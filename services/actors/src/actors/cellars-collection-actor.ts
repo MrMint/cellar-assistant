@@ -86,6 +86,7 @@ import {
 } from "@cellar-assistant/contracts";
 import { cellarItems } from "@cellar-assistant/db";
 import { inArray, type SQL, sql } from "@cellar-assistant/db/orm";
+import { cellarOwnedBySql } from "../lib/cellar-ownership.ts";
 import type { KeysetCursor, PageScope } from "../lib/collection-actor-base.ts";
 import { ViewerCollectionActorBase } from "../lib/collection-actor-base.ts";
 import {
@@ -152,13 +153,7 @@ const CELLAR_ROW: VisibleRow = {
 };
 
 /** Cellars `viewer` created or co-owns (`c` is `cellars`). Privacy plays no part. */
-const ownedBy = (viewer: string): SQL => sql`(
-  c.created_by_id = ${viewer}::uuid
-  or exists (
-    select 1 from public.cellar_owners o
-    where o.cellar_id = c.id and o.user_id = ${viewer}::uuid
-  )
-)`;
+const ownedBy = (viewer: string): SQL => cellarOwnedBySql(viewer, "c");
 
 /**
  * The newest thing that happened in cellar `c`: its creation, a bottle added

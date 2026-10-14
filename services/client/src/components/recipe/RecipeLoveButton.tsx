@@ -22,10 +22,16 @@ import { cn } from "@/lib/utils";
 export function RecipeLoveButton({
   recipeId,
   loved,
+  name,
   className,
 }: {
   recipeId: string;
   loved: boolean;
+  /**
+   * The recipe's name, where the button sits in a list of them (Loved ›
+   * Recipes): every row's button would otherwise have the same name.
+   */
+  name?: string;
   className?: string;
 }) {
   const [isLoved, setIsLoved] = useState(loved);
@@ -62,7 +68,15 @@ export function RecipeLoveButton({
     <IconButton
       onClick={toggle}
       disabled={isPending}
-      aria-label={isLoved ? "Loved — tap to remove" : "Love this recipe"}
+      aria-label={
+        name === undefined
+          ? isLoved
+            ? "Loved — tap to remove"
+            : "Love this recipe"
+          : isLoved
+            ? `${name}: loved — tap to remove`
+            : `Love ${name}`
+      }
       aria-pressed={isLoved}
       className={cn("shrink-0", className)}
     >

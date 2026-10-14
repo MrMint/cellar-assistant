@@ -214,6 +214,7 @@ export const KEYLESS_TYPES = [
   "UserSearchEdge",
   "UserSearchResult",
   "ValidationError",
+  "ViewerCounts",
   "WantToTryConnection",
   "WantToTryEdge",
   "WantToTryEntry",

@@ -1,7 +1,8 @@
 /**
  * X15's screens, rendered: the draft editor's match chips and privacy
- * control, the Bar page's drafts and recipes, the Loved page's recipes, and
- * the words a failed read is told in.
+ * control, the Bar page's drafts and recipes, and the words a failed read
+ * is told in. (The Loved page's recipes are X18's half of Loved:
+ * `favorites/loved-recipes.test.ts`.)
  */
 import { mock } from "bun:test";
 import assert from "node:assert/strict";
@@ -19,7 +20,6 @@ mock.module("next/navigation", () => ({
 const { RecipeEditor } = await import("./RecipeEditor");
 const { MyRecipes } = await import("./MyRecipes");
 const { readFailureCopy } = await import("./RecipeComposer");
-const { LovedRecipes } = await import("../../favorites/LovedRecipes");
 const { blankForm, formFromRecipe } = await import("./recipe-draft");
 
 const client = new Client({
@@ -166,26 +166,6 @@ describe("MyRecipes — the top of the Bar (X15)", () => {
 
   test("nothing at all when you have written nothing", () => {
     assert.equal(render(<MyRecipes rows={[]} />), "");
-  });
-});
-
-describe("LovedRecipes — Me › Lists › Loved (D9, X15)", () => {
-  test("three rows, then Show all", () => {
-    const rows = ["a", "b", "c", "d"].map((id) => ({
-      id,
-      name: `Recipe ${id}`,
-      type: "cocktail",
-      ingredientCount: 3,
-    }));
-    const html = render(<LovedRecipes rows={rows} totalCount={4} />);
-    assert.match(html, /aria-label="Loved recipes"/);
-    assert.match(html, /href="\/recipes\/c"/);
-    assert.doesNotMatch(html, /href="\/recipes\/d"/);
-    assert.match(html, />Show all</);
-  });
-
-  test("nothing when you Love no recipe", () => {
-    assert.equal(render(<LovedRecipes rows={[]} totalCount={0} />), "");
   });
 });
 

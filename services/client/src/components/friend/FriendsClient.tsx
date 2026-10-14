@@ -11,6 +11,7 @@ import {
   People,
   Warning,
 } from "@/components/app/icons";
+import { Link } from "@/components/app/Link";
 import { notify } from "@/components/app/notify";
 import { UserAvatar } from "@/components/app/UserAvatar";
 import { SearchField } from "@/components/shell/SearchField";
@@ -146,19 +147,47 @@ const Panel = ({
   </section>
 );
 
-/** A person row: avatar, name, then the row's actions. */
+/**
+ * A person row: avatar, name, then the row's actions. With `href` (a friend,
+ * X18) the avatar and name are one link into their profile; the actions stay
+ * buttons beside it, outside the link.
+ */
 const PersonRow = ({
   avatarUrl,
   displayName,
+  href,
   children,
 }: {
   avatarUrl?: string | null;
   displayName: string;
+  href?: string;
   children: React.ReactNode;
 }) => (
   <li className="flex min-h-14 items-center gap-3 rounded-md bg-surface-2 px-3 py-2">
-    <UserAvatar avatarUrl={avatarUrl} displayName={displayName} />
-    <span className="type-headline min-w-0 flex-1 truncate">{displayName}</span>
+    {href === undefined ? (
+      <>
+        <UserAvatar avatarUrl={avatarUrl} displayName={displayName} />
+        <span className="type-headline min-w-0 flex-1 truncate">
+          {displayName}
+        </span>
+      </>
+    ) : (
+      <Link
+        href={href}
+        underline="none"
+        data-slot="friend-profile-link"
+        className="-my-2 flex min-h-14 min-w-0 flex-1 items-center gap-3 text-ink-1"
+      >
+        <UserAvatar
+          aria-hidden
+          avatarUrl={avatarUrl}
+          displayName={displayName}
+        />
+        <span className="type-headline min-w-0 flex-1 truncate">
+          {displayName}
+        </span>
+      </Link>
+    )}
     <div className="flex shrink-0 gap-2">{children}</div>
   </li>
 );
@@ -455,6 +484,7 @@ export const FriendsClient = () => {
               key={row.user.id}
               avatarUrl={row.user.avatarUrl}
               displayName={row.user.displayName}
+              href={`/users/${row.user.id}`}
             >
               <RowButton
                 variant="destructive"

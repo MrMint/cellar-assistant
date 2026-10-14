@@ -20,17 +20,12 @@ import {
   favoritesVariables,
 } from "./adapter";
 import { FavoritesQuery } from "./fragments";
-import { type LovedRecipeRow, LovedRecipes } from "./LovedRecipes";
+import { LovedSegment } from "./LovedSegment";
 
 interface FavoritesClientProps {
   /** The server's first page, for the filter it was rendered with. */
   initialPage: Page<FavoriteGridRow>;
   initialTypes: ApiItemType[];
-  /** D9 / X15: the recipes you Love, server-read; drawn above the bottles. */
-  lovedRecipes?: {
-    readonly rows: readonly LovedRecipeRow[];
-    readonly totalCount: number;
-  };
 }
 
 /**
@@ -52,7 +47,6 @@ interface FavoritesClientProps {
 export function FavoritesClient({
   initialPage,
   initialTypes,
-  lovedRecipes,
 }: FavoritesClientProps) {
   const { types, setTypes } = useTypesFilterState();
 
@@ -92,21 +86,15 @@ export function FavoritesClient({
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        {/* Reached from the Me hub (D1): Back goes there on a cold open. */}
-        <AppBar title="Loved" parent="/me" className="min-w-0 flex-1" />
-        <div className="flex flex-row gap-4">
-          <CellarItemsFilter types={types} onTypesChange={setTypes} />
-        </div>
+      {/* Reached from the Me hub (D1): Back goes there on a cold open. */}
+      <AppBar title="Loved" parent="/me" />
+      {/* X18: Loved holds recipes too (D9); this is the drinks half. Straight
+          under the bar, where the recipes half draws it, so the segment does
+          not move under the thumb when it switches halves. */}
+      <LovedSegment value="drinks" />
+      <div className="flex flex-row gap-4">
+        <CellarItemsFilter types={types} onTypesChange={setTypes} />
       </div>
-      {/* Recipes are not an item type: a type filter is about bottles, so
-          the recipes stand aside while one is on. */}
-      {lovedRecipes !== undefined && (types ?? []).length === 0 && (
-        <LovedRecipes
-          rows={lovedRecipes.rows}
-          totalCount={lovedRecipes.totalCount}
-        />
-      )}
       {list.failure !== null && <ApiError error={list.failure} title="Loved" />}
       <VirtualGrid
         items={items}

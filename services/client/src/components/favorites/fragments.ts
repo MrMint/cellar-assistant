@@ -15,7 +15,6 @@
  */
 
 import { ItemCardFragment } from "@/components/item/ItemCard/fragments";
-import { ActorErrorFieldsFragment } from "@/lib/api/errors";
 import { graphql } from "@/lib/api/graphql";
 
 /** Cards per page. The API caps any `first` at 100. */
@@ -43,44 +42,4 @@ export const FavoritesQuery = graphql(
   }
 `,
   [ItemCardFragment],
-);
-
-/**
- * D9 / X15: the recipes you Love, newest Love first — Me › Lists › Loved
- * shows them above the bottles. Fifty is a screenful of rows and more than
- * anyone Loves in a sitting; "Show all" expands to these fifty — it does not
- * page past them (a follow-up if anyone Loves more).
- */
-export const LOVED_RECIPES_PAGE_SIZE = 50;
-
-export const LovedRecipesQuery = graphql(
-  `
-  query LovedRecipes($first: Int!, $after: String) {
-    lovedRecipes(first: $first, after: $after) {
-      __typename
-      ... on RecipeConnection {
-        totalCount
-        pageInfo {
-          hasNextPage
-          endCursor
-        }
-        edges {
-          cursor
-          node {
-            id
-            name
-            type
-            ingredientCount
-            recipeGroup {
-              id
-              name
-            }
-          }
-        }
-      }
-      ...ActorErrorFields
-    }
-  }
-`,
-  [ActorErrorFieldsFragment],
 );

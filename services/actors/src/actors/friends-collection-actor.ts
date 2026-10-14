@@ -49,13 +49,16 @@ import type {
   ActorCategory,
   Ctx,
   FriendEdgeDto,
+  FriendProfileDto,
   FriendRequestFilter,
   FriendRequestRowDto,
   FriendsCollectionActorInterface,
   FriendsFeedFilter,
+  ItemCheckInDto,
   ItemRef,
   Page,
   PageArgs,
+  ProfileFilter,
 } from "@cellar-assistant/contracts";
 import {
   ACTIVITY_KINDS,
@@ -68,14 +71,18 @@ import {
   isActivityKind,
   isFriendRequestFilter,
   isItemType,
+  isProfileFilter,
   isTierListEntryType,
   keysetPage,
   mapPage,
+  NotFoundError,
+  PROFILE_NOT_SHARED,
   parseActivityFeedCursor,
   ValidationError,
 } from "@cellar-assistant/contracts";
 import { type SQL, sql } from "@cellar-assistant/db/orm";
 import { bypassesPolicy } from "@cellar-assistant/policy";
+import { cellarOwnedBySql } from "../lib/cellar-ownership.ts";
 import {
   type CheckInSqlRow,
   checkInColumns,
@@ -95,6 +102,7 @@ import {
 } from "../lib/collection-sql.ts";
 import { ARCS } from "../lib/item-arcs.ts";
 import { placeRefVisibleToSql } from "../lib/unshared-places.ts";
+import { isUuid } from "../lib/uuid.ts";
 import { friendshipsOf } from "../lib/visibility.ts";
 import {
   canSeeSql,
@@ -158,7 +166,11 @@ type FriendsInput =
   | FriendRequestFilter
   | ActivityFilter
   | FriendsFeedFilter
+  | ProfileFilter
   | null;
+
+type ProfileIdRow = { readonly id: string; readonly sort_key: string };
+type ProfileLogRow = CheckInSqlRow & { readonly sort_key: string };
 
 /** A row's item, or `null` when none of the six arc columns named one. */
 const itemRefOf = (type: string | null, id: string | null): ItemRef | null => {
@@ -671,12 +683,200 @@ export class FriendsCollectionActor
     });
   }
 
+  /* -------------------------------------------------------------------- */
+  /* A friend's profile — X18                                              */
+  /* -------------------------------------------------------------------- */
+
+  /**
+   * Who, and friends since when — or `NotFound`. The gate for the whole
+   * profile: the `profile*` reads below re-check it on their own turns
+   * (`authorize`), so a page of them can never be had for a non-friend by
+   * skipping this call.
+   *
+   * Every refusal is the same `NotFound` with the same message
+   * ({@link PROFILE_NOT_SHARED}) — a stranger, yourself, an id that names
+   * nobody, a string that is not an id. A profile never answers "this
+   * account exists" (D24).
+   */
+  async profile(ctx: Ctx, userId: string): Promise<FriendProfileDto> {
+    const filter: ProfileFilter = {
+      profileOf: String(userId).toLowerCase(),
+    };
+    const found = await this.batch<FriendProfileDto | null>(
+      ctx,
+      filter,
+      null,
+      async () => {
+        const viewer = ctx.viewerId;
+        if (viewer === null) return null;
+        const { rows } = await this.db.execute<{
+          readonly since: Date | string | null;
+        }>(sql`
+          select max(created_at) as since from public.friends
+          where (user_id = ${viewer}::uuid and friend_id = ${filter.profileOf}::uuid)
+             or (user_id = ${filter.profileOf}::uuid and friend_id = ${viewer}::uuid)
+        `);
+        const since = toIso(rows[0]?.since ?? null);
+        return since === null ? null : { userId: filter.profileOf, since };
+      },
+    );
+    if (found === null) throw new NotFoundError(PROFILE_NOT_SHARED);
+    return found;
+  }
+
+  /**
+   * **ids** — the friend's own tier lists `canSeeTierList` admits for a
+   * friend (`#asFriend`): their PUBLIC and FRIENDS lists, never a PRIVATE
+   * one, whoever is asking. Ordered like
+   * `/tier-lists`, by when the contents last moved.
+   */
+  async profileTierLists(
+    ctx: Ctx,
+    filter: ProfileFilter,
+    page: PageArgs,
+  ): Promise<Page<string>> {
+    const sort = sql`t.content_updated_at`;
+    const id = sql`t.id`;
+    const asFriend = this.#asFriend(ctx);
+    const scope = async (): Promise<PageScope> => ({
+      from: sql`public.tier_lists t`,
+      where: sql`t.created_by_id = ${filter.profileOf}::uuid and ${canSeeSql(
+        await asFriend(),
+        { createdBy: sql`t.created_by_id`, privacy: sql`t.privacy` },
+      )}`,
+    });
+    return mapPage(
+      await this.paged<ProfileIdRow>(
+        ctx,
+        filter,
+        page,
+        async (after, limit) => {
+          const { from, where } = await scope();
+          const { rows } = await this.db.execute<ProfileIdRow>(sql`
+            select t.id, (t.content_updated_at)::text as sort_key
+            from ${from}
+            where ${where}
+              and ${keysetWhere(after, sort, id, "timestamptz", "desc")}
+            order by ${keysetOrder(sort, id, "desc")}
+            limit ${limit}
+          `);
+          return rows;
+        },
+        (row) => ({ sort: row.sort_key, id: row.id }),
+        scope,
+      ),
+      (row) => row.id,
+    );
+  }
+
+  /**
+   * **ids** — cellars the friend created or co-owns (`cellarOwnedBySql`)
+   * that `canSeeCellar` admits, newest first. A cellar the friend co-owns
+   * with a stranger is listed only if the viewer could open it anyway.
+   */
+  async profileCellars(
+    ctx: Ctx,
+    filter: ProfileFilter,
+    page: PageArgs,
+  ): Promise<Page<string>> {
+    const sort = sql`c.created_at`;
+    const id = sql`c.id`;
+    const asFriend = this.#asFriend(ctx);
+    const scope = async (): Promise<PageScope> => ({
+      from: sql`public.cellars c`,
+      where: sql`${cellarOwnedBySql(filter.profileOf, "c")} and ${canSeeSql(
+        await asFriend(),
+        {
+          createdBy: sql`c.created_by_id`,
+          privacy: sql`c.privacy`,
+          coOwnedCellarId: sql`c.id`,
+        },
+      )}`,
+    });
+    return mapPage(
+      await this.paged<ProfileIdRow>(
+        ctx,
+        filter,
+        page,
+        async (after, limit) => {
+          const { from, where } = await scope();
+          const { rows } = await this.db.execute<ProfileIdRow>(sql`
+            select c.id, (c.created_at)::text as sort_key
+            from ${from}
+            where ${where}
+              and ${keysetWhere(after, sort, id, "timestamptz", "desc")}
+            order by ${keysetOrder(sort, id, "desc")}
+            limit ${limit}
+          `);
+          return rows;
+        },
+        (row) => ({ sort: row.sort_key, id: row.id }),
+        scope,
+      ),
+      (row) => row.id,
+    );
+  }
+
+  /**
+   * **projection** — the friend's drink log: entries *about* them, newest
+   * first, through `canSeeCheckIn` and `canSeeCheckInDetails` as SQL. Every
+   * entry about a friend passes both (the friend branch), but the rules stay
+   * stated where the rows are read, as the feed's `#checkedIn` does — and a
+   * place under review that is not the viewer's comes back unnamed
+   * (`checkInColumns`).
+   */
+  async profileLogs(
+    ctx: Ctx,
+    filter: ProfileFilter,
+    page: PageArgs,
+  ): Promise<Page<ItemCheckInDto>> {
+    const sort = sql`ci.created_at`;
+    const id = sql`ci.id`;
+    const asFriend = this.#asFriend(ctx);
+    const scope = async (): Promise<PageScope> => ({
+      from: sql`public.check_ins ci`,
+      where: sql`ci.user_id = ${filter.profileOf}::uuid and ${canSeeCheckInSql(
+        await asFriend(),
+        "ci",
+      )}`,
+    });
+    return mapPage(
+      await this.paged<ProfileLogRow>(
+        ctx,
+        filter,
+        page,
+        async (after, limit) => {
+          const visible = await asFriend();
+          const { from, where } = await scope();
+          const { rows } = await this.db.execute<ProfileLogRow>(sql`
+            select ${checkInColumns(
+              "ci",
+              canSeeCheckInDetailsSql(visible, "ci"),
+              visible,
+            )},
+                   (ci.created_at)::text as sort_key
+            from ${from}
+            where ${where}
+              and ${keysetWhere(after, sort, id, "timestamptz", "desc")}
+            order by ${keysetOrder(sort, id, "desc")}
+            limit ${limit}
+          `);
+          return rows;
+        },
+        (row) => ({ sort: row.sort_key, id: row.id }),
+        scope,
+      ),
+      (row) => toItemCheckInDto(row, ctx.viewerId),
+    );
+  }
+
   protected override async authorize(
     ctx: Ctx,
     input: FriendsInput,
   ): Promise<"allow" | "empty"> {
     await super.authorize(ctx, input);
     if (input === null) return "allow";
+    if (isProfileFilter(input)) return await this.#authorizeProfile(ctx, input);
     if (typeof input === "string") {
       if (!isFriendRequestFilter(input)) {
         throw new ValidationError(
@@ -688,6 +888,55 @@ export class FriendsCollectionActor
     if ("limit" in input) requireActivityFilter(input);
     else requireFeedFilter(input);
     return "allow";
+  }
+
+  /**
+   * What a profile section is filtered by: the viewer **as a friend** —
+   * never `visibilityScope`'s `"everything"`, even for an admin. A profile is
+   * what someone shares with their friends, and the gate already holds an
+   * admin to friendship (`#authorizeProfile`); listing an admin's friend's
+   * PRIVATE list here would show them, on a social page, something that
+   * friend never shared. Opening a row by its id is still the policy
+   * package's call, unchanged.
+   *
+   * Lazy and read once per turn: the page and its `count(*)` share it, and a
+   * turn `authorize` answered `"empty"` never reads it at all.
+   */
+  #asFriend(ctx: Ctx): () => Promise<VisibilityScope> {
+    let scope: Promise<VisibilityScope> | null = null;
+    return () => {
+      scope ??= (async (): Promise<VisibilityScope> => {
+        const viewer = ctx.viewerId;
+        if (viewer === null) return { kind: "nothing" };
+        return {
+          kind: "viewer",
+          viewer,
+          friendIds: friendIdsOf(viewer, await friendshipsOf(this.db, viewer)),
+        };
+      })();
+      return scope;
+    };
+  }
+
+  /**
+   * The profile reads' gate, on every turn: the profile must be a friend of
+   * the viewer. Anything else — a stranger, the viewer themself, a malformed
+   * id, nobody — is `"empty"`, the same answer for all of them; `profile`
+   * turns that into its one `NotFound`.
+   *
+   * Friendship is a fact about two users, not a permission, so an admin
+   * viewer is held to it too (`isFriend`'s rule): a profile is a friend's.
+   */
+  async #authorizeProfile(
+    ctx: Ctx,
+    filter: ProfileFilter,
+  ): Promise<"allow" | "empty"> {
+    const viewer = ctx.viewerId;
+    if (viewer === null || !isUuid(filter.profileOf)) return "empty";
+    const friendIds = friendIdsOf(viewer, await friendshipsOf(this.db, viewer));
+    return friendIds.includes(filter.profileOf.toLowerCase())
+      ? "allow"
+      : "empty";
   }
 
   /**

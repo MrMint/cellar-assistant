@@ -2983,6 +2983,52 @@ export const graphcacheSchema: MinifiedIntrospection = {
       },
       {
         kind: "OBJECT",
+        name: "FriendProfile",
+        fields: [
+          {
+            name: "cellars",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "CellarConnection" },
+            },
+          },
+          {
+            name: "checkIns",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "ItemCheckInConnection" },
+            },
+          },
+          {
+            name: "id",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "ID" } },
+          },
+          {
+            name: "since",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "DateTime" },
+            },
+          },
+          {
+            name: "tierLists",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "TierListConnection" },
+            },
+          },
+          {
+            name: "user",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "UserProfile" },
+            },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
         name: "FriendRequest",
         fields: [
           {
@@ -6819,6 +6865,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
             },
           },
           {
+            name: "friendProfile",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "UNION", name: "QueryFriendProfileResult" },
+            },
+          },
+          {
             name: "genericItem",
             type: {
               kind: "NON_NULL",
@@ -7197,6 +7250,18 @@ export const graphcacheSchema: MinifiedIntrospection = {
           { kind: "OBJECT", name: "ConflictError" },
           { kind: "OBJECT", name: "ForbiddenError" },
           { kind: "OBJECT", name: "FriendInvitePreview" },
+          { kind: "OBJECT", name: "NotFoundError" },
+          { kind: "OBJECT", name: "ValidationError" },
+        ],
+      },
+      {
+        kind: "UNION",
+        name: "QueryFriendProfileResult",
+        possibleTypes: [
+          { kind: "OBJECT", name: "BudgetExceededError" },
+          { kind: "OBJECT", name: "ConflictError" },
+          { kind: "OBJECT", name: "ForbiddenError" },
+          { kind: "OBJECT", name: "FriendProfile" },
           { kind: "OBJECT", name: "NotFoundError" },
           { kind: "OBJECT", name: "ValidationError" },
         ],
@@ -11174,6 +11239,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
               ofType: { kind: "OBJECT", name: "CollectionStats" },
             },
           },
+          {
+            name: "counts",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "ViewerCounts" },
+            },
+          },
           { name: "email", type: { kind: "SCALAR", name: "String" } },
           {
             name: "emailVerified",
@@ -11252,6 +11324,29 @@ export const graphcacheSchema: MinifiedIntrospection = {
               kind: "NON_NULL",
               ofType: { kind: "OBJECT", name: "WantToTryConnection" },
             },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "ViewerCounts",
+        fields: [
+          {
+            name: "bottles",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
+          {
+            name: "logs",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
+          {
+            name: "places",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
+          {
+            name: "tierLists",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
           },
         ],
         interfaces: [],

@@ -403,9 +403,11 @@ reverse them. Each names the item it belongs to; none overrides an answer.
   Not this turns the line into the bar word for it ("Gin") when there is one.
   Typed lines are plain ingredients by name — the editor never guesses a
   catalog bottle.
-- **Loved recipes live on Loved (D9).** Me › Lists › Loved shows the recipes
-  you Love above the bottles (three, then Show all); a type filter hides them,
-  since it is about bottles.
+- **Loved recipes live on Loved (D9).** Me › Lists › Loved holds the recipes
+  you Love. X15 first drew them above the bottles (three, then Show all); X18
+  replaced that with Loved's Drinks · Recipes segment (see "Me hub v1"), so
+  the drinks half is bottles only and the recipes half pages and keeps each
+  row's Love toggle.
 - **The Bar page.** `/recipes` is titled **Bar** (the segment's word), with
   New recipe where Cellars has Add cellar; then Your drafts, Your recipes,
   What can I make, and All recipes. "Recipe Groups" and the paragraph about
@@ -444,3 +446,36 @@ reverse them. Each names the item it belongs to; none overrides an answer.
   client (Arrange replaced it in X23). The `is_editing_locked` column stays
   until a contract-phase migration drops it, so an older image still running
   during a deploy keeps working.
+
+### Me hub v1 (wave B "me": X18)
+
+- **Counts.** Under the Me header: bottles, logs, places, tier lists — each
+  the viewer's own. Bottles is D13's number (still in a cellar you created or
+  co-own); logs are drink-log entries *about* you, including one a friend
+  wrote for you at the table; places are the distinct places you have been
+  (marked Visited, or named on one of your logs), leaving out someone else's
+  place still under review (X27); tier lists are the ones you made, whatever
+  their privacy. Each names its noun, a zero is not shown, and an account
+  with nothing yet has no count row. The tiles are a summary, not links:
+  each has a row or a tab of its own.
+- **Settings.** The Account section is renamed Settings: Edit profile and
+  Sign out. **No theme switch** — dark is the default and light ships only
+  on evidence (D21), so a placeholder would promise something that is not
+  coming.
+- **Loved holds recipes (D9).** Loved gains a Drinks · Recipes segment held
+  in `?kind=recipes`; no `kind` is drinks, so every old `/favorites` link
+  lands where it did. Each loved recipe keeps its Love toggle; un-Loving
+  leaves the row in place until the next visit.
+- **A friend's profile (`/users/<id>`).** Reached from a friend's row on
+  Friends. Read-only: who, "Friends since <month year>", then the tier lists
+  of theirs you may open (PUBLIC and FRIENDS — never PRIVATE), the cellars
+  they created or co-own that you may open, and their drink log (entries
+  about them, newest first, with what they said; Show more). Sections with
+  nothing in them are not drawn; a friend who shares nothing gets "Nothing
+  shared yet." Only friends: a stranger, an id that names nobody and a
+  malformed id all get the same "doesn't exist or isn't shared with you"
+  (D24), decided server-side with one message, and the page reads nothing
+  before that gate answers. An admin is held to the same rules here: the
+  profile lists what a friend shares with friends, never a PRIVATE list or
+  cellar, even though an admin could open one by its link. Your own id redirects to Me. `/users` (the old
+  dead "Profile" crumb) redirects to Me.

@@ -65,6 +65,7 @@ import * as cellarFragments from "@/components/cellar/fragments";
 import * as onboardingQueries from "@/components/common/OnboardingWizard/queries";
 import * as drinkLogQueries from "@/components/drink-log/queries";
 import * as favoritesFragments from "@/components/favorites/fragments";
+import * as lovedRecipes from "@/components/favorites/loved-recipes";
 import * as friendFragments from "@/components/friend/fragments";
 import * as homeQueries from "@/components/home/queries";
 import * as itemFragments from "@/components/item/fragments";
@@ -72,6 +73,7 @@ import * as itemCardFragments from "@/components/item/ItemCard/fragments";
 import * as mapQueries from "@/components/map/queries";
 import * as menuLinesQueries from "@/components/menu-lines/queries";
 import * as pourQueries from "@/components/pour/queries";
+import * as profileQueries from "@/components/profile/queries";
 import * as rankingFragments from "@/components/ranking/fragments";
 import * as recipeEditorDocuments from "@/components/recipe/editor/documents";
 import * as recipeFragments from "@/components/recipe/fragments";
@@ -107,6 +109,7 @@ const MODULES: Readonly<Record<string, Record<string, unknown>>> = {
   "components/common/OnboardingWizard/queries.ts": onboardingQueries,
   "components/drink-log/queries.ts": drinkLogQueries,
   "components/favorites/fragments.ts": favoritesFragments,
+  "components/favorites/loved-recipes.ts": lovedRecipes,
   "components/friend/fragments.ts": friendFragments,
   "components/home/queries.ts": homeQueries,
   "components/item/ItemCard/fragments.ts": itemCardFragments,
@@ -114,6 +117,7 @@ const MODULES: Readonly<Record<string, Record<string, unknown>>> = {
   "components/map/queries.ts": mapQueries,
   "components/menu-lines/queries.ts": menuLinesQueries,
   "components/pour/queries.ts": pourQueries,
+  "components/profile/queries.ts": profileQueries,
   "components/ranking/fragments.ts": rankingFragments,
   "components/recipe/editor/documents.ts": recipeEditorDocuments,
   "components/recipe/fragments.ts": recipeFragments,

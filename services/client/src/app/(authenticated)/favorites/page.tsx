@@ -4,19 +4,23 @@ import {
   favoritesVariables,
 } from "@/components/favorites/adapter";
 import { Favorites } from "@/components/favorites/Favorites";
+import { FavoritesQuery } from "@/components/favorites/fragments";
+import { LovedRecipes } from "@/components/favorites/LovedRecipes";
 import {
-  FavoritesQuery,
   LOVED_RECIPES_PAGE_SIZE,
   LovedRecipesQuery,
-} from "@/components/favorites/fragments";
-import { unwrapResult } from "@/lib/api/result";
+  lovedKindFromParam,
+  lovedRecipesPage,
+} from "@/components/favorites/loved-recipes";
 import { apiServerQuery } from "@/lib/api/urql-server";
 import { toPage } from "@/lib/paging/paged-connection";
 import { parseTypesParam } from "@/utilities/types-param";
 
 /**
- * `/favorites` — the old `Favorites` → `FavoritesClient` (`82450ad1`), with
- * the server's first page actually used, for the URL's `?types=` filter.
+ * `/favorites` — Me › Lists › Loved. Drinks: the old `Favorites` →
+ * `FavoritesClient` (`82450ad1`), with the server's first page actually
+ * used, for the URL's `?types=` filter. Recipes (`?kind=recipes`, X18): the
+ * viewer's loved recipes (D9).
  *
  * `me` is null for a session that ended between the `(authenticated)`
  * layout's check and this read: that is a message, not a throw (the old page
@@ -32,18 +36,30 @@ export default async function FavoritesPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const raw = (await searchParams).types;
+  const params = await searchParams;
+  // X18: `?kind=recipes` is Loved's recipes half (D9); anything else, drinks.
+  if (lovedKindFromParam(params.kind) === "recipes") {
+    const recipes = lovedRecipesPage(
+      (
+        await apiServerQuery(LovedRecipesQuery, {
+          first: LOVED_RECIPES_PAGE_SIZE,
+          after: null,
+        })
+      ).lovedRecipes,
+    );
+    return (
+      <LovedRecipes
+        initialPage={recipes.ok ? recipes.data : null}
+        initialFailure={recipes.ok ? null : recipes.error}
+      />
+    );
+  }
+  const raw = params.types;
   const types = parseTypesParam(typeof raw === "string" ? raw : null);
-  const [data, loved] = await Promise.all([
-    apiServerQuery(FavoritesQuery, favoritesVariables(types, null)),
-    apiServerQuery(LovedRecipesQuery, {
-      first: LOVED_RECIPES_PAGE_SIZE,
-      after: null,
-    }),
-  ]);
-  // D9 / X15: the recipes you Love sit on the same page as the bottles. A
-  // failed read leaves them out rather than failing the bottles too.
-  const recipes = unwrapResult(loved.lovedRecipes, "RecipeConnection");
+  const data = await apiServerQuery(
+    FavoritesQuery,
+    favoritesVariables(types, null),
+  );
 
   if (data.me === null || data.me === undefined) {
     return (
@@ -60,14 +76,6 @@ export default async function FavoritesPage({
         favoriteRowFromNode(edge.node),
       )}
       initialTypes={types}
-      lovedRecipes={
-        recipes.ok
-          ? {
-              rows: recipes.data.edges.map((edge) => edge.node),
-              totalCount: recipes.data.totalCount ?? recipes.data.edges.length,
-            }
-          : undefined
-      }
     />
   );
 }

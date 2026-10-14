@@ -74,6 +74,26 @@ export type UserProfileDto = {
   readonly email: string | null;
 };
 
+/**
+ * The Me hub's counts (X18). Each is the viewer's own, decided from their own
+ * rows only:
+ *
+ * - `bottles` — bottles still in a cellar they created or co-own (D13, the
+ *   number `CellarsCollectionActor.stats` and every cellar card count);
+ * - `logs` — drink-log entries about them (`check_ins.user_id`), with or
+ *   without a bottle (X02) — the item page's "Your log", summed;
+ * - `places` — distinct places they have been: marked visited, or named on
+ *   one of their logs; a place under review someone else created is left out
+ *   (X27);
+ * - `tierLists` — tier lists they created, whatever their privacy.
+ */
+export type UserCountsDto = {
+  readonly bottles: number;
+  readonly logs: number;
+  readonly places: number;
+  readonly tierLists: number;
+};
+
 /** The mutable half. Every field is optional; omitted means unchanged. */
 export type UpdateProfileInput = {
   readonly displayName?: string;
@@ -516,6 +536,8 @@ export type UserActorInterface = {
     page: PageArgs,
     drafts?: boolean | null,
   ): Promise<Page<string>>;
+  /** X18: the Me hub's counts. Self (or admin, for their own) only. */
+  counts(ctx: Ctx): Promise<UserCountsDto>;
 };
 
 export const UserActorDescriptor: ActorDescriptor<UserActorInterface> = {
@@ -556,5 +578,6 @@ export const UserActorDescriptor: ActorDescriptor<UserActorInterface> = {
     setRecipeLove: {},
     lovedRecipes: {},
     myRecipes: {},
+    counts: {},
   },
 };

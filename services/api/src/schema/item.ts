@@ -234,7 +234,7 @@ const ItemCheckInScopeEnum = builder.enumType("ItemCheckInScope", {
   values: ITEM_CHECK_IN_SCOPES,
 });
 
-const ItemCheckInConnection = builder.connectionObject(
+export const ItemCheckInConnection = builder.connectionObject(
   { type: ItemCheckInType, name: "ItemCheckInConnection" },
   { name: "ItemCheckInEdge" },
 );

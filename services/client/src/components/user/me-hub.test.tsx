@@ -17,7 +17,7 @@ mock.module("next/image", () => ({
   ),
 }));
 
-const { MeHub, ME_SECTIONS } = await import("./MeHub");
+const { MeHub, ME_SECTIONS, SETTINGS_LABEL } = await import("./MeHub");
 const { textOf } = await import("@/test-support/markup");
 
 const user = { id: "u1", email: "pat@example.test", displayName: "Pat" };
@@ -83,6 +83,53 @@ describe("MeHub", () => {
     assert.ok(textOf(pinned).includes("4 of yours"));
   });
 
+  test("X18: the count row names each noun, leaves out zeros, and is not a link", () => {
+    const counted = renderToStaticMarkup(
+      <MeHub
+        user={user}
+        data={{
+          counts: { bottles: 53, logs: 1, places: 0, tierLists: 4 },
+          pinnedTierLists: [],
+          tierListCount: 4,
+          pendingFriendRequests: 0,
+        }}
+      />,
+    );
+    const row = counted.match(
+      /<dl\b[^>]*data-slot="me-counts"[^>]*>([\s\S]*?)<\/dl>/,
+    );
+    assert.ok(row, "a count row");
+    const tiles = [
+      ...(row?.[1] ?? "").matchAll(
+        /<dt\b[^>]*>([^<]*)<\/dt><dd\b[^>]*>([^<]*)<\/dd>/g,
+      ),
+    ].map(([, noun, value]) => `${value} ${noun}`);
+    assert.deepEqual(tiles, ["53 bottles", "1 log", "4 tier lists"]);
+    assert.ok(!/<a\b/.test(row?.[1] ?? ""));
+    // It sits under the header, above Lists.
+    assert.ok(counted.indexOf("me-counts") < counted.indexOf(">Lists<"));
+  });
+
+  test("X18: no counts (unread, or all zero) is no row at all", () => {
+    assert.ok(!html.includes('data-slot="me-counts"'));
+    const zeros = renderToStaticMarkup(
+      <MeHub
+        user={user}
+        data={{
+          counts: { bottles: 0, logs: 0, places: 0, tierLists: 0 },
+          pinnedTierLists: [],
+          tierListCount: 0,
+          pendingFriendRequests: 0,
+        }}
+      />,
+    );
+    assert.ok(!zeros.includes('data-slot="me-counts"'));
+  });
+
+  test("Loved says it holds drinks and recipes", () => {
+    assert.ok(textOf(html).includes("Drinks and recipes"));
+  });
+
   test("Friends carries a badge for pending requests, said in words to AT", () => {
     const badged = renderToStaticMarkup(
       <MeHub
@@ -100,11 +147,15 @@ describe("MeHub", () => {
     assert.ok(!html.includes('data-slot="count-badge"'));
   });
 
-  test("section labels, Lists first and Account last", () => {
+  test("section labels, Lists first and Settings last", () => {
     const labels = [...html.matchAll(/<h2\b[^>]*>([^<]*)<\/h2>/g)].map(
       (m) => m[1],
     );
-    assert.deepEqual(labels, [...ME_SECTIONS.map((s) => s.label), "Account"]);
+    assert.equal(SETTINGS_LABEL, "Settings");
+    assert.deepEqual(labels, [
+      ...ME_SECTIONS.map((s) => s.label),
+      SETTINGS_LABEL,
+    ]);
     assert.equal(labels[0], "Lists");
   });
 

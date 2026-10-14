@@ -2282,6 +2282,87 @@ enum FriendInviteStatus {
   SIGNED_OUT
 }
 
+"""
+A friend, as their read-only profile shows them (X18): their tier lists and cellars you may open, and their drink log. Only ever returned for a friend.
+"""
+type FriendProfile {
+  """
+  Cellars they created or co-own that you may open (`canSeeCellar`), newest first.
+  """
+  cellars(
+    """
+    An `edge.cursor` from a previous page. Opaque and owned by the actor that minted it: cursors are not interchangeable between fields.
+    """
+    after: String
+
+    """**Not supported.** See `last`. Paging is forward-only."""
+    before: String
+
+    """
+    How many edges to return, 1 to 100 inclusive; defaults to 20. Over the cap is a `VALIDATION` error, not a silent clamp.
+    """
+    first: Int
+
+    """
+    **Not supported.** Present because the Relay spec puts it here; passing it is a `VALIDATION` error rather than a silently forward page. Paging is forward-only — use `first`/`after`.
+    """
+    last: Int
+  ): CellarConnection!
+
+  """
+  Their drink log — entries about them, newest first, as `canSeeCheckIn` admits them.
+  """
+  checkIns(
+    """
+    An `edge.cursor` from a previous page. Opaque and owned by the actor that minted it: cursors are not interchangeable between fields.
+    """
+    after: String
+
+    """**Not supported.** See `last`. Paging is forward-only."""
+    before: String
+
+    """
+    How many edges to return, 1 to 100 inclusive; defaults to 20. Over the cap is a `VALIDATION` error, not a silent clamp.
+    """
+    first: Int
+
+    """
+    **Not supported.** Present because the Relay spec puts it here; passing it is a `VALIDATION` error rather than a silently forward page. Paging is forward-only — use `first`/`after`.
+    """
+    last: Int
+  ): ItemCheckInConnection!
+
+  """The friend's user id — the profile's identity."""
+  id: ID!
+
+  """When the friendship began."""
+  since: DateTime!
+
+  """
+  Their tier lists you may see — PUBLIC and FRIENDS, never PRIVATE (`canSeeTierList`) — most recently changed first.
+  """
+  tierLists(
+    """
+    An `edge.cursor` from a previous page. Opaque and owned by the actor that minted it: cursors are not interchangeable between fields.
+    """
+    after: String
+
+    """**Not supported.** See `last`. Paging is forward-only."""
+    before: String
+
+    """
+    How many edges to return, 1 to 100 inclusive; defaults to 20. Over the cap is a `VALIDATION` error, not a silent clamp.
+    """
+    first: Int
+
+    """
+    **Not supported.** Present because the Relay spec puts it here; passing it is a `VALIDATION` error rather than a silently forward page. Paging is forward-only — use `first`/`after`.
+    """
+    last: Int
+  ): TierListConnection!
+  user: UserProfile!
+}
+
 """A pending `friend_requests` row."""
 type FriendRequest {
   direction: FriendRequestDirection!
@@ -4935,6 +5016,11 @@ type Query {
   """
   friendInvitePreview(token: String!): QueryFriendInvitePreviewResult!
 
+  """
+  A friend's read-only profile (X18). `NotFoundError` — one message for every case — for anyone who is not your friend, yourself included, and for an id that names nobody: the answer never says whether an account exists.
+  """
+  friendProfile(userId: ID!): QueryFriendProfileResult!
+
   """One `generic_items` row. Not an Item — see `GenericItem`."""
   genericItem(id: ID!): QueryGenericItemResult!
 
@@ -5541,6 +5627,8 @@ union QueryDuplicatePlacesResult = BudgetExceededError | ConflictError | Duplica
 union QueryFileResult = BudgetExceededError | ConflictError | File | ForbiddenError | NotFoundError | ValidationError
 
 union QueryFriendInvitePreviewResult = BudgetExceededError | ConflictError | ForbiddenError | FriendInvitePreview | NotFoundError | ValidationError
+
+union QueryFriendProfileResult = BudgetExceededError | ConflictError | ForbiddenError | FriendProfile | NotFoundError | ValidationError
 
 union QueryGenericItemResult = BudgetExceededError | ConflictError | ForbiddenError | GenericItem | NotFoundError | ValidationError
 
@@ -8346,6 +8434,9 @@ type Viewer {
   The /search landing line. Counts only cellars you created or co-own — `myCellars` also lists other people's visible cellars, so summing it over-counts (UI parity G36).
   """
   collectionStats: CollectionStats!
+
+  """The Me hub's counts (X18)."""
+  counts: ViewerCounts!
   email: String
   emailVerified: Boolean!
 
@@ -8547,6 +8638,27 @@ type Viewer {
     """
     last: Int
   ): WantToTryConnection!
+}
+
+"""
+The Me hub's counts (X18). Each is the viewer's own: a friend's cellar or list never adds to them.
+"""
+type ViewerCounts {
+  """
+  Bottles still in a cellar you created or co-own — the D13 count every cellar card shows.
+  """
+  bottles: Int!
+
+  """Drink-log entries about you, with or without a bottle (X02)."""
+  logs: Int!
+
+  """
+  Distinct places you have been: marked visited, or named on one of your logs.
+  """
+  places: Int!
+
+  """Tier lists you made, whatever their privacy."""
+  tierLists: Int!
 }
 
 """
