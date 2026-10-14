@@ -463,9 +463,18 @@ test("Home's Friends feed shows a friend's review and their FRIENDS list — nev
       .filter({ hasText: teaName })
       .filter({ hasText: "★4.5" });
     await expect(rated.first()).toContainText(/ rated /);
-    await expect(
-      rated.first().getByRole("link", { name: teaName }),
-    ).toHaveAttribute("href", `/teas/${teaId}`);
+    // Ratings by one friend within three hours fold into "rated N things"
+    // (X10), and the shared account rates in other specs too (m07 runs
+    // beside this one), so the review may be one name in a fold rather than
+    // its own sentence. Only the sentence links the item.
+    const folded = /rated \d+ things/.test(
+      (await rated.first().textContent()) ?? "",
+    );
+    if (!folded) {
+      await expect(
+        rated.first().getByRole("link", { name: teaName }),
+      ).toHaveAttribute("href", `/teas/${teaId}`);
+    }
     await expect(
       friends.getByText(new RegExp(`#1 in ${sharedName}`)).first(),
     ).toBeVisible();
