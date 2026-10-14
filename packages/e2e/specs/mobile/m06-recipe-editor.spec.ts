@@ -99,10 +99,10 @@ test("a private recipe is nobody else's: no page, no Love, no Want to try", asyn
     expect(read.recipe.__typename).toBe("NotFoundError");
 
     const love = await other.query(
-      `mutation L($id: ID!) { toggleRecipeLove(recipeId: $id) { __typename } }`,
+      `mutation L($id: ID!) { setRecipeLove(recipeId: $id, loved: true) { __typename } }`,
       { id: recipeId },
     );
-    expect(love.toggleRecipeLove.__typename).toBe("NotFoundError");
+    expect(love.setRecipeLove.__typename).toBe("NotFoundError");
 
     const save = await other.query(
       `mutation W($id: ID!) {

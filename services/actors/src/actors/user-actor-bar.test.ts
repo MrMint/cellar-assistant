@@ -201,7 +201,7 @@ describe.skipIf(skip)("UserActor — recipe privacy (X15 / D22)", () => {
       const actor = await actorOf(me, db);
       const ctx = userCtx(me);
       for (const id of [secret, draft, randomUUID()]) {
-        await expect(actor.toggleRecipeLove(ctx, id)).rejects.toBeInstanceOf(
+        await expect(actor.setRecipeLove(ctx, id, true)).rejects.toBeInstanceOf(
           NotFoundError,
         );
         await expect(
@@ -211,7 +211,7 @@ describe.skipIf(skip)("UserActor — recipe privacy (X15 / D22)", () => {
       // The author may Love their own private draft.
       const authors = await actorOf(author, db);
       expect(
-        (await authors.toggleRecipeLove(userCtx(author), draft)).loved,
+        (await authors.setRecipeLove(userCtx(author), draft, true)).loved,
       ).toBe(true);
     });
   });
@@ -230,8 +230,8 @@ describe.skipIf(skip)("UserActor — recipe privacy (X15 / D22)", () => {
       });
       const actor = await actorOf(me, db);
       const ctx = userCtx(me);
-      await actor.toggleRecipeLove(ctx, kept);
-      await actor.toggleRecipeLove(ctx, hidden);
+      await actor.setRecipeLove(ctx, kept, true);
+      await actor.setRecipeLove(ctx, hidden, true);
       await actor.setWantToTry(ctx, { kind: "RECIPE", recipeId: kept }, true);
       await actor.setWantToTry(ctx, { kind: "RECIPE", recipeId: hidden }, true);
 
