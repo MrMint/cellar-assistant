@@ -1,9 +1,9 @@
 {
   "version": "8",
   "dialect": "postgres",
-  "id": "7c1c1ca1-57b7-4592-b82a-51097fdf2cac",
+  "id": "86ec7dea-3651-49cc-ac07-8d91a68b576c",
   "prevIds": [
-    "eddc737a-ba62-43cd-b5f2-df64929ab687"
+    "48ffd526-f1a9-48a8-9131-d1ae2d678f92"
   ],
   "ddl": [
     {
@@ -227,6 +227,12 @@
     {
       "isRlsEnabled": false,
       "name": "cellars",
+      "entityType": "tables",
+      "schema": "public"
+    },
+    {
+      "isRlsEnabled": false,
+      "name": "check_in_trash",
       "entityType": "tables",
       "schema": "public"
     },
@@ -1783,6 +1789,71 @@
       "entityType": "columns",
       "schema": "public",
       "table": "cellars"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "check_in_trash"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "removal_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "check_in_trash"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "removed_by_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "check_in_trash"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "name": "removed_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "check_in_trash"
+    },
+    {
+      "type": "jsonb",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "row",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "check_in_trash"
     },
     {
       "type": "uuid",
@@ -10026,6 +10097,48 @@
       "nameExplicit": true,
       "columns": [
         {
+          "value": "removal_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "idx_check_in_trash_removal_id",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "check_in_trash"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "removed_at",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "idx_check_in_trash_removed_at",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "check_in_trash"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
           "value": "cellar_item_id",
           "isExpression": false,
           "asc": true,
@@ -13409,6 +13522,27 @@
       "nameExplicit": true,
       "columns": [
         {
+          "value": "recipe_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": "(recipe_id IS NOT NULL)",
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "idx_want_to_try_recipe_id",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "want_to_try"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
           "value": "user_id",
           "isExpression": false,
           "asc": true,
@@ -13830,6 +13964,23 @@
       "entityType": "fks",
       "schema": "public",
       "table": "cellars"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "removed_by_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "user",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "check_in_trash_removed_by_id_user_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "check_in_trash"
     },
     {
       "nameExplicit": false,
@@ -16375,7 +16526,7 @@
         "id"
       ],
       "onUpdate": "NO ACTION",
-      "onDelete": "CASCADE",
+      "onDelete": "RESTRICT",
       "name": "want_to_try_user_id_user_id_fkey",
       "entityType": "fks",
       "schema": "public",
@@ -16392,7 +16543,7 @@
         "id"
       ],
       "onUpdate": "NO ACTION",
-      "onDelete": "CASCADE",
+      "onDelete": "RESTRICT",
       "name": "want_to_try_beer_id_beers_id_fkey",
       "entityType": "fks",
       "schema": "public",
@@ -16409,7 +16560,7 @@
         "id"
       ],
       "onUpdate": "NO ACTION",
-      "onDelete": "CASCADE",
+      "onDelete": "RESTRICT",
       "name": "want_to_try_wine_id_wines_id_fkey",
       "entityType": "fks",
       "schema": "public",
@@ -16426,7 +16577,7 @@
         "id"
       ],
       "onUpdate": "NO ACTION",
-      "onDelete": "CASCADE",
+      "onDelete": "RESTRICT",
       "name": "want_to_try_spirit_id_spirits_id_fkey",
       "entityType": "fks",
       "schema": "public",
@@ -16443,7 +16594,7 @@
         "id"
       ],
       "onUpdate": "NO ACTION",
-      "onDelete": "CASCADE",
+      "onDelete": "RESTRICT",
       "name": "want_to_try_coffee_id_coffees_id_fkey",
       "entityType": "fks",
       "schema": "public",
@@ -16460,7 +16611,7 @@
         "id"
       ],
       "onUpdate": "NO ACTION",
-      "onDelete": "CASCADE",
+      "onDelete": "RESTRICT",
       "name": "want_to_try_sake_id_sakes_id_fkey",
       "entityType": "fks",
       "schema": "public",
@@ -16477,7 +16628,7 @@
         "id"
       ],
       "onUpdate": "NO ACTION",
-      "onDelete": "CASCADE",
+      "onDelete": "RESTRICT",
       "name": "want_to_try_tea_id_teas_id_fkey",
       "entityType": "fks",
       "schema": "public",
@@ -16734,6 +16885,16 @@
       "name": "cellars_pkey",
       "schema": "public",
       "table": "cellars",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "name": "check_in_trash_pkey",
+      "schema": "public",
+      "table": "check_in_trash",
       "entityType": "pks"
     },
     {

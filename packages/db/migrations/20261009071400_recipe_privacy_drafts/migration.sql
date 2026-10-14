@@ -1,3 +1,11 @@
+-- Regenerated at merge as 20261009071400 (was 20261009054209 on
+-- wb/recipesedit), so it sorts after want_to_try's 20261009054753
+-- (want_to_try_restrict_recipe_index) and X03's 20261009071339
+-- (check_in_trash) that other databases already have; the snapshot now
+-- chains from check_in_trash. drizzle-kit generated the same end state (it
+-- would add the column straight at DEFAULT 'PRIVATE'); the reviewed SQL below,
+-- which backfills existing rows as PUBLIC first, is unchanged.
+--
 -- X15 (D22): recipes are private first, and AI output is a draft.
 --
 -- `privacy` is the same `permission_type` cellars and tier lists carry, with
