@@ -407,6 +407,18 @@ describe("TabBar", () => {
     assert.match(bar?.className ?? "", /pb-\[env\(safe-area-inset-bottom\)\]/);
   });
 
+  test("the search sheet has no tab bar, so the shell leaves the indicator's padding", async () => {
+    pathname = "/search";
+    await render(
+      <AppShell>
+        <p>page</p>
+      </AppShell>,
+    );
+    const shell = container.querySelector('[data-slot="app-shell"]');
+    assert.equal(container.querySelector('[data-slot="tab-bar"]'), null);
+    assert.doesNotMatch(shell?.className ?? "", /safe-area-inset-bottom/);
+  });
+
   test("＋ opens the chooser: Bottle · Menu · Recipe · Place", async () => {
     await render(<TabBar />);
     await click(container.querySelector('button[aria-label="Add"]'));
@@ -440,6 +452,19 @@ describe("TabBar", () => {
       false,
       "at the root and the top: nothing to do",
     );
+  });
+
+  test("X10: Home at its root and the top opens the search sheet", () => {
+    const home = TABS.find((t) => t.key === "home");
+    assert.ok(home);
+    assert.equal(home.href, "/");
+    const scroller = { scrollTop: 0, scrollTo: () => {} } as unknown as Element;
+    const nav: string[] = [];
+    assert.equal(
+      handleActiveTabTap(home, "/", (h) => nav.push(h), scroller),
+      true,
+    );
+    assert.deepEqual(nav, ["/search"]);
   });
 });
 

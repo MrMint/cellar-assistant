@@ -14,7 +14,9 @@ import { bottomNav, expect, test } from "../../fixtures/mobile.ts";
  * offenders are reported at once (`expect.soft`), not just the first.
  */
 
-for (const route of ["/cellars", "/search", "/map"]) {
+// Home (`/`), not `/search`: since X10 the search sheet is full screen and
+// has no tab bar to check.
+for (const route of ["/cellars", "/", "/map"]) {
   test(`every tab-bar control is named on ${route}`, async ({ page }) => {
     await page.goto(route);
     const nav = await bottomNav(page);

@@ -367,6 +367,108 @@ export const graphcacheSchema: MinifiedIntrospection = {
         interfaces: [],
       },
       {
+        kind: "OBJECT",
+        name: "AiJob",
+        fields: [
+          { name: "count", type: { kind: "SCALAR", name: "Int" } },
+          {
+            name: "failureCode",
+            type: { kind: "ENUM", name: "ActorErrorCode" },
+          },
+          {
+            name: "failureReason",
+            type: { kind: "ENUM", name: "ActorErrorReason" },
+          },
+          { name: "finishedAt", type: { kind: "SCALAR", name: "DateTime" } },
+          {
+            name: "id",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "ID" } },
+          },
+          { name: "itemType", type: { kind: "ENUM", name: "ItemType" } },
+          {
+            name: "kind",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "ENUM", name: "AiJobKind" },
+            },
+          },
+          { name: "placeId", type: { kind: "SCALAR", name: "ID" } },
+          { name: "placeName", type: { kind: "SCALAR", name: "String" } },
+          { name: "recipeId", type: { kind: "SCALAR", name: "ID" } },
+          { name: "recipeName", type: { kind: "SCALAR", name: "String" } },
+          { name: "retryAt", type: { kind: "SCALAR", name: "DateTime" } },
+          {
+            name: "startedAt",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "DateTime" },
+            },
+          },
+          {
+            name: "status",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "ENUM", name: "AiJobStatus" },
+            },
+          },
+          {
+            name: "subjectId",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "ID" } },
+          },
+          { name: "tierListName", type: { kind: "SCALAR", name: "String" } },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "AiJobConnection",
+        fields: [
+          {
+            name: "edges",
+            type: {
+              kind: "NON_NULL",
+              ofType: {
+                kind: "LIST",
+                ofType: {
+                  kind: "NON_NULL",
+                  ofType: { kind: "OBJECT", name: "AiJobEdge" },
+                },
+              },
+            },
+          },
+          {
+            name: "pageInfo",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "PageInfo" },
+            },
+          },
+          { name: "totalCount", type: { kind: "SCALAR", name: "Int" } },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "AiJobEdge",
+        fields: [
+          {
+            name: "cursor",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "String" },
+            },
+          },
+          {
+            name: "node",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "AiJob" },
+            },
+          },
+        ],
+        interfaces: [],
+      },
+      {
         kind: "UNION",
         name: "AttachItemImageResult",
         possibleTypes: [
@@ -10721,6 +10823,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
             },
           },
           {
+            name: "aiJobs",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "AiJobConnection" },
+            },
+          },
+          {
             name: "bottleSearch",
             type: {
               kind: "NON_NULL",
@@ -10754,6 +10863,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
             type: { kind: "OBJECT", name: "FriendInvite" },
           },
           {
+            name: "friendsFeed",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "ActivityEntryConnection" },
+            },
+          },
+          {
             name: "id",
             type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "ID" } },
           },
@@ -10762,6 +10878,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
             type: {
               kind: "NON_NULL",
               ofType: { kind: "OBJECT", name: "NearbyPlaceConnection" },
+            },
+          },
+          {
+            name: "openBottles",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "CellarItemConnection" },
             },
           },
           {

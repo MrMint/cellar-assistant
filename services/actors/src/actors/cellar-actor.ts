@@ -1167,6 +1167,14 @@ export class CellarActor
 /* Pure helpers                                                                */
 /* -------------------------------------------------------------------------- */
 
+/**
+ * A `cellar_items` row as the API sees it. Exported for the one other reader
+ * of whole bottle rows, `CellarsCollectionActor.openBottles` (Home's Continue
+ * shelf), so both shape a bottle the same way.
+ */
+export const cellarItemDtoFrom = (row: CellarItemRow): CellarItemDto =>
+  toItemDto(row, null);
+
 const toItemDto = (
   row: CellarItemRow,
   distance: number | null,

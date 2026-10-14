@@ -66,6 +66,7 @@ import * as onboardingQueries from "@/components/common/OnboardingWizard/queries
 import * as drinkLogQueries from "@/components/drink-log/queries";
 import * as favoritesFragments from "@/components/favorites/fragments";
 import * as friendFragments from "@/components/friend/fragments";
+import * as homeQueries from "@/components/home/queries";
 import * as itemFragments from "@/components/item/fragments";
 import * as itemCardFragments from "@/components/item/ItemCard/fragments";
 import * as mapQueries from "@/components/map/queries";
@@ -106,6 +107,7 @@ const MODULES: Readonly<Record<string, Record<string, unknown>>> = {
   "components/drink-log/queries.ts": drinkLogQueries,
   "components/favorites/fragments.ts": favoritesFragments,
   "components/friend/fragments.ts": friendFragments,
+  "components/home/queries.ts": homeQueries,
   "components/item/ItemCard/fragments.ts": itemCardFragments,
   "components/item/fragments.ts": itemFragments,
   "components/map/queries.ts": mapQueries,

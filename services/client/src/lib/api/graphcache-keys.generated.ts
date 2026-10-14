@@ -24,6 +24,8 @@ export const KEYLESS_TYPES = [
   "ActivityEntryConnection",
   "ActivityEntryEdge",
   "AiCapabilities",
+  "AiJobConnection",
+  "AiJobEdge",
   "BarPantry",
   "BarPantryEntry",
   "BarRecipeMatch",

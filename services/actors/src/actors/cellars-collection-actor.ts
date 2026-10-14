@@ -62,6 +62,7 @@ import type {
   BottleSearchHit,
   BottleSearchInput,
   CappedList,
+  CellarItemDto,
   CellarsCollectionActorInterface,
   CollectionSection,
   CollectionStatsDto,
@@ -83,7 +84,8 @@ import {
   requireReverseEdgeBatch,
   ValidationError,
 } from "@cellar-assistant/contracts";
-import { type SQL, sql } from "@cellar-assistant/db/orm";
+import { cellarItems } from "@cellar-assistant/db";
+import { inArray, type SQL, sql } from "@cellar-assistant/db/orm";
 import type { KeysetCursor, PageScope } from "../lib/collection-actor-base.ts";
 import { ViewerCollectionActorBase } from "../lib/collection-actor-base.ts";
 import {
@@ -95,6 +97,7 @@ import { ARCS } from "../lib/item-arcs.ts";
 import { ITEM_TABLES } from "../lib/item-bindings.ts";
 import { type VisibleRow, visibleWhere } from "../lib/visibility-sql.ts";
 import { escapeLike } from "./brand-search-actor.ts";
+import { cellarItemDtoFrom } from "./cellar-actor.ts";
 
 type CellarIdRow = { readonly id: string; readonly sort_key: string };
 
@@ -115,6 +118,10 @@ type BottleRow = {
  * would find the item.
  */
 export const BOTTLE_NAME_SIMILARITY = 0.5;
+
+/** Home's Continue shelf: newest-opened first (`ci` is `cellar_items`). */
+const OPENED = sql`ci.open_at`;
+const BOTTLE_ID = sql`ci.id`;
 
 type ContainingRow = {
   readonly cellar_id: string;
@@ -273,6 +280,69 @@ export class CellarsCollectionActor
         byType,
       },
     };
+  }
+
+  /**
+   * Home's Continue shelf (X10): the viewer's open bottles across every
+   * cellar they created or co-own (`ownedBy` — `stats`'s set; a friend's
+   * open bottle is not yours to pour), newest opened first.
+   *
+   * Two statements: the keyset page of ids, then those rows whole, shaped by
+   * `CellarActor`'s own mapper so a bottle reads the same from either actor.
+   */
+  async openBottles(ctx: Ctx, page: PageArgs): Promise<Page<CellarItemDto>> {
+    const ids = await this.paged<CellarIdRow>(
+      ctx,
+      null,
+      page,
+      (after, limit) => this.#readOpen(ctx, after, limit),
+      (row) => ({ sort: row.sort_key, id: row.id }),
+      () => this.#openScope(ctx),
+    );
+    const wanted = ids.entries.map((entry) => entry.node.id);
+    if (wanted.length === 0) return { ...ids, entries: [] };
+    const rows = await this.db
+      .select()
+      .from(cellarItems)
+      .where(inArray(cellarItems.id, wanted));
+    const byId = new Map(rows.map((row) => [row.id, row]));
+    const entries = ids.entries.flatMap(({ cursor, node }) => {
+      const row = byId.get(node.id);
+      // Gone between the two reads: drop it rather than fail the shelf.
+      return row === undefined
+        ? []
+        : [{ cursor, node: cellarItemDtoFrom(row) }];
+    });
+    return { ...ids, entries };
+  }
+
+  /** Shared by the open-bottles page and its `count(*)` — see `PageScope`. */
+  #openScope(ctx: Ctx): PageScope {
+    const viewer = ctx.viewerId;
+    return {
+      from: sql`public.cellar_items ci join public.cellars c on c.id = ci.cellar_id`,
+      where:
+        viewer === null
+          ? sql`false`
+          : sql`${ownedBy(viewer)} and ci.open_at is not null and ci.empty_at is null`,
+    };
+  }
+
+  async #readOpen(
+    ctx: Ctx,
+    after: KeysetCursor | null,
+    limit: number,
+  ): Promise<readonly CellarIdRow[]> {
+    const { from, where } = this.#openScope(ctx);
+    const { rows } = await this.db.execute<CellarIdRow>(sql`
+      select ci.id, (${OPENED})::text as sort_key
+      from ${from}
+      where ${where}
+        and ${keysetWhere(after, OPENED, BOTTLE_ID, "timestamptz", "desc")}
+      order by ${keysetOrder(OPENED, BOTTLE_ID, "desc")}
+      limit ${limit}
+    `);
+    return rows;
   }
 
   /**

@@ -69,6 +69,9 @@ import "./place-edges.ts";
 // link `UserProfile`, `Item`, `ItemReview`, `TierListItem` and `Cellar`,
 // nearby places link `Place`, so it comes after every module declaring them.
 import "./discovery.ts";
+// X10: Home's `Viewer.openBottles`, `Viewer.aiJobs` and `CellarItem.cellar` —
+// references `cellar.ts`, `item.ts` and `errors.ts`, so it follows them.
+import "./home.ts";
 // X08: `Viewer.wantToTry` and the `isWantToTry` edges on `Item` and `Recipe`
 // reference `Viewer`, `Item`, `Recipe` and the `Place` stub, so it comes last.
 import "./want-to-try.ts";

@@ -23,6 +23,7 @@ import {
   seedBeer as seedNamedBeer,
   seedWine as seedNamedWine,
   seedCellar as seedOwnedCellar,
+  seedWine,
 } from "../lib/search-testing.ts";
 import {
   activate,
@@ -811,6 +812,82 @@ describe.skipIf(skip)("CellarsCollectionActor", () => {
           ]),
         ).rejects.toThrow(ForbiddenError);
         expect(actor.queryCount).toBe(0);
+      });
+    });
+  });
+
+  /** X10: Home's Continue shelf. */
+  describe("openBottles", () => {
+    it("lists open, unfinished bottles in cellars the viewer created or co-owns, newest opened first", async () => {
+      await withTestDb(async (db) => {
+        const viewer = await seedUser(db);
+        const friend = await seedUser(db);
+        await befriend(db, viewer, friend);
+        await befriend(db, friend, viewer);
+        const mine = await seedCellar(db, viewer, "PRIVATE");
+        const coOwned = await seedCellar(db, friend, "PRIVATE");
+        await db.execute(sql`
+          insert into public.cellar_owners (cellar_id, user_id)
+          values (${coOwned}::uuid, ${viewer}::uuid)
+        `);
+        const friends = await seedCellar(db, friend, "FRIENDS");
+        const wine = await seedWine(db, viewer, "Open wine");
+
+        const bottle = async (
+          cellar: string,
+          state: { open?: string; empty?: string },
+        ) => {
+          const id = await seedCellarItem(db, cellar, viewer, wine);
+          await db.execute(sql`
+            update public.cellar_items
+            set open_at = ${state.open ?? null}::timestamptz,
+                empty_at = ${state.empty ?? null}::timestamptz,
+                percentage_remaining = 40
+            where id = ${id}::uuid
+          `);
+          return id;
+        };
+        const older = await bottle(mine, { open: "2026-09-01T10:00:00Z" });
+        const newer = await bottle(coOwned, { open: "2026-09-20T10:00:00Z" });
+        await bottle(mine, {});
+        await bottle(mine, {
+          open: "2026-09-25T10:00:00Z",
+          empty: "2026-09-26T10:00:00Z",
+        });
+        await bottle(friends, { open: "2026-09-28T10:00:00Z" });
+
+        const actor = await activate(
+          createActor(CellarsCollectionActor, viewer, db),
+        );
+        const page = await actor.openBottles(
+          userCtx(viewer),
+          pageArgs({ first: 10 }),
+        );
+        expect(page.entries.map((e) => e.node.id)).toEqual([newer, older]);
+        expect(page.totalCount).toBe(2);
+        expect(page.entries[0]?.node).toMatchObject({
+          cellarId: coOwned,
+          item: wine,
+          percentageRemaining: 40,
+          emptyAt: null,
+        });
+
+        // Keyset paging: one at a time, the same two in the same order.
+        const first = await actor.openBottles(
+          userCtx(viewer),
+          pageArgs({ first: 1 }),
+        );
+        expect(first.hasNextPage).toBe(true);
+        const second = await actor.openBottles(
+          userCtx(viewer),
+          pageArgs({ first: 1, after: first.entries[0]?.cursor ?? null }),
+        );
+        expect(second.entries.map((e) => e.node.id)).toEqual([older]);
+        expect(second.hasNextPage).toBe(false);
+
+        await expect(
+          actor.openBottles(userCtx(friend), pageArgs({ first: 5 })),
+        ).rejects.toBeInstanceOf(ForbiddenError);
       });
     });
   });

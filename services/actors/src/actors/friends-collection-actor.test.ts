@@ -10,6 +10,7 @@
 import {
   type ActivityFilter,
   ForbiddenError,
+  type FriendsFeedFilter,
   pageArgs,
   userCtx,
   ValidationError,
@@ -513,6 +514,209 @@ describe.skipIf(skip)("FriendsCollectionActor", () => {
           actor.recentActivity(userCtx(bob, "r"), ALL),
         ).rejects.toBeInstanceOf(ForbiddenError);
         expect(actor.queryCount).toBe(0);
+      });
+    });
+  });
+
+  /**
+   * X10: Home's Friends section. Friends only, every kind's rule kept, and
+   * paged for real — a cursor names one point in the merged order, so no
+   * page skips or repeats a row however the kinds interleave.
+   */
+  describe("friendsFeed", () => {
+    const feedPage = async (
+      actor: FriendsCollectionActor,
+      viewer: string,
+      first: number,
+      after: string | null = null,
+      kinds: FriendsFeedFilter["kinds"] = [],
+    ) =>
+      await actor.friendsFeed(
+        userCtx(viewer, "r"),
+        { kinds },
+        pageArgs({ first, after }),
+      );
+
+    it("lists friends' activity, never the viewer's own or a stranger's", async () => {
+      await withTestDb(async (db) => {
+        const viewer = await seedUser(db);
+        const friend = await seedUser(db);
+        const stranger = await seedUser(db);
+        await seedFriendship(db, viewer, friend);
+        const wine = await seedWine(db, viewer, "Feed wine");
+        await seedItemReview(db, friend, wine, 4);
+        await seedItemReview(db, viewer, wine, 3);
+        await seedItemReview(db, stranger, wine, 2);
+        const actor = await activate(
+          createActor(FriendsCollectionActor, viewer, db),
+        );
+        const page = await feedPage(actor, viewer, 10);
+        expect(page.entries.map((e) => e.node.userId)).toEqual([friend]);
+        expect(page.hasNextPage).toBe(false);
+      });
+    });
+
+    it("keeps canSeeTierList and canSeeCellar: a friend's PRIVATE list or cellar never reaches the feed", async () => {
+      await withTestDb(async (db) => {
+        const viewer = await seedUser(db);
+        const friend = await seedUser(db);
+        await seedFriendship(db, viewer, friend);
+        const place = await seedPlace(db, { name: "P", lng: 0, lat: 0 });
+        const wine = await seedWine(db, friend, "Feed privacy wine");
+        type Privacy = "PRIVATE" | "FRIENDS" | "PUBLIC";
+        const lists = {} as Record<Privacy, string>;
+        const cellars = {} as Record<Privacy, string>;
+        for (const privacy of ["PRIVATE", "FRIENDS", "PUBLIC"] as const) {
+          const list = await seedTierList(db, {
+            createdById: friend,
+            privacy,
+          });
+          await seedTierListPlace(db, list, place);
+          lists[privacy] = list;
+          const cellar = await seedCellar(db, {
+            createdById: friend,
+            privacy,
+          });
+          await seedCellarItem(db, cellar, friend, wine);
+          cellars[privacy] = cellar;
+        }
+        const actor = await activate(
+          createActor(FriendsCollectionActor, viewer, db),
+        );
+        const { entries } = await feedPage(actor, viewer, 20);
+        const listIds = entries.map((e) => e.node.tierListItem?.tierListId);
+        const cellarIds = entries.map((e) => e.node.cellarId);
+        for (const privacy of ["PRIVATE", "FRIENDS", "PUBLIC"] as const) {
+          const ctx = userCtx(viewer, "r");
+          expect(listIds.includes(lists[privacy]), `list ${privacy}`).toBe(
+            canSeeTierList(ctx, {
+              createdById: friend,
+              privacy,
+              viewerIsFriendOfCreator: true,
+            }),
+          );
+          expect(
+            cellarIds.includes(cellars[privacy]),
+            `cellar ${privacy}`,
+          ).toBe(
+            canSeeCellar(ctx, {
+              createdById: friend,
+              privacy,
+              coOwnerIds: [],
+              viewerIsFriendOfCreator: true,
+            }),
+          );
+        }
+        // The two PRIVATE rows exist; the feed just never names them.
+        expect(listIds).not.toContain(lists.PRIVATE);
+        expect(cellarIds).not.toContain(cellars.PRIVATE);
+      });
+    });
+
+    it("is empty without friends, and refuses another viewer", async () => {
+      await withTestDb(async (db) => {
+        const viewer = await seedUser(db);
+        const other = await seedUser(db);
+        const actor = await activate(
+          createActor(FriendsCollectionActor, viewer, db),
+        );
+        expect((await feedPage(actor, viewer, 5)).entries).toEqual([]);
+        await expect(
+          actor.friendsFeed(
+            userCtx(other, "r"),
+            { kinds: [] },
+            pageArgs({ first: 5 }),
+          ),
+        ).rejects.toBeInstanceOf(ForbiddenError);
+        await expect(
+          actor.friendsFeed(
+            userCtx(viewer, "r"),
+            { kinds: ["SHARED"] } as unknown as FriendsFeedFilter,
+            pageArgs({ first: 5 }),
+          ),
+        ).rejects.toBeInstanceOf(ValidationError);
+        await expect(
+          feedPage(actor, viewer, 5, "offset:3"),
+        ).rejects.toBeInstanceOf(ValidationError);
+      });
+    });
+
+    it("walks every row exactly once across pages, kinds interleaved and tied", async () => {
+      await withTestDb(async (db) => {
+        const viewer = await seedUser(db);
+        const friend = await seedUser(db);
+        await seedFriendship(db, viewer, friend);
+        const cellar = await seedCellar(db, {
+          createdById: friend,
+          privacy: "FRIENDS",
+        });
+        const wines = [];
+        for (let i = 0; i < 4; i += 1) {
+          wines.push(await seedWine(db, friend, `Paged ${i}`));
+        }
+        // Two kinds at the very same instant, and two rows of one kind at
+        // another, so the cursor has to break ties on kind and on id.
+        const tied = "2026-10-01T12:00:00.000Z";
+        const tiedPair = "2026-10-01T11:00:00.000Z";
+        for (const [i, wine] of wines.entries()) {
+          await seedCellarItem(db, cellar, friend, wine);
+          await seedCheckIn(db, {
+            userId: friend,
+            item: wine,
+            createdAt: i < 2 ? tiedPair : `2026-10-0${2 + i}T09:00:00.000Z`,
+          });
+        }
+        await db.execute(sql`
+          update public.cellar_items set created_at = ${tied}::timestamptz
+          where cellar_id = ${cellar}::uuid
+        `);
+        const firstWine = wines[0];
+        if (firstWine === undefined) throw new Error("no wine seeded");
+        await seedCheckIn(db, {
+          userId: friend,
+          item: firstWine,
+          createdAt: tied,
+        });
+
+        const actor = await activate(
+          createActor(FriendsCollectionActor, viewer, db),
+        );
+        const everything = await feedPage(actor, viewer, 50);
+        const all = everything.entries.map(
+          (e) => `${e.node.kind}:${e.node.id}`,
+        );
+        expect(all).toHaveLength(9);
+
+        const walked: string[] = [];
+        let after: string | null = null;
+        for (let pages = 0; pages < 20; pages += 1) {
+          const page = await feedPage(actor, viewer, 2, after);
+          walked.push(
+            ...page.entries.map((e) => `${e.node.kind}:${e.node.id}`),
+          );
+          if (!page.hasNextPage) break;
+          after = page.entries.at(-1)?.cursor ?? null;
+        }
+        expect(walked).toEqual(all);
+        // Newest first, ties by kind A→Z.
+        const ats = everything.entries.map((e) => e.node.occurredAt);
+        expect([...ats].sort().reverse()).toEqual(ats);
+      });
+    });
+
+    it("keeps the kind filter across pages", async () => {
+      await withTestDb(async (db) => {
+        const viewer = await seedUser(db);
+        const friend = await seedUser(db);
+        await seedFriendship(db, viewer, friend);
+        const wine = await seedWine(db, friend, "Only logs");
+        await seedItemReview(db, friend, wine, 4);
+        await seedCheckIn(db, { userId: friend, item: wine });
+        const actor = await activate(
+          createActor(FriendsCollectionActor, viewer, db),
+        );
+        const page = await feedPage(actor, viewer, 5, null, ["CHECKED_IN"]);
+        expect(page.entries.map((e) => e.node.kind)).toEqual(["CHECKED_IN"]);
       });
     });
   });

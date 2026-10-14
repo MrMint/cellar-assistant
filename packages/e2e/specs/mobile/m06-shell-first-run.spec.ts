@@ -93,8 +93,16 @@ test("a brand-new account: lands Home, has My Cellar, and every empty screen off
     await page.getByLabel("Password").fill(`pw-${randomUUID()}`);
     await page.getByRole("button", { name: "Sign up", exact: true }).click();
 
-    // X01: Home, which shows search until X10 — not /cellars.
-    await expect(page).toHaveURL(/\/search(?:\?|$)/, { timeout: 30_000 });
+    // X01/X10: Home "Today" at `/` — not /cellars, and not /search any more.
+    await expect(page).toHaveURL(/^https?:\/\/[^/]+\/(?:\?.*)?$/, {
+      timeout: 30_000,
+    });
+    // A brand-new account has no bottles: Home's one first-run line and
+    // action, and no friends: N15's invite.
+    await expect(page.getByText("Your cellar is waiting.")).toBeVisible({
+      timeout: 20_000,
+    });
+    await expect(page.getByText("Taste is better compared.")).toBeVisible();
 
     // The starter cellar is made through the outbox, a few seconds behind
     // the sign-up: poll for it rather than racing it.

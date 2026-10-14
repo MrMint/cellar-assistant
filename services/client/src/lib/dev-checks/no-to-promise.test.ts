@@ -67,6 +67,15 @@ const EXEMPT: Readonly<Record<string, Exemption>> = {
       "move payload does not carry it. Its answer is used once, inside that " +
       "move, and only when it is that move (`movedEditSeq`).",
   },
+  "home/AiJobWatcher.tsx": {
+    calls: 1,
+    reason:
+      "X10's job watcher polls `me.aiJobs` (one bounded list, never paged) " +
+      "with network-only reads, one at a time: the next poll is scheduled " +
+      "only after the last one answered, a `running` flag the effect's " +
+      "cleanup clears drops any answer that lands after it, and it stops when " +
+      "nothing runs. A poll is a loop over one small set, not a list to page.",
+  },
   "recipe/RecipePhotoProcessor.tsx": {
     calls: 1,
     reason:

@@ -17,9 +17,16 @@ import { TabBar } from "./TabBar";
 export function contentLayout(pathname: string): {
   padded: boolean;
   scrolls: boolean;
+  tabBar: boolean;
 } {
   const isMap = pathname === "/map" || pathname.startsWith("/map/");
-  return { padded: !isMap, scrolls: pathname !== "/map" };
+  return {
+    padded: !isMap,
+    scrolls: pathname !== "/map",
+    // X10: search is a full-screen sheet on a phone, and a full-screen sheet
+    // hides the tab bar (design §2). The side rail stays from `sm` up.
+    tabBar: pathname !== "/search",
+  };
 }
 
 /**
@@ -36,7 +43,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname() ?? "/";
   useNavHistoryTracker();
   usePointerDownPrefetch();
-  const { padded, scrolls } = contentLayout(pathname);
+  const { padded, scrolls, tabBar } = contentLayout(pathname);
 
   return (
     <div
@@ -47,8 +54,10 @@ export function AppShell({ children }: { children: ReactNode }) {
         // tab bar's glass runs under the home indicator. It has to be this
         // element: the shell clips (overflow-hidden), so a negative margin
         // on the tab bar itself was cut off at the shell's edge. Nothing
-        // between the root layout and here may clip either.
-        "max-sm:mb-[calc(-1*env(safe-area-inset-bottom))]",
+        // between the root layout and here may clip either. Without a tab
+        // bar (the search sheet, X10) there is no glass to run under it, so
+        // the root layout's padding stays and results clear the indicator.
+        tabBar && "max-sm:mb-[calc(-1*env(safe-area-inset-bottom))]",
       )}
     >
       <SideRail className="hidden sm:flex" />
@@ -62,7 +71,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       >
         {children}
       </main>
-      <TabBar className="sm:hidden" />
+      {tabBar && <TabBar className="sm:hidden" />}
     </div>
   );
 }

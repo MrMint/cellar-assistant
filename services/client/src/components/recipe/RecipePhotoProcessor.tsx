@@ -11,6 +11,7 @@ import {
   Success,
 } from "@/components/app/icons";
 import { Link } from "@/components/app/Link";
+import { kickAiJobs } from "@/components/home/ai-job-store";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
@@ -213,6 +214,9 @@ export function RecipePhotoProcessor({
         setPhase({ kind: "failed", reason: aiOutcome(result.error).message });
         return;
       }
+      // X10: the shell's watcher follows the job, so the recipe's "ready"
+      // toast lands wherever the person has gone by then.
+      kickAiJobs();
       setPhase({
         kind: "running",
         jobId: result.data.id,

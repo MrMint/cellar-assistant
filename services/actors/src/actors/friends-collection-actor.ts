@@ -43,6 +43,7 @@
  */
 import type {
   ActivityEntryDto,
+  ActivityFeedCursor,
   ActivityFilter,
   ActivityKind,
   ActorCategory,
@@ -51,6 +52,7 @@ import type {
   FriendRequestFilter,
   FriendRequestRowDto,
   FriendsCollectionActorInterface,
+  FriendsFeedFilter,
   ItemRef,
   Page,
   PageArgs,
@@ -58,13 +60,18 @@ import type {
 import {
   ACTIVITY_KINDS,
   ACTIVITY_MAX_LIMIT,
+  activityFeedCursor,
   ConflictError,
+  compareFeedEntries,
+  emptyPage,
   FriendsCollectionActorDescriptor,
   isActivityKind,
   isFriendRequestFilter,
   isItemType,
   isTierListEntryType,
+  keysetPage,
   mapPage,
+  parseActivityFeedCursor,
   ValidationError,
 } from "@cellar-assistant/contracts";
 import { type SQL, sql } from "@cellar-assistant/db/orm";
@@ -147,7 +154,11 @@ type AddedActivityRow = {
  * them. `null` for `friends`, the filter for `requests`, an `ActivityFilter`
  * for `recentActivity`.
  */
-type FriendsInput = FriendRequestFilter | ActivityFilter | null;
+type FriendsInput =
+  | FriendRequestFilter
+  | ActivityFilter
+  | FriendsFeedFilter
+  | null;
 
 /** A row's item, or `null` when none of the six arc columns named one. */
 const itemRefOf = (type: string | null, id: string | null): ItemRef | null => {
@@ -188,6 +199,52 @@ const requireActivityFilter = (input: unknown): ActivityFilter => {
     );
   }
   return { kinds: candidate.kinds, limit };
+};
+
+/** Refuses anything but `{ kinds: ActivityKind[] }`. */
+const requireFeedFilter = (input: unknown): FriendsFeedFilter => {
+  const candidate = input as Partial<FriendsFeedFilter> | null;
+  if (
+    candidate === null ||
+    typeof candidate !== "object" ||
+    !Array.isArray(candidate.kinds) ||
+    !candidate.kinds.every(
+      (kind) => typeof kind === "string" && isActivityKind(kind),
+    )
+  ) {
+    throw new ValidationError(`unknown feed filter ${JSON.stringify(input)}`);
+  }
+  return { kinds: candidate.kinds };
+};
+
+/**
+ * A row's place in the feed, compared at the precision the feed carries:
+ * `occurredAt` is ISO to the millisecond (the driver drops the rest), so the
+ * SQL orders and pages by the same truncation — otherwise two rows inside
+ * one millisecond could straddle a page and one be skipped.
+ */
+const feedAt = (at: SQL): SQL => sql`date_trunc('milliseconds', ${at})`;
+
+/** `ORDER BY` for one kind's read: the feed's order within a kind. */
+const feedOrder = (at: SQL, id: SQL): SQL =>
+  sql`${feedAt(at)} desc, ${id} desc`;
+
+/**
+ * Rows of `kind` strictly after `cursor` in the feed's order (`occurredAt`
+ * desc, kind asc, id desc) — `isAfterFeedCursor` in `contracts`, as SQL.
+ */
+const afterFeedCursor = (
+  kind: ActivityKind,
+  cursor: ActivityFeedCursor | null,
+  at: SQL,
+  id: SQL,
+): SQL => {
+  if (cursor === null) return sql`true`;
+  const bound = sql`${cursor.at}::timestamptz`;
+  if (kind > cursor.kind) return sql`${feedAt(at)} <= ${bound}`;
+  if (kind < cursor.kind) return sql`${feedAt(at)} < ${bound}`;
+  return sql`(${feedAt(at)} < ${bound}
+    or (${feedAt(at)} = ${bound} and ${id} < ${cursor.id}::uuid))`;
 };
 
 const REVIEWS = ARCS.itemReviews;
@@ -324,7 +381,75 @@ export class FriendsCollectionActor
     });
   }
 
-  async #reviews(authors: SQL, limit: number): Promise<ActivityEntryDto[]> {
+  /**
+   * Home's Friends section (X10): `recentActivity`'s four reads, with two
+   * differences — the authors are the viewer's **friends** only (Home's own
+   * sections already show the viewer's), and the list pages for real.
+   *
+   * Each kind reads `first + 1` rows strictly after the cursor
+   * (`afterFeedCursor`), the merge sorts them into the feed's order and keeps
+   * `first`. Whatever a kind contributes beyond that is read again on the
+   * next page, which is the price of never holding anything between turns;
+   * four bounded statements per page.
+   */
+  async friendsFeed(
+    ctx: Ctx,
+    filter: FriendsFeedFilter,
+    page: PageArgs,
+  ): Promise<Page<ActivityEntryDto>> {
+    const after =
+      page.after === null ? null : parseActivityFeedCursor(page.after);
+    return await this.batch(
+      ctx,
+      filter,
+      emptyPage<ActivityEntryDto>(),
+      async () => {
+        const viewer = ctx.viewerId;
+        if (viewer === null) return emptyPage();
+        const friendIds = friendIdsOf(
+          viewer,
+          await friendshipsOf(this.db, viewer),
+        );
+        if (friendIds.length === 0) return emptyPage();
+        const scope: VisibilityScope = bypassesPolicy(ctx)
+          ? { kind: "everything" }
+          : { kind: "viewer", viewer, friendIds };
+        const authors = uuidArray(friendIds, "author id");
+        const kinds: readonly ActivityKind[] =
+          filter.kinds.length === 0 ? ACTIVITY_KINDS : filter.kinds;
+        const limit = page.first + 1;
+
+        const entries: ActivityEntryDto[] = [];
+        if (kinds.includes("REVIEWED")) {
+          entries.push(...(await this.#reviews(authors, limit, after)));
+        }
+        if (kinds.includes("TIER_LISTED")) {
+          entries.push(
+            ...(await this.#tierListed(authors, scope, limit, after)),
+          );
+        }
+        if (kinds.includes("ADDED")) {
+          entries.push(...(await this.#added(authors, scope, limit, after)));
+        }
+        if (kinds.includes("CHECKED_IN")) {
+          entries.push(
+            ...(await this.#checkedIn(authors, scope, viewer, limit, after)),
+          );
+        }
+        return keysetPage(
+          entries.sort(compareFeedEntries),
+          page,
+          activityFeedCursor,
+        );
+      },
+    );
+  }
+
+  async #reviews(
+    authors: SQL,
+    limit: number,
+    after: ActivityFeedCursor | null = null,
+  ): Promise<ActivityEntryDto[]> {
     const { rows } = await this.db.execute<ReviewActivityRow>(sql`
       select r.id, r.user_id, r.score, r.text::text as text,
              r.created_at, r.updated_at,
@@ -332,7 +457,8 @@ export class FriendsCollectionActor
              ${REVIEWS.idExpr("r")} as item_id
       from public.item_reviews r
       where r.user_id = any(${authors})
-      order by r.created_at desc, r.id desc
+        and ${afterFeedCursor("REVIEWED", after, sql`r.created_at`, sql`r.id`)}
+      order by ${feedOrder(sql`r.created_at`, sql`r.id`)}
       limit ${limit}
     `);
     const entries: ActivityEntryDto[] = [];
@@ -371,6 +497,7 @@ export class FriendsCollectionActor
     authors: SQL,
     scope: VisibilityScope,
     limit: number,
+    after: ActivityFeedCursor | null = null,
   ): Promise<ActivityEntryDto[]> {
     const visible = canSeeSql(scope, {
       createdBy: sql`t.created_by_id`,
@@ -402,7 +529,8 @@ export class FriendsCollectionActor
               : null,
           sql`ti.place_id`,
         )}
-      order by ti.created_at desc, ti.id desc
+        and ${afterFeedCursor("TIER_LISTED", after, sql`ti.created_at`, sql`ti.id`)}
+      order by ${feedOrder(sql`ti.created_at`, sql`ti.id`)}
       limit ${limit}
     `);
     return rows.map((row): ActivityEntryDto => {
@@ -444,6 +572,7 @@ export class FriendsCollectionActor
     authors: SQL,
     scope: VisibilityScope,
     limit: number,
+    after: ActivityFeedCursor | null = null,
   ): Promise<ActivityEntryDto[]> {
     const visible = canSeeSql(scope, {
       createdBy: sql`c.created_by_id`,
@@ -458,7 +587,8 @@ export class FriendsCollectionActor
       join public.cellars c on c.id = ci.cellar_id
       where ci.created_by = any(${authors})
         and ${visible}
-      order by ci.created_at desc, ci.id desc
+        and ${afterFeedCursor("ADDED", after, sql`ci.created_at`, sql`ci.id`)}
+      order by ${feedOrder(sql`ci.created_at`, sql`ci.id`)}
       limit ${limit}
     `);
     const entries: ActivityEntryDto[] = [];
@@ -499,6 +629,7 @@ export class FriendsCollectionActor
     scope: VisibilityScope,
     viewer: string,
     limit: number,
+    after: ActivityFeedCursor | null = null,
   ): Promise<ActivityEntryDto[]> {
     const visible = canSeeCheckInSql(scope, "ci");
     const { rows } = await this.db.execute<CheckInSqlRow>(sql`
@@ -510,7 +641,13 @@ export class FriendsCollectionActor
           and ${visible}
         order by ci.group_id, (ci.id = ci.group_id) desc, ci.created_at, ci.id
       ) occasion
-      order by occasion.created_at desc, occasion.id desc
+      where ${afterFeedCursor(
+        "CHECKED_IN",
+        after,
+        sql`occasion.created_at`,
+        sql`occasion.id`,
+      )}
+      order by ${feedOrder(sql`occasion.created_at`, sql`occasion.id`)}
       limit ${limit}
     `);
     return rows.map((row): ActivityEntryDto => {
@@ -548,7 +685,8 @@ export class FriendsCollectionActor
       }
       return "allow";
     }
-    requireActivityFilter(input);
+    if ("limit" in input) requireActivityFilter(input);
+    else requireFeedFilter(input);
     return "allow";
   }
 

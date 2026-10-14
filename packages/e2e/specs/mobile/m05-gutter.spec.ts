@@ -59,6 +59,8 @@ type Target = {
   path: () => string;
   /** What has to be on screen before measuring means anything. */
   ready: (page: Page) => Locator;
+  /** X10: the search sheet is full screen, with no tab bar to wait for. */
+  sheet?: boolean;
 };
 
 const targets: Target[] = [
@@ -73,10 +75,17 @@ const targets: Target[] = [
     ready: (page) => page.locator(`a[href="/cellars/${cellarId}/items"]`),
   },
   {
-    name: "search",
+    name: "the search sheet",
     path: () => "/search",
     ready: (page) =>
       page.getByRole("searchbox").or(page.getByRole("textbox")).first(),
+    sheet: true,
+  },
+  {
+    name: "Home (X10)",
+    path: () => "/",
+    ready: (page) =>
+      page.getByRole("link", { name: "Search bottles, places and recipes" }),
   },
 ];
 
@@ -186,7 +195,7 @@ for (const target of targets) {
     await page.goto(target.path());
     await expect(target.ready(page)).toBeVisible();
     await settleNetwork(page);
-    await bottomNav(page);
+    if (target.sheet !== true) await bottomNav(page);
 
     const { viewportWidth, clipped, probes } = await measure(page);
     expect(viewportWidth).toBe(375);

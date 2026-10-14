@@ -100,7 +100,7 @@ test("semantic item search returns ranked results", async ({ api }) => {
 const searchBox = (page: import("@playwright/test").Page) =>
   page.getByRole("textbox").first();
 
-test("the landing view: greeting, collection line, Scan, Photo — and no quick-link chips (X01)", async ({
+test("the search sheet: its title and Close, Scan, Photo — and no quick-link chips (X01, X10)", async ({
   api,
   primary,
 }) => {
@@ -115,9 +115,16 @@ test("the landing view: greeting, collection line, Scan, Photo — and no quick-
   const { imageSearch } = await aiCapabilities(api);
   const noise = watch(primary);
   await primary.goto("/search");
+  // X10: a full-screen sheet with a title and Close; the greeting is Home's.
+  await expect(
+    primary.getByRole("heading", { name: "Search", level: 1 }),
+  ).toBeVisible();
+  await expect(
+    primary.getByRole("button", { name: "Close search" }),
+  ).toBeVisible();
   await expect(
     primary.getByRole("heading", { name: /^Good (morning|afternoon|evening)/ }),
-  ).toBeVisible();
+  ).toHaveCount(0);
   await expect(primary.getByRole("button", { name: "Scan" })).toBeVisible();
   const photo = primary.getByRole("button", { name: "Photo" });
   if (imageSearch) await expect(photo).toBeVisible();
@@ -130,7 +137,7 @@ test("the landing view: greeting, collection line, Scan, Photo — and no quick-
   expect(noise.pageErrors, "the search page threw").toEqual([]);
 });
 
-test("the collection line counts only cellars you own or co-own (G36)", async ({
+test("Home's collection line counts only cellars you own or co-own (G36)", async ({
   api,
   api2,
   primary,
@@ -160,7 +167,8 @@ test("the collection line counts only cellars you own or co-own (G36)", async ({
       "the stranger's PUBLIC cellar should be visible — or this test proves nothing",
     ).toBe("Cellar");
 
-    await primary.goto("/search");
+    // X10: the line moved with the greeting, to Home.
+    await primary.goto("/");
     const total = Object.values(
       after.itemCounts as Record<string, number>,
     ).reduce((a, b) => a + b, 0);
@@ -369,7 +377,7 @@ async function rank(api: Api, tierListId: string, teaId: string) {
   );
 }
 
-test("Recent Activity shows a friend's review and their FRIENDS list — never their PRIVATE one", async ({
+test("Home's Friends feed shows a friend's review and their FRIENDS list — never their PRIVATE one (X10)", async ({
   api,
   api2,
   primary,
@@ -404,14 +412,30 @@ test("Recent Activity shows a friend's review and their FRIENDS list — never t
     await rank(api2, secret, teaId);
     await rank(api2, shared, teaId);
 
-    // Through the API: the PRIVATE list contributes no entry at all.
-    const feed = await api.query(
+    // Through the API: the PRIVATE list contributes no entry at all — in
+    // the old feed's field, and in Home's paged friends-only one.
+    const recent = await api.query(
       `query { me { recentActivity(kinds: [TIER_LISTED, REVIEWED], limit: 20, first: 40) {
+         edges { node { tierListItem { tierListId } } }
+       } } }`,
+    );
+    expect(
+      recent.me.recentActivity.edges.map(
+        (e: any) => e.node.tierListItem?.tierListId,
+      ),
+      "a friend's PRIVATE list leaked into recentActivity",
+    ).not.toContain(secret);
+    const feed = await api.query(
+      `query { me { friendsFeed(kinds: [TIER_LISTED, REVIEWED], first: 50) {
          edges { node { kind user { id } item { id }
            tierListItem { tierListId tierList { name } } } }
        } } }`,
     );
-    const nodes = feed.me.recentActivity.edges.map((e: any) => e.node);
+    const nodes = feed.me.friendsFeed.edges.map((e: any) => e.node);
+    expect(
+      nodes.every((n: any) => n.user?.id !== me),
+      "the friends feed listed the viewer's own activity",
+    ).toBe(true);
     const listIds = nodes.map((n: any) => n.tierListItem?.tierListId);
     expect(listIds, "the friend's FRIENDS list is missing").toContain(shared);
     expect(listIds, "a friend's PRIVATE list leaked").not.toContain(secret);
@@ -426,32 +450,27 @@ test("Recent Activity shows a friend's review and their FRIENDS list — never t
       "the friend's review is missing from the feed",
     ).toBe(true);
 
-    // Through the page, filtered as the old toggles filter (?activity=).
+    // Through the page: Home's Friends section, in sentences (X10).
     const noise = watch(primary);
-    await primary.goto("/search?activity=reviewed");
+    await primary.goto("/");
+    const friends = primary.getByRole("region", {
+      name: "Friends",
+      exact: true,
+    });
+    await expect(friends).toBeVisible({ timeout: 20_000 });
+    const rated = friends
+      .getByRole("article")
+      .filter({ hasText: teaName })
+      .filter({ hasText: "★4.5" });
+    await expect(rated.first()).toContainText(/ rated /);
     await expect(
-      primary.getByText("Recent Activity", { exact: true }),
-    ).toBeVisible();
-    const reviewCard = primary.getByRole("link").filter({ hasText: teaName });
-    await expect(reviewCard.first()).toBeVisible();
-    // X08: the row is no longer one big link — the name is the link,
-    // stretched over the row, so the row's Want to try bookmark can be a
-    // button of its own. "Rated 4.5" is in the row, beside the link: the
-    // innermost element holding both is the row.
-    const reviewRow = primary
-      .locator("div")
-      .filter({ has: reviewCard.first() })
-      .filter({ hasText: "Rated 4.5" })
-      .last();
-    await expect(reviewRow).toBeVisible();
-    await expect(reviewCard.first()).toHaveAttribute("href", `/teas/${teaId}`);
-
-    await primary.goto("/search?activity=tier-listed");
+      rated.first().getByRole("link", { name: teaName }),
+    ).toHaveAttribute("href", `/teas/${teaId}`);
     await expect(
-      primary.getByText(`#1 in ${sharedName}`).first(),
+      friends.getByText(new RegExp(`#1 in ${sharedName}`)).first(),
     ).toBeVisible();
     expect(await bodyText(primary)).not.toContain(secretName);
-    expect(noise.pageErrors, "the search page threw").toEqual([]);
+    expect(noise.pageErrors, "Home threw").toEqual([]);
   } finally {
     for (const id of [secret, shared]) {
       await api2.query(
@@ -463,7 +482,7 @@ test("Recent Activity shows a friend's review and their FRIENDS list — never t
   }
 });
 
-test("Nearby Places renders from the geolocation cookie, nearest first", async ({
+test("Home's Nearby Places renders from the geolocation cookie, nearest first (X10)", async ({
   primary,
 }) => {
   // Somewhere with nothing else nearby (open Atlantic), so the strip's six
@@ -481,7 +500,7 @@ test("Nearby Places renders from the geolocation cookie, nearest first", async (
         { name: "user_location", value: `${lat},${lng}`, url: BASE_URL },
       ]);
     const noise = watch(primary);
-    await primary.goto("/search");
+    await primary.goto("/");
     await expect(
       primary.getByText("Nearby Places", { exact: true }),
     ).toBeVisible();
@@ -498,14 +517,14 @@ test("Nearby Places renders from the geolocation cookie, nearest first", async (
     );
     await expect(cards.nth(1)).toContainText(far.name);
     await expect(primary.getByText("View all on map")).toBeVisible();
-    expect(noise.pageErrors, "the search page threw").toEqual([]);
+    expect(noise.pageErrors, "Home threw").toEqual([]);
   } finally {
     await deletePlace(near.id);
     await deletePlace(far.id);
   }
 });
 
-test("the landing view is visible before any script runs", async ({
+test("the search sheet and Home are visible before any script runs", async ({
   browser,
 }) => {
   // AnimateIn used to server-render `opacity:0` and wait for framer-motion to
@@ -538,6 +557,12 @@ test("the landing view is visible before any script runs", async ({
         timeout: 5_000,
       })
       .toBe(1);
+    // Home (X10): its search field is there, and no greeting from the
+    // server's clock (X01, observation 6).
+    await page.goto("/");
+    await expect(
+      page.getByRole("link", { name: "Search bottles, places and recipes" }),
+    ).toBeVisible();
     await expect(
       page.getByRole("heading", { name: /^Good (morning|afternoon|evening)/ }),
       "the server rendered a greeting from its own clock",
