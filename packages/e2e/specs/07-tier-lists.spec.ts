@@ -40,8 +40,19 @@ const escapeRegExp = (text: string) =>
 let tierListId: string;
 let listName: string;
 
-test("creates a tier list", async ({ primary }) => {
+test("creates a tier list", async ({ api, primary }) => {
   listName = unique("E2 Tier List");
+  // Whether the form will offer "Start with your ratings" for wines, asked
+  // up front: the switch appears only once the form's own templates read
+  // lands, so a bare `isVisible()` raced it and, losing, created the list
+  // pre-filled (the switch is on by default).
+  const templates = await api.raw(
+    `query { me { tierListTemplates(first: 10) { edges { node { listType ratedCount } } } } }`,
+  );
+  const ratedWines =
+    (templates.data?.me?.tierListTemplates?.edges ?? []).find(
+      (e: any) => e.node.listType === "wine",
+    )?.node.ratedCount ?? 0;
 
   await primary.goto("/tier-lists/add");
   await primary.getByLabel("Name").fill(listName);
@@ -53,7 +64,8 @@ test("creates a tier list", async ({ primary }) => {
   const fromRatings = primary.getByRole("switch", {
     name: /Start with your ratings/,
   });
-  if (await fromRatings.isVisible()) {
+  if (ratedWines > 0) {
+    await expect(fromRatings).toBeChecked({ timeout: 15_000 });
     await fromRatings.click();
     await expect(fromRatings).not.toBeChecked();
   }
