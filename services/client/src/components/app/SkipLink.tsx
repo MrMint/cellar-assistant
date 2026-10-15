@@ -44,12 +44,15 @@ export function SkipLink({
       className={cn(
         "sr-only focus-visible:not-sr-only",
         "focus-visible:fixed focus-visible:top-[calc(env(safe-area-inset-top)+0.5rem)] focus-visible:left-[calc(env(safe-area-inset-left)+1rem)] focus-visible:z-[100]",
-        "type-callout rounded-full bg-primary px-4 py-3 font-semibold text-primary-foreground shadow-lg outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50",
+        "type-callout rounded-full bg-primary font-semibold text-primary-foreground shadow-lg outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50",
         className,
       )}
       {...props}
     >
-      Skip to content
+      {/* The padding lives here, not on the link: `not-sr-only` resets the
+          link's own padding to 0 when it shows, and `sr-only`'s 1px box
+          would otherwise be padded out to 32×24 while hidden. */}
+      <span className="block px-4 py-3">Skip to content</span>
     </a>
   );
 }

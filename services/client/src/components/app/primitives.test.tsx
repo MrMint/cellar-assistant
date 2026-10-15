@@ -449,5 +449,8 @@ describe("SkipLink (X21)", () => {
     assert.match(cls, /(^| )sr-only( |$)/);
     assert.match(cls, /focus-visible:not-sr-only/);
     assert.match(cls, /focus-visible:ring-/);
+    // Padding on the link would pad sr-only's 1px box out while hidden and
+    // be reset by not-sr-only once shown: it lives on the inner span.
+    assert.doesNotMatch(cls, /(^| )p[xy]?-\d/);
   });
 });

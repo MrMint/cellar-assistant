@@ -202,8 +202,11 @@ test("/recipes: newest first, as the old page (UI parity #15)", async ({
 
   // The grid, unsearched: the first card is the group just created.
   await primary.goto("/recipes");
-  // Each card's name is an h2 under the page's h1 (X21).
-  const firstCard = primary.locator("main h2").first();
+  // Each card's name is an h3 under the "All recipes" h2 (X21).
+  const firstCard = primary
+    .getByRole("region", { name: "All recipes" })
+    .locator("h3")
+    .first();
   await expect(firstCard).toHaveText(g.recipeNames[0] ?? "", {
     timeout: 20_000,
   });
