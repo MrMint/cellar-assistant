@@ -233,9 +233,12 @@ test("a per-type cellar add names the cellar; Open it now shows the bottle, unop
     0,
   );
   await sheet.getByRole("button", { name: "Open it now" }).tap();
-  await page.waitForURL(new RegExp(`/cellars/${cellarId}/teas/[0-9a-f-]+$`), {
-    timeout: 30_000,
-  });
+  await page.waitForURL(
+    new RegExp(`/cellars/${cellarId}/teas/[0-9a-f-]{36}$`),
+    {
+      timeout: 30_000,
+    },
+  );
   const bottleId = new URL(page.url()).pathname.split("/").at(-1) ?? "";
 
   const api = await Gql.forAccount("primary");
