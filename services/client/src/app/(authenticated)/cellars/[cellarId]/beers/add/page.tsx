@@ -1,10 +1,13 @@
-import { ItemOnboarding } from "@/components/common/OnboardingWizard/ItemOnboarding";
+import { PinnedCellarCapture } from "@/components/capture/PinnedCellarCapture";
 
 /**
- * `/cellars/[cellarId]/beers/add` — `82450ad1`'s `AddBeer`: the onboarding
- * wizard with the cellar pinned, so the item is filed as a bottle (with its
- * display photo) once it exists.
+ * `/cellars/[cellarId]/beers/add` — `82450ad1`'s `AddBeer`: the capture
+ * surface with the cellar pinned and the type fixed, so the item is filed as
+ * a bottle (with its display photo) once it exists. The cellar is read first
+ * (`PinnedCellarCapture`), so the success sheet names it.
  */
+export const dynamic = "force-dynamic";
+
 export default async function AddBeer({
   params,
   searchParams,
@@ -15,11 +18,5 @@ export default async function AddBeer({
   const { cellarId } = await params;
   const { draft } = await searchParams;
 
-  return (
-    <ItemOnboarding
-      type="BEER"
-      cellarId={cellarId}
-      resumeId={typeof draft === "string" ? draft : undefined}
-    />
-  );
+  return <PinnedCellarCapture cellarId={cellarId} type="BEER" draft={draft} />;
 }

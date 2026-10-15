@@ -2,7 +2,6 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
-import { CAPTURE_OPTIONS } from "./nav";
 
 /**
  * Prefetch on `pointerdown` (X24, design §4.10).
@@ -91,15 +90,4 @@ export function usePointerDownPrefetch(): void {
         capture: true,
       });
   }, [router]);
-}
-
-/**
- * The ＋ button's pointerdown (tab bar and side rail): warm the chooser's
- * four destinations while the finger is still down, so whichever row is
- * picked commits into its shell.
- */
-export function prefetchCaptureDestinations(router: {
-  prefetch: (href: string) => void;
-}): void {
-  for (const option of CAPTURE_OPTIONS) router.prefetch(option.href);
 }

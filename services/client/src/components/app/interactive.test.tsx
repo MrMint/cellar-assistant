@@ -1,6 +1,6 @@
 /**
  * The app primitives that need a DOM: sheets and dialogs (portals, focus,
- * Escape), the tab bar and its chooser, the segmented control, the rating
+ * Escape), the tab bar and its ＋, the segmented control, the rating
  * input, AppBar's Back, and toasts with Undo. Driven through happy-dom with
  * `next/navigation` stood in for, the way `search-page-layout.test.tsx` does.
  */
@@ -343,12 +343,12 @@ describe("TabBar", () => {
     await render(<TabBar />);
     const nav = container.querySelector('nav[aria-label="Main"]');
     assert.ok(nav);
-    const links = [...nav.querySelectorAll("a")];
+    const links = [...nav.querySelectorAll("a:not([aria-label])")];
     assert.deepEqual(
       links.map((a) => a.textContent),
       ["Home", "Cellar", "Map", "Me"],
     );
-    const add = nav.querySelector('button[aria-label="Add"]');
+    const add = nav.querySelector('a[aria-label="Add"]');
     assert.ok(add, "the capture button");
     assert.deepEqual(
       [...nav.querySelectorAll("[aria-current=page]")].map(
@@ -419,14 +419,24 @@ describe("TabBar", () => {
     assert.doesNotMatch(shell?.className ?? "", /safe-area-inset-bottom/);
   });
 
-  test("＋ opens the chooser: Bottle · Menu · Recipe · Place", async () => {
+  test("＋ goes straight to the capture surface — no chooser (X06)", async () => {
     await render(<TabBar />);
-    await click(container.querySelector('button[aria-label="Add"]'));
-    await flush(10);
-    const dialog = document.querySelector('[role="dialog"]');
-    assert.ok(dialog);
-    const labels = [...dialog.querySelectorAll("a")].map((a) => a.textContent);
-    assert.deepEqual(labels, ["Bottle", "Menu", "Recipe", "Place"]);
+    const add = container.querySelector('a[aria-label="Add"]');
+    assert.equal(add?.getAttribute("href"), "/add");
+    assert.equal(add?.getAttribute("aria-haspopup"), null);
+    assert.equal(document.querySelector('[role="dialog"]'), null);
+  });
+
+  test("the capture surface hides the tab bar, and the shell keeps the inset", async () => {
+    pathname = "/add";
+    await render(
+      <AppShell>
+        <p>camera</p>
+      </AppShell>,
+    );
+    assert.equal(container.querySelector('[data-slot="tab-bar"]'), null);
+    const shell = container.querySelector('[data-slot="app-shell"]');
+    assert.doesNotMatch(shell?.className ?? "", /max-sm:mb-/);
   });
 
   test("re-tap: scroll to top first, then pop to the tab's root", () => {

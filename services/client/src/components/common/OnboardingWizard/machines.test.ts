@@ -12,7 +12,6 @@ import type {
   DefaultValuesResult,
   FetchDefaultsInput,
   InsertCellarItemInput,
-  OpenCellarItemInput,
   RereadLabelsInput,
   RereadLabelsResult,
   SearchByImageInput,
@@ -52,6 +51,8 @@ const run = ({
   resumeId = undefined as string | undefined,
   onRestart = undefined as (() => void) | undefined,
   labelSent = undefined as boolean | undefined,
+  storedFrontLabel = undefined as string | undefined,
+  resumePhoto = undefined as string | undefined,
 }) => {
   const filed: InsertCellarItemInput[] = [];
   const closed: CloseOnboardingInput[] = [];
@@ -61,7 +62,6 @@ const run = ({
   const reread_: RereadLabelsInput[] = [];
   const read: FetchDefaultsInput[] = [];
   const uploaded: unknown[] = [];
-  const opened: OpenCellarItemInput[] = [];
   const pushed: string[] = [];
   const machine = OnboardingMachine.provide({
     actors: {
@@ -80,12 +80,6 @@ const run = ({
           return reread;
         },
       ),
-      openCellarItem: fromPromise(
-        async ({ input }: { input: OpenCellarItemInput }) => {
-          opened.push(input);
-          return true;
-        },
-      ),
       uploadFiles: fromPromise(async ({ input }) => {
         uploaded.push(input);
         return { frontLabelFileId: "front" };
@@ -102,6 +96,9 @@ const run = ({
             itemOnboardingId: resumeId ?? "onb",
             confidence,
             ...(labelSent === undefined ? {} : { labelSent }),
+            ...(storedFrontLabel === undefined
+              ? {}
+              : { frontLabelFileId: storedFrontLabel }),
           };
         },
       ),
@@ -139,6 +136,7 @@ const run = ({
       cellarId: inCellar ? "cellar-1" : undefined,
       itemType,
       resumeId,
+      resumePhoto,
       onRestart,
     },
   });
@@ -160,7 +158,6 @@ const run = ({
     reread: reread_,
     read,
     uploaded,
-    opened,
     pushed,
   };
 };
@@ -408,14 +405,16 @@ const wineMatch = (itemId: string, name = itemId): ExistingItem => ({
 
 describe("snap-once (X05): the photo search rides beside the read (G32, D12)", () => {
   test("the shutter's photo is searched, as the type being added, and its matches lead the draft", async () => {
-    const { actor, imageSearched } = run({
+    const { actor, imageSearched, uploaded } = run({
       confidence: 0.5,
       imageMatches: [wineMatch("w1"), wineMatch("declined")],
     });
     await settled(actor);
     await waitFor(actor, (s) => s.context.imageMatches.length > 0);
     assert.equal(imageSearched.length, 1);
-    assert.equal(imageSearched[0]?.displayImage, "data:image/jpeg;base64,AA==");
+    // X06: the search reads the label's own file — one upload, not two.
+    assert.equal(uploaded.length, 1);
+    assert.equal(imageSearched[0]?.imageFileId, "front");
     assert.equal(imageSearched[0]?.itemType, "WINE");
     // Items declined earlier are not offered again.
     assert.deepEqual(
@@ -452,12 +451,26 @@ describe("snap-once (X05): the photo search rides beside the read (G32, D12)", (
     await waitFor(actor, () => closed.length > 0);
   });
 
-  test("the display photo is the front label (N21)", async () => {
+  test("the display photo is the front label (N21), attached from its upload (X06)", async () => {
     const { actor, filed } = run({ confidence: 0.5 });
     await settled(actor);
     actor.send({ type: "CREATED", itemId: "new", name: "New wine" });
     await waitFor(actor, (s) => s.value === "finalPrompt");
     assert.equal(filed[0]?.displayImage, "data:image/jpeg;base64,AA==");
+    assert.equal(filed[0]?.displayImageFileId, "front");
+  });
+
+  test("a catalogued pick with no cellar attaches the label's file too", async () => {
+    const { actor, photographed } = run({
+      confidence: 0.5,
+      inCellar: false,
+      imageMatches: [wineMatch("w1")],
+    });
+    await settled(actor);
+    await waitFor(actor, (s) => s.context.imageMatches.length > 0);
+    actor.send({ type: "USE_IMAGE_MATCH", item: wineMatch("w1") });
+    await waitFor(actor, (s) => s.value === "finalPrompt");
+    assert.equal(photographed[0]?.displayImageFileId, "front");
   });
 
   test("never creates an item without the person's tap (D25)", async () => {
@@ -544,26 +557,27 @@ describe("the real ending (N21's success sheet)", () => {
     assert.equal(actor.getSnapshot().status, "done");
   });
 
-  test("Open it now opens the bottle, then shows it", async () => {
-    const { actor, opened, pushed } = run({ confidence: 0.5 });
+  test("Open it now shows the bottle's page and uncorks nothing (X06)", async () => {
+    const { actor, pushed } = run({ confidence: 0.5 });
     await settled(actor);
     actor.send({ type: "CREATED", itemId: "new" });
     const filed = await waitFor(actor, (s) => s.value === "finalPrompt");
     actor.send({ type: "OPEN_NOW" });
-    await waitFor(actor, (s) => s.status === "done");
-    assert.equal(opened[0]?.cellarId, "cellar-1");
-    assert.equal(opened[0]?.cellarItemId, filed.context.cellarItemId);
-    assert.match(pushed[0] ?? "", /^\/cellars\/cellar-1\/wines\//);
+    assert.equal(actor.getSnapshot().status, "done");
+    assert.equal(
+      pushed[0],
+      `/cellars/cellar-1/wines/${filed.context.cellarItemId}`,
+    );
   });
 
   test("no Open it now without a cellar", async () => {
-    const { actor, opened } = run({ confidence: 0.5, inCellar: false });
+    const { actor, pushed } = run({ confidence: 0.5, inCellar: false });
     await settled(actor);
     actor.send({ type: "CREATED", itemId: "new" });
     await waitFor(actor, (s) => s.value === "finalPrompt");
     actor.send({ type: "OPEN_NOW" });
     assert.equal(actor.getSnapshot().value, "finalPrompt");
-    assert.deepEqual(opened, []);
+    assert.deepEqual(pushed, []);
   });
 });
 
@@ -626,5 +640,36 @@ describe("background continuation (X05): a resumed draft", () => {
     assert.deepEqual(uploaded, []);
     assert.equal(read[0]?.itemOnboardingId, "onb-left");
     assert.equal(state.context.labelSent, true);
+  });
+
+  test("after a full reload, the session's label file is its photo (X06)", async () => {
+    const { actor, filed, imageSearched, uploaded } = run({
+      confidence: 0.5,
+      resumeId: "onb-left",
+      labelSent: true,
+      storedFrontLabel: "stored-front",
+    });
+    const state = await settled(actor);
+    assert.deepEqual(uploaded, []);
+    assert.equal(state.context.frontLabelFileId, "stored-front");
+    assert.equal(state.context.displayImageFileId, "stored-front");
+    await waitFor(actor, () => imageSearched.length > 0);
+    assert.equal(imageSearched[0]?.imageFileId, "stored-front");
+    actor.send({ type: "CREATED", itemId: "new" });
+    await waitFor(actor, (s) => s.value === "finalPrompt");
+    assert.equal(filed[0]?.displayImageFileId, "stored-front");
+    assert.equal(filed[0]?.displayImage, undefined);
+  });
+
+  test("a resume that still holds its capture keeps it as the display photo", async () => {
+    const { actor } = run({
+      confidence: 0.5,
+      resumeId: "onb-left",
+      storedFrontLabel: "stored-front",
+      resumePhoto: "data:held",
+    });
+    const state = await settled(actor);
+    assert.equal(state.context.displayImageDataUrl, "data:held");
+    assert.equal(state.context.displayImageFileId, "stored-front");
   });
 });

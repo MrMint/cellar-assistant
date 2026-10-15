@@ -83,6 +83,14 @@ const EXEMPT: Readonly<Record<string, Exemption>> = {
       "state with network-only reads in an effect whose cleanup sets " +
       "`cancelled`; a poll is a loop over one object, not a list.",
   },
+  "recipe/useRecipePhotoJob.ts": {
+    calls: 1,
+    reason:
+      "Polls one recipe-photo job to a terminal state with network-only reads " +
+      "in an effect whose cleanup sets `cancelled`; a poll is a loop over one " +
+      "object, not a list. (The capture surface's Recipe mode, X06; the Bar's " +
+      "own composer polls through recipe/editor/useRecipeJob.ts.)",
+  },
   "common/OnboardingWizard/actors/closeOnboarding.ts": {
     calls: 1,
     reason:
@@ -108,13 +116,6 @@ const EXEMPT: Readonly<Record<string, Exemption>> = {
       "an actor whose state has been left, which is the gate. X05 tracks it " +
       "by session id in `captureDrafts`, so a remount or a resume adopts the " +
       "read in flight instead of sending a second one.",
-  },
-  "common/OnboardingWizard/actors/openCellarItem.ts": {
-    calls: 1,
-    reason:
-      "An xstate promise actor (N21's success sheet, `openingNow`): one " +
-      "openCellarItem for the bottle just filed, idempotent server-side, and " +
-      "the machine leaves for the bottle page whatever it answers.",
   },
   "common/OnboardingWizard/actors/insertCellarItem.ts": {
     calls: 1,

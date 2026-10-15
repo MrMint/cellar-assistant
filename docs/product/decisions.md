@@ -479,3 +479,65 @@ reverse them. Each names the item it belongs to; none overrides an answer.
   profile lists what a friend shares with friends, never a PRIVATE list or
   cellar, even though an admin could open one by its link. Your own id redirects to Me. `/users` (the old
   dead "Profile" crumb) redirects to Me.
+
+### Global capture (wave B "globalcapture": X06, X05 leftovers)
+
+- **＋ is the camera (X06).** The chooser sheet is gone: ＋ is a link to
+  `/add`, the full-screen capture surface, and the phone's tab bar steps
+  aside there (and on a cellar's add pages) with Close as the way out —
+  back to the page ＋ was tapped on, or Home on a cold open. The mode row
+  is **Bottle · Menu · Recipe**, right under the picture, opening on the
+  last mode used (an explicit `?mode=` wins; a `?draft=` is always a
+  bottle). **Place left ＋**: a place is added from the map (its own
+  button) and from the menu picker's "Not listed? Add the place".
+- **Menus from anywhere (X06).** A scan is filed on a place, so the place
+  is settled before the scan is sent, never guessed silently. The position
+  is asked the D14 way (one line of ours, then the browser's prompt) and
+  finds the nearest place the app knows **within 200 m**; the card under
+  the camera asks "At Cork & Barrel?" — "Yes, I'm here" is the one tap.
+  "Somewhere else", no place nearby, or no location opens a picker: the
+  other places nearby, a search by name, "Not listed? Add the place". The
+  shutter never waits: a photo taken first is held, and the tap that
+  settles the place sends it. The scan's `placeHint` carries the chosen
+  place, plus the position only when that place is one of those around
+  the person (a place picked by name gets none: it is not where that menu
+  is). A guess passed over is not sent even as `estimatedPlaceId` — it is
+  a claim the person said was false, and it would block deleting that
+  place while it is still its creator's. The results page takes over at
+  once.
+- **Recipe mode (X06)** reads a recipe photo at the shutter (the same
+  `startRecipePhotoJob` the Bar's New recipe › Photo starts, through
+  `useRecipePhotoJob`) and opens the new private draft in the recipe editor
+  (`/recipes/<id>/edit`, X15) when it lands. Paste and Type stay on the
+  Bar's New recipe; ＋ is the camera.
+- **Photo search's fallback (X06).** Where the catalogue does not
+  recognise a photo, the results end in "Read the label instead", which
+  carries **the same bytes** into Add (in memory, `?photo=<token>`; a
+  reload offers a fresh snap instead). Add shows the photo with the type
+  row (last used) and "Read this label", so the person sets the type
+  before the one read. Where the deployment cannot search by photo at all
+  but can read labels, the search page's Photo button goes straight to
+  that fallback instead of disappearing.
+- **"Looks like a menu" switches modes (X05/X06).** A label read that
+  abstains with `surfaceKind: menu` offers "Scan it as a menu", which
+  opens Menu mode with the same photo (from a cellar's add page, `/add`
+  in Menu mode).
+- **"Open it now" opens the bottle's page; it never uncorks (X05
+  leftover).** Uncorking from the success sheet turned a tap meant as
+  "show me" into an opening in the bottle's log. The bottle page's own
+  "Open it!" is one tap away. Because Open it now *is* the bottle's page,
+  the sheet no longer has a second "View bottle"; dismissing it still
+  lands on the bottle (with no cellar, the second action is "View item").
+- **One upload per photo (X05 leftover).** The front label goes up once,
+  as `label-front`: the read, the photo match (`itemSearch(imageFileId:)`
+  on that same file — the search discards only `image-search` files) and
+  the bottle's display image (`attachItemImage` with that file id) all use
+  it. It used to go up three times.
+- **A resumed draft keeps its photo across a reload (X05 leftover).** The
+  session already stores the label's file id; a draft reopened after a
+  full reload takes its thumbnail from that file and attaches it as the
+  display image, instead of opening photo-less.
+- **Every cellar add page names the cellar (X05 leftover).** The six
+  per-type routes read the cellar like `/items/add` does, so the success
+  sheet says "… is in Home Cellar", a cellar that does not exist is a 404,
+  and a viewer who may not add there gets the note instead of a camera.

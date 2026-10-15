@@ -22,7 +22,7 @@ import { FilterChip } from "./FilterChip";
 import { IconButton } from "./IconButton";
 import * as icons from "./icons";
 import { Link } from "./Link";
-import { activeTab, CAPTURE_OPTIONS, isUnder, TABS } from "./nav";
+import { activeTab, CAPTURE_HREF, isCaptureRoute, isUnder, TABS } from "./nav";
 import { nextNavStack } from "./nav-history";
 import { InsetSection, ListRow, Page } from "./Page";
 import { formatScore, Score } from "./Score";
@@ -71,10 +71,9 @@ describe("nav: which tab is lit", () => {
     );
     // A query (`/add?mode=bottle`) asks the page something; the route is
     // the path before it.
-    const hrefs = [
-      ...TABS.map((t) => t.href),
-      ...CAPTURE_OPTIONS.map((o) => o.href),
-    ].map((href) => href.split("?")[0] ?? href);
+    const hrefs = [...TABS.map((t) => t.href), CAPTURE_HREF].map(
+      (href) => href.split("?")[0] ?? href,
+    );
     // A page may sit one route group down (`cellars/(list)/page.tsx`, X24's
     // way of scoping a loading shell to one page).
     const hasPage = (dir: string) =>
@@ -95,11 +94,25 @@ describe("nav: which tab is lit", () => {
     );
   });
 
-  test("the chooser offers Bottle · Menu · Recipe · Place", () => {
-    assert.deepEqual(
-      CAPTURE_OPTIONS.map((o) => o.label),
-      ["Bottle", "Menu", "Recipe", "Place"],
-    );
+  test("＋ is the capture surface; its routes are /add and a cellar's add pages", () => {
+    assert.equal(CAPTURE_HREF, "/add");
+    for (const path of [
+      "/add",
+      "/add/wines",
+      "/cellars/c1/items/add",
+      "/cellars/c1/teas/add",
+    ]) {
+      assert.equal(isCaptureRoute(path), true, path);
+    }
+    for (const path of [
+      "/added",
+      "/cellars/add",
+      "/tier-lists/add",
+      "/cellars/c1/items",
+      "/cellars/c1/items/add/more",
+    ]) {
+      assert.equal(isCaptureRoute(path), false, path);
+    }
   });
 });
 
@@ -132,6 +145,11 @@ describe("AppShell: the content area per route", () => {
     assert.equal(contentLayout("/search").tabBar, false);
     assert.equal(contentLayout("/").tabBar, true);
     assert.equal(contentLayout("/searching").tabBar, true);
+  });
+  test("the tab bar steps aside for capture (X06)", () => {
+    assert.equal(contentLayout("/add").tabBar, false);
+    assert.equal(contentLayout("/cellars/c1/items/add").tabBar, false);
+    assert.equal(contentLayout("/cellars/add").tabBar, true);
   });
 });
 

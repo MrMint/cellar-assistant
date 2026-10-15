@@ -33,9 +33,7 @@ mock.module("next/navigation", () => ({
 const React = await import("react");
 const { act } = React;
 const { createRoot } = await import("react-dom/client");
-const { prefetchTarget, usePointerDownPrefetch, prefetchCaptureDestinations } =
-  await import("./prefetch");
-const { CAPTURE_OPTIONS } = await import("./nav");
+const { prefetchTarget, usePointerDownPrefetch } = await import("./prefetch");
 
 const here = {
   href: "http://localhost/cellars?sort=a",
@@ -220,16 +218,5 @@ describe("usePointerDownPrefetch", () => {
     );
     assert.deepEqual(prefetched, []);
     root = createRoot(container);
-  });
-});
-
-describe("prefetchCaptureDestinations", () => {
-  test("warms every row the ＋ chooser offers", () => {
-    const seen: string[] = [];
-    prefetchCaptureDestinations({ prefetch: (href) => seen.push(href) });
-    assert.deepEqual(
-      seen,
-      CAPTURE_OPTIONS.map((o) => o.href),
-    );
   });
 });

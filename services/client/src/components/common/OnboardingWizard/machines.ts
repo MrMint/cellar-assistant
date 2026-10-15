@@ -15,7 +15,6 @@ import type { AiOutcome } from "@/lib/ai/outcome";
 import { closeOnboarding } from "./actors/closeOnboarding";
 import { fetchDefaults } from "./actors/fetchDefaults";
 import { insertCellarItem } from "./actors/insertCellarItem";
-import { openCellarItem } from "./actors/openCellarItem";
 import { rereadLabels } from "./actors/rereadLabels";
 import { searchByBarcode } from "./actors/searchByBarcode";
 import { searchByImage } from "./actors/searchByImage";
@@ -26,7 +25,6 @@ import type {
   FetchDefaultsInput,
   InsertCellarItemInput,
   InsertCellarItemResult,
-  OpenCellarItemInput,
   RereadLabelsInput,
   RereadLabelsResult,
   SearchByImageInput,
@@ -74,8 +72,10 @@ type DraftInput = {
  * barcode while you frame the label; the shutter's photo is the front label,
  * and it is also the display photo (N21) and the photo-search query (G32,
  * D12). `COMPLETE` goes straight to `upload` → `analyze`, while the photo
- * search runs beside the read (`imageSearch`, spawned at the shutter, never
- * waited for). The back label is an optional re-read from the draft card
+ * search runs beside the read (`imageSearch`, spawned once the label is up,
+ * never waited for). **The bytes go up once** (X06): the read, the photo
+ * search and the bottle's display image all use the one `label-front` file.
+ * The back label is an optional re-read from the draft card
  * (`form.rereading`), never a step in the way.
  *
  * What carried over from the restored machine, unchanged in meaning:
@@ -105,7 +105,11 @@ type DraftInput = {
  *   (`SET_TYPE` while framing, `SET_CELLAR` until it is filed), because they
  *   are defaults (last used), not route facts, on the generic add page.
  * - The ending is a success sheet (`finalPrompt`): Snap another · Open it
- *   now · the bottle (N21).
+ *   now (N21). "Open it now" shows the bottle's page, where opening it is
+ *   one tap; it never uncorks anything itself (X06's call).
+ * - A draft resumed after a full reload has lost its capture, but the session
+ *   remembers the label's file (`frontLabelFileId` from the read), which is
+ *   what its photo and display image come back from.
  */
 export const OnboardingMachine = createMachine(
   {
@@ -134,6 +138,11 @@ export const OnboardingMachine = createMachine(
         frontLabelFileId?: string;
         backLabelFileId?: string;
         displayImageDataUrl?: string;
+        /**
+         * The display photo, already uploaded: the front label's file when
+         * the display photo is the front label (N21). Attached as it is.
+         */
+        displayImageFileId?: string;
         itemOnboardingId: string;
         /** Whether a label photograph actually reached the read. */
         labelSent: boolean;
@@ -252,10 +261,6 @@ export const OnboardingMachine = createMachine(
             >;
           }
         | {
-            src: "openCellarItem";
-            logic: PromiseActorLogic<boolean, OpenCellarItemInput>;
-          }
-        | {
             src: "closeOnboarding";
             logic: PromiseActorLogic<boolean, CloseOnboardingInput>;
           };
@@ -327,8 +332,6 @@ export const OnboardingMachine = createMachine(
                   defaults: undefined,
                   catalogMatch: undefined,
                 }),
-                // G32/D12: the same photo is the photo-search query.
-                "startImageSearch",
               ],
               target: "upload",
             },
@@ -356,10 +359,20 @@ export const OnboardingMachine = createMachine(
           }),
           onDone: {
             target: "analyze",
-            actions: assign({
-              backLabelFileId: ({ event }) => event.output.backLabelFileId,
-              frontLabelFileId: ({ event }) => event.output.frontLabelFileId,
-            }),
+            actions: [
+              assign({
+                backLabelFileId: ({ event }) => event.output.backLabelFileId,
+                frontLabelFileId: ({ event }) => event.output.frontLabelFileId,
+                // N21: the display photo is the front label, so its file is.
+                displayImageFileId: ({ event, context }) =>
+                  context.displayImageDataUrl === context.frontLabel
+                    ? event.output.frontLabelFileId
+                    : undefined,
+              }),
+              // G32/D12: the same file is the photo-search query (X06: no
+              // second upload of the same bytes).
+              "startImageSearch",
+            ],
           },
           // The photos could not be stored, so read nothing and go on to the
           // form — the session still opens, and the reason is shown.
@@ -430,16 +443,36 @@ export const OnboardingMachine = createMachine(
           },
           onDone: {
             target: "matching",
-            actions: assign({
-              itemOnboardingId: ({ event }) => event.output.itemOnboardingId,
-              defaults: ({ event }) => event.output.defaults,
-              confidence: ({ event }) => event.output.confidence,
-              extractionError: ({ event }) => event.output.extractionError,
-              labelSent: ({ event, context }) =>
-                event.output.labelSent ??
-                (isNotNil(context.frontLabelFileId) ||
-                  isNotNil(context.backLabelFileId)),
-            }),
+            actions: [
+              assign({
+                itemOnboardingId: ({ event }) => event.output.itemOnboardingId,
+                defaults: ({ event }) => event.output.defaults,
+                confidence: ({ event }) => event.output.confidence,
+                extractionError: ({ event }) => event.output.extractionError,
+                labelSent: ({ event, context }) =>
+                  event.output.labelSent ??
+                  (isNotNil(context.frontLabelFileId) ||
+                    isNotNil(context.backLabelFileId)),
+              }),
+              // A resumed draft uploaded nothing here: its label's file is
+              // the one the session stored (X06), and so is its display
+              // photo, unless the page still holds a different capture.
+              enqueueActions(({ context, event, enqueue }) => {
+                const stored = event.output.frontLabelFileId;
+                if (!context.resumed || isNotNil(context.frontLabelFileId)) {
+                  return;
+                }
+                if (isNil(stored)) return;
+                enqueue.assign({
+                  frontLabelFileId: stored,
+                  displayImageFileId:
+                    context.displayImageDataUrl === context.frontLabel
+                      ? stored
+                      : undefined,
+                });
+                enqueue("startImageSearch");
+              }),
+            ],
           },
         },
       },
@@ -667,6 +700,7 @@ export const OnboardingMachine = createMachine(
               newCellarItemId,
               urqlClient,
               displayImageDataUrl,
+              displayImageFileId,
             },
           }) => ({
             itemId: existingItemId ?? "",
@@ -675,6 +709,7 @@ export const OnboardingMachine = createMachine(
             cellarItemId: newCellarItemId,
             urqlClient,
             displayImage: displayImageDataUrl,
+            displayImageFileId,
           }),
           onDone: {
             target: "finalPrompt",
@@ -706,6 +741,7 @@ export const OnboardingMachine = createMachine(
             context: {
               existingItemId,
               displayImageDataUrl,
+              displayImageFileId,
               urqlClient,
               itemType,
             },
@@ -713,6 +749,7 @@ export const OnboardingMachine = createMachine(
             itemId: existingItemId ?? "",
             itemType,
             displayImage: displayImageDataUrl,
+            displayImageFileId,
             urqlClient,
           }),
           // The item was chosen either way; only its photo can have failed.
@@ -744,29 +781,19 @@ export const OnboardingMachine = createMachine(
             },
             target: "done",
           },
+          // "Open it now" (X06's call): the bottle's page, where opening it
+          // is one tap — never an uncork from the sheet, which a tap meant as
+          // "show me" would have written into the bottle's log.
           OPEN_NOW: {
             guard: ({ context }) =>
               isNotNil(context.cellarId) && isNotNil(context.cellarItemId),
-            target: "openingNow",
+            actions: "goToResult",
+            target: "done",
           },
           DONE: {
             actions: "goToResult",
             target: "done",
           },
-        },
-      },
-      // "Open it now": the bottle is uncorked as it is filed, then shown.
-      // Opening failing still shows the bottle — its own "Open it" is there.
-      openingNow: {
-        invoke: {
-          src: "openCellarItem",
-          input: ({ context }) => ({
-            urqlClient: context.urqlClient,
-            cellarId: context.cellarId ?? "",
-            cellarItemId: context.cellarItemId ?? "",
-          }),
-          onDone: { target: "done", actions: "goToResult" },
-          onError: { target: "done", actions: "goToResult" },
         },
       },
       done: {
@@ -807,12 +834,14 @@ export const OnboardingMachine = createMachine(
             }
           : {},
       ),
-      startImageSearch: enqueueActions(({ context, event, enqueue }) => {
-        if (event.type !== "COMPLETE" || isNil(event.frontLabel)) return;
+      // Run after the assigns before it in the same list, so the label's
+      // file id is already in the context.
+      startImageSearch: enqueueActions(({ context, enqueue }) => {
+        if (isNil(context.frontLabelFileId)) return;
         enqueue.spawnChild("searchByImage", {
           id: "imageSearch",
           input: {
-            displayImage: event.frontLabel,
+            imageFileId: context.frontLabelFileId,
             urqlClient: context.urqlClient,
             itemType: context.itemType,
           },
@@ -852,7 +881,6 @@ export const OnboardingMachine = createMachine(
       rereadLabels,
       insertCellarItem,
       uploadItemImage,
-      openCellarItem,
       closeOnboarding,
     },
   },

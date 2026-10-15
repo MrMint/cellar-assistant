@@ -94,6 +94,9 @@ export const readDefaults = async ({
       sent ||
       onboarding.frontLabelImageId !== null ||
       onboarding.backLabelImageId !== null,
+    ...(onboarding.frontLabelImageId === null
+      ? {}
+      : { frontLabelFileId: onboarding.frontLabelImageId }),
   };
 };
 

@@ -19,10 +19,14 @@ import { expect, test, watch } from "../fixtures/test.ts";
  * - Where it is offered, the Photo button photographs, uploads and searches,
  *   and the page shows the old results block (a test pattern matches nothing,
  *   so the old empty state, or a grid if something is that close).
- * - Where it is not, N07/D25 **hides** the feature instead of offering it and
- *   refusing: `/search` has no Photo button, and the onboarding wizard never
- *   asks for a photo match — it keeps the photo and moves on. That replaced
- *   the earlier "the page must say photo search is not available" contract.
+ * - Where it is not, N07/D25 never offers the search and lets it refuse: the
+ *   onboarding wizard never asks for a photo match — it keeps the photo and
+ *   moves on. `/search`'s Photo button stays only where a label can still be
+ *   read (`labelRead`), and goes straight to its X06 fallback: the photo is
+ *   read as a label in Add, with the same bytes.
+ * - X06: the search's results end in that fallback ("Read the label
+ *   instead"), and the add flow uploads the front label once — the photo
+ *   match reads the label's own file, never a second `image-search` copy.
  */
 test.use({
   launchOptions: {
@@ -58,16 +62,45 @@ test("the Photo button photographs, uploads and searches — and says so honestl
   api,
 }) => {
   test.setTimeout(120_000);
-  const { imageSearch } = await aiCapabilities(api);
+  const { imageSearch, labelRead } = await aiCapabilities(api);
   const noise = watch(primary);
   await primary.goto("/search");
   const photo = primary.getByRole("button", { name: "Photo" });
-  if (!imageSearch) {
+  if (!imageSearch && !labelRead) {
     // Hidden, not refused. `toHaveCount(0)` retries, so it also waits out the
     // first paint, which offers every feature until the answer lands.
     await expect(primary.getByRole("button", { name: "Scan" })).toBeVisible();
     await expect(photo).toHaveCount(0);
     expect(noise.pageErrors, "the search page threw").toEqual([]);
+    return;
+  }
+  if (!imageSearch) {
+    // X06: no photo search here, so the Photo button is its fallback — the
+    // photo is read as a label in Add, with no search upload at all.
+    const uploads: string[] = [];
+    primary.on("request", (request) => {
+      const body = request.postData() ?? "";
+      if (body.includes("CreateUploadTarget")) uploads.push(body);
+    });
+    await photo.click();
+    await expect(
+      primary.getByText("Take a picture of the label"),
+    ).toBeVisible();
+    await primary.waitForFunction(
+      () => (document.querySelector("video")?.readyState ?? 0) >= 2,
+    );
+    await primary.getByRole("button", { name: "Take photo" }).click();
+    await primary.waitForURL(/\/add\?mode=bottle&photo=/, { timeout: 30_000 });
+    await expect(
+      primary.locator('[data-slot="capture-preview"] img'),
+    ).toBeVisible();
+    await expect(
+      primary.getByRole("button", { name: "Read this label" }),
+    ).toBeVisible();
+    expect(uploads, "nothing is uploaded before the person reads it").toEqual(
+      [],
+    );
+    expect(noise.pageErrors, "the page threw").toEqual([]);
     return;
   }
   await photo.click();
@@ -108,6 +141,13 @@ test("the Photo button photographs, uploads and searches — and says so honestl
   expect(file.data?.file?.__typename, JSON.stringify(file)).toBe(
     "NotFoundError",
   );
+
+  // X06: the fallback carries the same photo into Add, read as a label.
+  await primary.getByRole("link", { name: "Read the label instead" }).click();
+  await primary.waitForURL(/\/add\?mode=bottle&photo=/);
+  await expect(
+    primary.getByRole("button", { name: "Read this label" }),
+  ).toBeVisible();
   expect(noise.pageErrors, "the search page threw").toEqual([]);
 });
 
@@ -158,10 +198,24 @@ test("onboarding: the front-label photo is matched against the catalogue beside 
   // Every match request the wizard sends, so the unavailable branch can
   // assert there was none (`searchByImage.ts` asks the capability first).
   const matchRequests: string[] = [];
+  const uploadKinds: string[] = [];
+  const labelFileIds: string[] = [];
   primary.on("request", (request) => {
     const body = request.postData() ?? "";
     if (request.method() === "POST" && body.includes("OnboardingImageMatches"))
       matchRequests.push(body);
+    if (request.method() === "POST" && body.includes("CreateUploadTarget")) {
+      uploadKinds.push(JSON.parse(body).variables?.input?.kind ?? "?");
+    }
+  });
+  primary.on("response", async (response) => {
+    const body = response.request().postData() ?? "";
+    if (!body.includes("CreateUploadTarget")) return;
+    const json = await response.json().catch(() => null);
+    const target = json?.data?.createUploadTarget;
+    if (target?.key?.startsWith("label-front/")) {
+      labelFileIds.push(target.fileId);
+    }
   });
   const matched = imageSearch
     ? primary.waitForRequest(
@@ -176,6 +230,8 @@ test("onboarding: the front-label photo is matched against the catalogue beside 
   if (matched !== null) {
     const body = JSON.parse((await matched).postData() ?? "{}");
     expect(body.variables?.imageFileId).toMatch(UUID);
+    // X06: one upload — the match reads the front label's own file.
+    expect(labelFileIds).toContain(body.variables?.imageFileId);
     // Narrowed to the type being added.
     expect(body.variables?.itemTypes).toEqual(["BEER"]);
   }
@@ -191,4 +247,6 @@ test("onboarding: the front-label photo is matched against the catalogue beside 
       "a photo match was requested on a stack that cannot search by image",
     ).toEqual([]);
   }
+  // X06: the shutter's bytes went up once, as the front label.
+  expect(uploadKinds).toEqual(["label-front"]);
 });

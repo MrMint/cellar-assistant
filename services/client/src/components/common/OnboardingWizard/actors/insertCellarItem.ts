@@ -21,6 +21,7 @@ export const insertCellarItem = fromPromise(
       cellarId,
       cellarItemId,
       displayImage,
+      displayImageFileId,
       urqlClient,
     },
   }: {
@@ -31,6 +32,7 @@ export const insertCellarItem = fromPromise(
       itemId,
       itemType,
       displayImage,
+      displayImageFileId,
     );
     const response = await urqlClient
       .mutation(AddItemToCellarFromItemMutation, {

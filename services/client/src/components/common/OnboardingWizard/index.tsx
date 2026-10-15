@@ -1,7 +1,7 @@
 "use client";
 
 import { useMachine } from "@xstate/react";
-import { useCallback } from "react";
+import { type ReactNode, useCallback } from "react";
 import { useClient } from "urql";
 import { BottomSheet } from "@/components/app/BottomSheet";
 import { CaptureCamera } from "@/components/capture/CaptureCamera";
@@ -30,6 +30,8 @@ export type OnboardingWizardProps = {
   itemType?: ApiItemType;
   /** In a cellar a known item is "+1 bottle"; elsewhere "Use this". */
   inCellar?: boolean;
+  /** Right under the camera: the capture surface's mode row (X06). */
+  belowCamera?: ReactNode;
 };
 
 /**
@@ -47,6 +49,7 @@ export const OnboardingWizard = ({
   onComplete,
   itemType,
   inCellar = false,
+  belowCamera,
 }: OnboardingWizardProps) => {
   const urqlClient = useClient();
 
@@ -105,6 +108,7 @@ export const OnboardingWizard = ({
           ) : undefined
         }
       />
+      {belowCamera}
 
       {state.matches("photo") && chosen !== undefined ? (
         <div className="flex flex-col gap-2">

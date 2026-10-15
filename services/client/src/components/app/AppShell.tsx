@@ -3,6 +3,7 @@
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
+import { isCaptureRoute } from "./nav";
 import { useNavHistoryTracker } from "./nav-history";
 import { usePointerDownPrefetch } from "./prefetch";
 import { SideRail } from "./SideRail";
@@ -12,7 +13,10 @@ import { TabBar } from "./TabBar";
  * How the content area treats a route (what `ConditionalPaddingWrapper` did):
  * every `/map/*` route lays itself out edge to edge, and only the map canvas
  * itself (`/map`) clips instead of scrolling, so MapLibre fills exactly the
- * space above the tab bar and its attribution stays visible (N22).
+ * space above the tab bar and its attribution stays visible (N22). The
+ * phone's tab bar steps aside on the capture surface (X06, design §2 — the
+ * camera has the screen, and Close is the way out) and on the search sheet
+ * (X10).
  */
 export function contentLayout(pathname: string): {
   padded: boolean;
@@ -24,8 +28,9 @@ export function contentLayout(pathname: string): {
     padded: !isMap,
     scrolls: pathname !== "/map",
     // X10: search is a full-screen sheet on a phone, and a full-screen sheet
-    // hides the tab bar (design §2). The side rail stays from `sm` up.
-    tabBar: pathname !== "/search",
+    // hides the tab bar (design §2), as does capture (X06: "It hides only in
+    // capture"). The side rail stays from `sm` up.
+    tabBar: pathname !== "/search" && !isCaptureRoute(pathname),
   };
 }
 
@@ -55,8 +60,8 @@ export function AppShell({ children }: { children: ReactNode }) {
         // element: the shell clips (overflow-hidden), so a negative margin
         // on the tab bar itself was cut off at the shell's edge. Nothing
         // between the root layout and here may clip either. Without a tab
-        // bar (the search sheet, X10) there is no glass to run under it, so
-        // the root layout's padding stays and results clear the indicator.
+        // bar (the search sheet, X10; capture, X06) there is no glass to run
+        // under it, so the root layout's padding keeps the content clear.
         tabBar && "max-sm:mb-[calc(-1*env(safe-area-inset-bottom))]",
       )}
     >

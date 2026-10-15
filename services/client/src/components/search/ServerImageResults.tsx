@@ -8,6 +8,7 @@ import {
 import { searchResultsFromNodes } from "./adapter";
 import { NoSearchResults } from "./NoSearchResults";
 import { SearchImageQuery } from "./queries";
+import { ReadLabelInstead } from "./ReadLabelInstead";
 import { SearchResultGrid } from "./SearchResultGrid";
 
 /** The old page's empty state for an image search, verbatim. */
@@ -38,6 +39,10 @@ export const ExpiredImageSearch = () => (
  * photo (`IMAGE_SEARCH_UNAVAILABLE` — the local lane's Ollama, say), a photo
  * that is no longer there (`NOT_FOUND` — {@link ExpiredImageSearch}), and any
  * other refusal (budget, say).
+ *
+ * Each answer ends in the fallback (X06): read the same photo as a label in
+ * Add (`ReadLabelInstead`) — the next step when nothing matched, a quiet
+ * "Not one of these?" under results. An expired link has no photo to carry.
  */
 export async function ServerImageResults({
   imageFileId,
@@ -53,21 +58,27 @@ export async function ServerImageResults({
   if (!result.ok) {
     if (isImageSearchUnavailable(result.error)) {
       return (
-        <NoImageMatches message="Photo search isn't available here. Search by name or scan a barcode instead." />
+        <>
+          <NoImageMatches message="Photo search isn't available here. Search by name or scan a barcode instead." />
+          <ReadLabelInstead imageFileId={imageFileId} prominent />
+        </>
       );
     }
     if (result.error.code === "NOT_FOUND") return <ExpiredImageSearch />;
     // N07: a limit or any other refusal, in words chosen from the reason —
     // never the server's message; `retryAt` in the viewer's own zone.
     return (
-      <AiFailureStatus
-        failure={{
-          code: result.error.code,
-          reason: result.error.reason,
-          retryAt: result.error.retryAt,
-        }}
-        fallback="search by name or scan a barcode"
-      />
+      <>
+        <AiFailureStatus
+          failure={{
+            code: result.error.code,
+            reason: result.error.reason,
+            retryAt: result.error.retryAt,
+          }}
+          fallback="search by name or scan a barcode"
+        />
+        <ReadLabelInstead imageFileId={imageFileId} className="mt-4" />
+      </>
     );
   }
 
@@ -75,8 +86,14 @@ export async function ServerImageResults({
     result.data.edges.map((edge) => edge.node.item),
   );
   return results.length === 0 ? (
-    <NoImageMatches message="No items found matching the image" />
+    <>
+      <NoImageMatches message="No items found matching the image" />
+      <ReadLabelInstead imageFileId={imageFileId} prominent />
+    </>
   ) : (
-    <SearchResultGrid items={results} />
+    <>
+      <SearchResultGrid items={results} />
+      <ReadLabelInstead imageFileId={imageFileId} className="mt-6" />
+    </>
   );
 }

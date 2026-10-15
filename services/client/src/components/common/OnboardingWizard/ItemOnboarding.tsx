@@ -3,28 +3,29 @@
 import { useActor } from "@xstate/react";
 import { usePathname, useRouter } from "next/navigation";
 import { includes, isNotNil } from "ramda";
-import { useCallback, useEffect, useRef, useState } from "react";
-import { useClient } from "urql";
-import { BottomSheet } from "@/components/app/BottomSheet";
-import { EmptyState } from "@/components/app/EmptyState";
 import {
-  Camera,
-  Cocktail,
-  ErrorIcon,
-  MapIcon,
-  Scan,
-  Warning,
-} from "@/components/app/icons";
-import { Link } from "@/components/app/Link";
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
+import { useClient, useQuery } from "urql";
+import { BottomSheet } from "@/components/app/BottomSheet";
+import { Camera, ErrorIcon, Scan, Warning } from "@/components/app/icons";
 import { notify } from "@/components/app/notify";
-import { SegmentedControl } from "@/components/app/SegmentedControl";
 import { TypeChip } from "@/components/app/TypeChip";
 import { CaptureCamera } from "@/components/capture/CaptureCamera";
+import {
+  CaptureHeader,
+  CapturePhotoPreview,
+} from "@/components/capture/CaptureChrome";
 import {
   type AddableCellar,
   CellarPicker,
 } from "@/components/capture/CellarPicker";
 import { captureDrafts } from "@/components/capture/drafts";
+import { CaptureFileUrlQuery } from "@/components/capture/queries";
 import { SuccessSheet } from "@/components/capture/SuccessSheet";
 import { TypePicker } from "@/components/capture/TypePicker";
 import {
@@ -34,15 +35,18 @@ import {
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
+import { unwrapResult } from "@/lib/api/result";
 import {
-  type CaptureMode,
-  defaultCaptureMode,
   defaultCellarId,
   defaultItemType,
   readCapturePrefs,
   rememberCapturePrefs,
 } from "@/lib/capture/capture-prefs";
 import { BACKGROUND_AFTER_MS, draftIdFrom } from "@/lib/capture/draft-store";
+import {
+  captureHrefWithPhoto,
+  photoHandoff,
+} from "@/lib/capture/photo-handoff";
 import { AiStatus } from "../AiStatus";
 import { AnimationShowcase, type ShowcaseStage } from "../AnimationShowcase";
 import { QuickAddCard } from "../QuickAddCard";
@@ -70,12 +74,25 @@ export type ItemOnboardingProps = {
    * no cellar is pinned. The default is the last used (X05).
    */
   cellars?: readonly AddableCellar[];
-  /** `/add`'s mode row: Bottle · Menu · Recipe, opening on the last used. */
-  showModes?: boolean;
-  /** The mode an entry asked for (`?mode=`), which wins over the last used. */
-  mode?: CaptureMode;
   /** `?draft=<id>`: reopen a read left running in the background. */
   resumeId?: string;
+  /** Before the title: the capture surface's Close (X06). */
+  leading?: ReactNode;
+  /**
+   * Right under the camera while framing: the capture surface's mode row,
+   * Bottle · Menu · Recipe (X06). Gone once the shutter has fired.
+   */
+  modeRow?: ReactNode;
+  /**
+   * A label photo carried in (photo search's fallback, X06): shown in the
+   * camera's place with the type row, and read on "Read this label".
+   */
+  initialPhoto?: string;
+  /**
+   * The read said "menu" (`surfaceKind`): switch to Menu mode with the same
+   * photo. Without it, the photo is carried to `/add?mode=menu`.
+   */
+  onScanAsMenu?: (photo: string | undefined) => void;
 };
 
 /**
@@ -99,16 +116,12 @@ export const ItemOnboarding = (props: ItemOnboardingProps) => {
       key={run}
       {...props}
       resumeId={resumeId}
+      // A carried photo is the first bottle's; "Snap another" is a new one.
+      initialPhoto={run === 0 ? props.initialPhoto : undefined}
       onRestart={restart}
     />
   );
 };
-
-const MODE_OPTIONS = [
-  { value: "bottle", label: "Bottle", icon: <Camera aria-hidden /> },
-  { value: "menu", label: "Menu", icon: <Scan aria-hidden /> },
-  { value: "recipe", label: "Recipe", icon: <Cocktail aria-hidden /> },
-] as const;
 
 const ItemOnboardingRun = ({
   type,
@@ -117,9 +130,11 @@ const ItemOnboardingRun = ({
   chooseType = false,
   typeExplicit = false,
   cellars,
-  showModes = false,
-  mode: explicitMode,
   resumeId,
+  leading,
+  modeRow,
+  initialPhoto,
+  onScanAsMenu,
   onRestart,
 }: ItemOnboardingProps & { onRestart: () => void }) => {
   const urqlClient = useClient();
@@ -156,15 +171,17 @@ const ItemOnboardingRun = ({
   // one, so it is shown and sent as printed.
   const { barcode: scanned } = context;
 
+  // A label photo carried in (X06): read on the person's tap, so the type
+  // row can be set first. "Retake" drops it for the live camera.
+  const [carried, setCarried] = useState<string | undefined>(initialPhoto);
+
   // Defaults that live in this browser (X05: last used, never a classifier),
   // applied after mount so the server render and hydration agree.
-  const [mode, setMode] = useState<CaptureMode>(explicitMode ?? "bottle");
   const applied = useRef(false);
   useEffect(() => {
     if (applied.current) return;
     applied.current = true;
     const prefs = readCapturePrefs();
-    if (showModes) setMode(defaultCaptureMode(explicitMode, prefs));
     if (chooseType && resumeId === undefined) {
       const next = defaultItemType(typeExplicit ? type : null, prefs);
       if (next !== type) send({ type: "SET_TYPE", itemType: next });
@@ -175,17 +192,7 @@ const ItemOnboardingRun = ({
         cellarId: defaultCellarId(null, prefs, cellars),
       });
     }
-  }, [
-    showModes,
-    explicitMode,
-    chooseType,
-    typeExplicit,
-    resumeId,
-    type,
-    pinnedCellarId,
-    cellars,
-    send,
-  ]);
+  }, [chooseType, typeExplicit, resumeId, type, pinnedCellarId, cellars, send]);
 
   const handleOnComplete = useCallback(
     ({
@@ -341,69 +348,93 @@ const ItemOnboardingRun = ({
 
   const menuOutcome = context.extractionError?.kind === "looks-like-menu";
 
+  // A draft resumed after a full reload has lost its capture; the session's
+  // label file is its photo now (X06).
+  const [{ data: storedPhoto }] = useQuery({
+    query: CaptureFileUrlQuery,
+    variables: { id: context.frontLabelFileId ?? "" },
+    pause:
+      context.frontLabel !== undefined ||
+      context.frontLabelFileId === undefined,
+  });
+  const storedPhotoUrl = (() => {
+    const file = unwrapResult(storedPhoto?.file, "File");
+    return file.ok ? file.data.url : undefined;
+  })();
+  const labelPhoto = context.frontLabel ?? storedPhotoUrl;
+  const displayPhoto =
+    context.displayImageDataUrl ??
+    (context.displayImageFileId !== undefined &&
+    context.displayImageFileId === context.frontLabelFileId
+      ? storedPhotoUrl
+      : undefined);
+
+  // X05/X06: the read said "menu" — Menu mode, with the same photo.
+  const scanAsMenu = () => {
+    const photo = context.frontLabel?.startsWith("data:")
+      ? context.frontLabel
+      : undefined;
+    if (onScanAsMenu !== undefined) {
+      onScanAsMenu(photo);
+      return;
+    }
+    router.push(
+      photo === undefined
+        ? "/add?mode=menu"
+        : captureHrefWithPhoto("menu", photoHandoff.put(photo)),
+    );
+  };
+
   return (
     <div className="flex flex-col gap-4">
-      <h1 className="type-title-2 text-ink-1">
-        {chooseType && state.value === "wizard"
-          ? "Add a bottle"
-          : `Add ${typeLabel}`}
-      </h1>
+      <CaptureHeader
+        leading={leading}
+        title={
+          chooseType && state.value === "wizard"
+            ? "Add a bottle"
+            : `Add ${typeLabel}`
+        }
+      />
 
       {state.value === "wizard" && (
         <div className="flex w-full max-w-[600px] flex-col gap-3">
-          {showModes && (
-            <SegmentedControl
-              aria-label="What are you capturing?"
-              value={mode}
-              options={MODE_OPTIONS}
+          {chooseType && (
+            <TypePicker
+              value={itemType}
               onValueChange={(next) => {
-                setMode(next);
-                rememberCapturePrefs({ mode: next });
+                send({ type: "SET_TYPE", itemType: next });
+                rememberCapturePrefs({ itemType: next });
               }}
             />
           )}
-          {mode === "bottle" ? (
+          {carried !== undefined ? (
             <>
-              {chooseType && (
-                <TypePicker
-                  value={itemType}
-                  onValueChange={(next) => {
-                    send({ type: "SET_TYPE", itemType: next });
-                    rememberCapturePrefs({ itemType: next });
-                  }}
-                />
-              )}
-              <OnboardingWizard
-                onComplete={handleOnComplete}
-                itemType={itemType}
-                inCellar={inCellar}
-              />
+              <CapturePhotoPreview
+                photo={carried}
+                alt="Your label, as snapped"
+                onRetake={() => setCarried(undefined)}
+              >
+                <Button
+                  onClick={() =>
+                    handleOnComplete({ frontLabelDataUrl: carried })
+                  }
+                >
+                  <Scan aria-hidden />
+                  Read this label
+                </Button>
+              </CapturePhotoPreview>
+              {modeRow}
+              <p className="text-center type-callout text-ink-2">
+                Check the type above, then read the label — it lands in a draft
+                you can fix.
+              </p>
             </>
-          ) : mode === "menu" ? (
-            <EmptyState
-              illustration={<MapIcon aria-hidden className="size-10" />}
-              title="Menus are read at their place."
-              description="Find the bar or shop on the map, then scan its menu there."
-              action={
-                <Button asChild>
-                  <Link href="/map" underline="none">
-                    Find the place
-                  </Link>
-                </Button>
-              }
-            />
           ) : (
-            <EmptyState
-              illustration={<Cocktail aria-hidden className="size-10" />}
-              title="Snap a recipe card."
-              description="A photo or pasted text becomes a draft you check before it's saved."
-              action={
-                <Button asChild>
-                  <Link href="/recipes/new" underline="none">
-                    New recipe
-                  </Link>
-                </Button>
-              }
+            <OnboardingWizard
+              onComplete={handleOnComplete}
+              itemType={itemType}
+              inCellar={inCellar}
+              belowCamera={modeRow}
             />
           )}
         </div>
@@ -411,14 +442,14 @@ const ItemOnboardingRun = ({
 
       {reading && (
         <div className="flex w-full max-w-[600px] flex-col gap-3">
-          {context.frontLabel !== undefined && (
+          {labelPhoto !== undefined && (
             <div className="flex items-center gap-3">
               {/* The photo stays in view from the shutter on: the read is
                   about *this* picture (design §5 moment 2, before its
                   dissolve). */}
-              {/* biome-ignore lint/performance/noImgElement: the local capture (data URL). */}
+              {/* biome-ignore lint/performance/noImgElement: the local capture (data URL), or its stored file's presigned URL. */}
               <img
-                src={context.frontLabel}
+                src={labelPhoto}
                 alt="Your label, as snapped"
                 className="h-16 w-12 shrink-0 rounded-md object-cover"
               />
@@ -498,10 +529,10 @@ const ItemOnboardingRun = ({
       {state.matches("form") && (
         <div data-slot="draft-card" className="flex flex-col gap-4">
           <div className="flex max-w-[600px] items-center gap-3">
-            {context.frontLabel !== undefined && (
-              // biome-ignore lint/performance/noImgElement: the local capture (data URL).
+            {labelPhoto !== undefined && (
+              // biome-ignore lint/performance/noImgElement: the local capture (data URL), or its stored file's presigned URL.
               <img
-                src={context.frontLabel}
+                src={labelPhoto}
                 alt="Your label, as snapped"
                 className="h-20 w-15 shrink-0 rounded-md object-cover"
               />
@@ -526,12 +557,12 @@ const ItemOnboardingRun = ({
             <div className="flex max-w-[600px] flex-col gap-2">
               <AiStatus outcome={context.extractionError} />
               {menuOutcome && (
-                // X05: the label read said "menu" — at zero extra calls.
+                // X05: the label read said "menu" — at zero extra calls; X06:
+                // Menu mode takes the same photo, no second shot.
                 <div className="flex flex-wrap gap-2">
-                  <Button asChild>
-                    <Link href="/map" underline="none">
-                      Scan it as a menu
-                    </Link>
+                  <Button onClick={scanAsMenu}>
+                    <Scan aria-hidden />
+                    Scan it as a menu
                   </Button>
                   <Button variant="ghost" onClick={onRestart}>
                     Retake
@@ -639,13 +670,12 @@ const ItemOnboardingRun = ({
       )}
 
       <SuccessSheet
-        open={includes(state.value, ["finalPrompt", "openingNow"])}
+        open={state.value === "finalPrompt"}
         itemType={itemType}
         itemName={context.itemName}
         cellarName={inCellar ? (cellarName ?? "your cellar") : undefined}
-        photo={context.displayImageDataUrl}
+        photo={displayPhoto}
         imageError={context.imageError}
-        opening={state.value === "openingNow"}
         onSnapAnother={() => send({ type: "SNAP_ANOTHER" })}
         onOpenNow={
           inCellar && isNotNil(context.cellarItemId)
