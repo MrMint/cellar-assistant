@@ -94,7 +94,9 @@ test.describe("onboard → cellar → check in", () => {
       "the flow never reached the success sheet — the confirm was rejected or the outbox did not deliver ItemActor.create",
     ).toBeVisible({ timeout: 60_000 });
     await expect(sheet).toContainText(name);
-    await sheet.getByRole("button", { name: "View bottle" }).click();
+    // X06: in a cellar the sheet's second action is "Open it now", which
+    // shows the bottle's page (it uncorks nothing); "View bottle" is gone.
+    await sheet.getByRole("button", { name: "Open it now" }).click();
 
     // Decision 1: in a cellar, the ending lands on the bottle.
     await expect(primary).toHaveURL(
