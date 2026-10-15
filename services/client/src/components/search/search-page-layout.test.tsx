@@ -96,17 +96,17 @@ const urql = new Client({ url: "http://test.invalid/graphql", exchanges: [] });
 /** The `/search` page for one URL — the page.tsx shape, without the I/O. */
 function Page({ href }: { href: string }) {
   const q = new URL(href, "http://localhost").searchParams.get("q");
-  const { query, hasActiveSearch } = searchStateFromParams({
-    q: q ?? undefined,
-  });
+  const state = searchStateFromParams({ q: q ?? undefined });
+  const { query, hasActiveSearch } = state;
   return (
     <SearchPageLayout
       urlQuery={query}
+      header={<h1>Search</h1>}
       landing={
         hasActiveSearch
           ? null
           : {
-              hero: <h1 data-testid="hero">Good evening</h1>,
+              hero: <h2 data-testid="hero">Good evening</h2>,
             }
       }
     >
@@ -253,6 +253,26 @@ describe("the search box survives typing (N01)", () => {
         ["replace", "/search?q=wi"],
         ["replace", "/search?q=wine"],
       ]);
+    } finally {
+      await unmount();
+    }
+  });
+
+  test("X21: exactly one h1, the sheet's, without remounting the box", async () => {
+    await mount("/search");
+    try {
+      const box = input();
+      const h1s = () => [...container.querySelectorAll("h1")];
+      assert.equal(h1s().length, 1);
+      assert.equal(h1s()[0]?.textContent, "Search");
+
+      await typeInto(box, "w");
+      await settle();
+      await resolveResults("w");
+
+      assert.equal(h1s().length, 1);
+      assert.equal(h1s()[0]?.textContent, "Search");
+      assert.equal(input(), box, "the input was not remounted");
     } finally {
       await unmount();
     }

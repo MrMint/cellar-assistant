@@ -1,4 +1,7 @@
-import { CellarItemPage } from "@/components/item/CellarItemPage";
+import {
+  CellarItemPage,
+  cellarItemPageMetadata,
+} from "@/components/item/CellarItemPage";
 
 /**
  * `/cellars/[cellarId]/wines/[itemId]` — one bottle: `[itemId]` is the
@@ -6,6 +9,16 @@ import { CellarItemPage } from "@/components/item/CellarItemPage";
  * as the shared `CellarItemPage`; an item id redirects to its bottle.
  */
 export const dynamic = "force-dynamic";
+
+export function generateMetadata({
+  params,
+}: {
+  params: Promise<{ itemId: string; cellarId: string }>;
+}) {
+  return params.then(({ cellarId, itemId }) =>
+    cellarItemPageMetadata("WINE", cellarId, itemId),
+  );
+}
 
 export default async function CellarWineItemPage({
   params,

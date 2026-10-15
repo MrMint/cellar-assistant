@@ -1,4 +1,6 @@
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { cache } from "react";
 import {
   type TierListItemNode,
   tierListDataFrom,
@@ -31,6 +33,28 @@ const MAX_ENTRY_PAGES = 50;
  */
 export const dynamic = "force-dynamic";
 
+/** The first page, once per request, for the page and its title (X21). */
+const loadFirstPage = cache((tierListId: string) =>
+  apiServerQuery(GetTierListQuery, {
+    id: tierListId,
+    first: TIER_LIST_ITEMS_PAGE_SIZE,
+    after: null,
+  }),
+);
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ tierListId: string }>;
+}): Promise<Metadata> {
+  const { tierListId } = await params;
+  const result = unwrapResult(
+    (await loadFirstPage(tierListId)).tierList,
+    "TierList",
+  );
+  return { title: result.ok ? result.data.name : "Tier list" };
+}
+
 export default async function TierListPage({
   params,
 }: {
@@ -38,11 +62,7 @@ export default async function TierListPage({
 }) {
   const { tierListId } = await params;
   const [first, viewer] = await Promise.all([
-    apiServerQuery(GetTierListQuery, {
-      id: tierListId,
-      first: TIER_LIST_ITEMS_PAGE_SIZE,
-      after: null,
-    }),
+    loadFirstPage(tierListId),
     apiServerQuery(TierListViewerQuery, {}),
   ]);
 

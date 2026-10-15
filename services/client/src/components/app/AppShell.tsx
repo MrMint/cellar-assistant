@@ -3,6 +3,7 @@
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
+import { mainContentProps } from "./main-content";
 import { isCaptureRoute } from "./nav";
 import { useNavHistoryTracker } from "./nav-history";
 import { usePointerDownPrefetch } from "./prefetch";
@@ -39,6 +40,10 @@ export function contentLayout(pathname: string): {
  * between them the **inner scroller** (D26) — the one element that scrolls,
  * which is what tab re-tap and (later) pull-to-refresh act on.
  *
+ * Landmarks (X21): the rail and the tab bar are each a `nav` named "Main"
+ * (only one is ever displayed), and the scroller is the page's one `<main>`,
+ * the root layout's skip link's target.
+ *
  * Layout only. The GraphQL provider, the install prompt and the viewer are
  * the caller's (`components/shell/AppShell.tsx` wraps this). It also starts a
  * route's prefetch at the pointerdown on any in-app link inside it (X24,
@@ -67,9 +72,10 @@ export function AppShell({ children }: { children: ReactNode }) {
     >
       <SideRail className="hidden sm:flex" />
       <main
+        {...mainContentProps}
         data-app-scroller=""
         className={cn(
-          "min-h-0 min-w-0 flex-1 overflow-x-hidden",
+          "min-h-0 min-w-0 flex-1 overflow-x-hidden outline-none",
           padded && "p-4",
           scrolls ? "overflow-y-auto" : "flex flex-col overflow-y-hidden",
         )}

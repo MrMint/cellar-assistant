@@ -8,7 +8,7 @@ import { WantToTryListQuery } from "@/components/want-to-try/queries";
 import { WantToTryList } from "@/components/want-to-try/WantToTryList";
 import { apiServerQuery } from "@/lib/api/urql-server";
 
-export const metadata: Metadata = { title: "Want to try · Cellar Assistant" };
+export const metadata: Metadata = { title: "Want to try" };
 
 /**
  * `/want-to-try` — Me › Lists › "Want to try" (X08, D1, D27): drinks, places

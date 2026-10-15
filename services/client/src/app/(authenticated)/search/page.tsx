@@ -1,6 +1,8 @@
+import type { Metadata } from "next";
 import { type ReactNode, Suspense } from "react";
 import {
   type SearchParams,
+  searchPageTitle,
   searchStateFromParams,
 } from "@/components/search/adapter";
 import { SearchPageLayout } from "@/components/search/SearchPageLayout";
@@ -52,6 +54,13 @@ export const dynamic = "force-dynamic";
 
 interface SearchPageProps {
   searchParams: Promise<SearchParams>;
+}
+
+/** X21: "Search", or what is being searched for. Reads the URL only. */
+export async function generateMetadata({
+  searchParams,
+}: SearchPageProps): Promise<Metadata> {
+  return { title: searchPageTitle(searchStateFromParams(await searchParams)) };
 }
 
 export default async function Search({ searchParams }: SearchPageProps) {

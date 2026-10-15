@@ -53,6 +53,12 @@ export type RecipeDetailsProps = {
    * `revalidatePath`. A client-rendered caller (the photo page) refetches.
    */
   onChanged?: () => void;
+  /**
+   * The recipe name's heading level (X21): `h1` where it is the page's
+   * heading (`/recipes/[id]`), `h2` under a page's own h1 (a group's name,
+   * the AI generator's title).
+   */
+  titleLevel?: "h1" | "h2";
 };
 
 /**
@@ -82,6 +88,7 @@ export const RecipeDetails = ({
   reviewsEndCursor = null,
   reviewsHasNextPage = false,
   onChanged,
+  titleLevel = "h2",
 }: RecipeDetailsProps) => {
   const router = useRouter();
   const reviews = recipe.recipe_reviews ?? [];
@@ -198,6 +205,7 @@ export const RecipeDetails = ({
         <div className="grid min-w-0 grid-cols-1 gap-4 sm:col-span-2 lg:grid-cols-2">
           <div className="flex min-w-0 flex-col gap-4">
             <RecipeDetailsCard
+              titleLevel={titleLevel}
               recipeId={recipe.id}
               title={recipe.name}
               type={recipe.type}

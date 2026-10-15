@@ -32,6 +32,8 @@ const CHIP = "h-7 px-3 text-sm [&>svg]:size-4";
 export type RecipeDetailsCardProps = {
   recipeId: string;
   title: string;
+  /** X21: `h1` when the recipe is the page; `h2` (default) under another h1. */
+  titleLevel?: "h1" | "h2";
   type: "food" | "cocktail";
   difficulty_level?: number | null;
   prep_time_minutes?: number | null;
@@ -67,6 +69,7 @@ export function RecipeDetailsCard({
   version,
   description,
   isWantToTry,
+  titleLevel: Title = "h2",
 }: RecipeDetailsCardProps) {
   const subTitlePhrases = [
     type,
@@ -79,7 +82,9 @@ export function RecipeDetailsCard({
   return (
     <section className="flex flex-col gap-4 rounded-lg bg-surface-1 p-4">
       <div className="flex items-start gap-2">
-        <h3 className="min-w-0 flex-1 break-words type-title-2">{title}</h3>
+        <Title className="min-w-0 flex-1 break-words type-title-2">
+          {title}
+        </Title>
         {isLoved !== undefined && (
           <RecipeLoveButton
             recipeId={recipeId}

@@ -29,7 +29,7 @@ import { parseTypesParam } from "@/utilities/types-param";
 export const dynamic = "force-dynamic";
 
 /** D27: favourites read "Loved" wherever a person sees them, the tab too. */
-export const metadata: Metadata = { title: "Loved · Cellar Assistant" };
+export const metadata: Metadata = { title: "Loved" };
 
 export default async function FavoritesPage({
   searchParams,

@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { ICON_STROKE, Offline, Refresh } from "@/components/app/icons";
+import { MainContent } from "@/components/app/main-content";
 import { ShellMessage } from "@/components/shell/ShellMessage";
 import { OFFLINE_COPY } from "@/components/shell/shell-copy";
 import { Button } from "@/components/ui/button";
@@ -19,7 +20,7 @@ export default function OfflinePage() {
   useEffect(() => onceBackOnline(window, () => window.location.reload()), []);
 
   return (
-    <div className="flex min-h-full flex-1">
+    <MainContent className="flex min-h-full flex-1">
       <ShellMessage
         copy={OFFLINE_COPY}
         icon={<Offline strokeWidth={ICON_STROKE} />}
@@ -30,6 +31,6 @@ export default function OfflinePage() {
           </Button>
         }
       />
-    </div>
+    </MainContent>
   );
 }

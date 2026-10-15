@@ -1,7 +1,10 @@
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { MenuScanResults } from "@/components/map/scanning/MenuScanResults";
 import { Spinner } from "@/components/ui/spinner";
+
+export const metadata: Metadata = { title: "Scan results" };
 
 interface ScanDetailsPageProps {
   params: Promise<{

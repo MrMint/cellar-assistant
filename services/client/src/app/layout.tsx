@@ -3,6 +3,7 @@ import { SpeedInsights } from "@vercel/speed-insights/next";
 import type { Metadata, Viewport } from "next";
 import { Fraunces, Inter } from "next/font/google";
 import { NuqsAdapter } from "nuqs/adapters/next/app";
+import { SkipLink } from "@/components/app/SkipLink";
 import AppClientProviders from "@/components/providers/AppClientProviders";
 import SerwistClientProvider from "@/components/providers/SerwistClientProvider";
 import { AppleSplashScreens } from "@/components/pwa/AppleSplashScreens";
@@ -36,7 +37,11 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: "Cellar Assistant",
+  // X21: every route names itself ("Cellars · Cellar Assistant"), through its
+  // own `metadata` or `generateMetadata`; `lib/dev-checks/page-titles.test.ts`
+  // holds every page.tsx to that. A page sets its own words only — never the
+  // suffix — or `{ absolute }` when the app's name is already in them.
+  title: { default: "Cellar Assistant", template: "%s · Cellar Assistant" },
   description:
     "Manage your wine, beer, spirit, and coffee collections. Scan menus, track your cellar, and discover new favorites.",
   applicationName: "Cellar Assistant",
@@ -72,6 +77,8 @@ export default function RootLayout({
         <AppleSplashScreens />
       </head>
       <body className="bg-background font-sans text-foreground">
+        {/* X21: the first Tab stop on every page; each frame's <main> is its target. */}
+        <SkipLink />
         <SerwistClientProvider>
           <NuqsAdapter>
             <AppClientProviders>

@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { Suspense } from "react";
 import { Page } from "@/components/app/Page";
 import {
@@ -18,6 +19,8 @@ import {
 import { RecipeGroupSearch } from "@/components/search/RecipeGroupSearch";
 import { unwrapResult } from "@/lib/api/result";
 import { apiServerQuery } from "@/lib/api/urql-server";
+
+export const metadata: Metadata = { title: "Recipes" };
 
 /**
  * `/recipes` — the Cellar tab's **Bar** (D1): your drafts and your recipes

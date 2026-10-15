@@ -12,7 +12,7 @@ import {
 import { apiServerQuery } from "@/lib/api/urql-server";
 import { getServerUser } from "@/utilities/auth-server";
 
-export const metadata: Metadata = { title: "Me · Cellar Assistant" };
+export const metadata: Metadata = { title: "Me" };
 export const dynamic = "force-dynamic";
 
 /**

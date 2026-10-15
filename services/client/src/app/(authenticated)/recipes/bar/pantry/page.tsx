@@ -1,9 +1,12 @@
+import type { Metadata } from "next";
 import { AppBar } from "@/components/app/AppBar";
 import { Page } from "@/components/app/Page";
 import { PantryEditor } from "@/components/bar/PantryEditor";
 import { BarPantryQuery } from "@/components/bar/queries";
 import { unwrapResult } from "@/lib/api/result";
 import { apiServerQuery } from "@/lib/api/urql-server";
+
+export const metadata: Metadata = { title: "Bar pantry" };
 
 /**
  * `/recipes/bar/pantry` — **the Bar pantry** (D23): ~30 toggles, separate

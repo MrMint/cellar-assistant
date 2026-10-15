@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { Suspense } from "react";
 import { ShellBlocks } from "@/components/app/LoadingShell";
 import { Page } from "@/components/app/Page";
@@ -12,6 +13,8 @@ import {
 import { TodayHeader } from "@/components/home/TodayHeader";
 import { Skeleton } from "@/components/ui/skeleton";
 import { getServerUser } from "@/utilities/auth-server";
+
+export const metadata: Metadata = { title: "Home" };
 
 export const dynamic = "force-dynamic";
 

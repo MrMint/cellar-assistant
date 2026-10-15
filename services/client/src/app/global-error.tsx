@@ -1,5 +1,6 @@
 "use client";
 
+import { MainContent } from "@/components/app/main-content";
 import { BoundaryError } from "@/components/shell/BoundaryError";
 import "./globals.css";
 
@@ -18,9 +19,10 @@ export default function GlobalError(props: {
     <html lang="en" data-theme="dark">
       <body className="bg-background font-sans text-foreground">
         <title>Something went wrong · Cellar Assistant</title>
-        <div className="flex min-h-dvh">
+        {/* The root layout (and its skip link) is gone; the main stays (X21). */}
+        <MainContent className="flex min-h-dvh">
           <BoundaryError {...props} />
-        </div>
+        </MainContent>
       </body>
     </html>
   );

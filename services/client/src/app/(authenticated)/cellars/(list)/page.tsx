@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { type CellarSectionSeed, Cellars } from "@/components/cellar/Cellars";
 import { GetCellarsQuery } from "@/components/cellar/fragments";
 import { sectionPageSize } from "@/components/cellar-api/pagination";
@@ -6,6 +7,8 @@ import { ViewerQuery } from "@/lib/api/cellars";
 import { unwrapResult } from "@/lib/api/result";
 import { apiServerQuery } from "@/lib/api/urql-server";
 import { toPage } from "@/lib/paging/paged-connection";
+
+export const metadata: Metadata = { title: "Cellars" };
 
 /**
  * `/cellars` — Yours, From friends and Discover (decision D2, X11), each a

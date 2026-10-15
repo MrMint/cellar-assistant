@@ -272,6 +272,13 @@ otherwise; no Back on a tab root without history. Overflow is an action
 sheet on phones and a dropdown from `md`. (`HeaderBar` keeps its props and
 renders this — S1.)
 
+**`SkipLink`** — rendered once by the root layout. `main-content.tsx` holds
+`MAIN_CONTENT_ID` / `mainContentProps` for a frame's `<main>`, and
+`MainContent` for a frame that is only a message (see "Accessibility
+baseline"). Those live apart from `SkipLink` because it is a client module,
+and a plain object imported from one reaches a server component as a client
+reference, not as the object.
+
 **`Page`** — `<Page>` centred 720 px column, sections 24 pt apart; `wide`
 → 1120; `withActionBar` adds bottom room for an `ActionBar`.
 
@@ -450,6 +457,37 @@ It covers every `app/Link` (tabs included) without making `Link` a client
 component. Opt a link out with `data-prefetch="false"`. Buttons that navigate
 warm their destination themselves: AppBar's Back (its `parent` on a cold deep
 link). ＋ is a link, so the shared listener covers it.
+
+## Accessibility baseline (X21)
+
+Every page, held by tests rather than by review:
+
+- **A title of its own.** Export `metadata` (`{ title: "Cellars" }`) or
+  `generateMetadata` from the `page.tsx` — the words only; the root
+  layout's template adds " · Cellar Assistant" (`{ absolute }` when the app
+  is already named). A name from data comes from the page's own read
+  wrapped in React `cache()` (see `ItemPage`'s `loadItemPage`), so the title
+  costs no request. Guard: `lib/dev-checks/page-titles.test.ts`.
+- **Exactly one h1.** An `AppBar` with a string `title` is it; a page whose
+  heading lives in the content (an item's name) passes the bar a `<p>`. A
+  page with no visible headline (the map, `/search`) renders an `sr-only` h1.
+  Headings go down one level at a time.
+- **One `<main>`, the skip link's target.** `SkipLink` (rendered once, by
+  the root layout) focuses `MAIN_CONTENT_ID` — by script, so it adds no
+  history entry for Back to land on; every frame spreads `mainContentProps`
+  on its `<main>` (`AppShell`, `AuthPage`, `ShareFrame`), and a message with
+  no frame around it renders in `MainContent` (the offline page, the
+  signed-out and shared-link not-found pages, the share and global error
+  pages). A new frame without one breaks the skip link.
+- **Every control named.** `IconButton` requires `aria-label`; anything else
+  icon-only needs one too. Guard: `lib/dev-checks/control-names.test.ts`.
+- **Focus visible.** Controls draw `focus-visible:ring-[3px]
+  ring-ring/50` (the primitives do); `outline-none` never ships without a
+  focus-visible replacement on something a keyboard can reach.
+- **The gate:** `packages/e2e/specs/mobile/m21-axe.spec.ts` — axe at 390,
+  serious + critical = 0 over the main routes, plus the structural checks
+  above, the skip link and a keyboard walk (each stop's look focused against
+  its look after focus moves on: a ring that is always there is not one).
 
 ## Layering (z-index)
 

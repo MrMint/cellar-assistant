@@ -1,4 +1,6 @@
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { cache } from "react";
 import { Link } from "@/components/app/Link";
 import { RecipeGroupPageQuery } from "@/components/recipe/queries";
 import { RecipePage } from "@/components/recipe/RecipePage";
@@ -25,13 +27,31 @@ import { apiServerQuery } from "@/lib/api/urql-server";
  */
 export const dynamic = "force-dynamic";
 
+/** One group read per request, for the page and its title (X21). */
+const loadRecipeGroup = cache((groupId: string) =>
+  apiServerQuery(RecipeGroupPageQuery, { groupId }),
+);
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ groupId: string }>;
+}): Promise<Metadata> {
+  const { groupId } = await params;
+  const result = unwrapResult(
+    (await loadRecipeGroup(groupId)).recipeGroup,
+    "RecipeGroup",
+  );
+  return { title: result.ok ? result.data.name : "Recipe" };
+}
+
 export default async function RecipeGroupPage({
   params,
 }: {
   params: Promise<{ groupId: string }>;
 }) {
   const { groupId } = await params;
-  const data = await apiServerQuery(RecipeGroupPageQuery, { groupId });
+  const data = await loadRecipeGroup(groupId);
   const result = unwrapResult(data.recipeGroup, "RecipeGroup");
   if (!result.ok) {
     if (isNotFound(result.error)) notFound();

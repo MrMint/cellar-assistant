@@ -92,11 +92,20 @@ const recipe: Recipe = {
   recipe_variations: [{ id: "r2", name: "Sbagliato", version: 3 }],
 };
 
+describe("RecipeDetails: the name's heading level (X21)", () => {
+  test("h1 where the recipe is the page", () => {
+    const page = render(<RecipeDetails recipe={recipe} titleLevel="h1" />);
+    assert.match(page, /<h1[^>]*>Negroni</);
+    assert.doesNotMatch(page, /<h[23][^>]*>Negroni</);
+  });
+});
+
 describe("RecipeDetails (restored)", () => {
   const html = render(<RecipeDetails recipe={recipe} viewerId="me" />);
 
   test("the details card: title, subtitle phrases joined with ' • ', chips", () => {
-    assert.match(html, /<h3[^>]*>Negroni</);
+    // X21: an h2 under another page's h1 by default …
+    assert.match(html, /<h2[^>]*>Negroni</);
     assert.match(
       html.replace(/<[^>]+>/g, ""),
       /cocktail • Easy • 5 minutes • Serves 1 • Version 2/,

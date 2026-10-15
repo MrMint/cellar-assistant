@@ -1,8 +1,11 @@
+import type { Metadata } from "next";
 import { PinnedCellarCapture } from "@/components/capture/PinnedCellarCapture";
 import {
   type ApiItemType,
   ITEM_TYPES,
 } from "@/components/cellar-api/itemTypes";
+
+export const metadata: Metadata = { title: "Add a bottle" };
 
 /**
  * `/cellars/[cellarId]/items/add` — the capture surface (X05) filing into

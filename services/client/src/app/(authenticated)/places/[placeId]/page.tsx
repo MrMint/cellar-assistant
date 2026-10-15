@@ -1,4 +1,5 @@
-import { Suspense } from "react";
+import type { Metadata } from "next";
+import { cache, Suspense } from "react";
 import { PlaceDetails } from "@/components/map/places/PlaceDetails";
 import {
   PlaceDetailsShell,
@@ -32,12 +33,25 @@ interface PlaceDetailsPageProps {
   }>;
 }
 
+/** The hero read, once per request, for the page and its title (X21). */
+const loadPlaceHero = cache((placeId: string) =>
+  apiServerQuery(PlaceHeroQuery, { id: placeId }),
+);
+
+export async function generateMetadata({
+  params,
+}: PlaceDetailsPageProps): Promise<Metadata> {
+  const { placeId } = await params;
+  const read = unwrapResult((await loadPlaceHero(placeId)).place, "Place");
+  return { title: read.ok ? read.data.name : "Place" };
+}
+
 export default async function PlaceDetailsPage({
   params,
 }: PlaceDetailsPageProps) {
   const { placeId } = await params;
 
-  const { place } = await apiServerQuery(PlaceHeroQuery, { id: placeId });
+  const { place } = await loadPlaceHero(placeId);
   const read = unwrapResult(place, "Place");
   const hero: PlaceHero | undefined = read.ok
     ? {

@@ -1,4 +1,7 @@
+import type { Metadata } from "next";
 import { PinnedCellarCapture } from "@/components/capture/PinnedCellarCapture";
+
+export const metadata: Metadata = { title: "Add a coffee" };
 
 /**
  * `/cellars/[cellarId]/coffees/add` — `82450ad1`'s `AddCoffee`: the capture

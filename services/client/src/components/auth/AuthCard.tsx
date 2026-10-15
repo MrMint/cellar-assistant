@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { mainContentProps } from "@/components/app/main-content";
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -6,12 +7,16 @@ import { cn } from "@/lib/utils";
 /**
  * The page the sign-in and sign-up cards sit on: the card centred in the
  * space, over whatever background comes first (sign-in's poured beer).
+ * It is the page's `<main>` (X21): there is no other chrome around it.
  */
 export function AuthPage({ children }: { children: ReactNode }) {
   return (
-    <div className="relative flex flex-1 items-center justify-center overflow-hidden">
+    <main
+      {...mainContentProps}
+      className="relative flex flex-1 items-center justify-center overflow-hidden outline-none"
+    >
       {children}
-    </div>
+    </main>
   );
 }
 

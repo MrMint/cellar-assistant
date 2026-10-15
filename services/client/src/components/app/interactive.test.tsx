@@ -70,6 +70,8 @@ const { recordNavigation } = await import("./nav-history");
 const { Toaster } = await import("./Toaster");
 const { dismissNotification, notify, UNDO_TOAST_MS } = await import("./notify");
 const { AppShell } = await import("./AppShell");
+const { MAIN_CONTENT_ID } = await import("./main-content");
+const { SkipLink } = await import("./SkipLink");
 
 let container: HTMLElement;
 let root: ReturnType<typeof createRoot>;
@@ -492,6 +494,37 @@ describe("AppShell", () => {
     assert.match(main?.className ?? "", /overflow-y-auto/);
     assert.ok(container.querySelector('[data-slot="side-rail"]'));
     assert.ok(container.querySelector('[data-slot="tab-bar"]'));
+  });
+
+  test("X21: the main is the skip link's target, and the navs are named", async () => {
+    pathname = "/cellars";
+    await render(<AppShell>page</AppShell>);
+    const main = container.querySelector("main");
+    assert.equal(main?.id, MAIN_CONTENT_ID);
+    // Focusable by script only, so following the skip link lands focus in it.
+    assert.equal(main?.getAttribute("tabindex"), "-1");
+    const navs = [...container.querySelectorAll("nav")];
+    assert.ok(navs.length >= 2);
+    for (const nav of navs)
+      assert.equal(nav.getAttribute("aria-label"), "Main");
+  });
+
+  test("X21: the skip link focuses main without a history entry", async () => {
+    pathname = "/cellars";
+    await render(
+      <>
+        <SkipLink />
+        <AppShell>page</AppShell>
+      </>,
+    );
+    const before = window.history.length;
+    const href = window.location.href;
+    await click(container.querySelector('[data-slot="skip-link"]'));
+    assert.equal(document.activeElement?.id, MAIN_CONTENT_ID);
+    // A fragment navigation would add `#main-content` and an entry, and the
+    // next Back would only return to this same page.
+    assert.equal(window.location.href, href);
+    assert.equal(window.history.length, before);
   });
 
   test("records in-app history for AppBar's Back", async () => {
