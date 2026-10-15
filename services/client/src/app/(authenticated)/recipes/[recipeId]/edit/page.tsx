@@ -14,7 +14,7 @@ import { apiServerQuery } from "@/lib/api/urql-server";
  */
 export const dynamic = "force-dynamic";
 
-export const metadata: Metadata = { title: "Edit recipe · Cellar Assistant" };
+export const metadata: Metadata = { title: "Edit recipe" };
 
 export default async function EditRecipePage({
   params,

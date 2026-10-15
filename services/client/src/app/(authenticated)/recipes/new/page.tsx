@@ -10,7 +10,7 @@ import {
  */
 export const dynamic = "force-dynamic";
 
-export const metadata: Metadata = { title: "New recipe · Cellar Assistant" };
+export const metadata: Metadata = { title: "New recipe" };
 
 const SOURCES = new Set(["photo", "paste", "type"]);
 

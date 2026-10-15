@@ -20,7 +20,7 @@ export const dynamic = "force-dynamic";
  * The tab title names nobody: a title is the one part of a page that outlives
  * it (history, the tab strip), and the name is already the page's heading.
  */
-export const metadata: Metadata = { title: "Friend · Cellar Assistant" };
+export const metadata: Metadata = { title: "Friend" };
 
 /**
  * `/users/[userId]` — a friend's read-only profile (X18).

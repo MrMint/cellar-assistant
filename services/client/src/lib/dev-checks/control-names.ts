@@ -45,6 +45,12 @@ export type UnnamedControl = {
 
 /** Native and shadcn controls, and Radix's `…Trigger` / `…Close` buttons. */
 const CONTROL_TAG = /^(?:button|Button|a|Link|\w+Trigger|\w+Close)$/;
+/**
+ * App components whose name matches `CONTROL_TAG` but that name themselves:
+ * each renders an `IconButton` with a fixed `aria-label`, so a bare
+ * `<CaptureClose />` is named ("Close"), not an empty Radix close.
+ */
+const SELF_NAMED = new Set(["CaptureClose"]);
 const CONTROL_ROLES = new Set(["button", "link"]);
 const NAMING_ATTRIBUTES = ["aria-label", "aria-labelledby", "title"] as const;
 
@@ -88,7 +94,9 @@ const namedByAttribute = (node: Jsx): boolean =>
   });
 
 const isControl = (node: Jsx): boolean => {
-  if (CONTROL_TAG.test(tagOf(node))) return true;
+  const tag = tagOf(node);
+  if (SELF_NAMED.has(tag)) return false;
+  if (CONTROL_TAG.test(tag)) return true;
   const role = stringAttribute(node, "role");
   return role !== undefined && CONTROL_ROLES.has(role);
 };

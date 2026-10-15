@@ -56,6 +56,11 @@ describe("control-name guard: what it flags", () => {
 });
 
 describe("control-name guard: what it leaves alone", () => {
+  test("an app component that labels itself (X06's CaptureClose)", () => {
+    assert.deepEqual(scan(`<CaptureClose />`), []);
+    assert.deepEqual(scan(`<DialogClose />`), ["DialogClose"]);
+  });
+
   test("text, an expression, sr-only text or a labelled descendant", () => {
     assert.deepEqual(scan(`<button>Save</button>`), []);
     assert.deepEqual(
