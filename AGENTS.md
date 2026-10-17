@@ -69,7 +69,8 @@ directory that does not exist.
 
 This file carries no copy of that managed block — a second copy would be both wrong here and
 unmaintained, since `next dev` only ever writes the one in its own project directory. Everything
-below is the actual project guide, for any agent; `CLAUDE.md` beside this file is just `@AGENTS.md`.
+below is the actual project guide, for any agent; `CLAUDE.md` beside this file imports it with `@AGENTS.md` and adds only Claude Code-specific
+sections: compaction and multi-agent builds.
 
 ## The backend is Dapr actors, not Nhost/Hasura
 
