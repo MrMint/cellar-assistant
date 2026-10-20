@@ -99,7 +99,7 @@ x-node-app: &node-app
   build:
     dockerfile_inline: |
       FROM node:24-bookworm-slim
-      COPY --from=oven/bun:1.4.2 /usr/local/bin/bun /usr/local/bin/bun
+      COPY --from=oven/bun:1.4.3 /usr/local/bin/bun /usr/local/bin/bun
   # Source is mounted, not baked: apps run straight off the workspace with
   # Node 24's built-in TypeScript type stripping, so there is no build step and
   # no image to rebuild on every edit. The isolated store's node_modules
