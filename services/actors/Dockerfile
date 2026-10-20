@@ -56,7 +56,7 @@ WORKDIR /workspace
 # @parcel/watcher and @swc/core. Bun will NOT fail the install the way pnpm did
 # if that ruling goes missing — it skips the script in silence — which is what
 # scripts/check-blocked-builds.mjs exists to catch in CI.
-COPY --from=oven/bun:1.4.2 /usr/local/bin/bun /usr/local/bin/bun
+COPY --from=oven/bun:1.4.3 /usr/local/bin/bun /usr/local/bin/bun
 
 # ---- deps: install with the workspace visible, production deps only -------
 FROM base AS deps

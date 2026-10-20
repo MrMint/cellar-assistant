@@ -42,7 +42,7 @@ WORKDIR /workspace
 # Bun is both the package manager and the runtime here, so the binary lives in
 # `base` and every later stage inherits it. Corepack cannot pin bun; keep this
 # tag equal to the root package.json's `packageManager`.
-COPY --from=oven/bun:1.4.2 /usr/local/bin/bun /usr/local/bin/bun
+COPY --from=oven/bun:1.4.3 /usr/local/bin/bun /usr/local/bin/bun
 
 # ---- deps: install with the whole workspace visible -------------------------
 FROM base AS deps
