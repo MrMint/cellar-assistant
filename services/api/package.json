@@ -20,7 +20,7 @@
     "@pothos/plugin-relay": "4.8.1",
     "dataloader": "2.2.3",
     "graphql": "catalog:",
-    "graphql-yoga": "5.24.1",
+    "graphql-yoga": "5.24.6",
     "jose": "catalog:"
   },
   "devDependencies": {
