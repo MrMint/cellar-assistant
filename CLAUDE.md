@@ -22,6 +22,9 @@ bounded pieces. When you split work across parallel agents:
   criteria), `verifier` for checking the running app, and `scout` (Sonnet) for a search that
   would take a stream more than two turns. A session loads these from its own checkout, so start
   a lead from a checkout that is current with `origin/main`.
+- **Never pass `model: opus` to a search agent.** `scout` runs on Sonnet by its own definition,
+  and a `model` you pass overrides it. Give `Explore` `model: sonnet`, or `haiku` for a plain
+  "where is X". Opus is for agents that build, review or verify.
 
 - **One brief file per stream.** It gives the goal, the acceptance criteria, the files the stream
   owns and the checks it must pass. Point to shared plans by path and section; never inline them.
