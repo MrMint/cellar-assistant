@@ -2,8 +2,9 @@
 
 # Compact instructions
 
-Context compacts at a 300k window (set in the owner's user-level Claude Code settings), so a long
-task compacts several times. When you are using compact, keep: the path of your brief and of your
+A `stream-builder` agent compacts at a 300k window (set in its own definition), so a long stream
+compacts several times; other sessions keep the default window, so a long design or planning
+conversation keeps what was said in it. When you are using compact, keep: the path of your brief and of your
 `PROGRESS.md`, the task's acceptance criteria, every decision with its reason, the files you
 changed, failing tests or typechecks and their error text, and the next step. Drop: old command
 output, file contents you can re-read, screenshots, and finished exploration. After a compaction,
@@ -15,10 +16,12 @@ Most of the quota goes to subagents. An agent pays for its whole context on ever
 that runs hundreds of turns at half a million tokens costs many times what the same work costs in
 bounded pieces. When you split work across parallel agents:
 
-- **Spawn each role as its agent type.** The owner's user config defines them in
-  `~/.claude/agents/`: `stream-builder` for build and fix streams (1-hour prompt cache, turn cap,
-  the `PROGRESS.md` rules), `reviewer` for review rounds (fresh context, sees only the diff and
-  the criteria) and `verifier` for checking the running app. Quick lookups stay on `Explore`.
+- **Spawn each role as its agent type,** defined in `.claude/agents/`: `stream-builder` for build
+  and fix streams (turn cap, 300k compaction window, the `PROGRESS.md` rules, long code files
+  read as an outline), `reviewer` for review rounds (fresh context, sees only the diff and the
+  criteria), `verifier` for checking the running app, and `scout` (Sonnet) for a search that
+  would take a stream more than two turns. A session loads these from its own checkout, so start
+  a lead from a checkout that is current with `origin/main`.
 
 - **One brief file per stream.** It gives the goal, the acceptance criteria, the files the stream
   owns and the checks it must pass. Point to shared plans by path and section; never inline them.
