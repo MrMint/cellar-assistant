@@ -53,7 +53,7 @@ WORKDIR /workspace
 # services/actors' otherwise-identical stage once lost its corepack pin,
 # silently fetched a floating package manager and could not build
 # protobufjs/esbuild.
-COPY --from=oven/bun:1.4.2 /usr/local/bin/bun /usr/local/bin/bun
+COPY --from=oven/bun:1.4.4 /usr/local/bin/bun /usr/local/bin/bun
 
 # ---- deps: install with the workspace visible, production deps only -------
 FROM base AS deps
