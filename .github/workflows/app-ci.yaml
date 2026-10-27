@@ -126,7 +126,7 @@ concurrency:
 # rather than leaving a comment asking someone to remember.
 env:
   BUN_VERSION: "1.4.2"
-  BIOME_VERSION: "2.5.15"
+  BIOME_VERSION: "2.6.3"
 
 jobs:
   check:
