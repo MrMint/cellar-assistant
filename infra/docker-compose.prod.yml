@@ -371,7 +371,7 @@ services:
     # The pinned default is the base file's tag; see the UPGRADE CHECKLIST on
     # the base service before overriding it — ./grafana/otel-lgtm/prometheus.yaml
     # is a copy of that tag's file and has to move with it.
-    image: ${OTEL_LGTM_IMAGE:-grafana/otel-lgtm:0.35.0}
+    image: ${OTEL_LGTM_IMAGE:-grafana/otel-lgtm:0.38.1}
     # Changes when infra/grafana/** changes (provisioning, dashboards, alert
     # rules, the Prometheus override), so a deploy recreates this container
     # exactly then — Grafana reads alerting provisioning only at startup, and

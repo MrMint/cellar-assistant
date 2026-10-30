@@ -111,7 +111,7 @@ x-node-app: &node-app
   restart: unless-stopped
 
 x-daprd: &daprd
-  image: daprio/daprd:1.18.4
+  image: daprio/daprd:1.19.0
   # Each sidecar is a normal container on the compose network rather than
   # sharing its app's network namespace. `network_mode: "service:<app>"` also
   # works, but then restarting the app tears down the namespace the sidecar is
@@ -290,7 +290,7 @@ services:
   # moved out of the actor state store into this service in Dapr 1.15, which is
   # why it is not optional here even though no state store is declared.
   placement:
-    image: daprio/placement:1.18.4
+    image: daprio/placement:1.19.0
     command:
       - "/placement"
       - "--port=50005"
@@ -787,7 +787,7 @@ services:
     # ./grafana/otel-lgtm/prometheus.yaml from the NEW image (that file's
     # header says how). The retention flags below are CLI flags of the bundled
     # servers and are worth re-checking against the new versions' `-help`.
-    image: grafana/otel-lgtm:0.35.0
+    image: grafana/otel-lgtm:0.38.1
     ports:
       - "${BIND_ADDR:-127.0.0.1}:${GRAFANA_PORT:-3010}:3000"
     volumes:
