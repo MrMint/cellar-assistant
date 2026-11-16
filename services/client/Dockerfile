@@ -37,7 +37,7 @@
 # So the OS and Node come from the Docker Official Image and only the bun
 # binary is pinned, by copying the one static binary out of the official image.
 
-FROM node:24-bookworm-slim AS base
+FROM node:26-bookworm-slim AS base
 WORKDIR /workspace
 # Bun is both the package manager and the runtime here, so the binary lives in
 # `base` and every later stage inherits it. Corepack cannot pin bun; keep this

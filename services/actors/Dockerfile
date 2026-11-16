@@ -41,7 +41,7 @@
 # The cost is the bun binary in the runtime layer (~100 MB uncompressed, shared
 # with nothing). That is the price of the rollback being a `CMD` override.
 
-FROM node:24-bookworm-slim AS base
+FROM node:26-bookworm-slim AS base
 WORKDIR /workspace
 
 # Bun is both the package manager and — since phase 5b — the runtime, so it is
