@@ -1,11 +1,11 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 import { ActionBar } from "@/components/app/ActionBar";
 import { BottomSheet } from "@/components/app/BottomSheet";
 import { IconButton } from "@/components/app/IconButton";
 import { Delete, Edit, More, Ranked, Share } from "@/components/app/icons";
+import { useNavigate } from "@/components/app/useNavigate";
 import type { ApiItemType } from "@/components/cellar-api/itemTypes";
 import type { PourBottle } from "@/components/pour/PourSheet";
 import { AddToTierListModal } from "@/components/tier-list/AddToTierListModal";
@@ -82,7 +82,7 @@ export function ItemActionBar({
   pourable,
   deletable,
 }: ItemActionBarProps) {
-  const router = useRouter();
+  const navigate = useNavigate();
   const actions = useItemActions();
   const share = useItemShare({ itemId, itemType, itemName });
   const [moreOpen, setMoreOpen] = useState(false);
@@ -104,7 +104,7 @@ export function ItemActionBar({
         void share();
         return;
       case "edit":
-        if (editHref !== null) router.push(editHref);
+        if (editHref !== null) navigate.push(editHref);
         return;
       case "delete":
         setDeleteOpen(true);

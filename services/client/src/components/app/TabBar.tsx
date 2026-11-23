@@ -1,6 +1,6 @@
 "use client";
 
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { type MouseEvent, useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 import { Link } from "./Link";
@@ -12,6 +12,7 @@ import {
   type Tab,
   type TabKey,
 } from "./nav";
+import { useNavigate } from "./useNavigate";
 
 /** The shell's inner scroller (`AppShell`), which re-tap scrolls to the top. */
 export const SCROLLER_SELECTOR = "[data-app-scroller]";
@@ -126,13 +127,13 @@ export function CaptureButton({ className }: { className?: string }) {
  */
 export function TabBar({ className }: { className?: string }) {
   const pathname = usePathname() ?? "/";
-  const router = useRouter();
+  const navigate = useNavigate();
   const [active, setActive] = useOptimisticTab();
 
   const onTap = (event: MouseEvent<HTMLAnchorElement>, tab: Tab) => {
     if (opensElsewhere(event)) return;
     if (tab.key === active) {
-      if (handleActiveTabTap(tab, pathname, router.push)) {
+      if (handleActiveTabTap(tab, pathname, navigate.push)) {
         event.preventDefault();
       }
       return;

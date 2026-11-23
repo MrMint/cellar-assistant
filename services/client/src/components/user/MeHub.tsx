@@ -16,6 +16,7 @@ import { badgeVariants } from "@/components/ui/badge-variants";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import type { ServerUser } from "@/utilities/auth-server";
+import { MeStamps } from "./MeStamps";
 import {
   badgeText,
   countTiles,
@@ -250,6 +251,8 @@ export function MeHub({
         </div>
       </header>
       <MeCountRow counts={data.counts} />
+      {/* ux-c M4 slot: fetches its own data, renders nothing until then. */}
+      <MeStamps />
       {ME_SECTIONS.map((section) => (
         <InsetSection key={section.label} label={section.label}>
           {section.label === "Lists" && (

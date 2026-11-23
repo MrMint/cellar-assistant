@@ -30,6 +30,7 @@ import { IconButton } from "./IconButton";
 import { type AppIcon, Back, More } from "./icons";
 import { Link } from "./Link";
 import { canGoBack } from "./nav-history";
+import { useNavigate } from "./useNavigate";
 
 export type AppBarAction = {
   label: string;
@@ -70,7 +71,7 @@ export type AppBarProps = {
 
 /**
  * The page header (N26): a real Back, a title, at most two actions and a
- * `⋯` overflow. Back uses the in-app history (`router.back()`) when there is
+ * `⋯` overflow. Back uses the in-app history (`navigate.back()`) when there is
  * one and the declared `parent` otherwise, so a deep link opened cold in the
  * standalone PWA never strands the user.
  *
@@ -89,6 +90,7 @@ export function AppBar({
   className,
 }: AppBarProps) {
   const router = useRouter();
+  const navigate = useNavigate();
   const desktop = useMediaQuery(breakpointUp("md"));
   const pathname = usePathname();
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -116,8 +118,8 @@ export function AppBar({
   const showBack = !root && (parent !== undefined || hasHistory);
 
   const goBack = () => {
-    if (canGoBack()) router.back();
-    else if (parent !== undefined) router.push(parent);
+    if (canGoBack()) navigate.back();
+    else if (parent !== undefined) navigate.push(parent);
   };
   // A cold deep link's Back is a push to `parent`: start its prefetch at the
   // pointerdown, as every in-app link does (X24). History Back needs none.

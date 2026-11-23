@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { notify } from "@/components/app/notify";
+import { useNavigate } from "@/components/app/useNavigate";
 import { Spinner } from "@/components/ui/spinner";
 import { authClient } from "@/lib/api/auth-client";
 import { completeSignOut } from "@/lib/auth/sign-out";
@@ -32,6 +33,7 @@ import { cn } from "@/lib/utils";
  */
 export function SignOutButton({ className }: { className?: string }) {
   const router = useRouter();
+  const navigate = useNavigate();
   const [pending, setPending] = useState(false);
 
   const handleSignOut = async () => {
@@ -64,7 +66,7 @@ export function SignOutButton({ className }: { className?: string }) {
     }
     // `replace`, so Back does not walk into a signed-in page that no longer
     // has a session behind it.
-    router.replace("/sign-in");
+    navigate.replace("/sign-in");
     router.refresh();
   };
 

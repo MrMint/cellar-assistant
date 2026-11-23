@@ -146,6 +146,8 @@ export const TABLE_WRITERS = {
   item_favorites: "UserActor",
   user_place_interactions: "UserActor",
   want_to_try: "UserActor",
+  // ux-c seams (M1): brew settings, one row per person and item.
+  item_brew_prefs: "UserActor",
   friends: "UserActor",
   friend_requests: "UserActor",
   // X14 / D23 and D9: the Bar pantry toggles and recipe Love.
