@@ -1,4 +1,5 @@
 import { ensureFriends } from "../../fixtures/data.ts";
+import { deleteTeas } from "../../fixtures/db.ts";
 import { expect, test } from "../../fixtures/mobile.ts";
 import { ACCOUNTS, Gql } from "../../fixtures/test.ts";
 
@@ -15,8 +16,9 @@ import { ACCOUNTS, Gql } from "../../fixtures/test.ts";
  *
  * The exact numbers depend on what else the two accounts have rated, so the
  * spec asserts the shape of the line, not its figures. Creates five teas
- * and ten reviews; deletes the reviews afterwards (the API has no item
- * delete — other specs leave their teas too). No places, no lists.
+ * and ten reviews, and deletes all of them afterwards (L10): the reviews
+ * through the API, then the teas with `deleteTeas`, since the API has no
+ * item delete. No places, no lists.
  */
 test.describe.configure({ mode: "serial" });
 
@@ -26,6 +28,8 @@ const SECONDARY_SCORES = [4, 4.5, 3, 5, 4.5];
 
 type Review = { account: "primary" | "secondary"; itemId: string; id: string };
 const reviews: Review[] = [];
+/** Every tea this run created, recorded before anything else can fail. */
+const teaIds: string[] = [];
 
 async function createTea(api: Gql, category: string, name: string) {
   const created = await api.query(
@@ -74,6 +78,7 @@ test.beforeAll(async () => {
 
     for (const [i, score] of PRIMARY_SCORES.entries()) {
       const itemId = await createTea(api, category, `${TOKEN} shared ${i}`);
+      teaIds.push(itemId);
       reviews.push({
         account: "primary",
         itemId,
@@ -106,6 +111,8 @@ test.afterAll(async () => {
   } finally {
     await api.dispose();
     await api2.dispose();
+    // The teas go too (CR-10), with anything still hanging off them.
+    if (teaIds.length > 0) deleteTeas(teaIds.splice(0));
   }
 });
 

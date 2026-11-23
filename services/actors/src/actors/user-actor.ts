@@ -336,7 +336,12 @@ const toBrewPrefsDto = (item: ItemRef, row: BrewPrefsRow): BrewPrefsDto => ({
 const brewNumber = (
   value: unknown,
   what: string,
-  { min, max, integer }: { min: number; max?: number; integer?: boolean },
+  {
+    min,
+    max,
+    integer,
+    positive,
+  }: { min?: number; max?: number; integer?: boolean; positive?: boolean },
 ): number | null => {
   if (value === null || value === undefined) return null;
   if (typeof value !== "number" || !Number.isFinite(value)) {
@@ -345,11 +350,17 @@ const brewNumber = (
   if (integer === true && !Number.isInteger(value)) {
     throw new ValidationError(`${what} must be a whole number`);
   }
-  if (value < min || (max !== undefined && value > max)) {
+  // `positive` is the contract's and the DB check's "> 0" exactly (CB-2):
+  // any value above zero, however small, and never zero itself.
+  if (positive === true && !(value > 0)) {
+    throw new ValidationError(`${what} must be more than 0`);
+  }
+  if (
+    (min !== undefined && value < min) ||
+    (max !== undefined && value > max)
+  ) {
     throw new ValidationError(
-      max === undefined
-        ? `${what} must be more than 0`
-        : `${what} must be between ${min} and ${max}`,
+      `${what} must be between ${min ?? "0"} and ${max ?? "any amount"}`,
     );
   }
   return value;
@@ -2147,11 +2158,11 @@ export class UserActor
         integer: true,
       }),
       steepSeconds: brewNumber(input.steepSeconds, "steepSeconds", {
-        min: 1,
+        positive: true,
         integer: true,
       }),
-      doseGrams: brewNumber(input.doseGrams, "doseGrams", { min: 0.1 }),
-      waterMl: brewNumber(input.waterMl, "waterMl", { min: 1 }),
+      doseGrams: brewNumber(input.doseGrams, "doseGrams", { positive: true }),
+      waterMl: brewNumber(input.waterMl, "waterMl", { positive: true }),
     };
     const empty = Object.values(values).every((value) => value === null);
     await this.tx(async (tx) => {

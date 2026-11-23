@@ -806,6 +806,59 @@ describe.skipIf(skip)("CheckInActor (X02)", () => {
       });
     });
 
+    it("names a companion on a recipe log only if they may see the recipe (FR-8)", async () => {
+      await withTestDb(async (db) => {
+        const { drinker, friend } = await scenario(db);
+        const open = await seedRecipe(db, {
+          name: "Round of spritz",
+          createdById: drinker,
+        });
+        const secret = await seedRecipe(db, {
+          name: "Drinker's private amaro",
+          createdById: drinker,
+          privacy: "PRIVATE",
+        });
+
+        // On a recipe the friend may see: both rows, and the friend sees theirs.
+        const openLog = randomUUID();
+        const logged = await (await actorFor(db, openLog)).log(
+          userCtx(drinker, "r"),
+          { recipeId: open, companionIds: [friend] },
+        );
+        expect(logged.entry.recipe).toEqual({ id: open });
+
+        // On a private one: refused, and nothing is written.
+        const secretLog = randomUUID();
+        await expect(
+          (await actorFor(db, secretLog)).log(userCtx(drinker, "r"), {
+            recipeId: secret,
+            companionIds: [friend],
+          }),
+        ).rejects.toBeInstanceOf(ForbiddenError);
+        const written = await db
+          .select({ id: checkIns.id })
+          .from(checkIns)
+          .where(eq(checkIns.recipeId, secret));
+        expect(written).toEqual([]);
+
+        // Nor can they be added after the fact.
+        const alone = randomUUID();
+        await (await actorFor(db, alone)).log(userCtx(drinker, "r"), {
+          recipeId: secret,
+        });
+        await expect(
+          (await actorFor(db, alone)).setCompanions(userCtx(drinker, "r"), {
+            companionIds: [friend],
+          }),
+        ).rejects.toBeInstanceOf(ForbiddenError);
+        const rows = await db
+          .select({ userId: checkIns.userId })
+          .from(checkIns)
+          .where(eq(checkIns.recipeId, secret));
+        expect(rows).toEqual([{ userId: drinker }]);
+      });
+    });
+
     it("a log whose recipe was deleted stays, naming nothing", async () => {
       await withTestDb(async (db) => {
         const { drinker, friend } = await scenario(db);
