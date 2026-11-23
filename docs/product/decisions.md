@@ -293,14 +293,24 @@ reverse them. Each names the item it belongs to; none overrides an answer.
   your bar. The meaning half is cut at 0.45 and 0.05 past the nearest, measured
   on hand-written recipes (the N05 set has none) — re-measure when it has some.
 - **People.** Anyone by name: friends first, then requests either way, then
-  everyone else with an Add button that sends the request in place. Friends
-  and requests open Friends (there is no profile page).
+  everyone else with an Add button that sends the request in place. A friend
+  opens their profile (`/users/<id>`, "Me hub v1"); a request opens Friends,
+  where it is answered, since the profile answers friends only (updated in
+  wave C "leftovers": the rows predate friend profiles).
 - **Places.** Searched within about 30 km of your last known position (the
   location cookie the map and Home write). Without one, only places whose name
   matched are shown — a category-only match would be a bar anywhere on earth.
 - **No AI.** Every section answers by name when the phrase cannot be embedded
   (places and recipes gained that fallback here), and the page says "Matching
   names only: search by meaning is off." when `semanticSearch` is false.
+- **The app needs JavaScript (L1, wave C "leftovers").** `/search` keeps its
+  `loading.tsx` shell: it is what a navigation into the sheet shows while the
+  page streams. Without scripts nothing replaces it, so the no-JS spec is
+  gone; the spec now holds the live box to what that one guarded (fully
+  visible once hydrated, no `opacity:0` left behind, takes typing).
+- **Close replaces (wave C "leftovers").** Close swaps the sheet's history
+  entry for the page it was opened from, so Back after Close does not reopen
+  `/search`.
 ### Home "Today" and the AI inbox (wave B "home": X10, D1)
 
 - **`/` is Home.** The redirect to `/search` is gone; the Home tab points at

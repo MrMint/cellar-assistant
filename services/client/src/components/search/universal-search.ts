@@ -487,9 +487,9 @@ const RELATION_LINES: Readonly<Record<PersonRelation, string | undefined>> = {
 };
 
 /**
- * People: friends and open requests go to `/friends`, where they are
- * answered and managed (there is no profile page); anyone else ends in
- * "Add".
+ * People: a friend opens their profile (`/users/<id>`, X18); an open
+ * request goes to `/friends`, where it is answered; anyone else ends in
+ * "Add". A request is not a profile link: the profile answers friends only.
  */
 export const peopleRows = (
   data: ResultOf<typeof SearchPeopleSectionQuery> | undefined,
@@ -505,7 +505,12 @@ export const peopleRows = (
       thumb: { kind: "avatar", url: node.avatarUrl, name: node.displayName },
       ...(relation === "NONE"
         ? { addFriend: { userId: node.userId, name: node.displayName } }
-        : { href: "/friends" }),
+        : {
+            href:
+              relation === "FRIEND"
+                ? `/users/${encodeURIComponent(node.userId)}`
+                : "/friends",
+          }),
     };
   });
 };
