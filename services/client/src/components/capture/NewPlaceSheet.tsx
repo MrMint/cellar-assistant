@@ -61,15 +61,31 @@ export function NewPlaceSheet({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [placeId, setPlaceId] = useState(() => crypto.randomUUID());
+  // The fix the sheet opened on (CR-4). `useGeolocation` keeps watching and
+  // indoor drift passes its 11 m filter routinely; following it would mint a
+  // new `placeId` (breaking the N09 retry) and spend another budgeted Google
+  // read (D16) on every move. So the sheet takes the first fix it sees per
+  // opening, and the pin, the listing and the id all belong to that one.
+  const [pinned, setPinned] = useState<{
+    latitude: number;
+    longitude: number;
+  } | null>(null);
+  if (!open && pinned !== null) setPinned(null);
+  if (open && pinned === null && location !== null) setPinned(location);
 
-  const lat = location?.latitude ?? null;
-  const lng = location?.longitude ?? null;
-  // One nearby read per opening. A fresh id per opening, too: a sheet closed
-  // and reopened is a new place, not a retry of the last one.
+  // A fresh id per opening: a sheet closed and reopened is a new place, not a
+  // retry of the last one.
   useEffect(() => {
     if (!open) return;
     setPlaceId(crypto.randomUUID());
     setError(null);
+  }, [open]);
+
+  const lat = pinned?.latitude ?? null;
+  const lng = pinned?.longitude ?? null;
+  // One nearby read per opening: `pinned` is set once per opening.
+  useEffect(() => {
+    if (!open) return;
     if (lat === null || lng === null) {
       setPrefill({ kind: "none" });
       return;
@@ -100,7 +116,12 @@ export function NewPlaceSheet({
   }, [open, lat, lng, googleNearbySearchAction]);
 
   const submit = async () => {
-    const built = newPlaceInput({ name, category, location, placeId });
+    const built = newPlaceInput({
+      name,
+      category,
+      location: pinned,
+      placeId,
+    });
     if (!built.ok) {
       setError(built.error);
       return;
@@ -141,7 +162,7 @@ export function NewPlaceSheet({
             size="lg"
             className="w-full"
             onClick={() => void submit()}
-            disabled={saving || location === null}
+            disabled={saving || pinned === null}
           >
             {saving ? <Spinner aria-hidden className="size-4" /> : null}
             {hasPhoto ? "Add place and scan" : "Add place"}
@@ -206,7 +227,7 @@ export function NewPlaceSheet({
 
         <p className="type-footnote flex items-center gap-2.5 text-ink-2">
           <Place aria-hidden className="size-[18px] shrink-0 text-brand" />
-          {location === null
+          {pinned === null
             ? "Your location is needed to pin the place."
             : "Pinned at your location"}
         </p>

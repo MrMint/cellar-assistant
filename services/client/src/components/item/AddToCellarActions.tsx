@@ -15,12 +15,10 @@ import { Spinner } from "@/components/ui/spinner";
 import { Switch } from "@/components/ui/switch";
 import { RemoveItemFromCellarMutation } from "@/lib/api/cellars";
 import { UploadRejectedError, uploadFile } from "@/lib/api/files";
-import { readFragment } from "@/lib/api/graphql";
 import {
   AddItemToCellarFromItemMutation,
   AttachItemImageMutation,
   ItemBottleHistoryQuery,
-  ItemImageFragment,
 } from "@/lib/api/items";
 import { unwrapResult } from "@/lib/api/result";
 import {
@@ -30,7 +28,6 @@ import {
 } from "@/lib/capture/capture-prefs";
 import { AddPhotoModal, RebuyPhotoOffer } from "./AddPhoto";
 import { addedMessage, MAX_BOTTLES_AT_ONCE, rebuyOffer } from "./add-to-cellar";
-import { SetCellarItemDisplayImageMutation } from "./fragments";
 
 type CellarChoice = { id: string; name: string };
 
@@ -120,14 +117,8 @@ export const AddToCellarSheet = ({
   const [, removeItemFromCellar] = useMutation(RemoveItemFromCellarMutation);
   const client = useClient();
   const [, attachImage] = useMutation(AttachItemImageMutation);
-  const [, setDisplayImage] = useMutation(SetCellarItemDisplayImageMutation);
   // L02: the re-buy offer, which outlives the sheet that closed to show it.
-  const [rebuy, setRebuy] = useState<{
-    title: string;
-    body: string;
-    cellarId: string;
-    cellarItemId: string;
-  } | null>(null);
+  const [rebuy, setRebuy] = useState<{ title: string } | null>(null);
   const [photoOpen, setPhotoOpen] = useState(false);
   const openId = useId();
   const quantityId = useId();
@@ -168,15 +159,15 @@ export const AddToCellarSheet = ({
     if (history.data === undefined && history.error === undefined) return;
     setAsking(null);
     const found = history.data?.item;
-    const first = asking.filed[0];
-    if (found?.__typename !== "QueryItemSuccess" || first === undefined) return;
+    if (found?.__typename !== "QueryItemSuccess" || asking.filed.length === 0)
+      return;
     const offer = rebuyOffer({
       bottlesOfItem: found.data.myBottles.totalCount ?? 0,
       added: asking.filed.length,
       name: found.data.name,
     });
     if (offer !== null) {
-      setRebuy({ ...offer, cellarId: asking.target, cellarItemId: first });
+      setRebuy({ title: offer.title });
     }
   }, [asking, history]);
 
@@ -208,6 +199,9 @@ export const AddToCellarSheet = ({
     cellars.find((cellar) => cellar.id === cellarId)?.name ?? "your cellar";
 
   const undo = async (filed: readonly string[], target: string) => {
+    // The bottles are going: no photo offer for them, asked or still pending.
+    setAsking(null);
+    setRebuy(null);
     const toast = notify("Taking them back out…", { tone: "loading" });
     const results = await Promise.all(
       filed.map((cellarItemId) =>
@@ -228,7 +222,11 @@ export const AddToCellarSheet = ({
     );
   };
 
-  /** Upload, attach as a private image, and make it this bottle's picture. */
+  /**
+   * Upload and attach as a private image of the item (CR-8): a receipt is
+   * yours, and it is not the bottle's display image — the cellar grid and
+   * the bottle page keep showing the label.
+   */
   const saveRebuyPhoto = async (image: File) => {
     if (rebuy === null) return;
     let fileId: string;
@@ -245,28 +243,17 @@ export const AddToCellarSheet = ({
         await attachImage({
           itemId,
           type: itemType,
-          // A receipt is yours: never on the item's public gallery.
+          // Never on the item's public gallery.
           input: { fileId, isPublic: false },
         })
       ).data?.attachItemImage,
       "ItemImage",
     );
     if (!attached.ok) throw new Error(attached.error.message);
-    const updated = unwrapResult(
-      (
-        await setDisplayImage({
-          cellarId: rebuy.cellarId,
-          cellarItemId: rebuy.cellarItemId,
-          displayImageId: readFragment(ItemImageFragment, attached.data).id,
-        })
-      ).data?.updateCellarItem,
-      "CellarItem",
-    );
-    if (!updated.ok) throw new Error(updated.error.message);
     setPhotoOpen(false);
     setRebuy(null);
     router.refresh();
-    notify("Photo saved to this bottle", { tone: "success" });
+    notify("Photo saved to your photos", { tone: "success" });
   };
 
   const submit = async () => {
@@ -463,7 +450,6 @@ export const AddToCellarSheet = ({
           <div className="pb-2">
             <RebuyPhotoOffer
               title={rebuy.title}
-              body={rebuy.body}
               onAddPhoto={() => setPhotoOpen(true)}
               onDismiss={() => setRebuy(null)}
             />
