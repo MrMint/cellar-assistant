@@ -41,6 +41,14 @@ mock.module("next/navigation", () => ({
 
 /** The board: four in Very Good (band 4), nothing above or below. */
 const BOARD = ["Eagle Rare", "Weller", "Buffalo Trace", "Old Forester"];
+/**
+ * Per-test knobs: a long board served over two pages (CR-1), an add that
+ * fails until told otherwise (CR-2), and a slow second page so urql holds
+ * the first page's data while it fetches.
+ */
+let longBoard = false;
+let failAdds = 0;
+const LONG = Array.from({ length: 130 }, (_, i) => `Bottle ${i}`);
 const wineNode = (name: string, position: number) => ({
   __typename: "TierListItem",
   id: `row-${position}`,
@@ -89,6 +97,42 @@ globalThis.fetch = (async (_url: unknown, init?: { body?: unknown }) => {
   const input = variables.input as
     | { band?: number; position?: number; entry?: { id: string } }
     | undefined;
+  if (operationName === "GetTierList" && longBoard) {
+    const second = variables.after === "c100";
+    if (second) await new Promise((r) => setTimeout(r, 5));
+    const slice = second ? LONG.slice(100) : LONG.slice(0, 100);
+    const offset = second ? 100 : 0;
+    const page = {
+      tierList: {
+        __typename: "TierList",
+        id: "tl-1",
+        items: {
+          __typename: "TierListItemConnection",
+          totalCount: LONG.length,
+          pageInfo: {
+            hasNextPage: !second,
+            endCursor: second ? null : "c100",
+          },
+          edges: slice.map((name, i) => ({
+            __typename: "TierListItemEdge",
+            cursor: String(offset + i),
+            node: wineNode(name, offset + i),
+          })),
+        },
+      },
+    };
+    return new Response(JSON.stringify({ data: page }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  }
+  if (operationName === "AddItemToTierList" && failAdds > 0) {
+    failAdds -= 1;
+    return new Response(
+      JSON.stringify({ data: null, errors: [{ message: "timed out" }] }),
+      { status: 200, headers: { "content-type": "application/json" } },
+    );
+  }
   const data =
     operationName === "GetTierList"
       ? {
@@ -168,6 +212,8 @@ let root: ReturnType<typeof createRoot>;
 let done = 0;
 
 beforeEach(() => {
+  longBoard = false;
+  failAdds = 0;
   sent = [];
   refreshes = 0;
   done = 0;
@@ -183,7 +229,13 @@ afterEach(async () => {
 
 const settle = () => new Promise((r) => setTimeout(r, 10));
 
-const render = async () => {
+const render = async ({
+  myScore = 4,
+  entityType = "spirit",
+}: {
+  myScore?: number;
+  entityType?: "spirit" | "tea";
+} = {}) => {
   await act(async () => {
     root.render(
       <Provider value={client()}>
@@ -191,10 +243,10 @@ const render = async () => {
           tierListId="tl-1"
           candidate={{
             id: "s-new",
-            entityType: "spirit",
+            entityType,
             name: "Blanton's",
             subtitle: "",
-            myScore: 4,
+            myScore,
           }}
           onDone={() => {
             done += 1;
@@ -322,6 +374,70 @@ describe("pairwise placement (L09)", () => {
         /min-h-11|h-11|h-12|h-13/,
         `${el.textContent} is under 44 px`,
       );
+    }
+  });
+
+  test("reads every page of a list longer than one page (CR-1)", async () => {
+    longBoard = true;
+    await render();
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 30));
+    });
+    const reads = sent.filter((s) => s.operationName === "GetTierList");
+    assert.deepEqual(
+      reads.map((s) => s.variables.after ?? null),
+      [null, "c100"],
+    );
+    assert.ok(document.querySelector('[data-slot="pairwise-question"]'));
+    // 130 in the band: the middle of the whole board, not of page 1 twice.
+    assert.ok(buttonNamed(/^Bottle 65, Very Good number 66$/));
+  });
+
+  test("Undo into an empty band offers to place it again (CR-2)", async () => {
+    // Excellent (band 5) is empty on this board: no question, straight in.
+    await render({ myScore: 5 });
+    assert.equal(adds().length, 1);
+    await click(buttonNamed(/^Undo$/));
+    const panel = document.querySelector('[data-slot="pairwise-pending"]');
+    assert.ok(panel, "a dead skeleton after Undo");
+    assert.equal(
+      document.querySelector('[aria-label="Reading your list"]'),
+      null,
+    );
+    await click(buttonNamed(/^Place it again$/));
+    assert.equal(adds().length, 2);
+    assert.ok(document.querySelector('[data-slot="pairwise-result"]'));
+  });
+
+  test("a failed add offers Try again and a way back (CR-2)", async () => {
+    failAdds = 1;
+    await render();
+    await click(buttonNamed(/^About the same$/));
+    assert.equal(adds().length, 1);
+    assert.ok(document.querySelector('[role="alert"]'));
+    await click(buttonNamed(/^Try again$/));
+    assert.equal(adds().length, 2);
+    assert.equal(sentPosition(1), 3);
+    assert.ok(document.querySelector('[data-slot="pairwise-result"]'));
+  });
+
+  test("a failed add can go back to the questions (CR-2)", async () => {
+    failAdds = 1;
+    await render();
+    await click(buttonNamed(/^About the same$/));
+    await click(buttonNamed(/^Start over$/));
+    assert.ok(document.querySelector('[data-slot="pairwise-question"]'));
+  });
+
+  test("the vessels take the entry's type colour (CR-11)", async () => {
+    await render({ entityType: "tea" });
+    const vessels = [
+      ...document.querySelectorAll('[data-slot="pairwise-choice"] svg'),
+    ];
+    assert.equal(vessels.length, 2);
+    for (const svg of vessels) {
+      assert.match(svg.getAttribute("class") ?? "", /text-type-tea-text/);
+      assert.doesNotMatch(svg.getAttribute("class") ?? "", /spirit/);
     }
   });
 });
