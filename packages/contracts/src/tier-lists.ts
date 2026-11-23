@@ -297,9 +297,19 @@ export type UpdateTierListInput = {
 
 export type AddTierListItemInput = {
   readonly entry: TierListEntryRef;
-  /** Defaults to `0`. Position within the band is computed in-turn (§2.1) —
-   *  there is no way to request a specific position; append, then reorder. */
+  /** Defaults to `0`. Without `position`, the entry is appended to the
+   *  band's end, its position computed in-turn (§2.1). */
   readonly band?: number;
+  /**
+   * M7, the positioned add (wave C "pairwise"): with `band` too, the entry is
+   * inserted at this index of that band — `0` is the band's top, the band's
+   * current length its end — and the entries at and after it move down one,
+   * all as **one** `ADD` history entry, so one Undo takes the placement back
+   * and one Redo puts it in the same place. Out of `0..length`, or without
+   * `band`, is a `ValidationError`. `addOne` only: `addItems` appends, and
+   * refuses a `position`.
+   */
+  readonly position?: number;
   readonly notes?: string | null;
   /**
    * The row id, minted by the caller. **The §8.4 idempotency key.** Falls
