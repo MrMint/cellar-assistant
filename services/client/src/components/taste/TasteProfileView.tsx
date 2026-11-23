@@ -16,8 +16,10 @@ import { failureFromTransport, unwrapResult } from "@/lib/api/result";
 import { cn } from "@/lib/utils";
 import { TasteAgreementFieldsFragment, TasteProfileQuery } from "./queries";
 import {
+  agreementCounts,
   agreementLine,
   agreementShown,
+  nodes,
   styleLabel,
   typeBarWidths,
 } from "./taste-lines";
@@ -49,20 +51,30 @@ export function TasteProfileView() {
   }
 
   const profile = unwrapResult(data.tasteProfile, "TasteProfile");
-  const friends = unwrapResult(
-    data.friendTasteAgreements,
-    "QueryFriendTasteAgreementsSuccess",
-  );
+  const friends = profile.ok
+    ? unwrapResult(profile.data.friends, "TasteAgreementConnection")
+    : undefined;
 
   return (
     <Page>
       <AppBar title="Taste profile" parent="/me" />
       {profile.ok ? (
         <>
-          <ArchetypeCard profile={profile.data} />
-          {profile.data.types.length > 0 && (
+          <ArchetypeCard
+            profile={{
+              ...profile.data,
+              archetype:
+                profile.data.archetype === null
+                  ? null
+                  : {
+                      title: profile.data.archetype.title,
+                      loves: nodes(profile.data.archetype.loves),
+                    },
+            }}
+          />
+          {profile.data.types.edges.length > 0 && (
             <InsetSection label="What it's built from">
-              {typeBarWidths(profile.data.types).map((row) => {
+              {typeBarWidths(nodes(profile.data.types)).map((row) => {
                 const tokens = itemTypeTokens[row.itemType];
                 return (
                   <div
@@ -97,10 +109,10 @@ export function TasteProfileView() {
         <ApiError error={profile.error} />
       )}
 
-      {friends.ok && (
+      {friends?.ok && (
         <div className="flex flex-col gap-2">
           <InsetSection label="With friends">
-            {friends.data.data.length === 0 ? (
+            {friends.data.edges.length === 0 ? (
               <ListRow
                 leading={<People aria-hidden strokeWidth={ICON_STROKE} />}
                 title={
@@ -111,9 +123,10 @@ export function TasteProfileView() {
                 description="Add a friend to see where you agree."
               />
             ) : (
-              friends.data.data.map((masked) => {
+              nodes(friends.data).map((masked) => {
                 const row = readFragment(TasteAgreementFieldsFragment, masked);
-                const shown = agreementShown(row);
+                const counts = agreementCounts(row);
+                const shown = agreementShown(counts);
                 return (
                   <ListRow
                     key={row.userId}
@@ -128,7 +141,7 @@ export function TasteProfileView() {
                     title={<span className="type-headline">{row.name}</span>}
                     description={
                       <span className={shown ? "text-ink-2" : "text-ink-3"}>
-                        {agreementLine(row)}
+                        {agreementLine(counts)}
                       </span>
                     }
                     trailing={

@@ -7,7 +7,7 @@ import { unwrapResult } from "@/lib/api/result";
 import { cn } from "@/lib/utils";
 import { CloneTierListButton } from "./CloneTierListButton";
 import { TasteAgreementFieldsFragment, TasteAgreementQuery } from "./queries";
-import { agreementLine, agreementShown } from "./taste-lines";
+import { agreementCounts, agreementLine, agreementShown } from "./taste-lines";
 
 export type CompareList = { readonly id: string; readonly name: string };
 
@@ -36,7 +36,9 @@ export function TasteCompareSection({
   if (data === undefined) return null;
   const result = unwrapResult(data.tasteAgreement, "TasteAgreement");
   if (!result.ok) return null;
-  const agreement = readFragment(TasteAgreementFieldsFragment, result.data);
+  const agreement = agreementCounts(
+    readFragment(TasteAgreementFieldsFragment, result.data),
+  );
   const shown = agreementShown(agreement);
 
   return (

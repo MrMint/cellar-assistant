@@ -56,8 +56,8 @@ describe("tasteProfile", () => {
     const result = await run(
       `{ tasteProfile { __typename ... on TasteProfile {
           ratingCount line linePhrasedByAi
-          types { itemType count }
-          archetype { key title loves { label itemType count average } lessKeen { label } }
+          types { edges { node { itemType count } } }
+          archetype { key title loves { edges { node { label itemType count average } } } lessKeen { edges { node { label } } } }
         } } }`,
       testContext(invoke, viewer),
     );
@@ -67,14 +67,23 @@ describe("tasteProfile", () => {
       ratingCount: 12,
       line: profile.line,
       linePhrasedByAi: false,
-      types: [{ itemType: "WINE", count: 12 }],
+      types: { edges: [{ node: { itemType: "WINE", count: 12 } }] },
       archetype: {
         key: "DEVOTED",
         title: "Devoted to Nebbiolo",
-        loves: [
-          { label: "Nebbiolo", itemType: "WINE", count: 5, average: 4.8 },
-        ],
-        lessKeen: [{ label: "Merlot" }],
+        loves: {
+          edges: [
+            {
+              node: {
+                label: "Nebbiolo",
+                itemType: "WINE",
+                count: 5,
+                average: 4.8,
+              },
+            },
+          ],
+        },
+        lessKeen: { edges: [{ node: { label: "Merlot" } }] },
       },
     });
     expect(calls[0]).toMatchObject({
@@ -105,7 +114,7 @@ describe("tasteAgreement", () => {
     });
     const result = await run(
       `{ tasteAgreement(userId: "${FRIEND}") { __typename ... on TasteAgreement {
-          userId name shared agreed byType { itemType shared agreed }
+          userId name shared agreed byType { edges { node { itemType shared agreed } } }
         } } }`,
       testContext(invoke, viewer),
     );
@@ -116,7 +125,7 @@ describe("tasteAgreement", () => {
       name: "Maya",
       shared: 9,
       agreed: 7,
-      byType: [{ itemType: "WINE", shared: 9, agreed: 7 }],
+      byType: { edges: [{ node: { itemType: "WINE", shared: 9, agreed: 7 } }] },
     });
     expect(calls[0]).toMatchObject({
       actorId: viewer.id,
@@ -143,26 +152,29 @@ describe("tasteAgreement", () => {
   });
 });
 
-describe("friendTasteAgreements", () => {
+describe("TasteProfile.friends", () => {
   it("serves a gated row with agreed null", async () => {
     const { invoke } = stubSidecar({
+      "TasteActor.profile": () => profile,
       "TasteActor.friendAgreements": () => [
         agreement,
         { ...agreement, name: "Sam", shared: 2, agreed: null, byType: [] },
       ],
     });
     const result = await run(
-      `{ friendTasteAgreements { __typename
-          ... on QueryFriendTasteAgreementsSuccess { data { name shared agreed } }
-        } }`,
+      `{ tasteProfile { ... on TasteProfile { friends { __typename
+          ... on TasteAgreementConnection { edges { node { name shared agreed } } }
+        } } } }`,
       testContext(invoke, viewer),
     );
     expect(result.errors).toBeUndefined();
-    expect(result.data?.friendTasteAgreements).toEqual({
-      __typename: "QueryFriendTasteAgreementsSuccess",
-      data: [
-        { name: "Maya", shared: 9, agreed: 7 },
-        { name: "Sam", shared: 2, agreed: null },
+    expect(
+      (result.data?.tasteProfile as { friends?: unknown } | undefined)?.friends,
+    ).toEqual({
+      __typename: "TasteAgreementConnection",
+      edges: [
+        { node: { name: "Maya", shared: 9, agreed: 7 } },
+        { node: { name: "Sam", shared: 2, agreed: null } },
       ],
     });
   });

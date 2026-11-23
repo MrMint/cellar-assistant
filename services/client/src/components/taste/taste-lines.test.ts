@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
+  agreementCounts,
   agreementLine,
   agreementShown,
   styleLabel,
@@ -53,5 +54,16 @@ describe("typeBarWidths", () => {
         { itemType: "SPIRIT", count: 20 },
       ]).map((t) => t.percent),
     ).toEqual([100, 48]);
+  });
+});
+
+describe("agreementCounts", () => {
+  test("reads the API's connection into the line's counts", () => {
+    const counts = agreementCounts({
+      shared: 9,
+      agreed: 7,
+      byType: { edges: [{ node: { itemType: "WINE", shared: 9, agreed: 7 } }] },
+    });
+    expect(agreementLine(counts)).toBe("You agree on 7 of 9 shared wines");
   });
 });

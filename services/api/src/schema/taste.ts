@@ -19,6 +19,7 @@ import type {
 import {
   AGREEMENT_MIN_SHARED,
   ForbiddenError,
+  offsetPage,
   TASTE_ARCHETYPE_KEYS,
   TasteActorDescriptor,
   tasteActorId,
@@ -26,6 +27,10 @@ import {
 import type { ApiContext } from "../context.ts";
 import { builder } from "./builder.ts";
 import { ItemTypeEnum } from "./item.ts";
+import { connectionFromPage, toPageArgs } from "./pagination.ts";
+
+// §1.5 has no exception for a list the server knows is short: each list
+// here is a connection, paged in memory over the actor's bounded answer.
 
 const TasteArchetypeKeyEnum = builder.enumType("TasteArchetypeKey", {
   description:
@@ -50,6 +55,11 @@ const TasteStyleType = builder
     }),
   });
 
+const TasteStyleConnection = builder.connectionObject(
+  { type: TasteStyleType, name: "TasteStyleConnection" },
+  { name: "TasteStyleEdge" },
+);
+
 const TasteTypeCountType = builder
   .objectRef<TasteTypeCountDto>("TasteTypeCount")
   .implement({
@@ -59,14 +69,31 @@ const TasteTypeCountType = builder
     }),
   });
 
+const TasteTypeCountConnection = builder.connectionObject(
+  { type: TasteTypeCountType, name: "TasteTypeCountConnection" },
+  { name: "TasteTypeCountEdge" },
+);
+
 const TasteArchetypeType = builder
   .objectRef<TasteArchetypeDto>("TasteArchetype")
   .implement({
     fields: (t) => ({
       key: t.field({ type: TasteArchetypeKeyEnum, resolve: (a) => a.key }),
       title: t.exposeString("title"),
-      loves: t.field({ type: [TasteStyleType], resolve: (a) => a.loves }),
-      lessKeen: t.field({ type: [TasteStyleType], resolve: (a) => a.lessKeen }),
+      loves: t.field({
+        type: TasteStyleConnection,
+        description: "At or above your mean, best first; at most four.",
+        args: t.arg.connectionArgs(),
+        resolve: (a, args) =>
+          connectionFromPage(offsetPage(a.loves, toPageArgs(args))),
+      }),
+      lessKeen: t.field({
+        type: TasteStyleConnection,
+        description: "Below your mean, lowest first; at most two.",
+        args: t.arg.connectionArgs(),
+        resolve: (a, args) =>
+          connectionFromPage(offsetPage(a.lessKeen, toPageArgs(args))),
+      }),
     }),
   });
 
@@ -78,7 +105,13 @@ const TasteProfileType = builder
       "model may only phrase `line`, and `linePhrasedByAi` says when it did.",
     fields: (t) => ({
       ratingCount: t.exposeInt("ratingCount"),
-      types: t.field({ type: [TasteTypeCountType], resolve: (p) => p.types }),
+      types: t.field({
+        type: TasteTypeCountConnection,
+        description: "One row per item type you have rated, most first.",
+        args: t.arg.connectionArgs(),
+        resolve: (p, args) =>
+          connectionFromPage(offsetPage(p.types, toPageArgs(args))),
+      }),
       archetype: t.field({
         type: TasteArchetypeType,
         nullable: true,
@@ -100,6 +133,11 @@ const TasteAgreementTypeType = builder
     }),
   });
 
+const TasteAgreementByTypeConnection = builder.connectionObject(
+  { type: TasteAgreementTypeType, name: "TasteAgreementByTypeConnection" },
+  { name: "TasteAgreementByTypeEdge" },
+);
+
 const TasteAgreementType = builder
   .objectRef<TasteAgreementDto>("TasteAgreement")
   .implement({
@@ -114,8 +152,11 @@ const TasteAgreementType = builder
       shared: t.exposeInt("shared"),
       agreed: t.int({ nullable: true, resolve: (a) => a.agreed }),
       byType: t.field({
-        type: [TasteAgreementTypeType],
-        resolve: (a) => a.byType,
+        type: TasteAgreementByTypeConnection,
+        description: "Empty below the gate.",
+        args: t.arg.connectionArgs(),
+        resolve: (a, args) =>
+          connectionFromPage(offsetPage(a.byType, toPageArgs(args))),
       }),
     }),
   });
@@ -149,12 +190,28 @@ builder.queryField("tasteAgreement", (t) =>
   }),
 );
 
-builder.queryField("friendTasteAgreements", (t) =>
+const TasteAgreementConnection = builder.connectionObject(
+  { type: TasteAgreementType, name: "TasteAgreementConnection" },
+  { name: "TasteAgreementEdge" },
+);
+
+// On the profile rather than at the root: the page reads both at once, and
+// the root's paging fields are a counted set (schema.test.ts, A7e). Its own
+// error union keeps a failure here from nulling the archetype above it.
+builder.objectField(TasteProfileType, "friends", (t) =>
   t.field({
-    type: [TasteAgreementType],
-    description: "L03: agreement with each of your friends, most shared first.",
+    type: TasteAgreementConnection,
+    description:
+      "L03: agreement with each of your friends, most shared first. Counts " +
+      "only ratings you may see.",
+    args: t.arg.connectionArgs(),
     errors: {},
-    resolve: (_root, _args, context) =>
-      tasteActor(context, "compare tastes").friendAgreements(),
+    resolve: async (_profile, args, context) =>
+      connectionFromPage(
+        offsetPage(
+          await tasteActor(context, "compare tastes").friendAgreements(),
+          toPageArgs(args),
+        ),
+      ),
   }),
 );

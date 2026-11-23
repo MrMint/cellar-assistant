@@ -10,14 +10,19 @@ export const TasteAgreementFieldsFragment = graphql(`
     shared
     agreed
     byType {
-      itemType
-      shared
-      agreed
+      edges {
+        node {
+          itemType
+          shared
+          agreed
+        }
+      }
     }
   }
 `);
 
-/** `/taste-profile`: your archetype, what it is built from, your friends. */
+/** `/taste-profile`: your archetype, what it is built from, your friends
+ * (on the profile, each list a connection: §1.5). */
 export const TasteProfileQuery = graphql(
   `
     query TasteProfile {
@@ -28,25 +33,35 @@ export const TasteProfileQuery = graphql(
           line
           linePhrasedByAi
           types {
-            itemType
-            count
+            edges {
+              node {
+                itemType
+                count
+              }
+            }
           }
           archetype {
             key
             title
             loves {
-              itemType
-              label
+              edges {
+                node {
+                  itemType
+                  label
+                }
+              }
             }
           }
-        }
-        ...ActorErrorFields
-      }
-      friendTasteAgreements {
-        __typename
-        ... on QueryFriendTasteAgreementsSuccess {
-          data {
-            ...TasteAgreementFields
+          friends {
+            __typename
+            ... on TasteAgreementConnection {
+              edges {
+                node {
+                  ...TasteAgreementFields
+                }
+              }
+            }
+            ...ActorErrorFields
           }
         }
         ...ActorErrorFields

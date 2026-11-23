@@ -76,3 +76,23 @@ export const typeBarWidths = (
     percent: Math.max(4, Math.round((t.count / top) * 100)),
   }));
 };
+
+/** A connection's nodes, in order (the API pages every list, §1.5). */
+export function nodes<T>(connection: {
+  readonly edges: readonly { readonly node: T }[];
+}): T[] {
+  return connection.edges.map((edge) => edge.node);
+}
+
+/** An agreement row as `agreementLine` reads it, from the API's shape. */
+export function agreementCounts(row: {
+  readonly shared: number;
+  readonly agreed: number | null;
+  readonly byType: {
+    readonly edges: readonly {
+      readonly node: AgreementCounts["byType"][number];
+    }[];
+  };
+}): AgreementCounts {
+  return { shared: row.shared, agreed: row.agreed, byType: nodes(row.byType) };
+}
