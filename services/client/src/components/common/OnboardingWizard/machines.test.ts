@@ -132,7 +132,7 @@ const run = ({
   const actor = createActor(machine, {
     input: {
       urqlClient: {} as Client,
-      router: { push: (href: string) => pushed.push(href) },
+      navigate: { push: (href: string) => pushed.push(href) },
       cellarId: inCellar ? "cellar-1" : undefined,
       itemType,
       resumeId,
@@ -243,7 +243,7 @@ describe("matching (N19)", () => {
     const actor = createActor(machine, {
       input: {
         urqlClient: {} as Client,
-        router: { push: () => {} },
+        navigate: { push: () => {} },
         cellarId: "c",
         itemType: "WINE",
       },
@@ -274,7 +274,7 @@ describe("matching (N19)", () => {
     const actor = createActor(machine, {
       input: {
         urqlClient: {} as Client,
-        router: { push: () => {} },
+        navigate: { push: () => {} },
         cellarId: "c",
         itemType: "WINE",
       },
@@ -609,7 +609,7 @@ describe("defaults the person can change (X05)", () => {
       {
         input: {
           urqlClient: {} as Client,
-          router: { push: () => {} },
+          navigate: { push: () => {} },
           cellarId: "c",
           itemType: "WINE",
         },

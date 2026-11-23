@@ -10,6 +10,7 @@ import {
 } from "react-hook-form";
 import { useMutation } from "urql";
 import { AIDraftField } from "@/components/app/AIDraftField";
+import { useNavigate } from "@/components/app/useNavigate";
 import { BrandPicker } from "@/components/brand/BrandPicker";
 import type { ApiItemType } from "@/components/cellar-api/itemTypes";
 import {
@@ -130,6 +131,7 @@ export const ItemForm = ({
   correction,
 }: ItemFormProps) => {
   const router = useRouter();
+  const navigate = useNavigate();
   const [, updateItem] = useMutation(UpdateItemMutation);
   const brands = useBrandChange(type, id);
   const layout = formLayout(type);
@@ -374,7 +376,7 @@ export const ItemForm = ({
         return;
       }
     }
-    router.push(onSavedHref);
+    navigate.push(onSavedHref);
     router.refresh();
   };
 

@@ -2,7 +2,7 @@
 
 import { useActor } from "@xstate/react";
 import { AnimatePresence, motion } from "motion/react";
-import { useRouter } from "next/navigation";
+
 import { includes } from "ramda";
 import {
   type ReactNode,
@@ -21,6 +21,7 @@ import {
   Scan,
   Search,
 } from "@/components/app/icons";
+import { useNavigate } from "@/components/app/useNavigate";
 import { Button } from "@/components/ui/button";
 import {
   InputGroup,
@@ -110,7 +111,7 @@ export const ClientSearchInterface = ({
   urlQuery,
 }: ClientSearchInterfaceProps) => {
   const [isFocused, setIsFocused] = useState(false);
-  const router = useRouter();
+  const nav = useNavigate();
   const inputRef = useRef<HTMLInputElement>(null);
 
   // The page's shared transition when there is one (the results skeleton
@@ -123,10 +124,10 @@ export const ClientSearchInterface = ({
   const navigate = useCallback(
     ({ method, href }: SearchNavigation) =>
       startNavigation(() => {
-        if (method === "push") router.push(href);
-        else router.replace(href);
+        if (method === "push") nav.push(href);
+        else nav.replace(href);
       }),
-    [router, startNavigation],
+    [nav, startNavigation],
   );
   const {
     value: searchQuery,
@@ -180,7 +181,7 @@ export const ClientSearchInterface = ({
       // its fallback — read as a label in Add, with the same bytes.
       setPhotoNavigating(true);
       const href = captureHrefWithPhoto("bottle", photoHandoff.put(image));
-      startNavigation(() => router.push(href));
+      startNavigation(() => nav.push(href));
       return;
     }
     uploadSearchPhoto(urqlClient, image)
@@ -191,7 +192,7 @@ export const ClientSearchInterface = ({
         // search file's id — the one thing the results page knows.
         photoHandoff.put(image, fileId);
         setPhotoNavigating(true);
-        startNavigation(() => router.push(href));
+        startNavigation(() => nav.push(href));
       })
       .catch((error: unknown) => {
         setPhotoError(
@@ -369,7 +370,7 @@ export const ClientSearchInterface = ({
                     send({ type: "SEARCH_ERROR" });
                     return;
                   }
-                  startNavigation(() => router.push(href));
+                  startNavigation(() => nav.push(href));
                 }}
               />
             </CaptureCard>

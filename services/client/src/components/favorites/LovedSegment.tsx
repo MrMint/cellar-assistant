@@ -1,8 +1,8 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { SegmentedControl } from "@/components/app/SegmentedControl";
+import { useNavigate } from "@/components/app/useNavigate";
 import { LOVED_KINDS, type LovedKind, lovedHref } from "./loved-recipes";
 
 /**
@@ -11,7 +11,7 @@ import { LOVED_KINDS, type LovedKind, lovedHref } from "./loved-recipes";
  * the page lands (N12: acknowledge every tap within a frame).
  */
 export function LovedSegment({ value }: { value: LovedKind }) {
-  const router = useRouter();
+  const navigate = useNavigate();
   const [shown, setShown] = useState<LovedKind>(value);
   return (
     <SegmentedControl
@@ -19,7 +19,7 @@ export function LovedSegment({ value }: { value: LovedKind }) {
       value={shown}
       onValueChange={(next) => {
         setShown(next);
-        router.replace(lovedHref(next), { scroll: false });
+        navigate.replace(lovedHref(next), { scroll: false });
       }}
       options={LOVED_KINDS}
     />

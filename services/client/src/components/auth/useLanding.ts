@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useCallback, useTransition } from "react";
+import { useNavigate } from "@/components/app/useNavigate";
 
 /**
  * Leaving the sign-in or sign-up page for where the viewer lands (X01).
@@ -22,12 +23,13 @@ export function useLanding(destination: string): {
   landing: boolean;
 } {
   const router = useRouter();
+  const navigate = useNavigate();
   const [landing, startTransition] = useTransition();
   const land = useCallback(() => {
     startTransition(() => {
-      router.replace(destination);
+      navigate.replace(destination);
       router.refresh();
     });
-  }, [router, destination]);
+  }, [navigate, router, destination]);
   return { land, landing };
 }

@@ -1,6 +1,5 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useId } from "react";
 import { BottomSheet } from "@/components/app/BottomSheet";
 import {
@@ -12,6 +11,7 @@ import {
   Write,
 } from "@/components/app/icons";
 import { Link } from "@/components/app/Link";
+import { useNavigate } from "@/components/app/useNavigate";
 import { holdRecipePhoto } from "./pending-photo";
 
 export type NewRecipeSheetProps = {
@@ -66,7 +66,7 @@ export function NewRecipeSheet({
   onOpenChange,
   aiOffered = true,
 }: NewRecipeSheetProps) {
-  const router = useRouter();
+  const navigate = useNavigate();
   const inputId = useId();
 
   return (
@@ -92,7 +92,7 @@ export function NewRecipeSheet({
                 }
                 holdRecipePhoto(file);
                 onOpenChange(false);
-                router.push("/recipes/new?from=photo");
+                navigate.push("/recipes/new?from=photo");
               }}
             />
             <RowBody

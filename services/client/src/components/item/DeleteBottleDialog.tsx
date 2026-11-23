@@ -1,9 +1,9 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
 import { useMutation } from "urql";
 import { ResponsiveDialog } from "@/components/app/ResponsiveDialog";
+import { useNavigate } from "@/components/app/useNavigate";
 import type { ApiItemType } from "@/components/cellar-api/itemTypes";
 import { Button } from "@/components/ui/button";
 import { RemoveItemFromCellarMutation } from "@/lib/api/cellars";
@@ -49,7 +49,7 @@ export function DeleteBottleDialog({
   bottleId,
   bottle,
 }: DeleteBottleDialogProps) {
-  const router = useRouter();
+  const navigate = useNavigate();
   const [isPending, startTransition] = useTransition();
   const [hasDeleted, setHasDeleted] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -92,7 +92,7 @@ export function DeleteBottleDialog({
         return;
       }
       setHasDeleted(true);
-      router.replace(`/cellars/${cellarId}/items`);
+      navigate.replace(`/cellars/${cellarId}/items`);
     });
   };
 

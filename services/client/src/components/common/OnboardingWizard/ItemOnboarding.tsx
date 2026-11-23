@@ -1,7 +1,7 @@
 "use client";
 
 import { useActor } from "@xstate/react";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { includes, isNotNil } from "ramda";
 import {
   type ReactNode,
@@ -15,6 +15,7 @@ import { BottomSheet } from "@/components/app/BottomSheet";
 import { Camera, ErrorIcon, Scan, Warning } from "@/components/app/icons";
 import { notify } from "@/components/app/notify";
 import { TypeChip } from "@/components/app/TypeChip";
+import { useNavigate } from "@/components/app/useNavigate";
 import { CaptureCamera } from "@/components/capture/CaptureCamera";
 import {
   CaptureHeader,
@@ -101,16 +102,16 @@ export type ItemOnboardingProps = {
  * starts a fresh run in place.
  */
 export const ItemOnboarding = (props: ItemOnboardingProps) => {
-  const router = useRouter();
+  const navigate = useNavigate();
   const pathname = usePathname();
   const [run, setRun] = useState(0);
   const [resumeId, setResumeId] = useState(() => draftIdFrom(props.resumeId));
   const restart = useCallback(() => {
     // Drop `?draft=`: the next run is a new bottle.
-    if (resumeId !== undefined) router.replace(pathname);
+    if (resumeId !== undefined) navigate.replace(pathname);
     setResumeId(undefined);
     setRun((n) => n + 1);
-  }, [resumeId, router, pathname]);
+  }, [resumeId, navigate, pathname]);
   return (
     <ItemOnboardingRun
       key={run}
@@ -138,7 +139,7 @@ const ItemOnboardingRun = ({
   onRestart,
 }: ItemOnboardingProps & { onRestart: () => void }) => {
   const urqlClient = useClient();
-  const router = useRouter();
+  const navigate = useNavigate();
   const pathname = usePathname();
 
   const resumeHref = useCallback(
@@ -154,7 +155,7 @@ const ItemOnboardingRun = ({
     input: {
       urqlClient,
       cellarId: pinnedCellarId,
-      router,
+      navigate,
       itemType: type,
       draft: { resumeHref },
       resumeId,
@@ -249,7 +250,7 @@ const ItemOnboardingRun = ({
       if (draft.settled.state === "ready" && refusal === undefined) {
         notify(`Your ${label} is read`, {
           description: "The draft is waiting for you to check it.",
-          undo: () => router.push(href),
+          undo: () => navigate.push(href),
           actionLabel: "Review",
           durationMs: 15_000,
         });
@@ -260,14 +261,14 @@ const ItemOnboardingRun = ({
               ? "scan it as a menu, or retake it."
               : "fill the details in yourself."
           }`,
-          undo: () => router.push(href),
+          undo: () => navigate.push(href),
           actionLabel: "Review",
           durationMs: 15_000,
         });
       } else {
         notify(`The ${label} label couldn't be read`, {
           description: "You can fill the details in yourself.",
-          undo: () => router.push(href),
+          undo: () => navigate.push(href),
           actionLabel: "Fill it in",
           tone: "error",
           durationMs: 15_000,
@@ -275,7 +276,7 @@ const ItemOnboardingRun = ({
       }
     });
     if (!tracked) return;
-    router.push(
+    navigate.push(
       context.cellarId === undefined
         ? "/"
         : `/cellars/${context.cellarId}/items`,
@@ -378,7 +379,7 @@ const ItemOnboardingRun = ({
       onScanAsMenu(photo);
       return;
     }
-    router.push(
+    navigate.push(
       photo === undefined
         ? "/add?mode=menu"
         : captureHrefWithPhoto("menu", photoHandoff.put(photo)),

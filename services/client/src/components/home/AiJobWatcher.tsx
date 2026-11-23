@@ -4,6 +4,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef } from "react";
 import { useClient } from "urql";
 import { notify } from "@/components/app/notify";
+import { useNavigate } from "@/components/app/useNavigate";
 import { readFragment } from "@/lib/api/graphql";
 import { aiJobStore } from "./ai-job-store";
 import {
@@ -42,6 +43,7 @@ export const WATCH_LIMIT_MS = 15 * 60 * 1000;
 export function AiJobWatcher() {
   const client = useClient();
   const router = useRouter();
+  const navigate = useNavigate();
   const pathname = usePathname() ?? "/";
   const pathRef = useRef(pathname);
   pathRef.current = pathname;
@@ -83,7 +85,7 @@ export function AiJobWatcher() {
       const settled = settledSince(previous, jobs);
       before = snapshotOf(jobs);
       aiJobStore.publish(jobs);
-      for (const job of settled) announce(job, pathRef.current, router.push);
+      for (const job of settled) announce(job, pathRef.current, navigate.push);
       if (settled.length > 0 && pathRef.current === "/") router.refresh();
       if (anyRunning(jobs)) timer = setTimeout(tick, POLL_MS);
       else stop();
@@ -104,7 +106,7 @@ export function AiJobWatcher() {
       // The shell is going (sign-out): this viewer's jobs go with it.
       aiJobStore.reset();
     };
-  }, [client, router]);
+  }, [client, navigate, router]);
 
   return null;
 }

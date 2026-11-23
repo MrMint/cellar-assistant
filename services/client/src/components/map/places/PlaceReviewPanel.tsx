@@ -20,7 +20,6 @@
  * looking.
  */
 
-import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { useMutation } from "urql";
 import { ConfirmSheet } from "@/components/app/ConfirmSheet";
@@ -35,6 +34,7 @@ import {
 } from "@/components/app/icons";
 import { Link } from "@/components/app/Link";
 import { notify } from "@/components/app/notify";
+import { useNavigate } from "@/components/app/useNavigate";
 import { Button } from "@/components/ui/button";
 import { failureFromTransport, unwrapResult } from "@/lib/api/result";
 import { cn } from "@/lib/utils";
@@ -167,7 +167,7 @@ function ReviewState({
   status: "PENDING" | "REJECTED";
   rejectionReason: string | null;
 }) {
-  const router = useRouter();
+  const navigate = useNavigate();
   const [confirming, setConfirming] = useState(false);
   const [deleteState, deletePlace] = useMutation(DeletePlaceMutation);
 
@@ -185,7 +185,7 @@ function ReviewState({
     }
     setConfirming(false);
     notify(`Deleted ${placeName}`, { tone: "success" });
-    router.replace("/map");
+    navigate.replace("/map");
   };
 
   return (

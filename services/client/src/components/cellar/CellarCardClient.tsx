@@ -1,7 +1,7 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useCallback } from "react";
+import { useNavigate } from "@/components/app/useNavigate";
 import { CellarCard } from "./CellarCard";
 
 type User = {
@@ -41,14 +41,14 @@ export function CellarCardClient({
   cellar,
   onBeforeNavigate,
 }: CellarCardClientProps) {
-  const router = useRouter();
+  const navigate = useNavigate();
 
   const handleEditClick = useCallback(
     (cellarId: string) => {
       onBeforeNavigate?.();
-      router.push(`/cellars/${cellarId}/edit`);
+      navigate.push(`/cellars/${cellarId}/edit`);
     },
-    [router, onBeforeNavigate],
+    [navigate, onBeforeNavigate],
   );
 
   return (

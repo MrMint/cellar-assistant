@@ -1,9 +1,9 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { IconButton } from "@/components/app/IconButton";
 import { Close, ICON_STROKE } from "@/components/app/icons";
 import { previousPathOutside } from "@/components/app/nav-history";
+import { useNavigate } from "@/components/app/useNavigate";
 
 /**
  * The search sheet's top bar (X10): `/search` is a full-screen sheet over
@@ -13,8 +13,8 @@ import { previousPathOutside } from "@/components/app/nav-history";
  * Home on a cold open.
  */
 export function SearchSheetHeader() {
-  const router = useRouter();
-  const close = () => router.push(previousPathOutside("/search") ?? "/");
+  const navigate = useNavigate();
+  const close = () => navigate.push(previousPathOutside("/search") ?? "/");
   return (
     <div className="flex items-center justify-between gap-2">
       <h1 className="type-title-2 text-ink-1">Search</h1>

@@ -5,6 +5,7 @@ import { useCallback, useState } from "react";
 import { useMutation } from "urql";
 import { ConfirmSheet } from "@/components/app/ConfirmSheet";
 import { Delete } from "@/components/app/icons";
+import { useNavigate } from "@/components/app/useNavigate";
 import { Button } from "@/components/ui/button";
 import { DeleteCellarMutation } from "@/lib/api/cellars";
 import { type ApiFailure, unwrapResult } from "@/lib/api/result";
@@ -32,6 +33,7 @@ export function DeleteCellarButton({
   itemCount: number;
 }) {
   const router = useRouter();
+  const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<ApiFailure | null>(null);
   const [{ fetching }, deleteCellar] = useMutation(DeleteCellarMutation);
@@ -48,9 +50,9 @@ export function DeleteCellarButton({
       return;
     }
     setOpen(false);
-    router.push("/cellars");
+    navigate.push("/cellars");
     router.refresh();
-  }, [cellarId, deleteCellar, router]);
+  }, [cellarId, deleteCellar, navigate, router]);
 
   const blocked = itemCount > 0;
 

@@ -2,13 +2,14 @@
 
 import type * as GeoJSON from "geojson";
 import "maplibre-gl/dist/maplibre-gl.css";
-import { useRouter } from "next/navigation";
+
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Map as MapGL,
   type MapLayerMouseEvent,
   type MapRef,
 } from "react-map-gl/maplibre";
+import { useNavigate } from "@/components/app/useNavigate";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import type { CachedLocation } from "@/lib/geo-cookie/parse";
 import { cn } from "@/lib/utils";
@@ -82,7 +83,7 @@ export function MapLibreRenderer({
   const mapActions = useMapActions();
   const mapFilters = useMapFilters();
   const { isPlacing } = useMapPinPlacement();
-  const router = useRouter();
+  const navigate = useNavigate();
   const isDesktop = useMediaQuery("(min-width: 769px)");
   const hasSidebar = useMediaQuery("(min-width: 600px)");
 
@@ -356,7 +357,7 @@ export function MapLibreRenderer({
       mapActions.exitPinPlacement();
       const name = pendingPlaceNameRef.current;
       pendingPlaceNameRef.current = null;
-      router.push(
+      navigate.push(
         createPlaceHref({
           latitude: center.lat,
           longitude: center.lng,
@@ -364,7 +365,7 @@ export function MapLibreRenderer({
         }),
       );
     }
-  }, [mapActions, router]);
+  }, [mapActions, navigate]);
 
   // However the pin drop ends (Confirm reads the name first; Cancel, or the
   // controls' own toggle), a searched name must not leak into the next one.
