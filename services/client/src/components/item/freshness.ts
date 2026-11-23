@@ -104,6 +104,15 @@ const parts = (date: string): [number, number, number] | null => {
   return m === null ? null : [Number(m[1]), Number(m[2]), Number(m[3])];
 };
 
+/**
+ * The person's calendar day, "2026-12-31", in their own time zone (CR-12).
+ * Not `toISOString()`, which is UTC: at 18:00 on 31 Dec in UTC-7 that is
+ * already 1 Jan, and a bottle whose Drink until is 31 Dec reads past a day
+ * early.
+ */
+export const localDay = (now: Date): string =>
+  `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+
 /** "12 Mar 2023". */
 export const formatDay = (date: string): string => {
   const p = parts(date);
