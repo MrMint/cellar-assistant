@@ -7,6 +7,7 @@ import { IconButton } from "@/components/app/IconButton";
 import { Delete, Edit, More, Ranked, Share } from "@/components/app/icons";
 import { useNavigate } from "@/components/app/useNavigate";
 import type { ApiItemType } from "@/components/cellar-api/itemTypes";
+import { typeWords } from "@/components/drink-log/type-words";
 import type { PourBottle } from "@/components/pour/PourSheet";
 import { AddToTierListModal } from "@/components/tier-list/AddToTierListModal";
 import type { TierListEntityType } from "@/components/tier-list/constants";
@@ -131,7 +132,8 @@ export function ItemActionBar({
             onClick={() => actions?.pour(pourable)}
             disabled={actions === null}
           >
-            Pour
+            {/* W-20: Steep a tin of tea, Brew a bag of coffee. */}
+            {typeWords(itemType).pour}
           </Button>
         ) : (
           <Button

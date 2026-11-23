@@ -292,3 +292,21 @@ describe("localDay (CR-12)", () => {
     }
   });
 });
+
+describe("W-20 · a tin of tea is not a bottle", () => {
+  test("the rows say Packed, Best from and Best by", () => {
+    const m = freshnessModel(
+      bottle(),
+      { type: "TEA", style: "oolong", form: null, vintageYear: null },
+      TODAY,
+    );
+    expect(row(m, "packagedOn")?.label).toBe("Packed");
+    expect(row(m, "drinkFrom")?.label).toBe("Best from");
+    expect(row(m, "drinkUntil")?.label).toBe("Best by");
+  });
+  test("a wine keeps Bottled and Drink until", () => {
+    const m = freshnessModel(bottle(), red2020, TODAY);
+    expect(row(m, "packagedOn")?.label).toBe("Bottled");
+    expect(row(m, "drinkUntil")?.label).toBe("Drink until");
+  });
+});

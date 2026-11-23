@@ -30,6 +30,7 @@ import {
   ItemDrinkLogQuery,
   RestoreDrinkLogMutation,
 } from "./queries";
+import { typeWords } from "./type-words";
 import { useDrinkLogFeedback } from "./useDrinkLogFeedback";
 
 /** The newest this many; the section says when there are more. */
@@ -227,8 +228,8 @@ export function YourLog({
           <div className="flex flex-col items-start gap-3 p-4">
             <p className="type-body text-ink-1">Nothing logged yet.</p>
             <p className="type-footnote">
-              Log a glass to remember it — where, who with, what you noticed.
-              Your review stays separate.
+              Log a {typeWords(subject.itemType).serving} to remember it —
+              where, who with, what you noticed. Your review stays separate.
             </p>
             <Button onClick={openNew}>
               <Cocktail aria-hidden />

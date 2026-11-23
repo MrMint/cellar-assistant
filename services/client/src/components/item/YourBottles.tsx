@@ -5,6 +5,11 @@ import { InsetSection } from "@/components/app/Page";
 import { LEVEL_FILL } from "@/components/cellar/BottleCard";
 import { bottleState } from "@/components/cellar/bottle-state";
 import type { ApiItemType } from "@/components/cellar-api/itemTypes";
+import {
+  containerCountLabel,
+  typeWords,
+  yourContainersLabel,
+} from "@/components/drink-log/type-words";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { bottleHref } from "./adapter";
@@ -12,11 +17,7 @@ import { BottleFreshnessFields } from "./BottleFreshnessFields";
 import { HeldBackNote } from "./HeldBackNote";
 import { useItemActions } from "./ItemActions";
 import { ItemRemainingSlider } from "./ItemRemainingSlider";
-import {
-  bottleStateLine,
-  bottlesCountLabel,
-  type YourBottle,
-} from "./item-page-model";
+import { bottleStateLine, type YourBottle } from "./item-page-model";
 
 export type YourBottlesProps = {
   itemType: ApiItemType;
@@ -82,16 +83,18 @@ export function YourBottles({
   // poured keeps its sheet: that lives in `ItemActionsProvider`.)
   if (bottles.length === 0) return null;
 
+  // W-20: a tin of tea is steeped, a bag of coffee brewed.
+  const words = typeWords(itemType);
   const logFrom = (bottle: YourBottle) =>
     actions?.logDrink({ cellarId: bottle.cellarId, cellarItemId: bottle.id });
 
   return (
     <InsetSection
       id="your-bottles"
-      label="Your bottles"
+      label={yourContainersLabel(itemType)}
       action={
         <span className="type-footnote tabular">
-          {bottlesCountLabel(total ?? bottles.length)}
+          {containerCountLabel(itemType, total ?? bottles.length)}
         </span>
       }
     >
@@ -136,10 +139,10 @@ export function YourBottles({
                         percentageRemaining: bottle.percentageRemaining,
                       })
                     }
-                    aria-label={`Pour from ${cellar}`}
+                    aria-label={`${words.pour} from ${cellar}`}
                     className="relative after:absolute after:-inset-y-1 after:inset-x-0 after:content-['']"
                   >
-                    Pour
+                    {words.pour}
                   </Button>
                   <Button
                     size="sm"
@@ -178,7 +181,7 @@ export function YourBottles({
       <HeldBackNote
         shown={bottles.length}
         total={total}
-        noun="bottles"
+        noun={words.containers}
         order="first"
       />
     </InsetSection>
