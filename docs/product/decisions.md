@@ -339,14 +339,20 @@ reverse them. Each names the item it belongs to; none overrides an answer.
   shelf. **Pour**
   opens the X02 drink-log sheet with the bottle; X03's Pour sheet replaces
   what it opens when it lands.
-- **Drink soon** is the opened-bottle table only (D29): a style's typical
-  life once open, labelled "Typical for <style> once open: <span>", listed
-  once a bottle has been open the shortest span, most overdue first, over
-  every open bottle (up to 100), not only the shelf's dozen. Beer
-  (1–2 days) and coffee beans (2–4 weeks) apply to any style; wine, sake,
-  spirits and tea by their style field; matcha by its form. A style the
-  table lacks shows no window. Per-bottle dates and the user's own
-  drink-from/until stay L02.
+- **Drink soon** is opened bottles first, then sealed ones (L02, L18).
+  Opened is unchanged: a style's typical life once open, labelled
+  "Typical for <style> once open: <span>", listed once a bottle has been
+  open the shortest span, most overdue first, over every open bottle (up to
+  100); beer (1–2 days) and coffee beans (2–4 weeks) apply to any style,
+  wine, sake, spirits and tea by their style field, matcha by its form.
+  Sealed bottles join when their window's end — the owner's own
+  drink-until, else the shelf-life table's typical one for the style —
+  falls within three months (or has passed): "Sealed · window ends Jan 2027
+  · typical for IPA", or "Sealed · your date: drink by Feb 2027". It is no
+  longer the opened table only because L02 gave each bottle its own dates
+  and the table its sealed rows, so a window that is closing is now
+  something we know rather than guess. A style the table lacks, with no
+  date of the owner's, still shows no window (D29).
 - **Friends** is friends only (your own activity is the rest of Home), in
   sentences ("Sam rated Barolo ★4.5", "Sam had Pliny · with you · at Old
   Mill"), with bursts folded: the same person, kind and cellar or list,
@@ -599,3 +605,43 @@ reverse them. Each names the item it belongs to; none overrides an answer.
   `RecipeThumb`. AddItemClient and the brand card/details still use the
   PNGs: their restored-markup tests (outside this stream) pin the images,
   so swapping them is a hand-off.
+
+### Freshness and drink soon (wave C "freshness": L02)
+
+- **Per-bottle fields.** `packagedOn`, `acquiredOn`, `drinkFrom`,
+  `drinkUntil` (GraphQL `Date`, strict `yyyy-mm-dd`), `priceAmount` (Float,
+  0–99,999,999.99, two decimals) with `priceCurrency` (ISO 4217, set
+  together; clearing the amount clears the currency) and `location` (≤ 80
+  characters). All optional, all clearable with `null`. `drinkFrom` after
+  `drinkUntil` is refused, checked against the stored other end.
+- **Private to the owners.** "Dates and price are yours and stay private"
+  (the Freshness board): anyone who is not the creator or a co-owner reads
+  `null` for every one of them, on every read path, and `Cellar.drinkSoon`
+  is an empty page for them. Writes follow the cellar's existing rules; a
+  bottle id from another cellar answers exactly as an id that does not
+  exist.
+- **The table is one list, two units.** Sealed rows count months from
+  bottling, vintage or purchase (tried in that order); opened rows count
+  days, because open life is "3–5 days" and months would round it away.
+  Every row carries the words "typical for <label>" prints. Sealed spirits,
+  koshu, dark tea and pu-erh have no row on purpose: they keep or improve,
+  and a made-up end would be an estimate.
+- **The server ranks Drink soon** (`Cellar.drinkSoon`, `Viewer.drinkSoon`,
+  connections per §1.5): opened by how far through their life, then sealed
+  by the nearest end. Home keeps computing its opened rows in the browser
+  from `me.openBottles`, so "Open N days" ticks with the page clock and the
+  existing tests hold, and takes only the sealed rows from the server. A
+  cellar's dashboard draws the server's list whole, for owners.
+- **Board differences.** The window heading is years ("2024 – 2036") when
+  the span is two years or more and month-year otherwise; the rows show
+  month-year ("Mar 2024 · yours"), not the board's bare year, so a beer's
+  three-month window reads as one. An opened bottle's card is its open life
+  ("Best by 25 Nov 2026"), not the cellar window, since once open the
+  cellar window no longer says how long it keeps; its rows still show the
+  sealed dates. The sealed Drink soon row's verb is **Open** as a link to
+  the bottle, not a pour.
+- **Re-buy photo.** After adding a bottle of an item you already had (any
+  bottle of it in your cellars, finished included), a card offers a label
+  or receipt photo; it is attached as a private item image and set as that
+  bottle's picture. A first bottle gets no card.
+- **Pour is 44x44** on Home's shelf and in Drink soon (L27).
