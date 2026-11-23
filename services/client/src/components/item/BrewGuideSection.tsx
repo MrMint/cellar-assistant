@@ -84,7 +84,12 @@ export function BrewGuideView({
       <div className="flex items-center justify-between">
         <h2 className="type-title-2 text-ink-1">{title}</h2>
         {!editing && (
-          <Button variant="ghost" size="sm" onClick={() => setEditing(true)}>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="min-h-11"
+            onClick={() => setEditing(true)}
+          >
             {guide === null ? "Add your own" : "Edit"}
           </Button>
         )}
@@ -120,21 +125,23 @@ function GuideCard({
     <div className="flex flex-col gap-4 rounded-xl bg-surface-1 p-4">
       <dl className="grid grid-cols-3 gap-3">
         {guide.facts.map((fact) => (
+          // A <dl> group holds only <dt> then <dd>s (axe definition-list):
+          // the term leads in the markup, and `order` puts the number on top.
           <div key={fact.key} className="flex flex-col">
-            <dd className="font-display text-[28px] text-ink-1 tabular-nums leading-9">
-              {formatBrewFact(fact)}
-            </dd>
-            <dt className="type-footnote text-ink-2">
+            <dt className="type-footnote order-2 text-ink-2">
               {BREW_FACT_LABEL[fact.key]}
             </dt>
-            <span
+            <dd className="order-1 font-display text-[28px] text-ink-1 tabular-nums leading-9">
+              {formatBrewFact(fact)}
+            </dd>
+            <dd
               className={cn(
-                "type-footnote",
+                "type-footnote order-3",
                 fact.source === "yours" ? "text-brass" : "text-ink-3",
               )}
             >
               {fact.source}
-            </span>
+            </dd>
           </div>
         ))}
       </dl>

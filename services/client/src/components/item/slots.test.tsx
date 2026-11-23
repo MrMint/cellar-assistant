@@ -9,8 +9,10 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { Client, fetchExchange, Provider } from "urql";
 import { MeStamps } from "../user/MeStamps";
 import type { ItemView } from "./adapter";
+import { ThisBottleRows } from "./BottleFreshnessFields";
 import { BrewGuideSection, BrewGuideView } from "./BrewGuideSection";
 import { brewGuide, typicalBrew } from "./brew-table";
+import { freshnessModel } from "./freshness";
 import { SeenAtSection } from "./SeenAtSection";
 
 const item = { itemId: "i1", type: "TEA", name: "Sencha" } as ItemView;
@@ -73,6 +75,58 @@ describe("ux-c M4 slots", () => {
     assert.match(html, />typical</);
     assert.match(html, /Typical for oolong/);
     assert.match(html, /Start first steep · 3:00/);
+  });
+
+  test("Brew guide: a well-formed <dl> (E-10, axe definition-list) and a 44px Edit (CR-9, L8)", () => {
+    const html = renderToStaticMarkup(
+      <BrewGuideView
+        itemType="TEA"
+        itemId="i1"
+        guide={brewGuide(typicalBrew("TEA", { category: "oolong" }), null)}
+        prefs={null}
+      />,
+    );
+    const dl = /<dl[^>]*>([\s\S]*?)<\/dl>/.exec(html)?.[1] ?? "";
+    assert.ok(dl.length > 0, "the guide renders its facts");
+    // Each group is a <div> holding only <dt> then <dd>s: no stray element,
+    // and the term comes first.
+    const groups = dl.match(/<div[^>]*>[\s\S]*?<\/div>/g) ?? [];
+    assert.ok(groups.length > 0);
+    for (const group of groups) {
+      const inner = group.replace(/^<div[^>]*>|<\/div>$/g, "");
+      const tags = [...inner.matchAll(/<(\w+)[\s>]/g)].map((m) => m[1]);
+      assert.equal(tags[0], "dt", `term first: ${group}`);
+      assert.ok(
+        tags.every((tag) => tag === "dt" || tag === "dd"),
+        `only dt/dd in a group: ${tags.join(",")}`,
+      );
+    }
+    const edit = /<button[^>]*>Edit<\/button>/.exec(html)?.[0] ?? "";
+    assert.match(edit, /min-h-11/, "the Edit target is at least 44px tall");
+  });
+
+  test("This bottle: the Edit target is at least 44px tall (CR-9, L8)", () => {
+    const model = freshnessModel(
+      {
+        openAt: null,
+        emptyAt: null,
+        packagedOn: null,
+        acquiredOn: null,
+        drinkFrom: null,
+        drinkUntil: null,
+        priceAmount: null,
+        priceCurrency: null,
+        location: null,
+      },
+      { type: "WINE", style: "RED", form: null, vintageYear: 2020 },
+      "2026-11-22",
+    );
+    const html = renderToStaticMarkup(
+      <ThisBottleRows model={model} onEdit={() => {}} />,
+    );
+    const edit = /<button[^>]*>Edit<\/button>/.exec(html)?.[0] ?? "";
+    assert.ok(edit.length > 0, "This bottle has an Edit");
+    assert.match(edit, /min-h-11/);
   });
 
   test("MeStamps renders nothing", () => {

@@ -25,6 +25,7 @@ import {
   type FreshnessStatus,
   freshnessModel,
   freshnessPatch,
+  localDay,
 } from "./freshness";
 
 type Data = ResultOf<typeof BottleFreshnessQuery>;
@@ -281,7 +282,7 @@ export function ThisBottleRows({
       label="This bottle"
       data-slot="this-bottle"
       action={
-        <Button size="sm" variant="ghost" onClick={onEdit}>
+        <Button size="sm" variant="ghost" className="min-h-11" onClick={onEdit}>
           Edit
         </Button>
       }
@@ -362,7 +363,8 @@ export function BottleFreshnessFields({
           };
         })();
   const item = node === null ? null : freshnessItemOf(node.item);
-  const today = useMemo(() => new Date().toISOString().slice(0, 10), []);
+  // The person's own day, not UTC's (CR-12).
+  const today = useMemo(() => localDay(new Date()), []);
   if (bottle === null || item === null) return null;
   const model = freshnessModel(bottle, item, today);
 

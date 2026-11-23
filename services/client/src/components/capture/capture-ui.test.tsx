@@ -47,6 +47,9 @@ const sent: Sent[] = [];
 let refuseAdd = false;
 /** L10: what the Google nearby read answers — a listing, or the budget's no. */
 let nearbyBudgetExhausted = false;
+/** L02: bottles of the item after the add (status ALL), and how late it lands. */
+let historyBottles = 0;
+let historyDelayMs = 0;
 globalThis.fetch = (async (_url: unknown, init?: { body?: unknown }) => {
   const body = JSON.parse(String(init?.body ?? "{}")) as {
     query?: string;
@@ -61,70 +64,85 @@ globalThis.fetch = (async (_url: unknown, init?: { body?: unknown }) => {
   sent.push({ operationName, variables });
   const input = variables.input as { cellarItemId?: string } | undefined;
   const placeInput = variables.input as { placeId?: string } | undefined;
+  if (operationName === "ItemBottleHistory" && historyDelayMs > 0) {
+    await new Promise((r) => setTimeout(r, historyDelayMs));
+  }
   const data =
-    operationName === "MapGooglePlaceSuggestions"
+    operationName === "ItemBottleHistory"
       ? {
-          googlePlaceSuggestions: {
-            charged: !nearbyBudgetExhausted,
-            reason: nearbyBudgetExhausted ? "monthly budget reached" : null,
-            suggestions: {
-              edges: nearbyBudgetExhausted
-                ? []
-                : [
-                    {
-                      node: {
-                        googlePlaceId: "g-1",
-                        name: "Bar Lumen",
-                        secondaryText: "1 Main St",
-                        types: ["bar", "point_of_interest"],
-                        location: { lat: 37.7749, lng: -122.4194 },
-                      },
-                    },
-                  ],
+          item: {
+            __typename: "QueryItemSuccess",
+            data: {
+              __typename: "Wine",
+              id: "w1",
+              name: "Ridge",
+              myBottles: { totalCount: historyBottles },
             },
           },
         }
-      : operationName === "MapCreatePlace"
+      : operationName === "MapGooglePlaceSuggestions"
         ? {
-            createPlace: {
-              __typename: "CreatePlacePayload",
-              place: {
-                id: placeInput?.placeId ?? "p-new",
-                reviewStatus: "PENDING",
+            googlePlaceSuggestions: {
+              charged: !nearbyBudgetExhausted,
+              reason: nearbyBudgetExhausted ? "monthly budget reached" : null,
+              suggestions: {
+                edges: nearbyBudgetExhausted
+                  ? []
+                  : [
+                      {
+                        node: {
+                          googlePlaceId: "g-1",
+                          name: "Bar Lumen",
+                          secondaryText: "1 Main St",
+                          types: ["bar", "point_of_interest"],
+                          location: { lat: 37.7749, lng: -122.4194 },
+                        },
+                      },
+                    ],
               },
-              nearbyDuplicates: { edges: [] },
             },
           }
-        : operationName === "AddItemToCellarFromItem"
+        : operationName === "MapCreatePlace"
           ? {
-              addItemToCellar: refuseAdd
-                ? {
-                    __typename: "ForbiddenError",
-                    code: "FORBIDDEN",
-                    message: "Only owners can add to this cellar",
-                    reason: null,
-                    retryAt: null,
-                  }
-                : {
-                    __typename: "CellarItem",
-                    id: input?.cellarItemId ?? "x",
-                    cellarId: variables.cellarId,
-                    item: {
-                      __typename: "Wine",
-                      id: "w1",
-                      type: "WINE",
-                      name: "Ridge",
-                    },
-                  },
-            }
-          : operationName === "RemoveItemFromCellar"
-            ? {
-                removeItemFromCellar: {
-                  __typename: "RemovedCellarItem",
-                  id: variables.cellarItemId,
+              createPlace: {
+                __typename: "CreatePlacePayload",
+                place: {
+                  id: placeInput?.placeId ?? "p-new",
+                  reviewStatus: "PENDING",
                 },
+                nearbyDuplicates: { edges: [] },
+              },
+            }
+          : operationName === "AddItemToCellarFromItem"
+            ? {
+                addItemToCellar: refuseAdd
+                  ? {
+                      __typename: "ForbiddenError",
+                      code: "FORBIDDEN",
+                      message: "Only owners can add to this cellar",
+                      reason: null,
+                      retryAt: null,
+                    }
+                  : {
+                      __typename: "CellarItem",
+                      id: input?.cellarItemId ?? "x",
+                      cellarId: variables.cellarId,
+                      item: {
+                        __typename: "Wine",
+                        id: "w1",
+                        type: "WINE",
+                        name: "Ridge",
+                      },
+                    },
               }
-            : {};
+            : operationName === "RemoveItemFromCellar"
+              ? {
+                  removeItemFromCellar: {
+                    __typename: "RemovedCellarItem",
+                    id: variables.cellarItemId,
+                  },
+                }
+              : {};
   return new Response(JSON.stringify({ data }), {
     status: 200,
     headers: { "content-type": "application/json" },
@@ -185,6 +203,8 @@ beforeEach(() => {
   refreshes = 0;
   refuseAdd = false;
   nearbyBudgetExhausted = false;
+  historyBottles = 0;
+  historyDelayMs = 0;
   window.localStorage.clear();
 });
 
@@ -339,6 +359,51 @@ describe("Add to Cellar sheet (N21)", () => {
     assert.deepEqual(removed, filed, "Undo removes exactly the bottles filed");
   });
 
+  test("re-buy: the offer promises only the photo it keeps (CR-8, L02)", async () => {
+    historyBottles = 2;
+    await render(
+      <>
+        <AddToCellarActions itemId="w1" itemType="WINE" cellars={cellars} />
+        <Toaster />
+      </>,
+    );
+    await click(button("Add to Cellar"));
+    await flush(20);
+    await click(button("Add bottle"));
+    await flush(80);
+    const offer = document.querySelector('[data-slot="rebuy-photo"]');
+    assert.ok(offer, "another bottle of something you had: the offer opens");
+    assert.match(offer.textContent ?? "", /Another Ridge added/);
+    assert.match(offer.textContent ?? "", /label or receipt/);
+    assert.doesNotMatch(
+      offer.textContent ?? "",
+      /price|date/,
+      "nothing reads price or date from the photo",
+    );
+  });
+
+  test("re-buy: Undo before the history read lands offers nothing (CR-8)", async () => {
+    historyBottles = 2;
+    historyDelayMs = 60;
+    await render(
+      <>
+        <AddToCellarActions itemId="w1" itemType="WINE" cellars={cellars} />
+        <Toaster />
+      </>,
+    );
+    await click(button("Add to Cellar"));
+    await flush(20);
+    await click(button("Add bottle"));
+    await flush(5);
+    await click(button("Undo"));
+    await flush(150);
+    assert.equal(
+      document.querySelector('[data-slot="rebuy-photo"]'),
+      null,
+      "the bottle is gone; no photo offer for it",
+    );
+  });
+
   test("a refusal keeps the sheet open and says why", async () => {
     refuseAdd = true;
     await render(
@@ -427,6 +492,53 @@ describe("NewPlaceSheet (L10: scan anywhere)", () => {
     assert.deepEqual(created, [
       { id: input.placeId, name: "Bar Lumen", category: "bar" },
     ]);
+  });
+
+  test("GPS drift while open: one Google read, one placeId, the pin stays at the opening fix (CR-4, N09)", async () => {
+    const sheet = (location: { latitude: number; longitude: number }) => (
+      <NewPlaceSheet
+        open
+        onOpenChange={() => {}}
+        location={location}
+        hasPhoto={false}
+        onCreated={() => {}}
+        onPickInstead={() => {}}
+      />
+    );
+    await render(sheet(HERE));
+    await flush(30);
+    await click(button("Add place"));
+    await flush(30);
+    // The fix moves ~20 m, twice, while the sheet stays open.
+    await render(sheet({ latitude: 37.77508, longitude: -122.4194 }));
+    await flush(30);
+    await render(sheet({ latitude: 37.77526, longitude: -122.4194 }));
+    await flush(30);
+    assert.equal(
+      nameInput()?.value,
+      "Bar Lumen",
+      "the typed/prefilled name stays",
+    );
+    await click(button("Add place"));
+    await flush(30);
+    assert.equal(
+      sent.filter((s) => s.operationName === "MapGooglePlaceSuggestions")
+        .length,
+      1,
+      "one budgeted nearby read per open sheet",
+    );
+    const inputs = sent
+      .filter((s) => s.operationName === "MapCreatePlace")
+      .map(
+        (s) =>
+          s.variables.input as {
+            placeId: string;
+            location: { lat: number };
+          },
+      );
+    assert.equal(inputs.length, 2);
+    assert.equal(inputs[0]?.placeId, inputs[1]?.placeId, "a retry converges");
+    assert.equal(inputs[1]?.location.lat, HERE.latitude);
   });
 
   test("out of budget: 'Details pending', an empty name, and a bound refusal before any create", async () => {
