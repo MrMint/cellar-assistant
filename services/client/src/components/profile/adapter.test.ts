@@ -1,13 +1,14 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import {
+  cellarPageResult,
   cellarRow,
   friendProfileView,
   friendsSinceLine,
+  listPageResult,
   listRow,
   logPageResult,
   logRow,
-  moreLine,
   sharesNothing,
 } from "./adapter";
 
@@ -46,8 +47,16 @@ const profile = (overrides: Partial<Record<string, unknown>> = {}) =>
       displayName: "Sam",
       avatarUrl: null,
     },
-    tierLists: { totalCount: 0, edges: [] },
-    cellars: { totalCount: 0, edges: [] },
+    tierLists: {
+      totalCount: 0,
+      pageInfo: { hasNextPage: false, endCursor: null },
+      edges: [],
+    },
+    cellars: {
+      totalCount: 0,
+      pageInfo: { hasNextPage: false, endCursor: null },
+      edges: [],
+    },
     checkIns: {
       totalCount: 0,
       pageInfo: { hasNextPage: false, endCursor: null },
@@ -164,8 +173,10 @@ describe("friendProfileView", () => {
       profile({
         tierLists: {
           totalCount: 26,
+          pageInfo: { hasNextPage: true, endCursor: "t:1" },
           edges: [
             {
+              cursor: "t:1",
               node: {
                 __typename: "TierList",
                 id: "t1",
@@ -184,22 +195,14 @@ describe("friendProfileView", () => {
       }),
     );
     assert.ok(!sharesNothing(view));
-    assert.equal(view.tierListCount, 26);
-    assert.equal(
-      moreLine(view.tierLists.length, view.tierListCount),
-      "Showing 1 of 26",
-    );
+    assert.equal(view.tierLists.totalCount, 26);
+    assert.equal(view.tierLists.rows.length, 1);
+    assert.equal(view.tierLists.hasNextPage, true);
+    assert.equal(view.tierLists.endCursor, "t:1");
     assert.equal(view.logs.rows.length, 1);
     assert.equal(view.logs.hasNextPage, true);
     assert.equal(view.logs.endCursor, "k:1");
     assert.equal(view.logs.totalCount, 14);
-  });
-});
-
-describe("moreLine", () => {
-  test("only when the page did not show the whole section", () => {
-    assert.equal(moreLine(5, 5), null);
-    assert.equal(moreLine(20, 21), "Showing 20 of 21");
   });
 });
 
@@ -212,5 +215,85 @@ describe("logPageResult", () => {
     } as unknown as Parameters<typeof logPageResult>[0]);
     assert.equal(refused.ok, false);
     assert.equal(logPageResult(undefined).ok, false);
+  });
+});
+
+describe("listPageResult / cellarPageResult (leftovers 6)", () => {
+  test("the page after the first 20: rows, cursor, and whether more remain", () => {
+    const next = listPageResult({
+      __typename: "FriendProfile",
+      id: "f1",
+      tierLists: {
+        totalCount: 21,
+        pageInfo: { hasNextPage: false, endCursor: "t:20" },
+        edges: [
+          {
+            cursor: "t:20",
+            node: {
+              __typename: "TierList",
+              id: "t20",
+              name: "Whites",
+              itemCount: 0,
+              privacy: "FRIENDS",
+            },
+          },
+        ],
+      },
+    } as unknown as Parameters<typeof listPageResult>[0]);
+    assert.ok(next.ok);
+    if (!next.ok) return;
+    assert.deepEqual(
+      next.data.rows.map((row) => [row.id, row.href, row.description]),
+      [["t20", "/tier-lists/t20", "Friends only"]],
+    );
+    assert.equal(next.data.endCursor, "t:20");
+    assert.equal(next.data.hasNextPage, false);
+    assert.equal(next.data.totalCount, 21);
+
+    const cellars = cellarPageResult({
+      __typename: "FriendProfile",
+      id: "f1",
+      cellars: {
+        totalCount: 22,
+        pageInfo: { hasNextPage: true, endCursor: "c:20" },
+        edges: [
+          {
+            cursor: "c:20",
+            node: {
+              __typename: "Cellar",
+              id: "c20",
+              name: "Garage",
+              itemCounts: { total: 3 },
+            },
+          },
+        ],
+      },
+    } as unknown as Parameters<typeof cellarPageResult>[0]);
+    assert.ok(cellars.ok);
+    if (!cellars.ok) return;
+    assert.deepEqual(
+      cellars.data.rows.map((row) => [row.id, row.description]),
+      [["c20", "3 bottles"]],
+    );
+    assert.equal(cellars.data.hasNextPage, true);
+  });
+
+  test("a refusal passes through as the failure", () => {
+    const refusal = {
+      __typename: "NotFoundError",
+      code: "NOT_FOUND",
+      message: "This profile doesn't exist or isn't shared with you.",
+    };
+    assert.equal(
+      listPageResult(refusal as unknown as Parameters<typeof listPageResult>[0])
+        .ok,
+      false,
+    );
+    assert.equal(
+      cellarPageResult(
+        refusal as unknown as Parameters<typeof cellarPageResult>[0],
+      ).ok,
+      false,
+    );
   });
 });

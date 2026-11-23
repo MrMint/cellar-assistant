@@ -42,10 +42,8 @@ const base = {
   name: "Sam",
   avatarUrl: null,
   sinceLine: "Friends since Mar 2026",
-  tierLists: [],
-  tierListCount: 0,
-  cellars: [],
-  cellarCount: 0,
+  tierLists: { rows: [], endCursor: null, hasNextPage: false, totalCount: 0 },
+  cellars: { rows: [], endCursor: null, hasNextPage: false, totalCount: 0 },
   logs: { rows: [], endCursor: null, hasNextPage: false, totalCount: 0 },
 } as const;
 
@@ -73,15 +71,19 @@ describe("FriendProfile", () => {
       <FriendProfile
         view={{
           ...base,
-          tierLists: [
-            {
-              id: "t1",
-              name: "Reds, ranked",
-              href: "/tier-lists/t1",
-              description: "9 entries · Public",
-            },
-          ],
-          tierListCount: 1,
+          tierLists: {
+            rows: [
+              {
+                id: "t1",
+                name: "Reds, ranked",
+                href: "/tier-lists/t1",
+                description: "9 entries · Public",
+              },
+            ],
+            endCursor: "t:1",
+            hasNextPage: false,
+            totalCount: 1,
+          },
           logs: {
             rows: [
               {
@@ -116,6 +118,44 @@ describe("FriendProfile", () => {
     assert.ok(text.includes("at Cork and Barrel"));
     // More to read: the log offers it.
     assert.match(html, /<button\b[^>]*>Show more<\/button>/);
+  });
+
+  test("a list or cellar section with more than its first page offers Show more (leftovers 6)", () => {
+    const rows = (prefix: string, href: string) =>
+      Array.from({ length: 20 }, (_, index) => ({
+        id: `${prefix}${index}`,
+        name: `${prefix} ${index}`,
+        href: `${href}/${prefix}${index}`,
+        description: "Public",
+      }));
+    const html = render(
+      <FriendProfile
+        view={{
+          ...base,
+          tierLists: {
+            rows: rows("t", "/tier-lists"),
+            endCursor: "t:19",
+            hasNextPage: true,
+            totalCount: 26,
+          },
+          cellars: {
+            rows: rows("c", "/cellars"),
+            endCursor: "c:19",
+            hasNextPage: true,
+            totalCount: 21,
+          },
+        }}
+      />,
+    );
+    for (const section of ["tier-lists", "cellars"]) {
+      const start = html.indexOf(`data-section="${section}"`);
+      assert.ok(start >= 0, `${section} is drawn`);
+      const rest = html.slice(start);
+      const next = rest.indexOf("data-section=", 1);
+      const own = next < 0 ? rest : rest.slice(0, next);
+      assert.match(own, /<button\b[^>]*>Show more<\/button>/, section);
+    }
+    assert.ok(!textOf(html).includes("Showing 20 of"));
   });
 
   test("nothing on the page edits: no form, no destructive control", () => {
