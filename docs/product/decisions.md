@@ -812,3 +812,47 @@ reverse them. Each names the item it belongs to; none overrides an answer.
   fragment lacks Wine `style`, Spirit `spiritType` and Tea `form`, so a card
   shows variety/beer/tea-category vessels until it selects them (hand-off).
 
+
+### Taste profile and friend agreement (wave C "taste": L03)
+
+- **"Agree" is a half-star:** two scores of the same item agree when
+  `|a − b| ≤ 0.5` (`AGREEMENT_MAX_DIFFERENCE`). **N = 5** shared items
+  (`AGREEMENT_MIN_SHARED`, L30): below it the server sends `agreed: null`
+  and the page only says how many you share. Agreement is always a count,
+  "7 of 9 shared wines" (one type) or "… shared items" (several), never a
+  percentage. Both constants live in `packages/contracts/src/taste.ts`.
+- **What counts as a rating:** your newest score per item, from your
+  reviews and your drink log together. Reviews are world-readable to any
+  signed-in user (e4-decisions), so a friend's reviews always count. A
+  drink-log score counts only where `canSeeCheckInDetails` admits the
+  viewer (the drinker, a companion or a friend), applied in SQL through
+  `canSeeCheckInDetailsSql`; that is the "friend's private item never
+  counts" rule, since reviews have no private form. A disabled, malformed,
+  self or unseeable (`!canSeeProfile`) user answers exactly like a missing
+  one: `NotFound(PROFILE_NOT_SHARED)`. No new policy function was needed.
+- **The archetype is deterministic** (`lib/taste-agreement.ts`): none below
+  10 ratings or 2 styles with ≥ 2 ratings each. Then, first match wins:
+  mean ≥ 4.25 Generous palate; mean ≤ 2.75 Hard to impress; one style
+  holding ≥ 40 % of ratings "Devoted to X"; three or more types with ≥ 3
+  ratings Cross-cellar explorer; a spread between styles ≥ 1.5 Knows what
+  they like; otherwise "<Type> first". Loves are the styles at or above
+  your mean (top 4), less keen the lowest 2 below it. Style is per type:
+  wine variety (else style), beer style, spirit style (else type), coffee
+  process, sake category (else type), tea category.
+- **The AI only phrases, and abstains first (L4).** Thin data never calls
+  it and shows "Rate N more items to see your archetype." The phraser's
+  schema puts `factsSupportALine` before `line`; a line must name a style
+  it was given, carry no digits and stay under 240 characters, or the plain
+  sentence is used. Per L47 the seam is not wired in batch 3: production
+  uses `noTastePhraser`, so every line is the deterministic one and the
+  page shows no "Phrased by AI" mark. Wiring it is the fix round's H-10.
+- **Clone** (`cloneTierList`, `TierListActor.clone`) copies a list you may
+  see (`canSeeTierList`) into a new **private** list of yours, same list
+  type and name, entries in order, without notes, description or hidden
+  places. A list you may not see answers like a missing one. Undo deletes
+  the copy. Want-to-try is not a tier list and is never offered (L42).
+- **Board differences:** each friend row's Compare goes to their profile's
+  `#compare` section (`TasteCompareSection`, mounted in `FriendProfile`),
+  which repeats the count and carries the Copy buttons, rather than a
+  separate compare page. The page has no tab of its own; the Me tab should
+  highlight on it (`nav.ts`, a hand-off).
