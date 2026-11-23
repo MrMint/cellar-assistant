@@ -1,4 +1,5 @@
 import { eventually, unique } from "../../fixtures/data.ts";
+import { deleteTeas } from "../../fixtures/db.ts";
 import { expect, test } from "../../fixtures/mobile.ts";
 import { Gql } from "../../fixtures/test.ts";
 
@@ -152,6 +153,9 @@ test.afterAll(async () => {
     }
   } finally {
     await api.dispose();
+    // The five teas this run created (CR-10, L10: a run cleans up what it
+    // creates), after the list and review that point at them.
+    deleteTeas([...ranked, newcomerId].filter((id) => id !== ""));
   }
 });
 

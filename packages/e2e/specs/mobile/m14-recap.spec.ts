@@ -126,7 +126,8 @@ test("Me → recap → next card → share falls back to download", async ({
   await expect(page.getByText(/Saved the image to your device/)).toBeVisible();
 
   // Close goes back to Me.
-  await page.getByRole("link", { name: "Close recap" }).click();
+  // A button now: Close goes back (history), not a push of /me (CR-6).
+  await page.getByRole("button", { name: "Close recap" }).click();
   await expect(page).toHaveURL(/\/me$/);
 });
 
@@ -151,7 +152,13 @@ test("the share image answers another user and a missing period alike", async ({
 
   // Signed out, the request never yields an image: the app's proxy sends it
   // to sign-in before the route runs, the same for any owner or period.
-  const anonymous = await browser.newContext();
+  // The test runner applies the project's storageState to
+  // `browser.newContext()` too (runBeforeCreateBrowserContext), so without an
+  // explicit empty state this "anonymous" context is the signed-in owner and
+  // rightly gets their PNG (E-8).
+  const anonymous = await browser.newContext({
+    storageState: { cookies: [], origins: [] },
+  });
   const answers = [];
   for (const path of [
     `/api/recap/${ACCOUNTS.primary.id}/${period}/0`,

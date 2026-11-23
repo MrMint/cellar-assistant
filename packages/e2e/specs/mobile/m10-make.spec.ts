@@ -94,6 +94,9 @@ test("recipe → Make → steps → Made it → Undo", async ({ page }) => {
   await expect(
     page.getByRole("button", { name: "Leave Make mode" }),
   ).toBeVisible();
+  // Full screen (L08, CR-5): one main landmark (the shell's), no tab bar.
+  await expect(page.locator("main")).toHaveCount(1);
+  await expect(page.getByRole("navigation", { name: "Main" })).toBeHidden();
 
   // Servings: one up, one down; the stepper never goes below one.
   await expect(
@@ -139,4 +142,11 @@ test("recipe → Make → steps → Made it → Undo", async ({ page }) => {
   await expect(page.getByText("Log removed")).toBeVisible({ timeout: 10_000 });
   await expect.poll(myRecipeLogs, { timeout: 10_000 }).toHaveLength(0);
   await expect(page.getByText("Step 3 of 3")).toBeVisible();
+
+  // Leave goes back to the recipe (CR-6): history Back, so Make mode is not
+  // left in the stack for the recipe page's Back to re-enter.
+  await page.getByRole("button", { name: "Leave Make mode" }).click();
+  await expect(page).toHaveURL(new RegExp(`/recipes/${recipeId}$`));
+  await page.goForward();
+  await expect(page).toHaveURL(new RegExp(`/recipes/${recipeId}/make$`));
 });
