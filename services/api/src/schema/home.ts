@@ -24,7 +24,11 @@ import {
   viewerCollectionActorId,
 } from "@cellar-assistant/contracts";
 import { builder } from "./builder.ts";
-import { CellarItemConnection } from "./cellar.ts";
+import {
+  CellarItemConnection,
+  DrinkSoonConnection,
+  viewerDrinkSoon,
+} from "./cellar.ts";
 import { ActorErrorCodeEnum, ActorErrorReasonEnum } from "./errors.ts";
 import { ItemTypeEnum } from "./item.ts";
 import { connectionFromPage, toPageArgs } from "./pagination.ts";
@@ -50,6 +54,22 @@ builder.objectField(Viewer, "openBottles", (t) =>
             viewerCollectionActorId(viewer.id),
           )
           .openBottles(toPageArgs(args)),
+      ),
+  }),
+);
+
+builder.objectField(Viewer, "drinkSoon", (t) =>
+  t.field({
+    type: DrinkSoonConnection,
+    description:
+      "Home's Drink soon (ux-c L02): across the cellars you created or " +
+      "co-own, opened bottles past their style's open life, then sealed " +
+      "ones whose window — your own dates, else the typical one for the " +
+      "style — closes within three months. Never an estimate (D29).",
+    args: t.arg.connectionArgs(),
+    resolve: async (viewer, args, context) =>
+      connectionFromPage(
+        offsetPage(await viewerDrinkSoon(context, viewer.id), toPageArgs(args)),
       ),
   }),
 );

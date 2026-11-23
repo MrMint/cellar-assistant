@@ -7,6 +7,7 @@ import {
   type DashboardData,
   dashboardHasContent,
   dashboardTiles,
+  drinkSoonRows,
   monthKeysEndingAt,
   monthLabel,
   pourTrend,
@@ -128,5 +129,69 @@ describe("the cellar dashboard's numbers (X04, D3)", () => {
       shelf.map((entry) => entry.item.id),
       ["new"],
     );
+  });
+});
+
+describe("drinkSoonRows (L02)", () => {
+  type Node = Parameters<typeof drinkSoonRows>[0][number];
+  const node = (over: Record<string, unknown>): Node =>
+    ({
+      reason: "SEALED",
+      urgency: "SOON",
+      openDays: null,
+      openLifeFromDays: null,
+      openLifeUntilDays: null,
+      typicalFor: "IPA",
+      window: { until: "2027-01-01", untilSource: "TYPICAL" },
+      bottle: {
+        __typename: "CellarItem",
+        id: "b1",
+        cellarId: "c1",
+        item: { __typename: "Beer", id: "i1", type: "BEER", name: "hazy one" },
+      },
+      ...over,
+    }) as unknown as Node;
+
+  test("opened, then sealed, worded as the board words them", () => {
+    const rows = drinkSoonRows([
+      node({
+        reason: "OPENED",
+        urgency: "PAST",
+        openDays: 9,
+        openLifeFromDays: 3,
+        openLifeUntilDays: 5,
+        typicalFor: "red wine",
+        window: null,
+        bottle: {
+          __typename: "CellarItem",
+          id: "w1",
+          cellarId: "c1",
+          item: {
+            __typename: "Wine",
+            id: "i2",
+            type: "WINE",
+            name: "barolo",
+            vintage: "2016-01-01",
+          },
+        },
+      }),
+      node({}),
+      node({ window: { until: "2027-02-14", untilSource: "USER" } }),
+    ]);
+    assert.deepEqual(
+      rows.map((r) => r.line),
+      [
+        "Open 9 days · typical for red wine once open: 3–5 days",
+        "Sealed · window ends Jan 2027 · typical for IPA",
+        "Sealed · your date: drink by Feb 2027",
+      ],
+    );
+    assert.equal(rows[0]?.past, true);
+    assert.match(rows[0]?.title ?? "", /^2016 /);
+    assert.equal(rows[1]?.href, "/cellars/c1/beers/b1");
+  });
+
+  test("a sealed row with no end is not drawn", () => {
+    assert.deepEqual(drinkSoonRows([node({ window: null })]), []);
   });
 });

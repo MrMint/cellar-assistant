@@ -8,7 +8,15 @@
  * story).
  */
 import { ITEM_TYPES_IN_ORDER, itemTypeTokens } from "@/components/app/TypeChip";
-import type { ApiItemType } from "@/components/cellar-api/itemTypes";
+import {
+  type ApiItemType,
+  cellarItemHref,
+  ITEM_TYPES,
+} from "@/components/cellar-api/itemTypes";
+import type { ResultOf } from "@/lib/api/graphql";
+import { formatItemVintage } from "@/utilities";
+import { displayItemName } from "@/utilities/smart-title-case";
+import type { CellarDrinkSoonQuery } from "./fragments";
 
 export const MONTHS_SHORT = [
   "Jan",
@@ -264,3 +272,77 @@ export const sparkBars = (
 /** Whether the dashboard has anything to show above the collection. */
 export const dashboardHasContent = (data: DashboardData): boolean =>
   data.bottleCount > 0 || data.finishedCount > 0;
+
+type DrinkSoonNode = NonNullable<
+  Extract<
+    NonNullable<ResultOf<typeof CellarDrinkSoonQuery>["cellar"]>,
+    { __typename: "Cellar" }
+  >["drinkSoon"]
+>["edges"][number]["node"];
+
+/** One Drink soon row on a cellar's dashboard (L02). */
+export type DrinkSoonRow = {
+  readonly id: string;
+  readonly href: string;
+  readonly type: ApiItemType;
+  readonly title: string;
+  readonly past: boolean;
+  /** "Open 9 days · typical for red wine once open: 3–5 days". */
+  readonly line: string;
+};
+
+const monthYear = (date: string): string =>
+  `${MONTHS_SHORT[Number(date.slice(5, 7)) - 1]} ${date.slice(0, 4)}`;
+
+const isItemType = (value: string): value is ApiItemType =>
+  (ITEM_TYPES as readonly string[]).includes(value);
+
+/**
+ * The server's ranked rows, worded as the DrinkSoon board words them: opened
+ * first ("Open N days · typical once open"), then sealed ("Sealed · window
+ * ends …" or "Sealed · your date: drink by …").
+ */
+export const drinkSoonRows = (
+  nodes: readonly DrinkSoonNode[],
+): DrinkSoonRow[] =>
+  nodes.flatMap((node): DrinkSoonRow[] => {
+    const item = node.bottle.item;
+    if (item === null || item === undefined || !isItemType(item.type)) {
+      return [];
+    }
+    const until = (node.window?.until as string | null | undefined) ?? null;
+    let line: string;
+    if (node.reason === "OPENED") {
+      const days = node.openDays ?? 0;
+      const life =
+        node.openLifeFromDays === null || node.openLifeUntilDays === null
+          ? ""
+          : ` · typical${node.typicalFor === null ? "" : ` for ${node.typicalFor}`} once open: ${node.openLifeFromDays}–${node.openLifeUntilDays} days`;
+      line = `Open ${days} ${days === 1 ? "day" : "days"}${life}`;
+    } else {
+      if (until === null) return [];
+      line =
+        node.window?.untilSource === "USER"
+          ? `Sealed · your date: drink by ${monthYear(until)}`
+          : `Sealed · ${node.urgency === "PAST" ? "window ended" : "window ends"} ${monthYear(until)}${
+              node.typicalFor === null
+                ? ""
+                : ` · typical for ${node.typicalFor}`
+            }`;
+    }
+    const name = displayItemName(item.name);
+    const vintage =
+      item.__typename === "Wine"
+        ? formatItemVintage("WINE", item.vintage)
+        : undefined;
+    return [
+      {
+        id: node.bottle.id,
+        href: cellarItemHref(node.bottle.cellarId, item.type, node.bottle.id),
+        type: item.type,
+        title: vintage === undefined ? name : `${vintage} ${name}`,
+        past: node.urgency === "PAST",
+        line,
+      },
+    ];
+  });

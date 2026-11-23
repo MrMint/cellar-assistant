@@ -26,16 +26,18 @@ import { apiServerQuery } from "@/lib/api/urql-server";
 import { getGeolocationFromCookie } from "@/lib/geo-cookie/server";
 import type { AiJob } from "./ai-jobs";
 import { ContinueSection } from "./ContinueShelf";
-import { openBottlesFromNodes } from "./continue";
+import { openBottlesFromNodes, sealedSoonFromNodes } from "./continue";
 import { FriendsFeed } from "./FriendsFeed";
 import { HomeInbox } from "./HomeInbox";
 import type { IncomingRequest, PendingSuggestion } from "./inbox";
 import { NearbySection } from "./NearbySection";
 import {
   AiJobFieldsFragment,
+  DRINK_SOON_READ,
   FEED_PAGE_SIZE,
   FRIENDS_RANKED_LIMIT,
   HomeContinueQuery,
+  HomeDrinkSoonQuery,
   HomeFriendsFeedQuery,
   HomeFriendsRankedQuery,
   HomeInboxQuery,
@@ -120,18 +122,25 @@ export async function InboxSection() {
  * N15's first-run line and its one action.
  */
 export async function ContinueSectionServer() {
-  const [data, stats] = await Promise.all([
+  const [data, stats, soonData] = await Promise.all([
     apiServerQuery(HomeContinueQuery, { first: OPEN_BOTTLES_READ }).catch(
       () => null,
     ),
     apiServerQuery(SearchCollectionStatsQuery)
       .then((answer) => answer.me?.collectionStats)
       .catch(() => undefined),
+    // L02: sealed bottles closing soon. Its failure costs only those rows.
+    apiServerQuery(HomeDrinkSoonQuery, { first: DRINK_SOON_READ }).catch(
+      () => null,
+    ),
   ]);
   const bottles = openBottlesFromNodes(
     data?.me?.openBottles.edges.map((edge) => edge.node) ?? [],
   );
-  if (bottles.length === 0) {
+  const sealed = sealedSoonFromNodes(
+    soonData?.me?.drinkSoon.edges.map((edge) => edge.node) ?? [],
+  );
+  if (bottles.length === 0 && sealed.length === 0) {
     if (stats?.itemCounts.total !== 0) return null;
     return (
       <div className="rounded-lg bg-surface-1">
@@ -155,6 +164,7 @@ export async function ContinueSectionServer() {
     <ContinueSection
       bottles={bottles}
       total={data?.me?.openBottles.totalCount ?? bottles.length}
+      sealed={sealed}
       serverNow={Date.now()}
     />
   );

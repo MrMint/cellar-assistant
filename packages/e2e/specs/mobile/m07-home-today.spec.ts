@@ -18,7 +18,9 @@ import { Gql, settleNetwork } from "../../fixtures/test.ts";
  *   second tap on Home at the top opens search too.
  * - Continue: an open bottle with Pour, which opens the drink-log sheet.
  * - Drink soon: a bottle open past its style's window, labelled "Typical for
- *   <style> once open" — a table, never a model (D29).
+ *   <style> once open" — a table, never a model (D29); then (L02) a sealed
+ *   bottle whose own drink-by date is a month away, "Sealed · your date:
+ *   drink by <Mon YYYY>", after the opened ones. Pour is at least 44x44 (L27).
  * - Friends: a friend's rating reads as a sentence, and a friend's PRIVATE
  *   list never shows.
  * - `/discoveries` and `/map/scans` land on Home's inbox.
@@ -36,6 +38,7 @@ const prefix = unique("E2 Home");
 const names = {
   fresh: `${prefix} Fresh Tea`,
   stale: `${prefix} Stale Tea`,
+  sealed: `${prefix} Sealed Tea`,
   rated: `${prefix} Rated Tea`,
 };
 const secretList = `${prefix} Secret List`;
@@ -91,6 +94,42 @@ const addBottle = async (api: Gql, cellar: string, itemId: string) => {
   return bottleId;
 };
 
+/** L02: a sealed bottle with the owner's own drink-by date. */
+const addSealedBottle = async (
+  api: Gql,
+  cellar: string,
+  itemId: string,
+  drinkUntil: string,
+) => {
+  const added = await api.query(
+    `mutation A($cellarId: ID!, $input: AddCellarItemInput!) {
+       addItemToCellar(cellarId: $cellarId, input: $input) {
+         __typename ... on CellarItem { id drinkUntil } ... on Error { message }
+       }
+     }`,
+    {
+      cellarId: cellar,
+      input: {
+        cellarItemId: crypto.randomUUID(),
+        item: { id: itemId, type: "TEA" },
+        drinkUntil,
+      },
+    },
+  );
+  expect(added.addItemToCellar.__typename, JSON.stringify(added)).toBe(
+    "CellarItem",
+  );
+  expect(added.addItemToCellar.drinkUntil).toBe(drinkUntil);
+};
+
+/** A month from today, as `yyyy-mm-dd` and as Drink soon prints it. */
+const inAMonth = (() => {
+  const d = new Date(Date.now() + 30 * 86_400_000);
+  const iso = d.toISOString().slice(0, 10);
+  const month = d.toLocaleString("en", { month: "short", timeZone: "UTC" });
+  return { iso, label: `${month} ${d.getUTCFullYear()}` };
+})();
+
 test.beforeAll(async () => {
   const api = await Gql.forAccount("primary");
   const api2 = await Gql.forAccount("secondary");
@@ -116,6 +155,12 @@ test.beforeAll(async () => {
       await createTea(api, names.stale, category),
     );
     backdateOpened(stale, 800);
+    await addSealedBottle(
+      api,
+      cellarId,
+      await createTea(api, names.sealed, category),
+      inAMonth.iso,
+    );
 
     const me = (await api.query("query { me { id } }")).me.id as string;
     friendId = (await api2.query("query { me { id } }")).me.id as string;
@@ -236,6 +281,35 @@ test("Drink soon: a bottle past its style's window, labelled with the style (D29
   await expect(row).toContainText(/Typical for .+ once open: /);
   // Opened just now, the other tea is open but not yet "soon".
   await expect(section).not.toContainText(names.fresh);
+
+  // The row's Pour is a 44x44 target at least (L27).
+  const pour = row.getByRole("button", { name: `Pour ${names.stale}` });
+  const box = await pour.boundingBox();
+  expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
+  expect(box?.width ?? 0).toBeGreaterThanOrEqual(44);
+});
+
+test("Drink soon: a sealed bottle whose own date is close, after the opened ones (L02)", async ({
+  page,
+}) => {
+  await page.goto("/");
+  const section = page.getByRole("region", { name: "Drink soon" });
+  const rows = section.locator('[data-slot="list-row"]');
+  const sealed = rows.filter({ hasText: names.sealed });
+  await expect(sealed).toBeVisible({ timeout: 20_000 });
+  await expect(sealed).toContainText(
+    `Sealed · your date: drink by ${inAMonth.label}`,
+  );
+  // Sealed rows come after every opened one.
+  const texts = await rows.allTextContents();
+  const stale = texts.findIndex((t) => t.includes(names.stale));
+  const sealedAt = texts.findIndex((t) => t.includes(names.sealed));
+  expect(stale).toBeGreaterThanOrEqual(0);
+  expect(sealedAt).toBeGreaterThan(stale);
+  // Its verb is Open: the bottle's page, not a pour.
+  await expect(
+    sealed.getByRole("link", { name: `Open ${names.sealed}` }),
+  ).toBeVisible();
 });
 
 test("Friends: a friend's rating reads as a sentence; their PRIVATE list never shows", async ({

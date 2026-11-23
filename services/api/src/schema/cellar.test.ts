@@ -64,6 +64,13 @@ const cellarItem = {
   distance: null,
   createdAt: "2026-09-09T00:00:00.000Z",
   updatedAt: "2026-09-09T00:00:00.000Z",
+  packagedOn: null,
+  acquiredOn: "2026-03-12",
+  drinkFrom: null,
+  drinkUntil: "2036-12-31",
+  priceAmount: 58,
+  priceCurrency: "EUR",
+  location: "Rack B, row 3",
 };
 
 const checkIn = {
@@ -416,6 +423,78 @@ describe("cellar mutations (§8.3)", () => {
       { viewerId: viewer.id, kind: "user", requestId: "req-test" },
       { bottle: { cellarId: CELLAR_ID, cellarItemId: cellarItem.id } },
     ]);
+  });
+});
+
+describe("ux-c L02: a bottle's dates, price and place", () => {
+  it("updateCellarItem passes each field through, null meaning clear", async () => {
+    const { invoke, calls } = stubSidecar({
+      "CellarActor.updateItem": () => cellarItem,
+    });
+    const result = await run(
+      `mutation {
+         updateCellarItem(cellarId: "${CELLAR_ID}", cellarItemId: "${cellarItem.id}", input: {
+           acquiredOn: "2026-03-12", drinkUntil: "2036-12-31",
+           priceAmount: 58, priceCurrency: "EUR", location: null
+         }) {
+           __typename
+           ... on CellarItem { acquiredOn drinkUntil priceAmount priceCurrency location packagedOn }
+         }
+       }`,
+      testContext(invoke, viewer),
+    );
+    expect(result.errors).toBeUndefined();
+    expect(calls[0]?.args[2]).toEqual({
+      acquiredOn: "2026-03-12",
+      drinkUntil: "2036-12-31",
+      priceAmount: 58,
+      priceCurrency: "EUR",
+      location: null,
+    });
+    expect(result.data?.updateCellarItem).toEqual({
+      __typename: "CellarItem",
+      acquiredOn: "2026-03-12",
+      drinkUntil: "2036-12-31",
+      priceAmount: 58,
+      priceCurrency: "EUR",
+      location: "Rack B, row 3",
+      packagedOn: null,
+    });
+  });
+
+  it("refuses a malformed date before it reaches the actor", async () => {
+    const { invoke, calls } = stubSidecar({
+      "CellarActor.updateItem": () => cellarItem,
+    });
+    const result = await run(
+      `mutation {
+         updateCellarItem(cellarId: "${CELLAR_ID}", cellarItemId: "${cellarItem.id}", input: { packagedOn: "last week" }) { __typename }
+       }`,
+      testContext(invoke, viewer),
+    );
+    expect(result.errors?.length).toBeGreaterThan(0);
+    expect(calls).toEqual([]);
+  });
+
+  it("addItemToCellar carries them on the new bottle", async () => {
+    const { invoke, calls } = stubSidecar({
+      "CellarActor.addItem": () => cellarItem,
+      "ItemActor.get": () => wine,
+    });
+    const result = await run(
+      `mutation {
+         addItemToCellar(cellarId: "${CELLAR_ID}", input: {
+           item: { type: WINE, id: "${WINE_ID}" }, acquiredOn: "2026-03-12", location: "Rack B"
+         }) { __typename }
+       }`,
+      testContext(invoke, viewer),
+    );
+    expect(result.errors).toBeUndefined();
+    expect(calls[0]?.args[1]).toMatchObject({
+      acquiredOn: "2026-03-12",
+      location: "Rack B",
+      packagedOn: null,
+    });
   });
 });
 

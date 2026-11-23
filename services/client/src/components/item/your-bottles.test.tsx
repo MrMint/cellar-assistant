@@ -30,9 +30,23 @@ window.matchMedia = ((query: string) => ({
   dispatchEvent: () => false,
 })) as unknown as typeof window.matchMedia;
 
+// L02: the selected bottle's freshness reads this; Save lands in `updates`.
+let queryData: unknown;
+const updates: unknown[] = [];
 mock.module("urql", () => ({
-  useQuery: () => [{ data: undefined, fetching: false }, () => {}],
-  useMutation: () => [{}, async () => ({ data: undefined })],
+  useQuery: () => [{ data: queryData, fetching: false }, () => {}],
+  useMutation: () => [
+    {},
+    async (variables: unknown) => {
+      updates.push(variables);
+      return {
+        data: {
+          updateCellarItem: { __typename: "CellarItem", id: "b-1" },
+          setCellarItemPercentage: undefined,
+        },
+      };
+    },
+  ],
   useClient: () => ({}),
 }));
 mock.module("next/navigation", () => ({
@@ -67,6 +81,8 @@ beforeEach(() => {
 });
 
 afterEach(async () => {
+  queryData = undefined;
+  updates.length = 0;
   await act(async () => root.unmount());
   document.body.innerHTML = "";
 });
@@ -82,14 +98,19 @@ const open = {
   percentageRemaining: 60,
 };
 
-const render = async (bottles: (typeof open)[]) => {
+const render = async (bottles: (typeof open)[], selectedId?: string) => {
   await act(async () => {
     root.render(
       <ItemActionsProvider
         subject={{ itemType: "TEA", itemId: "t-1", itemName: "Sencha" }}
         defaultBottle={null}
       >
-        <YourBottles itemType="TEA" itemName="Sencha" bottles={bottles} />
+        <YourBottles
+          itemType="TEA"
+          itemName="Sencha"
+          bottles={bottles}
+          selectedId={selectedId}
+        />
       </ItemActionsProvider>,
     );
     await settle();
@@ -130,5 +151,95 @@ describe("Your bottles' Pour (X09 + X03)", () => {
     assert.equal(document.querySelector('[data-slot="your-bottle"]'), null);
     assert.equal(document.querySelector("#your-bottles"), null);
     assert.equal(pourSheet(), undefined);
+  });
+});
+
+const sealedRed = {
+  cellar: {
+    __typename: "Cellar",
+    id: "c-1",
+    item: {
+      __typename: "CellarItem",
+      id: "b-1",
+      openAt: null,
+      emptyAt: null,
+      packagedOn: null,
+      acquiredOn: "2026-01-10",
+      drinkFrom: null,
+      drinkUntil: null,
+      priceAmount: null,
+      priceCurrency: null,
+      location: null,
+      item: {
+        __typename: "Wine",
+        id: "w-1",
+        type: "WINE",
+        wineStyle: "RED",
+        vintage: "2020-01-01",
+      },
+    },
+  },
+};
+
+const typeInto = (input: HTMLInputElement, value: string) => {
+  const setter = Object.getOwnPropertyDescriptor(
+    HTMLInputElement.prototype,
+    "value",
+  )?.set;
+  setter?.call(input, value);
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+};
+
+describe("the selected bottle's freshness (L02)", () => {
+  test("its window, labelled typical, and its rows with Add", async () => {
+    queryData = sealedRed;
+    await render([{ ...open, openAt: null }], "b-1");
+    const card = document.querySelector('[data-slot="drinking-window"]');
+    assert.ok(card, "no drinking window");
+    assert.match(card.textContent ?? "", /2022 – 2030/);
+    assert.match(card.textContent ?? "", /typical for red wine/);
+    const rows = document.querySelector('[data-slot="this-bottle"]');
+    assert.match(rows?.textContent ?? "", /Bought10 Jan 2026/);
+    assert.ok(document.querySelector('button[aria-label="Add price"]'));
+    assert.match(rows?.textContent ?? "", /stay private/);
+  });
+
+  test("an unselected bottle draws none", async () => {
+    queryData = sealedRed;
+    await render([open]);
+    assert.equal(
+      document.querySelector('[data-slot="bottle-freshness"]'),
+      null,
+    );
+  });
+
+  test("Edit saves only what changed", async () => {
+    queryData = sealedRed;
+    await render([{ ...open, openAt: null }], "b-1");
+    const add = document.querySelector<HTMLButtonElement>(
+      'button[aria-label="Add where it lives"]',
+    );
+    assert.ok(add);
+    await act(async () => {
+      add.click();
+      await settle();
+    });
+    const where = document.querySelector<HTMLInputElement>("#fresh-location");
+    assert.ok(where, "no sheet");
+    await act(async () => {
+      typeInto(where, "Rack B");
+      await settle();
+    });
+    const save = [...document.querySelectorAll("button")].find(
+      (b) => b.textContent === "Save",
+    );
+    assert.ok(save);
+    await act(async () => {
+      save.click();
+      await settle();
+    });
+    assert.deepEqual(updates, [
+      { cellarId: "c-1", cellarItemId: "b-1", input: { location: "Rack B" } },
+    ]);
   });
 });
