@@ -1123,6 +1123,39 @@ export const graphcacheSchema: MinifiedIntrospection = {
       },
       {
         kind: "OBJECT",
+        name: "BreadthStamp",
+        fields: [
+          {
+            name: "count",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
+          {
+            name: "kind",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "ENUM", name: "BreadthStampKind" },
+            },
+          },
+          {
+            name: "tier",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "BreadthStamps",
+        fields: [
+          { name: "recipes", type: { kind: "OBJECT", name: "BreadthStamp" } },
+          { name: "regions", type: { kind: "OBJECT", name: "BreadthStamp" } },
+          { name: "styles", type: { kind: "OBJECT", name: "BreadthStamp" } },
+          { name: "types", type: { kind: "OBJECT", name: "BreadthStamp" } },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
         name: "BrewPrefs",
         fields: [
           { name: "doseGrams", type: { kind: "SCALAR", name: "Float" } },
@@ -6956,6 +6989,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
             },
           },
           {
+            name: "breadthStamps",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "UNION", name: "QueryBreadthStampsResult" },
+            },
+          },
+          {
             name: "cellar",
             type: {
               kind: "NON_NULL",
@@ -7161,6 +7201,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
             },
           },
           {
+            name: "recap",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "UNION", name: "QueryRecapResult" },
+            },
+          },
+          {
             name: "recipe",
             type: {
               kind: "NON_NULL",
@@ -7311,6 +7358,18 @@ export const graphcacheSchema: MinifiedIntrospection = {
         name: "QueryBrandsResult",
         possibleTypes: [
           { kind: "OBJECT", name: "BrandConnection" },
+          { kind: "OBJECT", name: "BudgetExceededError" },
+          { kind: "OBJECT", name: "ConflictError" },
+          { kind: "OBJECT", name: "ForbiddenError" },
+          { kind: "OBJECT", name: "NotFoundError" },
+          { kind: "OBJECT", name: "ValidationError" },
+        ],
+      },
+      {
+        kind: "UNION",
+        name: "QueryBreadthStampsResult",
+        possibleTypes: [
+          { kind: "OBJECT", name: "BreadthStamps" },
           { kind: "OBJECT", name: "BudgetExceededError" },
           { kind: "OBJECT", name: "ConflictError" },
           { kind: "OBJECT", name: "ForbiddenError" },
@@ -7646,6 +7705,18 @@ export const graphcacheSchema: MinifiedIntrospection = {
       },
       {
         kind: "UNION",
+        name: "QueryRecapResult",
+        possibleTypes: [
+          { kind: "OBJECT", name: "BudgetExceededError" },
+          { kind: "OBJECT", name: "ConflictError" },
+          { kind: "OBJECT", name: "ForbiddenError" },
+          { kind: "OBJECT", name: "NotFoundError" },
+          { kind: "OBJECT", name: "Recap" },
+          { kind: "OBJECT", name: "ValidationError" },
+        ],
+      },
+      {
+        kind: "UNION",
         name: "QueryRecipeGroupResult",
         possibleTypes: [
           { kind: "OBJECT", name: "BudgetExceededError" },
@@ -7882,6 +7953,106 @@ export const graphcacheSchema: MinifiedIntrospection = {
               ofType: { kind: "OBJECT", name: "RankingEntry" },
             },
           },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "Recap",
+        fields: [
+          {
+            name: "cards",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "RecapCards" },
+            },
+          },
+          {
+            name: "period",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "String" },
+            },
+          },
+          {
+            name: "stamps",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "BreadthStamps" },
+            },
+          },
+          {
+            name: "timeZone",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "String" },
+            },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "RecapCard",
+        fields: [
+          {
+            name: "chips",
+            type: {
+              kind: "NON_NULL",
+              ofType: {
+                kind: "LIST",
+                ofType: {
+                  kind: "NON_NULL",
+                  ofType: { kind: "SCALAR", name: "String" },
+                },
+              },
+            },
+          },
+          {
+            name: "count",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
+          {
+            name: "itemTypes",
+            type: {
+              kind: "NON_NULL",
+              ofType: {
+                kind: "LIST",
+                ofType: {
+                  kind: "NON_NULL",
+                  ofType: { kind: "ENUM", name: "ItemType" },
+                },
+              },
+            },
+          },
+          {
+            name: "kind",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "ENUM", name: "RecapCardKind" },
+            },
+          },
+          { name: "newCount", type: { kind: "SCALAR", name: "Int" } },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "RecapCards",
+        fields: [
+          {
+            name: "earned",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "BreadthStamps" },
+            },
+          },
+          { name: "newToYou", type: { kind: "OBJECT", name: "RecapCard" } },
+          { name: "recipes", type: { kind: "OBJECT", name: "RecapCard" } },
+          { name: "regions", type: { kind: "OBJECT", name: "RecapCard" } },
+          { name: "styles", type: { kind: "OBJECT", name: "RecapCard" } },
+          { name: "topRated", type: { kind: "OBJECT", name: "RecapCard" } },
+          { name: "types", type: { kind: "OBJECT", name: "RecapCard" } },
         ],
         interfaces: [],
       },

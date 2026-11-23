@@ -80,6 +80,7 @@ import {
   PlaceReviewActorDescriptor,
   PlaceSearchActorDescriptor,
   RankingsActorDescriptor,
+  RecapActorDescriptor,
   RecipeActorDescriptor,
   RecipeGroupActorDescriptor,
   RecipeGroupsCollectionActorDescriptor,
@@ -145,6 +146,7 @@ import { PlaceReviewActor } from "./place-review-actor.ts";
 import { PlaceSearchActor } from "./place-search-actor.ts";
 import { ProbeJobActor, ProbeJobActorDescriptor } from "./probe-job-actor.ts";
 import { RankingsActor } from "./rankings-actor.ts";
+import { RecapActor } from "./recap-actor.ts";
 import { RecipeActor } from "./recipe-actor.ts";
 import { RecipeGroupActor } from "./recipe-group-actor.ts";
 import { RecipeGroupsCollectionActor } from "./recipe-groups-collection-actor.ts";
@@ -364,4 +366,7 @@ export const ACTOR_REGISTRY: readonly RegistryEntry[] = [
   // (label reads, menu scans, recipe photos, tier-list insights), read the
   // C3 way — keyed by the viewer, checked every turn, nothing held.
   entry(AiJobsCollectionActor, AiJobsCollectionActorDescriptor),
+  // L04. The recap deck and breadth stamps: the viewer's own drink log, read
+  // through its own query and DTO (L32, L45). Keyed by the viewer, read-only.
+  entry(RecapActor, RecapActorDescriptor),
 ];

@@ -554,6 +554,20 @@ bars stay put. The pieces:
   not animate. Render at most one `AppBar` at a time (two would share a name
   and the browser skips the transition).
 
+## Recap and stamps (L04)
+
+`/recap` is a full-screen deck (`components/recap/RecapDeck.tsx`, a `fixed
+inset-0 z-50` page over the shell, laid out to the Recap board) of the
+viewer's own month or year, from `Query.recap`. Cards arrive thresholded: an
+empty deck is an empty state, never padding. Copy lives in `recap-copy.ts`,
+shared with the share image (`RecapShareCard.tsx`, `next/og`) served by
+`app/api/recap/[owner]/[period]/[card]/route.tsx` to the signed-in owner only;
+every refusal is one private 404 (`recap-image.ts`). `share-card.ts` shares
+the PNG as a `File` (no url, no text) and falls back to a download.
+`RecapStamp` is the round stamp, used by the deck and by Me's `MeStamps`,
+which renders nothing until mounted and loaded. Stamp words are
+`lib/stamps/stamps.ts`: counts of distinct things only.
+
 ## Make mode and the brew timer (L08)
 
 `components/make/` holds Make mode (`MakeMode`, at `/recipes/[id]/make`) and

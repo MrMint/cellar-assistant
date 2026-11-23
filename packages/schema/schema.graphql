@@ -938,6 +938,34 @@ enum BrandType {
   winery
 }
 
+"""A count-of-distinct achievement from the viewer's drink log."""
+type BreadthStamp {
+  """How many distinct things of this kind."""
+  count: Int!
+  kind: BreadthStampKind!
+
+  """The highest tier `count` has reached."""
+  tier: Int!
+}
+
+"""
+What a breadth stamp counts: distinct styles, regions, item types or recipes made. Never volume or frequency.
+"""
+enum BreadthStampKind {
+  RECIPES
+  REGIONS
+  STYLES
+  TYPES
+}
+
+"""The viewer's breadth stamps, one field per kind; null until earned."""
+type BreadthStamps {
+  recipes: BreadthStamp
+  regions: BreadthStamp
+  styles: BreadthStamp
+  types: BreadthStamp
+}
+
 """
 Your own steep or brew numbers for one tea or coffee (ux-c L08). Each overrides the guide's typical row; null keeps the typical number.
 """
@@ -5102,6 +5130,9 @@ type Query {
     parentBrandId: ID
   ): QueryBrandsResult!
 
+  """L04: the viewer's breadth stamps over their whole drink log."""
+  breadthStamps: QueryBreadthStampsResult!
+
   """
   One cellar by id. `NotFoundError` covers both 'no such cellar' and 'not yours to see' — they are indistinguishable on purpose (§1.6).
   """
@@ -5631,6 +5662,16 @@ type Query {
   ): QueryRankingsResult!
 
   """
+  L04: the viewer's own recap deck for a month (`2026-10`) or a year (`2026`). Signed-in only; there is no argument naming whose recap.
+  """
+  recap(
+    period: String!
+
+    """IANA zone the period is read in (default UTC)."""
+    timeZone: String
+  ): QueryRecapResult!
+
+  """
   One recipe by id. `NotFoundError` covers both 'no such recipe' and 'not yours to see' (§1.6).
   """
   recipe(id: ID!): QueryRecipeResult!
@@ -5816,6 +5857,8 @@ union QueryBrandSearchResult = BrandSearchConnection | BudgetExceededError | Con
 
 union QueryBrandsResult = BrandConnection | BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | ValidationError
 
+union QueryBreadthStampsResult = BreadthStamps | BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | ValidationError
+
 union QueryCellarItemSearchResult = BudgetExceededError | CellarItemSearchConnection | ConflictError | ForbiddenError | NotFoundError | ValidationError
 
 union QueryCellarResult = BudgetExceededError | Cellar | ConflictError | ForbiddenError | NotFoundError | ValidationError
@@ -5871,6 +5914,8 @@ union QueryPlaceResult = BudgetExceededError | ConflictError | ForbiddenError | 
 union QueryPlaceSearchResult = BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | PlaceSearchConnection | ValidationError
 
 union QueryRankingsResult = BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | RankingsConnection | ValidationError
+
+union QueryRecapResult = BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | Recap | ValidationError
 
 union QueryRecipeGroupResult = BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | RecipeGroup | ValidationError
 
@@ -5935,6 +5980,49 @@ type RankingsConnection {
 type RankingsEdge {
   cursor: String!
   node: RankingEntry!
+}
+
+type Recap {
+  cards: RecapCards!
+
+  """`YYYY-MM` or `YYYY`."""
+  period: String!
+
+  """Stamps held at the end of the period."""
+  stamps: BreadthStamps!
+  timeZone: String!
+}
+
+"""
+One card of the deck. Cards below their data threshold are skipped (null), never padded.
+"""
+type RecapCard {
+  chips: [String!]!
+  count: Int!
+  itemTypes: [ItemType!]!
+  kind: RecapCardKind!
+  newCount: Int
+}
+
+enum RecapCardKind {
+  NEW_TO_YOU
+  RECIPES
+  REGIONS
+  STAMP
+  STYLES
+  TOP_RATED
+  TYPES
+}
+
+type RecapCards {
+  """Stamps whose tier was crossed inside the period."""
+  earned: BreadthStamps!
+  newToYou: RecapCard
+  recipes: RecapCard
+  regions: RecapCard
+  styles: RecapCard
+  topRated: RecapCard
+  types: RecapCard
 }
 
 """
