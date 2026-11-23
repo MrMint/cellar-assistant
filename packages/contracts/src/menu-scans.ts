@@ -247,6 +247,13 @@ export type MenuScanDto = {
   readonly processedAt: string | null;
   readonly createdAt: string | null;
   readonly updatedAt: string | null;
+  /**
+   * L10 (wave C seenat): the venue name the menu itself prints, read by the
+   * extraction seam with its abstention first (L4); `null` when it declined.
+   * A proposal only: the scan's place keeps its own name until its creator
+   * confirms a rename (L24). Optional so older producers omit it.
+   */
+  readonly headerName?: string | null;
 };
 
 /**

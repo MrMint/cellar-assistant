@@ -67,6 +67,7 @@ import {
   ScanResultsQuery,
   SUGGESTIONS_PAGE_SIZE,
 } from "../queries";
+import { HeaderRenameOffer } from "./HeaderRenameOffer";
 import { ScanStatusBadge, type ScanTone } from "./ScanStatusBadge";
 import {
   isExtractionDone,
@@ -410,6 +411,11 @@ export function MenuScanResults({ scanId }: MenuScanResultsProps) {
           </Notice>
         )}
       </section>
+
+      {/* L10: the menu's printed name, offered as a rename — never applied unconfirmed. */}
+      {settled && scan.place && (
+        <HeaderRenameOffer scanId={scan.id} onRenamed={refresh} />
+      )}
 
       {actionError && <Notice tone="danger">{actionError}</Notice>}
 

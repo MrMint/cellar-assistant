@@ -4,11 +4,11 @@ import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "urql";
 import { EmptyState } from "@/components/app/EmptyState";
 import {
+  AddPlace,
   Check,
   ChevronRight,
   ErrorIcon,
   MapIcon,
-  MyLocation,
   Place,
   Scan,
   Search,
@@ -18,6 +18,7 @@ import { notify } from "@/components/app/notify";
 import { ResponsiveDialog } from "@/components/app/ResponsiveDialog";
 import { useNavigate } from "@/components/app/useNavigate";
 import { usePlaceActions } from "@/components/map/actions";
+import { LocationPrePrompt } from "@/components/map/core/LocationPrePrompt";
 import { useGeolocation } from "@/components/map/hooks/useGeolocation";
 import { formatCategoryName } from "@/components/map/places/place-utils";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -37,7 +38,16 @@ import { dataUrlToFile } from "@/lib/items/data-url";
 import { cn } from "@/lib/utils";
 import { CaptureCamera } from "./CaptureCamera";
 import { CaptureHeader, CapturePhotoPreview } from "./CaptureChrome";
+import { type CreatedPlace, NewPlaceSheet } from "./NewPlaceSheet";
+import { nearbyWithCreated, offerNewPlace } from "./new-place";
 import { CaptureNearbyPlacesQuery, CapturePlaceSearchQuery } from "./queries";
+
+/**
+ * D14's one line for the scanner, said by `LocationPrePrompt` before the
+ * browser asks: why a menu wants the position.
+ */
+export const MENU_LOCATION_PRE_PROMPT_COPY =
+  "Use your location to find the place this menu is from.";
 
 /** How many nearby places the question and the picker look at. */
 const NEARBY_LIMIT = 8;
@@ -111,11 +121,18 @@ export function MenuCapture({
     [nearbyData],
   );
   const nearest = useMemo(() => nearestKnownPlace(nearby), [nearby]);
+  // L10: nothing the app knows within 50 m — offer to add the place inline.
+  const offerAdd = offerNewPlace({
+    location,
+    nearby,
+    searching: nearbyFetching,
+  });
 
   const [photo, setPhoto] = useState<string | null>(initialPhoto ?? null);
   const [chosen, setChosen] = useState<Chosen | null>(null);
   const [declined, setDeclined] = useState(false);
   const [picking, setPicking] = useState(false);
+  const [adding, setAdding] = useState(false);
   const [sending, setSending] = useState<Sending>({ kind: "idle" });
 
   // A send outlives this surface (Close, or a tab, mid-upload): it must not
@@ -128,7 +145,11 @@ export function MenuCapture({
     };
   }, []);
 
-  const send = async (shot: string, place: Chosen) => {
+  const send = async (
+    shot: string,
+    place: Chosen,
+    around: readonly KnownPlace[] = nearby,
+  ) => {
     const file = dataUrlToFile(shot, `menu-scan-${Date.now()}.jpg`);
     if (file === null) {
       setSending({
@@ -140,7 +161,7 @@ export function MenuCapture({
     setSending({ kind: "sending" });
     const result = await uploadAndProcessMenuScan(
       file,
-      menuPlaceHint({ confirmed: place, nearby, location }),
+      menuPlaceHint({ confirmed: place, nearby: around, location }),
     );
     if (result.success && result.scanId !== undefined) {
       const href = `/map/scans/${result.scanId}`;
@@ -175,6 +196,19 @@ export function MenuCapture({
     if (photo !== null) void send(photo, place);
   };
 
+  /**
+   * L10: a place made inline (Under review) is settled the moment it exists,
+   * and a held photo goes filed on it — with the position, since the place
+   * was pinned where the person stands (L24: settled before upload).
+   */
+  const created = (place: CreatedPlace) => {
+    const settled = { id: place.id, name: place.name };
+    const around = nearbyWithCreated(nearby, place);
+    setChosen(settled);
+    setAdding(false);
+    if (photo !== null) void send(photo, settled, around);
+  };
+
   const onShutter = (shot: string) => {
     setPhoto(shot);
     setSending({ kind: "idle" });
@@ -182,8 +216,9 @@ export function MenuCapture({
       void send(shot, chosen);
       return;
     }
-    // Nothing to ask "At …?" about: go straight to the picker.
-    if (nearest === null || declined) setPicking(true);
+    // Nothing to ask "At …?" about: add the place when none is here, or pick.
+    if (nearest === null && offerAdd) setAdding(true);
+    else if (nearest === null || declined) setPicking(true);
   };
 
   if (!isOffered(capabilities, "menuScan")) {
@@ -253,6 +288,7 @@ export function MenuCapture({
           setPicking(true);
         }}
         onPick={() => setPicking(true)}
+        onAdd={offerAdd ? () => setAdding(true) : undefined}
       />
 
       {sending.kind === "failed" && (
@@ -287,6 +323,26 @@ export function MenuCapture({
         nearby={otherPlaces(nearby, nearest?.id ?? null)}
         guess={declined ? null : nearest}
         onChoose={choose}
+        onAdd={
+          location === null
+            ? undefined
+            : () => {
+                setPicking(false);
+                setAdding(true);
+              }
+        }
+      />
+
+      <NewPlaceSheet
+        open={adding}
+        onOpenChange={setAdding}
+        location={location}
+        hasPhoto={photo !== null}
+        onCreated={created}
+        onPickInstead={() => {
+          setAdding(false);
+          setPicking(true);
+        }}
       />
     </div>
   );
@@ -307,6 +363,7 @@ function PlaceCard({
   onConfirm,
   onDecline,
   onPick,
+  onAdd,
 }: {
   chosen: Chosen | null;
   nearest: KnownPlace | null;
@@ -318,6 +375,8 @@ function PlaceCard({
   onConfirm: (place: Chosen) => void;
   onDecline: () => void;
   onPick: () => void;
+  /** L10: no place within 50 m — add it here. */
+  onAdd?: () => void;
 }) {
   const shell = (body: ReactNode, actions?: ReactNode) => (
     <section
@@ -394,25 +453,26 @@ function PlaceCard({
     </Button>
   );
 
-  // D14: our one line first; the browser's prompt only from this tap. Not
-  // gated on the map's "Not now": that dismissed the map's banner, and this
-  // card is a different question with its own way past it (Pick the place).
+  // D14: our one line first (`LocationPrePrompt`, the map's own, L10); the
+  // browser's prompt only from its Continue. Not gated on the map's "Not
+  // now": that dismissed the map's banner, and this card is a different
+  // question with its own way past it (Pick the place).
   if (geo.permission === "prompt" && !geo.requested) {
-    return shell(
-      <>
-        <p className="type-headline text-ink-1">Where are you?</p>
-        <p className="type-footnote">
-          Your location finds the place this menu is from. It&rsquo;s only used
-          to file the menu.
-        </p>
-      </>,
-      <>
-        <Button onClick={geo.request} disabled={disabled}>
-          <MyLocation aria-hidden />
-          Use my location
-        </Button>
-        {pick}
-      </>,
+    return (
+      <section
+        aria-label="Where this menu is from"
+        data-slot="menu-place"
+        className="flex flex-col"
+      >
+        <LocationPrePrompt
+          copy={MENU_LOCATION_PRE_PROMPT_COPY}
+          continueLabel="Use my location"
+          dismissLabel="Pick the place"
+          onContinue={geo.request}
+          onDismiss={onPick}
+          disabled={disabled}
+        />
+      </section>
     );
   }
 
@@ -446,7 +506,17 @@ function PlaceCard({
             : "No place we know is right here. Pick it, or add it."}
       </p>
     </>,
-    pick,
+    onAdd === undefined ? (
+      pick
+    ) : (
+      <>
+        <Button onClick={onAdd} disabled={disabled}>
+          <AddPlace aria-hidden />
+          Add this place
+        </Button>
+        {pick}
+      </>
+    ),
   );
 }
 
@@ -510,12 +580,15 @@ function PlacePicker({
   guess,
   nearby,
   onChoose,
+  onAdd,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   guess: KnownPlace | null;
   nearby: readonly KnownPlace[];
   onChoose: (place: Chosen) => void;
+  /** L10: add it inline (the photo stays); without a fix, the full form. */
+  onAdd?: () => void;
 }) {
   const [query, setQuery] = useState("");
   const [debounced, setDebounced] = useState("");
@@ -540,12 +613,19 @@ function PlacePicker({
       onOpenChange={onOpenChange}
       title="Where's this menu from?"
       footer={
-        <Button variant="ghost" asChild>
-          <Link href="/map/create-place" underline="none">
-            <MapIcon aria-hidden />
+        onAdd === undefined ? (
+          <Button variant="ghost" asChild>
+            <Link href="/map/create-place" underline="none">
+              <MapIcon aria-hidden />
+              Not listed? Add the place
+            </Link>
+          </Button>
+        ) : (
+          <Button variant="ghost" onClick={onAdd}>
+            <AddPlace aria-hidden />
             Not listed? Add the place
-          </Link>
-        </Button>
+          </Button>
+        )
       }
     >
       <div className="flex flex-col gap-3 pb-2">

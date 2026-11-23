@@ -115,6 +115,15 @@ export type MenuExtractionResult = {
    * read.
    */
   readonly imageDescription: string | null;
+  /**
+   * L10 (wave C seenat): the venue name the menu itself prints, or `null`
+   * when the model abstained (`venueNameIsPrinted` false or absent), when
+   * there is no legible menu, or when the name is not in `rawText`. Into
+   * `menu_scans.header_name`, and only ever offered as a rename the person
+   * confirms (L24); nothing applies it. Optional so that an extraction
+   * provider which does not read headers answers "none" by omission.
+   */
+  readonly headerName?: string | null;
 };
 
 export type MenuExtractionProvider = (

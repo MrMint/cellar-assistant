@@ -22,6 +22,7 @@ import { EMBEDDING_DIMENSIONS } from "../embeddings.ts";
 import type { ImageLoader } from "./images.ts";
 import { RECIPE_PHOTO_SCHEMA } from "./prompts.ts";
 import {
+  menuHeaderName,
   providerEmbedder,
   providerInsightsGenerator,
   providerItemDefaults,
@@ -1142,6 +1143,81 @@ describe("B8 · menu extraction", () => {
         placeId: null,
       }),
     ).rejects.toThrow(/s-42/);
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+
+describe("L10 · the menu header's venue name abstains first", () => {
+  const scan = {
+    menuScanId: "s-h",
+    originalImageId: "orig",
+    processedImageId: null,
+    placeId: "p-1",
+  };
+  const page = (extra: Record<string, unknown>) =>
+    JSON.stringify({
+      imageDescription: "A printed cocktail list with a logo at the top.",
+      menuIsLegible: true,
+      rawText: "BAR LUMEN\nCOCKTAILS\nHouse Negroni ... 16",
+      confidence: 0.8,
+      items: [{ name: "House Negroni", itemType: "cocktail" }],
+      ...extra,
+    });
+
+  it("reads a printed name that is in the page's own text", async () => {
+    const { provider } = fakeProvider(
+      page({ venueNameIsPrinted: true, venueName: "Bar  Lumen" }),
+    );
+    const result = await providerMenuExtraction(provider, loader)(ctx, scan);
+    expect(result.headerName).toBe("Bar Lumen");
+  });
+
+  it("is null when the model abstains, whatever `venueName` says", async () => {
+    for (const extra of [
+      { venueNameIsPrinted: false, venueName: "Bar Lumen" },
+      { venueName: "Bar Lumen" },
+      { venueNameIsPrinted: "yes", venueName: "Bar Lumen" },
+    ]) {
+      const { provider } = fakeProvider(page(extra));
+      const result = await providerMenuExtraction(provider, loader)(ctx, scan);
+      expect(result.headerName).toBeNull();
+    }
+  });
+
+  it("drops a name that is not in `rawText` — not read off this page", async () => {
+    const { provider } = fakeProvider(
+      page({ venueNameIsPrinted: true, venueName: "The Negroni Club" }),
+    );
+    const result = await providerMenuExtraction(provider, loader)(ctx, scan);
+    expect(result.headerName).toBeNull();
+  });
+
+  it("carries no name out of an illegible page", async () => {
+    const { provider } = fakeProvider(
+      JSON.stringify({
+        imageDescription: "A grey wall.",
+        menuIsLegible: false,
+        venueNameIsPrinted: true,
+        venueName: "Bar Lumen",
+      }),
+    );
+    const result = await providerMenuExtraction(provider, loader)(ctx, scan);
+    expect(result.noMenuDetected).toBe(true);
+    expect(result.headerName ?? null).toBeNull();
+  });
+
+  it("menuHeaderName refuses one-letter and over-long names", () => {
+    const raw = "X\n" + "A".repeat(130);
+    expect(
+      menuHeaderName({ venueNameIsPrinted: true, venueName: "X" }, raw),
+    ).toBeNull();
+    expect(
+      menuHeaderName(
+        { venueNameIsPrinted: true, venueName: "A".repeat(130) },
+        raw,
+      ),
+    ).toBeNull();
   });
 });
 

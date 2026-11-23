@@ -587,3 +587,15 @@ countdown: idle, running, paused, done — every transition takes `now`) behind
 `useCountdown`, and `wake-lock.ts` (feature-detected Screen Wake Lock)
 behind `useWakeLock`. Reach for `useCountdown` for any countdown rather than
 a new interval, and never assume `navigator.wakeLock` exists.
+
+**Seen at and the inline new place (wave C "seenat", L10).** The item page's
+"Seen at" slot is `item/SeenAtSection.tsx`: it mounts after hydration, reads
+`Item.seenAt` through urql, renders nothing without a row, and never asks for
+location — it sorts nearest first only when the browser already shares one.
+Menu rows use the `Scan` icon on a primary tint, log rows the `Place` icon on
+`surface-3`, each a 56 px link to the place. Scan-anywhere lives in
+`capture/NewPlaceSheet.tsx` (a `ResponsiveDialog`) with its rules pure in
+`capture/new-place.ts`; the menu header's rename offer is
+`map/scanning/HeaderRenameOffer.tsx`. `LocationPrePrompt` now takes optional
+`copy`, `continueLabel`, `dismissLabel` and `disabled`, so a surface can say
+its own line before the OS prompt.

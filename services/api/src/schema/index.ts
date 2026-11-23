@@ -89,5 +89,7 @@ import "./taste.ts";
 import "./recap.ts";
 // ux-c L08 (make): `Item.myBrewPrefs` and `setBrewPrefs` — reference `Item`.
 import "./brew-prefs.ts";
+// L10 (wave C seenat): `Item.seenAt`.
+import "./seen-at.ts";
 
 export const schema = builder.toSchema();

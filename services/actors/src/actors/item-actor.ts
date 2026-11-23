@@ -75,6 +75,8 @@ import type {
   PageArgs,
   RegenerateVectorResult,
   ReplaceItemBrandInput,
+  SeenAtDto,
+  SeenAtInput,
   SetItemBarcodeInput,
   SharedAttributeValue,
   SharedItemDto,
@@ -156,6 +158,7 @@ import {
 } from "../lib/item-bindings.ts";
 import { enqueueOutbox } from "../lib/outbox.ts";
 import { OUTBOX_TARGETS } from "../lib/outbox-targets.ts";
+import { loadSeenAt } from "../lib/seen-at.ts";
 import { requireUuid } from "../lib/uuid.ts";
 import {
   embeddingModel,
@@ -613,6 +616,24 @@ export class ItemActor
       return true;
     });
     return scoreOf(counted);
+  }
+
+  /**
+   * L10 (wave C seenat): where this item was seen — on a scanned menu, in the
+   * viewer's own log, or a friend's — as far as the viewer may see each place
+   * and each log (`lib/seen-at.ts`, composing `canSeePlace` and
+   * `canSeeCheckInDetails`). It reads the key, not the aggregate, on purpose:
+   * a missing item answers `[]`, exactly as an item seen only at places or in
+   * logs the viewer may not see, so the list is never an existence oracle (L6).
+   */
+  async seenAt(
+    ctx: Ctx,
+    input: SeenAtInput = {},
+  ): Promise<readonly SeenAtDto[]> {
+    requireSignedIn(ctx, "see where an item was seen");
+    const parsed = parseItemActorKey(this.key);
+    if (parsed === null || parsed.kind !== "item") return [];
+    return loadSeenAt(this.db, ctx, parsed.ref, input);
   }
 
   /**
