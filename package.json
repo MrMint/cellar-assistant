@@ -68,7 +68,8 @@
     "db:migrate": "node packages/db/src/migrate/cli.ts",
     "dev:migrate": "scripts/stack/stack.sh migrate",
     "test:e2e": "bun run --filter @cellar-assistant/e2e test",
-    "test:e2e:report": "bun run --filter @cellar-assistant/e2e report"
+    "test:e2e:report": "bun run --filter @cellar-assistant/e2e report",
+    "test:harness": "node --test \".claude/hooks/*.test.mjs\" \"tools/*.test.ts\""
   },
   "packageManager": "bun@1.4.2",
   "devDependencies": {

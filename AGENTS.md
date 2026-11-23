@@ -465,6 +465,12 @@ than after.
   `git merge-base --is-ancestor <feature-sha> HEAD && echo ok` in it (`<feature-sha>` from
   `git rev-parse HEAD` in the tree you meant); and when you create one yourself, name the commit
   explicitly — `git worktree add <path> <sha>` — rather than letting a tool pick a default branch.
+- **Create a worktree under the primary checkout's `.claude/worktrees/`, never under another
+  worktree.** Measured 2026-11-22: about forty worktrees sat nested under one build's worktree
+  (`.claude/worktrees/<build>/.claude/worktrees/…`). Removing the parent strands them, and
+  `node tools/teardown-worktrees.ts` has to take them down child first. Run
+  `git -C "$(git rev-parse --git-common-dir)/.." worktree add .claude/worktrees/<name> <sha>` so the
+  path is the primary's whatever directory you are in.
 
 ---
 
