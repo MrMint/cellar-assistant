@@ -17,6 +17,7 @@ import {
   NEW_PLACE_WITHIN_METERS,
   namePrefill,
   newPlaceInput,
+  pinnedLine,
 } from "./new-place";
 
 export type CreatedPlace = {
@@ -46,7 +47,16 @@ export function NewPlaceSheet({
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  location: { latitude: number; longitude: number } | null;
+  /**
+   * The person's fix. `accuracy` (metres, the Geolocation API's
+   * `coords.accuracy`) is optional: the board's "about 12 m accurate" shows
+   * when the caller has it (W-16).
+   */
+  location: {
+    latitude: number;
+    longitude: number;
+    accuracy?: number | null;
+  } | null;
   /** A photo is held: the confirm also sends it. */
   hasPhoto: boolean;
   onCreated: (place: CreatedPlace) => void;
@@ -69,6 +79,7 @@ export function NewPlaceSheet({
   const [pinned, setPinned] = useState<{
     latitude: number;
     longitude: number;
+    accuracy?: number | null;
   } | null>(null);
   if (!open && pinned !== null) setPinned(null);
   if (open && pinned === null && location !== null) setPinned(location);
@@ -119,7 +130,10 @@ export function NewPlaceSheet({
     const built = newPlaceInput({
       name,
       category,
-      location: pinned,
+      location:
+        pinned === null
+          ? null
+          : { latitude: pinned.latitude, longitude: pinned.longitude },
       placeId,
     });
     if (!built.ok) {
@@ -229,7 +243,7 @@ export function NewPlaceSheet({
           <Place aria-hidden className="size-[18px] shrink-0 text-brand" />
           {pinned === null
             ? "Your location is needed to pin the place."
-            : "Pinned at your location"}
+            : pinnedLine(pinned.accuracy)}
         </p>
 
         <p className="type-footnote rounded-lg bg-surface-3 px-3.5 py-3 text-ink-2">

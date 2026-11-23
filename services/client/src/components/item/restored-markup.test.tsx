@@ -224,7 +224,7 @@ describe("ItemPageView (X09: one item page)", () => {
     // Share stays the AppBar's trailing action too.
     assert.match(html, /<button[^>]*aria-label="Share"/);
     // No Your bottles section when you have none.
-    assert.doesNotMatch(html, />Your bottles</);
+    assert.doesNotMatch(html, />Your tins</);
   });
 
   test("`⋯`: tier list and Share for everyone, Edit for the creator, Delete bottle last", () => {
@@ -273,12 +273,13 @@ describe("Your bottles (X09)", () => {
       ],
       bottlesTotal: 2,
     });
-    assert.match(html, />Your bottles</);
-    assert.match(html, />2 bottles</);
+    // W-20: a tea's bottles are tins.
+    assert.match(html, />Your tins</);
+    assert.match(html, />2 tins</);
     assert.match(html, />Open · 40% left</);
     assert.match(html, />Sealed</);
     assert.match(html, /href="\/cellars\/c\/teas\/b1"/);
-    assert.match(html, /aria-label="Pour from Home"/);
+    assert.match(html, /aria-label="Steep from Home"/);
     assert.match(html, /aria-label="Log a drink from Garage"/);
     // Nothing is selected on the item's own URL (the breadcrumbs' own
     // aria-current is the page's, not a bottle's).
@@ -305,7 +306,7 @@ describe("the bottle route: the item page with that bottle selected (X09)", () =
     assert.match(html, /aria-current="page"[^>]*>Home</);
     // X03: a sealed bottle is poured (the first pour opens it); opening
     // without pouring is the quiet "Mark as opened".
-    assert.match(html, /aria-label="Pour from Home"/);
+    assert.match(html, /aria-label="Steep from Home"/);
     assert.match(html, />Mark as opened</);
     assert.doesNotMatch(html, />Open it!</);
     assert.match(html, /<button[^>]*aria-label="Add a photo"/);
@@ -352,7 +353,7 @@ describe("the bottle route: the item page with that bottle selected (X09)", () =
     });
     assert.match(html, />Finished</);
     assert.match(html, />Restore to cellar</);
-    assert.doesNotMatch(html, /aria-label="Pour from Home"/);
+    assert.doesNotMatch(html, /aria-label="Steep from Home"/);
   });
 
   test("someone else's: read-only, no level, no photo tile, no Pour", () => {
@@ -363,7 +364,7 @@ describe("the bottle route: the item page with that bottle selected (X09)", () =
     assert.match(html, />Sam&#x27;s</);
     assert.doesNotMatch(html, />Mark as opened</);
     assert.doesNotMatch(html, /aria-label="Add a photo"/);
-    assert.doesNotMatch(html, />Your bottles</);
+    assert.doesNotMatch(html, />Your tins</);
   });
 });
 
@@ -491,7 +492,7 @@ describe("lists the API stops at 100 rows say so (gap #8)", () => {
     });
     assert.match(html, /Showing the first 100 of 140 cellars\./);
     assert.match(html, /Showing the first 1 of 101 lists\./);
-    assert.match(html, /Showing the first 1 of 60 bottles\./);
+    assert.match(html, /Showing the first 1 of 60 tins\./);
   });
 
   test("a whole list carries no note", () => {

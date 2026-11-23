@@ -983,3 +983,18 @@ reverse them. Each names the item it belongs to; none overrides an answer.
 - **No seam for taste (L47 → H-10).** The taste_phrase seam was dropped from
   this stream; the proposed cap (20 000 requests / 200 cents a month) is
   recorded for whoever adds it with `install.ts` and `budget.ts`.
+- **An item seen nowhere still shows the scan prompt (fix round, W-15).** The
+  board draws Seen at with places and the "Scan a menu" prompt under them; M4
+  rendered nothing at all when the list was empty, which hid the one way into
+  scan-anywhere on exactly the items that need it. Now the slot shows its
+  heading and the prompt alone ("Saw it somewhere?", no "else" with no list)
+  when the read answered with no places and menu scanning is offered. It still
+  renders nothing before the answer, on a refusal, and when there is nothing to
+  show and the viewer cannot act — menu scanning not offered by this
+  deployment (`seenAtView` in `components/item/seen-at.ts`).
+- **A log refreshes Seen at (W-14).** Log writes do not touch `Item.seenAt` in
+  graphcache, so the log sheet (and delete, restore, undo) announce on a
+  module-level bus (`components/drink-log/log-events.ts`) and the slot re-asks
+  network-only. A bus rather than a graphcache `updates` entry keeps the change
+  inside the two features; an `updates` invalidation is the better home if more
+  readers need it.

@@ -126,7 +126,8 @@ describe("Your bottles' Pour (X09 + X03)", () => {
   test("Pour opens X03's sheet, which outlives the bottle leaving the list", async () => {
     await render([open]);
     const pour = document.querySelector<HTMLButtonElement>(
-      'button[aria-label="Pour from Garage"]',
+      // W-20: a tea is steeped.
+      'button[aria-label="Steep from Garage"]',
     );
     assert.ok(pour, "no Pour button");
     await act(async () => {

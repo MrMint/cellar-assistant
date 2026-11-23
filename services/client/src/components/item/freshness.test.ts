@@ -136,6 +136,20 @@ describe("freshnessModel — sealed", () => {
     expect(bar.today).toBeLessThan(bar.start + bar.width);
     expect(bar.axisFrom).toBe("2020");
   });
+
+  test("W-6: the axis ends on the owner's Drink until, not the padding past it", () => {
+    const m = freshnessModel(
+      bottle({ drinkUntil: "2026-12-31" }),
+      red2020,
+      TODAY,
+    );
+    expect(m.window?.untilSource).toBe("user");
+    expect(m.bar?.axisTo).toBe("2026");
+    // The board keeps the prompt while one end is still typical.
+    expect(m.sourceLine).toBe(
+      "From: typical for red wine, 2 years from vintage. Until: your date. Set your own to override.",
+    );
+  });
 });
 
 describe("freshnessModel — opened", () => {
@@ -276,5 +290,23 @@ describe("localDay (CR-12)", () => {
     } finally {
       process.env.TZ = tz;
     }
+  });
+});
+
+describe("W-20 · a tin of tea is not a bottle", () => {
+  test("the rows say Packed, Best from and Best by", () => {
+    const m = freshnessModel(
+      bottle(),
+      { type: "TEA", style: "oolong", form: null, vintageYear: null },
+      TODAY,
+    );
+    expect(row(m, "packagedOn")?.label).toBe("Packed");
+    expect(row(m, "drinkFrom")?.label).toBe("Best from");
+    expect(row(m, "drinkUntil")?.label).toBe("Best by");
+  });
+  test("a wine keeps Bottled and Drink until", () => {
+    const m = freshnessModel(bottle(), red2020, TODAY);
+    expect(row(m, "packagedOn")?.label).toBe("Bottled");
+    expect(row(m, "drinkUntil")?.label).toBe("Drink until");
   });
 });

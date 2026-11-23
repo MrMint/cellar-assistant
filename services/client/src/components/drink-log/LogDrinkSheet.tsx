@@ -34,6 +34,7 @@ import {
   toggleId,
   updateInput,
 } from "./log-draft";
+import { announceDrinkLogChanged } from "./log-events";
 import {
   DrinkLogPlacePickerQuery,
   LogDrinkMutation,
@@ -203,6 +204,7 @@ export function LogDrinkSheet({
         }
       }
       onOpenChange(false);
+      announceDrinkLogChanged(subject.itemId);
       onSaved?.({ entryId: mode.entryId, drinkerCount: 1, kind: "edit" });
       return;
     }
@@ -216,6 +218,7 @@ export function LogDrinkSheet({
       return;
     }
     onOpenChange(false);
+    announceDrinkLogChanged(subject.itemId);
     onSaved?.({
       entryId: result.data.entry.id,
       drinkerCount: result.data.drinkerCount,
