@@ -1,7 +1,7 @@
 "use client";
 
 import { BottomSheet } from "@/components/app/BottomSheet";
-import { Camera, Success, Warning } from "@/components/app/icons";
+import { Add, Camera, Success, Warning } from "@/components/app/icons";
 import { TypeGlyph } from "@/components/app/TypeChip";
 import type { ApiItemType } from "@/components/cellar-api/itemTypes";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -53,6 +53,9 @@ export function SuccessSheet({
   onDone,
 }: SuccessSheetProps) {
   const inCellar = cellarName !== undefined;
+  // W-21: "Snap another" only after a photo; a typed-in add goes again the
+  // same way it came, so the button says "Add another".
+  const photographed = photo !== undefined;
   return (
     <BottomSheet
       open={open}
@@ -68,8 +71,8 @@ export function SuccessSheet({
       footer={
         <div className="flex flex-col gap-2">
           <Button onClick={onSnapAnother}>
-            <Camera aria-hidden />
-            Snap another
+            {photographed ? <Camera aria-hidden /> : <Add aria-hidden />}
+            {photographed ? "Snap another" : "Add another"}
           </Button>
           {onOpenNow !== undefined ? (
             <Button variant="secondary" onClick={onOpenNow}>

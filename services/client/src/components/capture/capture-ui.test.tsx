@@ -222,6 +222,7 @@ describe("SuccessSheet (N21's real ending)", () => {
         itemType="WINE"
         itemName="Ridge Lytton Springs"
         cellarName="Home Cellar"
+        photo="data:image/png;base64,AAAA"
         onSnapAnother={() => calls.push("snap")}
         onOpenNow={() => calls.push("open")}
         onDone={() => calls.push("done")}
@@ -264,6 +265,9 @@ describe("SuccessSheet (N21's real ending)", () => {
     assert.equal(title?.textContent, "Added to the catalog");
     assert.equal(button("Open it now"), undefined);
     assert.ok(button("View item"));
+    // W-21: nothing was photographed, so nothing is snapped again.
+    assert.ok(button("Add another"));
+    assert.equal(button("Snap another"), undefined);
   });
 });
 
