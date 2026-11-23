@@ -42,10 +42,7 @@ export function FriendProfile({ view }: { view: FriendProfileView }) {
 
       {/* L03, L30: agreement as a count, and their lists to copy. A slot:
           nothing until it has its own answer. */}
-      <TasteCompareSection
-        userId={view.userId}
-        lists={view.tierLists.rows.map(({ id, name }) => ({ id, name }))}
-      />
+      <TasteCompareSection userId={view.userId} lists={view.tierLists} />
 
       {sharesNothing(view) ? (
         <EmptyState
