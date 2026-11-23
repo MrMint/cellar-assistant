@@ -82,6 +82,8 @@ import "./share.ts";
 // `Cellar` and `ItemCheckIn` connections and whose person is a `UserProfile`
 // — refs from four modules, so it comes after every one of them.
 import "./friend-profile.ts";
+// L04: the recap deck and breadth stamps (uses `ItemType` from item.ts).
+import "./recap.ts";
 // L10 (wave C seenat): `Item.seenAt`.
 import "./seen-at.ts";
 
