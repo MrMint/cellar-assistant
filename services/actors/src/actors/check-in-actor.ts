@@ -321,7 +321,7 @@ export class CheckInActor
       input,
     );
 
-    await this.#requireCompanionsSeeRecipe(ctx, recipeId, companions.ids);
+    await this.#requireCompanionsSeeRecipe(recipeId, companions.ids);
 
     const groupId = this.key;
     const now = new Date();
@@ -552,7 +552,7 @@ export class CheckInActor
     // The companions log the same drink: an item or a recipe.
     const target = targetOf(row);
     requireOneTarget(target);
-    await this.#requireCompanionsSeeRecipe(ctx, target.recipeId, added);
+    await this.#requireCompanionsSeeRecipe(target.recipeId, added);
     const now = new Date();
     await this.tx(async (tx) => {
       if (dropped.length > 0) {
@@ -919,7 +919,6 @@ export class CheckInActor
    * (`#requireRecipe`), so saying who cannot leaks nothing to them.
    */
   async #requireCompanionsSeeRecipe(
-    ctx: Ctx,
     recipeId: string | null,
     companionIds: readonly string[],
   ): Promise<void> {
@@ -927,7 +926,8 @@ export class CheckInActor
     for (const companion of companionIds) {
       const seen = await visibleRecipeIds(
         this.db,
-        { viewerId: companion, kind: "user", requestId: ctx.requestId },
+        // The companion's own view, as a check only: never forwarded.
+        { viewerId: companion, kind: "user", requestId: randomUUID() },
         [recipeId],
       );
       if (!seen.has(recipeId)) {
