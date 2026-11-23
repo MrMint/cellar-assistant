@@ -285,6 +285,17 @@ export type CreateTierListInput = {
   readonly startFrom?: TierListStart;
 };
 
+/**
+ * L03: copy a list you may see into a new PRIVATE list of yours. Entries keep
+ * their band and order; notes and the description stay the owner's. A list
+ * you may not see answers like a missing one.
+ */
+export type CloneTierListInput = {
+  readonly sourceTierListId: string;
+  /** Defaults to the source list's name. */
+  readonly name?: string | null;
+};
+
 export const TIER_LIST_STARTS = ["EMPTY", "RATINGS"] as const;
 export type TierListStart = (typeof TIER_LIST_STARTS)[number];
 
@@ -482,6 +493,8 @@ export type TierListActorInterface = {
    */
   getShared(ctx: Ctx): Promise<SharedTierListDto>;
   create(ctx: Ctx, input: CreateTierListInput): Promise<TierListDto>;
+  /** L03: a PRIVATE copy of a visible list, at this (caller-minted) id. */
+  clone(ctx: Ctx, input: CloneTierListInput): Promise<TierListDto>;
   update(ctx: Ctx, input: UpdateTierListInput): Promise<TierListDto>;
   delete(ctx: Ctx): Promise<DeletedTierList>;
 
@@ -588,6 +601,8 @@ export const TierListActorDescriptor: ActorDescriptor<TierListActorInterface> =
       // X16: a list started from your ratings has entries, which enqueues
       // `generateInsights` like any other edit.
       create: { modelBacked: true },
+      // L03: a copy has entries, which enqueues `generateInsights`.
+      clone: { modelBacked: true },
       update: {},
       delete: {},
       items: {},

@@ -82,6 +82,9 @@ import "./share.ts";
 // `Cellar` and `ItemCheckIn` connections and whose person is a `UserProfile`
 // — refs from four modules, so it comes after every one of them.
 import "./friend-profile.ts";
+// L03 (wave C "taste"): the taste profile and agreement. References
+// `ItemType` from `item.ts`; adds two Query fields.
+import "./taste.ts";
 // L04: the recap deck and breadth stamps (uses `ItemType` from item.ts).
 import "./recap.ts";
 // ux-c L08 (make): `Item.myBrewPrefs` and `setBrewPrefs` — reference `Item`.

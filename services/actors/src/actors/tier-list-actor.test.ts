@@ -2285,3 +2285,115 @@ describe.skipIf(skip)("TierListActor positioned add (M7)", () => {
     });
   });
 });
+
+describe.skipIf(skip)("TierListActor clone (L03)", () => {
+  afterAll(closeTestDb);
+
+  /** A friend's list of three wines across two bands, with a note. */
+  const setup = async (db: DbOrTx, privacy: PermissionType) => {
+    const owner = await seedUser(db);
+    const viewer = await seedUser(db);
+    await seedFriendship(db, owner, viewer);
+    const ownerCtx = userCtx(owner, "r-owner");
+    const id = await seedTierList(db, {
+      createdById: owner,
+      privacy,
+      name: "Maya's reds",
+    });
+    const source = await activate(newTierListActor(id, db));
+    const wines: string[] = [];
+    for (const [name, band] of [
+      ["A", 5],
+      ["B", 5],
+      ["C", 3],
+    ] as const) {
+      const wine = await seedWine(db, owner, name);
+      await source.addItem(ownerCtx, {
+        entry: { type: "WINE", id: wine },
+        band,
+        notes: "the owner's words",
+      });
+      wines.push(wine);
+    }
+    return { owner, viewer, id, wines, viewerCtx: userCtx(viewer, "r-v") };
+  };
+
+  it("copies a visible list into a new PRIVATE list of yours, in band and order, without notes", async () => {
+    await withTestDb(async (db) => {
+      const { viewer, id, wines, viewerCtx } = await setup(db, "FRIENDS");
+      const copyId = randomUUID();
+      const copy = await activate(newTierListActor(copyId, db));
+      const dto = await copy.clone(viewerCtx, { sourceTierListId: id });
+      expect(dto).toMatchObject({
+        id: copyId,
+        name: "Maya's reds",
+        privacy: "PRIVATE",
+        createdById: viewer,
+      });
+      const rows = (await copy.items(viewerCtx, page)).entries.map(
+        (e) => e.node,
+      );
+      expect(rows.map((r) => `${r.band}:${r.position}:${r.entry.id}`)).toEqual([
+        `5:0:${wines[0]}`,
+        `5:1:${wines[1]}`,
+        `3:0:${wines[2]}`,
+      ]);
+      expect(rows.every((r) => r.notes === null)).toBe(true);
+      // Undo is a delete of the copy; the source is untouched.
+      await copy.delete(viewerCtx);
+      const [left] = await db
+        .select({ id: tierLists.id })
+        .from(tierLists)
+        .where(eq(tierLists.id, id));
+      expect(left?.id).toBe(id);
+    });
+  });
+
+  it("a list you cannot see answers exactly like a missing one", async () => {
+    await withTestDb(async (db) => {
+      const { id, viewerCtx } = await setup(db, "PRIVATE");
+      const refusal = async (sourceTierListId: string) => {
+        const actor = await activate(newTierListActor(randomUUID(), db));
+        return refusalOf(
+          () => actor.clone(viewerCtx, { sourceTierListId }),
+          sourceTierListId,
+        );
+      };
+      const hidden = await refusal(id);
+      const missing = await refusal(randomUUID());
+      expect(hidden).toEqual({
+        code: "NOT_FOUND",
+        message: "tier list <id> does not exist",
+      });
+      expect(missing).toEqual(hidden);
+      expect(await refusal("not-a-uuid")).toEqual(hidden);
+      // Nothing was created at either id.
+      const mine = await db
+        .select({ id: tierLists.id })
+        .from(tierLists)
+        .where(eq(tierLists.createdById, viewerCtx.viewerId ?? ""));
+      expect(mine).toHaveLength(0);
+    });
+  });
+
+  it("refuses an id that already holds a list, and a signed-out caller", async () => {
+    await withTestDb(async (db) => {
+      const { owner, id, viewerCtx } = await setup(db, "PUBLIC");
+      const taken = await seedTierList(db, { createdById: owner });
+      const actor = await activate(newTierListActor(taken, db));
+      expect(
+        await refusalOf(
+          () => actor.clone(viewerCtx, { sourceTierListId: id }),
+          taken,
+        ),
+      ).toMatchObject({ code: "CONFLICT" });
+      const fresh = await activate(newTierListActor(randomUUID(), db));
+      expect(
+        await refusalOf(
+          () => fresh.clone(anonymousCtx("r-anon"), { sourceTierListId: id }),
+          id,
+        ),
+      ).toMatchObject({ code: "FORBIDDEN" });
+    });
+  });
+});

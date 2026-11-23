@@ -1932,6 +1932,18 @@ export const graphcacheSchema: MinifiedIntrospection = {
       },
       {
         kind: "UNION",
+        name: "CloneTierListResult",
+        possibleTypes: [
+          { kind: "OBJECT", name: "BudgetExceededError" },
+          { kind: "OBJECT", name: "ConflictError" },
+          { kind: "OBJECT", name: "ForbiddenError" },
+          { kind: "OBJECT", name: "NotFoundError" },
+          { kind: "OBJECT", name: "TierList" },
+          { kind: "OBJECT", name: "ValidationError" },
+        ],
+      },
+      {
+        kind: "UNION",
         name: "CloseItemOnboardingResult",
         possibleTypes: [
           { kind: "OBJECT", name: "BudgetExceededError" },
@@ -5223,6 +5235,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
             },
           },
           {
+            name: "cloneTierList",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "UNION", name: "CloneTierListResult" },
+            },
+          },
+          {
             name: "closeItemOnboarding",
             type: {
               kind: "NON_NULL",
@@ -7297,6 +7316,20 @@ export const graphcacheSchema: MinifiedIntrospection = {
             },
           },
           {
+            name: "tasteAgreement",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "UNION", name: "QueryTasteAgreementResult" },
+            },
+          },
+          {
+            name: "tasteProfile",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "UNION", name: "QueryTasteProfileResult" },
+            },
+          },
+          {
             name: "tierList",
             type: {
               kind: "NON_NULL",
@@ -7842,6 +7875,30 @@ export const graphcacheSchema: MinifiedIntrospection = {
           { kind: "OBJECT", name: "ForbiddenError" },
           { kind: "OBJECT", name: "NotFoundError" },
           { kind: "OBJECT", name: "SharedTierList" },
+          { kind: "OBJECT", name: "ValidationError" },
+        ],
+      },
+      {
+        kind: "UNION",
+        name: "QueryTasteAgreementResult",
+        possibleTypes: [
+          { kind: "OBJECT", name: "BudgetExceededError" },
+          { kind: "OBJECT", name: "ConflictError" },
+          { kind: "OBJECT", name: "ForbiddenError" },
+          { kind: "OBJECT", name: "NotFoundError" },
+          { kind: "OBJECT", name: "TasteAgreement" },
+          { kind: "OBJECT", name: "ValidationError" },
+        ],
+      },
+      {
+        kind: "UNION",
+        name: "QueryTasteProfileResult",
+        possibleTypes: [
+          { kind: "OBJECT", name: "BudgetExceededError" },
+          { kind: "OBJECT", name: "ConflictError" },
+          { kind: "OBJECT", name: "ForbiddenError" },
+          { kind: "OBJECT", name: "NotFoundError" },
+          { kind: "OBJECT", name: "TasteProfile" },
           { kind: "OBJECT", name: "ValidationError" },
         ],
       },
@@ -10544,6 +10601,395 @@ export const graphcacheSchema: MinifiedIntrospection = {
           { kind: "OBJECT", name: "NotFoundError" },
           { kind: "OBJECT", name: "ValidationError" },
         ],
+      },
+      {
+        kind: "OBJECT",
+        name: "TasteAgreement",
+        fields: [
+          { name: "agreed", type: { kind: "SCALAR", name: "Int" } },
+          { name: "avatarUrl", type: { kind: "SCALAR", name: "String" } },
+          {
+            name: "byType",
+            type: {
+              kind: "NON_NULL",
+              ofType: {
+                kind: "OBJECT",
+                name: "TasteAgreementByTypeConnection",
+              },
+            },
+          },
+          {
+            name: "name",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "String" },
+            },
+          },
+          {
+            name: "shared",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
+          {
+            name: "userId",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "ID" } },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "TasteAgreementByType",
+        fields: [
+          { name: "agreed", type: { kind: "SCALAR", name: "Int" } },
+          {
+            name: "itemType",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "ENUM", name: "ItemType" },
+            },
+          },
+          {
+            name: "shared",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "TasteAgreementByTypeConnection",
+        fields: [
+          {
+            name: "edges",
+            type: {
+              kind: "NON_NULL",
+              ofType: {
+                kind: "LIST",
+                ofType: {
+                  kind: "NON_NULL",
+                  ofType: { kind: "OBJECT", name: "TasteAgreementByTypeEdge" },
+                },
+              },
+            },
+          },
+          {
+            name: "pageInfo",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "PageInfo" },
+            },
+          },
+          { name: "totalCount", type: { kind: "SCALAR", name: "Int" } },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "TasteAgreementByTypeEdge",
+        fields: [
+          {
+            name: "cursor",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "String" },
+            },
+          },
+          {
+            name: "node",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "TasteAgreementByType" },
+            },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "TasteAgreementConnection",
+        fields: [
+          {
+            name: "edges",
+            type: {
+              kind: "NON_NULL",
+              ofType: {
+                kind: "LIST",
+                ofType: {
+                  kind: "NON_NULL",
+                  ofType: { kind: "OBJECT", name: "TasteAgreementEdge" },
+                },
+              },
+            },
+          },
+          {
+            name: "pageInfo",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "PageInfo" },
+            },
+          },
+          { name: "totalCount", type: { kind: "SCALAR", name: "Int" } },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "TasteAgreementEdge",
+        fields: [
+          {
+            name: "cursor",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "String" },
+            },
+          },
+          {
+            name: "node",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "TasteAgreement" },
+            },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "TasteArchetype",
+        fields: [
+          {
+            name: "key",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "ENUM", name: "TasteArchetypeKey" },
+            },
+          },
+          {
+            name: "lessKeen",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "TasteStyleConnection" },
+            },
+          },
+          {
+            name: "loves",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "TasteStyleConnection" },
+            },
+          },
+          {
+            name: "title",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "String" },
+            },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "TasteProfile",
+        fields: [
+          {
+            name: "archetype",
+            type: { kind: "OBJECT", name: "TasteArchetype" },
+          },
+          {
+            name: "friends",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "UNION", name: "TasteProfileFriendsResult" },
+            },
+          },
+          {
+            name: "line",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "String" },
+            },
+          },
+          {
+            name: "linePhrasedByAi",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "Boolean" },
+            },
+          },
+          {
+            name: "ratingCount",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
+          {
+            name: "types",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "TasteTypeCountConnection" },
+            },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "UNION",
+        name: "TasteProfileFriendsResult",
+        possibleTypes: [
+          { kind: "OBJECT", name: "BudgetExceededError" },
+          { kind: "OBJECT", name: "ConflictError" },
+          { kind: "OBJECT", name: "ForbiddenError" },
+          { kind: "OBJECT", name: "NotFoundError" },
+          { kind: "OBJECT", name: "TasteAgreementConnection" },
+          { kind: "OBJECT", name: "ValidationError" },
+        ],
+      },
+      {
+        kind: "OBJECT",
+        name: "TasteStyle",
+        fields: [
+          {
+            name: "average",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "Float" },
+            },
+          },
+          {
+            name: "count",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
+          {
+            name: "itemType",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "ENUM", name: "ItemType" },
+            },
+          },
+          {
+            name: "label",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "String" },
+            },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "TasteStyleConnection",
+        fields: [
+          {
+            name: "edges",
+            type: {
+              kind: "NON_NULL",
+              ofType: {
+                kind: "LIST",
+                ofType: {
+                  kind: "NON_NULL",
+                  ofType: { kind: "OBJECT", name: "TasteStyleEdge" },
+                },
+              },
+            },
+          },
+          {
+            name: "pageInfo",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "PageInfo" },
+            },
+          },
+          { name: "totalCount", type: { kind: "SCALAR", name: "Int" } },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "TasteStyleEdge",
+        fields: [
+          {
+            name: "cursor",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "String" },
+            },
+          },
+          {
+            name: "node",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "TasteStyle" },
+            },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "TasteTypeCount",
+        fields: [
+          {
+            name: "count",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
+          {
+            name: "itemType",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "ENUM", name: "ItemType" },
+            },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "TasteTypeCountConnection",
+        fields: [
+          {
+            name: "edges",
+            type: {
+              kind: "NON_NULL",
+              ofType: {
+                kind: "LIST",
+                ofType: {
+                  kind: "NON_NULL",
+                  ofType: { kind: "OBJECT", name: "TasteTypeCountEdge" },
+                },
+              },
+            },
+          },
+          {
+            name: "pageInfo",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "PageInfo" },
+            },
+          },
+          { name: "totalCount", type: { kind: "SCALAR", name: "Int" } },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "TasteTypeCountEdge",
+        fields: [
+          {
+            name: "cursor",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "String" },
+            },
+          },
+          {
+            name: "node",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "TasteTypeCount" },
+            },
+          },
+        ],
+        interfaces: [],
       },
       {
         kind: "OBJECT",

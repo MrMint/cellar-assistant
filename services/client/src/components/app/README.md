@@ -554,6 +554,17 @@ bars stay put. The pieces:
   not animate. Render at most one `AppBar` at a time (two would share a name
   and the browser skips the transition).
 
+### Taste profile (wave C "taste", L03)
+
+`/taste-profile` lives in `components/taste/`, not here, but it leans on
+this folder's pieces: `AppBar` with `parent="/me"`, `InsetSection` and
+`ListRow` for the friend rows, `UserAvatar`, and `itemTypeTokens` for the
+"What it's built from" bars. `TasteCompareSection` is a slot (L38): it
+fetches its own agreement and renders nothing on an error, so a profile
+that may not be seen adds nothing to the page's own answer. The Me tab
+does not yet highlight on `/taste-profile`; `nav.ts` needs it in `also`.
+
+
 ## Recap and stamps (L04)
 
 `/recap` is a full-screen deck (`components/recap/RecapDeck.tsx`, a `fixed

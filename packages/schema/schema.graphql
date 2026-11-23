@@ -1543,6 +1543,8 @@ type CheckInEdge {
 
 union CheckInResult = BudgetExceededError | CheckIn | ConflictError | ForbiddenError | NotFoundError | ValidationError
 
+union CloneTierListResult = BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | TierList | ValidationError
+
 union CloseItemOnboardingResult = BudgetExceededError | ConflictError | ForbiddenError | ItemOnboarding | NotFoundError | ValidationError
 
 type Coffee implements Item {
@@ -4085,6 +4087,11 @@ type Mutation {
   ): CheckInResult!
 
   """
+  L03: copies a tier list you may see into a new PRIVATE list of yours — the entries in band and order, not the notes. A list you may not see answers NotFound, like a missing one. Undo is `deleteTierList` on the copy.
+  """
+  cloneTierList(name: String, sourceTierListId: ID!): CloneTierListResult!
+
+  """
   Closes a session whose bottle turned out to be an item the catalogue already held (the quick-add, or “Is it this one? +1 bottle”): its status becomes `MATCHED` and nothing is created. Idempotent; a session that already `CONFIRMED` an item of its own stays `CONFIRMED`.
   """
   closeItemOnboarding(onboardingId: ID!): CloseItemOnboardingResult!
@@ -5827,6 +5834,14 @@ type Query {
   sharedTierList(id: ID!): QuerySharedTierListResult!
 
   """
+  L03: agreement with one user. A malformed id, a missing user and one you may not see answer alike (NotFound).
+  """
+  tasteAgreement(userId: ID!): QueryTasteAgreementResult!
+
+  """L03: the viewer's own taste profile."""
+  tasteProfile: QueryTasteProfileResult!
+
+  """
   One tier list by id. `NotFoundError` covers both 'no such list' and 'not yours to see' (§1.6).
   """
   tierList(id: ID!): QueryTierListResult!
@@ -5966,6 +5981,10 @@ union QuerySharedItemResult = BudgetExceededError | ConflictError | ForbiddenErr
 union QuerySharedRecipeResult = BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | SharedRecipe | ValidationError
 
 union QuerySharedTierListResult = BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | SharedTierList | ValidationError
+
+union QueryTasteAgreementResult = BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | TasteAgreement | ValidationError
+
+union QueryTasteProfileResult = BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | TasteProfile | ValidationError
 
 union QueryTierListResult = BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | TierList | ValidationError
 
@@ -7816,6 +7835,229 @@ input SuggestItemDetailsInput {
 union SuggestItemDetailsResult = BudgetExceededError | ConflictError | ForbiddenError | ItemDetailSuggestions | NotFoundError | ValidationError
 
 union SuggestNewItemDetailsResult = BudgetExceededError | ConflictError | ForbiddenError | ItemDetailSuggestions | NotFoundError | ValidationError
+
+"""
+Items you and this user both rated, counting only ratings you may see, and how many of them you agree on. `agreed` is null below 5 shared items. Never a percentage.
+"""
+type TasteAgreement {
+  agreed: Int
+  avatarUrl: String
+
+  """Empty below the gate."""
+  byType(
+    """
+    An `edge.cursor` from a previous page. Opaque and owned by the actor that minted it: cursors are not interchangeable between fields.
+    """
+    after: String
+
+    """**Not supported.** See `last`. Paging is forward-only."""
+    before: String
+
+    """
+    How many edges to return, 1 to 100 inclusive; defaults to 20. Over the cap is a `VALIDATION` error, not a silent clamp.
+    """
+    first: Int
+
+    """
+    **Not supported.** Present because the Relay spec puts it here; passing it is a `VALIDATION` error rather than a silently forward page. Paging is forward-only — use `first`/`after`.
+    """
+    last: Int
+  ): TasteAgreementByTypeConnection!
+  name: String!
+  shared: Int!
+  userId: ID!
+}
+
+type TasteAgreementByType {
+  agreed: Int
+  itemType: ItemType!
+  shared: Int!
+}
+
+type TasteAgreementByTypeConnection {
+  edges: [TasteAgreementByTypeEdge!]!
+  pageInfo: PageInfo!
+
+  """Total rows matching the query, or null when counting is not cheap."""
+  totalCount: Int
+}
+
+type TasteAgreementByTypeEdge {
+  cursor: String!
+  node: TasteAgreementByType!
+}
+
+type TasteAgreementConnection {
+  edges: [TasteAgreementEdge!]!
+  pageInfo: PageInfo!
+
+  """Total rows matching the query, or null when counting is not cheap."""
+  totalCount: Int
+}
+
+type TasteAgreementEdge {
+  cursor: String!
+  node: TasteAgreement!
+}
+
+type TasteArchetype {
+  key: TasteArchetypeKey!
+
+  """Below your mean, lowest first; at most two."""
+  lessKeen(
+    """
+    An `edge.cursor` from a previous page. Opaque and owned by the actor that minted it: cursors are not interchangeable between fields.
+    """
+    after: String
+
+    """**Not supported.** See `last`. Paging is forward-only."""
+    before: String
+
+    """
+    How many edges to return, 1 to 100 inclusive; defaults to 20. Over the cap is a `VALIDATION` error, not a silent clamp.
+    """
+    first: Int
+
+    """
+    **Not supported.** Present because the Relay spec puts it here; passing it is a `VALIDATION` error rather than a silently forward page. Paging is forward-only — use `first`/`after`.
+    """
+    last: Int
+  ): TasteStyleConnection!
+
+  """At or above your mean, best first; at most four."""
+  loves(
+    """
+    An `edge.cursor` from a previous page. Opaque and owned by the actor that minted it: cursors are not interchangeable between fields.
+    """
+    after: String
+
+    """**Not supported.** See `last`. Paging is forward-only."""
+    before: String
+
+    """
+    How many edges to return, 1 to 100 inclusive; defaults to 20. Over the cap is a `VALIDATION` error, not a silent clamp.
+    """
+    first: Int
+
+    """
+    **Not supported.** Present because the Relay spec puts it here; passing it is a `VALIDATION` error rather than a silently forward page. Paging is forward-only — use `first`/`after`.
+    """
+    last: Int
+  ): TasteStyleConnection!
+  title: String!
+}
+
+"""
+Which deterministic rule named the archetype (decisions.md, "Taste profile and friend agreement").
+"""
+enum TasteArchetypeKey {
+  DECISIVE
+  DEVOTED
+  EXACTING
+  EXPLORER
+  FOCUSED
+  GENEROUS
+}
+
+"""
+Your cross-type archetype from your own ratings. Deterministic; a model may only phrase `line`, and `linePhrasedByAi` says when it did.
+"""
+type TasteProfile {
+  """Null while the data is too thin to name one."""
+  archetype: TasteArchetype
+
+  """
+  L03: agreement with each of your friends, most shared first. Counts only ratings you may see.
+  """
+  friends(
+    """
+    An `edge.cursor` from a previous page. Opaque and owned by the actor that minted it: cursors are not interchangeable between fields.
+    """
+    after: String
+
+    """**Not supported.** See `last`. Paging is forward-only."""
+    before: String
+
+    """
+    How many edges to return, 1 to 100 inclusive; defaults to 20. Over the cap is a `VALIDATION` error, not a silent clamp.
+    """
+    first: Int
+
+    """
+    **Not supported.** Present because the Relay spec puts it here; passing it is a `VALIDATION` error rather than a silently forward page. Paging is forward-only — use `first`/`after`.
+    """
+    last: Int
+  ): TasteProfileFriendsResult!
+  line: String!
+  linePhrasedByAi: Boolean!
+  ratingCount: Int!
+
+  """One row per item type you have rated, most first."""
+  types(
+    """
+    An `edge.cursor` from a previous page. Opaque and owned by the actor that minted it: cursors are not interchangeable between fields.
+    """
+    after: String
+
+    """**Not supported.** See `last`. Paging is forward-only."""
+    before: String
+
+    """
+    How many edges to return, 1 to 100 inclusive; defaults to 20. Over the cap is a `VALIDATION` error, not a silent clamp.
+    """
+    first: Int
+
+    """
+    **Not supported.** Present because the Relay spec puts it here; passing it is a `VALIDATION` error rather than a silently forward page. Paging is forward-only — use `first`/`after`.
+    """
+    last: Int
+  ): TasteTypeCountConnection!
+}
+
+union TasteProfileFriendsResult = BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | TasteAgreementConnection | ValidationError
+
+"""A style you have rated at least twice."""
+type TasteStyle {
+  """Half-star scale."""
+  average: Float!
+  count: Int!
+  itemType: ItemType!
+
+  """The style value as stored: a variety, a beer style, …"""
+  label: String!
+}
+
+type TasteStyleConnection {
+  edges: [TasteStyleEdge!]!
+  pageInfo: PageInfo!
+
+  """Total rows matching the query, or null when counting is not cheap."""
+  totalCount: Int
+}
+
+type TasteStyleEdge {
+  cursor: String!
+  node: TasteStyle!
+}
+
+type TasteTypeCount {
+  """Distinct items rated."""
+  count: Int!
+  itemType: ItemType!
+}
+
+type TasteTypeCountConnection {
+  edges: [TasteTypeCountEdge!]!
+  pageInfo: PageInfo!
+
+  """Total rows matching the query, or null when counting is not cheap."""
+  totalCount: Int
+}
+
+type TasteTypeCountEdge {
+  cursor: String!
+  node: TasteTypeCount!
+}
 
 type Tea implements Item {
   barcode: String
