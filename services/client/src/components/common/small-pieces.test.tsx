@@ -7,6 +7,7 @@ import { describe, test } from "node:test";
 import type { ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { ITEM_TYPES } from "@/components/cellar-api/itemTypes";
+import { stripStyleBlocks } from "@/test-support/markup";
 import { ItemTypeIcon } from "./ItemTypeIcon";
 import { PageLoading } from "./PageLoading";
 
@@ -40,7 +41,7 @@ describe("PageLoading", () => {
       html,
       /height:100%;width:100%|\b(?:size-full|h-full w-full)\b/,
     );
-    const markup = html.replace(/<style[^>]*>[^<]*<\/style>/g, "");
+    const markup = stripStyleBlocks(html);
     assert.match(
       markup,
       /^<div\b[^>]*><[a-z]+\b[^>]*role="(?:progressbar|status)"/,

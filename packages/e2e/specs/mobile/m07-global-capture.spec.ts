@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { randomInt, randomUUID } from "node:crypto";
 import type { Page } from "@playwright/test";
 import { createCellar, unique } from "../../fixtures/data.ts";
 import {
@@ -39,8 +39,8 @@ const PIXEL_PNG = Buffer.from(
 
 // Somewhere in Lake Superior's shore country: no seed or spec place nearby.
 const POINT = {
-  latitude: 47.31 + Math.random() * 0.05,
-  longitude: -88.42 + Math.random() * 0.05,
+  latitude: 47.31 + randomInt(50_000) / 1_000_000,
+  longitude: -88.42 + randomInt(50_000) / 1_000_000,
 };
 const placeId = randomUUID();
 const placeName = unique("E2 Capture Bar").replace(/[^A-Za-z0-9 ]/g, "");

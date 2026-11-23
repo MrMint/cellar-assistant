@@ -6,6 +6,7 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import { renderToStaticMarkup } from "react-dom/server";
+import { stripStyleBlocks } from "@/test-support/markup";
 import {
   LOCATION_PRE_PROMPT_COPY,
   LocationPrePrompt,
@@ -18,7 +19,7 @@ import { MapErrorBanner } from "./core/MapErrorBanner";
 import { SearchEmptyState } from "./places/SearchEmptyState";
 
 const render = (node: React.ReactNode) =>
-  renderToStaticMarkup(node).replace(/<style[^>]*>[^<]*<\/style>/g, "");
+  stripStyleBlocks(renderToStaticMarkup(node));
 
 describe("SearchEmptyState (N22)", () => {
   test("answers 'Not on the map yet' and offers 'Add it here'", () => {

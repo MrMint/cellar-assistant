@@ -1,3 +1,4 @@
+import { randomInt } from "node:crypto";
 import { unique } from "../../fixtures/data.ts";
 import {
   deletePlace,
@@ -35,8 +36,8 @@ const PIXEL_PNG = Buffer.from(
 const SEEN = { latitude: 43.0747, longitude: -89.3842 };
 // Lake Superior's shore country: no seed or spec place nearby.
 const NOWHERE = {
-  latitude: 47.36 + Math.random() * 0.05,
-  longitude: -88.32 + Math.random() * 0.05,
+  latitude: 47.36 + randomInt(50_000) / 1_000_000,
+  longitude: -88.32 + randomInt(50_000) / 1_000_000,
 };
 
 let api: Gql;

@@ -10,6 +10,7 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import { renderToStaticMarkup } from "react-dom/server";
 import { type FieldErrors, useForm } from "react-hook-form";
+import { stripStyleBlocks } from "@/test-support/markup";
 
 mock.module("@/components/item-api/useReferenceOptions", () => ({
   useReferenceOptions: () => ({
@@ -45,10 +46,7 @@ const render = (label: string, errors?: FieldErrors<Values>) => {
       <ItemFormField entry={entry(label)} control={control} disabled={false} />
     );
   }
-  return renderToStaticMarkup(<Harness />).replace(
-    /<style[^>]*>[^<]*<\/style>/g,
-    "",
-  );
+  return stripStyleBlocks(renderToStaticMarkup(<Harness />));
 };
 
 describe("ItemFormField errors (N03)", () => {

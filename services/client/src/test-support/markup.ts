@@ -37,7 +37,27 @@ export const isDisabled = (tag: string): boolean =>
 
 /** The text content of a fragment: tags dropped, whitespace collapsed. */
 export const textOf = (fragment: string): string =>
-  fragment
-    .replace(/<[^>]+>/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
+  stripTags(fragment, " ").replace(/\s+/g, " ").trim();
+
+/**
+ * Repeats `pass` until the markup stops changing, so a removal that joins two
+ * halves of a tag cannot leave a new one behind (CodeQL "incomplete
+ * multi-character sanitization"). The markup is our own render, not user input.
+ */
+const untilStable = (html: string, pass: (s: string) => string): string => {
+  let previous: string;
+  let current = html;
+  do {
+    previous = current;
+    current = pass(previous);
+  } while (current !== previous);
+  return current;
+};
+
+/** Drops the `<style>` blocks inlined into a static render. */
+export const stripStyleBlocks = (html: string): string =>
+  untilStable(html, (s) => s.replace(/<style[^>]*>[^<]*<\/style>/g, ""));
+
+/** Drops every tag, putting `replacement` where each one was. */
+export const stripTags = (html: string, replacement = ""): string =>
+  untilStable(html, (s) => s.replace(/<[^>]+>/g, replacement));

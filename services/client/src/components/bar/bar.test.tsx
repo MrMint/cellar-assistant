@@ -11,6 +11,7 @@ import { PANTRY_KINDS } from "@cellar-assistant/contracts/bar";
 import type { ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { Client, Provider } from "urql";
+import { stripTags } from "@/test-support/markup";
 
 mock.module("next/navigation", () => ({
   useRouter: () => ({ replace: () => {}, push: () => {}, refresh: () => {} }),
@@ -32,7 +33,7 @@ const client = new Client({
 });
 const render = (node: ReactNode) =>
   renderToStaticMarkup(<Provider value={client}>{node}</Provider>);
-const text = (html: string) => html.replace(/<[^>]+>/g, "");
+const text = (html: string) => stripTags(html);
 
 const match = (
   recipeId: string,

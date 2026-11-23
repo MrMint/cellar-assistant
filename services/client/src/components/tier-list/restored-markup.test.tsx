@@ -9,6 +9,7 @@ import type { ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { Client, Provider } from "urql";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { stripStyleBlocks } from "@/test-support/markup";
 
 mock.module("next/navigation", () => ({
   useRouter: () => ({ replace: () => {}, push: () => {}, refresh: () => {} }),
@@ -33,11 +34,13 @@ const client = new Client({
 });
 // `TooltipProvider` stands in for the app's own (`AppClientProviders`).
 const render = (node: ReactNode) =>
-  renderToStaticMarkup(
-    <Provider value={client}>
-      <TooltipProvider>{node}</TooltipProvider>
-    </Provider>,
-  ).replace(/<style[^>]*>[^<]*<\/style>/g, "");
+  stripStyleBlocks(
+    renderToStaticMarkup(
+      <Provider value={client}>
+        <TooltipProvider>{node}</TooltipProvider>
+      </Provider>,
+    ),
+  );
 
 const items = Array.from({ length: 12 }, (_, i) => ({
   id: `row-${i}`,

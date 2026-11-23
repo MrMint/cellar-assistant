@@ -5,6 +5,7 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import { renderToStaticMarkup } from "react-dom/server";
+import { stripStyleBlocks } from "@/test-support/markup";
 import { BoundaryError } from "./BoundaryError";
 import { NotFoundMessage } from "./NotFoundMessage";
 import {
@@ -14,9 +15,7 @@ import {
 } from "./shell-copy";
 
 const render = (node: React.ReactNode) =>
-  renderToStaticMarkup(node)
-    .replace(/<style[^>]*>[^<]*<\/style>/g, "")
-    .replaceAll("&#x27;", "'");
+  stripStyleBlocks(renderToStaticMarkup(node)).replaceAll("&#x27;", "'");
 
 describe("NOT_FOUND_COPY (D24)", () => {
   test("one message that never says which of missing or private it is", () => {

@@ -10,6 +10,7 @@ import { describe, test } from "node:test";
 import type { ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { Client, Provider } from "urql";
+import { stripStyleBlocks, stripTags } from "@/test-support/markup";
 
 mock.module("next/image", () => ({
   default: (props: { alt: string }) => (
@@ -32,9 +33,8 @@ const client = new Client({
   exchanges: [],
 });
 const render = (node: ReactNode) =>
-  renderToStaticMarkup(<Provider value={client}>{node}</Provider>).replace(
-    /<style[^>]*>[^<]*<\/style>/g,
-    "",
+  stripStyleBlocks(
+    renderToStaticMarkup(<Provider value={client}>{node}</Provider>),
   );
 
 type Recipe = Parameters<typeof RecipeDetails>[0]["recipe"];
@@ -107,7 +107,7 @@ describe("RecipeDetails (restored)", () => {
     // X21: an h2 under another page's h1 by default …
     assert.match(html, /<h2[^>]*>Negroni</);
     assert.match(
-      html.replace(/<[^>]+>/g, ""),
+      stripTags(html),
       /cocktail • Easy • 5 minutes • Serves 1 • Version 2/,
     );
     // each phrase is an unbreakable run, so "Serves" never wraps away from "1"
@@ -186,7 +186,7 @@ describe("RecipeDetails (restored)", () => {
     assert.match(signedIn, /aria-label="Loved — tap to remove"/);
     assert.match(signedIn, /aria-pressed="true"/);
     assert.match(signedIn, /data-makeability="one_away"/);
-    assert.match(signedIn.replace(/<[^>]+>/g, ""), /One bottle away · Campari/);
+    assert.match(stripTags(signedIn), /One bottle away · Campari/);
   });
 
   test("instructions: numbered chip, type chip, equipment, time", () => {

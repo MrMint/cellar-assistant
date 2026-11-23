@@ -1,9 +1,10 @@
+import { randomBytes } from "node:crypto";
 import type { AccountKey } from "./accounts.ts";
 import { Gql } from "./test.ts";
 
 /** A name nothing else in the database will collide with. */
 export const unique = (prefix: string): string =>
-  `${prefix} ${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+  `${prefix} ${Date.now().toString(36)}${randomBytes(3).toString("hex")}`;
 
 /**
  * Create a cellar through the API, for tests whose *subject* is something else.
