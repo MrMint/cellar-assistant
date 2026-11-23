@@ -77,6 +77,7 @@ const tea: ItemView = {
   everyone: { average: null, count: 0 },
   friends: { average: null, count: 0 },
   plate: { producer: "West Lake", name: "Dragonwell", origin: "China" },
+  plateStyle: null,
 };
 
 type PageProps = Parameters<typeof ItemPageView>[0];
@@ -249,6 +250,13 @@ describe("ItemPageView (X09: one item page)", () => {
     assert.match(plate, /role="img"/);
     assert.match(plate, /aria-label="Label: West Lake Dragonwell, China"/);
     assert.doesNotMatch(html, /data-alt="A picture of a glass"/);
+  });
+
+  test("the hero plate draws the item's style vessel (H-6)", () => {
+    const bagged = page({
+      item: { ...tea, plateStyle: { form: "TEA_BAG" } },
+    });
+    assert.match(bagged, /data-vessel="pouch"/);
   });
 });
 
