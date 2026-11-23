@@ -14,6 +14,7 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import type { ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { stripStyleBlocks } from "@/test-support/markup";
 
 let lastOnCapture: ((dataUrl: string) => void) | null = null;
 mock.module("../common/CameraCapture", () => ({
@@ -26,7 +27,7 @@ mock.module("../common/CameraCapture", () => ({
 const { AddPhotoBody, AddPhotoModal } = await import("./AddPhoto");
 
 const render = (node: ReactNode) =>
-  renderToStaticMarkup(node).replace(/<style[^>]*>[^<]*<\/style>/g, "");
+  stripStyleBlocks(renderToStaticMarkup(node));
 
 describe("AddPhotoModal (restored, live camera)", () => {
   test("the old title over the live viewfinder, with a file input as fallback", () => {

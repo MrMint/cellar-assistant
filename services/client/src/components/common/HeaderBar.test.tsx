@@ -10,6 +10,7 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import type { ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { stripStyleBlocks } from "@/test-support/markup";
 
 let pathname = "/";
 mock.module("next/navigation", () => ({
@@ -21,7 +22,7 @@ const { HeaderBar } = await import("./HeaderBar");
 const { LOADING, openTag, textOf } = await import("@/test-support/markup");
 
 const render = (node: ReactNode) =>
-  renderToStaticMarkup(node).replace(/<style[^>]*>[^<]*<\/style>/g, "");
+  stripStyleBlocks(renderToStaticMarkup(node));
 
 /** The crumbs (separators are `aria-hidden` list items, and skipped). */
 const crumbs = (html: string): string[] =>

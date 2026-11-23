@@ -8,6 +8,7 @@ import { mock } from "bun:test";
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import { renderToStaticMarkup } from "react-dom/server";
+import { stripStyleBlocks } from "@/test-support/markup";
 
 mock.module("next/image", () => ({
   default: (props: { alt: string }) => (
@@ -19,7 +20,7 @@ const { BrandCard } = await import("./BrandCard");
 const { BrandDetails } = await import("./BrandDetails");
 
 const render = (node: Parameters<typeof renderToStaticMarkup>[0]) =>
-  renderToStaticMarkup(node).replace(/<style[^>]*>[^<]*<\/style>/g, "");
+  stripStyleBlocks(renderToStaticMarkup(node));
 
 const card = {
   id: "b1",

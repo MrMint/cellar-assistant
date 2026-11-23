@@ -15,6 +15,7 @@ import { describe, test } from "node:test";
 import type { ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { useForm } from "react-hook-form";
+import { stripStyleBlocks } from "@/test-support/markup";
 
 let fetching = false;
 mock.module("@/components/item-api/useReferenceOptions", () => ({
@@ -33,7 +34,7 @@ const { EnumSelect } = await import("./EnumSelect");
 const { isDisabled, openTag } = await import("@/test-support/markup");
 
 const render = (node: ReactNode) =>
-  renderToStaticMarkup(node).replace(/<style[^>]*>[^<]*<\/style>/g, "");
+  stripStyleBlocks(renderToStaticMarkup(node));
 
 function Harness(props: {
   enumKey: Parameters<typeof EnumSelect>[0]["enumKey"];

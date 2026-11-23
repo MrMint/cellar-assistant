@@ -269,7 +269,7 @@ describe("model-backed fields", () => {
     const isMutation = name !== "placeSearch";
     const body = Array.from(
       { length: copies },
-      (_, i) => `a${i}: ${field.replace("$", String(i))}`,
+      (_, i) => `a${i}: ${field.replaceAll("$", String(i))}`,
     ).join(" ");
     const messages = check(`${isMutation ? "mutation " : ""}{ ${body} }`);
     const refusal = messages.find((m) => m.includes("model inference")) ?? "";

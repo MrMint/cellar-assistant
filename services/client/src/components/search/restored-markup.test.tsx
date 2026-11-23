@@ -15,6 +15,7 @@ import { createRequest, ssrExchange } from "@urql/core";
 import type { ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { Client, Provider } from "urql";
+import { stripStyleBlocks, stripTags } from "@/test-support/markup";
 
 mock.module("next/image", () => ({
   default: (props: { alt: string }) => (
@@ -50,11 +51,10 @@ const client = new Client({
   exchanges: [],
 });
 const render = (node: ReactNode) =>
-  renderToStaticMarkup(<Provider value={client}>{node}</Provider>).replace(
-    /<style[^>]*>[^<]*<\/style>/g,
-    "",
+  stripStyleBlocks(
+    renderToStaticMarkup(<Provider value={client}>{node}</Provider>),
   );
-const text = (html: string) => html.replace(/<[^>]+>/g, " ");
+const text = (html: string) => stripTags(html, " ");
 
 describe("ClientSearchInterface (restored)", () => {
   test("an empty box offers the old Scan and Photo buttons, in that order", () => {

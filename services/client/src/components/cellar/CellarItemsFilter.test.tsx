@@ -9,12 +9,12 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import type { ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { textOf } from "@/test-support/markup";
+import { stripStyleBlocks, textOf } from "@/test-support/markup";
 import { CellarItemsFilter } from "./CellarItemsFilter";
 import { filterCountsFromItemCounts } from "./cellarItemCounts";
 
 const render = (node: ReactNode) =>
-  renderToStaticMarkup(node).replace(/<style[^>]*>[^<]*<\/style>/g, "");
+  stripStyleBlocks(renderToStaticMarkup(node));
 
 const buttons = (html: string) =>
   [

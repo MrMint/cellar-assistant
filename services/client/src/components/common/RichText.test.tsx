@@ -12,6 +12,7 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import type { ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { stripStyleBlocks } from "@/test-support/markup";
 import { RichTextDisplay } from "./RichTextDisplay";
 import { RichTextEditor } from "./RichTextEditor";
 import {
@@ -21,7 +22,7 @@ import {
 } from "./rich-text";
 
 const render = (node: ReactNode) =>
-  renderToStaticMarkup(node).replace(/<style[^>]*>[^<]*<\/style>/g, "");
+  stripStyleBlocks(renderToStaticMarkup(node));
 
 const oldLexical = lexicalStateFromPlainText("Bright cherry.\nLong finish.");
 

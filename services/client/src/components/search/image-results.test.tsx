@@ -13,6 +13,7 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import type { ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { stripStyleBlocks, stripTags } from "@/test-support/markup";
 
 mock.module("next/image", () => ({
   default: (props: { alt: string }) => (
@@ -34,10 +35,12 @@ const { ServerImageResults } = await import("./ServerImageResults");
 const FILE = "0b5f8c2e-9d61-4c7a-8f0e-3a1b2c4d5e6f";
 
 const render = async () =>
-  renderToStaticMarkup(
-    (await ServerImageResults({ imageFileId: FILE })) as ReactNode,
-  ).replace(/<style[^>]*>[^<]*<\/style>/g, "");
-const text = (html: string) => html.replace(/<[^>]+>/g, " ");
+  stripStyleBlocks(
+    renderToStaticMarkup(
+      (await ServerImageResults({ imageFileId: FILE })) as ReactNode,
+    ),
+  );
+const text = (html: string) => stripTags(html, " ");
 
 const wine = {
   __typename: "Wine",

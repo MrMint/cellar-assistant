@@ -7,6 +7,7 @@ import { mock } from "bun:test";
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import { renderToStaticMarkup } from "react-dom/server";
+import { stripStyleBlocks } from "@/test-support/markup";
 
 mock.module("next/navigation", () => ({
   useRouter: () => ({ replace: () => {}, push: () => {}, refresh: () => {} }),
@@ -20,7 +21,7 @@ const { FORMER_PASSWORD_USER_NOTE } = await import("./SocialButtons");
 const { readPasswordMode } = await import("@/lib/auth/password-mode");
 
 const render = (node: React.ReactNode) =>
-  renderToStaticMarkup(node).replace(/<style[^>]*>[^<]*<\/style>/g, "");
+  stripStyleBlocks(renderToStaticMarkup(node));
 
 const SOCIAL = [
   "Continue with Google",

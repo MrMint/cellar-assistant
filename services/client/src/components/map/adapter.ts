@@ -332,12 +332,29 @@ export function photosFrom(nodes: readonly PhotoNode[]): PlaceGooglePhoto[] {
  * (`{ displayName, uri }` for a photo author, `{ provider, … }` otherwise).
  * Anything else is skipped rather than set as HTML.
  */
+/**
+ * The text of an attribution string with its markup dropped (Google sends
+ * `<a href>` credits). A character scan rather than a regex `replace`, so a
+ * removal cannot join two halves into a new tag; the result is rendered as
+ * text, never as HTML, either way.
+ */
+function withoutTags(value: string): string {
+  let out = "";
+  let inTag = false;
+  for (const ch of value) {
+    if (inTag) inTag = ch !== ">";
+    else if (ch === "<") inTag = true;
+    else out += ch;
+  }
+  return out;
+}
+
 export function attributionLines(attributions: unknown): string[] {
   if (!Array.isArray(attributions)) return [];
   const lines: string[] = [];
   for (const entry of attributions) {
     if (typeof entry === "string") {
-      const text = entry.replace(/<[^>]*>/g, "").trim();
+      const text = withoutTags(entry).trim();
       if (text !== "") lines.push(text);
       continue;
     }
