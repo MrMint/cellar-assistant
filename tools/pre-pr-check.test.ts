@@ -4,6 +4,7 @@ import type { Package } from "./code-map.ts";
 import {
   baseRef,
   biomeCmds,
+  cell,
   changedFiles,
   checkPathOf,
   commandStep,
@@ -216,5 +217,13 @@ describe("typecheckHint", () => {
     assert.deepEqual(typecheckHint(failed, true), failed);
     const passed = { ...failed, ok: true, tail: [] };
     assert.deepEqual(typecheckHint(passed, false), passed);
+  });
+});
+
+describe("cell", () => {
+  it("escapes backslashes before pipes, and folds newlines", () => {
+    assert.equal(cell("a|b"), "a\\|b");
+    assert.equal(cell("C:\\x|y"), "C:\\\\x\\|y");
+    assert.equal(cell("one\ntwo"), "one two");
   });
 });

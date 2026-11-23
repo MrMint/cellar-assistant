@@ -333,6 +333,14 @@ export function secretsStep(hits: string[], scanned: number): Step {
 }
 
 /** The report for `.review/pre-pr.md` and the PR body. */
+/** Text made safe for one markdown table cell: backslashes, pipes and newlines escaped. */
+export function cell(text: string): string {
+  return text
+    .replace(/\\/g, "\\\\")
+    .replace(/\|/g, "\\|")
+    .replace(/\r?\n/g, " ");
+}
+
 export function render(
   steps: Step[],
   base: string,
@@ -347,8 +355,7 @@ export function render(
     "| step | result | note |",
     "|---|---|---|",
     ...steps.map(
-      (s) =>
-        `| ${s.name} | ${s.ok ? "pass" : "FAIL"} | ${s.summary.replace(/\|/g, "\\|")} |`,
+      (s) => `| ${s.name} | ${s.ok ? "pass" : "FAIL"} | ${cell(s.summary)} |`,
     ),
   ];
   for (const s of steps.filter((x) => !x.ok && x.tail.length)) {

@@ -128,7 +128,7 @@ export function parsePackage(dir: string, text: string): Package | null {
 }
 
 /** The file a `@cellar-assistant/<pkg>[/subpath]` specifier names, through `exports`. */
-function resolvePackage(
+export function resolvePackage(
   spec: string,
   packages: readonly Package[],
 ): string | null {
@@ -148,7 +148,8 @@ function resolvePackage(
       sub.endsWith(tail) &&
       sub.length >= head.length + tail.length
     )
-      return target.replace(
+      // Node substitutes every `*` in the target, not just the first.
+      return target.replaceAll(
         "*",
         sub.slice(head.length, sub.length - tail.length),
       );

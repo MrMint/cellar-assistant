@@ -14,6 +14,7 @@ import {
   type Package,
   parsePackage,
   renderMap,
+  resolvePackage,
   resolveSpecifier,
   specifiersOf,
 } from "./code-map.ts";
@@ -265,5 +266,19 @@ describe("star re-exports", () => {
       "services/api/src/q.ts",
       "services/client/src/app/page.tsx",
     ]);
+  });
+});
+
+describe("resolvePackage", () => {
+  it("substitutes every * in an exports target, as Node does", () => {
+    const pkg = {
+      name: "@cellar-assistant/x",
+      dir: "packages/x",
+      exports: { "./*": "packages/x/src/*/*.ts" },
+    };
+    assert.equal(
+      resolvePackage("@cellar-assistant/x/item", [pkg]),
+      "packages/x/src/item/item.ts",
+    );
   });
 });
