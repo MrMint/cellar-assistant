@@ -130,8 +130,10 @@ test("an item page lists where it was seen on a menu, nearest first", async ({
   const row = seenAt.getByRole("link", { name: new RegExp(placeName) });
   await expect(row).toBeVisible();
   await expect(row).toContainText(/On the menu · scanned/);
-  // About 110 m from where the browser says it is.
-  await expect(row).toContainText(/\b1\d\d m\b/);
+  // About 110 m from where the browser says it is. E-9b: the link's text runs
+  // the reason and the distance together ("…scanned just now110 m"), so no
+  // word boundary before the number.
+  await expect(row).toContainText(/1\d\d m\b/);
   await expect(seenAt).toContainText("Nearest first.");
   await expect(
     seenAt.getByRole("link", { name: "Scan a menu" }),
