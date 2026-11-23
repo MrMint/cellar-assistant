@@ -97,6 +97,7 @@ import {
   checkInTrash,
   files,
   places,
+  recipes,
   user,
 } from "@cellar-assistant/db";
 import { and, asc, eq, gt, inArray, lt, sql } from "@cellar-assistant/db/orm";
@@ -106,6 +107,7 @@ import {
   canSeeCellar,
   canSeeCheckIn,
   canSeeCheckInDetails,
+  canSeeRecipeLog,
   checkInIsClaimed,
   isFriend,
 } from "@cellar-assistant/policy";
@@ -114,6 +116,7 @@ import { withoutDetails } from "../lib/check-in-rows.ts";
 import { flavourTagSuggester } from "../lib/flavour-tags.ts";
 import { ARCS } from "../lib/item-arcs.ts";
 import { itemNames } from "../lib/item-names.ts";
+import { canSeeRecipeRow, recipeVisibility } from "../lib/recipe-visibility.ts";
 import { placeIsVisible } from "../lib/unshared-places.ts";
 import { requireUuid } from "../lib/uuid.ts";
 import {
@@ -309,7 +312,10 @@ export class CheckInActor
     }
 
     const placeId = await this.#requirePlace(ctx, input.placeId);
-    const { item, cellarItemId } = await this.#requireSubject(ctx, input);
+    const { item, recipeId, cellarItemId } = await this.#requireSubject(
+      ctx,
+      input,
+    );
 
     const groupId = this.key;
     const now = new Date();
@@ -320,7 +326,8 @@ export class CheckInActor
       createdById: viewer,
       groupId,
       cellarItemId,
-      ...ARC.values(item),
+      ...(item === null ? {} : ARC.values(item)),
+      recipeId,
       placeId,
       // The opinion belongs to the viewer's own row and to no one else's.
       ...(includeSelf && index === 0
@@ -651,6 +658,15 @@ export class CheckInActor
           .from(files)
           .where(inArray(files.id, ids)),
     );
+    // ux-c L08: a "Made it" log's recipe may have been deleted meanwhile.
+    const recipesFound = await existing(
+      restorable.map((gone) => gone.recipeId ?? null),
+      (ids) =>
+        this.db
+          .select({ id: recipes.id })
+          .from(recipes)
+          .where(inArray(recipes.id, ids)),
+    );
     const people = await existing(
       restorable.flatMap((gone) => [gone.userId, gone.createdById]),
       (ids) =>
@@ -671,6 +687,10 @@ export class CheckInActor
         photoFileId:
           gone.photoFileId !== null && photos.has(gone.photoFileId)
             ? gone.photoFileId
+            : null,
+        recipeId:
+          typeof gone.recipeId === "string" && recipesFound.has(gone.recipeId)
+            ? gone.recipeId
             : null,
       }));
     const ids = [
@@ -785,10 +805,30 @@ export class CheckInActor
     ctx: Ctx,
     aggregate: CheckInAggregate,
   ): Promise<boolean> {
-    return canSeeCheckIn(ctx, {
+    const log = {
       ...(await this.#personal(ctx, aggregate)),
       cellar: await this.#cellarOf(ctx, aggregate.row.cellarItemId),
+    };
+    const recipeId = aggregate.row.recipeId;
+    if (recipeId === null) return canSeeCheckIn(ctx, log);
+    // ux-c L08: a "Made it" log names its recipe, so it needs both.
+    return canSeeRecipeLog(ctx, {
+      ...log,
+      recipe: await this.#recipeOf(ctx, recipeId),
     });
+  }
+
+  /** `canSeeRecipe`'s argument for the log's recipe, or `null` if it is gone. */
+  async #recipeOf(ctx: Ctx, recipeId: string) {
+    const [found] = await this.db
+      .select({
+        createdById: recipes.createdById,
+        privacy: recipes.privacy,
+        isDraft: recipes.isDraft,
+      })
+      .from(recipes)
+      .where(eq(recipes.id, recipeId));
+    return found === undefined ? null : recipeVisibility(this.db, ctx, found);
   }
 
   /** The flags of `canSeeCheckIn`'s personal branches (and of its details). */
@@ -873,7 +913,18 @@ export class CheckInActor
   async #requireSubject(
     ctx: Ctx,
     input: LogDrinkInput,
-  ): Promise<{ item: ItemRef; cellarItemId: string | null }> {
+  ): Promise<{
+    item: ItemRef | null;
+    recipeId: string | null;
+    cellarItemId: string | null;
+  }> {
+    if (input.recipeId !== null && input.recipeId !== undefined) {
+      return {
+        item: null,
+        recipeId: await this.#requireRecipe(ctx, input),
+        cellarItemId: null,
+      };
+    }
     const named =
       input.item === null || input.item === undefined
         ? null
@@ -887,7 +938,7 @@ export class CheckInActor
       if (!found.has(named.id)) {
         throw new NotFoundError(`${named.type} ${named.id} not found`);
       }
-      return { item: named, cellarItemId: null };
+      return { item: named, recipeId: null, cellarItemId: null };
     }
     const fromBottle = await this.#requireBottle(ctx, bottle);
     if (
@@ -898,7 +949,37 @@ export class CheckInActor
         "the item does not match the bottle it was poured from",
       );
     }
-    return fromBottle;
+    return { ...fromBottle, recipeId: null };
+  }
+
+  /**
+   * ux-c L08 "Made it": a recipe log names the recipe and nothing else (L23),
+   * and the recipe must be one the viewer may see. A hidden recipe answers
+   * exactly like a missing one — the same `NotFound`, the same message — so
+   * logging is no existence oracle for a private recipe (L6).
+   */
+  async #requireRecipe(ctx: Ctx, input: LogDrinkInput): Promise<string> {
+    if (
+      (input.item !== null && input.item !== undefined) ||
+      (input.bottle !== null && input.bottle !== undefined)
+    ) {
+      throw new ValidationError(
+        "a recipe log names the recipe only, not an item or a bottle",
+      );
+    }
+    const recipeId = requireUuid(input.recipeId, "recipeId");
+    const absent = new NotFoundError(`recipe ${recipeId} not found`);
+    const [found] = await this.db
+      .select({
+        createdById: recipes.createdById,
+        privacy: recipes.privacy,
+        isDraft: recipes.isDraft,
+      })
+      .from(recipes)
+      .where(eq(recipes.id, recipeId));
+    if (found === undefined) throw absent;
+    if (!(await canSeeRecipeRow(this.db, ctx, found))) throw absent;
+    return recipeId;
   }
 
   async #requireBottle(
@@ -1043,7 +1124,8 @@ export const toEntryDto = (
     id: row.id,
     userId: row.userId,
     createdById: row.createdById,
-    item: ARC.requireRefOf(row),
+    item: ARC.refOf(row),
+    recipe: row.recipeId === null ? null : { id: row.recipeId },
     score: row.score,
     note: row.note,
     tags: row.tags,

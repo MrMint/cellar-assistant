@@ -42,6 +42,45 @@ export type FeedEntry = {
   } | null;
   /** CHECKED_IN: "with you and Ana · at The Corner Bar", or "". */
   readonly context: string;
+  /**
+   * ux-c L08: a "Made it" log — a recipe, not an item ("Sam made Negroni").
+   * `/search`'s adapter skips a row with no item, so these are built here.
+   */
+  readonly made: boolean;
+};
+
+/** L44: what a Made-it log whose recipe was deleted names. */
+export const DELETED_RECIPE_NAME = "a recipe that was deleted";
+
+/**
+ * A friend's Made-it log as a "drank" entry: the recipe stands where the
+ * item would, and links into the recipe — or nowhere, once it was deleted.
+ */
+const recipeLogEntry = (
+  node: FeedNode,
+  viewerId: string | null,
+): ActivityEntry | null => {
+  const log = node.checkIn;
+  if (node.kind !== "CHECKED_IN" || node.item !== null || log === null) {
+    return null;
+  }
+  const recipe = log.recipe;
+  return {
+    kind: "drank",
+    id: `drank-${log.id}`,
+    timestamp: node.occurredAt as string,
+    userId: node.user?.id ?? "",
+    userName: node.user?.displayName ?? "",
+    userAvatar: node.user?.avatarUrl ?? null,
+    itemName: recipe === null ? DELETED_RECIPE_NAME : recipe.name,
+    itemType: "RECIPE",
+    itemHref: recipe === null ? "" : `/recipes/${recipe.id}`,
+    save: null,
+    score: log.score,
+    note: log.note,
+    tags: log.tags,
+    context: drinkContext(node, viewerId),
+  };
 };
 
 /**
@@ -79,7 +118,8 @@ export const feedEntriesFromNodes = (
   viewerId: string | null,
 ): FeedEntry[] =>
   nodes.flatMap((node): FeedEntry[] => {
-    const entry = activityEntryFromNode(node, viewerId);
+    const recipe = recipeLogEntry(node, viewerId);
+    const entry = recipe ?? activityEntryFromNode(node, viewerId);
     if (entry === null) return [];
     const list = node.tierListItem?.tierList ?? null;
     const target =
@@ -92,7 +132,14 @@ export const feedEntriesFromNodes = (
         : node.kind === "TIER_LISTED" && list !== null
           ? { id: list.id, name: list.name, href: `/tier-lists/${list.id}` }
           : null;
-    return [{ entry, target, context: drinkContext(node, viewerId) }];
+    return [
+      {
+        entry,
+        target,
+        context: drinkContext(node, viewerId),
+        made: recipe !== null,
+      },
+    ];
   });
 
 /** One piece of a sentence: plain words, or a name that links somewhere. */
@@ -148,11 +195,10 @@ const sentenceOf = (burst: {
   if (first === undefined) throw new Error("an empty burst");
   const { entry, target } = first;
   const who: Token = { text: entry.userName || "A friend", strong: true };
-  const thing: Token = {
-    text: entry.itemName,
-    href: entry.itemHref,
-    strong: true,
-  };
+  const thing: Token =
+    entry.itemHref === ""
+      ? { text: entry.itemName }
+      : { text: entry.itemName, href: entry.itemHref, strong: true };
   const where: Token | null =
     target === null
       ? null
@@ -225,7 +271,7 @@ const sentenceOf = (burst: {
       return {
         sentence: [
           who,
-          { text: " had " },
+          { text: first.made ? " made " : " had " },
           thing,
           ...(stars === null ? [] : [{ text: ` · ${stars}` }]),
           ...(first.context === "" ? [] : [{ text: ` · ${first.context}` }]),

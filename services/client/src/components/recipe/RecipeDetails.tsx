@@ -228,6 +228,19 @@ export const RecipeDetails = ({
               isLoved={recipe.is_loved}
             />
 
+            {/* ux-c L08: the recipe, full screen, step by step. */}
+            {!isDraft && recipe.instructions.length > 0 && (
+              <Button asChild size="lg" className="self-start">
+                <Link
+                  href={`/recipes/${recipe.id}/make`}
+                  underline="none"
+                  data-testid="make-it"
+                >
+                  Make it
+                </Link>
+              </Button>
+            )}
+
             {/* Recipe variations */}
             {(isNotNil(recipe.canonical_recipe) || variations.length > 0) && (
               <section className="flex flex-col gap-4 rounded-lg bg-surface-1 p-4">

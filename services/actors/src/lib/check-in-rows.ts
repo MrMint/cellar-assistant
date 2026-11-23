@@ -19,6 +19,8 @@ export type CheckInSqlRow = ArcSqlRow & {
   readonly user_id: string;
   readonly created_by_id: string;
   readonly cellar_item_id: string | null;
+  /** ux-c L08: a "Made it" log's recipe (no item then), or null. */
+  readonly recipe_id: string | null;
   readonly score: number | null;
   readonly note: string | null;
   readonly tags: readonly string[] | null;
@@ -58,7 +60,7 @@ export const checkInColumns = (
   );
   return sql`${row}.id, ${row}.user_id, ${row}.created_by_id,
     (${details}) as details_visible,
-    ${row}.cellar_item_id, ${row}.score, ${row}.note, ${row}.tags,
+    ${row}.cellar_item_id, ${row}.recipe_id, ${row}.score, ${row}.note, ${row}.tags,
     (case when ${placeVisible} then ${placeId} end) as place_id,
     ${row}.photo_file_id, ${row}.created_at, ${row}.updated_at,
     ${ARCS.checkIns.columnList(alias)},
@@ -86,7 +88,8 @@ export const toItemCheckInDto = (
     id: row.id,
     userId: row.user_id,
     createdById: row.created_by_id,
-    item: ARCS.checkIns.requireRefOf(row, "column"),
+    item: ARCS.checkIns.refOf(row, "column"),
+    recipe: row.recipe_id === null ? null : { id: row.recipe_id },
     score: row.score === null ? null : Number(row.score),
     note: row.note,
     tags: row.tags ?? [],

@@ -360,6 +360,11 @@ export const HomeFriendsFeedQuery = graphql(
               note
               tags
               companionIds
+              recipe {
+                __typename
+                id
+                name
+              }
               place {
                 __typename
                 id

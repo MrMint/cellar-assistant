@@ -564,6 +564,7 @@ fetches its own agreement and renders nothing on an error, so a profile
 that may not be seen adds nothing to the page's own answer. The Me tab
 does not yet highlight on `/taste-profile`; `nav.ts` needs it in `also`.
 
+
 ## Recap and stamps (L04)
 
 `/recap` is a full-screen deck (`components/recap/RecapDeck.tsx`, a `fixed
@@ -577,3 +578,12 @@ the PNG as a `File` (no url, no text) and falls back to a download.
 `RecapStamp` is the round stamp, used by the deck and by Me's `MeStamps`,
 which renders nothing until mounted and loaded. Stamp words are
 `lib/stamps/stamps.ts`: counts of distinct things only.
+
+## Make mode and the brew timer (L08)
+
+`components/make/` holds Make mode (`MakeMode`, at `/recipes/[id]/make`) and
+the pieces it shares with the Steep / Brew guide: `timer.ts` (a pure
+countdown: idle, running, paused, done — every transition takes `now`) behind
+`useCountdown`, and `wake-lock.ts` (feature-detected Screen Wake Lock)
+behind `useWakeLock`. Reach for `useCountdown` for any countdown rather than
+a new interval, and never assume `navigator.wakeLock` exists.

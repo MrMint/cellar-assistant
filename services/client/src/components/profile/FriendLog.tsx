@@ -1,5 +1,6 @@
 "use client";
 
+import { GlassWater } from "lucide-react";
 import { Link } from "@/components/app/Link";
 import { InsetSection } from "@/components/app/Page";
 import { Score } from "@/components/app/Score";
@@ -15,6 +16,16 @@ import { FriendLogPageQuery, PROFILE_LOG_PAGE_SIZE } from "./queries";
 
 /** The item's glyph on its type's tint — the log has no photos of its own. */
 function Glyph({ row }: { row: ProfileLogRow }) {
+  if (row.kind === "recipe") {
+    return (
+      <span
+        aria-hidden
+        className="flex size-11 shrink-0 items-center justify-center rounded-sm bg-surface-2 text-ink-2"
+      >
+        <GlassWater className="size-5" />
+      </span>
+    );
+  }
   if (row.itemType === null) {
     return <span aria-hidden className="size-11 rounded-sm bg-surface-2" />;
   }
@@ -74,14 +85,23 @@ export function FriendLog({
           >
             <Glyph row={row} />
             <div className="flex min-w-0 flex-1 flex-col gap-1">
-              <Link
-                href={row.href}
-                overlay
-                underline="none"
-                className="type-body truncate text-ink-1"
-              >
-                {row.title}
-              </Link>
+              {row.href === null ? (
+                <span className="type-body truncate text-ink-2">
+                  {row.title}
+                </span>
+              ) : (
+                <Link
+                  href={row.href}
+                  overlay
+                  underline="none"
+                  className="type-body truncate text-ink-1"
+                >
+                  {row.title}
+                </Link>
+              )}
+              {row.kind === "recipe" && (
+                <span className="type-footnote text-ink-2">Made it</span>
+              )}
               <div className="flex items-baseline gap-2">
                 <span className="type-footnote tabular">
                   <Timestamp iso={row.createdAt} precision="date" />

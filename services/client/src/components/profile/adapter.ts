@@ -47,9 +47,15 @@ export type ProfileCellarRow = {
 export type ProfileLogRow = {
   readonly id: string;
   readonly createdAt: string;
-  /** The item's name, its vintage first when it has one. */
+  /** ux-c L08: an item log, or a recipe made ("Made it"). */
+  readonly kind: "item" | "recipe";
+  /**
+   * The item's name, its vintage first when it has one — or the recipe's
+   * name, or {@link DELETED_RECIPE_TITLE}.
+   */
   readonly title: string;
-  readonly href: string;
+  /** Into the item or the recipe; `null` when the recipe was deleted. */
+  readonly href: string | null;
   readonly itemType: ApiItemType | null;
   readonly score: number | null;
   readonly note: string | null;
@@ -139,8 +145,30 @@ const ITEM_TYPES = new Set<string>([
   "TEA",
 ]);
 
-export const logRow = (entry: LogEntry): ProfileLogRow => {
+/** L44: a "Made it" log whose recipe has since been deleted. */
+export const DELETED_RECIPE_TITLE = "A recipe that was deleted";
+
+/** What the row is about: an item, or a recipe someone made (ux-c L08). */
+const logSubject = (
+  entry: LogEntry,
+): Pick<ProfileLogRow, "title" | "href" | "itemType" | "kind"> => {
   const item = entry.item;
+  if (item === null) {
+    const recipe = entry.recipe;
+    return recipe === null
+      ? {
+          kind: "recipe",
+          title: DELETED_RECIPE_TITLE,
+          href: null,
+          itemType: null,
+        }
+      : {
+          kind: "recipe",
+          title: recipe.name,
+          href: `/recipes/${recipe.id}`,
+          itemType: null,
+        };
+  }
   const vintage =
     item.__typename === "Wine"
       ? formatVintage(item.vintage)
@@ -148,13 +176,20 @@ export const logRow = (entry: LogEntry): ProfileLogRow => {
         ? formatVintage(item.vintageYear)
         : undefined;
   const name = displayItemName(item.name);
+  return {
+    kind: "item",
+    title: vintage === undefined ? name : `${vintage} ${name}`,
+    href: itemHref(item.type, item.id),
+    itemType: ITEM_TYPES.has(item.type) ? (item.type as ApiItemType) : null,
+  };
+};
+
+export const logRow = (entry: LogEntry): ProfileLogRow => {
   const place = entry.place;
   return {
     id: entry.id,
     createdAt: entry.createdAt as string,
-    title: vintage === undefined ? name : `${vintage} ${name}`,
-    href: itemHref(item.type, item.id),
-    itemType: ITEM_TYPES.has(item.type) ? (item.type as ApiItemType) : null,
+    ...logSubject(entry),
     score: entry.score,
     note: entry.note === null || entry.note.trim() === "" ? null : entry.note,
     tags: entry.tags,

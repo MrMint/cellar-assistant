@@ -773,6 +773,7 @@ export const graphcacheSchema: MinifiedIntrospection = {
               ofType: { kind: "OBJECT", name: "CellarItemConnection" },
             },
           },
+          { name: "myBrewPrefs", type: { kind: "OBJECT", name: "BrewPrefs" } },
           { name: "myReview", type: { kind: "OBJECT", name: "ItemReview" } },
           {
             name: "name",
@@ -1150,6 +1151,24 @@ export const graphcacheSchema: MinifiedIntrospection = {
           { name: "regions", type: { kind: "OBJECT", name: "BreadthStamp" } },
           { name: "styles", type: { kind: "OBJECT", name: "BreadthStamp" } },
           { name: "types", type: { kind: "OBJECT", name: "BreadthStamp" } },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "BrewPrefs",
+        fields: [
+          { name: "doseGrams", type: { kind: "SCALAR", name: "Float" } },
+          { name: "steepSeconds", type: { kind: "SCALAR", name: "Int" } },
+          {
+            name: "updatedAt",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "DateTime" },
+            },
+          },
+          { name: "waterMl", type: { kind: "SCALAR", name: "Float" } },
+          { name: "waterTempC", type: { kind: "SCALAR", name: "Int" } },
         ],
         interfaces: [],
       },
@@ -2019,6 +2038,7 @@ export const graphcacheSchema: MinifiedIntrospection = {
               ofType: { kind: "OBJECT", name: "CellarItemConnection" },
             },
           },
+          { name: "myBrewPrefs", type: { kind: "OBJECT", name: "BrewPrefs" } },
           { name: "myReview", type: { kind: "OBJECT", name: "ItemReview" } },
           {
             name: "name",
@@ -3668,6 +3688,7 @@ export const graphcacheSchema: MinifiedIntrospection = {
               ofType: { kind: "OBJECT", name: "CellarItemConnection" },
             },
           },
+          { name: "myBrewPrefs", type: { kind: "OBJECT", name: "BrewPrefs" } },
           { name: "myReview", type: { kind: "OBJECT", name: "ItemReview" } },
           {
             name: "name",
@@ -3880,16 +3901,11 @@ export const graphcacheSchema: MinifiedIntrospection = {
               ofType: { kind: "SCALAR", name: "Boolean" },
             },
           },
-          {
-            name: "item",
-            type: {
-              kind: "NON_NULL",
-              ofType: { kind: "INTERFACE", name: "Item" },
-            },
-          },
+          { name: "item", type: { kind: "INTERFACE", name: "Item" } },
           { name: "note", type: { kind: "SCALAR", name: "String" } },
           { name: "photo", type: { kind: "OBJECT", name: "File" } },
           { name: "place", type: { kind: "OBJECT", name: "Place" } },
+          { name: "recipe", type: { kind: "OBJECT", name: "Recipe" } },
           { name: "score", type: { kind: "SCALAR", name: "Float" } },
           {
             name: "tags",
@@ -5565,6 +5581,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
             type: {
               kind: "NON_NULL",
               ofType: { kind: "UNION", name: "SetBrandParentResult" },
+            },
+          },
+          {
+            name: "setBrewPrefs",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "UNION", name: "SetBrewPrefsResult" },
             },
           },
           {
@@ -9552,6 +9575,7 @@ export const graphcacheSchema: MinifiedIntrospection = {
               ofType: { kind: "OBJECT", name: "CellarItemConnection" },
             },
           },
+          { name: "myBrewPrefs", type: { kind: "OBJECT", name: "BrewPrefs" } },
           { name: "myReview", type: { kind: "OBJECT", name: "ItemReview" } },
           {
             name: "name",
@@ -9649,6 +9673,33 @@ export const graphcacheSchema: MinifiedIntrospection = {
           { kind: "OBJECT", name: "ConflictError" },
           { kind: "OBJECT", name: "ForbiddenError" },
           { kind: "OBJECT", name: "NotFoundError" },
+          { kind: "OBJECT", name: "ValidationError" },
+        ],
+      },
+      {
+        kind: "OBJECT",
+        name: "SetBrewPrefsPayload",
+        fields: [
+          {
+            name: "item",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "INTERFACE", name: "Item" },
+            },
+          },
+          { name: "prefs", type: { kind: "OBJECT", name: "BrewPrefs" } },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "UNION",
+        name: "SetBrewPrefsResult",
+        possibleTypes: [
+          { kind: "OBJECT", name: "BudgetExceededError" },
+          { kind: "OBJECT", name: "ConflictError" },
+          { kind: "OBJECT", name: "ForbiddenError" },
+          { kind: "OBJECT", name: "NotFoundError" },
+          { kind: "OBJECT", name: "SetBrewPrefsPayload" },
           { kind: "OBJECT", name: "ValidationError" },
         ],
       },
@@ -10300,6 +10351,7 @@ export const graphcacheSchema: MinifiedIntrospection = {
               ofType: { kind: "OBJECT", name: "CellarItemConnection" },
             },
           },
+          { name: "myBrewPrefs", type: { kind: "OBJECT", name: "BrewPrefs" } },
           { name: "myReview", type: { kind: "OBJECT", name: "ItemReview" } },
           {
             name: "name",
@@ -10922,6 +10974,7 @@ export const graphcacheSchema: MinifiedIntrospection = {
               ofType: { kind: "OBJECT", name: "CellarItemConnection" },
             },
           },
+          { name: "myBrewPrefs", type: { kind: "OBJECT", name: "BrewPrefs" } },
           { name: "myReview", type: { kind: "OBJECT", name: "ItemReview" } },
           {
             name: "name",
@@ -12315,6 +12368,7 @@ export const graphcacheSchema: MinifiedIntrospection = {
               ofType: { kind: "OBJECT", name: "CellarItemConnection" },
             },
           },
+          { name: "myBrewPrefs", type: { kind: "OBJECT", name: "BrewPrefs" } },
           { name: "myReview", type: { kind: "OBJECT", name: "ItemReview" } },
           {
             name: "name",
