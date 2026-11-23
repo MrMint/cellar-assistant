@@ -2,6 +2,9 @@
 name: verifier
 description: Checks a running app against a checklist through screenshots, the browser pane or a walkthrough, and writes a report. Use for verify-round lenses (render, consistency, walkthrough), not for code review or fixes.
 model: opus
+effort: medium
+maxTurns: 250
+autoCompactWindow: 300000
 disallowedTools: Edit, NotebookEdit
 experimental:
   cacheTtl: 5m

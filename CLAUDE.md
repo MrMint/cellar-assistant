@@ -14,33 +14,30 @@ re-read your brief and your `PROGRESS.md` before acting.
 
 Most of the quota goes to subagents. An agent pays for its whole context on every turn, so a stream
 that runs hundreds of turns at half a million tokens costs many times what the same work costs in
-bounded pieces. When you split work across parallel agents:
+bounded pieces. For a build of parallel streams, use the `multi-agent-build` skill
+(`.claude/skills/multi-agent-build/SKILL.md`): it is the lead's process, phase by phase. The rules
+every agent needs are below. The first four are enforced by hooks in `.claude/hooks/`, which
+`bun run test:harness` tests; the last three are yours to keep.
 
-- **Spawn each role as its agent type,** defined in `.claude/agents/`: `stream-builder` for build
-  and fix streams (turn cap, 300k compaction window, the `PROGRESS.md` rules, long code files
-  read as an outline), `reviewer` for review rounds (fresh context, sees only the diff and the
-  criteria), `verifier` for checking the running app, and `scout` (Sonnet) for a search that
-  would take a stream more than two turns. A session loads these from its own checkout, so start
-  a lead from a checkout that is current with `origin/main`.
-- **Never pass `model: opus` to a search agent.** `scout` runs on Sonnet by its own definition,
-  and a `model` you pass overrides it. Give `Explore` `model: sonnet`, or `haiku` for a plain
-  "where is X". Opus is for agents that build, review or verify.
-
-- **One brief file per stream.** It gives the goal, the acceptance criteria, the files the stream
-  owns and the checks it must pass. Point to shared plans by path and section; never inline them.
-  An agent re-reads its brief after every compaction.
-- **Every brief requires a `PROGRESS.md`** at the root of the agent's worktree, not committed. The
-  agent updates it at each milestone with what's done, decisions and why, files touched, what's
-  failing, and the next step. It re-reads the file after compacting and hands back its contents
-  rather than a recap from memory.
-- **Size streams to finish within one or two compactions.** Split by file ownership so no two
-  streams write the same file. An agent that compacts three or more times is doing too much: stop
-  it and split the remaining work from its `PROGRESS.md`.
-- **Resume while the context is small and warm, otherwise spawn fresh.** A resumed agent keeps
-  its history and can read the cache its last run warmed, so `SendMessage` it for prompt
-  follow-ups to the same work. Once its context is large, or the follow-up comes hours later
-  after a review round with its cache cold, spawn a fresh `stream-builder`. Give it the
-  findings it owns, written to a file, plus the original stream's `PROGRESS.md`.
-- **Keep tool output small.** Pipe tests and typechecks through `tail` or a filter, read line
-  ranges rather than whole files, and look at a screenshot once and write down what it showed.
-  Each image stays in context until the next compaction.
+- **Spawn each role as its agent type,** defined in `.claude/agents/`: `stream-builder` for build and
+  fix streams, `reviewer` for review rounds, `verifier` for checking the running app, `scout` for a
+  search that would take you more than two turns, `surveyor` for read-many-write-one reports, and
+  `sweeper` for a mechanical change across many files. Each definition sets its own model, effort,
+  turn cap and compaction window. The spawn guard refuses `general-purpose`, `fork`, and any
+  project agent whose definition sets no `effort` or `maxTurns`, and lists the roles that fit. A
+  single short task none of them fits passes with a description starting `one-off:`.
+- **Never pass `model: opus` to `scout`, `Explore`, `surveyor` or `sweeper`.** The spawn guard
+  refuses it. Give `Explore` `model: sonnet`, or `haiku` for a plain "where is X".
+- **A session loads its roles and hooks from its own checkout, once.** Start a lead from a worktree
+  cut from `origin/main`; the SessionStart hook says so when a checkout is far behind.
+- **The shell guard refuses** a host `bun run dev`/`build` (AGENTS.md § HARD), a bare `git stash` or
+  `git stash pop`, `git branch -D`, `pkill`/`killall` by name, and a subagent's git writes in the
+  primary checkout.
+- **Resume while the context is small and warm, otherwise spawn fresh.** `SendMessage` a finished
+  agent for a prompt follow-up to the same work. Once its context is large, or the follow-up comes
+  after a review round with its cache cold, spawn a fresh `stream-builder` with the findings it owns
+  in a file, plus the original stream's `PROGRESS.md`.
+- **Keep tool output small.** Pipe tests and typechecks through `tail` or a filter, read line ranges
+  rather than whole files, and look at a screenshot once and write down what it showed.
+- **Measure after each build.** `node tools/agent-spend.ts --since <date>` gives spend by role and
+  agent, flags unroled and oversized agents, and prints the streams' search-turn share.
