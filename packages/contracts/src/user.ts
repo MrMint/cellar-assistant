@@ -293,6 +293,38 @@ export type WantToTryEntryDto = {
   readonly savedAt: string;
 };
 
+/**
+ * ux-c L08: the viewer's own steep (tea) or brew (coffee) numbers for one item
+ * (`item_brew_prefs`). Each is the user's override of the "typical" table
+ * row the client draws (L3); `null` keeps the table's number. Owner-only:
+ * nobody else's prefs are readable or writable, and asking for them answers
+ * exactly like an item that does not exist.
+ */
+export type BrewPrefsDto = {
+  readonly item: ItemRef;
+  /** Water temperature, °C, 1–100. */
+  readonly waterTempC: number | null;
+  /** First steep / total brew time, seconds, > 0. */
+  readonly steepSeconds: number | null;
+  /** Leaf or ground coffee, grams, > 0. */
+  readonly doseGrams: number | null;
+  /** Water, millilitres, > 0. */
+  readonly waterMl: number | null;
+  readonly updatedAt: string;
+};
+
+/** Brew-pref item types: a steep guide on a tea, a brew guide on a coffee. */
+export const BREW_PREF_ITEM_TYPES = ["TEA", "COFFEE"] as const;
+
+/** The four overrides; each `null` clears that one (all `null` removes the row). */
+export type SetBrewPrefsInput = {
+  readonly item: ItemRef;
+  readonly waterTempC: number | null;
+  readonly steepSeconds: number | null;
+  readonly doseGrams: number | null;
+  readonly waterMl: number | null;
+};
+
 export type SetWantToTryResult = {
   readonly target: WantToTryTarget;
   /** State *after* the call. */
@@ -538,6 +570,17 @@ export type UserActorInterface = {
   ): Promise<Page<string>>;
   /** X18: the Me hub's counts. Self (or admin, for their own) only. */
   counts(ctx: Ctx): Promise<UserCountsDto>;
+  /**
+   * ux-c L08: this user's brew prefs for one tea or coffee, or `null` when
+   * they have none. Self only — anybody else, and an item that does not
+   * exist, get the same `NotFound`.
+   */
+  brewPrefs(ctx: Ctx, item: ItemRef): Promise<BrewPrefsDto | null>;
+  /** ux-c L08: replace this user's brew prefs for one item. Self only, as above. */
+  setBrewPrefs(
+    ctx: Ctx,
+    input: SetBrewPrefsInput,
+  ): Promise<BrewPrefsDto | null>;
 };
 
 export const UserActorDescriptor: ActorDescriptor<UserActorInterface> = {
@@ -579,5 +622,7 @@ export const UserActorDescriptor: ActorDescriptor<UserActorInterface> = {
     lovedRecipes: {},
     myRecipes: {},
     counts: {},
+    brewPrefs: {},
+    setBrewPrefs: {},
   },
 };

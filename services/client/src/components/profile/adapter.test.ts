@@ -3,6 +3,7 @@ import { describe, test } from "node:test";
 import {
   cellarPageResult,
   cellarRow,
+  DELETED_RECIPE_TITLE,
   friendProfileView,
   friendsSinceLine,
   listPageResult,
@@ -33,6 +34,7 @@ const entry = (overrides: Partial<Record<string, unknown>> = {}): LogArg =>
       name: "Barolo Riserva",
       vintage: "2016-01-01",
     },
+    recipe: null,
     ...overrides,
   }) as unknown as LogArg;
 
@@ -152,6 +154,26 @@ describe("rows", () => {
     assert.deepEqual(row.tags, ["smoke", "peat"]);
     assert.match(row.context, /^with Ana/);
     assert.match(row.context, /at Cork & Barrel$/);
+  });
+
+  test("ux-c L08: a Made-it log names its recipe and links into it", () => {
+    const row = logRow(
+      entry({
+        item: null,
+        recipe: { __typename: "Recipe", id: "r1", name: "Negroni" },
+      }),
+    );
+    assert.equal(row.kind, "recipe");
+    assert.equal(row.title, "Negroni");
+    assert.equal(row.href, "/recipes/r1");
+    assert.equal(row.itemType, null);
+  });
+
+  test("L44: a log whose recipe was deleted says so, and links nowhere", () => {
+    const row = logRow(entry({ item: null, recipe: null }));
+    assert.equal(row.kind, "recipe");
+    assert.equal(row.title, DELETED_RECIPE_TITLE);
+    assert.equal(row.href, null);
   });
 
   test("a blank note is no note", () => {

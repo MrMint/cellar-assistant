@@ -681,6 +681,151 @@ describe.skipIf(skip)("CheckInActor (X02)", () => {
    * was deleted (`recipe_id` set null, `check_ins_one_item` is `<= 1`), so
    * "exactly one drink" is the actor's rule on every write instead.
    */
+  describe("ux-c L08 · Made it — a recipe-only log", () => {
+    it("logs a recipe with no item, and Undo removes it", async () => {
+      await withTestDb(async (db) => {
+        const { drinker } = await scenario(db);
+        const author = await seedUser(db);
+        const recipeId = await seedRecipe(db, {
+          name: "Made-it Negroni",
+          createdById: author,
+        });
+        const id = randomUUID();
+        const logged = await (await actorFor(db, id)).log(
+          userCtx(drinker, "r"),
+          { recipeId },
+        );
+        expect(logged.entry.item).toBeNull();
+        expect(logged.entry.recipe).toEqual({ id: recipeId });
+        expect(logged.cellarItemId).toBeNull();
+        const [row] = await db
+          .select({ recipeId: checkIns.recipeId, wineId: checkIns.wineId })
+          .from(checkIns)
+          .where(eq(checkIns.id, id));
+        expect(row).toEqual({ recipeId, wineId: null });
+
+        expect(
+          await (await actorFor(db, id)).remove(userCtx(drinker, "r")),
+        ).toEqual({ ids: [id] });
+        const restored = await (await actorFor(db, id)).restore(
+          userCtx(drinker, "r"),
+        );
+        expect(restored.ids).toEqual([id]);
+      });
+    });
+
+    it("refuses a recipe log that also names an item or a bottle", async () => {
+      await withTestDb(async (db) => {
+        const { drinker, wine } = await scenario(db);
+        const recipeId = await seedRecipe(db, {
+          name: "Two-target sour",
+          createdById: drinker,
+        });
+        await expect(
+          (await actorFor(db)).log(userCtx(drinker, "r"), {
+            recipeId,
+            item: wine,
+          }),
+        ).rejects.toBeInstanceOf(ValidationError);
+      });
+    });
+
+    it("answers a hidden recipe exactly like a missing one", async () => {
+      await withTestDb(async (db) => {
+        const { drinker } = await scenario(db);
+        const author = await seedUser(db);
+        const hidden = await seedRecipe(db, {
+          name: "Someone's private bitters",
+          createdById: author,
+          privacy: "PRIVATE",
+        });
+        const missing = randomUUID();
+        const refused = async (recipeId: string) =>
+          refusalOf(
+            async () =>
+              (await actorFor(db)).log(userCtx(drinker, "r"), { recipeId }),
+            recipeId,
+          );
+        const forHidden = await refused(hidden);
+        expect(forHidden).toEqual(await refused(missing));
+        expect(forHidden.code).toBe("NOT_FOUND");
+      });
+    });
+
+    it("a friend sees a log on a PUBLIC recipe, not on a PRIVATE one — told it does not exist", async () => {
+      await withTestDb(async (db) => {
+        const { drinker, friend, stranger } = await scenario(db);
+        const open = await seedRecipe(db, {
+          name: "Shared spritz",
+          createdById: drinker,
+        });
+        const secret = await seedRecipe(db, {
+          name: "Drinker's private tonic",
+          createdById: drinker,
+          privacy: "PRIVATE",
+        });
+        const openLog = randomUUID();
+        const secretLog = randomUUID();
+        await (await actorFor(db, openLog)).log(userCtx(drinker, "r"), {
+          recipeId: open,
+        });
+        await (await actorFor(db, secretLog)).log(userCtx(drinker, "r"), {
+          recipeId: secret,
+        });
+
+        const seen = await (await actorFor(db, openLog)).get(
+          userCtx(friend, "r"),
+        );
+        expect(seen.recipe).toEqual({ id: open });
+        // The drinker sees their own log on their own private recipe.
+        expect(
+          (await (await actorFor(db, secretLog)).get(userCtx(drinker, "r")))
+            .recipe,
+        ).toEqual({ id: secret });
+
+        const missing = randomUUID();
+        const absent = await refusalOf(
+          async () => (await actorFor(db, missing)).get(userCtx(friend, "r")),
+          missing,
+        );
+        expect(
+          await refusalOf(
+            async () =>
+              (await actorFor(db, secretLog)).get(userCtx(friend, "r")),
+            secretLog,
+          ),
+        ).toEqual(absent);
+        // A stranger may see the PUBLIC recipe, but the log is friends-only.
+        expect(
+          await refusalOf(
+            async () =>
+              (await actorFor(db, openLog)).get(userCtx(stranger, "r")),
+            openLog,
+          ),
+        ).toEqual(absent);
+      });
+    });
+
+    it("a log whose recipe was deleted stays, naming nothing", async () => {
+      await withTestDb(async (db) => {
+        const { drinker, friend } = await scenario(db);
+        const recipeId = await seedRecipe(db, {
+          name: "Soon-gone flip",
+          createdById: drinker,
+        });
+        const id = randomUUID();
+        await (await actorFor(db, id)).log(userCtx(drinker, "r"), {
+          recipeId,
+        });
+        await db.execute(
+          sql`delete from public.recipes where id = ${recipeId}::uuid`,
+        );
+        const seen = await (await actorFor(db, id)).get(userCtx(friend, "r"));
+        expect(seen).toMatchObject({ item: null, recipe: null });
+      });
+    });
+  });
+
   describe("L44 · exactly one target on every write", () => {
     it("requireOneTarget admits one item or one recipe, and nothing else", () => {
       const none = {

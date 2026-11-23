@@ -142,6 +142,7 @@ import type {
   AiCapabilities,
   BarKind,
   BarPantryItemDto,
+  BrewPrefsDto,
   ConfirmFriendshipPayload,
   ConfirmFriendshipResult,
   Ctx,
@@ -157,6 +158,7 @@ import type {
   PlaceInteractionDto,
   RecordPlaceInteractionInput,
   SetBarPantryItemInput,
+  SetBrewPrefsInput,
   SetFavoriteResult,
   SetRecipeLoveResult,
   SetWantToTryResult,
@@ -169,6 +171,7 @@ import type {
   WantToTryTarget,
 } from "@cellar-assistant/contracts";
 import {
+  BREW_PREF_ITEM_TYPES,
   ConflictError,
   ForbiddenError,
   formatInviteToken,
@@ -191,6 +194,7 @@ import {
   friendInvites,
   friendRequests,
   friends,
+  itemBrewPrefs,
   itemFavorites,
   recipeFavorites,
   recipes,
@@ -312,6 +316,44 @@ const favoriteRef = (row: FavoriteRow): ItemRef | null => {
 
 /** `want_to_try`'s item arc; the seventh column, `recipe_id`, is read beside it. */
 const WISHES = ARCS.wantToTry;
+const BREW_PREFS = ARCS.itemBrewPrefs;
+
+type BrewPrefsRow = typeof itemBrewPrefs.$inferSelect;
+
+const toBrewPrefsDto = (item: ItemRef, row: BrewPrefsRow): BrewPrefsDto => ({
+  item,
+  waterTempC: row.waterTempC,
+  steepSeconds: row.steepSeconds,
+  doseGrams: row.doseGrams,
+  waterMl: row.waterMl,
+  updatedAt: new Date(row.updatedAt).toISOString(),
+});
+
+/**
+ * One override: absent or `null` clears it; otherwise a finite number inside
+ * the table's check (`item_brew_prefs_*`), refused before Postgres would.
+ */
+const brewNumber = (
+  value: unknown,
+  what: string,
+  { min, max, integer }: { min: number; max?: number; integer?: boolean },
+): number | null => {
+  if (value === null || value === undefined) return null;
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    throw new ValidationError(`${what} must be a number`);
+  }
+  if (integer === true && !Number.isInteger(value)) {
+    throw new ValidationError(`${what} must be a whole number`);
+  }
+  if (value < min || (max !== undefined && value > max)) {
+    throw new ValidationError(
+      max === undefined
+        ? `${what} must be more than 0`
+        : `${what} must be between ${min} and ${max}`,
+    );
+  }
+  return value;
+};
 
 /** What a `want_to_try` row names; `null` only for a row its check forbids. */
 const wishTarget = (row: WantToTryRow): WantToTryTarget | null => {
@@ -2045,6 +2087,97 @@ export class UserActor
    * counts are the owner's whatever the caller is allowed to see: an admin
    * asking gets *their own* numbers, because this actor is keyed by them.
    */
+  /* ---------------------------------------------------------------------- */
+  /* Brew prefs — ux-c L08                                                    */
+  /* ---------------------------------------------------------------------- */
+
+  /**
+   * The refusal for every brew-prefs call that may not proceed: somebody
+   * else's prefs, an item that does not exist, and a tea or coffee id that
+   * names nothing all answer this one `NotFound` (L6) — a stranger's call
+   * cannot tell "not yours" from "no such item".
+   */
+  #brewPrefsAbsent(item: ItemRef): NotFoundError {
+    return new NotFoundError(
+      `brew prefs for ${String(item?.type).toLowerCase()} ${String(item?.id)} not found`,
+    );
+  }
+
+  /** The ref, checked: a tea or a coffee that exists, asked by this user. */
+  async #requireBrewItem(ctx: Ctx, item: ItemRef): Promise<ItemRef> {
+    // The viewer's own prefs only — not even an admin reads someone's.
+    if (ctx.viewerId !== this.key) throw this.#brewPrefsAbsent(item);
+    const type: unknown = item?.type;
+    if (
+      typeof type !== "string" ||
+      !(BREW_PREF_ITEM_TYPES as readonly string[]).includes(type) ||
+      !isItemType(type)
+    ) {
+      throw new ValidationError("brew prefs are for a tea or a coffee");
+    }
+    if (!isUuid(item.id)) throw this.#brewPrefsAbsent(item);
+    const ref: ItemRef = { type, id: String(item.id).toLowerCase() };
+    if (!(await this.#itemExists(ref))) throw this.#brewPrefsAbsent(ref);
+    return ref;
+  }
+
+  async #brewPrefsRow(ref: ItemRef): Promise<BrewPrefsRow | null> {
+    const [row] = await this.db
+      .select()
+      .from(itemBrewPrefs)
+      .where(and(eq(itemBrewPrefs.userId, this.key), BREW_PREFS.where(ref)));
+    return row ?? null;
+  }
+
+  async brewPrefs(ctx: Ctx, item: ItemRef): Promise<BrewPrefsDto | null> {
+    const ref = await this.#requireBrewItem(ctx, item);
+    const row = await this.#brewPrefsRow(ref);
+    return row === null ? null : toBrewPrefsDto(ref, row);
+  }
+
+  async setBrewPrefs(
+    ctx: Ctx,
+    input: SetBrewPrefsInput,
+  ): Promise<BrewPrefsDto | null> {
+    const ref = await this.#requireBrewItem(ctx, input?.item);
+    const values = {
+      waterTempC: brewNumber(input.waterTempC, "waterTempC", {
+        min: 1,
+        max: 100,
+        integer: true,
+      }),
+      steepSeconds: brewNumber(input.steepSeconds, "steepSeconds", {
+        min: 1,
+        integer: true,
+      }),
+      doseGrams: brewNumber(input.doseGrams, "doseGrams", { min: 0.1 }),
+      waterMl: brewNumber(input.waterMl, "waterMl", { min: 1 }),
+    };
+    const empty = Object.values(values).every((value) => value === null);
+    await this.tx(async (tx) => {
+      // All four cleared is "back to typical": no row at all.
+      if (empty) {
+        await tx
+          .delete(itemBrewPrefs)
+          .where(
+            and(eq(itemBrewPrefs.userId, this.key), BREW_PREFS.where(ref)),
+          );
+        return;
+      }
+      const updated = await tx
+        .update(itemBrewPrefs)
+        .set({ ...values, updatedAt: new Date() })
+        .where(and(eq(itemBrewPrefs.userId, this.key), BREW_PREFS.where(ref)))
+        .returning({ id: itemBrewPrefs.id });
+      if (updated.length > 0) return;
+      await tx
+        .insert(itemBrewPrefs)
+        .values({ userId: this.key, ...BREW_PREFS.values(ref), ...values });
+    });
+    const row = await this.#brewPrefsRow(ref);
+    return row === null ? null : toBrewPrefsDto(ref, row);
+  }
+
   async counts(ctx: Ctx): Promise<UserCountsDto> {
     this.requireAggregate();
     this.#requireSelf(ctx, "see these counts");

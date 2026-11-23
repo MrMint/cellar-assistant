@@ -137,6 +137,11 @@ export const normaliseCheckInTags = (tags: readonly string[]): string[] => {
 };
 
 /** The bottle a log was poured from — both ids, because `CellarActor` is keyed by cellar. */
+/** The recipe a recipe log names (ux-c L08). */
+export type CheckInRecipeRef = {
+  readonly id: string;
+};
+
 export type CheckInBottleRef = {
   readonly cellarId: string;
   readonly cellarItemId: string;
@@ -144,10 +149,16 @@ export type CheckInBottleRef = {
 
 export type LogDrinkInput = {
   /**
-   * What was drunk. Required unless `bottle` is given, in which case it is
-   * read off the bottle — and if both are given they must agree.
+   * What was drunk. Required unless `bottle` or `recipeId` is given; with a
+   * bottle it is read off the bottle — and if both are given they must agree.
    */
   readonly item?: ItemRef | null;
+  /**
+   * ux-c L08 "Made it": a recipe the viewer made. A recipe log names the
+   * recipe and nothing else (L23) — no item, no bottle — and the recipe must
+   * be one the viewer may see; a hidden one answers like a missing one.
+   */
+  readonly recipeId?: string | null;
   /** The bottle, when it came from a cellar. The cellar must be visible to the viewer. */
   readonly bottle?: CheckInBottleRef | null;
   /** Half stars, or `null`/absent for no score. Never touches the review. */
@@ -221,8 +232,14 @@ export type ItemCheckInDto = {
   readonly userId: string;
   /** `check_ins.created_by_id` — who wrote it; differs for a companion row. */
   readonly createdById: string;
-  /** The item this entry is on. */
-  readonly item: ItemRef;
+  /**
+   * The item this entry is on, or `null` for a recipe log ("Made it", L23)
+   * — and then `recipe` is set, unless the recipe was deleted since (L44):
+   * a log with neither is "a recipe that was deleted".
+   */
+  readonly item: ItemRef | null;
+  /** The recipe a "Made it" log names, or `null` (an item log, or deleted). */
+  readonly recipe: CheckInRecipeRef | null;
   /** Half stars, or `null`. Not the review. */
   readonly score: number | null;
   readonly note: string | null;

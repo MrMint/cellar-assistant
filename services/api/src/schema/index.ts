@@ -84,5 +84,7 @@ import "./share.ts";
 import "./friend-profile.ts";
 // L04: the recap deck and breadth stamps (uses `ItemType` from item.ts).
 import "./recap.ts";
+// ux-c L08 (make): `Item.myBrewPrefs` and `setBrewPrefs` — reference `Item`.
+import "./brew-prefs.ts";
 
 export const schema = builder.toSchema();

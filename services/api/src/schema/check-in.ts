@@ -46,6 +46,7 @@ import { FileType } from "./file.ts";
 import { ItemCheckInType, ItemTypeEnum } from "./item.ts";
 import { connectionFromPage, toPageArgs } from "./pagination.ts";
 import { type PatchPolicy, patch, present } from "./patch.ts";
+import { RecipeType_, visibleRecipeIdOrNull } from "./recipe.ts";
 import { PlaceStubType } from "./tier-list.ts";
 
 /* -------------------------------------------------------------------------- */
@@ -53,6 +54,19 @@ import { PlaceStubType } from "./tier-list.ts";
 /* -------------------------------------------------------------------------- */
 
 builder.objectFields(ItemCheckInType, (t) => ({
+  recipe: t.field({
+    type: RecipeType_,
+    nullable: true,
+    description:
+      'ux-c L08: the recipe a "Made it" log names — then `item` is null. ' +
+      "Null for an item log, and for a log whose recipe was deleted since " +
+      '(render it as "a recipe that was deleted"). A recipe log is only ' +
+      "ever served to a viewer who may see the recipe (`canSeeRecipeLog`).",
+    resolve: (checkIn, _args, context) =>
+      checkIn.recipe === null
+        ? null
+        : visibleRecipeIdOrNull(context, checkIn.recipe.id),
+  }),
   place: t.field({
     type: PlaceStubType,
     nullable: true,
@@ -98,11 +112,19 @@ const DrinkLogBottleInput = builder.inputType("DrinkLogBottleInput", {
 
 const LogDrinkInput = builder.inputType("LogDrinkInput", {
   description:
-    "A drink you had. `item` or `bottle` (or both, agreeing). Everything else " +
+    "A drink you had. `item` or `bottle` (or both, agreeing), or a " +
+    "`recipeId` alone. Everything else " +
     "is optional; a score here is this glass's, not the item's review.",
   fields: (t) => ({
     item: t.field({ type: LogItemRefInput, required: false }),
     bottle: t.field({ type: DrinkLogBottleInput, required: false }),
+    recipeId: t.id({
+      required: false,
+      description:
+        'ux-c L08 "Made it": a recipe you made. A recipe log names the ' +
+        "recipe only — pass no `item` or `bottle` with it. A recipe you may " +
+        "not see answers like one that does not exist.",
+    }),
     score: t.float({
       required: false,
       description: "Half stars, 0.5 to 5.",
@@ -183,6 +205,7 @@ const toLogInput = (
         },
       }
     : {}),
+  ...(present(input.recipeId) ? { recipeId: String(input.recipeId) } : {}),
   ...(present(input.bottle)
     ? {
         bottle: {
