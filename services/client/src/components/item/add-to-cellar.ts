@@ -15,7 +15,8 @@ export const addedMessage = (count: number, cellarName: string): string =>
 /**
  * L02 — the re-buy offer: adding another bottle of something you have had
  * (any bottle of it, finished or not, besides the ones just added) asks for a
- * photo of its label or receipt, which keeps this bottle's price and date.
+ * photo of its label or receipt (the sheet's own copy says what the photo
+ * is for). The offer is its title only.
  * `null` for a first bottle: there is nothing to tell apart yet.
  */
 export const rebuyOffer = ({
@@ -27,10 +28,5 @@ export const rebuyOffer = ({
   bottlesOfItem: number;
   added: number;
   name: string;
-}): { readonly title: string; readonly body: string } | null =>
-  bottlesOfItem - added <= 0
-    ? null
-    : {
-        title: `Another ${name} added`,
-        body: "Snap its label or receipt to keep this bottle's price and date.",
-      };
+}): { readonly title: string } | null =>
+  bottlesOfItem - added <= 0 ? null : { title: `Another ${name} added` };

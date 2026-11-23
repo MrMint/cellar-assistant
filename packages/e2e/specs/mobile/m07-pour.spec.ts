@@ -258,6 +258,13 @@ test("the last pour: Finished, then the rating, then the band it reads as", asyn
 
   const rate = page.getByRole("dialog", { name: "How was it?" });
   await expect(rate).toBeVisible({ timeout: 20_000 });
+  // Save stays disabled until there is a score, and a trial click waits for
+  // an enabled button, so pick the score before the hit test below.
+  // The stars are visually-hidden radios: pick one as a keyboard does.
+  const four = rate.getByRole("radio", { name: /^4\.5 stars/ });
+  await four.focus();
+  await page.keyboard.press("Space");
+  await expect(four).toBeChecked();
   // Leftovers 3: the "Finished" Undo toast sits above the open sheet (M5's
   // `--sheet-inset`), so it never covers the sheet's action area. Prove it
   // while the toast is still showing: Save takes a hit-tested tap (a trial
@@ -284,11 +291,6 @@ test("the last pour: Finished, then the rating, then the band it reads as", asyn
       saveBox.y < toastBox.y + toastBox.height;
     expect(overlaps, "the toast covers the rating sheet's Save").toBe(false);
   }
-  // The stars are visually-hidden radios: pick one as a keyboard does.
-  const four = rate.getByRole("radio", { name: /^4\.5 stars/ });
-  await four.focus();
-  await page.keyboard.press("Space");
-  await expect(four).toBeChecked();
   await rate.getByRole("button", { name: "Save rating" }).click();
 
   const lists = page.getByRole("dialog", { name: "On your lists" });

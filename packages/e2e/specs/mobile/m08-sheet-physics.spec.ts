@@ -12,7 +12,8 @@ import { expect, test } from "../../fixtures/mobile.ts";
  *
  * The sheet is the map's Filters (MapFilter is a BottomSheet on a phone,
  * L15): it needs no data, so nothing is created. The second test shortens the
- * viewport so the filters overflow the sheet and its body scrolls.
+ * viewport to 390×320 so even the filters every user sees overflow the sheet
+ * and its body scrolls.
  */
 
 type Point = { x: number; y: number };
@@ -95,7 +96,11 @@ test("a list inside a sheet scrolls without dismissing it", async ({
   page,
   noise,
 }) => {
-  await page.setViewportSize({ width: 390, height: 480 });
+  // 320 tall: the sheet caps at 90dvh (288 px), and after its title and
+  // footer the body is shorter than the filters that always render (Minimum
+  // Rating and Visit Status, 185 px). The Tier Lists section only appears for
+  // a user with tier lists, so a taller viewport made this depend on data.
+  await page.setViewportSize({ width: 390, height: 320 });
   const sheet = await openFilters(page);
   const body = sheet.locator(".overflow-y-auto").first();
   const metrics = await body.evaluate((el) => ({
@@ -104,7 +109,7 @@ test("a list inside a sheet scrolls without dismissing it", async ({
   }));
   expect(
     metrics.scrollHeight,
-    "at 390×480 the filters should overflow the sheet, so its body scrolls",
+    "at 390×320 the filters should overflow the sheet, so its body scrolls",
   ).toBeGreaterThan(metrics.clientHeight);
 
   const sheetTop = async () => (await sheet.boundingBox())?.y ?? 0;
