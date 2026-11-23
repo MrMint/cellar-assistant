@@ -1,6 +1,6 @@
 "use client";
 
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import type { MouseEvent } from "react";
 import { cn } from "@/lib/utils";
 import { Link } from "./Link";
@@ -11,6 +11,7 @@ import {
   opensElsewhere,
   useOptimisticTab,
 } from "./TabBar";
+import { useNavigate } from "./useNavigate";
 
 /**
  * From `sm` up: the same five destinations as `TabBar`, stacked in a rail on
@@ -18,13 +19,13 @@ import {
  */
 export function SideRail({ className }: { className?: string }) {
   const pathname = usePathname() ?? "/";
-  const router = useRouter();
+  const navigate = useNavigate();
   const [active, setActive] = useOptimisticTab();
 
   const onTap = (event: MouseEvent<HTMLAnchorElement>, tab: Tab) => {
     if (opensElsewhere(event)) return;
     if (tab.key === active) {
-      if (handleActiveTabTap(tab, pathname, router.push)) {
+      if (handleActiveTabTap(tab, pathname, navigate.push)) {
         event.preventDefault();
       }
       return;
