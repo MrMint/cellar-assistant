@@ -24,6 +24,7 @@ import {
   seedFriendship,
   seedItemOfType,
   seedItemReview,
+  seedRecipe,
   seedWine,
 } from "../lib/search-testing.ts";
 import {
@@ -235,6 +236,33 @@ describe.skipIf(skip)("TasteActor", () => {
           agreed: 4,
           byType: [{ type: "WINE", shared: 6, agreed: 4 }],
         });
+      });
+    });
+
+    it("a recipe-only drink log is not an item rating", async () => {
+      await withTestDb(async (db) => {
+        const user = await seedUser(db);
+        const wine = await seedItemOfType(db, "WINE", user);
+        await scoreCheckIn(db, user, wine, 4);
+        const recipeId = await seedRecipe(db, {
+          name: "Negroni test",
+          type: "cocktail",
+          createdById: user,
+        });
+        // A logged pour of the recipe: a seeded log moved off its wine.
+        const logId = await seedCheckIn(db, {
+          userId: user,
+          item: await seedItemOfType(db, "WINE", user),
+        });
+        await db.execute(sql`
+          update public.check_ins
+          set wine_id = null, recipe_id = ${recipeId}::uuid, score = 5
+          where id = ${logId}::uuid
+        `);
+        const rows = await ratingsOf(db, { kind: "everything" }, user);
+        expect(rows).toEqual([
+          expect.objectContaining({ type: "WINE", itemId: wine.id, score: 4 }),
+        ]);
       });
     });
 
