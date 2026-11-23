@@ -554,3 +554,11 @@ bars stay put. The pieces:
   not animate. Render at most one `AppBar` at a time (two would share a name
   and the browser skips the transition).
 
+## Make mode and the brew timer (L08)
+
+`components/make/` holds Make mode (`MakeMode`, at `/recipes/[id]/make`) and
+the pieces it shares with the Steep / Brew guide: `timer.ts` (a pure
+countdown: idle, running, paused, done — every transition takes `now`) behind
+`useCountdown`, and `wake-lock.ts` (feature-detected Screen Wake Lock)
+behind `useWakeLock`. Reach for `useCountdown` for any countdown rather than
+a new interval, and never assume `navigator.wakeLock` exists.

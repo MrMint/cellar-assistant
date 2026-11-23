@@ -812,3 +812,46 @@ reverse them. Each names the item it belongs to; none overrides an answer.
   fragment lacks Wine `style`, Spirit `spiritType` and Tea `form`, so a card
   shows variety/beer/tea-category vessels until it selects them (hand-off).
 
+
+### Make mode, Made it, Steep and Brew (wave C "make": L08)
+
+- **Make mode** is `/recipes/[id]/make`, reached from "Make it" on a saved
+  recipe with steps (not on an AI draft). One step at a time; a step is
+  timed only when the recipe says so (`time_minutes`, or a duration written
+  in its text up to an hour, a range taking its longer end); nothing is
+  guessed. Servings run 1–12 from the recipe's serving size; an amount the
+  recipe wrote only as text keeps its text and gets "× n".
+- **The screen stays on** through the Screen Wake Lock API, feature
+  detected: the "Screen stays on while you make it" line appears only where
+  the browser has it, and a refusal is silent. It is asked for again when
+  the tab comes back.
+- **Made it** is a recipe-only drink log: `logDrink` with `recipeId`, no
+  item and no bottle — CheckInActor refuses a log with a recipe and either
+  (L23, L44). Undo in its toast deletes the log. A recipe the viewer may
+  not see and one that does not exist are the same `NOT_FOUND`. The
+  optional rating afterwards is the recipe's own review form (L29).
+- **Who sees a recipe log** (L6, L28): `canSeeRecipeLog` — the viewer must
+  be allowed the log *and* the recipe; a recipe that could not be loaded
+  answers like a forbidden one. The SQL twin sits in `canSeeCheckInSql`, so
+  the friends feed, a friend's log and a log's photo all inherit it. A
+  deleted recipe leaves an ordinary log that reads "a recipe that was
+  deleted", with no link.
+- **Steep and Brew** are a fixed table labelled "typical" (L3): tea by
+  category for one western cup, matcha by its form (whisked, so no time),
+  coffee by roast for one 15 g : 250 ml pour-over. `blend`, an unknown
+  category and a coffee with no roast have no row, so no guide shows until
+  the user enters their own numbers ("Add your own"). Each number of your
+  own replaces the typical one and is marked "yours". All four cleared goes
+  back to typical (the row is deleted).
+- **Your numbers are yours alone.** `myBrewPrefs` and `setBrewPrefs` go to
+  the viewer's own UserActor; another user's prefs and a missing item
+  answer the same `NOT_FOUND`, admin included. `setBrewPrefs` takes scalar
+  arguments, not an input object: it replaces the whole row, so there is no
+  partial update for a patch policy to guard.
+- **Board differences.** The MakeMode board's step text, servings stepper,
+  segmented progress and Back / Next (gold) footer are kept; the
+  ingredient checklist is always below the step rather than a drawer. The
+  done state ("Made it") is a page of its own with the review form and
+  "Back to the recipe", not a sheet. The BrewGuide board's facts grid shows
+  only the numbers that exist (matcha has no time), and the coffee row's
+  "V60" method name is not shown — the table has one method per type.
