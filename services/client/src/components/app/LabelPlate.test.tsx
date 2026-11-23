@@ -8,7 +8,14 @@ import { describe, test } from "node:test";
 import { renderToStaticMarkup } from "react-dom/server";
 import { ITEM_TYPE_ORDER } from "@/lib/tokens";
 import { openTag, textOf } from "../../test-support/markup";
-import { LabelPlate } from "./LabelPlate";
+import { LabelPlate, vesselShape } from "./LabelPlate";
+import {
+  TYPE_VESSEL,
+  VESSEL_NAMES,
+  VESSEL_PATHS,
+  VESSEL_RULES,
+  vesselFor,
+} from "./label-plate/silhouettes";
 
 const full = {
   producer: "Vietti",
@@ -78,5 +85,103 @@ describe("LabelPlate", () => {
       <LabelPlate type="SAKE" plate={{ ...full }} />,
     );
     assert.equal(a, b);
+  });
+});
+
+/**
+ * B03's style → vessel table, pinned row by row: a change to which style gets
+ * which bottle is a change to this list, on purpose.
+ */
+describe("style → vessel table", () => {
+  const cases = [
+    // [type, fields, vessel]
+    ["WINE", { style: "SPARKLING" }, "sparkling"],
+    ["WINE", { style: "SPARKLING", variety: "CHARDONNAY" }, "sparkling"],
+    ["WINE", { style: "RED", variety: "PINOT_NOIR" }, "burgundy"],
+    ["WINE", { style: "WHITE", variety: "CHARDONNAY" }, "burgundy"],
+    ["WINE", { style: "WHITE", variety: "RIESLING" }, "alsace"],
+    ["WINE", { style: "WHITE", variety: "GEWURZTRAMINER" }, "alsace"],
+    ["WINE", { style: "WHITE", variety: "Gewürztraminer" }, "alsace"],
+    ["BEER", { style: "AMERICAN_IPA" }, "can"],
+    ["BEER", { style: "India Pale Ale" }, "can"],
+    ["BEER", { style: "SOUR" }, "can"],
+    ["BEER", { style: "GOSE" }, "can"],
+    ["BEER", { style: "VIENNA_LAGER" }, "stubby"],
+    ["BEER", { style: "PILSENER_PILSNER_PILS" }, "stubby"],
+    ["BEER", { style: "MUNICH_HELLES" }, "stubby"],
+    ["SPIRIT", { style: "WHISKEY" }, "square"],
+    ["SPIRIT", { style: "SCOTCH" }, "square"],
+    ["SPIRIT", { style: "BOURBON" }, "square"],
+    ["SPIRIT", { style: "RYE" }, "square"],
+    ["SPIRIT", { style: "GIN" }, "tall"],
+    ["SPIRIT", { style: "VODKA" }, "tall"],
+    ["TEA", { style: "green", form: "tea_bag" }, "pouch"],
+    ["TEA", { form: "sachet" }, "pouch"],
+    ["TEA", { form: "matcha_powder" }, "pouch"],
+    ["TEA", { form: "instant" }, "pouch"],
+  ] as const;
+
+  for (const [type, fields, vessel] of cases) {
+    test(`${type} ${JSON.stringify(fields)} → ${vessel}`, () => {
+      assert.equal(vesselFor(type, fields), vessel);
+    });
+  }
+
+  test("every rule is exercised by a case above", () => {
+    for (const rule of VESSEL_RULES) {
+      assert.ok(
+        cases.some(
+          ([type, , vessel]) => type === rule.type && vessel === rule.vessel,
+        ),
+        `no case pins ${rule.type} → ${rule.vessel}`,
+      );
+    }
+  });
+
+  test("fallback: no fields, or an unknown style, gets the type's vessel", () => {
+    for (const type of ITEM_TYPE_ORDER) {
+      assert.equal(vesselFor(type), TYPE_VESSEL[type]);
+      assert.equal(vesselFor(type, null), TYPE_VESSEL[type]);
+      assert.equal(
+        vesselFor(type, { style: "NOT_A_STYLE", variety: "X", form: "Y" }),
+        TYPE_VESSEL[type],
+      );
+    }
+    assert.deepEqual(TYPE_VESSEL, {
+      WINE: "bordeaux",
+      BEER: "tall-neck",
+      SPIRIT: "decanter",
+      SAKE: "tokkuri",
+      COFFEE: "bag",
+      TEA: "tin",
+    });
+  });
+
+  test("a style rule only fires for its own type", () => {
+    assert.equal(vesselFor("BEER", { style: "SPARKLING" }), "tall-neck");
+    assert.equal(vesselFor("WINE", { style: "GIN" }), "bordeaux");
+    // Whole words only: "ginger" is not gin.
+    assert.equal(vesselFor("SPIRIT", { style: "GINGER_LIQUEUR" }), "decanter");
+    assert.equal(vesselFor("TEA", { form: "loose_leaf" }), "tin");
+  });
+
+  test("fourteen vessels, each with its own outline", () => {
+    assert.equal(VESSEL_NAMES.length, 14);
+    const paths = new Set(VESSEL_NAMES.map((name) => VESSEL_PATHS[name].d));
+    assert.equal(paths.size, VESSEL_NAMES.length);
+  });
+
+  test("the plate draws the style's vessel; vesselShape agrees", () => {
+    const html = renderToStaticMarkup(
+      <LabelPlate
+        type="BEER"
+        plate={{ name: "X" }}
+        styleFields={{ style: "AMERICAN_IPA" }}
+      />,
+    );
+    assert.match(html, /data-vessel="can"/);
+    assert.match(html, new RegExp(`d="${VESSEL_PATHS.can.d}"`));
+    assert.equal(vesselShape("BEER", { style: "AMERICAN_IPA" }).name, "can");
+    assert.equal(vesselShape("BEER").name, "tall-neck");
   });
 });

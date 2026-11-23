@@ -196,8 +196,13 @@ export const RecipeDetails = ({
                 className="absolute inset-0 size-full object-cover"
               />
             ) : (
-              // X15: a drawn plate, never a wine bottle for a cocktail.
-              <RecipePlate name={recipe.name} type={recipe.type} />
+              // X15: a drawn plate, never a wine bottle for a cocktail; B03
+              // colours its glass from the ingredients.
+              <RecipePlate
+                name={recipe.name}
+                type={recipe.type}
+                ingredients={recipe.ingredients}
+              />
             )}
           </div>
         </div>
