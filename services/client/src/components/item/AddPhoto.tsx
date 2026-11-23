@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { PhotoLibrary, Warning } from "@/components/app/icons";
 import { ResponsiveDialog } from "@/components/app/ResponsiveDialog";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
 import { describeUploadBlockers } from "@/lib/api/files";
 import { dataUrlToFile } from "@/lib/items/data-url";
 import { CameraCapture } from "../common/CameraCapture";
@@ -16,6 +17,8 @@ export type AddPhotoProps = {
   open: boolean;
   onClose: () => void;
   onCapture: (image: File) => Promise<void>;
+  /** The dialog's title; the display-image one by default. */
+  title?: string;
 };
 
 /**
@@ -34,13 +37,18 @@ export type AddPhotoProps = {
  *   otherwise leave the dialog spinning with no way to set a photo. The
  *   upload's error, which the old modal dropped, is shown.
  */
-export const AddPhotoModal = ({ open, onClose, onCapture }: AddPhotoProps) => (
+export const AddPhotoModal = ({
+  open,
+  onClose,
+  onCapture,
+  title = TITLE,
+}: AddPhotoProps) => (
   <ResponsiveDialog
     open={open}
     onOpenChange={(next) => {
       if (!next) onClose();
     }}
-    title={TITLE}
+    title={title}
   >
     {/* Mounted only while open: a closed dialog holds no camera stream. */}
     {open && <AddPhotoBody onCapture={onCapture} showTitle={false} />}
@@ -129,3 +137,40 @@ export const AddPhotoBody = ({
     </div>
   );
 };
+
+/**
+ * L02 — the re-buy card (the DrinkSoon board): "Another <name> added · Snap
+ * its label or receipt to keep this bottle's price and date." with
+ * [Add photo] [Not now]. The words come from `rebuyOffer`.
+ */
+export const RebuyPhotoOffer = ({
+  title,
+  body,
+  onAddPhoto,
+  onDismiss,
+}: {
+  title: string;
+  body: string;
+  onAddPhoto: () => void;
+  onDismiss: () => void;
+}) => (
+  <div data-slot="rebuy-photo" className="flex flex-col gap-4">
+    <div className="flex items-start gap-3">
+      <span className="flex size-10 shrink-0 items-center justify-center rounded-md bg-surface-2 text-ink-2">
+        <PhotoLibrary aria-hidden />
+      </span>
+      <div className="flex flex-col gap-0.5">
+        <p className="type-headline text-ink-1">{title}</p>
+        <p className="type-footnote text-ink-2">{body}</p>
+      </div>
+    </div>
+    <div className="flex gap-2">
+      <Button className="flex-1" onClick={onAddPhoto}>
+        Add photo
+      </Button>
+      <Button className="flex-1" variant="ghost" onClick={onDismiss}>
+        Not now
+      </Button>
+    </div>
+  </div>
+);

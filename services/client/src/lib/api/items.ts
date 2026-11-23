@@ -707,6 +707,28 @@ export const SetFavoriteMutation = graphql(
 );
 
 /**
+ * L02's re-buy check: how many bottles of this item you have had, in any
+ * state, and its name for the offer's line.
+ */
+export const ItemBottleHistoryQuery = graphql(`
+  query ItemBottleHistory($itemId: ID!, $type: ItemType!) {
+    item(id: $itemId, type: $type) {
+      __typename
+      ... on QueryItemSuccess {
+        data {
+          __typename
+          id
+          name
+          myBottles(first: 1, status: ALL) {
+            totalCount
+          }
+        }
+      }
+    }
+  }
+`);
+
+/**
  * Point an `item_image` row at an already-uploaded file.
  *
  * `fileId` must name a `files` row `FileActor.verify` has accepted — an upload

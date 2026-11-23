@@ -11,3 +11,26 @@ export const addedMessage = (count: number, cellarName: string): string =>
   count === 1
     ? `Added to ${cellarName}`
     : `Added ${count} bottles to ${cellarName}`;
+
+/**
+ * L02 — the re-buy offer: adding another bottle of something you have had
+ * (any bottle of it, finished or not, besides the ones just added) asks for a
+ * photo of its label or receipt, which keeps this bottle's price and date.
+ * `null` for a first bottle: there is nothing to tell apart yet.
+ */
+export const rebuyOffer = ({
+  bottlesOfItem,
+  added,
+  name,
+}: {
+  /** Every bottle of this item in your cellars, after the add (status ALL). */
+  bottlesOfItem: number;
+  added: number;
+  name: string;
+}): { readonly title: string; readonly body: string } | null =>
+  bottlesOfItem - added <= 0
+    ? null
+    : {
+        title: `Another ${name} added`,
+        body: "Snap its label or receipt to keep this bottle's price and date.",
+      };
