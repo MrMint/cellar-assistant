@@ -23,6 +23,7 @@ import {
   type LogDraft,
   type LogSubject,
 } from "./log-draft";
+import { announceDrinkLogChanged } from "./log-events";
 import {
   DeleteDrinkLogMutation,
   DrinkLogEntryFragment,
@@ -165,6 +166,7 @@ export function YourLog({
       return;
     }
     notify("Log restored", { tone: "success" });
+    announceDrinkLogChanged(subject.itemId);
     refresh();
   };
 
@@ -180,6 +182,7 @@ export function YourLog({
       });
       return;
     }
+    announceDrinkLogChanged(subject.itemId);
     refresh();
     notify(
       removed.data.ids.length > 1

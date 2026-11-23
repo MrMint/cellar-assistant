@@ -3,6 +3,7 @@ import {
   type SeenAtRow,
   seenAtDistance,
   seenAtRows,
+  seenAtView,
   seenAtWhy,
 } from "./seen-at";
 
@@ -64,5 +65,44 @@ describe("L10 · Seen at wording", () => {
     expect(
       seenAtRows({ item: { __typename: "NotFoundError" } } as never),
     ).toEqual([]);
+  });
+});
+
+describe("W-15 · what the Seen at slot shows", () => {
+  const answer = (rows: SeenAtRow[]) =>
+    ({
+      item: {
+        __typename: "QueryItemSuccess",
+        data: {
+          __typename: "Wine",
+          id: "i",
+          seenAt: {
+            totalCount: rows.length,
+            edges: rows.map((node) => ({ node })),
+          },
+        },
+      },
+    }) as unknown as Parameters<typeof seenAtView>[0];
+
+  test("places: the list (and its prompt)", () => {
+    expect(seenAtView(answer([row({})]), true)).toBe("list");
+    expect(seenAtView(answer([row({})]), false)).toBe("list");
+  });
+  test("no places, menu scanning offered: the prompt alone", () => {
+    expect(seenAtView(answer([]), true)).toBe("prompt");
+  });
+  test("nothing to show and nothing the viewer can do: nothing (M4)", () => {
+    expect(seenAtView(answer([]), false)).toBe("none");
+  });
+  test("no answer yet, or a refusal: nothing", () => {
+    expect(seenAtView(undefined, true)).toBe("none");
+    expect(
+      seenAtView(
+        {
+          item: { __typename: "NotFoundError" },
+        } as unknown as Parameters<typeof seenAtView>[0],
+        true,
+      ),
+    ).toBe("none");
   });
 });

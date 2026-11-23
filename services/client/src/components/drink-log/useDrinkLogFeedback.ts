@@ -5,6 +5,7 @@ import { useMutation } from "urql";
 import { notify } from "@/components/app/notify";
 import { unwrapResult } from "@/lib/api/result";
 import type { LogDrinkSheetProps } from "./LogDrinkSheet";
+import { announceDrinkLogChanged } from "./log-events";
 import { DeleteDrinkLogMutation } from "./queries";
 
 type Saved = Parameters<NonNullable<LogDrinkSheetProps["onSaved"]>>[0];
@@ -57,6 +58,7 @@ export function useDrinkLogFeedback({
               return;
             }
             notify("Log removed");
+            announceDrinkLogChanged(null);
             onChanged?.();
           })();
         },

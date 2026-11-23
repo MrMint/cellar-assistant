@@ -118,3 +118,22 @@ export const seenAtDistance = (meters: number | null): string | null => {
 
 /** Where "Scan a menu" goes: the capture surface's Menu mode. */
 export const SCAN_A_MENU_HREF = "/add?mode=menu";
+
+/**
+ * What the Seen at slot shows (W-15, decisions.md): the places and the scan
+ * prompt when there are places; the prompt alone when the item has none yet
+ * and the viewer can scan a menu — the prompt is the way into scan-anywhere,
+ * and an item nobody has seen anywhere is exactly where it is needed; and
+ * nothing (M4) while the answer is still coming, when the read failed, or when
+ * there is nothing to show and menu scanning is not offered here.
+ */
+export type SeenAtView = "list" | "prompt" | "none";
+
+export const seenAtView = (
+  data: ResultOf<typeof ItemSeenAtQuery> | undefined,
+  menuScanOffered: boolean,
+): SeenAtView => {
+  if (data?.item?.__typename !== "QueryItemSuccess") return "none";
+  if (seenAtRows(data).length > 0) return "list";
+  return menuScanOffered ? "prompt" : "none";
+};
