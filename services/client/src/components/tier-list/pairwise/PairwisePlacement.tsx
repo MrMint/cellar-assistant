@@ -135,6 +135,8 @@ export function PairwisePlacement({
   const [state, setState] = useState<PlacementState | null>(null);
   const [placed, setPlaced] = useState<Placed | null>(null);
   const [saving, setSaving] = useState(false);
+  // Whether Undo took this entry back (the pending screen's words).
+  const [tookBack, setTookBack] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [announcement, setAnnouncement] = useState("");
   const questionRef = useRef<HTMLHeadingElement>(null);
@@ -171,14 +173,13 @@ export function PairwisePlacement({
     [addItemToTierListAction, board, candidate, router, tierListId],
   );
 
-  // The first question, once the board is read — or, for an empty band,
-  // straight to the add: there is nothing to compare with.
+  // The first question, once the board is read. An empty band has nothing
+  // to compare with, so the pending screen says so and waits for a tap:
+  // nothing is saved that the person did not ask for (W-1).
   useEffect(() => {
     if (board === null || state !== null) return;
-    const start = startPlacement(board, band);
-    setState(start);
-    if (placementResult(start) !== null) void commit(start);
-  }, [band, board, commit, state]);
+    setState(startPlacement(board, band));
+  }, [band, board, state]);
 
   const respond = (next: PlacementState) => {
     setState(next);
@@ -205,6 +206,7 @@ export function PairwisePlacement({
       return;
     }
     setPlaced(null);
+    setTookBack(true);
     setState(startPlacement(board, band));
     setAnnouncement(`Took back ${candidate.name}. Which do you like more?`);
     router.refresh();
@@ -284,8 +286,8 @@ export function PairwisePlacement({
     );
   }
 
-  // A finished placement that is not placed: the add failed, or Undo took
-  // back an entry that had nothing to compare with (an empty band). Either
+  // A finished placement that is not placed: nothing to compare with (an
+  // empty band, W-1), the add failed, or Undo took back such an entry. Each
   // way the sheet offers the next step, never a skeleton (CR-2).
   if (
     state !== null &&
@@ -304,9 +306,14 @@ export function PairwisePlacement({
           <p role="alert" className="text-destructive type-callout">
             {error}
           </p>
-        ) : (
+        ) : tookBack ? (
           <p className="text-ink-2 type-callout">
             Took back {candidate.name}. It isn&apos;t on {bandLabel} now.
+          </p>
+        ) : (
+          <p className="text-ink-2 type-callout">
+            Nothing in {bandLabel} to compare {candidate.name} with yet, so it
+            goes first.
           </p>
         )}
         <div className="mt-auto flex w-full flex-col gap-1">
@@ -314,7 +321,11 @@ export function PairwisePlacement({
             className="h-13 w-full rounded-full"
             onClick={() => void commit(state)}
           >
-            {error !== null ? "Try again" : "Place it again"}
+            {error !== null
+              ? "Try again"
+              : tookBack
+                ? "Place it again"
+                : "Place it"}
           </Button>
           {error !== null && state.asked > 0 && (
             <Button
