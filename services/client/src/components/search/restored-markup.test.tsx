@@ -65,6 +65,14 @@ describe("ClientSearchInterface (restored)", () => {
     assert.doesNotMatch(text(html), /\bSearch\b/);
   });
 
+  test("W-12: an empty sheet opens with the box focused, a query's does not", () => {
+    assert.match(render(<ClientSearchInterface />), /<input[^>]*autofocus/i);
+    assert.doesNotMatch(
+      render(<ClientSearchInterface urlQuery="barolo" />),
+      /<input[^>]*autofocus/i,
+    );
+  });
+
   test("a query swaps both buttons for the round scan and camera icons and adds clear", () => {
     const html = render(<ClientSearchInterface urlQuery="barolo" />);
     assert.match(html, /value="barolo"/);
