@@ -4,10 +4,12 @@
  * (`seen-at.test.ts`). Every privacy rule is the server's — this module only
  * says what each row already is.
  */
+import { ActorErrorFieldsFragment } from "@/lib/api/errors";
 import { graphql, type ResultOf } from "@/lib/api/graphql";
 import { formatDistance } from "@/lib/items/distance";
 
-export const ItemSeenAtQuery = graphql(`
+export const ItemSeenAtQuery = graphql(
+  `
   query ItemSeenAt($id: ID!, $type: ItemType!, $near: LngLatInput) {
     item(id: $id, type: $type) {
       __typename
@@ -32,9 +34,12 @@ export const ItemSeenAtQuery = graphql(`
           }
         }
       }
+      ...ActorErrorFields
     }
   }
-`);
+`,
+  [ActorErrorFieldsFragment],
+);
 
 type ItemResult = NonNullable<ResultOf<typeof ItemSeenAtQuery>["item"]>;
 type Success = Extract<ItemResult, { __typename: "QueryItemSuccess" }>;
