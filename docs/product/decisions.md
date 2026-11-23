@@ -846,3 +846,8 @@ reverse them. Each names the item it belongs to; none overrides an answer.
   Satori has no Fraunces, so the share image uses the default face at the
   board's hierarchy. The Me entry is a "Your <month> recap" row inside the
   `MeStamps` slot, since `MeHub` is not this stream's file.
+- **No list fields in the API (§1.5).** `schema.test.ts` refuses a composite
+  list outside a connection's edges, so the deck is `RecapCards` (a nullable
+  field per card kind, plus `earned` stamps) and stamps are `BreadthStamps` (a
+  field per kind). The client orders the deck once (`deckOf`), and the share
+  image route indexes the same order.
