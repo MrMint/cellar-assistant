@@ -39,6 +39,16 @@
 /** The 300 ms pause the old box waited before navigating. */
 export const SEARCH_DEBOUNCE_MS = 300;
 
+/**
+ * Close on the search sheet (X10, leftovers 9): back to where it was opened
+ * from, Home on a cold open, by *replacing* the sheet's entry. A push would
+ * leave `/search` in the history, so Back after Close reopened the sheet.
+ */
+export const closeSearch = (
+  navigate: { replace(href: string, opts?: { kind?: "back" }): void },
+  origin: string | null,
+): void => navigate.replace(origin ?? "/", { kind: "back" });
+
 /** Where a text query goes: `/search?q=<trimmed>`, or `/search` when blank. */
 export const textSearchHref = (value: string): string => {
   const query = value.trim();

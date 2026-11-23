@@ -258,6 +258,32 @@ test("the last pour: Finished, then the rating, then the band it reads as", asyn
 
   const rate = page.getByRole("dialog", { name: "How was it?" });
   await expect(rate).toBeVisible({ timeout: 20_000 });
+  // Leftovers 3: the "Finished" Undo toast sits above the open sheet (M5's
+  // `--sheet-inset`), so it never covers the sheet's action area. Prove it
+  // while the toast is still showing: Save takes a hit-tested tap (a trial
+  // click fails when another element would receive it) and the two boxes do
+  // not overlap.
+  const finished = page
+    .locator("[data-sonner-toast]")
+    .filter({ hasText: "Finished. Moved out of the cellar." });
+  const save = rate.getByRole("button", { name: "Save rating" });
+  await expect(page.locator("html[data-sheet-open]")).toHaveCount(1);
+  await expect(finished).toBeVisible();
+  await save.click({ trial: true });
+  const [toastBox, saveBox] = await Promise.all([
+    finished.boundingBox(),
+    save.boundingBox(),
+  ]);
+  expect(toastBox, "the toast has a box").not.toBeNull();
+  expect(saveBox, "Save has a box").not.toBeNull();
+  if (toastBox !== null && saveBox !== null) {
+    const overlaps =
+      toastBox.x < saveBox.x + saveBox.width &&
+      saveBox.x < toastBox.x + toastBox.width &&
+      toastBox.y < saveBox.y + saveBox.height &&
+      saveBox.y < toastBox.y + toastBox.height;
+    expect(overlaps, "the toast covers the rating sheet's Save").toBe(false);
+  }
   // The stars are visually-hidden radios: pick one as a keyboard does.
   const four = rate.getByRole("radio", { name: /^4\.5 stars/ });
   await four.focus();

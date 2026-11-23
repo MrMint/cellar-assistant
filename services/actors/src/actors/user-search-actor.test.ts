@@ -288,6 +288,33 @@ describe.skipIf(skip)("UserSearchActor (§2.3, §1.5)", () => {
     });
   });
 
+  it("answers nobody by that name with the same empty set in both modes, and an existing person with a hit (leftovers 5)", async () => {
+    await withTestDb(async (db) => {
+      const s = await scenario(db);
+      for (const includeConnected of [false, true]) {
+        const nobody: UserSearchInput = {
+          term: "Zebedee",
+          ...(includeConnected ? { includeConnected } : {}),
+        };
+        expect(
+          await newActor(nobody, db, s.viewer, s.profiles).all(
+            userCtx(s.viewer),
+            nobody,
+          ),
+        ).toEqual([]);
+        const someone: UserSearchInput = {
+          term: "Alberta",
+          ...(includeConnected ? { includeConnected } : {}),
+        };
+        const hits = await newActor(someone, db, s.viewer, s.profiles).all(
+          userCtx(s.viewer),
+          someone,
+        );
+        expect(hits.map((hit) => hit.userId)).toEqual([s.stranger]);
+      }
+    });
+  });
+
   it("refuses an anonymous caller and an empty term", async () => {
     await withTestDb(async (db) => {
       const s = await scenario(db);

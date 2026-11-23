@@ -313,7 +313,7 @@ describe("rows", () => {
     assert.equal(row?.description, "Cocktail");
   });
 
-  test("people: friends and requests open Friends; anyone else ends in Add", () => {
+  test("people: a friend opens their profile, a request opens Friends; anyone else ends in Add", () => {
     const rows = peopleRows({
       userSearch: {
         __typename: "UserSearchConnection",
@@ -348,7 +348,7 @@ describe("rows", () => {
     assert.deepEqual(
       rows.map((row) => [row.title, row.description, row.href, row.addFriend]),
       [
-        ["Alfred", "Friend", "/friends", undefined],
+        ["Alfred", "Friend", "/users/u1", undefined],
         ["Alonzo", "Wants to be friends", "/friends", undefined],
         ["Alberta", undefined, undefined, { userId: "u3", name: "Alberta" }],
       ],
