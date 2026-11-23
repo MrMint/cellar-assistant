@@ -60,16 +60,16 @@ describe("recapCardCopy", () => {
       card({ kind: "STAMP", stamp: { kind: "REGIONS", count: 6, tier: 5 } }),
     );
     assert.equal(copy.big, "");
-    assert.equal(copy.title, "5 regions\ntried");
+    assert.equal(copy.title, "5+ regions\ntried");
   });
 });
 
 describe("stamps", () => {
   test("labels a tier with its noun", () => {
-    assert.equal(stampLabel({ kind: "TYPES", tier: 3 }), "3 kinds of drink");
+    assert.equal(stampLabel({ kind: "TYPES", tier: 3 }), "3+ kinds of drink");
     assert.equal(
       stampDescription({ kind: "STYLES", tier: 5, count: 7 }),
-      "Stamp: 5 styles (7 so far)",
+      "Stamp: 5+ styles (7 so far)",
     );
   });
 
@@ -77,7 +77,7 @@ describe("stamps", () => {
     const html = renderToStaticMarkup(
       <RecapStamp stamp={{ kind: "RECIPES", tier: 3, count: 3 }} />,
     );
-    assert.match(html, /aria-label="Stamp: 3 recipes made"/);
+    assert.match(html, /aria-label="Stamp: 3\+ recipes made"/);
   });
 });
 
