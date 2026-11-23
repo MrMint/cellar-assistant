@@ -542,6 +542,37 @@ export const relations = defineRelations(schema, (r) => ({
 			to: r.wines.id
 		}),
 	},
+	// ux-c seams (M1): hand-added with the `item_brew_prefs` table.
+	itemBrewPrefs: {
+		beer: r.one.beers({
+			from: r.itemBrewPrefs.beerId,
+			to: r.beers.id
+		}),
+		coffee: r.one.coffees({
+			from: r.itemBrewPrefs.coffeeId,
+			to: r.coffees.id
+		}),
+		sake: r.one.sakes({
+			from: r.itemBrewPrefs.sakeId,
+			to: r.sakes.id
+		}),
+		spirit: r.one.spirits({
+			from: r.itemBrewPrefs.spiritId,
+			to: r.spirits.id
+		}),
+		tea: r.one.teas({
+			from: r.itemBrewPrefs.teaId,
+			to: r.teas.id
+		}),
+		user: r.one.user({
+			from: r.itemBrewPrefs.userId,
+			to: r.user.id
+		}),
+		wine: r.one.wines({
+			from: r.itemBrewPrefs.wineId,
+			to: r.wines.id
+		}),
+	},
 	itemFavorites: {
 		beer: r.one.beers({
 			from: r.itemFavorites.beerId,
@@ -965,6 +996,11 @@ export const relations = defineRelations(schema, (r) => ({
 		photo: r.one.files({
 			from: r.checkIns.photoFileId,
 			to: r.files.id
+		}),
+		// ux-c seams (M1): hand-added with `check_ins.recipe_id`.
+		recipe: r.one.recipes({
+			from: r.checkIns.recipeId,
+			to: r.recipes.id
 		}),
 	},
 	checkInTrash: {
