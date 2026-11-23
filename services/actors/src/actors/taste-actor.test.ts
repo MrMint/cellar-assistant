@@ -458,6 +458,32 @@ describe.skipIf(skip)("TasteActor", () => {
       });
     });
 
+    it("reads every friend's ratings in one query, not one per friend (CB-3)", async () => {
+      await withTestDb(async (db) => {
+        const viewer = await seedUser(db);
+        const wine = await seedItemOfType(db, "WINE", viewer);
+        await seedItemReview(db, viewer, wine, 4);
+        const friends: string[] = [];
+        for (let i = 0; i < 4; i += 1) {
+          const friend = await seedUser(db, { displayName: `Friend ${i}` });
+          await seedFriendship(db, viewer, friend);
+          await seedFriendship(db, friend, viewer);
+          await seedItemReview(db, friend, wine, 4);
+          friends.push(friend);
+        }
+        const actor = await newActor(viewer, db);
+        const execute = vi.spyOn(db, "execute");
+        const rows = await actor.friendAgreements(userCtx(viewer));
+        const ratingReads = execute.mock.calls.filter(([query]) =>
+          JSON.stringify(query).includes("item_reviews"),
+        );
+        execute.mockRestore();
+        expect(rows.map((row) => row.userId).sort()).toEqual(friends.sort());
+        expect(rows.every((row) => row.shared === 1)).toBe(true);
+        expect(ratingReads).toHaveLength(1);
+      });
+    });
+
     it("a recipe-only drink log is not an item rating", async () => {
       await withTestDb(async (db) => {
         const user = await seedUser(db);

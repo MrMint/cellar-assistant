@@ -229,6 +229,7 @@ const styleCase = (): SQL =>
   )} end`;
 
 type RatingRow = {
+  readonly user_id: string;
   readonly type: string;
   readonly item_id: string;
   readonly score: number | string;
@@ -236,44 +237,63 @@ type RatingRow = {
 };
 
 /**
- * `subject`'s newest score per item, as `scope` may see it. Reviews count
- * for every signed-in viewer; drink-log scores only where
- * `canSeeCheckInDetails` admits them.
+ * Each of `subjects`' newest score per item, as `scope` may see it, in ONE
+ * read (CB-3): a viewer with hundreds of friends costs one query, not one
+ * per friend. Reviews count for every signed-in viewer; drink-log scores
+ * only where `canSeeCheckInDetails` admits them. Every subject is in the
+ * map, with `[]` when they have rated nothing `scope` may see.
  */
+export const ratingsOfMany = async (
+  db: DbOrTx,
+  scope: VisibilityScope,
+  subjects: readonly string[],
+): Promise<Map<string, TasteRating[]>> => {
+  const out = new Map<string, TasteRating[]>(
+    subjects.map((subject) => [subject, []]),
+  );
+  if (scope.kind === "nothing" || subjects.length === 0) return out;
+  const ids = uuidArray(subjects, "userId");
+  const { rows } = await db.execute<RatingRow>(sql`
+    with raw as (
+      select r.user_id, ${REVIEWS.typeExpr("r")} as type,
+             ${REVIEWS.idExpr("r")} as item_id,
+             r.score::float8 as score, r.updated_at as at
+      from public.item_reviews r
+      where r.user_id = any(${ids})
+      union all
+      select ci.user_id, ${CHECK_INS.typeExpr("ci")}, ${CHECK_INS.idExpr("ci")},
+             ci.score::float8, ci.created_at
+      from public.check_ins ci
+      where ci.user_id = any(${ids})
+        and ci.score is not null
+        and ${canSeeCheckInDetailsSql(scope, "ci")}
+    ), newest as (
+      select distinct on (user_id, type, item_id) user_id, type, item_id, score
+      from raw
+      where type is not null and item_id is not null
+      order by user_id, type, item_id, at desc nulls last
+    )
+    select n.user_id::text as user_id, n.type, n.item_id::text as item_id,
+           n.score, ${styleCase()} as style
+    from newest n
+    order by n.user_id, n.type, n.item_id`);
+  for (const row of rows) {
+    const score = Number(row.score);
+    if (!isItemType(row.type) || !Number.isFinite(score)) continue;
+    out
+      .get(row.user_id)
+      ?.push({ type: row.type, itemId: row.item_id, score, style: row.style });
+  }
+  return out;
+};
+
+/** `subject`'s newest score per item, as `scope` may see it. */
 export const ratingsOf = async (
   db: DbOrTx,
   scope: VisibilityScope,
   subject: string,
-): Promise<TasteRating[]> => {
-  if (scope.kind === "nothing") return [];
-  const { rows } = await db.execute<RatingRow>(sql`
-    with raw as (
-      select ${REVIEWS.typeExpr("r")} as type, ${REVIEWS.idExpr("r")} as item_id,
-             r.score::float8 as score, r.updated_at as at
-      from public.item_reviews r
-      where r.user_id = ${subject}::uuid
-      union all
-      select ${CHECK_INS.typeExpr("ci")}, ${CHECK_INS.idExpr("ci")},
-             ci.score::float8, ci.created_at
-      from public.check_ins ci
-      where ci.user_id = ${subject}::uuid
-        and ci.score is not null
-        and ${canSeeCheckInDetailsSql(scope, "ci")}
-    ), newest as (
-      select distinct on (type, item_id) type, item_id, score
-      from raw
-      where type is not null and item_id is not null
-      order by type, item_id, at desc nulls last
-    )
-    select n.type, n.item_id::text as item_id, n.score, ${styleCase()} as style
-    from newest n
-    order by n.type, n.item_id`);
-  return rows.flatMap((row) => {
-    const score = Number(row.score);
-    if (!isItemType(row.type) || !Number.isFinite(score)) return [];
-    return [{ type: row.type, itemId: row.item_id, score, style: row.style }];
-  });
-};
+): Promise<TasteRating[]> =>
+  (await ratingsOfMany(db, scope, [subject])).get(subject) ?? [];
 
 type UserRow = {
   readonly id: string;
@@ -285,6 +305,23 @@ const displayName = (row: UserRow): string =>
   row.name.trim() === "" || isEmailShaped(row.name)
     ? handleForId(row.id)
     : row.name;
+
+/** One friend's agreement row: the counts, never their ratings. */
+const agreementRow = (
+  mine: readonly TasteRating[],
+  theirs: readonly TasteRating[],
+  other: UserRow,
+): TasteAgreementDto => {
+  const agreement = agreementOf(mine, theirs);
+  return {
+    userId: other.id,
+    name: displayName(other),
+    avatarUrl: other.image === null || other.image === "" ? null : other.image,
+    shared: agreement.shared,
+    agreed: agreement.agreed,
+    byType: agreement.byType,
+  };
+};
 
 /* -------------------------------------------------------------------------- */
 /* The actor                                                                   */
@@ -366,8 +403,12 @@ export class TasteActor extends ActorBase implements TasteActorInterface {
       throw new NotFoundError(PROFILE_NOT_SHARED);
     }
     const scope = await visibilityScope(this.db, ctx);
-    const mine = await ratingsOf(this.db, scope, viewer);
-    return this.#agreementWith(scope, mine, other);
+    const ratings = await ratingsOfMany(this.db, scope, [viewer, other.id]);
+    return agreementRow(
+      ratings.get(viewer) ?? [],
+      ratings.get(other.id) ?? [],
+      other,
+    );
   }
 
   async friendAgreements(ctx: Ctx): Promise<readonly TasteAgreementDto[]> {
@@ -375,35 +416,22 @@ export class TasteActor extends ActorBase implements TasteActorInterface {
     const friendIds = friendIdsOf(viewer, await friendshipsOf(this.db, viewer));
     if (friendIds.length === 0) return [];
     const scope = await visibilityScope(this.db, ctx);
-    const mine = await ratingsOf(this.db, scope, viewer);
     const friends = (await this.#users(friendIds)).filter(
       (row) => bypassesPolicy(ctx) || canSeeProfile(ctx, { userId: row.id }),
     );
-    const rows: TasteAgreementDto[] = [];
-    for (const friend of friends) {
-      rows.push(await this.#agreementWith(scope, mine, friend));
-    }
+    // One read for yours and every friend's ratings (CB-3), not a scan per
+    // friend in sequence.
+    const ratings = await ratingsOfMany(this.db, scope, [
+      viewer,
+      ...friends.map((friend) => friend.id),
+    ]);
+    const mine = ratings.get(viewer) ?? [];
+    const rows = friends.map((friend) =>
+      agreementRow(mine, ratings.get(friend.id) ?? [], friend),
+    );
     return rows.sort(
       (a, b) => b.shared - a.shared || a.name.localeCompare(b.name),
     );
-  }
-
-  async #agreementWith(
-    scope: VisibilityScope,
-    mine: readonly TasteRating[],
-    other: UserRow,
-  ): Promise<TasteAgreementDto> {
-    const theirs = await ratingsOf(this.db, scope, other.id);
-    const agreement = agreementOf(mine, theirs);
-    return {
-      userId: other.id,
-      name: displayName(other),
-      avatarUrl:
-        other.image === null || other.image === "" ? null : other.image,
-      shared: agreement.shared,
-      agreed: agreement.agreed,
-      byType: agreement.byType,
-    };
   }
 
   async #users(ids: readonly string[]): Promise<UserRow[]> {

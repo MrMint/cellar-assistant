@@ -58,7 +58,7 @@ export function CloneTierListButton({
     <Button
       variant="secondary"
       size="sm"
-      className="rounded-full"
+      className="min-h-11 min-w-11 rounded-full"
       disabled={busy}
       aria-label={`Copy ${name} to your lists`}
       onClick={() => void onCopy()}

@@ -116,7 +116,11 @@ import { withoutDetails } from "../lib/check-in-rows.ts";
 import { flavourTagSuggester } from "../lib/flavour-tags.ts";
 import { ARCS } from "../lib/item-arcs.ts";
 import { itemNames } from "../lib/item-names.ts";
-import { canSeeRecipeRow, recipeVisibility } from "../lib/recipe-visibility.ts";
+import {
+  canSeeRecipeRow,
+  recipeVisibility,
+  visibleRecipeIds,
+} from "../lib/recipe-visibility.ts";
 import { placeIsVisible } from "../lib/unshared-places.ts";
 import { requireUuid } from "../lib/uuid.ts";
 import {
@@ -316,6 +320,8 @@ export class CheckInActor
       ctx,
       input,
     );
+
+    await this.#requireCompanionsSeeRecipe(recipeId, companions.ids);
 
     const groupId = this.key;
     const now = new Date();
@@ -546,6 +552,7 @@ export class CheckInActor
     // The companions log the same drink: an item or a recipe.
     const target = targetOf(row);
     requireOneTarget(target);
+    await this.#requireCompanionsSeeRecipe(target.recipeId, added);
     const now = new Date();
     await this.tx(async (tx) => {
       if (dropped.length > 0) {
@@ -901,6 +908,35 @@ export class CheckInActor
       }
     }
     return { ids, includesViewer };
+  }
+
+  /**
+   * ux-c FR-8 (CB-1): a recipe log's companions get rows naming the recipe,
+   * and a recipe log is visible only to someone who may see the recipe
+   * (`canSeeRecipeLog`). A companion who may not see it would hold a row
+   * hidden from themselves that their recap still counted — so naming them
+   * is refused, before anything is written. The logger may see the recipe
+   * (`#requireRecipe`), so saying who cannot leaks nothing to them.
+   */
+  async #requireCompanionsSeeRecipe(
+    recipeId: string | null,
+    companionIds: readonly string[],
+  ): Promise<void> {
+    if (recipeId === null || companionIds.length === 0) return;
+    for (const companion of companionIds) {
+      const seen = await visibleRecipeIds(
+        this.db,
+        // The companion's own view, as a check only: never forwarded.
+        { viewerId: companion, kind: "user", requestId: randomUUID() },
+        [recipeId],
+      );
+      if (!seen.has(recipeId)) {
+        throw new ForbiddenError(
+          `cannot log ${companion} on this recipe: they cannot see it. ` +
+            "Share the recipe with them, or log it without them",
+        );
+      }
+    }
   }
 
   /**

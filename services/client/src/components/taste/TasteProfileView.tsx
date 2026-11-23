@@ -192,9 +192,10 @@ function ArchetypeCard({ profile }: { profile: Profile }) {
       className="flex flex-col gap-2.5 rounded-[20px] bg-type-wine/15 p-[18px]"
     >
       <span className="type-overline text-type-wine-text">Your archetype</span>
-      <h1 className="type-title-1 font-display text-ink-1">
+      {/* AppBar's "Taste profile" is the page's one h1 (CR-13). */}
+      <h2 className="type-title-1 font-display text-ink-1">
         {profile.archetype?.title ?? "Not enough to go on yet"}
-      </h1>
+      </h2>
       {profile.archetype !== null && profile.archetype.loves.length > 0 && (
         <ul className="flex flex-wrap gap-1.5" aria-label="Styles you love">
           {profile.archetype.loves.map((style) => (
