@@ -7,6 +7,7 @@ import { mainContentProps } from "./main-content";
 import { isCaptureRoute } from "./nav";
 import { useNavHistoryTracker } from "./nav-history";
 import { usePointerDownPrefetch } from "./prefetch";
+import { RouteTransition } from "./RouteTransition";
 import { SideRail } from "./SideRail";
 import { TabBar } from "./TabBar";
 
@@ -48,6 +49,11 @@ export function contentLayout(pathname: string): {
  * the caller's (`components/shell/AppShell.tsx` wraps this). It also starts a
  * route's prefetch at the pointerdown on any in-app link inside it (X24,
  * `prefetch.ts`).
+ *
+ * Route motion (B05): the scroller is the page-level View Transition
+ * (`RouteTransition`), so a push slides it, Back slides it back and a tab
+ * switch crossfades it, while the rail and the tab bar — outside it, and
+ * anchored by name in `app/view-transitions.css` — stay put.
  */
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname() ?? "/";
@@ -71,17 +77,19 @@ export function AppShell({ children }: { children: ReactNode }) {
       )}
     >
       <SideRail className="hidden sm:flex" />
-      <main
-        {...mainContentProps}
-        data-app-scroller=""
-        className={cn(
-          "min-h-0 min-w-0 flex-1 overflow-x-hidden outline-none",
-          padded && "p-4",
-          scrolls ? "overflow-y-auto" : "flex flex-col overflow-y-hidden",
-        )}
-      >
-        {children}
-      </main>
+      <RouteTransition>
+        <main
+          {...mainContentProps}
+          data-app-scroller=""
+          className={cn(
+            "min-h-0 min-w-0 flex-1 overflow-x-hidden outline-none",
+            padded && "p-4",
+            scrolls ? "overflow-y-auto" : "flex flex-col overflow-y-hidden",
+          )}
+        >
+          {children}
+        </main>
+      </RouteTransition>
       {tabBar && <TabBar className="sm:hidden" />}
     </div>
   );

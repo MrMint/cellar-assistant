@@ -1,0 +1,138 @@
+/*
+ * Route motion (B05, design-direction §4.3, §4.4, §4.9). Imported by the
+ * root layout, after globals.css (L26: globals.css is not routemotion's).
+ *
+ * `RouteTransition` (components/app) wraps the shell's scroller in a React
+ * <ViewTransition> that, per navigation type, gives it one class:
+ *   .nav-forward  a push: the old page leaves to the leading edge, the new
+ *                 one arrives from the trailing edge;
+ *   .nav-back     the mirror;
+ *   .nav-tab      a tab switch: a crossfade, no slide.
+ * `MorphTitle` pairs a card's title with its page's heading (.morph).
+ * Without the API none of this runs; under reduced motion no type is set
+ * and the block at the end zeroes anything that still would.
+ */
+
+:root {
+  /* Enough to read as direction, not enough to track across the screen. */
+  --ca-route-offset: 48px;
+}
+
+/* Clicks during a transition reach the live page, not the overlay. */
+::view-transition {
+  pointer-events: none;
+}
+
+/* The document root: the bars and the page each animate on their own. */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+}
+
+/* ---- Forward and back: a short slide under a quick fade ---------------- */
+
+::view-transition-old(.nav-forward) {
+  --ca-route-from: 0;
+  --ca-route-to: calc(-1 * var(--ca-route-offset));
+  animation:
+    var(--ca-dur-short) var(--ca-ease-exit) both ca-route-fade-out,
+    var(--ca-dur-long) var(--ca-ease-standard) both ca-route-slide;
+}
+::view-transition-new(.nav-forward) {
+  --ca-route-from: var(--ca-route-offset);
+  --ca-route-to: 0;
+  animation:
+    var(--ca-dur-medium) var(--ca-ease-enter) var(--ca-dur-micro) both
+    ca-route-fade-in,
+    var(--ca-dur-long) var(--ca-ease-standard) both ca-route-slide;
+}
+::view-transition-old(.nav-back) {
+  --ca-route-from: 0;
+  --ca-route-to: var(--ca-route-offset);
+  animation:
+    var(--ca-dur-short) var(--ca-ease-exit) both ca-route-fade-out,
+    var(--ca-dur-long) var(--ca-ease-standard) both ca-route-slide;
+}
+::view-transition-new(.nav-back) {
+  --ca-route-from: calc(-1 * var(--ca-route-offset));
+  --ca-route-to: 0;
+  animation:
+    var(--ca-dur-medium) var(--ca-ease-enter) var(--ca-dur-micro) both
+    ca-route-fade-in,
+    var(--ca-dur-long) var(--ca-ease-standard) both ca-route-slide;
+}
+
+/* ---- Tabs: a crossfade, in place --------------------------------------- */
+
+::view-transition-old(.nav-tab) {
+  animation: var(--ca-dur-short) var(--ca-ease-exit) both ca-route-fade-out;
+}
+::view-transition-new(.nav-tab) {
+  animation: var(--ca-dur-medium) var(--ca-ease-enter) both ca-route-fade-in;
+}
+
+/* ---- Title morph -------------------------------------------------------- */
+
+::view-transition-group(.morph) {
+  animation-duration: var(--ca-dur-long);
+  animation-timing-function: var(--ca-ease-standard);
+}
+
+/* ---- Anchored bars: they do not move with the page ---------------------- */
+
+[data-slot="tab-bar"] {
+  view-transition-name: ca-tab-bar;
+}
+[data-slot="side-rail"] {
+  view-transition-name: ca-side-rail;
+}
+[data-slot="app-bar"] {
+  view-transition-name: ca-app-bar;
+}
+
+::view-transition-group(ca-tab-bar),
+::view-transition-group(ca-side-rail),
+::view-transition-group(ca-app-bar) {
+  animation: none;
+  z-index: 100;
+}
+::view-transition-old(ca-tab-bar),
+::view-transition-old(ca-side-rail),
+::view-transition-old(ca-app-bar) {
+  display: none;
+}
+::view-transition-new(ca-tab-bar),
+::view-transition-new(ca-side-rail),
+::view-transition-new(ca-app-bar) {
+  animation: none;
+}
+
+@keyframes ca-route-slide {
+  from {
+    translate: var(--ca-route-from) 0;
+  }
+  to {
+    translate: var(--ca-route-to) 0;
+  }
+}
+@keyframes ca-route-fade-out {
+  to {
+    opacity: 0;
+  }
+}
+@keyframes ca-route-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+/* §4.9: no translation under reduced motion. No type is set then, so
+   nothing should run; this catches anything that does. */
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    /* biome-ignore lint/complexity/noImportantStyles: reduced motion must beat every route animation. */
+    animation: none !important;
+  }
+}

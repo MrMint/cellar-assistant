@@ -6,9 +6,10 @@ import type { MouseEvent } from "react";
 import { useCallback } from "react";
 import { useMutation } from "urql";
 import { Comment, ICON_STROKE, Love } from "@/components/app/icons";
-import { LabelPlate } from "@/components/app/LabelPlate";
+import { LabelPlate, type PlateStyleFields } from "@/components/app/LabelPlate";
 import { Link } from "@/components/app/Link";
 import { notify } from "@/components/app/notify";
+import { MorphTitle } from "@/components/app/RouteTransition";
 import { Score } from "@/components/app/Score";
 import { TogglePop } from "@/components/app/TogglePop";
 import { TypeChip } from "@/components/app/TypeChip";
@@ -35,7 +36,11 @@ const PHOTO_ALT: Readonly<Record<ItemTypeValue, string>> = {
 };
 
 export type ItemCardProps = {
-  item: ItemCardItem;
+  /**
+   * The card's item. `styleFields` (imagery's style vessels, H-2) rides
+   * beside `ItemCardItem` until `types.ts` carries it: the adapters set it.
+   */
+  item: ItemCardItem & { styleFields?: PlateStyleFields | null };
   href?: string;
   onClick?: (itemId: string) => void;
   type: ItemTypeValue;
@@ -207,7 +212,11 @@ export const ItemCard = ({ item, href, onClick, type }: ItemCardProps) => {
         {isNil(item.displayImageUrl) && (
           // No photo: the item's own LabelPlate (N28), not the type's clip
           // art — so two wines no longer look identical.
-          <LabelPlate type={type} plate={item.plate ?? { name: item.name }} />
+          <LabelPlate
+            type={type}
+            plate={item.plate ?? { name: item.name }}
+            styleFields={item.styleFields}
+          />
         )}
       </div>
       {isNotNil(href) && (
@@ -217,9 +226,12 @@ export const ItemCard = ({ item, href, onClick, type }: ItemCardProps) => {
             underline="none"
             href={href}
             onClick={handleClick}
-            className="type-headline truncate text-ink-1 focus-visible:after:rounded-md focus-visible:after:ring-inset"
+            className="type-headline min-w-0 text-ink-1 focus-visible:after:rounded-md focus-visible:after:ring-inset"
           >
-            {title}
+            {/* B05: the title flies into the item page's heading. */}
+            <MorphTitle href={href} className="truncate">
+              {title}
+            </MorphTitle>
           </Link>
           {subtitle}
         </div>

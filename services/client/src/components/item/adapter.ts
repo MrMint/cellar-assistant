@@ -12,6 +12,7 @@
  * GraphQL round trip.
  */
 
+import type { PlateStyleFields } from "@/components/app/LabelPlate";
 import { inferBrandType } from "@/components/brand/adapter";
 import {
   type ApiItemType,
@@ -46,6 +47,7 @@ import {
   ItemPageReviewFragment,
 } from "./fragments";
 import type { ItemBrand } from "./ItemBrands";
+import { plateStyleFields } from "./ItemCard/adapter";
 import type { ItemCellar, ItemCellarUser } from "./ItemCellars";
 import type { ItemRecipeIngredient } from "./ItemRecipes";
 import type { Review } from "./ItemReviews";
@@ -547,6 +549,8 @@ export type ItemView = {
   friends: ScoreSummary;
   /** The hero's LabelPlate when there is no photo (N28). */
   plate: LabelPlateData;
+  /** That plate's `styleFields`: the item's style vessel (imagery, H-2). */
+  plateStyle: PlateStyleFields | null;
 };
 
 /**
@@ -570,6 +574,24 @@ export const itemPlate = (
     region: str(attributes.region),
     country: core.country,
     alcoholContentPercentage: num(attributes.alcoholContentPercentage),
+  });
+
+/**
+ * The style fields an item page's plate reads (H-2), off the page's own
+ * `...ItemAttributes` (which aliases Wine's `style` as `wineStyle`).
+ */
+export const itemPlateStyle = (
+  type: ApiItemType,
+  attributes: ItemAttributesSource,
+): PlateStyleFields | null =>
+  plateStyleFields(type, {
+    wineStyle: str(attributes.wineStyle),
+    variety: str(attributes.variety),
+    beerStyle: str(attributes.beerStyle),
+    spiritType: str(attributes.spiritType),
+    spiritStyle: str(attributes.spiritStyle),
+    category: str(attributes.category),
+    form: str(attributes.form),
   });
 
 /** `...ItemPageItem` → {@link ItemView}. */
@@ -620,6 +642,7 @@ export const itemViewFromFragment = (
       count: item.friendsScore.count,
     },
     plate: itemPlate(type, core, attributes, brands),
+    plateStyle: itemPlateStyle(type, attributes),
   };
 };
 

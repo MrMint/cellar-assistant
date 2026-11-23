@@ -1,9 +1,10 @@
 /**
- * `useNavigate` (ux-c M2) is a pass-through in seams: every call reaches
- * Next's router as the same method with the same arguments the call site
- * used to pass it directly, so the codemod that routes every `push`,
- * `replace` and `back` through it changes no behaviour. `kind` is ours and
- * never reaches the router.
+ * `useNavigate` (ux-c M2, B05). Without the View Transition API (happy-dom
+ * has none, like an old browser) every call reaches Next's router as the
+ * same method with the same arguments the call site used to pass it
+ * directly: navigation works and nothing about it changes. With the API,
+ * `kind` — given or inferred — becomes Next's `transitionTypes`, and reduced
+ * motion drops them again. `back` tells `RouteTransition` the pop's kind.
  */
 import { mock } from "bun:test";
 import assert from "node:assert/strict";
@@ -39,10 +40,15 @@ mock.module("next/navigation", () => ({
   useSearchParams: () => new URLSearchParams(),
 }));
 
+/** The viewer's reduced-motion preference, as motion's hook reports it. */
+let reduced = false;
+mock.module("motion/react", () => ({ useReducedMotion: () => reduced }));
+
 const React = await import("react");
 const { act } = React;
 const { createRoot } = await import("react-dom/client");
 const { useNavigate } = await import("./useNavigate");
+const { takePopKind } = await import("./RouteTransition");
 type Navigate = import("./useNavigate").Navigate;
 
 /** Mounts a component that hands back the hook's value. */
@@ -117,9 +123,103 @@ describe("useNavigate", () => {
     await unmount();
   });
 
+  test("no View Transition API: navigation still works, with no types", async () => {
+    assert.equal(
+      (document as { startViewTransition?: unknown }).startViewTransition,
+      undefined,
+    );
+    const { navigate, unmount } = await mountNavigate();
+    take();
+    navigate.push("/cellars/1", { kind: "forward" });
+    navigate.replace("/cellars", { kind: "back" });
+    assert.deepEqual(take(), [
+      ["push", "/cellars/1"],
+      ["replace", "/cellars"],
+    ]);
+    await unmount();
+  });
+
   test("is stable across renders, so it is safe in dependency arrays", async () => {
     const { navigate, rerender, unmount } = await mountNavigate();
     assert.equal(await rerender(), navigate);
     await unmount();
+  });
+});
+
+describe("useNavigate with the View Transition API", () => {
+  const doc = document as { startViewTransition?: unknown };
+  const withApi = async (body: (navigate: Navigate) => void) => {
+    doc.startViewTransition = () => ({});
+    window.history.replaceState(null, "", "/cellars/1");
+    const { navigate, unmount } = await mountNavigate();
+    take();
+    try {
+      body(navigate);
+    } finally {
+      await unmount();
+      delete doc.startViewTransition;
+      window.history.replaceState(null, "", "/");
+    }
+  };
+
+  test("push: deeper is forward, an ancestor is back, a tab root is a tab", async () => {
+    await withApi((navigate) => {
+      navigate.push("/wines/9");
+      navigate.push("/cellars");
+      navigate.push("/map", { scroll: false });
+    });
+    assert.deepEqual(take(), [
+      ["push", "/wines/9", { transitionTypes: ["nav-forward"] }],
+      ["push", "/cellars", { transitionTypes: ["nav-back"] }],
+      ["push", "/map", { scroll: false, transitionTypes: ["nav-tab"] }],
+    ]);
+  });
+
+  test("replace: in place on the same path; a given kind wins", async () => {
+    await withApi((navigate) => {
+      navigate.replace("?sort=name");
+      navigate.replace("/cellars/1/wines/2");
+      navigate.replace("/wines/9", { kind: "none" });
+      navigate.push("/cellars", { kind: "forward" });
+    });
+    assert.deepEqual(take(), [
+      ["replace", "?sort=name"],
+      ["replace", "/cellars/1/wines/2", { transitionTypes: ["nav-forward"] }],
+      ["replace", "/wines/9"],
+      ["push", "/cellars", { transitionTypes: ["nav-forward"] }],
+    ]);
+  });
+
+  test("back: the router gets no arguments; the pop is told its kind", async () => {
+    await withApi((navigate) => {
+      navigate.back();
+      assert.equal(takePopKind("/cellars"), "back");
+      navigate.back({ kind: "tab" });
+      assert.equal(takePopKind("/"), "tab");
+    });
+    assert.deepEqual(take(), [["back"], ["back"]]);
+    // Nothing asked: a browser Back falls back to the nav-history stack.
+    window.sessionStorage.setItem(
+      "ca:nav-stack",
+      JSON.stringify(["/cellars", "/cellars/1"]),
+    );
+    assert.equal(takePopKind("/cellars"), "back");
+    window.sessionStorage.removeItem("ca:nav-stack");
+  });
+
+  test("reduced motion: no transition types on any call", async () => {
+    reduced = true;
+    try {
+      await withApi((navigate) => {
+        navigate.push("/wines/9");
+        navigate.push("/map");
+      });
+    } finally {
+      reduced = false;
+    }
+    assert.deepEqual(take(), [
+      ["push", "/wines/9"],
+      ["push", "/map"],
+    ]);
   });
 });

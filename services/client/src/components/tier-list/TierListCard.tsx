@@ -16,6 +16,7 @@ import {
   Public,
 } from "@/components/app/icons";
 import { Link } from "@/components/app/Link";
+import { MorphTitle } from "@/components/app/RouteTransition";
 import { UserAvatar } from "@/components/app/UserAvatar";
 import { Badge } from "@/components/ui/badge";
 import type { ResultOf } from "@/lib/api/graphql";
@@ -66,7 +67,10 @@ export function TierListCard({ tierList, onNavigate }: TierListCardProps) {
             underline="none"
             onClick={onNavigate}
           >
-            {tierList.name}
+            {/* B05: flies into the list page's heading. */}
+            <MorphTitle href={`/tier-lists/${tierList.id}`}>
+              {tierList.name}
+            </MorphTitle>
           </Link>
         </h3>
         <PrivacyIcon

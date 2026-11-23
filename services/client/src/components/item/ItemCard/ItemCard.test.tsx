@@ -168,7 +168,7 @@ describe("ItemCard", () => {
     const html = render(
       <ItemCard type="WINE" href="/wines/i" item={{ ...base, name: "Brut" }} />,
     );
-    assert.match(html, />Brut<\/a>/);
+    assert.match(html, />Brut<\/span><\/a>/);
     assert.doesNotMatch(html, /undefined/);
   });
 
@@ -303,5 +303,28 @@ describe("ItemCard", () => {
     );
     assert.match(html, /aria-pressed="false"/);
     assert.doesNotMatch(html, /fill-brand/);
+  });
+
+  test("B05: the linked title is the morph source, named for its href", () => {
+    const html = render(<ItemCard type="WINE" href="/wines/i" item={base} />);
+    assert.match(
+      html,
+      /<a [^>]*href="\/wines\/i"><span data-slot="morph-title"/,
+    );
+  });
+
+  test("H-2: with no photo the plate draws the item's style vessel", () => {
+    const html = render(
+      <ItemCard
+        type="WINE"
+        href="/wines/i"
+        item={{
+          ...base,
+          displayImageUrl: undefined,
+          styleFields: { variety: "PINOT_NOIR" },
+        }}
+      />,
+    );
+    assert.match(html, /data-vessel="burgundy"/);
   });
 });

@@ -51,6 +51,16 @@ function write(stack: readonly string[]): void {
   }
 }
 
+/**
+ * The stack as it stands (empty on the server or with storage blocked):
+ * `RouteTransition` reads it on `popstate`, before the tracker records the
+ * new path, to tell browser Back from Forward.
+ */
+export function readNavStack(): string[] {
+  if (typeof window === "undefined") return [];
+  return read();
+}
+
 /** Record one navigation (used by the tracker; exported for tests). */
 export function recordNavigation(path: string): void {
   write(nextNavStack(read(), path));

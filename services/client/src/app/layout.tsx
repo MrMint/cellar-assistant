@@ -9,6 +9,8 @@ import SerwistClientProvider from "@/components/providers/SerwistClientProvider"
 import { AppleSplashScreens } from "@/components/pwa/AppleSplashScreens";
 import { color } from "@/lib/tokens";
 import "./globals.css";
+// B05 route motion; after globals.css, and its own file (L26).
+import "./view-transitions.css";
 
 /**
  * The two families (design §3.2), each loaded once and exposed as a CSS
