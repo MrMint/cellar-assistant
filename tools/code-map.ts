@@ -342,12 +342,65 @@ export function importGraph(
 
 /** Who uses `target`: files that import it, and files that import one of its names through a
  *  barrel that re-exports it, up to three barrels deep. `exported` is the target's own names. */
+/** The name that stands for "every name": a star re-export that could not be resolved
+ *  (a third-party module such as drizzle-orm), so any named import may be one of its. */
+export const ANY = "*";
+
+/** Every name a file exports: its own declarations, `export { … }` lists, and the names of each
+ *  `export * from` module it can resolve, expanded up to four levels; ANY for one it cannot. */
+export function exportedNames(
+  file: string,
+  sources: Sources,
+  packages: readonly Package[] = [],
+  depth = 0,
+): Set<string> {
+  const t = ts();
+  const text = sources.get(file) ?? "";
+  const out = new Set(
+    exportsOf(file, text)
+      .filter((e) => e.kind !== "re-export")
+      .map((e) => e.name),
+  );
+  const sf = t.createSourceFile(file, text, t.ScriptTarget.Latest, false);
+  for (const node of sf.statements) {
+    if (t.isExportAssignment(node)) {
+      out.add("default");
+      continue;
+    }
+    if (!t.isExportDeclaration(node)) continue;
+    const clause = node.exportClause;
+    if (clause && t.isNamedExports(clause)) {
+      for (const el of clause.elements) out.add(el.name.text);
+      continue;
+    }
+    if (clause && t.isNamespaceExport(clause)) {
+      out.add(clause.name.text);
+      continue;
+    }
+    const spec =
+      node.moduleSpecifier && t.isStringLiteral(node.moduleSpecifier)
+        ? node.moduleSpecifier.text
+        : null;
+    const target =
+      spec === null ? null : resolveSpecifier(file, spec, sources, packages);
+    if (target === null || depth >= 4) {
+      out.add(ANY);
+      continue;
+    }
+    for (const n of exportedNames(target, sources, packages, depth + 1))
+      if (n !== "default") out.add(n);
+  }
+  return out;
+}
+
 export function importersOf(
   target: string,
   exported: readonly string[],
   graph: Map<string, Edge[]>,
 ): Importer[] {
   const out = new Map<string, Importer>();
+  const has = (set: ReadonlySet<string>, name: string) =>
+    set.has(name) || set.has(ANY);
   const walk = (
     file: string,
     visible: ReadonlySet<string>,
@@ -363,7 +416,7 @@ export function importersOf(
             ? new Set([...visible].filter((n) => n !== "default"))
             : new Set(
                 edge.names
-                  .filter(([from]) => visible.has(from))
+                  .filter(([from]) => has(visible, from))
                   .map(([, as]) => as),
               );
         if (passed.size === 0) continue;
@@ -379,7 +432,7 @@ export function importersOf(
       const uses =
         edge.names === "*" ||
         (via === undefined && edge.names.length === 0) ||
-        edge.names.some(([from]) => visible.has(from));
+        edge.names.some(([from]) => has(visible, from));
       if (uses && !out.has(edge.file))
         out.set(
           edge.file,
@@ -468,7 +521,7 @@ export function renderMap(
   return files
     .map((f) => {
       const text = sources.get(f) ?? "";
-      const names = exportsOf(f, text).map((e) => e.name);
+      const names = [...exportedNames(f, sources, packages)];
       return renderEntry(
         f,
         text,

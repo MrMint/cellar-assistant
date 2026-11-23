@@ -15,7 +15,11 @@ import {
   nestedIn,
   parseArgs,
   parseWorktreeList,
+  porcelainPaths,
+  precious,
   renderPlan,
+  stackEnv,
+  stackPlan,
   type WorktreeEntry,
 } from "./teardown-worktrees.ts";
 
@@ -39,6 +43,7 @@ const facts = (entry: WorktreeEntry, over: Partial<Facts> = {}): Facts => ({
   untracked: [],
   kb: 1048576,
   nested: nestedIn(entry.path, listed),
+  stack: { kind: "none" },
   ...over,
 });
 
@@ -201,5 +206,111 @@ describe("parseArgs", () => {
       apply: true,
       minIdleHours: 24,
     });
+  });
+});
+
+describe("idle and precious paths", () => {
+  it("lists every path porcelain names, renames by their new name", () => {
+    assert.deepEqual(
+      porcelainPaths(" M a.ts\n?? new/b.ts\nR  old.ts -> c.ts\n"),
+      ["a.ts", "new/b.ts", "c.ts"],
+    );
+    assert.equal(countTrackedChanges(" M a.ts\n?? new/b.ts\n"), 1);
+  });
+  it("keeps PROGRESS.md, .review/ and .builds/ of the ignored files", () => {
+    assert.deepEqual(
+      precious([
+        "PROGRESS.md",
+        ".review/pre-pr.md",
+        ".builds/r1/briefs/a.md",
+        "node_modules/x/index.js",
+        "a/PROGRESS.md",
+        "",
+      ]),
+      ["PROGRESS.md", ".review/pre-pr.md", ".builds/r1/briefs/a.md"],
+    );
+  });
+});
+
+describe("stackPlan", () => {
+  const ls = (...ps: [string, string, string][]) =>
+    JSON.stringify(
+      ps.map(([Name, Status, ConfigFiles]) => ({ Name, Status, ConfigFiles })),
+    );
+  const compose = (wt: string) => `${wt}/infra/docker-compose.dev.yml`;
+  it("takes nothing down when no project lies inside it", () => {
+    assert.deepEqual(
+      stackPlan(
+        ls(["cellar-x", "exited(2)", "/elsewhere/c.yml"]),
+        A.path,
+        [],
+        true,
+      ),
+      { kind: "none" },
+    );
+  });
+  it("downs its one project by slug, but not one from a nested worktree", () => {
+    const json = ls(
+      ["cellar-lead-a", "exited(3)", compose(A.path)],
+      ["cellar-s1", "running(4)", compose(B.path)],
+    );
+    assert.deepEqual(stackPlan(json, A.path, [B.path, C.path], true), {
+      kind: "down",
+      project: "cellar-lead-a",
+      slug: "lead-a",
+      running: false,
+    });
+    const s1 = stackPlan(json, B.path, [], true);
+    assert.equal(s1.kind === "down" && s1.running, true);
+  });
+  it("keeps it for two projects, a foreign project, or no docker with a .stack/", () => {
+    const two = ls(
+      ["cellar-a", "exited(1)", compose(A.path)],
+      ["cellar-b", "exited(1)", `${A.path}/other.yml,/x.yml`],
+    );
+    assert.equal(stackPlan(two, A.path, [], true).kind, "keep");
+    assert.equal(
+      stackPlan(ls(["other", "exited(1)", compose(A.path)]), A.path, [], false)
+        .kind,
+      "keep",
+    );
+    assert.equal(stackPlan(null, A.path, [], true).kind, "keep");
+    assert.deepEqual(stackPlan(null, A.path, [], false), { kind: "none" });
+    assert.equal(stackPlan("nope", A.path, [], false).kind, "keep");
+  });
+  it("keeps a worktree whose stack is running", () => {
+    const v = decide(
+      facts(B, {
+        stack: {
+          kind: "down",
+          project: "cellar-s1",
+          slug: "s1",
+          running: true,
+        },
+      }),
+      1,
+    );
+    assert.deepEqual(v.reasons, ["stack cellar-s1 has running containers"]);
+  });
+  it("pins the slug and drops inherited stack variables", () => {
+    assert.deepEqual(
+      stackEnv(
+        {
+          PATH: "/bin",
+          CELLAR_STACK_SLUG: "main",
+          CELLAR_STACK_SLOT: "3",
+          COMPOSE_PROJECT_NAME: "cellar-main",
+        },
+        "s1",
+      ),
+      { PATH: "/bin", CELLAR_STACK_SLUG: "s1" },
+    );
+  });
+});
+
+describe("empty prefix", () => {
+  it("is refused", () => {
+    assert.match(String(parseArgs([""])), /empty prefix/);
+    assert.match(String(parseArgs(["r4-", " "])), /empty prefix/);
   });
 });

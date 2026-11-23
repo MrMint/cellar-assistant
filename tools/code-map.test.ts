@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { after, before, describe, it } from "node:test";
 import {
+  exportedNames,
   exportsOf,
   importersOf,
   importGraph,
@@ -35,10 +36,17 @@ const files: Record<string, string> = {
     'import { itemName } from "./items.ts";\n',
   "packages/db/package.json": JSON.stringify({
     name: "@cellar-assistant/db",
-    exports: { ".": { types: "./src/index.ts", default: "./dist/index.js" } },
+    exports: {
+      ".": { types: "./src/index.ts", default: "./dist/index.js" },
+      "./orm": "./src/orm.ts",
+    },
   }),
   "packages/db/src/index.ts":
     'import { itemName } from "@cellar-assistant/contracts";\nexport const x = itemName;\n',
+  "packages/db/src/orm.ts":
+    'export * from "drizzle-orm";\nexport const local = 1;\n',
+  "services/api/src/q.ts":
+    'import { eq } from "@cellar-assistant/db/orm";\nimport { Item } from "@cellar-assistant/contracts";\n',
   "services/client/package.json": JSON.stringify({
     name: "@cellar-assistant/client",
   }),
@@ -86,7 +94,7 @@ describe("parsePackage", () => {
   it("takes the types condition, a bare string, or main", () => {
     assert.deepEqual(
       parsePackage("packages/db", files["packages/db/package.json"])?.exports,
-      { ".": "packages/db/src/index.ts" },
+      { ".": "packages/db/src/index.ts", "./orm": "packages/db/src/orm.ts" },
     );
     assert.deepEqual(
       parsePackage("p/a", JSON.stringify({ name: "a", exports: "./x.ts" }))
@@ -154,6 +162,7 @@ describe("importersOf", () => {
         file: "packages/db/src/index.ts",
         via: "packages/contracts/src/index.ts",
       },
+      { file: "services/api/src/q.ts", via: "packages/contracts/src/index.ts" },
       { file: "services/client/src/lib/show.ts" },
     ]);
   });
@@ -208,7 +217,7 @@ describe("renderMap", () => {
     assert.match(out, /- L4 function `function itemName\(i: Item\): string`/);
     assert.match(
       out,
-      /\*\*Imported by \(2\):\*\* `packages\/db\/src\/index\.ts` \(via `packages\/contracts\/src\/index\.ts`\), `services\/client\/src\/lib\/show\.ts`/,
+      /\*\*Imported by \(3\):\*\* `packages\/db\/src\/index\.ts` \(via `packages\/contracts\/src\/index\.ts`\), `services\/api\/src\/q\.ts` \(via `packages\/contracts\/src\/index\.ts`\), `services\/client\/src\/lib\/show\.ts`/,
     );
     assert.match(
       out,
@@ -226,5 +235,35 @@ describe("renderMap", () => {
       () => renderMap(["nope"], sources, packages),
       /no file or directory/,
     );
+  });
+});
+
+describe("star re-exports", () => {
+  it("expands a resolvable star and marks an unresolvable one", () => {
+    assert.deepEqual(
+      [
+        ...exportedNames("packages/contracts/src/index.ts", sources, packages),
+      ].sort(),
+      ["Item", "itemName", "other"],
+    );
+    assert.deepEqual(
+      [...exportedNames("packages/db/src/orm.ts", sources, packages)].sort(),
+      ["*", "local"],
+    );
+  });
+  it("lists named importers of a barrel and of a third-party star", () => {
+    const graph = importGraph(sources, packages);
+    const users = (f: string) =>
+      importersOf(f, [...exportedNames(f, sources, packages)], graph).map(
+        (i) => i.file,
+      );
+    assert.deepEqual(users("packages/db/src/orm.ts"), [
+      "services/api/src/q.ts",
+    ]);
+    assert.deepEqual(users("packages/contracts/src/index.ts"), [
+      "packages/db/src/index.ts",
+      "services/api/src/q.ts",
+      "services/client/src/app/page.tsx",
+    ]);
   });
 });

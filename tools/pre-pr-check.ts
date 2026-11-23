@@ -18,7 +18,7 @@
 //              string matching SECRET_PATTERNS.
 //
 // It writes `.review/pre-pr.md`, a summary to paste into the PR body, and exits 1 when a step
-// fails, 2 on a usage error.
+// fails, 2 on a usage error or a base that is not a commit here.
 //
 // WHY: smart-home's Fettle builds grew a 1,600-line pre-PR floor (route shots, a model judge,
 // axe) for design work. Every stream, design or not, needed its cheap core: the branch touches
@@ -288,6 +288,18 @@ export function commandStep(
   };
 }
 
+export const NEXT_ENV = "services/client/next-env.d.ts";
+export const NEXT_ENV_HINT =
+  "services/client has no next-env.d.ts: run `bun run typegen` in services/client (it writes only gitignored files, measured 2026-11-22) and re-run.";
+
+/** A failed typecheck in a worktree with no next-env.d.ts gets the one line that explains it:
+ *  without it the client cannot type its image imports (TS2307 on `@/images/*.png`). */
+export function typecheckHint(step: Step, hasNextEnv: boolean): Step {
+  return step.ok || hasNextEnv
+    ? step
+    : { ...step, tail: [...step.tail, NEXT_ENV_HINT] };
+}
+
 /** What a changed file trips: its name, or a pattern in its text (null when unread). */
 export function secretHits(file: string, text: string | null): string[] {
   const hits: string[] = [];
@@ -403,6 +415,18 @@ function main(): void {
     }
     check = parseCheck(readFileSync(path, "utf8"));
   }
+  const verify = spawnSync(
+    "git",
+    ["rev-parse", "--verify", "--quiet", `${base}^{commit}`],
+    { encoding: "utf8" },
+  );
+  if (verify.status !== 0) {
+    console.error(
+      `base ${base} is not a commit here; fetch it, or pass --base <ref>`,
+    );
+    process.exitCode = 2;
+    return;
+  }
   const changed = changedFiles(
     git("diff", "--name-only", `${base}...HEAD`),
     git("status", "--porcelain", "--untracked-files=all"),
@@ -415,7 +439,12 @@ function main(): void {
     console.log(`${s.ok ? "pass" : "FAIL"}  ${s.name}: ${s.summary}`);
     if (!s.ok) for (const l of s.tail) console.log(`      ${l}`);
   };
-  const runStep = (name: string, cmds: Cmd[], empty: string) => {
+  const runStep = (
+    name: string,
+    cmds: Cmd[],
+    empty: string,
+    finish: (s: Step) => Step = (s) => s,
+  ) => {
     console.log(`… ${name}`);
     const outcomes: Outcome[] = [];
     for (const c of cmds) {
@@ -423,10 +452,12 @@ function main(): void {
       outcomes.push(o);
       if (o.status !== 0) break;
     }
-    report(commandStep(name, cmds, outcomes, empty));
+    report(finish(commandStep(name, cmds, outcomes, empty)));
   };
   report(ownsStep(changed, check?.owns ?? null));
-  runStep("typecheck", typecheckCmds(base), "nothing to typecheck");
+  runStep("typecheck", typecheckCmds(base), "nothing to typecheck", (s) =>
+    typecheckHint(s, existsSync(NEXT_ENV)),
+  );
   runStep(
     "biome",
     biomeCmds(changed, existsSync),

@@ -7,6 +7,7 @@ import {
   changedFiles,
   checkPathOf,
   commandStep,
+  NEXT_ENV_HINT,
   ownsStep,
   parseArgs,
   parseCheck,
@@ -16,6 +17,7 @@ import {
   show,
   testCmds,
   typecheckCmds,
+  typecheckHint,
 } from "./pre-pr-check.ts";
 
 const packages: Package[] = [
@@ -196,5 +198,23 @@ describe("render", () => {
     );
     assert.match(text, /\| biome \| FAIL \| a \\\| b \|/);
     assert.match(text, /### biome\n\n```\nerr\n```/);
+  });
+});
+
+describe("typecheckHint", () => {
+  const failed = {
+    name: "typecheck",
+    ok: false,
+    summary: "x",
+    tail: ["TS2307"],
+  };
+  it("adds the typegen line only to a failure with no next-env.d.ts", () => {
+    assert.deepEqual(typecheckHint(failed, false).tail, [
+      "TS2307",
+      NEXT_ENV_HINT,
+    ]);
+    assert.deepEqual(typecheckHint(failed, true), failed);
+    const passed = { ...failed, ok: true, tail: [] };
+    assert.deepEqual(typecheckHint(passed, false), passed);
   });
 });

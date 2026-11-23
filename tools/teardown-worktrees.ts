@@ -21,18 +21,26 @@
 //     whose managed block `next dev` and `next typegen` rewrite;
 //   * every commit it holds is on a remote ref (merged, or pushed to its PR branch);
 //   * it is not locked, and nothing in it changed for MIN_IDLE_HOURS (ALL_MIN_IDLE_HOURS with
-//     --all, which reaches worktrees other sessions may own);
+//     --all, which reaches worktrees other sessions may own). "Changed" is the newest mtime over
+//     its root, its git index and HEAD, every changed tracked and untracked path, the precious
+//     ignored files below, and everything under `.stack/` (the stack's logs);
+//   * no compose project of its own has running containers, and at most one compose project's
+//     config files lie inside it (outside its nested worktrees);
 //   * every worktree nested inside it is being removed too. Children go before their parent.
-// Untracked files (PROGRESS.md, .review/, scratch tests) are archived into one tgz before
-// anything is removed (`worktree-scratch-<day>.tgz` beside the repo, `-2`, `-3`… for a second
-// teardown that day), except any under a directory named for a cache, and except the nested
-// worktrees, which are judged on their own; gitignored files such as node_modules are not.
-// Branches are never deleted.
+// Untracked files (scratch tests, new sources) and the PRECIOUS ignored ones (PROGRESS.md,
+// .review/, .builds/: gitignored, but they hold a stream's decisions and hand-offs) are archived
+// into one tgz before anything is removed (`worktree-scratch-<day>.tgz` beside the repo, `-2`,
+// `-3`… for a second teardown that day), except any under a directory named for a cache, and
+// except the nested worktrees, which are judged on their own. Other gitignored files, such as
+// node_modules, are not archived. Branches are never deleted.
 //
-// Before each removal, when the worktree has a `.stack/`, it runs that worktree's own
-// `scripts/stack/stack.sh down --volumes`: a removed worktree's stack otherwise keeps its compose
-// project, ports and volumes. If that fails, the worktree stays, so nothing is left running with
-// no checkout to stop it from.
+// Before each removal, when a compose project's config files lie inside the worktree, it runs the
+// worktree's own `scripts/stack/stack.sh down --volumes` with CELLAR_STACK_SLUG set to that
+// project's slug, and CELLAR_STACK_SLOT and COMPOSE_PROJECT_NAME removed from the environment.
+// stack.sh takes its slug from CELLAR_STACK_SLUG before the worktree's basename, so an operator
+// shell that ran `eval "$(bun run dev:env)"` would otherwise point `down --volumes` at the
+// operator's own stack; and the basename alone is shared by two worktrees with the same leaf name.
+// If the down fails, the worktree stays, so nothing is left running with no checkout to stop it.
 //
 // The auto-mode classifier blocks an agent's bulk `git worktree remove --force`, so the lead runs
 // the dry run and the owner runs `--apply`.
@@ -40,7 +48,14 @@
 // Every export is a pure function over strings and numbers; only the main-guard touches git.
 
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, statSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  lstatSync,
+  mkdtempSync,
+  readdirSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
@@ -51,14 +66,24 @@ export const MIN_IDLE_HOURS = 1;
 export const ALL_MIN_IDLE_HOURS = 24;
 export const NOISE = /^services\/client\/(next-env\.d\.ts|AGENTS\.md)$/;
 const CACHE_DIR = /(^|\/)[^/]*cache[^/]*\//i;
+/** Gitignored files worth archiving, as git pathspecs and as a filter. */
+export const PRECIOUS_PATHSPECS = ["PROGRESS.md", ".review", ".builds"];
+const PRECIOUS = /^(PROGRESS\.md$|\.review\/|\.builds\/)/;
+/** Inherited variables that would point stack.sh at another worktree's stack. */
+export const STACK_ENV_DROP = [
+  "CELLAR_STACK_SLUG",
+  "CELLAR_STACK_SLOT",
+  "COMPOSE_PROJECT_NAME",
+];
 
 export const USAGE =
   "usage: node tools/teardown-worktrees.ts <prefix>… | --all  [--apply]";
 
 /** Changed tracked files in `git status --porcelain --untracked-files=no` output, less NOISE. */
 export function countTrackedChanges(porcelain: string): number {
-  return porcelain.split("\n").filter((l) => l && !NOISE.test(l.slice(3)))
-    .length;
+  return porcelain
+    .split("\n")
+    .filter((l) => l && !l.startsWith("?? ") && !NOISE.test(l.slice(3))).length;
 }
 
 /** The untracked files worth keeping, from `git ls-files --others` output split on NUL, less
@@ -70,6 +95,89 @@ export function keepable(untracked: string[], nested: string[] = []): string[] {
       !CACHE_DIR.test(f) &&
       !nested.some((n) => f === n || f === `${n}/` || f.startsWith(`${n}/`)),
   );
+}
+
+/** The ignored files worth archiving, from `git ls-files --others --ignored` split on NUL. */
+export function precious(ignored: string[]): string[] {
+  return ignored.filter((f) => f && PRECIOUS.test(f));
+}
+
+/** Every path `git status --porcelain --untracked-files=all` names (a rename's new name). */
+export function porcelainPaths(porcelain: string): string[] {
+  return porcelain
+    .split("\n")
+    .filter((l) => l.length > 3)
+    .map((l) => {
+      const path = l.slice(3);
+      const arrow = path.indexOf(" -> ");
+      return (arrow >= 0 ? path.slice(arrow + 4) : path).replace(/^"|"$/g, "");
+    });
+}
+
+/** What to do about a worktree's stack, from `docker compose ls --all --format json`. */
+export type StackPlan =
+  | { kind: "none" }
+  | { kind: "down"; project: string; slug: string; running: boolean }
+  | { kind: "keep"; why: string };
+
+/** The compose projects whose config files lie inside `worktree` but outside its `nested`
+ *  worktrees decide: none, nothing to take down; one, take that project down by its slug,
+ *  unless it is running; more, or one stack.sh did not name, keep the worktree. `composeLs` is
+ *  null when docker could not be asked; then a worktree with a `.stack/` is kept. */
+export function stackPlan(
+  composeLs: string | null,
+  worktree: string,
+  nested: string[],
+  hasStackDir: boolean,
+): StackPlan {
+  if (composeLs === null)
+    return hasStackDir
+      ? { kind: "keep", why: "has .stack/, and docker compose ls failed" }
+      : { kind: "none" };
+  let projects: { Name?: unknown; Status?: unknown; ConfigFiles?: unknown }[];
+  try {
+    const parsed = JSON.parse(composeLs.trim() || "[]");
+    projects = Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return { kind: "keep", why: "docker compose ls gave no JSON" };
+  }
+  const inside = (f: string) =>
+    f.startsWith(worktree + sep) && !nested.some((n) => f.startsWith(n + sep));
+  const mine = projects.filter((p) =>
+    String(p.ConfigFiles ?? "")
+      .split(",")
+      .some((f) => inside(f.trim())),
+  );
+  if (mine.length === 0) return { kind: "none" };
+  const names = mine.map((p) => String(p.Name));
+  if (mine.length > 1)
+    return {
+      kind: "keep",
+      why: `${mine.length} compose projects inside it (${names.join(", ")})`,
+    };
+  const [project] = names;
+  if (!project.startsWith("cellar-"))
+    return {
+      kind: "keep",
+      why: `compose project ${project} is not a cellar stack`,
+    };
+  return {
+    kind: "down",
+    project,
+    slug: project.slice("cellar-".length),
+    running: /running/.test(String(mine[0].Status ?? "")),
+  };
+}
+
+/** The environment for stack.sh: the caller's, less STACK_ENV_DROP, with the slug pinned. */
+export function stackEnv(
+  env: Record<string, string | undefined>,
+  slug: string,
+): Record<string, string | undefined> {
+  const out = { ...env };
+  for (const k of STACK_ENV_DROP) delete out[k];
+  out.CELLAR_STACK_SLUG = slug;
+  return out;
 }
 
 export interface WorktreeEntry {
@@ -142,6 +250,7 @@ export interface Facts {
   untracked: string[]; // worktree-relative
   kb: number;
   nested: string[]; // absolute paths of worktrees inside this one
+  stack: StackPlan;
 }
 
 export interface Verdict {
@@ -160,6 +269,9 @@ export function decide(facts: Facts, minIdleHours: number): Verdict {
     reasons.push(`${facts.unpushedCommits} commit(s) on no remote`);
   if (facts.idleHours < minIdleHours)
     reasons.push(`changed ${facts.idleHours.toFixed(1)} h ago`);
+  if (facts.stack.kind === "keep") reasons.push(facts.stack.why);
+  if (facts.stack.kind === "down" && facts.stack.running)
+    reasons.push(`stack ${facts.stack.project} has running containers`);
   return { facts, remove: reasons.length === 0, reasons };
 }
 
@@ -245,6 +357,8 @@ export interface Args {
 export function parseArgs(argv: string[]): Args | string {
   if (argv.includes("--help") || argv.includes("-h")) return "";
   const prefixes = argv.filter((a) => !a.startsWith("--"));
+  if (prefixes.some((p) => p.trim() === ""))
+    return "an empty prefix matches every worktree; name one, or pass --all";
   const all = argv.includes("--all");
   const unknown = argv.filter(
     (a) => a.startsWith("--") && !["--all", "--apply"].includes(a),
@@ -274,55 +388,111 @@ function git(cwd: string, ...args: string[]): string {
   return r.stdout ?? "";
 }
 
+/** Newest mtime under a directory, files and dirs alike; 0 when it is absent. */
+function newestUnder(dir: string): number {
+  if (!existsSync(dir)) return 0;
+  let newest = statSync(dir).mtimeMs;
+  for (const name of readdirSync(dir)) {
+    const full = join(dir, name);
+    const st = lstatSync(full);
+    newest = Math.max(
+      newest,
+      st.isDirectory() ? newestUnder(full) : st.mtimeMs,
+    );
+  }
+  return newest;
+}
+
+/** `docker compose ls --all --format json`, or null when docker cannot be asked. */
+function composeLs(): string | null {
+  const r = spawnSync(
+    "docker",
+    ["compose", "ls", "--all", "--format", "json"],
+    {
+      encoding: "utf8",
+      timeout: 30_000,
+    },
+  );
+  return r.status === 0 ? (r.stdout ?? "") : null;
+}
+
 function gather(
   entry: WorktreeEntry,
   here: string,
   listed: WorktreeEntry[],
+  compose: string | null,
 ): Facts {
   const p = entry.path;
   const gitDir = git(p, "rev-parse", "--absolute-git-dir").trim();
-  const mtimes = [p, join(gitDir, "index"), join(gitDir, "HEAD")]
+  const nested = nestedIn(p, listed);
+  const nestedRel = nested.map((n) => n.slice(p.length + 1));
+  const porcelain = git(p, "status", "--porcelain", "--untracked-files=all");
+  const untracked = keepable(
+    [
+      ...git(p, "ls-files", "--others", "--exclude-standard", "-z").split("\0"),
+      ...precious(
+        git(
+          p,
+          "ls-files",
+          "--others",
+          "--ignored",
+          "--exclude-standard",
+          "-z",
+          "--",
+          ...PRECIOUS_PATHSPECS,
+        ).split("\0"),
+      ),
+    ].filter((f, i, all) => all.indexOf(f) === i),
+    nestedRel,
+  );
+  const touched = [
+    ...new Set([
+      ...keepable(porcelainPaths(porcelain), nestedRel),
+      ...untracked,
+    ]),
+  ].map((f) => join(p, f));
+  const mtimes = [p, join(gitDir, "index"), join(gitDir, "HEAD"), ...touched]
     .filter(existsSync)
-    .map((f) => statSync(f).mtimeMs);
+    .map((f) => lstatSync(f).mtimeMs);
+  mtimes.push(newestUnder(join(p, ".stack")));
   const du = (
     spawnSync("du", ["-sk", p], { encoding: "utf8" }).stdout ?? ""
   ).split("\t")[0];
-  const nested = nestedIn(p, listed);
   return {
     entry,
     current: here === p || here.startsWith(p + sep),
-    trackedChanges: countTrackedChanges(
-      git(p, "status", "--porcelain", "--untracked-files=no"),
-    ),
+    trackedChanges: countTrackedChanges(porcelain),
     unpushedCommits: Number(
       git(p, "rev-list", "--count", "HEAD", "--not", "--remotes").trim(),
     ),
     idleHours: (Date.now() - Math.max(...mtimes)) / 3.6e6,
-    untracked: keepable(
-      git(p, "ls-files", "--others", "--exclude-standard", "-z").split("\0"),
-      nested.map((n) => n.slice(p.length + 1)),
-    ),
+    untracked,
     kb: Number(du) || 0,
     nested,
+    stack: stackPlan(compose, p, nested, existsSync(join(p, ".stack"))),
   };
 }
 
-/** Takes a worktree's stack down with its own stack.sh, when it has one. False on failure. */
-function downStack(worktree: string): boolean {
-  if (!existsSync(join(worktree, ".stack"))) return true;
+/** Takes a worktree's own compose project down with its stack.sh. False on failure. */
+function downStack(worktree: string, plan: StackPlan): boolean {
+  if (plan.kind === "none") return true;
+  if (plan.kind === "keep" || plan.running) return false;
   const script = join(worktree, "scripts", "stack", "stack.sh");
   if (!existsSync(script)) {
-    console.log(`${leafName(worktree)}: .stack/ but no scripts/stack/stack.sh`);
+    console.log(
+      `${leafName(worktree)}: compose project ${plan.project} but no scripts/stack/stack.sh; keeping it`,
+    );
     return false;
   }
   const r = spawnSync(script, ["down", "--volumes"], {
     cwd: worktree,
     encoding: "utf8",
     timeout: 180_000,
+    env: stackEnv(process.env, plan.slug),
   });
   if (r.status === 0) return true;
   console.log(
-    `${leafName(worktree)}: stack.sh down --volumes exited ${r.status ?? "on a signal"}; keeping it\n${(r.stderr ?? "").trim().split("\n").slice(-5).join("\n")}`,
+    `${leafName(worktree)}: stack.sh down --volumes (${plan.project}) exited ${r.status ?? "on a signal"}; keeping it\n${(r.stderr ?? "").trim().split("\n").slice(-5).join("\n")}`,
   );
   return false;
 }
@@ -347,8 +517,11 @@ function main(): void {
     git(root, "worktree", "list", "--porcelain"),
   ).filter((e) => existsSync(e.path));
   const scope = inScope(listed, root, args.prefixes, args.all);
+  const compose = composeLs();
   const verdicts = holdParents(
-    scope.map((e) => decide(gather(e, here, listed), args.minIdleHours)),
+    scope.map((e) =>
+      decide(gather(e, here, listed, compose), args.minIdleHours),
+    ),
   );
   const archive = archivePath(
     dirname(root),
@@ -374,7 +547,7 @@ function main(): void {
   for (const v of verdicts.filter((x) => x.remove)) {
     const p = v.facts.entry.path;
     const again = decide(
-      gather(v.facts.entry, here, listed),
+      gather(v.facts.entry, here, listed, composeLs()),
       args.minIdleHours,
     );
     const left = v.facts.nested.filter(existsSync);
@@ -384,7 +557,7 @@ function main(): void {
       console.log(`skip ${nameOf(v)}: ${again.reasons.join(", ")}`);
       continue;
     }
-    if (!downStack(p)) continue;
+    if (!downStack(p, again.facts.stack)) continue;
     git(root, "worktree", "remove", "--force", p);
     removed++;
   }
