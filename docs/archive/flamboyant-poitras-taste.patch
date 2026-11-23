@@ -1,0 +1,3673 @@
+# Stranded L03 taste-profile work from worktree flamboyant-poitras-fa3ffe (tip 1b8ced13, pre-migration Nhost tree).
+# Uncommitted changes, archived read-only on 2026-11-22: tracked diff vs 1b8ced13 plus untracked files as new-file diffs.
+# Apply against 1b8ced13 with: git apply <this file>
+
+diff --git a/src/components/common/SideNavigationBar.tsx b/src/components/common/SideNavigationBar.tsx
+index b0533235..6ea6a52a 100644
+--- a/src/components/common/SideNavigationBar.tsx
++++ b/src/components/common/SideNavigationBar.tsx
+@@ -27,6 +27,7 @@ import {
+   MdFavorite,
+   MdFormatListNumbered,
+   MdGroup,
++  MdInsights,
+   MdMap,
+   MdMenuBook,
+   MdMoreHoriz,
+@@ -118,6 +119,7 @@ const NAV_ITEMS: NavItem[] = [
+   { href: "/tier-lists", icon: <MdFormatListNumbered />, title: "Tier Lists" },
+   { href: "/rankings", icon: <FaRankingStar />, title: "Rankings" },
+   { href: "/favorites", icon: <MdFavorite />, title: "Favorites" },
++  { href: "/taste-profile", icon: <MdInsights />, title: "Taste Profile" },
+   { href: "/recipes", icon: <MdMenuBook />, title: "Recipes" },
+   { href: "/friends", icon: <MdGroup />, title: "Friends" },
+ ];
+diff --git a/functions/generateTasteProfile/index.ts b/functions/generateTasteProfile/index.ts
+new file mode 100644
+index 00000000..4f955c04
+--- /dev/null
++++ b/functions/generateTasteProfile/index.ts
+@@ -0,0 +1,204 @@
++import type { Request, Response } from "express";
++import type { JSONSchema7 } from "json-schema";
++import { createAIProvider } from "../_utils/ai-providers/factory";
++
++const { NHOST_WEBHOOK_SECRET } = process.env;
++
++interface StyleInput {
++  name: string;
++  count: number;
++}
++
++interface TopRatedInput {
++  name: string;
++  sub: string;
++  score: number;
++}
++
++interface RegionInput {
++  name: string;
++  count: number;
++}
++
++interface TasteProfileRequest {
++  itemType: string;
++  axisNames: string[];
++  styles: StyleInput[];
++  topRated: TopRatedInput[];
++  regions: RegionInput[];
++  avgScore: number;
++}
++
++function isStringArray(value: unknown): value is string[] {
++  return (
++    Array.isArray(value) && value.every((entry) => typeof entry === "string")
++  );
++}
++
++function parseRequest(body: unknown): TasteProfileRequest {
++  const raw = (body ?? {}) as Record<string, unknown>;
++
++  const itemType = typeof raw.itemType === "string" ? raw.itemType : "";
++  const axisNames = isStringArray(raw.axisNames) ? raw.axisNames : [];
++
++  if (!itemType) throw new Error("itemType is required");
++  if (axisNames.length === 0) throw new Error("axisNames is required");
++
++  const styles = Array.isArray(raw.styles)
++    ? (raw.styles as StyleInput[]).map((s) => ({
++        name: String(s?.name ?? ""),
++        count: Number(s?.count ?? 0),
++      }))
++    : [];
++
++  const topRated = Array.isArray(raw.topRated)
++    ? (raw.topRated as TopRatedInput[]).map((t) => ({
++        name: String(t?.name ?? ""),
++        sub: String(t?.sub ?? ""),
++        score: Number(t?.score ?? 0),
++      }))
++    : [];
++
++  const regions = Array.isArray(raw.regions)
++    ? (raw.regions as RegionInput[]).map((r) => ({
++        name: String(r?.name ?? ""),
++        count: Number(r?.count ?? 0),
++      }))
++    : [];
++
++  const avgScore = Number(raw.avgScore ?? 0);
++
++  return { itemType, axisNames, styles, topRated, regions, avgScore };
++}
++
++function buildSchema(axisNames: string[]): JSONSchema7 {
++  return {
++    type: "object",
++    properties: {
++      axes: {
++        type: "array",
++        description: `One entry per flavor axis. Provide exactly these axes by name: ${axisNames.join(", ")}.`,
++        items: {
++          type: "object",
++          properties: {
++            name: {
++              type: "string",
++              description: `The flavor axis name. Must be one of: ${axisNames.join(", ")}.`,
++              enum: axisNames,
++            },
++            you: {
++              type: "integer",
++              minimum: 0,
++              maximum: 100,
++              description:
++                "This member's strength on this flavor axis, 0 (none) to 100 (dominant).",
++            },
++          },
++          required: ["name", "you"],
++        },
++      },
++      archetype: {
++        type: "object",
++        properties: {
++          title: {
++            type: "string",
++            description:
++              "A short, fun taste-identity title in title case, e.g. 'The Hop-Forward Wanderer'.",
++          },
++          description: {
++            type: "string",
++            description:
++              "A 1-2 sentence, second-person description of this taste identity. Plain text only.",
++          },
++        },
++        required: ["title", "description"],
++      },
++    },
++    required: ["axes", "archetype"],
++  };
++}
++
++function buildPrompt(request: TasteProfileRequest): string {
++  const { itemType, axisNames, styles, topRated, regions, avgScore } = request;
++
++  const stylesSummary =
++    styles.length > 0
++      ? styles.map((s) => `- ${s.name} (logged ${s.count}x)`).join("\n")
++      : "- (no styles logged)";
++
++  const topRatedSummary =
++    topRated.length > 0
++      ? topRated
++          .map((t) => `- ${t.name} — ${t.sub} (rated ${t.score}/5)`)
++          .join("\n")
++      : "- (no rated items)";
++
++  const regionsSummary =
++    regions.length > 0
++      ? regions.map((r) => `- ${r.name} (${r.count})`).join("\n")
++      : "- (no regions logged)";
++
++  return `You are a perceptive ${itemType} taste analyst. Based on what a member has logged and rated, infer a flavor fingerprint that captures their personal palate.
++
++## The member's ${itemType} collection
++
++### Styles logged (most to least)
++${stylesSummary}
++
++### Top-rated items
++${topRatedSummary}
++
++### Regions / origins
++${regionsSummary}
++
++### Average rating across the collection
++${avgScore.toFixed(2)} / 5
++
++## What to produce
++
++1. A flavor fingerprint scored 0–100 on EXACTLY these axes (one entry per axis, using the exact names): ${axisNames.join(", ")}.
++   - 0 means this trait is essentially absent from their palate; 100 means it dominates.
++   - Weight the scores toward styles they log most often and items they rate highest.
++   - Use the full 0–100 range; avoid clustering everything around the middle.
++2. A short, fun "taste identity" archetype:
++   - title: a catchy title in title case (e.g. "The Hop-Forward Wanderer").
++   - description: 1–2 sentences, second person, grounded in their actual styles/ratings. Plain text only, no markdown.
++
++Return only the structured fields requested.`;
++}
++
++export default async function generateTasteProfile(
++  req: Request,
++  res: Response,
++) {
++  try {
++    if (req.method === "GET") return res.status(200).send();
++    if (req.method !== "POST") return res.status(405).send();
++    if (req.headers["nhost-webhook-secret"] !== NHOST_WEBHOOK_SECRET) {
++      return res.status(400).json({ error: "Unauthorized" });
++    }
++
++    const request = parseRequest(req.body);
++
++    const aiProvider = await createAIProvider();
++    const prompt = buildPrompt(request);
++    const schema = buildSchema(request.axisNames);
++
++    const aiResponse = await aiProvider.generateContent(
++      { prompt, schema },
++      "low",
++    );
++
++    const parsed = JSON.parse(aiResponse.content) as {
++      axes: { name: string; you: number }[];
++      archetype: { title: string; description: string };
++    };
++
++    return res.status(200).json(parsed);
++  } catch (error) {
++    console.error("[generateTasteProfile] Error:", error);
++    return res.status(500).json({
++      error: error instanceof Error ? error.message : "Unknown error occurred",
++    });
++  }
++}
+diff --git a/src/app/(authenticated)/taste-profile/page.tsx b/src/app/(authenticated)/taste-profile/page.tsx
+new file mode 100644
+index 00000000..ef49f601
+--- /dev/null
++++ b/src/app/(authenticated)/taste-profile/page.tsx
+@@ -0,0 +1,43 @@
++import { ITEM_TYPES, type ItemTypeValue } from "@cellar-assistant/shared";
++import { loadTasteProfile } from "@/components/taste-profile/data/loadTasteProfile";
++import { TasteProfileClient } from "@/components/taste-profile/TasteProfileClient";
++import type { Period } from "@/components/taste-profile/types";
++import { getServerUserId } from "@/utilities/auth-server";
++
++function parseType(value: string | undefined): ItemTypeValue {
++  const upper = (value ?? "").toUpperCase();
++  return (ITEM_TYPES as readonly string[]).includes(upper)
++    ? (upper as ItemTypeValue)
++    : "BEER";
++}
++
++function parsePeriod(value: string | undefined): Period {
++  return value === "all" ? "all" : "year";
++}
++
++export default async function TasteProfilePage({
++  searchParams,
++}: {
++  searchParams: Promise<{ type?: string; period?: string }>;
++}) {
++  const { type: typeParam, period: periodParam } = await searchParams;
++  const type = parseType(typeParam);
++  const period = parsePeriod(periodParam);
++
++  const userId = await getServerUserId();
++  const { data, heuristicFlavor, countsByType } = await loadTasteProfile(
++    userId,
++    type,
++    period,
++  );
++
++  return (
++    <TasteProfileClient
++      type={type}
++      period={period}
++      data={data}
++      heuristicFlavor={heuristicFlavor}
++      countsByType={countsByType}
++    />
++  );
++}
+diff --git a/src/app/actions/tasteProfile.ts b/src/app/actions/tasteProfile.ts
+new file mode 100644
+index 00000000..41fafcce
+--- /dev/null
++++ b/src/app/actions/tasteProfile.ts
+@@ -0,0 +1,119 @@
++"use server";
++
++import {
++  COMMUNITY_BASELINE,
++  FLAVOR_AXES,
++} from "@/components/taste-profile/flavor/heuristic";
++import type {
++  Archetype,
++  FlavorAxis,
++  FlavorResult,
++} from "@/components/taste-profile/types";
++
++interface GenerateAiFlavorInput {
++  itemType: string;
++  styles: { name: string; count: number }[];
++  topRated: { name: string; sub: string; score: number }[];
++  regions: { name: string; count: number }[];
++  avgScore: number;
++}
++
++interface AiFlavorResponse {
++  axes: { name: string; you: number }[];
++  archetype: Archetype;
++}
++
++const DEFAULT_FUNCTION_URL = "https://local.functions.nhost.run";
++
++function clamp(value: number, min: number, max: number): number {
++  return Math.min(max, Math.max(min, value));
++}
++
++function isAiFlavorResponse(value: unknown): value is AiFlavorResponse {
++  if (!value || typeof value !== "object") return false;
++  const candidate = value as Record<string, unknown>;
++
++  if (!Array.isArray(candidate.axes)) return false;
++  const axesValid = candidate.axes.every(
++    (axis) =>
++      axis &&
++      typeof axis === "object" &&
++      typeof (axis as Record<string, unknown>).name === "string" &&
++      typeof (axis as Record<string, unknown>).you === "number",
++  );
++  if (!axesValid) return false;
++
++  const archetype = candidate.archetype as Record<string, unknown> | undefined;
++  if (
++    !archetype ||
++    typeof archetype !== "object" ||
++    typeof archetype.title !== "string" ||
++    typeof archetype.description !== "string"
++  ) {
++    return false;
++  }
++
++  return true;
++}
++
++/**
++ * AI-sourced flavor fingerprint + archetype (A/B option B).
++ *
++ * Calls the `generateTasteProfile` serverless function and maps its output to a
++ * `FlavorResult`, attaching the community baseline as each axis's `avg`. Returns
++ * `null` on any failure so the UI can fall back to the heuristic source.
++ */
++export async function generateAiFlavor(
++  input: GenerateAiFlavorInput,
++): Promise<FlavorResult | null> {
++  try {
++    const functionUrl = process.env.NHOST_FUNCTION_URL ?? DEFAULT_FUNCTION_URL;
++
++    const response = await fetch(
++      `${functionUrl}/v1/functions/generateTasteProfile`,
++      {
++        method: "POST",
++        headers: {
++          "Content-Type": "application/json",
++          "nhost-webhook-secret": process.env.NHOST_WEBHOOK_SECRET ?? "",
++        },
++        body: JSON.stringify({
++          itemType: input.itemType,
++          axisNames: [...FLAVOR_AXES],
++          styles: input.styles,
++          topRated: input.topRated,
++          regions: input.regions,
++          avgScore: input.avgScore,
++        }),
++      },
++    );
++
++    if (!response.ok) {
++      console.error(`generateTasteProfile returned ${response.status}`);
++      return null;
++    }
++
++    const data: unknown = await response.json();
++    if (!isAiFlavorResponse(data)) {
++      console.error("generateTasteProfile returned unexpected shape");
++      return null;
++    }
++
++    const byName = new Map(data.axes.map((axis) => [axis.name, axis.you]));
++
++    const axes: FlavorAxis[] = FLAVOR_AXES.map((name) => {
++      const baseline = COMMUNITY_BASELINE[name];
++      const you = byName.get(name);
++      return {
++        name,
++        you: you === undefined ? baseline : clamp(Math.round(you), 0, 100),
++        avg: baseline,
++      };
++    });
++
++    return { axes, archetype: data.archetype };
++  } catch (error) {
++    console.error("Failed to generate AI flavor profile:", error);
++    return null;
++  }
++}
+diff --git a/src/components/taste-profile/TasteProfileClient.tsx b/src/components/taste-profile/TasteProfileClient.tsx
+new file mode 100644
+index 00000000..0d16dc66
+--- /dev/null
++++ b/src/components/taste-profile/TasteProfileClient.tsx
+@@ -0,0 +1,180 @@
++"use client";
++
++import type { ItemTypeValue } from "@cellar-assistant/shared";
++import { Box } from "@mui/joy";
++import type { StaticImageData } from "next/image";
++import { usePathname, useRouter } from "next/navigation";
++import { useState, useTransition } from "react";
++import beer1 from "@/images/beer1.png";
++import coffee1 from "@/images/coffee1.png";
++import sake1 from "@/images/sake1.png";
++import spirit1 from "@/images/spirit1.png";
++import tea1 from "@/images/tea1.png";
++import wine1 from "@/images/wine1.png";
++import { formatItemType } from "@/utilities";
++import { useFlavorResult } from "./flavor/useFlavorResult";
++import { UNLOCK_GOAL } from "./mockData";
++import { FlavorFingerprint } from "./modules/FlavorFingerprint";
++import { IdentityBanner } from "./modules/IdentityBanner";
++import { InsightsStrip } from "./modules/InsightsStrip";
++import { OriginBreakdown } from "./modules/OriginBreakdown";
++import { ScoreOverTime } from "./modules/ScoreOverTime";
++import { TastingCadence } from "./modules/TastingCadence";
++import { TopRated } from "./modules/TopRated";
++import { TopStyles } from "./modules/TopStyles";
++import { UnlockState } from "./modules/UnlockState";
++import { TasteProfileHeader } from "./TasteProfileHeader";
++import { tp } from "./tokens";
++import type {
++  FlavorResult,
++  FlavorSource,
++  Period,
++  TasteProfileData,
++} from "./types";
++
++const ILLUSTRATION: Record<ItemTypeValue, StaticImageData> = {
++  BEER: beer1,
++  WINE: wine1,
++  SPIRIT: spirit1,
++  COFFEE: coffee1,
++  SAKE: sake1,
++  TEA: tea1,
++};
++
++/** Two columns that collapse to one on small screens. */
++const row = (cols: string) => ({
++  display: "grid",
++  gridTemplateColumns: { xs: "1fr", md: cols },
++  gap: "20px",
++});
++
++type TasteProfileClientProps = {
++  type: ItemTypeValue;
++  period: Period;
++  data: TasteProfileData | null;
++  heuristicFlavor: FlavorResult;
++  countsByType: Partial<Record<ItemTypeValue, number>>;
++};
++
++export const TasteProfileClient = ({
++  type,
++  period,
++  data,
++  heuristicFlavor,
++  countsByType,
++}: TasteProfileClientProps) => {
++  const router = useRouter();
++  const pathname = usePathname();
++  const [isPending, startTransition] = useTransition();
++  const [compare, setCompare] = useState(true);
++  const [flavorSource, setFlavorSource] = useState<FlavorSource>("heuristic");
++
++  const { flavor } = useFlavorResult(type, flavorSource, data, heuristicFlavor);
++
++  const logged = countsByType[type] ?? 0;
++  const unlocked = logged >= UNLOCK_GOAL && data !== null;
++  const label = formatItemType(type).toLowerCase();
++
++  // type/period live in the URL so views are shareable and re-fetch on the
++  // server; the transition keeps the swap non-blocking.
++  const navigate = (next: { type?: ItemTypeValue; period?: Period }) => {
++    const params = new URLSearchParams({
++      type: (next.type ?? type).toLowerCase(),
++      period: next.period ?? period,
++    });
++    startTransition(() => {
++      router.replace(`${pathname}?${params.toString()}`, { scroll: false });
++    });
++  };
++
++  const body = () => {
++    if (!unlocked || !data) {
++      return (
++        <UnlockState
++          info={{ type, logged, goal: UNLOCK_GOAL }}
++          onAdd={() => router.push(`/search?type=${label}`)}
++        />
++      );
++    }
++
++    return (
++      <Box sx={{ display: "flex", flexDirection: "column", gap: "20px" }}>
++        <IdentityBanner
++          archetype={flavor.archetype}
++          statTiles={data.statTiles}
++          illustration={ILLUSTRATION[type]}
++          illustrationAlt={formatItemType(type)}
++          eyebrow={`Your ${label} taste identity`}
++        />
++
++        {data.insights.length > 0 && <InsightsStrip insights={data.insights} />}
++
++        <Box sx={row("1.05fr 1fr")}>
++          <FlavorFingerprint
++            axes={flavor.axes}
++            compare={compare}
++            onToggleCompare={() => setCompare((c) => !c)}
++            source={flavorSource}
++            onToggleSource={() =>
++              setFlavorSource((s) => (s === "ai" ? "heuristic" : "ai"))
++            }
++          />
++          <TopStyles
++            styles={data.styles}
++            periodNote={period === "year" ? "this year" : "all time"}
++          />
++        </Box>
++
++        <Box sx={row("1.05fr 1fr")}>
++          <TopRated items={data.topRated} />
++          <ScoreOverTime
++            scoreNow={data.scoreNow}
++            scoreDelta={data.scoreDelta}
++            trend={data.scoreTrend}
++          />
++        </Box>
++
++        <Box sx={row("1.3fr 1fr")}>
++          <TastingCadence months={data.cadence} caption={data.cadenceCaption} />
++          <OriginBreakdown
++            origin={data.origin}
++            caption={data.originCaption}
++            onOpenAtlas={() => router.push("/map")}
++          />
++        </Box>
++      </Box>
++    );
++  };
++
++  return (
++    <Box
++      sx={{
++        height: "100%",
++        overflowY: "auto",
++        overflowX: "hidden",
++        background: tp.color.bgBody,
++        color: tp.color.textPrimary,
++      }}
++    >
++      <TasteProfileHeader
++        type={type}
++        onTypeChange={(t) => navigate({ type: t })}
++        period={period}
++        onPeriodChange={(p) => navigate({ period: p })}
++      />
++
++      <Box
++        sx={{
++          maxWidth: "1180px",
++          margin: "0 auto",
++          padding: "26px 30px 64px",
++          opacity: isPending ? 0.55 : 1,
++          transition: `opacity ${tp.duration.base} ${tp.ease.standard}`,
++          pointerEvents: isPending ? "none" : "auto",
++        }}
++      >
++        {body()}
++      </Box>
++    </Box>
++  );
++};
+diff --git a/src/components/taste-profile/TasteProfileHeader.tsx b/src/components/taste-profile/TasteProfileHeader.tsx
+new file mode 100644
+index 00000000..277389d0
+--- /dev/null
++++ b/src/components/taste-profile/TasteProfileHeader.tsx
+@@ -0,0 +1,164 @@
++"use client";
++
++import { ITEM_TYPES, type ItemTypeValue } from "@cellar-assistant/shared";
++import { Box, Button, IconButton, Typography } from "@mui/joy";
++import { useRouter } from "next/navigation";
++import { MdArrowBack, MdShare } from "react-icons/md";
++import { formatItemType } from "@/utilities";
++import { TYPE_ICON } from "./icons";
++import { tp } from "./tokens";
++import type { Period } from "./types";
++
++type TasteProfileHeaderProps = {
++  type: ItemTypeValue;
++  onTypeChange: (t: ItemTypeValue) => void;
++  period: Period;
++  onPeriodChange: (p: Period) => void;
++  onShare?: () => void;
++};
++
++const PERIODS: { key: Period; label: string }[] = [
++  { key: "year", label: "This year" },
++  { key: "all", label: "All time" },
++];
++
++/** Sticky header: back, title, type tabs, period toggle, share. */
++export const TasteProfileHeader = ({
++  type,
++  onTypeChange,
++  period,
++  onPeriodChange,
++  onShare,
++}: TasteProfileHeaderProps) => {
++  const router = useRouter();
++
++  return (
++    <Box
++      sx={{
++        position: "sticky",
++        top: 0,
++        zIndex: 8,
++        background: "rgba(17,16,21,0.82)",
++        backdropFilter: "blur(16px) saturate(1.2)",
++        WebkitBackdropFilter: "blur(16px) saturate(1.2)",
++        borderBottom: `1px solid ${tp.color.divider}`,
++        padding: "14px 30px",
++        display: "flex",
++        alignItems: "center",
++        gap: "16px",
++        flexWrap: "wrap",
++      }}
++    >
++      <IconButton
++        variant="outlined"
++        color="neutral"
++        onClick={() => router.back()}
++        aria-label="Back"
++        sx={{ borderRadius: "9px" }}
++      >
++        <MdArrowBack />
++      </IconButton>
++      <Typography
++        sx={{
++          fontSize: tp.fontSize.xl,
++          fontWeight: 600,
++          letterSpacing: "-0.01em",
++        }}
++      >
++        Taste profile
++      </Typography>
++
++      {/* type tabs */}
++      <Box sx={{ display: "flex", gap: "7px", ml: "6px", flexWrap: "wrap" }}>
++        {ITEM_TYPES.map((t) => {
++          const on = t === type;
++          return (
++            <Box
++              key={t}
++              onClick={() => onTypeChange(t)}
++              role="tab"
++              aria-selected={on}
++              tabIndex={0}
++              onKeyDown={(e) => {
++                if (e.key === "Enter" || e.key === " ") {
++                  e.preventDefault();
++                  onTypeChange(t);
++                }
++              }}
++              sx={{
++                display: "flex",
++                alignItems: "center",
++                gap: "6px",
++                height: "32px",
++                padding: "0 12px",
++                borderRadius: tp.radius.pill,
++                fontSize: tp.fontSize.sm,
++                fontWeight: 600,
++                cursor: "pointer",
++                background: on ? tp.color.amber : "transparent",
++                color: on ? "#111015" : tp.color.textSecondary,
++                border: `1px solid ${on ? tp.color.amber : tp.color.border}`,
++                transition: `all ${tp.duration.fast} ${tp.ease.standard}`,
++              }}
++            >
++              <Box sx={{ fontSize: "14px", display: "inline-flex" }}>
++                {TYPE_ICON[t]}
++              </Box>
++              {formatItemType(t)}
++            </Box>
++          );
++        })}
++      </Box>
++
++      <Box
++        sx={{ display: "flex", alignItems: "center", gap: "12px", ml: "auto" }}
++      >
++        {/* period toggle */}
++        <Box
++          sx={{
++            display: "flex",
++            padding: "3px",
++            borderRadius: tp.radius.pill,
++            background: tp.color.bgLevel1,
++            border: `1px solid ${tp.color.border}`,
++          }}
++        >
++          {PERIODS.map((p) => {
++            const on = p.key === period;
++            return (
++              <Box
++                key={p.key}
++                onClick={() => onPeriodChange(p.key)}
++                role="tab"
++                aria-selected={on}
++                tabIndex={0}
++                onKeyDown={(e) => {
++                  if (e.key === "Enter" || e.key === " ") {
++                    e.preventDefault();
++                    onPeriodChange(p.key);
++                  }
++                }}
++                sx={{
++                  padding: "6px 14px",
++                  borderRadius: tp.radius.pill,
++                  fontSize: tp.fontSize.xs,
++                  fontWeight: 600,
++                  whiteSpace: "nowrap",
++                  cursor: "pointer",
++                  background: on ? "rgba(218,165,32,0.18)" : "transparent",
++                  color: on ? tp.color.amberLight : tp.color.textTertiary,
++                  transition: `all ${tp.duration.fast} ${tp.ease.standard}`,
++                }}
++              >
++                {p.label}
++              </Box>
++            );
++          })}
++        </Box>
++        <Button color="primary" startDecorator={<MdShare />} onClick={onShare}>
++          Share
++        </Button>
++      </Box>
++    </Box>
++  );
++};
+diff --git a/src/components/taste-profile/charts/BarTrack.tsx b/src/components/taste-profile/charts/BarTrack.tsx
+new file mode 100644
+index 00000000..9a617086
+--- /dev/null
++++ b/src/components/taste-profile/charts/BarTrack.tsx
+@@ -0,0 +1,46 @@
++"use client";
++
++import { Box } from "@mui/joy";
++import { tp } from "../tokens";
++
++type BarTrackProps = {
++  /** Fill ratio 0–1 (count ÷ max). */
++  ratio: number;
++  color: string;
++  /** Track height in px. */
++  height?: number;
++  animate?: boolean;
++};
++
++/**
++ * A single horizontal bar (rounded track + filled bar). Used by the Top styles
++ * and Where-it-comes-from modules. The width transitions in on the slow easing.
++ */
++export const BarTrack = ({
++  ratio,
++  color,
++  height = 10,
++  animate = true,
++}: BarTrackProps) => (
++  <Box
++    sx={{
++      flex: 1,
++      height: `${height}px`,
++      borderRadius: tp.radius.pill,
++      background: "rgba(255,255,255,0.06)",
++      overflow: "hidden",
++    }}
++  >
++    <Box
++      sx={{
++        height: "100%",
++        borderRadius: tp.radius.pill,
++        width: `${Math.round(Math.max(0, Math.min(1, ratio)) * 100)}%`,
++        background: color,
++        transition: animate
++          ? `width ${tp.duration.slow} ${tp.ease.out}`
++          : undefined,
++      }}
++    />
++  </Box>
++);
+diff --git a/src/components/taste-profile/charts/CadenceBars.tsx b/src/components/taste-profile/charts/CadenceBars.tsx
+new file mode 100644
+index 00000000..68f88aca
+--- /dev/null
++++ b/src/components/taste-profile/charts/CadenceBars.tsx
+@@ -0,0 +1,59 @@
++"use client";
++
++import { Box } from "@mui/joy";
++import { CADENCE_COLORS } from "../mockData";
++import { tp } from "../tokens";
++import type { CadenceMonth } from "../types";
++
++type CadenceBarsProps = {
++  months: CadenceMonth[];
++};
++
++/** 12-month vertical mini bar chart. Peak month amber, others faded amber. */
++export const CadenceBars = ({ months }: CadenceBarsProps) => {
++  const max = Math.max(1, ...months.map((m) => m.value));
++
++  return (
++    <Box
++      sx={{
++        display: "flex",
++        alignItems: "flex-end",
++        gap: "8px",
++        height: "104px",
++      }}
++    >
++      {months.map((m, i) => (
++        <Box
++          // biome-ignore lint/suspicious/noArrayIndexKey: months are a fixed positional series
++          key={i}
++          sx={{
++            flex: 1,
++            display: "flex",
++            flexDirection: "column",
++            alignItems: "center",
++            justifyContent: "flex-end",
++            gap: "7px",
++            height: "100%",
++          }}
++        >
++          <Box
++            sx={{
++              width: "100%",
++              maxWidth: "22px",
++              borderRadius: "5px 5px 3px 3px",
++              height: `${Math.round((m.value / max) * 100)}%`,
++              background: m.peak ? CADENCE_COLORS.peak : CADENCE_COLORS.rest,
++              transition: `height ${tp.duration.slow} ${tp.ease.out}`,
++            }}
++          />
++          <Box
++            component="span"
++            sx={{ fontSize: "10px", color: tp.color.textTertiary }}
++          >
++            {m.label}
++          </Box>
++        </Box>
++      ))}
++    </Box>
++  );
++};
+diff --git a/src/components/taste-profile/charts/LineChart.tsx b/src/components/taste-profile/charts/LineChart.tsx
+new file mode 100644
+index 00000000..5ebafe59
+--- /dev/null
++++ b/src/components/taste-profile/charts/LineChart.tsx
+@@ -0,0 +1,109 @@
++"use client";
++
++import { useId } from "react";
++import { tp } from "../tokens";
++import type { ScorePoint } from "../types";
++
++type LineChartProps = {
++  points: ScorePoint[];
++  /** Fixed y-domain (default 3.4–4.6 per the spec). */
++  min?: number;
++  max?: number;
++  /** Faint horizontal gridlines. */
++  gridlines?: number[];
++};
++
++/**
++ * Average-score-over-time line chart. Amber line + gradient area fill, fixed
++ * y-domain, last point emphasized. Ported from the design prototype.
++ */
++export const LineChart = ({
++  points,
++  min = 3.4,
++  max = 4.6,
++  gridlines = [4.0, 4.4],
++}: LineChartProps) => {
++  const gradientId = useId();
++  const w = 520;
++  const h = 150;
++  const padB = 24;
++  const padT = 12;
++  const ih = h - padB - padT;
++
++  if (points.length === 0) return null;
++
++  const X = (i: number) =>
++    points.length === 1 ? w / 2 : 6 + (i / (points.length - 1)) * (w - 12);
++  const Y = (v: number) => padT + ih - ((v - min) / (max - min)) * ih;
++
++  const line = points
++    .map((p, i) => `${X(i).toFixed(1)},${Y(p.value).toFixed(1)}`)
++    .join(" ");
++  const baseY = (padT + ih).toFixed(1);
++  const area = `6,${baseY} ${line} ${(w - 6).toFixed(1)},${baseY}`;
++
++  return (
++    <svg
++      viewBox={`0 0 ${w} ${h}`}
++      width="100%"
++      height="100%"
++      preserveAspectRatio="xMidYMid meet"
++      role="img"
++      aria-label="Average score over time"
++      style={{ display: "block" }}
++    >
++      <defs>
++        <linearGradient id={gradientId} x1={0} y1={0} x2={0} y2={1}>
++          <stop offset="0%" stopColor="rgba(218,165,32,0.34)" />
++          <stop offset="100%" stopColor="rgba(218,165,32,0)" />
++        </linearGradient>
++      </defs>
++      {gridlines.map((gv) => (
++        <line
++          key={`grid-${gv}`}
++          x1={6}
++          x2={w - 6}
++          y1={Y(gv)}
++          y2={Y(gv)}
++          stroke="rgba(255,255,255,0.06)"
++          strokeWidth={1}
++        />
++      ))}
++      <polygon points={area} fill={`url(#${gradientId})`} />
++      <polyline
++        points={line}
++        fill="none"
++        stroke={tp.color.amber}
++        strokeWidth={2.5}
++        strokeLinejoin="round"
++        strokeLinecap="round"
++      />
++      {points.map((p, i) => {
++        const last = i === points.length - 1;
++        return (
++          <circle
++            key={`pt-${p.label}`}
++            cx={X(i)}
++            cy={Y(p.value)}
++            r={last ? 5 : 3}
++            fill={last ? tp.color.amber : "#0C0B10"}
++            stroke={tp.color.amber}
++            strokeWidth={2}
++          />
++        );
++      })}
++      {points.map((p, i) => (
++        <text
++          key={`xlabel-${p.label}`}
++          x={X(i)}
++          y={h - 6}
++          textAnchor="middle"
++          fill={tp.color.textTertiary}
++          style={{ fontSize: 11 }}
++        >
++          {p.label}
++        </text>
++      ))}
++    </svg>
++  );
++};
+diff --git a/src/components/taste-profile/charts/RadarChart.tsx b/src/components/taste-profile/charts/RadarChart.tsx
+new file mode 100644
+index 00000000..8c1161c2
+--- /dev/null
++++ b/src/components/taste-profile/charts/RadarChart.tsx
+@@ -0,0 +1,129 @@
++"use client";
++
++import { tp } from "../tokens";
++import type { FlavorAxis } from "../types";
++
++type RadarChartProps = {
++  axes: FlavorAxis[];
++  size?: number;
++  showCompare?: boolean;
++};
++
++/**
++ * Radar / spider chart for the flavor fingerprint. Ported from the design
++ * prototype: N axes evenly around the circle, 4 concentric grid rings, a filled
++ * "you" polygon and an optional dashed "community" polygon.
++ */
++export const RadarChart = ({
++  axes,
++  size = 280,
++  showCompare = true,
++}: RadarChartProps) => {
++  const cx = size / 2;
++  const cy = size / 2;
++  const R = size * 0.34;
++  const n = axes.length;
++
++  const ang = (i: number) => -Math.PI / 2 + (i * 2 * Math.PI) / n;
++  const pt = (i: number, r: number): [number, number] => [
++    +(cx + Math.cos(ang(i)) * r).toFixed(1),
++    +(cy + Math.sin(ang(i)) * r).toFixed(1),
++  ];
++  const ring = (f: number) =>
++    axes.map((_, i) => pt(i, R * f).join(",")).join(" ");
++  const poly = (key: "you" | "avg") =>
++    axes.map((a, i) => pt(i, R * (a[key] / 100)).join(",")).join(" ");
++
++  const labelSize = size > 300 ? 14 : size > 230 ? 13 : 11;
++  const dotR = size > 230 ? 3.4 : 2.6;
++  const labelOffset = size > 230 ? 20 : 15;
++
++  return (
++    <svg
++      viewBox={`0 0 ${size} ${size}`}
++      width="100%"
++      height="100%"
++      role="img"
++      aria-label="Flavor fingerprint radar chart"
++      style={{ display: "block", overflow: "visible", maxHeight: size }}
++    >
++      {/* grid rings */}
++      {[0.25, 0.5, 0.75, 1].map((f, ri) => (
++        <polygon
++          key={`ring-${f}`}
++          points={ring(f)}
++          fill={ri === 3 ? "rgba(255,255,255,0.02)" : "none"}
++          stroke="rgba(255,255,255,0.09)"
++          strokeWidth={1}
++        />
++      ))}
++      {/* spokes */}
++      {axes.map((axis, i) => {
++        const [x, y] = pt(i, R);
++        return (
++          <line
++            key={`spoke-${axis.name}`}
++            x1={cx}
++            y1={cy}
++            x2={x}
++            y2={y}
++            stroke="rgba(255,255,255,0.08)"
++            strokeWidth={1}
++          />
++        );
++      })}
++      {/* community polygon */}
++      {showCompare && (
++        <polygon
++          points={poly("avg")}
++          fill="none"
++          stroke={tp.color.primary500}
++          strokeWidth={1.5}
++          strokeDasharray="4 3"
++          opacity={0.85}
++          strokeLinejoin="round"
++        />
++      )}
++      {/* you polygon */}
++      <polygon
++        points={poly("you")}
++        fill="rgba(218,165,32,0.22)"
++        stroke={tp.color.amber}
++        strokeWidth={2}
++        strokeLinejoin="round"
++      />
++      {/* you vertices */}
++      {axes.map((a, i) => {
++        const [x, y] = pt(i, R * (a.you / 100));
++        return (
++          <circle
++            key={`vtx-${a.name}`}
++            cx={x}
++            cy={y}
++            r={dotR}
++            fill={tp.color.amber}
++          />
++        );
++      })}
++      {/* axis labels */}
++      {axes.map((a, i) => {
++        const [x, y] = pt(i, R + labelOffset);
++        const c = Math.cos(ang(i));
++        const anchor = c > 0.3 ? "start" : c < -0.3 ? "end" : "middle";
++        return (
++          <text
++            key={`axis-${a.name}`}
++            x={x}
++            y={y}
++            textAnchor={anchor}
++            dominantBaseline="middle"
++            fill={tp.color.textSecondary}
++            style={{ fontSize: labelSize, fontWeight: 600 }}
++          >
++            {a.name}
++          </text>
++        );
++      })}
++    </svg>
++  );
++};
+diff --git a/src/components/taste-profile/charts/StarRating.tsx b/src/components/taste-profile/charts/StarRating.tsx
+new file mode 100644
+index 00000000..ef47601d
+--- /dev/null
++++ b/src/components/taste-profile/charts/StarRating.tsx
+@@ -0,0 +1,57 @@
++"use client";
++
++import { Box } from "@mui/joy";
++import { MdStar, MdStarHalf, MdStarOutline } from "react-icons/md";
++import { tp } from "../tokens";
++
++type StarRatingProps = {
++  /** 0–5, half-star resolution. */
++  value: number;
++  size?: number;
++  showValue?: boolean;
++  /** Decimal places when showing the value. */
++  precision?: number;
++};
++
++/**
++ * Gold 5-star rating. Joy has no Rating component, so this is a small custom
++ * display built from react-icons stars (matching how the app renders MdStar).
++ */
++export const StarRating = ({
++  value,
++  size = 15,
++  showValue = true,
++  precision = 2,
++}: StarRatingProps) => {
++  const clamped = Math.max(0, Math.min(5, value));
++
++  return (
++    <Box
++      sx={{ display: "inline-flex", alignItems: "center", gap: "5px" }}
++      aria-label={`${clamped.toFixed(precision)} out of 5 stars`}
++    >
++      <Box sx={{ display: "inline-flex", color: tp.color.starGold }}>
++        {Array.from({ length: 5 }, (_, i) => {
++          const filled = clamped >= i + 1;
++          const half = !filled && clamped >= i + 0.5;
++          const Icon = filled ? MdStar : half ? MdStarHalf : MdStarOutline;
++          // biome-ignore lint/suspicious/noArrayIndexKey: fixed 5-star positional series
++          return <Icon key={i} size={size} />;
++        })}
++      </Box>
++      {showValue && (
++        <Box
++          component="span"
++          sx={{
++            fontSize: `${Math.max(11, size - 2)}px`,
++            fontWeight: 700,
++            fontVariantNumeric: "tabular-nums",
++            color: tp.color.textPrimary,
++          }}
++        >
++          {clamped.toFixed(precision)}
++        </Box>
++      )}
++    </Box>
++  );
++};
+diff --git a/src/components/taste-profile/data/buildTasteProfile.ts b/src/components/taste-profile/data/buildTasteProfile.ts
+new file mode 100644
+index 00000000..5a77fea2
+--- /dev/null
++++ b/src/components/taste-profile/data/buildTasteProfile.ts
+@@ -0,0 +1,485 @@
++/**
++ * Pure aggregation layer for the Taste Profile dashboard (Phase 2).
++ *
++ * `buildTasteProfile` turns a member's normalized review history into the typed
++ * {@link TasteProfileData} contract the UI already consumes. It is intentionally
++ * side-effect free (aside from the injectable `now`) so it can be unit-tested and
++ * reused on the server.
++ *
++ * NOTE: `flavorAxes` and `archetype` are deliberately left as neutral
++ * placeholders here — the flavor fingerprint + archetype are produced by Phase 3
++ * (see `flavor/heuristic.ts`) and merged in by the caller. Do not compute them
++ * in this file.
++ */
++
++import { formatEnum, type ItemTypeValue } from "@cellar-assistant/shared";
++import { ITEM_TYPE_COLOR } from "../tokens";
++import type {
++  Insight,
++  Period,
++  StyleRow,
++  TasteProfileData,
++  UnlockInfo,
++} from "../types";
++
++/**
++ * A single review flattened to the fields the aggregator needs, regardless of
++ * the underlying item type. Produced by the data hook from the per-type query.
++ */
++export type RawReview = {
++  /** 0.5–5 */
++  score: number;
++  /** ISO timestamp (timestamptz). */
++  createdAt: string;
++  /** Item display name. */
++  name: string;
++  /** Raw style/category enum or string (type-specific), if present. */
++  style?: string | null;
++  /** Producer / brand name, if present. */
++  producer?: string | null;
++  /** Region (free text), if present. */
++  region?: string | null;
++  /** Country enum, if present. */
++  country?: string | null;
++};
++
++const PERIOD_NOTE: Record<Period, string> = {
++  year: "this year",
++  all: "all time",
++};
++
++/** Single-letter month labels, indexed by JS month (0 = Jan). */
++const MONTH_LETTERS = [
++  "J",
++  "F",
++  "M",
++  "A",
++  "M",
++  "J",
++  "J",
++  "A",
++  "S",
++  "O",
++  "N",
++  "D",
++];
++
++/** Short month names for trend labels (0 = Jan). */
++const MONTH_SHORT = [
++  "Jan",
++  "Feb",
++  "Mar",
++  "Apr",
++  "May",
++  "Jun",
++  "Jul",
++  "Aug",
++  "Sep",
++  "Oct",
++  "Nov",
++  "Dec",
++];
++
++/**
++ * Style-bar palette. Reuses the per-type accent as the lead color and rotates
++ * through a small set of warm/cool supporting hues so adjacent bars stay
++ * distinguishable. Mirrors the spirit of the mock's hand-picked colors without
++ * needing a per-style lookup table.
++ */
++const STYLE_PALETTE = [
++  "#E8A33D",
++  "#DAA520",
++  "#7A4A2B",
++  "#E8C547",
++  "#C9A24B",
++  "#9A5B13",
++  "#C97B84",
++  "#8FB8BC",
++  "#70A3A9",
++  "#568A8F",
++];
++
++function styleColor(type: ItemTypeValue, index: number): string {
++  if (index === 0) return ITEM_TYPE_COLOR[type];
++  return STYLE_PALETTE[index % STYLE_PALETTE.length] ?? ITEM_TYPE_COLOR[type];
++}
++
++/** Human label for the per-type "logged" stat tile. */
++const LOGGED_LABEL: Record<ItemTypeValue, string> = {
++  BEER: "Beers logged",
++  WINE: "Wines logged",
++  SPIRIT: "Spirits logged",
++  COFFEE: "Coffees logged",
++  SAKE: "Sakes logged",
++  TEA: "Teas logged",
++};
++
++/** Human label for the per-type "distinct producers" stat tile. */
++const PRODUCER_LABEL: Record<ItemTypeValue, string> = {
++  BEER: "Breweries",
++  WINE: "Wineries",
++  SPIRIT: "Distillers",
++  COFFEE: "Roasters",
++  SAKE: "Breweries",
++  TEA: "Producers",
++};
++
++function round2(value: number): string {
++  return (Math.round(value * 100) / 100).toFixed(2);
++}
++
++function avg(values: number[]): number {
++  if (values.length === 0) return 0;
++  return values.reduce((sum, v) => sum + v, 0) / values.length;
++}
++
++/** Pluralize "region"/"country" counts for captions (handles consonant+y → ies). */
++function plural(count: number, noun: string): string {
++  if (count === 1) return `${count} ${noun}`;
++  const pluralized = /[^aeiou]y$/.test(noun)
++    ? `${noun.slice(0, -1)}ies`
++    : `${noun}s`;
++  return `${count} ${pluralized}`;
++}
++
++function emptyData(type: ItemTypeValue, period: Period): TasteProfileData {
++  return {
++    archetype: { title: "", description: "" },
++    statTiles: [
++      { value: "0", label: LOGGED_LABEL[type] },
++      { value: "0", label: PRODUCER_LABEL[type] },
++      { value: "0", label: "Styles" },
++      { value: "0.00", label: "Avg score" },
++    ],
++    insights: [],
++    flavorAxes: [],
++    styles: [],
++    topRated: [],
++    scoreNow: "0.00",
++    scoreDelta: "",
++    scoreTrend: [],
++    cadence: [],
++    cadenceCaption: PERIOD_NOTE[period],
++    origin: [],
++    originCaption: "",
++  };
++}
++
++/** Filter reviews down to the active period relative to `now`. */
++function filterByPeriod(
++  reviews: RawReview[],
++  period: Period,
++  now: Date,
++): RawReview[] {
++  if (period === "all") return reviews;
++  // "year" == trailing 12 months.
++  const cutoff = new Date(now);
++  cutoff.setFullYear(cutoff.getFullYear() - 1);
++  return reviews.filter((r) => {
++    const d = new Date(r.createdAt);
++    return !Number.isNaN(d.getTime()) && d >= cutoff;
++  });
++}
++
++/** Top styles by count, colored, descending. */
++function buildStyles(
++  reviews: RawReview[],
++  type: ItemTypeValue,
++  limit = 7,
++): StyleRow[] {
++  const counts = new Map<string, number>();
++  for (const r of reviews) {
++    const label = formatEnum(r.style ?? undefined);
++    if (!label) continue;
++    counts.set(label, (counts.get(label) ?? 0) + 1);
++  }
++  return Array.from(counts.entries())
++    .sort((a, b) => b[1] - a[1])
++    .slice(0, limit)
++    .map(([name, count], index) => ({
++      name,
++      color: styleColor(type, index),
++      count,
++    }));
++}
++
++/** Top rated items by the member's own score, with a `Producer · Region · Style` subtitle. */
++function buildTopRated(reviews: RawReview[]) {
++  return [...reviews]
++    .sort((a, b) => b.score - a.score)
++    .slice(0, 5)
++    .map((r, index) => {
++      const parts = [
++        r.producer ?? undefined,
++        r.region ?? formatEnum(r.country ?? undefined) ?? undefined,
++        formatEnum(r.style ?? undefined),
++      ].filter((p): p is string => Boolean(p));
++      return {
++        rank: index + 1,
++        name: r.name,
++        sub: parts.join(" · "),
++        score: r.score,
++      };
++    });
++}
++
++/** Average score bucketed by month (year) or year (all), oldest → newest. */
++function buildScoreTrend(reviews: RawReview[], period: Period) {
++  if (reviews.length === 0) return [];
++
++  if (period === "all") {
++    const byYear = new Map<number, number[]>();
++    for (const r of reviews) {
++      const d = new Date(r.createdAt);
++      if (Number.isNaN(d.getTime())) continue;
++      const y = d.getFullYear();
++      const bucket = byYear.get(y) ?? [];
++      bucket.push(r.score);
++      byYear.set(y, bucket);
++    }
++    return Array.from(byYear.entries())
++      .sort((a, b) => a[0] - b[0])
++      .map(([year, scores]) => ({
++        label: String(year),
++        value: Math.round(avg(scores) * 100) / 100,
++      }));
++  }
++
++  // year: last ~6 months that have data, by month.
++  const byMonth = new Map<string, { date: Date; scores: number[] }>();
++  for (const r of reviews) {
++    const d = new Date(r.createdAt);
++    if (Number.isNaN(d.getTime())) continue;
++    const key = `${d.getFullYear()}-${d.getMonth()}`;
++    const bucket = byMonth.get(key) ?? {
++      date: new Date(d.getFullYear(), d.getMonth(), 1),
++      scores: [],
++    };
++    bucket.scores.push(r.score);
++    byMonth.set(key, bucket);
++  }
++  return Array.from(byMonth.values())
++    .sort((a, b) => a.date.getTime() - b.date.getTime())
++    .slice(-6)
++    .map((b) => ({
++      label: MONTH_SHORT[b.date.getMonth()] ?? "",
++      value: Math.round(avg(b.scores) * 100) / 100,
++    }));
++}
++
++/** Counts per month for the trailing 12 months, with the peak flagged. */
++function buildCadence(reviews: RawReview[], now: Date) {
++  // Build the 12-month window ending at `now`'s month, oldest → newest.
++  const months: { date: Date; label: string; value: number }[] = [];
++  for (let i = 11; i >= 0; i--) {
++    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
++    months.push({
++      date: d,
++      label: MONTH_LETTERS[d.getMonth()] ?? "",
++      value: 0,
++    });
++  }
++  const indexByKey = new Map<string, number>();
++  months.forEach((m, i) => {
++    indexByKey.set(`${m.date.getFullYear()}-${m.date.getMonth()}`, i);
++  });
++  for (const r of reviews) {
++    const d = new Date(r.createdAt);
++    if (Number.isNaN(d.getTime())) continue;
++    const idx = indexByKey.get(`${d.getFullYear()}-${d.getMonth()}`);
++    if (idx !== undefined) months[idx].value += 1;
++  }
++
++  let peakIdx = -1;
++  let peakValue = 0;
++  months.forEach((m, i) => {
++    if (m.value > peakValue) {
++      peakValue = m.value;
++      peakIdx = i;
++    }
++  });
++
++  const cadence = months.map((m, i) => ({
++    label: m.label,
++    value: m.value,
++    ...(i === peakIdx && peakValue > 0 ? { peak: true } : {}),
++  }));
++
++  let caption = "Last 12 months";
++  if (peakIdx >= 0 && peakValue > 0) {
++    const peakMonth = MONTH_SHORT[months[peakIdx].date.getMonth()] ?? "";
++    caption = `Last 12 months · peak in ${peakMonth} (${peakValue})`;
++  }
++  return {
++    cadence,
++    caption,
++    peakMonthShort: MONTH_SHORT[months[peakIdx]?.date.getMonth() ?? 0] ?? "",
++    peakValue,
++  };
++}
++
++/** Top regions by count, falling back to country when region is absent. */
++function buildOrigin(reviews: RawReview[], limit = 3) {
++  const counts = new Map<string, number>();
++  for (const r of reviews) {
++    const name = r.region ?? formatEnum(r.country ?? undefined) ?? undefined;
++    if (!name) continue;
++    counts.set(name, (counts.get(name) ?? 0) + 1);
++  }
++  const origin = Array.from(counts.entries())
++    .sort((a, b) => b[1] - a[1])
++    .slice(0, limit)
++    .map(([name, count]) => ({ name, count }));
++
++  const distinctRegions = new Set<string>();
++  const distinctCountries = new Set<string>();
++  for (const r of reviews) {
++    if (r.region) distinctRegions.add(r.region);
++    const c = formatEnum(r.country ?? undefined);
++    if (c) distinctCountries.add(c);
++  }
++  const regionCount = distinctRegions.size || counts.size;
++  const captionParts = [plural(regionCount, "region")];
++  if (distinctCountries.size > 0) {
++    captionParts.push(plural(distinctCountries.size, "country"));
++  }
++  return { origin, caption: captionParts.join(" · ") };
++}
++
++/** Derive up to 3 simple data-driven insights; falls back to fewer when sparse. */
++function buildInsights(
++  reviews: RawReview[],
++  styles: StyleRow[],
++  cadence: { peakMonthShort: string; peakValue: number },
++): Insight[] {
++  const insights: Insight[] = [];
++  const overallAvg = avg(reviews.map((r) => r.score));
++
++  // 1. Top style vs overall average.
++  if (styles.length > 0) {
++    const top = styles[0];
++    const topScores = reviews
++      .filter((r) => formatEnum(r.style ?? undefined) === top.name)
++      .map((r) => r.score);
++    if (topScores.length > 0) {
++      const delta = avg(topScores) - overallAvg;
++      if (Math.abs(delta) >= 0.1) {
++        insights.push({
++          icon: "trophy",
++          title: `${top.name} stands out`,
++          text: `You rate ${top.name} ${delta >= 0 ? "+" : ""}${(
++            Math.round(delta * 10) / 10
++          ).toFixed(1)}★ vs your overall average.`,
++        });
++      } else {
++        insights.push({
++          icon: "trophy",
++          title: `${top.name} leads`,
++          text: `${top.name} is your most-logged style (${top.count}).`,
++        });
++      }
++    }
++  }
++
++  // 2. Peak month.
++  if (cadence.peakValue > 1) {
++    insights.push({
++      icon: "bars",
++      title: `${cadence.peakMonthShort} was your peak`,
++      text: `${cadence.peakValue} logged — your busiest month this year.`,
++    });
++  }
++
++  // 3. Variety of styles.
++  const distinctStyles = new Set(
++    reviews.map((r) => formatEnum(r.style ?? undefined)).filter(Boolean),
++  ).size;
++  if (distinctStyles > 0) {
++    insights.push({
++      icon: "search",
++      title: "A varied palate",
++      text: `You've explored ${plural(distinctStyles, "different style")} so far.`,
++    });
++  }
++
++  return insights;
++}
++
++/**
++ * Build the full live dataset for a (type, period). `rawReviews` is the member's
++ * complete review history for that type (the aggregator handles period bucketing
++ * internally).
++ *
++ * Phase 3 fills `flavorAxes` / `archetype`; here they are neutral defaults.
++ */
++export function buildTasteProfile(
++  type: ItemTypeValue,
++  period: Period,
++  rawReviews: RawReview[],
++  now: Date = new Date(),
++): TasteProfileData {
++  const inPeriod = filterByPeriod(rawReviews, period, now);
++
++  if (inPeriod.length === 0) {
++    return emptyData(type, period);
++  }
++
++  const distinctProducers = new Set(
++    inPeriod.map((r) => r.producer).filter((p): p is string => Boolean(p)),
++  ).size;
++  const distinctStyles = new Set(
++    inPeriod.map((r) => formatEnum(r.style ?? undefined)).filter(Boolean),
++  ).size;
++  const overallAvg = avg(inPeriod.map((r) => r.score));
++
++  const styles = buildStyles(inPeriod, type);
++  const topRated = buildTopRated(inPeriod);
++  const scoreTrend = buildScoreTrend(inPeriod, period);
++  const cadenceResult = buildCadence(inPeriod, now);
++  const originResult = buildOrigin(inPeriod);
++  const insights = buildInsights(inPeriod, styles, cadenceResult);
++
++  const scoreNow = round2(overallAvg);
++  let scoreDelta = "";
++  if (scoreTrend.length >= 2) {
++    const first = scoreTrend[0];
++    const last = scoreTrend[scoreTrend.length - 1];
++    const delta = last.value - first.value;
++    const sign = delta >= 0 ? "+" : "";
++    scoreDelta = `${sign}${round2(delta)} since ${first.label}`;
++  }
++
++  return {
++    archetype: { title: "", description: "" },
++    statTiles: [
++      { value: String(inPeriod.length), label: LOGGED_LABEL[type] },
++      { value: String(distinctProducers), label: PRODUCER_LABEL[type] },
++      { value: String(distinctStyles), label: "Styles" },
++      { value: scoreNow, label: "Avg score" },
++    ],
++    insights,
++    flavorAxes: [],
++    styles,
++    topRated,
++    scoreNow,
++    scoreDelta,
++    scoreTrend,
++    cadence: cadenceResult.cadence,
++    cadenceCaption: cadenceResult.caption,
++    origin: originResult.origin,
++    originCaption: originResult.caption,
++  };
++}
++
++/** Build the unlock state for a type from the per-type logged counts. */
++export function buildUnlockInfo(
++  type: ItemTypeValue,
++  countsByType: Partial<Record<ItemTypeValue, number>>,
++  goal = 15,
++): UnlockInfo {
++  return {
++    type,
++    logged: countsByType[type] ?? 0,
++    goal,
++  };
++}
+diff --git a/src/components/taste-profile/data/loadTasteProfile.ts b/src/components/taste-profile/data/loadTasteProfile.ts
+new file mode 100644
+index 00000000..7fcbe61f
+--- /dev/null
++++ b/src/components/taste-profile/data/loadTasteProfile.ts
+@@ -0,0 +1,152 @@
++/**
++ * Server-side loader for the Taste Profile dashboard.
++ *
++ * Runs the active type's review query plus the per-type logged-count query with
++ * the member's session (so Hasura permissions apply), folds the rows into the
++ * typed {@link TasteProfileData} contract, and computes the heuristic flavor
++ * fingerprint — all on the server. The client shell receives finished data and
++ * only owns the interactive toggles. AI flavor is fetched client-side on demand
++ * via the `generateAiFlavor` server action.
++ */
++
++import type { ItemTypeValue } from "@cellar-assistant/shared";
++import { serverQuery } from "@/lib/urql/server";
++import { computeHeuristicFlavor } from "../flavor/heuristic";
++import type { FlavorResult, Period, TasteProfileData } from "../types";
++import { buildTasteProfile, type RawReview } from "./buildTasteProfile";
++import { loggedCountsQuery, REVIEW_QUERIES } from "./queries";
++
++type ItemRow = {
++  name: string;
++  style?: string | null;
++  variety?: string | null;
++  type?: string | null;
++  category?: string | null;
++  roast_level?: string | null;
++  region?: string | null;
++  country?: string | null;
++  brands?: Array<{ brand?: { name?: string | null } | null }> | null;
++};
++
++type ReviewRow = {
++  score: number;
++  created_at: string;
++  beer?: ItemRow | null;
++  wine?: ItemRow | null;
++  spirit?: ItemRow | null;
++  coffee?: ItemRow | null;
++  sake?: ItemRow | null;
++  tea?: ItemRow | null;
++};
++
++type CountRow = {
++  beer_id?: string | null;
++  wine_id?: string | null;
++  spirit_id?: string | null;
++  coffee_id?: string | null;
++  sake_id?: string | null;
++  tea_id?: string | null;
++};
++
++/** The style/category field that the dashboard treats as "style" per type. */
++function pickStyle(type: ItemTypeValue, item: ItemRow): string | null {
++  switch (type) {
++    case "BEER":
++      return item.style ?? null;
++    case "WINE":
++      return item.variety ?? item.style ?? null;
++    case "SPIRIT":
++      return item.type ?? null;
++    case "COFFEE":
++      return item.roast_level ?? null;
++    case "SAKE":
++    case "TEA":
++      return item.category ?? null;
++    default:
++      return null;
++  }
++}
++
++function normalizeRow(type: ItemTypeValue, row: ReviewRow): RawReview | null {
++  const item =
++    row.beer ?? row.wine ?? row.spirit ?? row.coffee ?? row.sake ?? row.tea;
++  if (!item) return null;
++  return {
++    score: row.score,
++    createdAt: row.created_at,
++    name: item.name,
++    style: pickStyle(type, item),
++    producer: item.brands?.[0]?.brand?.name ?? null,
++    region: item.region ?? null,
++    country: item.country ?? null,
++  };
++}
++
++function countByType(rows: CountRow[]): Partial<Record<ItemTypeValue, number>> {
++  const counts: Partial<Record<ItemTypeValue, number>> = {
++    BEER: 0,
++    WINE: 0,
++    SPIRIT: 0,
++    COFFEE: 0,
++    SAKE: 0,
++    TEA: 0,
++  };
++  for (const r of rows) {
++    if (r.beer_id) counts.BEER = (counts.BEER ?? 0) + 1;
++    else if (r.wine_id) counts.WINE = (counts.WINE ?? 0) + 1;
++    else if (r.spirit_id) counts.SPIRIT = (counts.SPIRIT ?? 0) + 1;
++    else if (r.coffee_id) counts.COFFEE = (counts.COFFEE ?? 0) + 1;
++    else if (r.sake_id) counts.SAKE = (counts.SAKE ?? 0) + 1;
++    else if (r.tea_id) counts.TEA = (counts.TEA ?? 0) + 1;
++  }
++  return counts;
++}
++
++const EMPTY_FLAVOR: FlavorResult = {
++  axes: [],
++  archetype: { title: "", description: "" },
++};
++
++export type TasteProfileLoad = {
++  data: TasteProfileData | null;
++  heuristicFlavor: FlavorResult;
++  countsByType: Partial<Record<ItemTypeValue, number>>;
++};
++
++export async function loadTasteProfile(
++  userId: string,
++  type: ItemTypeValue,
++  period: Period,
++): Promise<TasteProfileLoad> {
++  const [reviewResult, countsResult] = await Promise.allSettled([
++    serverQuery(REVIEW_QUERIES[type], { userId }),
++    serverQuery(loggedCountsQuery, { userId }),
++  ]);
++
++  let data: TasteProfileData | null = null;
++  if (reviewResult.status === "fulfilled") {
++    const rows = ((reviewResult.value as { item_reviews?: ReviewRow[] })
++      .item_reviews ?? []) as ReviewRow[];
++    const reviews = rows
++      .map((row) => normalizeRow(type, row))
++      .filter((r): r is RawReview => r !== null);
++    data = buildTasteProfile(type, period, reviews);
++  } else {
++    console.error("Taste profile review query failed:", reviewResult.reason);
++  }
++
++  let countsByType: Partial<Record<ItemTypeValue, number>> = {};
++  if (countsResult.status === "fulfilled") {
++    const rows = ((countsResult.value as { item_reviews?: CountRow[] })
++      .item_reviews ?? []) as CountRow[];
++    countsByType = countByType(rows);
++  } else {
++    console.error("Taste profile counts query failed:", countsResult.reason);
++  }
++
++  const heuristicFlavor = data
++    ? computeHeuristicFlavor(data.styles)
++    : EMPTY_FLAVOR;
++
++  return { data, heuristicFlavor, countsByType };
++}
+diff --git a/src/components/taste-profile/data/queries.ts b/src/components/taste-profile/data/queries.ts
+new file mode 100644
+index 00000000..2ef4c085
+--- /dev/null
++++ b/src/components/taste-profile/data/queries.ts
+@@ -0,0 +1,165 @@
++/**
++ * gql.tada queries that back the live Taste Profile dashboard (Phase 2).
++ *
++ * Each item type lives in its own table (beers, wines, …) joined to the member's
++ * history via `item_reviews`. Because the "style"/region fields differ per type,
++ * there is one review query per type — they all share the same envelope shape so
++ * the aggregator can treat them uniformly.
++ */
++
++import { graphql, type ItemTypeValue } from "@cellar-assistant/shared";
++
++/**
++ * Producer is the (primary) brand name. Ordering by `is_primary` desc puts the
++ * primary brand first; we read the first entry in the aggregator.
++ */
++const reviewBrandsSelection = `
++  brands(order_by: { is_primary: desc }, limit: 1) {
++    brand {
++      name
++    }
++  }
++`;
++
++export const beerReviewsQuery = graphql(`
++  query TasteProfileBeerReviews($userId: uuid!) {
++    item_reviews(
++      where: { user_id: { _eq: $userId }, beer_id: { _is_null: false } }
++      order_by: { created_at: asc }
++    ) {
++      score
++      created_at
++      beer {
++        name
++        style
++        country
++        ${reviewBrandsSelection}
++      }
++    }
++  }
++`);
++
++export const wineReviewsQuery = graphql(`
++  query TasteProfileWineReviews($userId: uuid!) {
++    item_reviews(
++      where: { user_id: { _eq: $userId }, wine_id: { _is_null: false } }
++      order_by: { created_at: asc }
++    ) {
++      score
++      created_at
++      wine {
++        name
++        variety
++        style
++        region
++        country
++        ${reviewBrandsSelection}
++      }
++    }
++  }
++`);
++
++export const spiritReviewsQuery = graphql(`
++  query TasteProfileSpiritReviews($userId: uuid!) {
++    item_reviews(
++      where: { user_id: { _eq: $userId }, spirit_id: { _is_null: false } }
++      order_by: { created_at: asc }
++    ) {
++      score
++      created_at
++      spirit {
++        name
++        type
++        country
++        ${reviewBrandsSelection}
++      }
++    }
++  }
++`);
++
++export const coffeeReviewsQuery = graphql(`
++  query TasteProfileCoffeeReviews($userId: uuid!) {
++    item_reviews(
++      where: { user_id: { _eq: $userId }, coffee_id: { _is_null: false } }
++      order_by: { created_at: asc }
++    ) {
++      score
++      created_at
++      coffee {
++        name
++        roast_level
++        country
++        ${reviewBrandsSelection}
++      }
++    }
++  }
++`);
++
++export const sakeReviewsQuery = graphql(`
++  query TasteProfileSakeReviews($userId: uuid!) {
++    item_reviews(
++      where: { user_id: { _eq: $userId }, sake_id: { _is_null: false } }
++      order_by: { created_at: asc }
++    ) {
++      score
++      created_at
++      sake {
++        name
++        category
++        region
++        country
++        ${reviewBrandsSelection}
++      }
++    }
++  }
++`);
++
++export const teaReviewsQuery = graphql(`
++  query TasteProfileTeaReviews($userId: uuid!) {
++    item_reviews(
++      where: { user_id: { _eq: $userId }, tea_id: { _is_null: false } }
++      order_by: { created_at: asc }
++    ) {
++      score
++      created_at
++      tea {
++        name
++        category
++        region
++        country
++        ${reviewBrandsSelection}
++      }
++    }
++  }
++`);
++
++/** The per-type review query used by the live dashboard, keyed by item type. */
++export const REVIEW_QUERIES = {
++  BEER: beerReviewsQuery,
++  WINE: wineReviewsQuery,
++  SPIRIT: spiritReviewsQuery,
++  COFFEE: coffeeReviewsQuery,
++  SAKE: sakeReviewsQuery,
++  TEA: teaReviewsQuery,
++} satisfies Record<ItemTypeValue, unknown>;
++
++/**
++ * Returns the member's review rows (type-id columns only) so the dashboard can
++ * count reviewed items per type and drive the unlock state.
++ *
++ * NOTE: the `user` role is not granted root-level `item_reviews_aggregate`
++ * permission, so we select the rows and count client-side instead of using an
++ * aggregate query (which fails validation for that role).
++ */
++export const loggedCountsQuery = graphql(`
++  query TasteProfileLoggedCounts($userId: uuid!) {
++    item_reviews(where: { user_id: { _eq: $userId } }) {
++      beer_id
++      wine_id
++      spirit_id
++      coffee_id
++      sake_id
++      tea_id
++    }
++  }
++`);
+diff --git a/src/components/taste-profile/flavor/heuristic.ts b/src/components/taste-profile/flavor/heuristic.ts
+new file mode 100644
+index 00000000..de9a1442
+--- /dev/null
++++ b/src/components/taste-profile/flavor/heuristic.ts
+@@ -0,0 +1,150 @@
++/**
++ * Heuristic flavor fingerprint + archetype (A/B option A).
++ *
++ * Maps each beer style to a 6-axis flavor vector, then takes a count-weighted
++ * average across the member's logged styles. No schema changes, no AI latency —
++ * an approximate but instant fingerprint. Compared against the AI source in the
++ * UI via the flavor-source toggle.
++ */
++
++import type { Archetype, FlavorAxis, FlavorResult, StyleRow } from "../types";
++
++export const FLAVOR_AXES = [
++  "Hoppy",
++  "Fruity",
++  "Sour",
++  "Roasty",
++  "Malty",
++  "Bitter",
++] as const;
++
++type Axis = (typeof FLAVOR_AXES)[number];
++type Vector = Record<Axis, number>;
++
++const vec = (
++  hoppy: number,
++  fruity: number,
++  sour: number,
++  roasty: number,
++  malty: number,
++  bitter: number,
++): Vector => ({
++  Hoppy: hoppy,
++  Fruity: fruity,
++  Sour: sour,
++  Roasty: roasty,
++  Malty: malty,
++  Bitter: bitter,
++});
++
++/**
++ * Keyword → flavor vector. Matched against a normalized style string, most
++ * specific keywords first (e.g. "imperial stout" before "stout").
++ */
++const STYLE_RULES: { match: string[]; v: Vector }[] = [
++  { match: ["hazy", "neipa", "new england"], v: vec(80, 80, 15, 5, 30, 45) },
++  { match: ["west coast"], v: vec(90, 45, 5, 10, 30, 90) },
++  {
++    match: ["double ipa", "imperial ipa", "dipa", "triple ipa"],
++    v: vec(95, 60, 10, 10, 45, 85),
++  },
++  { match: ["session ipa"], v: vec(75, 55, 10, 8, 25, 65) },
++  { match: ["ipa", "india pale"], v: vec(85, 55, 10, 10, 35, 80) },
++  { match: ["pale ale", "apa"], v: vec(60, 45, 10, 15, 40, 55) },
++  {
++    match: ["imperial stout", "barrel-aged", "barrel aged"],
++    v: vec(20, 25, 8, 92, 78, 55),
++  },
++  { match: ["stout"], v: vec(20, 22, 8, 88, 72, 52) },
++  { match: ["porter"], v: vec(25, 20, 8, 70, 70, 45) },
++  {
++    match: ["pilsner", "pils", "lager", "helles", "kolsch", "kölsch"],
++    v: vec(35, 15, 8, 10, 45, 40),
++  },
++  { match: ["barleywine", "barley wine"], v: vec(45, 50, 10, 40, 90, 55) },
++  { match: ["saison", "farmhouse"], v: vec(35, 60, 35, 10, 35, 35) },
++  {
++    match: ["gose", "berliner", "lambic", "sour", "wild"],
++    v: vec(15, 55, 90, 8, 25, 20),
++  },
++  {
++    match: ["hefeweizen", "witbier", "wheat", "weisse"],
++    v: vec(25, 55, 25, 8, 45, 25),
++  },
++  {
++    match: ["tripel", "dubbel", "quad", "belgian", "abbey"],
++    v: vec(30, 65, 20, 25, 70, 35),
++  },
++  {
++    match: ["amber", "red ale", "brown ale", "altbier", "bock"],
++    v: vec(35, 30, 8, 45, 70, 40),
++  },
++  { match: ["fruit", "milkshake", "pastry"], v: vec(35, 80, 20, 25, 45, 30) },
++];
++
++const DEFAULT_VECTOR = vec(40, 40, 20, 30, 50, 45);
++
++/** Community baseline used as the "compare to community" reference line. */
++export const COMMUNITY_BASELINE: Vector = vec(58, 50, 41, 55, 64, 52);
++
++const vectorForStyle = (name: string): Vector => {
++  const norm = name.toLowerCase();
++  for (const rule of STYLE_RULES) {
++    if (rule.match.some((m) => norm.includes(m))) return rule.v;
++  }
++  return DEFAULT_VECTOR;
++};
++
++const ARCHETYPE_BY_AXIS: Record<Axis, { title: string; trait: string }> = {
++  Hoppy: { title: "The Hop-Forward Wanderer", trait: "hoppy and adventurous" },
++  Fruity: {
++    title: "The Fruit-Forward Explorer",
++    trait: "bright and fruit-driven",
++  },
++  Sour: { title: "The Sour Seeker", trait: "tart and funk-loving" },
++  Roasty: {
++    title: "The Dark & Roasty Devotee",
++    trait: "deep and roast-forward",
++  },
++  Malty: { title: "The Malt Maven", trait: "rich and malt-driven" },
++  Bitter: { title: "The Bitter Enthusiast", trait: "bracingly bitter" },
++};
++
++const buildArchetype = (axes: FlavorAxis[], styles: StyleRow[]): Archetype => {
++  const top = [...axes].sort((a, b) => b.you - a.you)[0];
++  const dominant = (top?.name as Axis) ?? "Hoppy";
++  const { title, trait } =
++    ARCHETYPE_BY_AXIS[dominant] ?? ARCHETYPE_BY_AXIS.Hoppy;
++
++  const ranked = [...styles].sort((a, b) => b.count - a.count);
++  const leadStyle = ranked[0]?.name ?? "your favorites";
++  const variety = styles.length;
++
++  const description =
++    variety >= 6
++      ? `You lean ${trait} — ${leadStyle} leads the cellar, but your pours range across ${variety} styles.`
++      : `You lean ${trait} — ${leadStyle} leads the cellar, with a focused set of ${variety} styles.`;
++
++  return { title, description };
++};
++
++/** Compute the heuristic flavor fingerprint + archetype from style counts. */
++export function computeHeuristicFlavor(styles: StyleRow[]): FlavorResult {
++  const totals: Vector = vec(0, 0, 0, 0, 0, 0);
++  let weight = 0;
++
++  for (const s of styles) {
++    const v = vectorForStyle(s.name);
++    const w = Math.max(0, s.count);
++    weight += w;
++    for (const axis of FLAVOR_AXES) totals[axis] += v[axis] * w;
++  }
++
++  const axes: FlavorAxis[] = FLAVOR_AXES.map((axis) => ({
++    name: axis,
++    you: weight > 0 ? Math.round(totals[axis] / weight) : DEFAULT_VECTOR[axis],
++    avg: COMMUNITY_BASELINE[axis],
++  }));
++
++  return { axes, archetype: buildArchetype(axes, styles) };
++}
+diff --git a/src/components/taste-profile/flavor/useFlavorResult.ts b/src/components/taste-profile/flavor/useFlavorResult.ts
+new file mode 100644
+index 00000000..edc8cd9f
+--- /dev/null
++++ b/src/components/taste-profile/flavor/useFlavorResult.ts
+@@ -0,0 +1,68 @@
++"use client";
++
++/**
++ * Resolves the flavor fingerprint + archetype for the active source (A/B).
++ *
++ * - `heuristic` — computed on the server and passed in via `heuristicFlavor`.
++ * - `ai` — fetched via the `generateAiFlavor` server action; while it loads (or
++ *   if it fails) we fall back to the heuristic so the radar is never empty.
++ *   Results are cached per item type for the session.
++ */
++
++import type { ItemTypeValue } from "@cellar-assistant/shared";
++import { useEffect, useRef, useState } from "react";
++import { generateAiFlavor } from "@/app/actions/tasteProfile";
++import type { FlavorResult, FlavorSource, TasteProfileData } from "../types";
++
++type Result = { flavor: FlavorResult; aiLoading: boolean };
++
++export function useFlavorResult(
++  type: ItemTypeValue,
++  source: FlavorSource,
++  data: TasteProfileData | null,
++  heuristicFlavor: FlavorResult,
++): Result {
++  const [aiByType, setAiByType] = useState<
++    Partial<Record<ItemTypeValue, FlavorResult>>
++  >({});
++  const [aiLoading, setAiLoading] = useState(false);
++  const requested = useRef<Set<string>>(new Set());
++
++  useEffect(() => {
++    if (source !== "ai" || !data || data.styles.length === 0) return;
++    const key = type;
++    if (aiByType[key] || requested.current.has(key)) return;
++    requested.current.add(key);
++
++    let cancelled = false;
++    setAiLoading(true);
++    generateAiFlavor({
++      itemType: type,
++      styles: data.styles.map((s) => ({ name: s.name, count: s.count })),
++      topRated: data.topRated.map((r) => ({
++        name: r.name,
++        sub: r.sub,
++        score: r.score,
++      })),
++      regions: data.origin.map((o) => ({ name: o.name, count: o.count })),
++      avgScore: Number.parseFloat(data.scoreNow) || 0,
++    })
++      .then((res) => {
++        if (cancelled || !res) return;
++        setAiByType((prev) => ({ ...prev, [key]: res }));
++      })
++      .finally(() => {
++        if (!cancelled) setAiLoading(false);
++      });
++
++    return () => {
++      cancelled = true;
++    };
++  }, [source, type, data, aiByType]);
++
++  if (source === "ai") {
++    const ai = aiByType[type];
++    return { flavor: ai ?? heuristicFlavor, aiLoading: aiLoading && !ai };
++  }
++  return { flavor: heuristicFlavor, aiLoading: false };
++}
+diff --git a/src/components/taste-profile/icons.tsx b/src/components/taste-profile/icons.tsx
+new file mode 100644
+index 00000000..73b8609c
+--- /dev/null
++++ b/src/components/taste-profile/icons.tsx
+@@ -0,0 +1,29 @@
++import type { ItemTypeValue } from "@cellar-assistant/shared";
++import type { ReactNode } from "react";
++import {
++  FaBeer,
++  FaCocktail,
++  FaCoffee,
++  FaGlassWhiskey,
++  FaMugHot,
++  FaWineGlass,
++} from "react-icons/fa";
++import { MdBarChart, MdEmojiEvents, MdSearch } from "react-icons/md";
++import type { Insight } from "./types";
++
++/** Category icon per item type (handoff: react-icons Fa* set). */
++export const TYPE_ICON: Record<ItemTypeValue, ReactNode> = {
++  WINE: <FaWineGlass />,
++  BEER: <FaBeer />,
++  SPIRIT: <FaCocktail />,
++  COFFEE: <FaCoffee />,
++  SAKE: <FaGlassWhiskey />,
++  TEA: <FaMugHot />,
++};
++
++/** Icon for an insight card. */
++export const INSIGHT_ICON: Record<Insight["icon"], ReactNode> = {
++  trophy: <MdEmojiEvents />,
++  bars: <MdBarChart />,
++  search: <MdSearch />,
++};
+diff --git a/src/components/taste-profile/mockData.ts b/src/components/taste-profile/mockData.ts
+new file mode 100644
+index 00000000..c45efd37
+--- /dev/null
++++ b/src/components/taste-profile/mockData.ts
+@@ -0,0 +1,203 @@
++/**
++ * Demo data ported from the design prototype. Drives the dashboard in Phase 1
++ * and remains the fallback while real aggregations are wired up (Phase 2).
++ */
++
++import type { ItemTypeValue } from "@cellar-assistant/shared";
++import { tp } from "./tokens";
++import type {
++  Archetype,
++  FlavorAxis,
++  Insight,
++  Period,
++  TasteProfileData,
++} from "./types";
++
++const ARCHETYPE: Archetype = {
++  title: "The Hop-Forward Wanderer",
++  description:
++    "You lean hoppy and adventurous — IPAs lead the cellar, but your pours run from Vermont haze to Belgian farmhouse.",
++};
++
++const INSIGHTS: Insight[] = [
++  {
++    icon: "trophy",
++    title: "Hoppy beats malty",
++    text: "You rate IPAs 0.4★ above your overall average.",
++  },
++  {
++    icon: "bars",
++    title: "March was your peak",
++    text: "11 beers logged — your busiest month this year.",
++  },
++  {
++    icon: "search",
++    title: "An adventurous palate",
++    text: "62% of your pours were styles you had never logged before.",
++  },
++];
++
++/** Raw flavor scores (you vs community). Period-independent in the prototype. */
++export const MOCK_FLAVOR_AXES: FlavorAxis[] = [
++  { name: "Hoppy", you: 88, avg: 58 },
++  { name: "Fruity", you: 67, avg: 50 },
++  { name: "Sour", you: 34, avg: 41 },
++  { name: "Roasty", you: 46, avg: 55 },
++  { name: "Malty", you: 52, avg: 64 },
++  { name: "Bitter", you: 70, avg: 52 },
++];
++
++const STYLE_BASE = [
++  { name: "Hazy IPA", color: "#E8A33D", year: 19, all: 31 },
++  { name: "West Coast IPA", color: "#DAA520", year: 13, all: 22 },
++  { name: "Imperial Stout", color: "#7A4A2B", year: 9, all: 18 },
++  { name: "Pilsner", color: "#E8C547", year: 11, all: 14 },
++  { name: "Saison", color: "#C9A24B", year: 7, all: 11 },
++  { name: "Barleywine", color: "#9A5B13", year: 4, all: 8 },
++  { name: "Gose", color: "#C97B84", year: 6, all: 7 },
++];
++
++const TOP_RATED = [
++  {
++    rank: 1,
++    name: "Heady Topper",
++    sub: "The Alchemist · Stowe, VT · Double IPA",
++    score: 4.8,
++  },
++  {
++    rank: 2,
++    name: "Pliny the Elder",
++    sub: "Russian River · Santa Rosa, CA · Double IPA",
++    score: 4.7,
++  },
++  {
++    rank: 3,
++    name: "B.A. Speedway Stout",
++    sub: "AleSmith · San Diego, CA · Imperial Stout",
++    score: 4.6,
++  },
++  {
++    rank: 4,
++    name: "Saison Dupont",
++    sub: "Brasserie Dupont · Tourpes, BE · Saison",
++    score: 4.5,
++  },
++  {
++    rank: 5,
++    name: "King Sue",
++    sub: "Toppling Goliath · Decorah, IA · Hazy DIPA",
++    score: 4.4,
++  },
++];
++
++const CADENCE_RAW = [
++  { label: "M", value: 5 },
++  { label: "A", value: 7 },
++  { label: "M", value: 6 },
++  { label: "J", value: 8 },
++  { label: "J", value: 11, peak: true },
++  { label: "A", value: 7 },
++  { label: "S", value: 9 },
++  { label: "O", value: 6 },
++  { label: "N", value: 5 },
++  { label: "D", value: 8 },
++  { label: "J", value: 6 },
++  { label: "F", value: 8 },
++];
++
++const ORIGIN = [
++  { name: "New England", count: 9 },
++  { name: "California", count: 8 },
++  { name: "Belgium", count: 6 },
++];
++
++const PERIOD_DATA: Record<
++  Period,
++  {
++    tiles: TasteProfileData["statTiles"];
++    scoreNow: string;
++    scoreDelta: string;
++    trend: TasteProfileData["scoreTrend"];
++    note: string;
++  }
++> = {
++  year: {
++    tiles: [
++      { value: "86", label: "Beers logged" },
++      { value: "27", label: "Breweries" },
++      { value: "11", label: "Styles" },
++      { value: "4.27", label: "Avg score" },
++    ],
++    scoreNow: "4.27",
++    scoreDelta: "+0.67 since Sep",
++    trend: [
++      { label: "Sep", value: 3.6 },
++      { label: "Oct", value: 3.85 },
++      { label: "Nov", value: 3.7 },
++      { label: "Dec", value: 4.05 },
++      { label: "Jan", value: 4.18 },
++      { label: "Feb", value: 4.27 },
++    ],
++    note: "this year",
++  },
++  all: {
++    tiles: [
++      { value: "142", label: "Beers logged" },
++      { value: "38", label: "Breweries" },
++      { value: "14", label: "Styles" },
++      { value: "4.12", label: "Avg score" },
++    ],
++    scoreNow: "4.12",
++    scoreDelta: "+0.57 since 2022",
++    trend: [
++      { label: "2022", value: 3.55 },
++      { label: "2023", value: 3.8 },
++      { label: "2024", value: 4.0 },
++      { label: "2025", value: 4.12 },
++    ],
++    note: "all time",
++  },
++};
++
++export function getMockTasteProfile(period: Period): TasteProfileData {
++  const pd = PERIOD_DATA[period];
++  const styles = STYLE_BASE.map((s) => ({
++    name: s.name,
++    color: s.color,
++    count: s[period],
++  })).sort((a, b) => b.count - a.count);
++
++  return {
++    archetype: ARCHETYPE,
++    statTiles: pd.tiles,
++    insights: INSIGHTS,
++    flavorAxes: MOCK_FLAVOR_AXES,
++    styles,
++    topRated: TOP_RATED,
++    scoreNow: pd.scoreNow,
++    scoreDelta: pd.scoreDelta,
++    scoreTrend: pd.trend,
++    cadence: CADENCE_RAW,
++    cadenceCaption: "Last 12 months · peak in March (11)",
++    origin: ORIGIN,
++    originCaption: "7 regions · 4 countries",
++  };
++}
++
++/** Demo logged-counts for the non-beer unlock state. */
++export const MOCK_UNLOCK_COUNTS: Record<ItemTypeValue, number> = {
++  BEER: 86,
++  WINE: 12,
++  SPIRIT: 6,
++  COFFEE: 0,
++  SAKE: 0,
++  TEA: 4,
++};
++
++export const UNLOCK_GOAL = 15;
++
++/** Convenience: the amber bar palette for the cadence chart. */
++export const CADENCE_COLORS = {
++  peak: tp.color.amber,
++  rest: "rgba(218,165,32,0.34)",
++};
+diff --git a/src/components/taste-profile/modules/FlavorFingerprint.tsx b/src/components/taste-profile/modules/FlavorFingerprint.tsx
+new file mode 100644
+index 00000000..fe86a1fb
+--- /dev/null
++++ b/src/components/taste-profile/modules/FlavorFingerprint.tsx
+@@ -0,0 +1,188 @@
++"use client";
++
++import { Box } from "@mui/joy";
++import { MdCheck } from "react-icons/md";
++import { RadarChart } from "../charts/RadarChart";
++import { tp } from "../tokens";
++import type { FlavorAxis, FlavorSource } from "../types";
++import { ModuleCard } from "./ModuleCard";
++
++type FlavorFingerprintProps = {
++  axes: FlavorAxis[];
++  compare: boolean;
++  onToggleCompare: () => void;
++  /** A/B: which source produced these axes. */
++  source: FlavorSource;
++  onToggleSource: () => void;
++  radarSize?: number;
++};
++
++const deltaLabel = (you: number, avg: number) => {
++  const d = you - avg;
++  return d >= 0 ? `+${d}` : `${d}`;
++};
++
++const deltaColor = (you: number, avg: number) => {
++  const d = you - avg;
++  if (d >= 8) return tp.color.success300;
++  if (d <= -8) return tp.color.textTertiary;
++  return tp.color.textSecondary;
++};
++
++/** Flavor fingerprint: radar + per-axis legend, with compare + source toggles. */
++export const FlavorFingerprint = ({
++  axes,
++  compare,
++  onToggleCompare,
++  source,
++  onToggleSource,
++  radarSize = 280,
++}: FlavorFingerprintProps) => {
++  const compareToggle = (
++    <Box sx={{ display: "flex", alignItems: "center", gap: "8px" }}>
++      <SourceToggle source={source} onToggle={onToggleSource} />
++      <Box
++        onClick={onToggleCompare}
++        role="switch"
++        aria-checked={compare}
++        tabIndex={0}
++        onKeyDown={(e) => {
++          if (e.key === "Enter" || e.key === " ") {
++            e.preventDefault();
++            onToggleCompare();
++          }
++        }}
++        sx={{
++          display: "inline-flex",
++          alignItems: "center",
++          gap: "8px",
++          cursor: "pointer",
++          padding: "5px 11px",
++          borderRadius: tp.radius.pill,
++          background: compare ? "rgba(112,163,169,0.12)" : "transparent",
++          border: `1px solid ${compare ? tp.color.primary500 : tp.color.border}`,
++          fontSize: tp.fontSize.xs,
++          fontWeight: 600,
++          color: compare ? tp.color.primary300 : tp.color.textSecondary,
++          transition: `all ${tp.duration.fast} ${tp.ease.standard}`,
++        }}
++      >
++        <Box
++          sx={{
++            width: "15px",
++            height: "15px",
++            borderRadius: "4px",
++            border: `1.5px solid ${compare ? tp.color.primary500 : tp.color.border}`,
++            background: compare ? tp.color.primary500 : "transparent",
++            display: "inline-flex",
++            alignItems: "center",
++            justifyContent: "center",
++            fontSize: "11px",
++            color: "#111015",
++          }}
++        >
++          {compare && <MdCheck />}
++        </Box>
++        Compare to community
++      </Box>
++    </Box>
++  );
++
++  return (
++    <ModuleCard title="Flavor fingerprint" action={compareToggle}>
++      <Box
++        sx={{
++          display: "grid",
++          gridTemplateColumns: { xs: "1fr", sm: "1fr 152px" },
++          gap: "14px",
++          alignItems: "center",
++        }}
++      >
++        <Box
++          sx={{
++            height: `${radarSize - 20}px`,
++            padding: "16px 6px 0",
++            overflow: "visible",
++          }}
++        >
++          <RadarChart axes={axes} size={radarSize} showCompare={compare} />
++        </Box>
++        <Box sx={{ display: "flex", flexDirection: "column", gap: "9px" }}>
++          {axes.map((f) => (
++            <Box
++              key={f.name}
++              sx={{
++                display: "flex",
++                alignItems: "center",
++                justifyContent: "space-between",
++                gap: "8px",
++              }}
++            >
++              <Box
++                sx={{ fontSize: tp.fontSize.sm, color: tp.color.textSecondary }}
++              >
++                {f.name}
++              </Box>
++              <Box
++                sx={{
++                  fontSize: tp.fontSize.xs,
++                  fontWeight: 700,
++                  fontVariantNumeric: "tabular-nums",
++                  color: compare
++                    ? deltaColor(f.you, f.avg)
++                    : tp.color.textSecondary,
++                }}
++              >
++                {compare ? deltaLabel(f.you, f.avg) : `${f.you}`}
++              </Box>
++            </Box>
++          ))}
++        </Box>
++      </Box>
++    </ModuleCard>
++  );
++};
++
++/**
++ * A/B switch between the heuristic and AI flavor sources. Lets the team compare
++ * the two approaches side by side (Phase 3 decision).
++ */
++const SourceToggle = ({
++  source,
++  onToggle,
++}: {
++  source: FlavorSource;
++  onToggle: () => void;
++}) => (
++  <Box
++    onClick={onToggle}
++    role="button"
++    tabIndex={0}
++    aria-label={`Flavor source: ${source}. Click to switch.`}
++    onKeyDown={(e) => {
++      if (e.key === "Enter" || e.key === " ") {
++        e.preventDefault();
++        onToggle();
++      }
++    }}
++    title="Switch flavor source (heuristic / AI)"
++    sx={{
++      display: "inline-flex",
++      alignItems: "center",
++      gap: "6px",
++      cursor: "pointer",
++      padding: "5px 10px",
++      borderRadius: tp.radius.pill,
++      background: "rgba(218,165,32,0.10)",
++      border: `1px solid ${tp.color.border}`,
++      fontSize: "11px",
++      fontWeight: 700,
++      letterSpacing: "0.04em",
++      textTransform: "uppercase",
++      color: tp.color.amberLight,
++      transition: `all ${tp.duration.fast} ${tp.ease.standard}`,
++    }}
++  >
++    {source === "ai" ? "AI" : "Heuristic"}
++  </Box>
++);
+diff --git a/src/components/taste-profile/modules/IdentityBanner.tsx b/src/components/taste-profile/modules/IdentityBanner.tsx
+new file mode 100644
+index 00000000..4711769b
+--- /dev/null
++++ b/src/components/taste-profile/modules/IdentityBanner.tsx
+@@ -0,0 +1,135 @@
++"use client";
++
++import { Box, Typography } from "@mui/joy";
++import type { StaticImageData } from "next/image";
++import Image from "next/image";
++import { BEER_SOFT_GROUND, tp } from "../tokens";
++import type { Archetype, StatTile } from "../types";
++
++type IdentityBannerProps = {
++  archetype: Archetype;
++  statTiles: StatTile[];
++  illustration: StaticImageData;
++  illustrationAlt: string;
++  /** Eyebrow label, e.g. "Your beer taste identity". */
++  eyebrow: string;
++  /** Mint-ground color behind the illustration. */
++  ground?: string;
++};
++
++/** Full-width "taste identity" banner: illustration + archetype + stat tiles. */
++export const IdentityBanner = ({
++  archetype,
++  statTiles,
++  illustration,
++  illustrationAlt,
++  eyebrow,
++  ground = BEER_SOFT_GROUND,
++}: IdentityBannerProps) => (
++  <Box
++    sx={{
++      display: "flex",
++      gap: "22px",
++      alignItems: "center",
++      padding: "24px",
++      borderRadius: tp.radius.banner,
++      border: "1px solid rgba(218,165,32,0.34)",
++      background:
++        "linear-gradient(100deg,rgba(218,165,32,0.17),rgba(218,165,32,0.03) 58%),#1E1C24",
++      flexWrap: "wrap",
++    }}
++  >
++    <Box
++      sx={{
++        width: "96px",
++        height: "96px",
++        flex: "0 0 96px",
++        borderRadius: tp.radius.banner,
++        overflow: "hidden",
++        background: ground,
++        boxShadow: tp.shadow.sm,
++      }}
++    >
++      <Image
++        src={illustration}
++        alt={illustrationAlt}
++        width={96}
++        height={96}
++        style={{
++          width: "100%",
++          height: "100%",
++          objectFit: "cover",
++          display: "block",
++        }}
++      />
++    </Box>
++
++    <Box sx={{ flex: 1, minWidth: "220px" }}>
++      <Typography
++        sx={{
++          fontSize: tp.fontSize.xs,
++          fontWeight: 700,
++          letterSpacing: "0.1em",
++          textTransform: "uppercase",
++          color: tp.color.amber,
++        }}
++      >
++        {eyebrow}
++      </Typography>
++      <Typography
++        sx={{
++          margin: "5px 0 6px",
++          fontSize: tp.fontSize.xl3,
++          fontWeight: 700,
++          letterSpacing: "-0.025em",
++          color: tp.color.amberLight,
++          lineHeight: 1.05,
++        }}
++      >
++        {archetype.title}
++      </Typography>
++      <Typography
++        sx={{
++          margin: 0,
++          color: tp.color.textSecondary,
++          fontSize: tp.fontSize.md,
++          lineHeight: 1.5,
++          maxWidth: "440px",
++        }}
++      >
++        {archetype.description}
++      </Typography>
++    </Box>
++
++    <Box sx={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
++      {statTiles.map((s) => (
++        <Box
++          key={s.label}
++          sx={{
++            minWidth: "86px",
++            padding: "13px 15px",
++            borderRadius: tp.radius.statTile,
++            background: "rgba(12,11,16,0.45)",
++            border: `1px solid ${tp.color.border}`,
++          }}
++        >
++          <Box
++            sx={{
++              fontSize: "23px",
++              fontWeight: 700,
++              letterSpacing: "-0.02em",
++              fontVariantNumeric: "tabular-nums",
++            }}
++          >
++            {s.value}
++          </Box>
++          <Box
++            sx={{ fontSize: "11px", color: tp.color.textTertiary, mt: "2px" }}
++          >
++            {s.label}
++          </Box>
++        </Box>
++      ))}
++    </Box>
++  </Box>
++);
+diff --git a/src/components/taste-profile/modules/InsightsStrip.tsx b/src/components/taste-profile/modules/InsightsStrip.tsx
+new file mode 100644
+index 00000000..dd2632b6
+--- /dev/null
++++ b/src/components/taste-profile/modules/InsightsStrip.tsx
+@@ -0,0 +1,72 @@
++"use client";
++
++import { Box } from "@mui/joy";
++import { INSIGHT_ICON } from "../icons";
++import { tp } from "../tokens";
++import type { Insight } from "../types";
++
++type InsightsStripProps = {
++  insights: Insight[];
++};
++
++/** Three equal insight cards (icon chip + title + body). */
++export const InsightsStrip = ({ insights }: InsightsStripProps) => (
++  <Box
++    sx={{
++      display: "grid",
++      gridTemplateColumns: { xs: "1fr", md: "repeat(3,1fr)" },
++      gap: "16px",
++    }}
++  >
++    {insights.map((i) => (
++      <Box
++        key={i.title}
++        sx={{
++          display: "flex",
++          gap: "13px",
++          alignItems: "flex-start",
++          padding: "18px",
++          borderRadius: tp.radius.card,
++          background: tp.color.bgLevel1,
++          border: `1px solid ${tp.color.border}`,
++          transition: `box-shadow ${tp.duration.base} ${tp.ease.standard}, border-color ${tp.duration.base} ${tp.ease.standard}`,
++          "&:hover": {
++            boxShadow: tp.shadow.md,
++            borderColor: tp.color.borderStrong,
++          },
++        }}
++      >
++        <Box
++          sx={{
++            width: "38px",
++            height: "38px",
++            flex: "0 0 38px",
++            borderRadius: "10px",
++            background: "rgba(218,165,32,0.14)",
++            color: tp.color.amber,
++            display: "inline-flex",
++            alignItems: "center",
++            justifyContent: "center",
++            fontSize: "20px",
++          }}
++        >
++          {INSIGHT_ICON[i.icon]}
++        </Box>
++        <Box>
++          <Box sx={{ fontSize: tp.fontSize.md, fontWeight: 600, mb: "3px" }}>
++            {i.title}
++          </Box>
++          <Box
++            sx={{
++              fontSize: tp.fontSize.sm,
++              color: tp.color.textSecondary,
++              lineHeight: 1.45,
++            }}
++          >
++            {i.text}
++          </Box>
++        </Box>
++      </Box>
++    ))}
++  </Box>
++);
+diff --git a/src/components/taste-profile/modules/ModuleCard.tsx b/src/components/taste-profile/modules/ModuleCard.tsx
+new file mode 100644
+index 00000000..2f1d1372
+--- /dev/null
++++ b/src/components/taste-profile/modules/ModuleCard.tsx
+@@ -0,0 +1,62 @@
++"use client";
++
++import { Box, Typography } from "@mui/joy";
++import type { ReactNode } from "react";
++import { cardSx, tp } from "../tokens";
++
++type ModuleCardProps = {
++  title: string;
++  /** Optional decorator before the title (e.g. trophy icon). */
++  titleIcon?: ReactNode;
++  /** Right-aligned header content (caption, toggle, etc.). */
++  action?: ReactNode;
++  children: ReactNode;
++  /** Make the card a flex column (for charts that should fill height). */
++  fill?: boolean;
++};
++
++/** Standard dashboard card: hover-lifting surface with a header row. */
++export const ModuleCard = ({
++  title,
++  titleIcon,
++  action,
++  children,
++  fill,
++}: ModuleCardProps) => (
++  <Box
++    sx={{
++      ...cardSx,
++      ...(fill ? { display: "flex", flexDirection: "column" } : {}),
++    }}
++  >
++    <Box
++      sx={{
++        display: "flex",
++        alignItems: "center",
++        justifyContent: "space-between",
++        gap: "10px",
++        flexWrap: "wrap",
++        mb: "16px",
++      }}
++    >
++      <Box sx={{ display: "flex", alignItems: "center", gap: "9px" }}>
++        {titleIcon && (
++          <Box
++            sx={{
++              fontSize: "18px",
++              color: tp.color.amber,
++              display: "inline-flex",
++            }}
++          >
++            {titleIcon}
++          </Box>
++        )}
++        <Typography sx={{ fontSize: tp.fontSize.lg, fontWeight: 600 }}>
++          {title}
++        </Typography>
++      </Box>
++      {action}
++    </Box>
++    {children}
++  </Box>
++);
+diff --git a/src/components/taste-profile/modules/OriginBreakdown.tsx b/src/components/taste-profile/modules/OriginBreakdown.tsx
+new file mode 100644
+index 00000000..6ee02a07
+--- /dev/null
++++ b/src/components/taste-profile/modules/OriginBreakdown.tsx
+@@ -0,0 +1,97 @@
++"use client";
++
++import { Box } from "@mui/joy";
++import { BarTrack } from "../charts/BarTrack";
++import { tp } from "../tokens";
++import type { OriginRow } from "../types";
++import { ModuleCard } from "./ModuleCard";
++
++type OriginBreakdownProps = {
++  origin: OriginRow[];
++  caption: string;
++  onOpenAtlas?: () => void;
++};
++
++/** "Where it comes from": top regions + a footer link to the origin atlas. */
++export const OriginBreakdown = ({
++  origin,
++  caption,
++  onOpenAtlas,
++}: OriginBreakdownProps) => {
++  const max = Math.max(1, ...origin.map((g) => g.count));
++
++  return (
++    <ModuleCard
++      title="Where it comes from"
++      fill
++      action={
++        <Box sx={{ fontSize: tp.fontSize.xs, color: tp.color.textTertiary }}>
++          {caption}
++        </Box>
++      }
++    >
++      <Box
++        sx={{ display: "flex", flexDirection: "column", gap: "12px", flex: 1 }}
++      >
++        {origin.map((g) => (
++          <Box
++            key={g.name}
++            sx={{ display: "flex", alignItems: "center", gap: "11px" }}
++          >
++            <Box
++              sx={{
++                width: "96px",
++                flex: "0 0 96px",
++                fontSize: tp.fontSize.sm,
++                color: tp.color.textSecondary,
++                fontWeight: 500,
++              }}
++            >
++              {g.name}
++            </Box>
++            <BarTrack
++              ratio={g.count / max}
++              color={tp.color.amber}
++              height={8}
++              animate={false}
++            />
++            <Box
++              sx={{
++                width: "20px",
++                textAlign: "right",
++                fontSize: tp.fontSize.sm,
++                fontWeight: 700,
++                fontVariantNumeric: "tabular-nums",
++              }}
++            >
++              {g.count}
++            </Box>
++          </Box>
++        ))}
++      </Box>
++      <Box
++        onClick={onOpenAtlas}
++        role="link"
++        tabIndex={0}
++        onKeyDown={(e) => {
++          if (e.key === "Enter") onOpenAtlas?.();
++        }}
++        sx={{
++          display: "flex",
++          alignItems: "center",
++          justifyContent: "space-between",
++          mt: "16px",
++          pt: "14px",
++          borderTop: `1px solid ${tp.color.divider}`,
++          fontSize: tp.fontSize.sm,
++          fontWeight: 600,
++          color: tp.color.primary300,
++          cursor: "pointer",
++        }}
++      >
++        <span>Open your beer atlas</span>
++        <span style={{ fontSize: "15px" }}>→</span>
++      </Box>
++    </ModuleCard>
++  );
++};
+diff --git a/src/components/taste-profile/modules/ScoreOverTime.tsx b/src/components/taste-profile/modules/ScoreOverTime.tsx
+new file mode 100644
+index 00000000..0e816efb
+--- /dev/null
++++ b/src/components/taste-profile/modules/ScoreOverTime.tsx
+@@ -0,0 +1,55 @@
++"use client";
++
++import { Box } from "@mui/joy";
++import { LineChart } from "../charts/LineChart";
++import { tp } from "../tokens";
++import type { ScorePoint } from "../types";
++import { ModuleCard } from "./ModuleCard";
++
++type ScoreOverTimeProps = {
++  scoreNow: string;
++  scoreDelta: string;
++  trend: ScorePoint[];
++};
++
++/** Average score over time: big current average + delta + line chart. */
++export const ScoreOverTime = ({
++  scoreNow,
++  scoreDelta,
++  trend,
++}: ScoreOverTimeProps) => (
++  <ModuleCard title="Average score over time" fill>
++    <Box
++      sx={{
++        display: "flex",
++        alignItems: "baseline",
++        gap: "10px",
++        mb: "8px",
++        mt: "-8px",
++      }}
++    >
++      <Box
++        sx={{
++          fontSize: "32px",
++          fontWeight: 700,
++          letterSpacing: "-0.02em",
++          fontVariantNumeric: "tabular-nums",
++        }}
++      >
++        {scoreNow}
++      </Box>
++      <Box
++        sx={{
++          fontSize: tp.fontSize.sm,
++          fontWeight: 600,
++          color: tp.color.success300,
++        }}
++      >
++        {scoreDelta}
++      </Box>
++    </Box>
++    <Box sx={{ flex: 1, minHeight: "150px" }}>
++      <LineChart points={trend} />
++    </Box>
++  </ModuleCard>
++);
+diff --git a/src/components/taste-profile/modules/TastingCadence.tsx b/src/components/taste-profile/modules/TastingCadence.tsx
+new file mode 100644
+index 00000000..94794f93
+--- /dev/null
++++ b/src/components/taste-profile/modules/TastingCadence.tsx
+@@ -0,0 +1,26 @@
++"use client";
++
++import { Box } from "@mui/joy";
++import { CadenceBars } from "../charts/CadenceBars";
++import { tp } from "../tokens";
++import type { CadenceMonth } from "../types";
++import { ModuleCard } from "./ModuleCard";
++
++type TastingCadenceProps = {
++  months: CadenceMonth[];
++  caption: string;
++};
++
++/** 12-month tasting cadence bar chart. */
++export const TastingCadence = ({ months, caption }: TastingCadenceProps) => (
++  <ModuleCard
++    title="Tasting cadence"
++    action={
++      <Box sx={{ fontSize: tp.fontSize.xs, color: tp.color.textTertiary }}>
++        {caption}
++      </Box>
++    }
++  >
++    <CadenceBars months={months} />
++  </ModuleCard>
++);
+diff --git a/src/components/taste-profile/modules/TopRated.tsx b/src/components/taste-profile/modules/TopRated.tsx
+new file mode 100644
+index 00000000..f3aa9f8d
+--- /dev/null
++++ b/src/components/taste-profile/modules/TopRated.tsx
+@@ -0,0 +1,75 @@
++"use client";
++
++import { Box } from "@mui/joy";
++import { MdEmojiEvents } from "react-icons/md";
++import { StarRating } from "../charts/StarRating";
++import { tp } from "../tokens";
++import type { TopRatedItem } from "../types";
++import { ModuleCard } from "./ModuleCard";
++
++type TopRatedProps = {
++  items: TopRatedItem[];
++};
++
++/** Top rated list: rank + title/sub + star rating. */
++export const TopRated = ({ items }: TopRatedProps) => (
++  <ModuleCard title="Top rated" titleIcon={<MdEmojiEvents />}>
++    <Box>
++      {items.map((r) => (
++        <Box
++          key={r.rank}
++          sx={{
++            display: "flex",
++            alignItems: "center",
++            gap: "13px",
++            padding: "11px 8px",
++            margin: "0 -8px",
++            borderRadius: "9px",
++            borderBottom: `1px solid ${tp.color.divider}`,
++            transition: `background ${tp.duration.fast} ${tp.ease.standard}`,
++            cursor: "pointer",
++            "&:hover": { background: "rgba(255,255,255,0.03)" },
++          }}
++        >
++          <Box
++            sx={{
++              width: "20px",
++              flex: "0 0 20px",
++              fontSize: tp.fontSize.sm,
++              fontWeight: 700,
++              color: tp.color.textTertiary,
++              fontVariantNumeric: "tabular-nums",
++            }}
++          >
++            {r.rank}
++          </Box>
++          <Box sx={{ flex: 1, minWidth: 0 }}>
++            <Box
++              sx={{
++                fontSize: tp.fontSize.md,
++                fontWeight: 600,
++                whiteSpace: "nowrap",
++                overflow: "hidden",
++                textOverflow: "ellipsis",
++              }}
++            >
++              {r.name}
++            </Box>
++            <Box
++              sx={{
++                fontSize: tp.fontSize.xs,
++                color: tp.color.textTertiary,
++                whiteSpace: "nowrap",
++                overflow: "hidden",
++                textOverflow: "ellipsis",
++              }}
++            >
++              {r.sub}
++            </Box>
++          </Box>
++          <StarRating value={r.score} size={15} showValue precision={2} />
++        </Box>
++      ))}
++    </Box>
++  </ModuleCard>
++);
+diff --git a/src/components/taste-profile/modules/TopStyles.tsx b/src/components/taste-profile/modules/TopStyles.tsx
+new file mode 100644
+index 00000000..c8e6e3b1
+--- /dev/null
++++ b/src/components/taste-profile/modules/TopStyles.tsx
+@@ -0,0 +1,62 @@
++"use client";
++
++import { Box } from "@mui/joy";
++import { BarTrack } from "../charts/BarTrack";
++import { tp } from "../tokens";
++import type { StyleRow } from "../types";
++import { ModuleCard } from "./ModuleCard";
++
++type TopStylesProps = {
++  styles: StyleRow[];
++  /** "this year" / "all time" caption. */
++  periodNote: string;
++};
++
++/** Ranked list of styles with count-driven bars. */
++export const TopStyles = ({ styles, periodNote }: TopStylesProps) => {
++  const max = Math.max(1, ...styles.map((s) => s.count));
++
++  return (
++    <ModuleCard
++      title="Your top styles"
++      action={
++        <Box sx={{ fontSize: tp.fontSize.xs, color: tp.color.textTertiary }}>
++          {periodNote}
++        </Box>
++      }
++    >
++      <Box sx={{ display: "flex", flexDirection: "column", gap: "13px" }}>
++        {styles.map((s) => (
++          <Box
++            key={s.name}
++            sx={{ display: "flex", alignItems: "center", gap: "12px" }}
++          >
++            <Box
++              sx={{
++                width: "116px",
++                flex: "0 0 116px",
++                fontSize: tp.fontSize.sm,
++                color: tp.color.textSecondary,
++                fontWeight: 500,
++              }}
++            >
++              {s.name}
++            </Box>
++            <BarTrack ratio={s.count / max} color={s.color} />
++            <Box
++              sx={{
++                width: "26px",
++                textAlign: "right",
++                fontSize: tp.fontSize.sm,
++                fontWeight: 700,
++                fontVariantNumeric: "tabular-nums",
++              }}
++            >
++              {s.count}
++            </Box>
++          </Box>
++        ))}
++      </Box>
++    </ModuleCard>
++  );
++};
+diff --git a/src/components/taste-profile/modules/UnlockState.tsx b/src/components/taste-profile/modules/UnlockState.tsx
+new file mode 100644
+index 00000000..3ff21468
+--- /dev/null
++++ b/src/components/taste-profile/modules/UnlockState.tsx
+@@ -0,0 +1,125 @@
++"use client";
++
++import { Box, Button, Typography } from "@mui/joy";
++import { MdAdd } from "react-icons/md";
++import { formatItemType } from "@/utilities";
++import { TYPE_ICON } from "../icons";
++import { ITEM_TYPE_COLOR, ITEM_TYPE_TINT, tp } from "../tokens";
++import type { UnlockInfo } from "../types";
++
++type UnlockStateProps = {
++  info: UnlockInfo;
++  onAdd?: () => void;
++};
++
++/** Shown for a type that has not logged enough items to unlock its profile. */
++export const UnlockState = ({ info, onAdd }: UnlockStateProps) => {
++  const { type, logged, goal } = info;
++  const label = formatItemType(type).toLowerCase();
++  const zero = logged === 0;
++  const remaining = Math.max(0, goal - logged);
++  const pct = Math.round((Math.min(logged, goal) / goal) * 100);
++
++  return (
++    <Box
++      sx={{
++        minHeight: "520px",
++        display: "flex",
++        alignItems: "center",
++        justifyContent: "center",
++      }}
++    >
++      <Box
++        sx={{
++          maxWidth: "440px",
++          textAlign: "center",
++          display: "flex",
++          flexDirection: "column",
++          alignItems: "center",
++          gap: "18px",
++          padding: "40px",
++          borderRadius: "18px",
++          background: tp.color.bgLevel1,
++          border: `1px solid ${tp.color.border}`,
++        }}
++      >
++        <Box
++          sx={{
++            width: "84px",
++            height: "84px",
++            borderRadius: "22px",
++            background: ITEM_TYPE_TINT[type],
++            color: ITEM_TYPE_COLOR[type],
++            display: "inline-flex",
++            alignItems: "center",
++            justifyContent: "center",
++            fontSize: "42px",
++          }}
++        >
++          {TYPE_ICON[type]}
++        </Box>
++        <Box>
++          <Typography
++            sx={{
++              margin: "0 0 8px",
++              fontSize: tp.fontSize.xl2,
++              fontWeight: 700,
++              letterSpacing: "-0.02em",
++            }}
++          >
++            {zero
++              ? `No ${label} logged yet`
++              : `Your ${label} profile is still pouring`}
++          </Typography>
++          <Typography
++            sx={{
++              margin: 0,
++              color: tp.color.textSecondary,
++              fontSize: "15px",
++              lineHeight: 1.55,
++            }}
++          >
++            {zero
++              ? `Scan a label or add your first ${label} to start building a taste profile.`
++              : `You have logged ${logged} ${label}s. About ${remaining} more unlocks your full ${label} taste profile.`}
++          </Typography>
++        </Box>
++        <Box sx={{ width: "100%", maxWidth: "300px" }}>
++          <Box
++            sx={{
++              display: "flex",
++              justifyContent: "space-between",
++              fontSize: tp.fontSize.xs,
++              color: tp.color.textTertiary,
++              mb: "6px",
++            }}
++          >
++            <span>{logged} logged</span>
++            <span>{goal} to unlock</span>
++          </Box>
++          <Box
++            sx={{
++              height: "8px",
++              borderRadius: tp.radius.pill,
++              background: "rgba(255,255,255,0.06)",
++              overflow: "hidden",
++            }}
++          >
++            <Box
++              sx={{
++                height: "100%",
++                borderRadius: tp.radius.pill,
++                width: `${pct}%`,
++                background: ITEM_TYPE_COLOR[type],
++                transition: `width ${tp.duration.slow} ${tp.ease.out}`,
++              }}
++            />
++          </Box>
++        </Box>
++        <Button color="primary" startDecorator={<MdAdd />} onClick={onAdd}>
++          Add {label}
++        </Button>
++      </Box>
++    </Box>
++  );
++};
+diff --git a/src/components/taste-profile/tokens.ts b/src/components/taste-profile/tokens.ts
+new file mode 100644
+index 00000000..d7f3c1fa
+--- /dev/null
++++ b/src/components/taste-profile/tokens.ts
+@@ -0,0 +1,120 @@
++/**
++ * Design tokens for the Taste Profile feature.
++ *
++ * The design handoff references a `--ca-*` CSS-variable system that does not
++ * exist in this codebase. Where a value maps to the live Joy theme it is noted;
++ * the rest (amber accent, surface levels, per-type accents, shadows, motion) are
++ * literal values from the handoff that the theme does not provide.
++ *
++ * Use these constants in `sx`/`style` props so the dashboard stays faithful to
++ * the spec without polluting the global theme.
++ */
++
++import type { ItemTypeValue } from "@cellar-assistant/shared";
++
++export const tp = {
++  color: {
++    // Canvas / surfaces
++    bgBody: "#111015", // theme.palette.background.body
++    bgLevel1: "#1E1C24",
++    bgLevel2: "#27242F",
++    bgSurface: "#18171D",
++    bgPopup: "#1A1820",
++
++    // Text — mirror theme.palette.neutral 100/300/400
++    textPrimary: "#ECEAEF",
++    textSecondary: "#9E97B1",
++    textTertiary: "#786E91",
++
++    // Lines
++    border: "rgba(255,255,255,0.10)",
++    borderStrong: "rgba(255,255,255,0.18)",
++    divider: "rgba(255,255,255,0.08)",
++
++    // Primary (teal) — mirror theme.palette.primary 300/400/500/600
++    primary300: "#afcccf",
++    primary400: "#8fb8bc",
++    primary500: "#70a3a9",
++    primary600: "#568a8f",
++
++    // Beer accent (amber) — not in theme
++    amber: "#DAA520",
++    amberLight: "#EBC56A",
++    amberLight2: "#F0CE78",
++    amberDark: "#9A5B13",
++
++    success300: "#51BC51",
++    starGold: "#ffba26",
++  },
++
++  radius: {
++    card: "12px", // --ca-radius-lg
++    banner: "14px",
++    pill: "999px",
++    navSlot: "10px",
++    statTile: "11px",
++  },
++
++  shadow: {
++    sm: "0 1px 2px rgba(0,0,0,.4)",
++    md: "0 2px 8px rgba(0,0,0,.5), 0 6px 16px rgba(0,0,0,.35)",
++    lg: "0 4px 12px rgba(0,0,0,.55), 0 12px 28px rgba(0,0,0,.4)",
++  },
++
++  duration: {
++    fast: "120ms",
++    base: "200ms",
++    slow: "320ms",
++  },
++
++  ease: {
++    standard: "cubic-bezier(0.4,0,0.2,1)",
++    out: "cubic-bezier(0.16,1,0.3,1)",
++  },
++
++  fontSize: {
++    xs: "12px",
++    sm: "13px",
++    md: "14px",
++    lg: "18px",
++    xl: "20px",
++    xl2: "24px",
++    xl3: "30px",
++  },
++} as const;
++
++/** Per-item-type accent color (handoff "item-type colors"). */
++export const ITEM_TYPE_COLOR: Record<ItemTypeValue, string> = {
++  WINE: "#8B0000",
++  BEER: "#DAA520",
++  SPIRIT: "#607D8B",
++  COFFEE: "#8B4513",
++  SAKE: "#7B1FA2",
++  TEA: "#2E7D32",
++};
++
++/** Soft pastel backing used behind illustrations / unlock icons (~16% alpha). */
++export const ITEM_TYPE_TINT: Record<ItemTypeValue, string> = {
++  WINE: "rgba(139,0,0,0.16)",
++  BEER: "rgba(218,165,32,0.16)",
++  SPIRIT: "rgba(96,125,139,0.16)",
++  COFFEE: "rgba(139,69,19,0.16)",
++  SAKE: "rgba(123,31,162,0.16)",
++  TEA: "rgba(46,125,50,0.16)",
++};
++
++/** Mint ground used behind the beer illustration in the identity banner. */
++export const BEER_SOFT_GROUND = "#B8E0C8";
++
++/** Shared card style for the dashboard modules. */
++export const cardSx = {
++  background: tp.color.bgLevel1,
++  border: `1px solid ${tp.color.border}`,
++  borderRadius: tp.radius.card,
++  padding: "20px 22px",
++  transition: `box-shadow ${tp.duration.base} ${tp.ease.standard}, border-color ${tp.duration.base} ${tp.ease.standard}`,
++  "&:hover": {
++    boxShadow: tp.shadow.md,
++    borderColor: tp.color.borderStrong,
++  },
++} as const;
+diff --git a/src/components/taste-profile/types.ts b/src/components/taste-profile/types.ts
+new file mode 100644
+index 00000000..7a6752c8
+--- /dev/null
++++ b/src/components/taste-profile/types.ts
+@@ -0,0 +1,96 @@
++/**
++ * Data contract for the Taste Profile dashboard.
++ *
++ * Both the mock data (Phase 1) and the live aggregations (Phase 2) produce these
++ * shapes, so the UI never has to change as the backing source evolves.
++ */
++
++import type { ItemTypeValue } from "@cellar-assistant/shared";
++
++export type Period = "year" | "all";
++
++/** How the flavor fingerprint + archetype are produced (A/B). */
++export type FlavorSource = "heuristic" | "ai";
++
++export type StatTile = { value: string; label: string };
++
++export type StyleRow = {
++  name: string;
++  /** Bar color for this style. */
++  color: string;
++  count: number;
++};
++
++export type FlavorAxis = {
++  name: string;
++  /** 0–100, this member. */
++  you: number;
++  /** 0–100, community average. */
++  avg: number;
++};
++
++export type TopRatedItem = {
++  rank: number;
++  name: string;
++  /** `Producer · City, ST · Style` */
++  sub: string;
++  /** 0–5 */
++  score: number;
++};
++
++export type Insight = {
++  /** Icon key resolved by the insights strip. */
++  icon: "trophy" | "bars" | "search";
++  title: string;
++  text: string;
++};
++
++export type CadenceMonth = {
++  /** Single-letter month label. */
++  label: string;
++  value: number;
++  peak?: boolean;
++};
++
++export type OriginRow = { name: string; count: number };
++
++export type ScorePoint = { label: string; value: number };
++
++export type Archetype = {
++  /** e.g. "The Hop-Forward Wanderer" */
++  title: string;
++  description: string;
++};
++
++/** The full per-(type, period) dataset that drives the beer-style dashboard. */
++export type TasteProfileData = {
++  archetype: Archetype;
++  statTiles: StatTile[];
++  insights: Insight[];
++  flavorAxes: FlavorAxis[];
++  styles: StyleRow[];
++  topRated: TopRatedItem[];
++  scoreNow: string;
++  scoreDelta: string;
++  scoreTrend: ScorePoint[];
++  cadence: CadenceMonth[];
++  cadenceCaption: string;
++  origin: OriginRow[];
++  originCaption: string;
++};
++
++/** State for a type that has not unlocked its profile yet. */
++export type UnlockInfo = {
++  type: ItemTypeValue;
++  logged: number;
++  goal: number;
++};
++
++/**
++ * The flavor fingerprint + archetype, produced either heuristically or by AI.
++ * Both A/B sources resolve to this shape.
++ */
++export type FlavorResult = {
++  axes: FlavorAxis[];
++  archetype: Archetype;
++};

@@ -86,6 +86,7 @@ import {
   RecipePhotoJobActorDescriptor,
   RecipeSearchActorDescriptor,
   ReferenceDataActorDescriptor,
+  TasteActorDescriptor,
   TierListActorDescriptor,
   TierListsCollectionActorDescriptor,
   UserActorDescriptor,
@@ -151,6 +152,7 @@ import { RecipeGroupsCollectionActor } from "./recipe-groups-collection-actor.ts
 import { RecipePhotoJobActor } from "./recipe-photo-job-actor.ts";
 import { RecipeSearchActor } from "./recipe-search-actor.ts";
 import { ReferenceDataActor } from "./reference-data-actor.ts";
+import { TasteActor } from "./taste-actor.ts";
 import { TierListActor } from "./tier-list-actor.ts";
 import { TierListsCollectionActor } from "./tier-lists-collection-actor.ts";
 import { UserActor } from "./user-actor.ts";
@@ -364,4 +366,7 @@ export const ACTOR_REGISTRY: readonly RegistryEntry[] = [
   // (label reads, menu scans, recipe photos, tier-list insights), read the
   // C3 way — keyed by the viewer, checked every turn, nothing held.
   entry(AiJobsCollectionActor, AiJobsCollectionActorDescriptor),
+  // L03 (wave C "taste"): the taste profile and friend agreement, read-only,
+  // keyed by the viewer and checked every turn.
+  entry(TasteActor, TasteActorDescriptor),
 ];

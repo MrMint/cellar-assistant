@@ -31,6 +31,7 @@ export * from "./search.ts";
 export * from "./share.ts";
 export * from "./shelf-life.ts";
 export * from "./stored-failure.ts";
+export * from "./taste.ts";
 export * from "./tier-lists.ts";
 export * from "./user.ts";
 export * from "./views.ts";
