@@ -40,24 +40,39 @@ export const textOf = (fragment: string): string =>
   stripTags(fragment, " ").replace(/\s+/g, " ").trim();
 
 /**
- * Repeats `pass` until the markup stops changing, so a removal that joins two
- * halves of a tag cannot leave a new one behind (CodeQL "incomplete
- * multi-character sanitization"). The markup is our own render, not user input.
+ * Drops the `<style>…</style>` blocks inlined into a static render. A scan
+ * rather than a regex `replace`, so nothing a removal joins together can form a
+ * new block (CodeQL "incomplete multi-character sanitization"); the markup is
+ * our own render either way, never user input.
  */
-const untilStable = (html: string, pass: (s: string) => string): string => {
-  let previous: string;
-  let current = html;
-  do {
-    previous = current;
-    current = pass(previous);
-  } while (current !== previous);
-  return current;
+export const stripStyleBlocks = (html: string): string => {
+  let out = "";
+  let from = 0;
+  for (;;) {
+    const open = html.indexOf("<style", from);
+    if (open === -1) return out + html.slice(from);
+    const close = html.indexOf("</style>", open);
+    if (close === -1) return out + html.slice(from);
+    out += html.slice(from, open);
+    from = close + "</style>".length;
+  }
 };
 
-/** Drops the `<style>` blocks inlined into a static render. */
-export const stripStyleBlocks = (html: string): string =>
-  untilStable(html, (s) => s.replace(/<style[^>]*>[^<]*<\/style>/g, ""));
-
-/** Drops every tag, putting `replacement` where each one was. */
-export const stripTags = (html: string, replacement = ""): string =>
-  untilStable(html, (s) => s.replace(/<[^>]+>/g, replacement));
+/** Drops every tag, putting `replacement` where each one was (same scan). */
+export const stripTags = (html: string, replacement = ""): string => {
+  let out = "";
+  let inTag = false;
+  for (const ch of html) {
+    if (inTag) {
+      if (ch === ">") {
+        inTag = false;
+        out += replacement;
+      }
+    } else if (ch === "<") {
+      inTag = true;
+    } else {
+      out += ch;
+    }
+  }
+  return out;
+};
