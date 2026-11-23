@@ -13,7 +13,13 @@ const CLOCHE =
  * on the Main board's 64 × 88 grid: the drink's body, its top band, then the
  * rim, stem and foot drawn over both. Never a wine bottle (review #44, X15).
  */
-function Coupe({ ingredients }: { ingredients?: readonly GlassIngredient[] }) {
+function Coupe({
+  ingredients,
+  className = "relative h-[55%] w-auto",
+}: {
+  ingredients?: readonly GlassIngredient[];
+  className?: string;
+}) {
   const { base, top } = glassColors(ingredients);
   return (
     <svg
@@ -24,7 +30,7 @@ function Coupe({ ingredients }: { ingredients?: readonly GlassIngredient[] }) {
       data-glass="coupe"
       data-base={base}
       data-top={top}
-      className="relative h-[55%] w-auto"
+      className={className}
     >
       <path
         d="M6 10h52c0 18-12 30-26 30S6 28 6 10z"
@@ -98,5 +104,44 @@ export function RecipePlate({
         {name}
       </p>
     </div>
+  );
+}
+
+/**
+ * A recipe's thumbnail with no photo (B03, replacing the old wine and beer
+ * PNGs in a 48 px row): the same coupe, or the cloche, without the name.
+ */
+export function RecipeThumb({
+  type,
+  ingredients,
+  className,
+}: {
+  type: string;
+  ingredients?: readonly GlassIngredient[];
+  className?: string;
+}) {
+  return (
+    <span
+      aria-hidden
+      data-slot="recipe-thumb"
+      data-recipe-type={type === "food" ? "food" : "cocktail"}
+      className={cn(
+        "flex size-full items-center justify-center bg-surface-2",
+        className,
+      )}
+    >
+      {type === "food" ? (
+        <svg
+          aria-hidden
+          focusable="false"
+          viewBox="0 40 64 72"
+          className="h-[60%] w-auto fill-current text-ink-3"
+        >
+          <path d={CLOCHE} />
+        </svg>
+      ) : (
+        <Coupe ingredients={ingredients} className="h-[70%] w-auto" />
+      )}
+    </span>
   );
 }
