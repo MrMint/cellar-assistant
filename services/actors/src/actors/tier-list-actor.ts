@@ -150,6 +150,7 @@ import type {
   ActorCategory,
   AddTierListItemInput,
   AddTierListItemsResult,
+  CloneTierListInput,
   CreateTierListInput,
   Ctx,
   DeletedTierList,
@@ -241,7 +242,7 @@ import {
   viewerScopeOf,
 } from "../lib/tier-list-suggestions.ts";
 import { hiddenPlaceIds, placeIsVisible } from "../lib/unshared-places.ts";
-import { requireUuid } from "../lib/uuid.ts";
+import { isUuid, requireUuid } from "../lib/uuid.ts";
 import { tierListVisibility } from "../lib/visibility.ts";
 import { visibilityScope } from "../lib/visibility-sql.ts";
 
@@ -660,6 +661,103 @@ export class TierListActor
       if (seed.length === 0) return;
       await this.#insertSnapshots(tx, seed);
       // The list's first edit, so `seq` 1: one Undo empties it again.
+      await tx.insert(tierListHistory).values({
+        tierListId: this.key,
+        seq: 1,
+        kind: "ADD",
+        targetSeq: null,
+        change: { kind: "ADD", rows: seed },
+        userId: creator,
+      });
+      await this.#bumpContentAndEnqueueInsights(tx, ctx);
+    });
+    await this.reload();
+    return await this.#dtoFor(ctx, this.requireAggregate());
+  }
+
+  /**
+   * L03: a copy of a list you may see, as a new PRIVATE list of yours at this
+   * actor's (caller-minted) id — "compare and clone" on a friend's profile.
+   *
+   * The source is read fresh and decided by the same rule `get` uses
+   * (`canSeeTierList` over `tierListVisibility`), so a list you may not see
+   * and one that does not exist answer with the same `NotFound`, worded as a
+   * missing row. What is copied is what you would see on it: the entries, in
+   * band and order, minus a place still under review (X27). Not the notes —
+   * they are the owner's words — and not the description. Want-to-try is a
+   * separate, private table (L42) and never part of a tier list, so a clone
+   * cannot reach it.
+   *
+   * One edit, `seq` 1, like a list started from your ratings: Undo inside the
+   * list empties it, and the client's Undo deletes the list outright.
+   */
+  async clone(ctx: Ctx, input: CloneTierListInput): Promise<TierListDto> {
+    const creator = ctx.viewerId;
+    if (creator === null) {
+      throw new ForbiddenError("sign in to copy a tier list");
+    }
+    if (this.aggregate !== null) {
+      throw new ConflictError(`tier list ${this.key} already exists`);
+    }
+    const absent = (): never => {
+      throw new NotFoundError(
+        `tier list ${input.sourceTierListId} does not exist`,
+      );
+    };
+    const sourceId = isUuid(input.sourceTierListId)
+      ? input.sourceTierListId
+      : absent();
+    const [source] = await this.db
+      .select()
+      .from(tierLists)
+      .where(eq(tierLists.id, sourceId));
+    if (
+      source === undefined ||
+      !canSeeTierList(ctx, await tierListVisibility(this.db, ctx, source))
+    ) {
+      absent();
+    }
+    const found = source as typeof tierLists.$inferSelect;
+    const rows = await this.db
+      .select()
+      .from(tierListItems)
+      .where(eq(tierListItems.tierListId, sourceId))
+      .orderBy(sql`${tierListItems.band} desc, ${tierListItems.position} asc`);
+    const hidden = await hiddenPlaceIds(
+      this.db,
+      ctx,
+      rows.flatMap((row) => {
+        const ref = entryRefOf(row);
+        return ref.type === "PLACE" ? [ref.id] : [];
+      }),
+    );
+    const seed = appendedSnapshots(
+      [],
+      rows.flatMap((row) => {
+        const entry = entryRefOf(row);
+        if (entry.type === "PLACE" && hidden.has(entry.id)) return [];
+        return [{ entry, band: row.band, notes: null, id: randomUUID() }];
+      }),
+    );
+    const name = requireName(
+      input.name === undefined ||
+        input.name === null ||
+        input.name.trim() === ""
+        ? found.name
+        : input.name,
+    );
+
+    await this.tx(async (tx) => {
+      await tx.insert(tierLists).values({
+        id: this.key,
+        name,
+        description: null,
+        createdById: creator,
+        privacy: "PRIVATE",
+        listType: found.listType,
+      });
+      if (seed.length === 0) return;
+      await this.#insertSnapshots(tx, seed);
       await tx.insert(tierListHistory).values({
         tierListId: this.key,
         seq: 1,
