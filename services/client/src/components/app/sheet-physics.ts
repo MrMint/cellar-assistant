@@ -51,9 +51,15 @@ export function releaseVelocity(
   samples: readonly PointerSample[],
   windowMs: number = VELOCITY_WINDOW_MS,
 ): number {
-  const last = samples.at(-1);
+  const lastIndex = samples.length - 1;
+  const last = samples[lastIndex];
   if (last === undefined) return 0;
-  const first = samples.find((sample) => last.t - sample.t <= windowMs) ?? last;
+  let firstIndex = samples.findIndex((sample) => last.t - sample.t <= windowMs);
+  // Nothing else in the window (a slow frame, or the finger held still and
+  // then lifted): the last segment is the evidence there is.
+  if (firstIndex === lastIndex) firstIndex = lastIndex - 1;
+  const first = samples[firstIndex];
+  if (first === undefined) return 0;
   const dt = last.t - first.t;
   if (dt <= 0) return 0;
   return (last.y - first.y) / dt;

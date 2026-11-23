@@ -125,6 +125,14 @@ describe("releaseVelocity", () => {
     assert.equal(releaseVelocity(samples), 0);
   });
 
+  test("a slow frame before the lift still reads the last segment", () => {
+    const samples = [
+      { t: 0, y: 0 },
+      { t: 150, y: -150 },
+    ];
+    assert.equal(releaseVelocity(samples), -1);
+  });
+
   test("upward is negative; one sample is zero", () => {
     assert.equal(
       releaseVelocity([

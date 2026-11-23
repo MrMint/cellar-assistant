@@ -72,6 +72,8 @@ const { dismissNotification, notify, UNDO_TOAST_MS } = await import("./notify");
 const { AppShell } = await import("./AppShell");
 const { MAIN_CONTENT_ID } = await import("./main-content");
 const { SkipLink } = await import("./SkipLink");
+const { MapFilter } = await import("../map/core/MapFilter");
+const { TooltipProvider } = await import("../ui/tooltip");
 
 let container: HTMLElement;
 let root: ReturnType<typeof createRoot>;
@@ -281,7 +283,7 @@ describe("BottomSheet physics", () => {
     el.style.transform ||= "translate3d(0, 0px, 0)";
     await drag(el, [500, 470, 430, 380]);
     assert.deepEqual(snaps, [], "not before the snap has settled");
-    await flush(560);
+    await flush(700);
     assert.deepEqual(snaps, ["full"]);
     await flush(560);
     assert.deepEqual(snaps, ["full"], "once");
@@ -311,7 +313,7 @@ describe("BottomSheet physics", () => {
     // A browser computes `none`; happy-dom computes nothing, which vaul reads.
     el.style.transform ||= "translate3d(0, 0px, 0)";
     await drag(el, [300, 360, 460, 600]);
-    await flush(600);
+    await flush(700);
     assert.equal(closed, 1, "the sheet asked to close");
     assert.deepEqual(snaps, []);
   });
@@ -334,7 +336,7 @@ describe("BottomSheet physics", () => {
     // A browser computes `none`; happy-dom computes nothing, which vaul reads.
     el.style.transform ||= "translate3d(0, 0px, 0)";
     await drag(el, [300, 360, 460, 600]);
-    await flush(600);
+    await flush(700);
     assert.equal(closed, 0);
     assert.deepEqual(snaps, ["peek"]);
   });
@@ -390,6 +392,55 @@ describe("BottomSheet physics", () => {
     });
     await flush(1500);
     assert.equal(el.style.translate, "", "back at rest");
+  });
+});
+
+describe("MapFilter (L15)", () => {
+  const filters = (isMobile: boolean, onRating: (r?: number) => void) => (
+    <TooltipProvider>
+      <MapFilter
+        isMobile={isMobile}
+        onItemTypesChange={() => {}}
+        onSearchQueryChange={() => {}}
+        minRating={4}
+        onMinRatingChange={onRating}
+        onVisitStatusesChange={() => {}}
+      />
+    </TooltipProvider>
+  );
+
+  test("phone: More filters opens a bottom sheet; Reset is in its footer", async () => {
+    const ratings: (number | undefined)[] = [];
+    await render(filters(true, (r) => ratings.push(r)));
+    const more = container.querySelector('button[aria-label="More filters"]');
+    assert.equal(more?.getAttribute("aria-haspopup"), "dialog");
+    await click(more);
+    await flush(10);
+    const sheet = document.querySelector('[data-slot="bottom-sheet"]');
+    assert.ok(sheet, "the filters are a BottomSheet");
+    assert.equal(
+      document.getElementById(sheet.getAttribute("aria-labelledby") ?? "")
+        ?.textContent,
+      "Filters",
+    );
+    assert.ok(byText("Minimum Rating", sheet));
+    const footer = sheet.querySelector('[data-slot="drawer-footer"]');
+    await click(byText("Reset", footer ?? undefined));
+    assert.deepEqual(ratings, [undefined]);
+  });
+
+  test("from md: the popover, not a sheet", async () => {
+    viewportWidth = 1024;
+    await render(filters(false, () => {}));
+    await click(container.querySelector('button[aria-label="More filters"]'));
+    await flush(10);
+    assert.equal(document.querySelector('[data-slot="bottom-sheet"]'), null);
+    const panel = container.querySelector("#map-advanced-filters");
+    assert.ok(panel, "the panel renders in place, beside the button");
+    assert.ok(byText("Minimum Rating", panel));
+    // Let motion's enter finish: happy-dom rejects a cancelled animation's
+    // `finished`, and unmounting mid-enter would surface that as an error.
+    await flush(600);
   });
 });
 
@@ -800,6 +851,8 @@ describe("AppBar", () => {
     );
     await click(container.querySelector('button[aria-label="More actions"]'));
     await flush(10);
+    // The one BottomSheet, so it drags, snaps and stretches like the rest.
+    assert.ok(document.querySelector('[data-slot="bottom-sheet"]'));
     const del = [...document.querySelectorAll('[role="dialog"] button')].find(
       (b) => b.textContent === "Delete",
     );
@@ -812,6 +865,22 @@ describe("AppBar", () => {
       await new Promise((r) => setTimeout(r, 700));
     });
     assert.equal(deleted, 1);
+  });
+
+  test("overflow from md is a menu, not a sheet", async () => {
+    viewportWidth = 1024;
+    await render(
+      <AppBar
+        title="Barolo"
+        overflow={[{ label: "Edit", onSelect: () => {} }]}
+      />,
+    );
+    await flush(10);
+    const more = container.querySelector('button[aria-label="More actions"]');
+    assert.equal(more?.getAttribute("aria-haspopup"), "menu");
+    await click(more);
+    await flush(10);
+    assert.equal(document.querySelector('[data-slot="bottom-sheet"]'), null);
   });
 });
 
