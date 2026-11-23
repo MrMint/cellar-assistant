@@ -143,11 +143,12 @@ describe("CellarForm (restored)", () => {
 
 describe("AddItemClient (restored)", () => {
   const cards = (html: string) =>
-    [...html.matchAll(/data-next-image="art"[^>]*>[\s\S]*?>(\w+)</g)].map(
+    [...html.matchAll(/data-slot="type-plate"[^>]*>[\s\S]*?>(\w+)</g)].map(
       (m) => m[1],
     );
 
-  test("heading, six image cards in the old order, onboarding links", () => {
+  // H-3 (L22): each card draws its type's vessel on its tint, no raster.
+  test("heading, six type-plate cards in the old order, onboarding links", () => {
     const html = render(
       <AddItemClient cellarId="c1" cellarName="Basement" canAdd />,
     );
@@ -160,7 +161,12 @@ describe("AddItemClient (restored)", () => {
       "Sake",
       "Tea",
     ]);
-    assert.equal([...html.matchAll(/data-next-image="art"/g)].length, 6);
+    assert.equal([...html.matchAll(/data-slot="type-plate"/g)].length, 6);
+    assert.doesNotMatch(html, /data-next-image="art"/);
+    assert.match(
+      html,
+      /data-slot="type-plate" data-type="WINE"[^>]*>[\s\S]*?data-slot="vessel"/,
+    );
     assert.match(html, /href="\/cellars\/c1\/wines\/add"/);
     assert.match(html, /href="\/cellars\/c1\/teas\/add"/);
     assert.doesNotMatch(html, /You do not have permission/);

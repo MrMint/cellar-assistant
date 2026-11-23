@@ -17,13 +17,12 @@
  *   `app/Link`s. Same headings, copy, order and links.
  */
 
-import Image from "next/image";
 import { isNotNil } from "ramda";
 import type { ReactNode } from "react";
 import { ICON_STROKE, Place } from "@/components/app/icons";
 import { Link } from "@/components/app/Link";
 import { Badge } from "@/components/ui/badge";
-import cellar1 from "@/images/cellar1.png";
+import { BrandPlate } from "./BrandCard";
 import { BrandTypeChip } from "./brand-type-display";
 
 export type BrandItem = {
@@ -195,12 +194,7 @@ export const BrandDetails = ({
               className="size-full object-contain"
             />
           ) : (
-            <Image
-              src={cellar1}
-              alt={`${brand.name} placeholder`}
-              fill
-              className="object-contain"
-            />
+            <BrandPlate name={brand.name} />
           )}
         </div>
         <div className="flex flex-col gap-4 md:py-2">
