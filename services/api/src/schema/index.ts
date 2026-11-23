@@ -82,5 +82,7 @@ import "./share.ts";
 // `Cellar` and `ItemCheckIn` connections and whose person is a `UserProfile`
 // — refs from four modules, so it comes after every one of them.
 import "./friend-profile.ts";
+// L10 (wave C seenat): `Item.seenAt`.
+import "./seen-at.ts";
 
 export const schema = builder.toSchema();

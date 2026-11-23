@@ -802,6 +802,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
               ofType: { kind: "OBJECT", name: "ItemScore" },
             },
           },
+          {
+            name: "seenAt",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "SeenAtConnection" },
+            },
+          },
           { name: "style", type: { kind: "SCALAR", name: "String" } },
           {
             name: "tierListEntries",
@@ -2003,6 +2010,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
             type: {
               kind: "NON_NULL",
               ofType: { kind: "OBJECT", name: "ItemScore" },
+            },
+          },
+          {
+            name: "seenAt",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "SeenAtConnection" },
             },
           },
           { name: "species", type: { kind: "SCALAR", name: "String" } },
@@ -3653,6 +3667,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
             },
           },
           {
+            name: "seenAt",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "SeenAtConnection" },
+            },
+          },
+          {
             name: "tierListEntries",
             type: {
               kind: "NON_NULL",
@@ -4917,6 +4938,7 @@ export const graphcacheSchema: MinifiedIntrospection = {
           { name: "createdAt", type: { kind: "SCALAR", name: "DateTime" } },
           { name: "estimatedPlaceId", type: { kind: "SCALAR", name: "ID" } },
           { name: "extractedText", type: { kind: "SCALAR", name: "String" } },
+          { name: "headerName", type: { kind: "SCALAR", name: "String" } },
           {
             name: "id",
             type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "ID" } },
@@ -9359,6 +9381,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
             },
           },
           {
+            name: "seenAt",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "SeenAtConnection" },
+            },
+          },
+          {
             name: "servingTemperature",
             type: { kind: "SCALAR", name: "String" },
           },
@@ -9387,6 +9416,86 @@ export const graphcacheSchema: MinifiedIntrospection = {
           { name: "yeastStrain", type: { kind: "SCALAR", name: "String" } },
         ],
         interfaces: [{ kind: "INTERFACE", name: "Item" }],
+      },
+      {
+        kind: "OBJECT",
+        name: "SeenAtConnection",
+        fields: [
+          {
+            name: "edges",
+            type: {
+              kind: "NON_NULL",
+              ofType: {
+                kind: "LIST",
+                ofType: {
+                  kind: "NON_NULL",
+                  ofType: { kind: "OBJECT", name: "SeenAtEdge" },
+                },
+              },
+            },
+          },
+          {
+            name: "pageInfo",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "PageInfo" },
+            },
+          },
+          { name: "totalCount", type: { kind: "SCALAR", name: "Int" } },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "SeenAtEdge",
+        fields: [
+          {
+            name: "cursor",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "String" },
+            },
+          },
+          {
+            name: "node",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "SeenAtPlace" },
+            },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "SeenAtPlace",
+        fields: [
+          { name: "at", type: { kind: "SCALAR", name: "DateTime" } },
+          { name: "distanceMeters", type: { kind: "SCALAR", name: "Float" } },
+          { name: "friendName", type: { kind: "SCALAR", name: "String" } },
+          {
+            name: "kind",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "ENUM", name: "SeenAtKind" },
+            },
+          },
+          {
+            name: "place",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "Place" },
+            },
+          },
+          {
+            name: "placeName",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "String" },
+            },
+          },
+        ],
+        interfaces: [],
       },
       {
         kind: "UNION",
@@ -10102,6 +10211,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
             },
           },
           {
+            name: "seenAt",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "SeenAtConnection" },
+            },
+          },
+          {
             name: "spiritType",
             type: {
               kind: "NON_NULL",
@@ -10335,6 +10451,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
             type: {
               kind: "NON_NULL",
               ofType: { kind: "OBJECT", name: "ItemScore" },
+            },
+          },
+          {
+            name: "seenAt",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "SeenAtConnection" },
             },
           },
           {
@@ -11726,6 +11849,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
             type: {
               kind: "NON_NULL",
               ofType: { kind: "OBJECT", name: "ItemScore" },
+            },
+          },
+          {
+            name: "seenAt",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "SeenAtConnection" },
             },
           },
           {
