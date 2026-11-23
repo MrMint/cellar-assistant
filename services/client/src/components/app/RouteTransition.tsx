@@ -2,44 +2,17 @@
 
 import { useReducedMotion } from "motion/react";
 import {
-  addTransitionType,
   type ReactElement,
   type ReactNode,
-  startTransition,
-  useEffect,
-  useRef,
-  useState,
+  useLayoutEffect,
   ViewTransition,
 } from "react";
 import { useCurrentPath } from "./Link";
-import { readNavStack } from "./nav-history";
-import {
-  morphName,
-  motionEnv,
-  popKind,
-  TRANSITION_TYPE,
-  type TransitionKind,
-  transitionTypesFor,
-} from "./transition-kind";
+import { morphName, TRANSITION_TYPE } from "./transition-kind";
+import { setTraverseReducedMotion } from "./traverse-transition";
 
-/**
- * The kind `navigate.back()` asked for, consumed by the next `popstate`.
- * Module state, not React state: the pop it describes happens outside any
- * render, and there is one history per tab.
- */
-let pendingPopKind: TransitionKind | null = null;
-
-/** Say what the next history pop is (`useNavigate().back`). */
-export function expectPop(kind: TransitionKind): void {
-  pendingPopKind = kind;
-}
-
-/** The kind for a pop that has just landed on `to` (exported for tests). */
-export function takePopKind(to: string): TransitionKind {
-  const asked = pendingPopKind;
-  pendingPopKind = null;
-  return asked ?? popKind(readNavStack(), to);
-}
+// Moved to `traverse-transition.ts`; kept here for their importers.
+export { expectPop, takePopKind } from "./traverse-transition";
 
 /** Each animated type → the class `view-transitions.css` styles. */
 const BY_TYPE = {
@@ -58,30 +31,15 @@ const MORPH = {
 
 /**
  * Browser Back and Forward (and the edge swipe) reach Next as a `popstate`
- * with no transition type. This listener gives that navigation one: inside
- * the same event it starts a transition that adds the type and schedules a
- * no-op update, so the type queues on the root in the same transition lane
- * as Next's own traverse and the commit that swaps the page carries it.
- * The kind comes from `navigate.back()` when it asked, else from the
- * nav-history stack (read before the tracker records the new path).
+ * with no transition type. `traverse-transition.ts` adds one from inside
+ * Next's own traverse transition. It runs outside React, so the viewer's
+ * reduced-motion preference is handed to it from here.
  */
-function usePopTransitionType(): void {
-  const [, setPops] = useState(0);
-  const reduced = useRef(false);
-  reduced.current = useReducedMotion() ?? false;
-  useEffect(() => {
-    const onPop = () => {
-      const kind = takePopKind(window.location.pathname);
-      const types = transitionTypesFor(kind, motionEnv(reduced.current));
-      if (types === undefined) return;
-      startTransition(() => {
-        for (const type of types) addTransitionType(type);
-        setPops((n) => n + 1);
-      });
-    };
-    window.addEventListener("popstate", onPop);
-    return () => window.removeEventListener("popstate", onPop);
-  }, []);
+function useTraverseReducedMotion(): void {
+  const reduced = useReducedMotion() ?? false;
+  useLayoutEffect(() => {
+    setTraverseReducedMotion(reduced);
+  }, [reduced]);
 }
 
 /**
@@ -93,7 +51,7 @@ function usePopTransitionType(): void {
  * and are anchored by `view-transitions.css`.
  */
 export function RouteTransition({ children }: { children: ReactNode }) {
-  usePopTransitionType();
+  useTraverseReducedMotion();
   return (
     <ViewTransition
       enter={BY_TYPE}

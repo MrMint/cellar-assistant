@@ -3,7 +3,6 @@
 import { useReducedMotion } from "motion/react";
 import { useRouter } from "next/navigation";
 import { useMemo, useRef } from "react";
-import { expectPop } from "./RouteTransition";
 import {
   inferKind,
   motionEnv,
@@ -11,6 +10,7 @@ import {
   type TransitionKind,
   transitionTypesFor,
 } from "./transition-kind";
+import { expectPop } from "./traverse-transition";
 
 export type { TransitionKind } from "./transition-kind";
 
@@ -59,8 +59,8 @@ const routerOptions = (
  * is chosen in one place (B05): `kind` — given, or inferred from where the
  * href sits relative to the current page (`transition-kind.ts`) — becomes
  * Next's `transitionTypes`. `back` goes through browser history, which
- * carries no types, so it tells `RouteTransition`'s `popstate` listener the
- * kind instead. `refresh` and `prefetch` stay on `useRouter()`; they carry
+ * carries no types, so it tells `traverse-transition.ts` the kind for Next's
+ * traversal instead. `refresh` and `prefetch` stay on `useRouter()`; they carry
  * no transition.
  */
 export function useNavigate(): Navigate {
