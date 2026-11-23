@@ -226,6 +226,14 @@ export const MenuScanType = builder
           scan.effectivePlaceId === null ? null : { id: scan.effectivePlaceId },
       }),
       extractedText: t.exposeString("extractedText", { nullable: true }),
+      headerName: t.string({
+        nullable: true,
+        description:
+          "L10: the venue name the menu itself prints, or null when the " +
+          "model declined to read one. A proposal only — the place keeps " +
+          "its name until its creator confirms a rename.",
+        resolve: (scan) => scan.headerName ?? null,
+      }),
       processingStatus: t.field({
         type: MenuScanStatusEnum,
         resolve: (scan) => scan.processingStatus,

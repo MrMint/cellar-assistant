@@ -119,3 +119,28 @@ describe("itemDefaultsSchema date attributes", () => {
     });
   }
 });
+
+describe("L10 · MENU_EXTRACTION_SCHEMA's venue name", () => {
+  const schema = prompts.MENU_EXTRACTION_SCHEMA as JsonSchema & {
+    properties: Record<string, unknown>;
+    required: readonly string[];
+  };
+  const order = Object.keys(schema.properties);
+
+  it("decides the abstention before the name (property order is generation order, L4)", () => {
+    expect(order.indexOf("venueNameIsPrinted")).toBeGreaterThan(-1);
+    expect(order.indexOf("venueNameIsPrinted")).toBeLessThan(
+      order.indexOf("venueName"),
+    );
+    // After the verdict and the transcription it has to be found in.
+    expect(order.indexOf("menuIsLegible")).toBeLessThan(
+      order.indexOf("venueNameIsPrinted"),
+    );
+    expect(order.indexOf("rawText")).toBeLessThan(order.indexOf("venueName"));
+  });
+
+  it("never requires a name, so declining one is reachable", () => {
+    expect(schema.required).not.toContain("venueName");
+    expect(schema.required).not.toContain("venueNameIsPrinted");
+  });
+});

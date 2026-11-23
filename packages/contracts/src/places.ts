@@ -1020,3 +1020,37 @@ export type BulkUpsertFromOvertureResult = {
   /** Repeats of one `overture_id` within the payload, collapsed to the last. */
   readonly duplicatesCollapsed: number;
 };
+
+/* -------------------------------------------------------------------------- */
+/* L10 · Seen at (wave C seenat)                                              */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Why a place is in an item's "Seen at": the item is on a menu scanned there
+ * (a matched `place_menu_items` line), or the viewer logged it there, or a
+ * friend did (`check_ins.place_id`). One row per place, the strongest reason
+ * first (`SEEN_AT_KINDS` order).
+ */
+export const SEEN_AT_KINDS = ["OWN_LOG", "MENU", "FRIEND_LOG"] as const;
+export type SeenAtKind = (typeof SEEN_AT_KINDS)[number];
+
+/** At most this many places; the section is a glance, not a directory. */
+export const SEEN_AT_MAX = 20;
+
+export type SeenAtInput = {
+  /** The viewer's position, only to order nearest first and show distance. */
+  readonly near?: { readonly lat: number; readonly lng: number } | null;
+  readonly first?: number | null;
+};
+
+export type SeenAtDto = {
+  readonly placeId: string;
+  readonly placeName: string;
+  readonly kind: SeenAtKind;
+  /** When: the scan, or the log. ISO; null when the row carries no time. */
+  readonly at: string | null;
+  /** FRIEND_LOG only: whose log it was. */
+  readonly friendName: string | null;
+  /** Metres from `near`; null without it. */
+  readonly distanceMeters: number | null;
+};

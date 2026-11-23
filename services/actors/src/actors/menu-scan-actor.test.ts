@@ -28,7 +28,7 @@ import {
   userCtx,
   ValidationError,
 } from "@cellar-assistant/contracts";
-import { files, menuScans, outbox } from "@cellar-assistant/db";
+import { files, menuScans, outbox, places } from "@cellar-assistant/db";
 import { eq, sql } from "@cellar-assistant/db/orm";
 import { ActorId, DaprClient } from "@dapr/dapr";
 import { afterAll, describe, expect, it } from "vitest";
@@ -973,6 +973,59 @@ describe.skipIf(skip)("MenuScanActor (B8)", () => {
       ]);
       expect(rows[0]?.targetId).toBe(placeId);
       expect(rows[1]?.targetId).toBe(scanId);
+    });
+  });
+
+  it("process (L10): the menu header is stored as a proposal and never renames the place unconfirmed", async () => {
+    await withTestDb(async (db) => {
+      const owner = await seedUser(db);
+      const placeId = await seedPlace(db, { name: "Bar", ...SAN_FRANCISCO });
+      const scanId = await seedScan(db, { userId: owner, placeId });
+      const actor = await activate(
+        newScanActor(scanId, db, async () =>
+          extraction({ headerName: "Bar Lumen" }),
+        ),
+      );
+      await actor.process(testDelivery("row-h"), { menuScanId: scanId });
+
+      const scan = await actor.get(userCtx(owner, "r1"));
+      expect(scan.headerName).toBe("Bar Lumen");
+      // L24: the rename is the creator's to confirm. Processing writes the
+      // proposal on the scan and nothing on the place, and queues nothing
+      // that would (only the menu filing and the match).
+      const [place] = await db
+        .select({ name: places.name, displayName: places.displayName })
+        .from(places)
+        .where(eq(places.id, placeId));
+      expect(place?.name).toBe("Bar");
+      expect(place?.displayName ?? "Bar").toBe("Bar");
+    });
+  });
+
+  it("process (L10): an abstaining or no-menu read stores no header", async () => {
+    await withTestDb(async (db) => {
+      const owner = await seedUser(db);
+      const placeId = await seedPlace(db, { name: "Bar", ...SAN_FRANCISCO });
+      const quiet = await seedScan(db, { userId: owner, placeId });
+      const wall = await seedScan(db, { userId: owner, placeId });
+      const a = await activate(
+        newScanActor(quiet, db, async () => extraction()),
+      );
+      await a.process(testDelivery("row-q"), { menuScanId: quiet });
+      expect((await a.get(userCtx(owner, "r1"))).headerName).toBeNull();
+
+      const b = await activate(
+        newScanActor(wall, db, async () =>
+          extraction({
+            lines: [],
+            rawText: "",
+            noMenuDetected: true,
+            headerName: "Bar Lumen",
+          }),
+        ),
+      );
+      await b.process(testDelivery("row-w"), { menuScanId: wall });
+      expect((await b.get(userCtx(owner, "r2"))).headerName).toBeNull();
     });
   });
 

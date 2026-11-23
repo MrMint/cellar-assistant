@@ -57,6 +57,7 @@ import {
   type Simplify,
 } from "./item-types.ts";
 import type { Page, PageArgs } from "./page.ts";
+import type { SeenAtDto, SeenAtInput } from "./places.ts";
 import type { SharedItemDto } from "./share.ts";
 
 /** Exactly the values of the `item_type` Postgres enum. */
@@ -695,6 +696,8 @@ export type ItemActorInterface = {
     ctx: Ctx,
     input: UpdateGenericItemInput,
   ): Promise<GenericItemDto>;
+  /** L10: where this item was seen, as far as the viewer may see (`SeenAtDto`). */
+  seenAt(ctx: Ctx, input: SeenAtInput): Promise<readonly SeenAtDto[]>;
 };
 
 export const ItemActorDescriptor: ActorDescriptor<ItemActorInterface> = {
@@ -741,6 +744,7 @@ export const ItemActorDescriptor: ActorDescriptor<ItemActorInterface> = {
     getGeneric: {},
     createGeneric: {},
     updateGeneric: {},
+    seenAt: {},
   },
 };
 
