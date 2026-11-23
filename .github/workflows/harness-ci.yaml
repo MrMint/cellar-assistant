@@ -1,0 +1,71 @@
+# The agent harness: the hooks in .claude/hooks/ and the build tools in tools/.
+#
+# Every hook decides through pure exported functions, and hooks.test.mjs drives them, plus one
+# end-to-end run per hook through stdin. A hook that throws or prints the wrong shape fails open in
+# Claude Code, so a broken guard looks exactly like a passing one. This job is how it gets noticed.
+#
+# The two `paths` lists are identical on purpose; edit both together.
+name: harness-ci
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".claude/**"
+      - "tools/**"
+      - "scripts/stack/stack.sh"
+      - ".nvmrc"
+      - "package.json"
+      - "bun.lock"
+      - ".github/workflows/harness-ci.yaml"
+  pull_request:
+    paths:
+      - ".claude/**"
+      - "tools/**"
+      - "scripts/stack/stack.sh"
+      - ".nvmrc"
+      - "package.json"
+      - "bun.lock"
+      - ".github/workflows/harness-ci.yaml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: harness-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  BUN_VERSION: "1.4.2"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # The pre-PR check and teardown tests read git history.
+          fetch-depth: 0
+
+      # The hooks run under the developer's Node, so the tests do too.
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      # code-map resolves TypeScript through packages/contracts, so that package and the root are
+      # the whole install.
+      - name: Install
+        run: |
+          bun install --frozen-lockfile \
+            --filter cellar-assistant \
+            --filter "@cellar-assistant/contracts"
+
+      - name: Hook and tool tests
+        run: bun run test:harness
+
+      - name: Biome check
+        run: bunx @biomejs/biome@$(node -p "require('./package.json').devDependencies['@biomejs/biome']") check tools

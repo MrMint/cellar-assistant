@@ -99,6 +99,13 @@ packages/e2e/test-results/
 # derived ports, generated Dapr resources, run logs. Never committed.
 .stack/
 
+# A build stream's working notes and its checks' output (.claude/skills/multi-agent-build):
+# PROGRESS.md at a worktree's root, and .review/ beside it. Never committed.
+/PROGRESS.md
+.review/
+# A multi-agent build's plan, briefs and lead state (.claude/skills/multi-agent-build).
+/.builds/
+
 # dapr CLI run-file bookkeeping, created next to each app by `dapr run -f`.
 services/*/.dapr/
 
