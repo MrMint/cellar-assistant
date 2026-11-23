@@ -214,7 +214,11 @@ function OpenBottleCard({
             className="object-cover"
           />
         ) : (
-          <LabelPlate type={bottle.type} plate={bottle.plate} />
+          <LabelPlate
+            type={bottle.type}
+            plate={bottle.plate}
+            styleFields={bottle.styleFields}
+          />
         )}
         <div
           aria-hidden

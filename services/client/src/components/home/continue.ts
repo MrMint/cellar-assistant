@@ -3,6 +3,8 @@
  *
  * Pure — `continue.test.ts`.
  */
+
+import type { PlateStyleFields } from "@/components/app/LabelPlate";
 import {
   type ApiItemType,
   cellarItemHref,
@@ -34,6 +36,8 @@ export type OpenBottle = {
   readonly photoUrl: string | null;
   readonly placeholder: string | null;
   readonly plate: LabelPlateData;
+  /** B03: what picks the plate's vessel (a can for an IPA). */
+  readonly styleFields: PlateStyleFields;
   readonly openAt: string | null;
   readonly emptyAt: string | null;
   readonly percentageRemaining: number;
@@ -66,7 +70,21 @@ export const openBottleFromNode = (node: BottleNode): OpenBottle | null => {
           ? item.spiritType
           : item.__typename === "Tea"
             ? item.category
-            : null;
+            : item.__typename === "Beer"
+              ? item.beerStyle
+              : null;
+  const styleFields: PlateStyleFields = {
+    style:
+      (item.__typename === "Wine"
+        ? item.wineStyle
+        : item.__typename === "Beer"
+          ? item.beerStyle
+          : item.__typename === "Spirit"
+            ? item.spiritType
+            : null) ?? null,
+    variety: item.__typename === "Wine" ? (item.variety ?? null) : null,
+    form: item.__typename === "Tea" ? (item.form ?? null) : null,
+  };
   const plate = labelPlateFrom({
     type,
     name: item.name,
@@ -103,6 +121,7 @@ export const openBottleFromNode = (node: BottleNode): OpenBottle | null => {
     photoUrl: node.displayImage?.file.url ?? null,
     placeholder: node.displayImage?.placeholder ?? null,
     plate,
+    styleFields,
     openAt: node.openAt as string | null,
     emptyAt: node.emptyAt as string | null,
     percentageRemaining: node.percentageRemaining,

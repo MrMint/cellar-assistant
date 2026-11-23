@@ -63,12 +63,14 @@ export const HomeContinueQuery = graphql(`
                 __typename
                 vintage
                 wineStyle: style
+                variety
                 region
                 alcoholContentPercentage
               }
               ... on Beer {
                 __typename
                 vintage
+                beerStyle: style
                 alcoholContentPercentage
               }
               ... on Spirit {

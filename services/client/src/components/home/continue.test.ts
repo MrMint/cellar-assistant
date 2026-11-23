@@ -83,6 +83,36 @@ describe("openBottleFromNode", () => {
     }
   });
 
+  test("B03: the plate's vessel fields reach Home (H-1)", () => {
+    const wine = openBottleFromNode(
+      node({
+        ...base,
+        __typename: "Wine",
+        type: "WINE",
+        wineStyle: "RED",
+        variety: "PINOT_NOIR",
+      }),
+    );
+    assert.deepEqual(wine?.styleFields, {
+      style: "RED",
+      variety: "PINOT_NOIR",
+      form: null,
+    });
+    const beer = openBottleFromNode(
+      node({ ...base, __typename: "Beer", type: "BEER", beerStyle: "IPA" }),
+    );
+    assert.deepEqual(beer?.styleFields, {
+      style: "IPA",
+      variety: null,
+      form: null,
+    });
+    assert.equal(openLifeFor(beer ?? ({} as never))?.label, "beer");
+    const tea = openBottleFromNode(
+      node({ ...base, __typename: "Tea", type: "TEA", form: "loose_leaf" }),
+    );
+    assert.equal(tea?.styleFields.form, "loose_leaf");
+  });
+
   test("a bottle whose item the server nulled is dropped, not drawn", () => {
     assert.equal(openBottleFromNode(node(null)), null);
     assert.deepEqual(
