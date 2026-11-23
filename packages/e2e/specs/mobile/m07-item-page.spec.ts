@@ -172,7 +172,7 @@ test("Your bottles: Pour is X03's sheet, Log opens the sheet for that bottle", a
 }) => {
   await page.goto(`/teas/${teaId}`);
   const bottles = page.locator("section", {
-    has: page.getByRole("heading", { name: "Your bottles" }),
+    has: page.getByRole("heading", { name: "Your tins" }),
   });
   await bottles.scrollIntoViewIfNeeded();
   await expect(bottles.getByText("Open · 100% left")).toBeVisible();
@@ -180,7 +180,7 @@ test("Your bottles: Pour is X03's sheet, Log opens the sheet for that bottle", a
   // X03: open + log + level in one action — a cup of tea is 3 g of a 100 g
   // tin, so the level goes to 97 and the drink is logged from this bottle.
   await bottles
-    .getByRole("button", { name: `Pour from ${cellarName}` })
+    .getByRole("button", { name: `Steep from ${cellarName}` })
     .click();
   const pour = page.getByRole("dialog", { name: "Pour" });
   await pour.getByRole("button", { name: /^Cup/ }).click();
@@ -227,7 +227,7 @@ test("the bottle URL is this page with that bottle selected", async ({
   await expect(page.getByRole("heading", { name: teaName })).toBeVisible();
   await expect(page.getByTestId("selected-bottle")).toContainText(cellarName);
   const bottles = page.locator("section", {
-    has: page.getByRole("heading", { name: "Your bottles" }),
+    has: page.getByRole("heading", { name: "Your tins" }),
   });
   await expect(bottles.locator('[aria-current="page"]')).toHaveText(cellarName);
   // Its level is inline on its own URL.
@@ -237,7 +237,7 @@ test("the bottle URL is this page with that bottle selected", async ({
   // On a bottle of yours the ActionBar's primary is X03's Pour, from it.
   const bar = page.getByRole("toolbar", { name: "Item actions" });
   await expect(
-    bar.getByRole("button", { name: "Pour", exact: true }),
+    bar.getByRole("button", { name: "Steep", exact: true }),
   ).toBeVisible();
   await expect(bar.getByRole("button", { name: "Log a drink" })).toHaveCount(0);
   // Delete bottle is in ⋯, last.

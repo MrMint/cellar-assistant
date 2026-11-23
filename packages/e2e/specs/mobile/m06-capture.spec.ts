@@ -126,7 +126,8 @@ test("the cellar's add page: one camera, a remembered type, a draft, +1 bottle",
   await expect(
     sheet.getByRole("button", { name: "Open it now" }),
   ).toBeVisible();
-  await sheet.getByRole("button", { name: "Snap another" }).tap();
+  // A typed-in add offers "Add another" (W-21); "Snap another" is after a photo.
+  await sheet.getByRole("button", { name: "Add another" }).tap();
 
   // Back on the camera, the type still Tea — the last used.
   await expect(

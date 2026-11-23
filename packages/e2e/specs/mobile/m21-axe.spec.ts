@@ -526,7 +526,15 @@ test("focus is visible at every Tab stop on the main routes", async ({
       // Until focus wraps round to a stop already seen or leaves the page,
       // or 40 stops. Each step judges the stop before it, so the last stop
       // is judged by the step that ends the walk.
-      let stops = 0;
+      // A route that focuses a field on open (search, W-12) has its first
+      // stop already: count it, since Tab starts from the second.
+      let stops = (await page.evaluate(
+        () =>
+          document.activeElement !== null &&
+          document.activeElement !== document.body,
+      ))
+        ? 1
+        : 0;
       for (; stops <= 40; stops++) {
         await page.keyboard.press("Tab");
         const { judged, current } = await page.evaluate(focusStep);

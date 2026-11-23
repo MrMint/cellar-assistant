@@ -132,7 +132,7 @@ test("a sealed bottle pours: the first pour opens it, and Undo seals it again", 
   // Before the bottle is opened, Pour is the page's primary action — in the
   // thumb zone, above the tab bar, without scrolling.
   const bar = page.getByRole("toolbar", { name: "Item actions" });
-  const pour = bar.getByRole("button", { name: "Pour", exact: true });
+  const pour = bar.getByRole("button", { name: "Steep", exact: true });
   await expect(pour).toBeVisible({ timeout: 20_000 });
   const viewport = page.viewportSize();
   expect((await edgesOf(pour)).bottom).toBeLessThanOrEqual(
@@ -243,7 +243,7 @@ test("the last pour: Finished, then the rating, then the band it reads as", asyn
   await page.goto(`/cellars/${cellarId}/teas/${bottleId}`);
   await page
     .getByRole("toolbar", { name: "Item actions" })
-    .getByRole("button", { name: "Pour", exact: true })
+    .getByRole("button", { name: "Steep", exact: true })
     .click();
   const sheet = page.getByRole("dialog", { name: "Pour" });
   await sheet.getByRole("button", { name: "The rest" }).click();
