@@ -50,6 +50,10 @@ describe("L10 · Seen at wording", () => {
     expect(seenAtDistance(null)).toBeNull();
     expect(seenAtDistance(3)).toBe("10 m");
     expect(seenAtDistance(84)).toBe("80 m");
+    // E-9: a short walk reads in metres, not "0.1 km"; the board's 620 m
+    // is still "0.6 km".
+    expect(seenAtDistance(111)).toBe("110 m");
+    expect(seenAtDistance(484)).toBe("480 m");
     expect(seenAtDistance(620)).toBe("0.6 km");
     expect(seenAtDistance(6240)).toBe("6.2 km");
     expect(seenAtDistance(12_400)).toBe("12 km");

@@ -2,6 +2,7 @@ import { unique } from "../../fixtures/data.ts";
 import {
   deletePlace,
   deleteScannedMenu,
+  deleteTeas,
   insertPlace,
   insertScannedMenu,
 } from "../../fixtures/db.ts";
@@ -105,6 +106,9 @@ test.afterAll(async () => {
     deleteScannedMenu(scanId, fileId);
     await deletePlace(placeId);
   }
+  // CR-10 (L10): the run cleans up everything it creates, the tea too. After
+  // the menu, whose line matched it.
+  if (teaId !== "") deleteTeas([teaId]);
   await api.dispose();
 });
 
