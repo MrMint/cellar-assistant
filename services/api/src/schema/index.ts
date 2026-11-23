@@ -83,7 +83,9 @@ import "./share.ts";
 // — refs from four modules, so it comes after every one of them.
 import "./friend-profile.ts";
 // L03 (wave C "taste"): the taste profile and agreement. References
-// `ItemType` from `item.ts`; adds three Query fields.
+// `ItemType` from `item.ts`; adds two Query fields.
 import "./taste.ts";
+// L04: the recap deck and breadth stamps (uses `ItemType` from item.ts).
+import "./recap.ts";
 
 export const schema = builder.toSchema();
