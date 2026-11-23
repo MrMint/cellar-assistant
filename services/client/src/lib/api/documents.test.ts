@@ -72,6 +72,7 @@ import * as itemFragments from "@/components/item/fragments";
 import * as itemCardFragments from "@/components/item/ItemCard/fragments";
 import * as itemSeenAt from "@/components/item/seen-at";
 import * as mapQueries from "@/components/map/queries";
+import * as scanHeaderRename from "@/components/map/scanning/header-rename";
 import * as menuLinesQueries from "@/components/menu-lines/queries";
 import * as pourQueries from "@/components/pour/queries";
 import * as profileQueries from "@/components/profile/queries";
@@ -117,6 +118,7 @@ const MODULES: Readonly<Record<string, Record<string, unknown>>> = {
   "components/item/fragments.ts": itemFragments,
   "components/item/seen-at.ts": itemSeenAt,
   "components/map/queries.ts": mapQueries,
+  "components/map/scanning/header-rename.ts": scanHeaderRename,
   "components/menu-lines/queries.ts": menuLinesQueries,
   "components/pour/queries.ts": pourQueries,
   "components/profile/queries.ts": profileQueries,
