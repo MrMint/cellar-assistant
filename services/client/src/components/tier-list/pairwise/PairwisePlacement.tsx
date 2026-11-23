@@ -1,8 +1,8 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useRef, useState } from "react";
-import { useClient } from "urql";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useQuery } from "urql";
 import { ICON_STROKE, Place } from "@/components/app/icons";
 import { VesselSilhouette } from "@/components/app/LabelPlate";
 import { Button } from "@/components/ui/button";
@@ -49,50 +49,55 @@ type Placed = {
  * compares against a board another tab has since changed.
  */
 function useBoard(tierListId: string) {
-  const client = useClient();
-  const [board, setBoard] = useState<PlacementEntry[] | null>(null);
-  const [failed, setFailed] = useState(false);
+  // One page at a time through `useQuery`, following the cursor until the
+  // last: the pages read so far are kept, keyed by the cursor they came from.
+  const [after, setAfter] = useState<string | null>(null);
+  const [pages, setPages] = useState<ReadonlyMap<string, PlacementEntry[]>>(
+    () => new Map(),
+  );
+  const [complete, setComplete] = useState(false);
+  const [{ data, error }] = useQuery({
+    query: GetTierListQuery,
+    variables: { id: tierListId, first: TIER_LIST_ITEMS_PAGE_SIZE, after },
+    requestPolicy: "network-only",
+    pause: complete,
+  });
+
+  const result =
+    data === undefined ? null : unwrapResult(data.tierList, "TierList");
+  const failed = error !== undefined || (result !== null && !result.ok);
 
   useEffect(() => {
-    let live = true;
-    void (async () => {
-      const entries: PlacementEntry[] = [];
-      let after: string | null = null;
-      for (let page = 0; page < MAX_BOARD_PAGES; page += 1) {
-        const response = await client
-          .query(
-            GetTierListQuery,
-            { id: tierListId, first: TIER_LIST_ITEMS_PAGE_SIZE, after },
-            { requestPolicy: "network-only" },
-          )
-          .toPromise();
-        if (!live) return;
-        const result = unwrapResult(response.data?.tierList, "TierList");
-        if (response.error !== undefined || !result.ok) {
-          setFailed(true);
-          return;
-        }
-        for (const edge of result.data.items.edges) {
-          const row = itemDisplayFromNode(edge.node);
-          entries.push({
-            id: row.id,
-            name: row.name,
-            band: row.band,
-            position: row.position,
-          });
-        }
-        const pageInfo: { hasNextPage: boolean; endCursor: string | null } =
-          result.data.items.pageInfo;
-        if (!pageInfo.hasNextPage || pageInfo.endCursor === null) break;
-        after = pageInfo.endCursor;
-      }
-      setBoard(entries);
-    })();
-    return () => {
-      live = false;
-    };
-  }, [client, tierListId]);
+    if (result === null || !result.ok || complete) return;
+    const key = after ?? "";
+    if (pages.has(key)) return;
+    const entries = result.data.items.edges.map((edge): PlacementEntry => {
+      const row = itemDisplayFromNode(edge.node);
+      return {
+        id: row.id,
+        name: row.name,
+        band: row.band,
+        position: row.position,
+      };
+    });
+    setPages((current) => new Map(current).set(key, entries));
+    const pageInfo: { hasNextPage: boolean; endCursor: string | null } =
+      result.data.items.pageInfo;
+    if (
+      pageInfo.hasNextPage &&
+      pageInfo.endCursor !== null &&
+      pages.size + 1 < MAX_BOARD_PAGES
+    ) {
+      setAfter(pageInfo.endCursor);
+    } else {
+      setComplete(true);
+    }
+  }, [after, complete, pages, result]);
 
+  const board = useMemo(
+    () => (complete ? Array.from(pages.values()).flat() : null),
+    [complete, pages],
+  );
   return { board, failed };
 }
 

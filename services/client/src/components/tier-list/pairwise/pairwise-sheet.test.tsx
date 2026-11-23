@@ -222,6 +222,9 @@ const click = async (el: HTMLElement) => {
   await act(settle);
 };
 const adds = () => sent.filter((s) => s.operationName === "AddItemToTierList");
+/** The `position` the nth positioned add sent. */
+const sentPosition = (n = 0) =>
+  (adds()[n]?.variables.input as { position?: number } | undefined)?.position;
 
 describe("pairwise placement (L09)", () => {
   test("asks with two named buttons, then places in one positioned add", async () => {
@@ -284,11 +287,7 @@ describe("pairwise placement (L09)", () => {
   test("Undo takes it back in one history step and asks again", async () => {
     await render();
     await click(buttonNamed(/^About the same$/));
-    assert.equal(
-      adds()[0]?.variables.input &&
-        (adds()[0]?.variables.input as { position: number }).position,
-      3,
-    );
+    assert.equal(sentPosition(), 3);
     await click(buttonNamed(/^Undo$/));
     const undos = sent.filter((s) => s.operationName === "UndoTierListEdit");
     assert.deepEqual(
@@ -305,10 +304,7 @@ describe("pairwise placement (L09)", () => {
   test("Skip puts it at the end of its band, and Done closes", async () => {
     await render();
     await click(buttonNamed(/^Skip, put it at the end of Very Good$/));
-    assert.equal(
-      (adds()[0]?.variables.input as { position: number }).position,
-      BOARD.length,
-    );
+    assert.equal(sentPosition(), BOARD.length);
     assert.ok(
       document.body.textContent?.includes("Put at the end of Very Good."),
     );
