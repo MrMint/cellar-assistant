@@ -1,6 +1,7 @@
 import Image from "next/image";
 import { LabelPlate } from "@/components/app/LabelPlate";
 import { Link } from "@/components/app/Link";
+import { MorphTitle } from "@/components/app/RouteTransition";
 import { Score } from "@/components/app/Score";
 import { itemTypeTokens } from "@/components/app/TypeChip";
 import type { ApiItemType } from "@/components/cellar-api/itemTypes";
@@ -136,15 +137,19 @@ export function BottleCard({ cell, href, now, onClick }: BottleCardProps) {
       </div>
 
       <div className="flex flex-col gap-1.5 px-3 pt-2.5 pb-3">
-        <Link
-          overlay
-          underline="none"
-          href={href}
-          onClick={onClick}
-          className="type-callout line-clamp-2 min-h-10 font-semibold text-ink-1 focus-visible:after:rounded-md focus-visible:after:ring-inset"
-        >
-          {title}
-        </Link>
+        {/* B05: the title flies into the bottle page's heading (H-8). The
+            link is the morph's one box: line-clamp makes it a block. */}
+        <MorphTitle href={href}>
+          <Link
+            overlay
+            underline="none"
+            href={href}
+            onClick={onClick}
+            className="type-callout line-clamp-2 min-h-10 font-semibold text-ink-1 focus-visible:after:rounded-md focus-visible:after:ring-inset"
+          >
+            {title}
+          </Link>
+        </MorphTitle>
         <p
           data-slot="bottle-state"
           className="type-footnote flex items-center justify-between gap-2"

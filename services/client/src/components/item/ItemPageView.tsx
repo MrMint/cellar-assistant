@@ -105,6 +105,7 @@ export function ItemPageView({
     <LabelPlate
       type={item.type}
       plate={item.plate}
+      styleFields={item.plateStyle}
       labelled
       muted={selected !== null && selected.emptyAt !== null}
     />

@@ -4,7 +4,7 @@ import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
 import { EmptyState } from "@/components/app/EmptyState";
-import { ICON_STROKE, People, Place } from "@/components/app/icons";
+import { ICON_STROKE, People, Place, Recipe } from "@/components/app/icons";
 import { Link } from "@/components/app/Link";
 import { itemTypeTokens, TypeGlyph } from "@/components/app/TypeChip";
 import { UserAvatar } from "@/components/app/UserAvatar";
@@ -182,6 +182,7 @@ function Thumb({ burst }: { burst: FeedBurst }) {
         />
       ) : isItemType(first.itemType) ? (
         <span
+          data-thumb={first.itemType}
           className={cn(
             "flex size-full items-center justify-center",
             itemTypeTokens[first.itemType].tintClass,
@@ -189,8 +190,19 @@ function Thumb({ burst }: { burst: FeedBurst }) {
         >
           <TypeGlyph type={first.itemType} className="size-5" />
         </span>
+      ) : first.itemType === "RECIPE" ? (
+        // A Made-it log (L08): the recipe stands for the item (H-13).
+        <span
+          data-thumb="recipe"
+          className="flex size-full items-center justify-center bg-surface-2 text-ink-2"
+        >
+          <Recipe aria-hidden strokeWidth={ICON_STROKE} className="size-5" />
+        </span>
       ) : (
-        <span className="flex size-full items-center justify-center bg-surface-2 text-ink-2">
+        <span
+          data-thumb="place"
+          className="flex size-full items-center justify-center bg-surface-2 text-ink-2"
+        >
           <Place aria-hidden strokeWidth={ICON_STROKE} className="size-5" />
         </span>
       )}

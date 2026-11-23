@@ -72,6 +72,7 @@ export const TABS: readonly Tab[] = [
       "/friends",
       "/users",
       "/brands",
+      "/taste-profile",
     ],
   },
 ];

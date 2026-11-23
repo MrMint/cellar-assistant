@@ -12,6 +12,7 @@ import {
   apiActivityKinds,
   barcodeSearchHref,
   collectionStatsLine,
+  DELETED_RECIPE_NAME,
   imageSearchHref,
   MAX_BARCODE_LENGTH,
   nearbyPlacesFromNodes,
@@ -429,6 +430,47 @@ describe("activityEntryFromNode (the old buildActivityFeed's extractors)", () =>
       ),
       null,
     );
+  });
+
+  test("a recipe-only Made-it log (H-12): the recipe stands for the item", () => {
+    const log = (recipe: { id: string; name: string } | null) => ({
+      __typename: "ItemCheckIn",
+      id: "l2",
+      score: 4,
+      note: null,
+      tags: [],
+      companionIds: [],
+      place: null,
+      companions: { edges: [] },
+      recipe: recipe === null ? null : { __typename: "Recipe", ...recipe },
+    });
+    const made = activityEntryFromNode(
+      entry({
+        id: "CHECKED_IN:l2",
+        kind: "CHECKED_IN",
+        item: null,
+        review: null,
+        checkIn: log({ id: "r9", name: "Negroni" }),
+      }),
+    );
+    assert.equal(made?.kind, "drank");
+    assert.equal(made?.id, "drank-l2");
+    assert.equal(made?.itemName, "Negroni");
+    assert.equal(made?.itemType, "RECIPE");
+    assert.equal(made?.itemHref, "/recipes/r9");
+    assert.equal(made?.save, null, "a recipe is not a want-to-try target");
+    if (made?.kind === "drank") assert.equal(made.score, 4);
+    // Its recipe since deleted: named so, linking nowhere.
+    const gone = activityEntryFromNode(
+      entry({
+        kind: "CHECKED_IN",
+        item: null,
+        review: null,
+        checkIn: log(null),
+      }),
+    );
+    assert.equal(gone?.itemName, DELETED_RECIPE_NAME);
+    assert.equal(gone?.itemHref, "");
   });
 
   test("an edge the server nulled (list no longer visible) drops the row", () => {

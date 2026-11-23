@@ -13,6 +13,7 @@ import {
   planCommitNavigation,
   planLandedNavigation,
   planTypingNavigation,
+  readSessionHistory,
   type SearchNavigation,
   type SearchNavState,
   syncFromUrl,
@@ -323,5 +324,80 @@ describe("closeSearch", () => {
     const { calls, nav } = record();
     closeSearch(nav, null);
     assert.deepEqual(calls, [["replace", "/", { kind: "back" }]]);
+  });
+
+  // CR-3 / E-2: the first keystroke pushes, so the history is
+  // [/, /search, /search?q=gin]. Replacing the top would leave /search under
+  // it, and Back reopened the sheet. Close steps back past every sheet entry.
+  const at = (paths: string[], index = paths.length - 1) => ({
+    urls: paths.map((path) => `https://cellar.test${path}`),
+    index,
+  });
+  test("after typed searches, steps back past every /search entry", () => {
+    const { calls, nav } = record();
+    const went: number[] = [];
+    closeSearch(
+      nav,
+      "/",
+      at(["/cellars", "/", "/search", "/search?q=g", "/search?q=gin"]),
+      (delta) => went.push(delta),
+    );
+    assert.deepEqual(went, [-3]);
+    assert.deepEqual(calls, []);
+  });
+  test("with nothing typed, steps back one: the sheet's own entry", () => {
+    const went: number[] = [];
+    const { calls, nav } = record();
+    closeSearch(nav, "/", at(["/", "/search"]), (delta) => went.push(delta));
+    assert.deepEqual(went, [-1]);
+    assert.deepEqual(calls, []);
+  });
+  test("a /search entry below a page of ours is not the sheet's", () => {
+    const went: number[] = [];
+    const { nav } = record();
+    closeSearch(
+      nav,
+      "/wines/1",
+      at(["/search?q=old", "/wines/1", "/search", "/search?q=gin"]),
+      (delta) => went.push(delta),
+    );
+    assert.deepEqual(went, [-2]);
+  });
+  test("a cold open (no entry below the sheet) replaces, Home", () => {
+    const went: number[] = [];
+    const { calls, nav } = record();
+    closeSearch(nav, null, at(["/search", "/search?q=gin"]), (delta) =>
+      went.push(delta),
+    );
+    assert.deepEqual(went, []);
+    assert.deepEqual(calls, [["replace", "/", { kind: "back" }]]);
+  });
+});
+
+describe("readSessionHistory (CR-3)", () => {
+  const withWindow = <T>(value: unknown, run: () => T): T => {
+    const global = globalThis as { window?: unknown };
+    const saved = global.window;
+    global.window = value;
+    try {
+      return run();
+    } finally {
+      global.window = saved;
+    }
+  };
+  test("the Navigation API's entry URLs and the current index", () => {
+    const history = withWindow(
+      {
+        navigation: {
+          entries: () => [{ url: "https://x/" }, { url: null }],
+          currentEntry: { index: 1 },
+        },
+      },
+      readSessionHistory,
+    );
+    assert.deepEqual(history, { urls: ["https://x/", ""], index: 1 });
+  });
+  test("null without the API, so Close falls back to replacing", () => {
+    assert.equal(withWindow({}, readSessionHistory), null);
   });
 });

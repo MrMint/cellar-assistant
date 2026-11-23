@@ -18,6 +18,8 @@ import { useCallback, useMemo, useState } from "react";
 import { useQuery } from "urql";
 import { Close, Share } from "@/components/app/icons";
 import { Link } from "@/components/app/Link";
+import { useNavigate } from "@/components/app/useNavigate";
+import { leaveTo } from "@/components/make/leave";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { RecapStamp } from "./RecapStamp";
@@ -32,8 +34,10 @@ import {
 import {
   deckOf,
   RecapQuery,
+  type RecapStatus,
   recapFromResult,
   recapImagePath,
+  recapStatus,
 } from "./recap-data";
 import {
   browserDownload,
@@ -77,10 +81,14 @@ export function RecapDeck({
       ? String(period.year)
       : `${period.year}-${String(period.month).padStart(2, "0")}`;
   const timeZone = useMemo(viewerTimeZone, []);
-  const [result] = useQuery({
+  const [result, reexecute] = useQuery({
     query: RecapQuery,
     variables: { period: periodKey, timeZone },
   });
+  const retry = useCallback(
+    () => reexecute({ requestPolicy: "network-only" }),
+    [reexecute],
+  );
   const recap = recapFromResult(result.data);
   const deck = useMemo(() => (recap === null ? [] : deckOf(recap)), [recap]);
   const label = recapPeriodLabel(period);
@@ -88,7 +96,8 @@ export function RecapDeck({
   return (
     <RecapFrame
       label={label}
-      loading={result.fetching && recap === null}
+      status={recapStatus(result)}
+      onRetry={retry}
       cards={deck}
       period={period}
       ownerId={ownerId}
@@ -100,7 +109,8 @@ export function RecapDeck({
 
 function RecapFrame({
   label,
-  loading,
+  status,
+  onRetry,
   cards,
   period,
   ownerId,
@@ -108,7 +118,8 @@ function RecapFrame({
   timeZone,
 }: {
   label: string;
-  loading: boolean;
+  status: RecapStatus;
+  onRetry: () => void;
   cards: readonly RecapCardView[];
   period: RecapPeriod;
   ownerId: string;
@@ -118,6 +129,7 @@ function RecapFrame({
   const [index, setIndex] = useState(0);
   const [note, setNote] = useState(NOTE);
   const [sharing, setSharing] = useState(false);
+  const navigate = useNavigate();
   const current = cards[Math.min(index, Math.max(cards.length - 1, 0))];
   const copy = current === undefined ? null : recapCardCopy(current);
 
@@ -164,25 +176,26 @@ function RecapFrame({
           </div>
         )}
         <div className="flex items-center justify-between">
-          <span className="type-footnote text-ink-2">{label}</span>
-          <Link
-            href="/me"
-            kind="back"
+          <h1 className="type-footnote font-normal text-ink-2">{label}</h1>
+          <button
+            type="button"
+            onClick={() => leaveTo(navigate, "/me")}
             aria-label="Close recap"
-            underline="none"
             className="-mr-3 flex size-11 items-center justify-center text-ink-1"
           >
             <Close aria-hidden className="size-[22px]" strokeWidth={1.75} />
-          </Link>
+          </button>
         </div>
       </div>
 
-      {loading ? (
+      {status === "loading" ? (
         <div className="flex flex-1 flex-col gap-4 px-6 pt-6">
           <Skeleton className="h-4 w-24" />
           <Skeleton className="h-20 w-28" />
           <Skeleton className="h-16 w-64" />
         </div>
+      ) : status === "failed" ? (
+        <FailedDeck onRetry={onRetry} />
       ) : current === undefined || copy === null ? (
         <EmptyDeck period={period} />
       ) : (
@@ -231,7 +244,7 @@ function RecapFrame({
       )}
 
       <div className="flex flex-col gap-2 px-4 pt-4 pb-[max(40px,env(safe-area-inset-bottom))]">
-        {current !== undefined && (
+        {status === "ready" && current !== undefined && (
           <button
             type="button"
             onClick={share}
@@ -246,11 +259,38 @@ function RecapFrame({
           className="type-footnote text-center text-ink-3"
           aria-live="polite"
         >
-          {current === undefined
-            ? "Cards with too little data are skipped."
-            : note}
+          {status === "failed"
+            ? ""
+            : current === undefined
+              ? "Cards with too little data are skipped."
+              : note}
         </span>
       </div>
+    </div>
+  );
+}
+
+/** The read failed: say so, and offer it again (CR-7). Not "too little". */
+function FailedDeck({ onRetry }: { onRetry: () => void }) {
+  return (
+    <div
+      data-slot="recap-failed"
+      className="flex flex-1 flex-col gap-3.5 px-6 pt-6"
+    >
+      <span className="type-overline text-brass">Recap unavailable</span>
+      <p
+        role="alert"
+        className="font-display text-[28px] leading-[34px] font-semibold"
+      >
+        Couldn&apos;t load your recap just now
+      </p>
+      <button
+        type="button"
+        onClick={onRetry}
+        className="flex h-11 w-fit items-center rounded-full bg-ink-1/10 px-5 text-base font-semibold"
+      >
+        Try again
+      </button>
     </div>
   );
 }

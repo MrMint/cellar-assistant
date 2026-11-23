@@ -139,18 +139,24 @@ export const AddPhotoBody = ({
 };
 
 /**
- * L02 — the re-buy card (the DrinkSoon board): "Another <name> added · Snap
- * its label or receipt to keep this bottle's price and date." with
- * [Add photo] [Not now]. The words come from `rebuyOffer`.
+ * L02 — the re-buy card's line. It promises only what Add photo keeps: a
+ * private photo of the item, on your own gallery (CR-8). Nothing reads a
+ * price or a date from it, and it never becomes the bottle's picture.
+ */
+export const REBUY_PHOTO_BODY =
+  "Snap its label or receipt to keep a private photo of it.";
+
+/**
+ * L02 — the re-buy card (the DrinkSoon board): "Another <name> added" and
+ * the line above, with [Add photo] [Not now]. The title comes from
+ * `rebuyOffer`.
  */
 export const RebuyPhotoOffer = ({
   title,
-  body,
   onAddPhoto,
   onDismiss,
 }: {
   title: string;
-  body: string;
   onAddPhoto: () => void;
   onDismiss: () => void;
 }) => (
@@ -161,7 +167,7 @@ export const RebuyPhotoOffer = ({
       </span>
       <div className="flex flex-col gap-0.5">
         <p className="type-headline text-ink-1">{title}</p>
-        <p className="type-footnote text-ink-2">{body}</p>
+        <p className="type-footnote text-ink-2">{REBUY_PHOTO_BODY}</p>
       </div>
     </div>
     <div className="flex gap-2">

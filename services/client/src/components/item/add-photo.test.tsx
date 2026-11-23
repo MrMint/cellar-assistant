@@ -112,7 +112,6 @@ describe("re-buy photo (L02)", () => {
     const html = renderToStaticMarkup(
       <RebuyPhotoOffer
         title="Another Barolo added"
-        body="Snap its label or receipt to keep this bottle's price and date."
         onAddPhoto={() => calls.push("add")}
         onDismiss={() => calls.push("dismiss")}
       />,
@@ -120,6 +119,8 @@ describe("re-buy photo (L02)", () => {
     assert.match(html, /data-slot="rebuy-photo"/);
     assert.match(html, /Another Barolo added/);
     assert.match(html, /label or receipt/);
+    // CR-8: it keeps a photo, and promises nothing it does not keep.
+    assert.doesNotMatch(html, /price|date/);
     assert.match(html, />Add photo</);
     assert.match(html, />Not now</);
   });

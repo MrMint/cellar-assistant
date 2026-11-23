@@ -82,6 +82,7 @@ export const ItemCardFragment = graphql(`
       vintage
       variety
       region
+      wineStyle: style
       alcoholContentPercentage
     }
     ... on Beer {
@@ -94,6 +95,7 @@ export const ItemCardFragment = graphql(`
       __typename
       vintage
       spiritStyle: style
+      spiritType
       alcoholContentPercentage
     }
     ... on Coffee {
@@ -111,6 +113,7 @@ export const ItemCardFragment = graphql(`
       __typename
       category
       region
+      form
     }
   }
 `);

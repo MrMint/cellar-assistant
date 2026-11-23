@@ -104,10 +104,14 @@ export const seenAtWhy = (row: SeenAtRow, now: number | null): string => {
   return when === null ? `${who} had it here` : `${who} had it here · ${when}`;
 };
 
-/** "80 m", "0.6 km", "12 km"; null without a position. */
+/**
+ * "80 m", "110 m", "0.6 km", "12 km"; null without a position. Metres up to
+ * half a kilometre (E-9: "0.1 km" for a short walk read worse than "110 m"),
+ * then tenths of a km as the SeenAt board's "0.6 km".
+ */
 export const seenAtDistance = (meters: number | null): string | null => {
   if (meters === null || !Number.isFinite(meters) || meters < 0) return null;
-  if (meters < 100) return `${Math.max(10, Math.round(meters / 10) * 10)} m`;
+  if (meters < 495) return `${Math.max(10, Math.round(meters / 10) * 10)} m`;
   if (meters < 10_000) return `${(meters / 1000).toFixed(1)} km`;
   return `${Math.round(meters / 1000)} km`;
 };

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
+import { print } from "graphql";
 import {
   type ItemCardSource,
   itemCardFromCellarItem,
@@ -247,5 +248,23 @@ describe("itemCardFromFragment", () => {
     assert.equal(card.subtitle, "Nebbiolo");
     assert.equal(card.displayImageUrl, undefined);
     assert.ok(ItemCardFragment);
+  });
+});
+
+describe("ItemCardFragment selects the plate's style fields (H-9)", () => {
+  // `plateStyleFields` reads these; unselected, a card's plate never got a
+  // style vessel.
+  const source = print(ItemCardFragment).replace(/\s+/g, " ");
+  const branch = (type: string) =>
+    source.match(new RegExp(`\\.\\.\\. on ${type} \\{([^}]*)\\}`))?.[1] ?? "";
+
+  test("Wine's style as wineStyle", () => {
+    assert.match(branch("Wine"), /\bwineStyle: style\b/);
+  });
+  test("Spirit's spiritType", () => {
+    assert.match(branch("Spirit"), /\bspiritType\b/);
+  });
+  test("Tea's form", () => {
+    assert.match(branch("Tea"), /\bform\b/);
   });
 });

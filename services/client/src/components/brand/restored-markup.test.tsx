@@ -1,7 +1,8 @@
 /**
  * Render tests for the restored brand components, asserting the **old**
  * markup (`82450ad1:src/components/brand/*`), server-rendered the way the
- * first paint is. `next/image` is stubbed: bun imports a `.png` as a path.
+ * first paint is. A brand with no logo shows a monogram plate, not the old
+ * `cellar1.png` (H-3, L22); `next/image` stays stubbed so any raster shows.
  */
 import { mock } from "bun:test";
 import assert from "node:assert/strict";
@@ -30,11 +31,16 @@ const card = {
 };
 
 describe("BrandCard (restored)", () => {
-  test("placeholder art, type chip, linked title, description, item count", () => {
+  test("monogram plate, type chip, linked title, description, item count", () => {
     const html = render(<BrandCard brand={card} href="/brands/b1" />);
-    assert.match(html, /^(?:<[^>]+>)+<span data-next-image="art"/, "art first");
-    assert.match(html, /data-alt="Vietti placeholder"/);
-    assert.match(html, /data-alt="Vietti placeholder"[\s\S]*>Tea House</);
+    assert.match(
+      html,
+      /^(?:<[^>]+>)+<span data-slot="brand-plate"/,
+      "plate first",
+    );
+    assert.match(html, /data-slot="brand-plate"[^>]*>(?:<[^>]+>)*V</);
+    assert.doesNotMatch(html, /data-next-image/);
+    assert.match(html, /data-slot="brand-plate"[\s\S]*>Tea House</);
     assert.match(html, /href="\/brands\/b1"/);
     assert.match(html, /href="\/brands\/b1"[^>]*>(?:<[^>]+>)*Vietti</);
     assert.match(html, /Barolo producer/);
@@ -103,6 +109,8 @@ describe("BrandDetails (restored)", () => {
 
   test("header: h1 name, type chip, parent link, child chips; no Since (X23)", () => {
     const html = render(<BrandDetails brand={brand} />);
+    assert.match(html, /data-slot="brand-plate"[^>]*>(?:<[^>]+>)*V</);
+    assert.doesNotMatch(html, /data-next-image/);
     assert.match(html, /<h1[^>]*>Vietti<\/h1>/);
     assert.doesNotMatch(html, /Since/);
     assert.match(html, />Winery</);

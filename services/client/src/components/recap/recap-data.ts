@@ -162,6 +162,24 @@ export const recapFromResult = (
   return unwrapped.ok ? unwrapped.data : null;
 };
 
+/**
+ * Where the deck's read stands (CR-7). Only a recap that came back is a deck
+ * (an empty one is the honest "too little logged"); a transport error or a
+ * refusal is `failed`, never mistaken for an empty month.
+ */
+export type RecapStatus = "loading" | "failed" | "ready";
+
+export const recapStatus = (read: {
+  fetching: boolean;
+  error?: unknown;
+  data?: ResultOf<typeof RecapQuery> | null;
+}): RecapStatus => {
+  if (recapFromResult(read.data) !== null) return "ready";
+  if (read.fetching) return "loading";
+  if (read.error !== undefined || read.data !== undefined) return "failed";
+  return "loading";
+};
+
 /** The viewer's stamps, or `null` on any refusal. */
 export const stampsFromResult = (
   result: ResultOf<typeof BreadthStampsQuery> | null | undefined,

@@ -11,6 +11,7 @@ import {
   formatPrice,
   freshnessModel,
   freshnessPatch,
+  localDay,
 } from "./freshness";
 
 const TODAY = "2026-11-22";
@@ -260,5 +261,20 @@ describe("freshnessPatch", () => {
     expect(
       freshnessPatch(bottle(), { ...d, location: "x".repeat(81) }).ok,
     ).toBe(false);
+  });
+});
+
+describe("localDay (CR-12)", () => {
+  test("the local calendar day, not the UTC one", () => {
+    const tz = process.env.TZ;
+    process.env.TZ = "America/Los_Angeles";
+    try {
+      // 18:00 on 31 Dec in UTC-8 is 02:00 on 1 Jan UTC.
+      const evening = new Date(Date.UTC(2026, 11, 31, 2 + 24, 0));
+      expect(localDay(evening)).toBe("2026-12-31");
+      expect(localDay(new Date(Date.UTC(2026, 0, 5, 12)))).toBe("2026-01-05");
+    } finally {
+      process.env.TZ = tz;
+    }
   });
 });
