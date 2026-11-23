@@ -447,3 +447,50 @@ export const CellarSearchElsewhereQuery = graphql(
 `,
   [CellarItemGroupCardFragment, ActorErrorFieldsFragment],
 );
+
+/**
+ * L02: this cellar's Drink soon — opened bottles past their typical days and
+ * sealed ones whose window closes within three months, ranked by the server
+ * (`Cellar.drinkSoon`). Owner-only: anyone else gets an empty page.
+ */
+export const CellarDrinkSoonQuery = graphql(`
+  query CellarDrinkSoon($cellarId: ID!, $first: Int!) {
+    cellar(id: $cellarId) {
+      __typename
+      ... on Cellar {
+        id
+        drinkSoon(first: $first) {
+          totalCount
+          edges {
+            node {
+              reason
+              urgency
+              openDays
+              openLifeFromDays
+              openLifeUntilDays
+              typicalFor
+              window {
+                until
+                untilSource
+              }
+              bottle {
+                __typename
+                id
+                cellarId
+                item {
+                  __typename
+                  id
+                  type
+                  name
+                  ... on Wine {
+                    vintage
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+`);
