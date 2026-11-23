@@ -5559,7 +5559,7 @@ type Query {
   tierList(id: ID!): QueryTierListResult!
 
   """
-  One user's public profile. Any signed-in viewer may read it; `email` comes back null unless the viewer is the owner.
+  One user's public profile. Any signed-in viewer may read it; `email` comes back null unless the viewer is the owner. An id that names nobody, a malformed id and a profile the viewer may not see all get the same `NotFoundError`, so the answer never says whether an account exists.
   """
   user(id: ID!): QueryUserResult!
 
