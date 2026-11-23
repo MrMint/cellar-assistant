@@ -11,6 +11,7 @@ import {
   heldBackNote,
   isCellarOwner,
   itemCharacteristics,
+  itemPlateStyle,
   itemShareUrl,
   itemSubtitlePhrases,
   myReviewFromRow,
@@ -469,5 +470,45 @@ describe("formLayout create mode (the old create forms' stars)", () => {
     assert.deepEqual(starred("SAKE", "edit"), []);
     assert.deepEqual(starred("TEA", "edit"), []);
     assert.deepEqual(starred("WINE", "create"), starred("WINE", "edit"));
+  });
+});
+
+describe("itemPlateStyle (H-2)", () => {
+  test("reads the page's own attribute aliases into the vessel's fields", () => {
+    assert.deepEqual(
+      itemPlateStyle("WINE", {
+        __typename: "Wine",
+        wineStyle: "SPARKLING",
+        variety: "CHARDONNAY",
+      }),
+      { style: "SPARKLING", variety: "CHARDONNAY" },
+    );
+    assert.deepEqual(
+      itemPlateStyle("SPIRIT", {
+        __typename: "Spirit",
+        spiritType: "TEQUILA",
+        spiritStyle: "Blanco",
+      }),
+      { style: "TEQUILA" },
+    );
+    assert.deepEqual(
+      itemPlateStyle("TEA", {
+        __typename: "Tea",
+        category: "GREEN",
+        form: "matcha_powder",
+      }),
+      { style: "GREEN", form: "matcha_powder" },
+    );
+    assert.deepEqual(itemPlateStyle("BEER", { beerStyle: "STOUT" }), {
+      style: "STOUT",
+    });
+    assert.equal(itemPlateStyle("SAKE", { category: "JUNMAI" }), null);
+  });
+
+  test("an unselected or non-string field is null, not a match", () => {
+    assert.deepEqual(itemPlateStyle("WINE", { variety: 3 }), {
+      style: null,
+      variety: null,
+    });
   });
 });

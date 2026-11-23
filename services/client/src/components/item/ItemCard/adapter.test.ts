@@ -5,6 +5,7 @@ import {
   itemCardFromCellarItem,
   itemCardFromFragment,
   itemCardFromItem,
+  plateStyleFields,
   subtitleDescriptor,
 } from "./adapter";
 import { ItemCardFragment } from "./fragments";
@@ -49,7 +50,40 @@ describe("itemCardFromItem", () => {
       isFavorite: true,
       myScore: null,
       plate: { producer: "Vietti", name: "Barolo", vintage: "2016" },
+      styleFields: { style: null, variety: "NEBBIOLO" },
     });
+  });
+
+  test("H-2: each type's style fields reach the plate under the vessel's names", () => {
+    assert.deepEqual(
+      plateStyleFields("WINE", {
+        wineStyle: "SPARKLING",
+        variety: "CHARDONNAY",
+      }),
+      { style: "SPARKLING", variety: "CHARDONNAY" },
+    );
+    assert.deepEqual(plateStyleFields("BEER", { beerStyle: "STOUT" }), {
+      style: "STOUT",
+    });
+    // Spirit's vessel reads spiritType; its style only when that is absent.
+    assert.deepEqual(
+      plateStyleFields("SPIRIT", { spiritType: "TEQUILA", spiritStyle: "x" }),
+      { style: "TEQUILA" },
+    );
+    assert.deepEqual(plateStyleFields("SPIRIT", { spiritStyle: "GIN" }), {
+      style: "GIN",
+    });
+    assert.deepEqual(
+      plateStyleFields("TEA", { category: "GREEN", form: "matcha_powder" }),
+      { style: "GREEN", form: "matcha_powder" },
+    );
+    assert.equal(plateStyleFields("SAKE", { category: "JUNMAI" }), null);
+    assert.equal(plateStyleFields("COFFEE", {}), null);
+    assert.deepEqual(
+      itemCardFromItem({ id: "b", type: "BEER", name: "B", beerStyle: "IPA" })
+        .styleFields,
+      { style: "IPA" },
+    );
   });
 
   test("the LabelPlate gets region (else country) and ABV when selected", () => {

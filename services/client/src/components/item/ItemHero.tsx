@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { Link } from "@/components/app/Link";
+import { MorphTitle } from "@/components/app/RouteTransition";
 import { TypeChip } from "@/components/app/TypeChip";
 import type { ApiItemType } from "@/components/cellar-api/itemTypes";
 import { LoveButton } from "./LoveButton";
@@ -60,9 +61,12 @@ export function ItemHero({
           )}
         </div>
         <div className="flex items-start gap-2">
-          <h1 className="type-title-1 min-w-0 flex-1 break-words text-ink-1">
-            {name}
-          </h1>
+          {/* B05: where a card's title lands (named for this page's path). */}
+          <MorphTitle>
+            <h1 className="type-title-1 min-w-0 flex-1 break-words text-ink-1">
+              {name}
+            </h1>
+          </MorphTitle>
           <LoveButton
             itemId={itemId}
             type={type}

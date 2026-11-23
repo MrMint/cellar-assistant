@@ -1,6 +1,6 @@
 "use client";
 
-import { usePathname } from "next/navigation";
+import * as nextNavigation from "next/navigation";
 import { useEffect } from "react";
 
 /**
@@ -51,6 +51,16 @@ function write(stack: readonly string[]): void {
   }
 }
 
+/**
+ * The stack as it stands (empty on the server or with storage blocked):
+ * `RouteTransition` reads it on `popstate`, before the tracker records the
+ * new path, to tell browser Back from Forward.
+ */
+export function readNavStack(): string[] {
+  if (typeof window === "undefined") return [];
+  return read();
+}
+
 /** Record one navigation (used by the tracker; exported for tests). */
 export function recordNavigation(path: string): void {
   write(nextNavStack(read(), path));
@@ -84,7 +94,10 @@ export function canGoBack(): boolean {
 
 /** Mount once inside the shell: records every pathname change. */
 export function useNavHistoryTracker(): void {
-  const pathname = usePathname();
+  // Off the namespace: a test's partial `next/navigation` mock may lack it.
+  const pathname = (
+    nextNavigation as Partial<typeof nextNavigation>
+  ).usePathname?.();
   useEffect(() => {
     if (pathname) recordNavigation(pathname);
   }, [pathname]);

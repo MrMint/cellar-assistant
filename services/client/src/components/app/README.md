@@ -8,7 +8,7 @@ rules; this file has the **how**.
 
 Every primitive here has tests (`primitives.test.tsx` for the
 server-rendered ones, `interactive.test.tsx` under happy-dom for the rest).
-Files with no `"use client"` (Link, IconButton, Page, FilterChip, TypeChip,
+Files with no `"use client"` (IconButton, Page, FilterChip, TypeChip,
 Score, EmptyState, AIDraftField, ActionBar, UserAvatar, LabelPlate, LoadingShell,
 icons, nav, notify)
 can be rendered from server components.
@@ -112,7 +112,8 @@ not the brass accent. Brass is `primary` (or `brass`).
 | `Breadcrumbs` | `AppBar breadcrumbs` (desktop only) |
 | `ButtonGroup` | `ui/button-group` |
 | `Link` (Joy) | `app/Link` (`overlay`, `underline`, `className`) |
-| `next/link` for a visible link | `app/Link` too (B05 hooks View Transitions in here) |
+| `next/link` for a visible link | `app/Link` too: it infers the View Transition kind (B05); `navigation-guard.test.ts` fails on any other `next/link` import |
+| `useRouter().push/replace/back` | `useNavigate()` (`kind?: "forward" \| "back" \| "tab" \| "none"`, inferred when absent); `refresh`/`prefetch` stay on `useRouter` |
 | `Avatar` | `app/UserAvatar`; a stack is `flex -space-x-2` with `ring-2 ring-background` on each |
 | `Tooltip` | `ui/tooltip` — hover-capable devices only; on touch the `aria-label`/visible label does the job |
 
@@ -530,3 +531,26 @@ collapsing large title (B02), custom beverage glyphs.
 `VesselSilhouette` take the same fields. A recipe with no photo is `recipe/RecipePlate` (a coupe
 coloured by `recipe/glass-colors.ts`, or a cloche) or, in a row, `RecipeThumb`. A place with no photo
 is `map/places/PlaceHero`, toned from its category. All three are deterministic and use tokens only.
+
+## Route motion (B05)
+
+Pushes slide forward, Back slides back, a tab switch crossfades, and the
+bars stay put. The pieces:
+
+- **`transition-kind.ts`** — pure: `inferKind(from, to)` (same path → none,
+  another tab's root → tab, an ancestor → back, else forward),
+  `popKind(stack, to)` for browser Back/Forward, `transitionTypesFor(kind,
+  env)` (no types under reduced motion or without the API), `morphName`.
+- **`useNavigate`** and **`Link`** turn a kind (given or inferred) into
+  Next's `transitionTypes`. `navigate.back()` tells `RouteTransition` its kind.
+- **`RouteTransition`** wraps the shell's `<main>` in React's
+  `<ViewTransition>` and, on `popstate`, adds the kind's type to the
+  traverse's transition (from `nav-history`'s stack).
+- **`MorphTitle`** — wrap a card's title (`href` = the card's link) and the
+  page's heading (no props) and the title flies between them on forward and
+  back. Names come from the path, so a name must appear once per page.
+- **`app/view-transitions.css`** — the classes, and the anchors: anything
+  with `data-slot="tab-bar"`, `"side-rail"` or `"app-bar"` is named and does
+  not animate. Render at most one `AppBar` at a time (two would share a name
+  and the browser skips the transition).
+

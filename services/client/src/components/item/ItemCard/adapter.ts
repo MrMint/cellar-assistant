@@ -12,6 +12,7 @@
  * card without the heart count and without the gold star, rather than a lie.
  */
 
+import type { PlateStyleFields } from "@/components/app/LabelPlate";
 import type { ApiItemType } from "@/components/cellar-api/itemTypes";
 import { type FragmentOf, readFragment } from "@/lib/api/graphql";
 import { labelPlateFrom } from "@/lib/items/label-plate";
@@ -49,6 +50,12 @@ export type ItemCardSource = {
   variety?: string | null;
   beerStyle?: string | null;
   spiritStyle?: string | null;
+  /** Wine's own `style` (sparkling, …); `ItemCardFragment` does not select it yet. */
+  wineStyle?: string | null;
+  /** Spirit's `spiritType`, the vessel's field; not selected by the card fragment yet. */
+  spiritType?: string | null;
+  /** Tea's `form`; not selected by the card fragment yet. */
+  form?: string | null;
   roastLevel?: string | null;
   /** Sake and tea's subtitle descriptor. */
   category?: string | null;
@@ -102,11 +109,54 @@ const reviewedFrom = (item: ItemCardSource): boolean | undefined =>
     ? item.myReview !== null && item.myReview !== undefined
     : undefined;
 
+/** The fields a type's style vessel reads, under their API names. */
+export type StyleSource = {
+  wineStyle?: string | null;
+  variety?: string | null;
+  beerStyle?: string | null;
+  spiritType?: string | null;
+  spiritStyle?: string | null;
+  category?: string | null;
+  form?: string | null;
+};
+
+/**
+ * The LabelPlate's `styleFields` (imagery's style vessels, H-2) from an
+ * item's attributes: WINE `style` and `variety`, BEER `style`, SPIRIT
+ * `spiritType` (its `style` when that was not selected), TEA `category` as
+ * `style` plus `form`. Sake and coffee have one vessel each: `null`.
+ */
+export const plateStyleFields = (
+  type: ApiItemType,
+  source: StyleSource,
+): PlateStyleFields | null => {
+  switch (type) {
+    case "WINE":
+      return {
+        style: source.wineStyle ?? null,
+        variety: source.variety ?? null,
+      };
+    case "BEER":
+      return { style: source.beerStyle ?? null };
+    case "SPIRIT":
+      return { style: source.spiritType ?? source.spiritStyle ?? null };
+    case "TEA":
+      return { style: source.category ?? null, form: source.form ?? null };
+    default:
+      return null;
+  }
+};
+
+/** Card props plus the plate's style fields, which `ItemCard` reads. */
+export type StyledItemCardItem = ItemCardItem & {
+  styleFields: PlateStyleFields | null;
+};
+
 /**
  * An `Item` → card props. `id` and `itemId` are both the item's id: off a
  * cellar there is no bottle to distinguish.
  */
-export const itemCardFromItem = (item: ItemCardSource): ItemCardItem => {
+export const itemCardFromItem = (item: ItemCardSource): StyledItemCardItem => {
   const image = item.images?.edges[0]?.node;
   // Coffee and tea had no vintage in the old card (`vintage: undefined`).
   const hasVintage = item.type !== "COFFEE" && item.type !== "TEA";
@@ -141,7 +191,8 @@ export const itemCardFromItem = (item: ItemCardSource): ItemCardItem => {
       country: item.country,
       alcoholContentPercentage: item.alcoholContentPercentage,
     }),
-  } satisfies ItemCardItem;
+    styleFields: plateStyleFields(item.type, item),
+  } satisfies StyledItemCardItem;
 };
 
 export type CellarItemCardSource = {
@@ -157,7 +208,7 @@ export type CellarItemCardSource = {
  */
 export const itemCardFromCellarItem = (
   cellarItem: CellarItemCardSource,
-): ItemCardItem => ({
+): StyledItemCardItem => ({
   ...itemCardFromItem(cellarItem.item),
   id: cellarItem.id,
 });
@@ -169,4 +220,4 @@ export const itemCardFromCellarItem = (
  */
 export const itemCardFromFragment = (
   data: FragmentOf<typeof ItemCardFragment>,
-): ItemCardItem => itemCardFromItem(readFragment(ItemCardFragment, data));
+): StyledItemCardItem => itemCardFromItem(readFragment(ItemCardFragment, data));
