@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useRouter } from "next/navigation";
+
 import { useEffect, useState } from "react";
 import { AppBar } from "@/components/app/AppBar";
 import { EmptyState } from "@/components/app/EmptyState";
@@ -10,6 +10,7 @@ import { Link } from "@/components/app/Link";
 import { InsetSection, ListRow, Page } from "@/components/app/Page";
 import { SegmentedControl } from "@/components/app/SegmentedControl";
 import { itemTypeTokens, TypeGlyph } from "@/components/app/TypeChip";
+import { useNavigate } from "@/components/app/useNavigate";
 import { ApiError } from "@/components/cellar-api/ApiError";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -79,7 +80,7 @@ export function WantToTryList({
   initialPage,
   initialFilter,
 }: WantToTryListProps) {
-  const router = useRouter();
+  const navigate = useNavigate();
   const [filter, setFilter] = useState<WantToTryFilter>(initialFilter);
 
   const list = usePagedConnection({
@@ -110,7 +111,7 @@ export function WantToTryList({
 
   const changeFilter = (next: WantToTryFilter) => {
     setFilter(next);
-    router.replace(
+    navigate.replace(
       next === "all" ? "/want-to-try" : `/want-to-try?kind=${next}`,
       { scroll: false },
     );

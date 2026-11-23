@@ -74,6 +74,7 @@ export const tables = {
   friends: t.friends,
   generic_items: t.genericItems,
   item_brands: t.itemBrands,
+  item_brew_prefs: t.itemBrewPrefs,
   item_favorites: t.itemFavorites,
   item_image: t.itemImage,
   item_match_suggestions: t.itemMatchSuggestions,

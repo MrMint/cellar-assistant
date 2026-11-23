@@ -5,6 +5,7 @@ import { ItemCocktails } from "@/components/bar/ItemCocktails";
 import { YourLog } from "@/components/drink-log/YourLog";
 import { AddReview } from "@/components/review/AddReview";
 import type { ItemView } from "./adapter";
+import { BrewGuideSection } from "./BrewGuideSection";
 import { ChangeBrand } from "./ChangeBrand";
 import { ItemActionBar } from "./ItemActionBar";
 import { ItemActionsProvider } from "./ItemActions";
@@ -26,6 +27,7 @@ import {
   tasteCells,
   type YourBottle,
 } from "./item-page-model";
+import { SeenAtSection } from "./SeenAtSection";
 import { TasteHeader } from "./TasteHeader";
 import { YourBottles } from "./YourBottles";
 
@@ -217,6 +219,11 @@ export function ItemPageView({
             itemName: item.name,
           }}
         />
+        {/* ux-c M4 slots: each fetches its own data and renders nothing
+            until it has some. */}
+        {(item.type === "TEA" || item.type === "COFFEE") && (
+          <BrewGuideSection item={item} />
+        )}
         <ItemFacts
           facts={item.facts}
           description={item.description}
@@ -264,6 +271,7 @@ export function ItemPageView({
             )
           }
         />
+        <SeenAtSection item={item} />
         <ItemCellars cellars={cellars} total={cellarsTotal} />
         <ItemTierLists entries={tierLists} total={tierListsTotal} />
 

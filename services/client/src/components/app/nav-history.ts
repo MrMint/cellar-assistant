@@ -5,18 +5,18 @@ import { useEffect } from "react";
 
 /**
  * In-app history, per tab session, so AppBar's Back can tell "there is a page
- * of ours behind this one" (`router.back()`) from "this is a cold open of a
+ * of ours behind this one" (`navigate.back()`) from "this is a cold open of a
  * deep link" (go to the declared parent instead of leaving the app — an iOS
  * standalone PWA has no browser Back to rescue the user).
  *
  * The record is a stack of pathnames in `sessionStorage`. A navigation to the
  * entry just below the top is treated as a pop (Back), anything else as a
  * push. It is a heuristic — it cannot see forward navigation or tell a link
- * to the previous page from Back, and it records a `router.replace` as a
+ * to the previous page from Back, and it records a `navigate.replace` as a
  * push although the browser has no entry for the replaced page. That last
  * one would strand the user: after a cold-opened form replaces itself with
  * its result, the stack says "two pages", the browser has one, and
- * `router.back()` leaves the app (or does nothing in the standalone PWA).
+ * `navigate.back()` leaves the app (or does nothing in the standalone PWA).
  * So where the browser has the Navigation API (Chromium, Safari 26+), its
  * `canGoBack` — the real session history — can veto the stack.
  */

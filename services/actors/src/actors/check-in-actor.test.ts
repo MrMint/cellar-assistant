@@ -19,6 +19,7 @@
 import { randomUUID } from "node:crypto";
 import type { Ctx, ItemRef } from "@cellar-assistant/contracts";
 import {
+  ConflictError,
   ForbiddenError,
   NotFoundError,
   userCtx,
@@ -37,6 +38,7 @@ import {
   seedCellarItem,
   seedFriendship,
   seedPlace,
+  seedRecipe,
   seedWine,
 } from "../lib/search-testing.ts";
 import {
@@ -49,7 +51,7 @@ import {
   withTestDb,
 } from "../lib/testing.ts";
 import { CellarActor } from "./cellar-actor.ts";
-import { CheckInActor } from "./check-in-actor.ts";
+import { CheckInActor, requireOneTarget } from "./check-in-actor.ts";
 
 const { skip } = await resolveTestDatabase();
 
@@ -670,6 +672,100 @@ describe.skipIf(skip)("CheckInActor (X02)", () => {
             itemType: "MEAD" as never,
           }),
         ).rejects.toBeInstanceOf(ValidationError);
+      });
+    });
+  });
+
+  /*
+   * L44: logs outlive their recipe. The table allows a check-in whose recipe
+   * was deleted (`recipe_id` set null, `check_ins_one_item` is `<= 1`), so
+   * "exactly one drink" is the actor's rule on every write instead.
+   */
+  describe("L44 · exactly one target on every write", () => {
+    it("requireOneTarget admits one item or one recipe, and nothing else", () => {
+      const none = {
+        wineId: null,
+        beerId: null,
+        spiritId: null,
+        coffeeId: null,
+        sakeId: null,
+        teaId: null,
+        recipeId: null,
+      };
+      expect(() => requireOneTarget({ ...none, wineId: "w" })).not.toThrow();
+      expect(() => requireOneTarget({ ...none, recipeId: "r" })).not.toThrow();
+      expect(() => requireOneTarget(none)).toThrow(ValidationError);
+      expect(() =>
+        requireOneTarget({ ...none, teaId: "t", recipeId: "r" }),
+      ).toThrow(ValidationError);
+    });
+
+    it("the table keeps a log whose drink has gone, and update refuses to write to it", async () => {
+      await withTestDb(async (db) => {
+        const { drinker, wine } = await scenario(db);
+        const id = randomUUID();
+        await (await actorFor(db, id)).log(userCtx(drinker, "r"), {
+          item: wine,
+          score: 3,
+        });
+        // What `ON DELETE SET NULL` leaves behind once a recipe goes; the
+        // widened check allows it.
+        await db.execute(
+          sql`update public.check_ins set wine_id = null where id = ${id}::uuid`,
+        );
+        await expect(
+          (await actorFor(db, id)).update(userCtx(drinker, "r"), { score: 5 }),
+        ).rejects.toBeInstanceOf(ValidationError);
+        const [row] = await db
+          .select({ score: checkIns.score })
+          .from(checkIns)
+          .where(eq(checkIns.id, id));
+        expect(row?.score).toBe(3);
+      });
+    });
+
+    it("the table refuses two targets: an item and a recipe", async () => {
+      await withTestDb(async (db) => {
+        const { drinker, wine } = await scenario(db);
+        const recipeId = await seedRecipe(db, {
+          name: "L44 sour",
+          createdById: drinker,
+        });
+        const id = randomUUID();
+        await (await actorFor(db, id)).log(userCtx(drinker, "r"), {
+          item: wine,
+        });
+        await expect(
+          db.transaction((sp) =>
+            sp.execute(
+              sql`update public.check_ins set recipe_id = ${recipeId}::uuid where id = ${id}::uuid`,
+            ),
+          ),
+        ).rejects.toThrow();
+      });
+    });
+
+    it("restore refuses to bring back a log with nothing to log against", async () => {
+      await withTestDb(async (db) => {
+        const { drinker, wine } = await scenario(db);
+        const id = randomUUID();
+        await (await actorFor(db, id)).log(userCtx(drinker, "r"), {
+          item: wine,
+        });
+        await (await actorFor(db, id)).remove(userCtx(drinker, "r"));
+        await db.execute(sql`
+          update public.check_in_trash
+          set row = jsonb_set(row, '{wineId}', 'null'::jsonb)
+          where removal_id = ${id}::uuid
+        `);
+        await expect(
+          (await actorFor(db, id)).restore(userCtx(drinker, "r")),
+        ).rejects.toBeInstanceOf(ConflictError);
+        const rows = await db
+          .select({ id: checkIns.id })
+          .from(checkIns)
+          .where(eq(checkIns.id, id));
+        expect(rows).toEqual([]);
       });
     });
   });

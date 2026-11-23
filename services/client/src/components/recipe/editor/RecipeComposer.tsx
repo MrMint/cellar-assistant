@@ -1,6 +1,5 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { useClient, useMutation, useQuery } from "urql";
 import { AppBar } from "@/components/app/AppBar";
@@ -14,6 +13,7 @@ import {
 } from "@/components/app/icons";
 import { Link } from "@/components/app/Link";
 import { Page } from "@/components/app/Page";
+import { useNavigate } from "@/components/app/useNavigate";
 import { AiStatus } from "@/components/common/AiStatus";
 import { kickAiJobs } from "@/components/home/ai-job-store";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -448,7 +448,7 @@ function Reading({
   source: "photo" | "paste";
   onAgain: () => void;
 }) {
-  const router = useRouter();
+  const navigate = useNavigate();
   const phase = useRecipeJob(jobId);
   const [, cancel] = useMutation(CancelRecipePhotoJobMutation);
   const doneId = phase?.kind === "done" ? phase.recipeId : null;
@@ -471,8 +471,8 @@ function Reading({
   const checkingLeftover = endedId !== null && leftover.fetching;
 
   useEffect(() => {
-    if (doneId !== null) router.replace(`/recipes/${doneId}/edit`);
-  }, [doneId, router]);
+    if (doneId !== null) navigate.replace(`/recipes/${doneId}/edit`);
+  }, [doneId, navigate]);
 
   if (phase === null || phase.kind === "running") {
     const stage = phase?.stage ?? "EXTRACT";

@@ -22,7 +22,6 @@
  * Snackbar is `notify`.
  */
 
-import Image from "next/image";
 import { type ReactNode, useState } from "react";
 import {
   Directions,
@@ -57,12 +56,12 @@ import { usePlaceDetails } from "../hooks/usePlaceDetails";
 import { usePlaceToggles } from "../hooks/usePlaceToggles";
 import { MenuScanner } from "../scanning/MenuScanner";
 import { GoogleAttribution } from "./GoogleAttribution";
+import { LoveToggleButton, VisitedToggleButton } from "./PlaceActionButtons";
 import {
-  LoveToggleButton,
-  PlaceCategoryTile,
-  VisitedToggleButton,
-} from "./PlaceActionButtons";
-import { PlaceDetailsShell, type PlaceHero } from "./PlaceDetailsShell";
+  PlaceDetailsShell,
+  type PlaceHero as PlaceHeroData,
+} from "./PlaceDetailsShell";
+import { PlaceHero } from "./PlaceHero";
 import { PlaceMenuItems } from "./PlaceMenuItems";
 import { PlaceReviewPanel } from "./PlaceReviewPanel";
 import {
@@ -236,7 +235,7 @@ interface PlaceDetailsProps {
    * The name and category the server already read (X24): drawn in the
    * loading shell while the full read is on its way.
    */
-  hero?: PlaceHero;
+  hero?: PlaceHeroData;
   /** The old `getServerUserId()`; unused — the API knows the viewer. */
   userId?: string;
 }
@@ -396,20 +395,29 @@ export function PlaceDetails({
 
   const hours = enrichment?.openingHours ?? placeData.hours;
 
+  const heroCategory: string | undefined =
+    placeData.primary_category ?? placeData.categories[0];
+
   // ── Render ─────────────────────────────────────────────────────────
 
   return (
     <Page>
       {/* Hero Header */}
       <Section>
-        <div className="flex flex-row items-start gap-4">
-          <PlaceCategoryTile
-            category={placeData.primary_category ?? placeData.categories[0]}
-            large
+        <div className="flex flex-col gap-4">
+          {/* B03: the tonal hero, or the place's own photo in its frame. */}
+          <PlaceHero
+            name={placeData.name}
+            category={heroCategory}
+            categoryLabel={
+              heroCategory === undefined
+                ? undefined
+                : formatCategoryName(heroCategory)
+            }
+            photoUrl={googlePhotos[0]?.url}
           />
 
           <div className="min-w-0 flex-1">
-            <h1 className="type-title-1 mb-1 text-ink-1">{placeData.name}</h1>
             {placeData.display_name &&
               placeData.display_name !== placeData.name && (
                 <p className="type-body mb-1 text-ink-2">
@@ -528,19 +536,6 @@ export function PlaceDetails({
               : "This place is temporarily closed"}
           </AlertDescription>
         </Alert>
-      )}
-
-      {/* Google Photo */}
-      {googlePhotos[0]?.url && (
-        <div className="relative aspect-video overflow-hidden rounded-lg bg-surface-1">
-          <Image
-            src={googlePhotos[0].url}
-            alt={placeData.name}
-            fill
-            sizes="(max-width: 720px) 100vw, 720px"
-            className="object-cover"
-          />
-        </div>
       )}
 
       {/* Action Buttons */}

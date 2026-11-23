@@ -1,6 +1,5 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "urql";
 import { EmptyState } from "@/components/app/EmptyState";
@@ -17,6 +16,7 @@ import {
 import { Link } from "@/components/app/Link";
 import { notify } from "@/components/app/notify";
 import { ResponsiveDialog } from "@/components/app/ResponsiveDialog";
+import { useNavigate } from "@/components/app/useNavigate";
 import { usePlaceActions } from "@/components/map/actions";
 import { useGeolocation } from "@/components/map/hooks/useGeolocation";
 import { formatCategoryName } from "@/components/map/places/place-utils";
@@ -83,7 +83,7 @@ export function MenuCapture({
   modeRow,
   initialPhoto,
 }: MenuCaptureProps) {
-  const router = useRouter();
+  const navigate = useNavigate();
   const capabilities = useAiCapabilities();
   const geo = useGeolocation();
   const { uploadAndProcessMenuScan } = usePlaceActions();
@@ -145,10 +145,10 @@ export function MenuCapture({
     if (result.success && result.scanId !== undefined) {
       const href = `/map/scans/${result.scanId}`;
       if (mounted.current) {
-        router.push(href);
+        navigate.push(href);
       } else {
         notify(`The menu from ${place.name} is being read`, {
-          undo: () => router.push(href),
+          undo: () => navigate.push(href),
           actionLabel: "See it",
           durationMs: 15_000,
         });

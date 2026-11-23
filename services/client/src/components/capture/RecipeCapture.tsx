@@ -1,10 +1,10 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { type ReactNode, useState } from "react";
 import { EmptyState } from "@/components/app/EmptyState";
 import { Cocktail, ErrorIcon, Info } from "@/components/app/icons";
 import { Link } from "@/components/app/Link";
+import { useNavigate } from "@/components/app/useNavigate";
 import {
   recipePhotoStep,
   useRecipePhotoJob,
@@ -40,13 +40,13 @@ export function RecipeCapture({
   modeRow,
   initialPhoto,
 }: RecipeCaptureProps) {
-  const router = useRouter();
+  const navigate = useNavigate();
   const capabilities = useAiCapabilities();
   const [photo, setPhoto] = useState<string | null>(initialPhoto ?? null);
   const { phase, start, stop, reset } = useRecipePhotoJob({
     // Into the draft editor, as the Bar's New recipe › Photo lands (X15):
     // its matches are confirmed there before the recipe is shared.
-    onDone: (recipeId) => router.push(`/recipes/${recipeId}/edit`),
+    onDone: (recipeId) => navigate.push(`/recipes/${recipeId}/edit`),
   });
   const blockers = describeUploadBlockers();
   // A capture that does not decode to a file has nothing to send: say so

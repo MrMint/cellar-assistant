@@ -12,6 +12,7 @@ import { Add, AI, Check, Close, Delete } from "@/components/app/icons";
 import { notify } from "@/components/app/notify";
 import { Page } from "@/components/app/Page";
 import { SegmentedControl } from "@/components/app/SegmentedControl";
+import { useNavigate } from "@/components/app/useNavigate";
 import { ApiError } from "@/components/cellar-api/ApiError";
 import { Button } from "@/components/ui/button";
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
@@ -84,6 +85,7 @@ const TYPE_OPTIONS = [
  */
 export function RecipeEditor(props: RecipeEditorProps) {
   const router = useRouter();
+  const navigate = useNavigate();
   const [form, setForm] = useState<RecipeForm>(props.initial);
   const [recipeId, setRecipeId] = useState<string | null>(
     props.mode === "edit" ? props.recipeId : null,
@@ -223,7 +225,7 @@ export function RecipeEditor(props: RecipeEditorProps) {
         form.privacy === "PRIVATE" ? "Saved. Only you can see it." : "Saved.",
         { tone: "success" },
       );
-      router.replace(`/recipes/${id}`);
+      navigate.replace(`/recipes/${id}`);
       router.refresh();
     } catch (thrown) {
       setFailure({
@@ -253,7 +255,7 @@ export function RecipeEditor(props: RecipeEditorProps) {
     }
     setConfirmingDelete(false);
     notify(isDraft ? "Draft discarded." : "Recipe deleted.");
-    router.replace("/recipes");
+    navigate.replace("/recipes");
     router.refresh();
   };
 

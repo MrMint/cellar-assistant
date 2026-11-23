@@ -29,7 +29,7 @@
  */
 
 import type { CountryCode } from "libphonenumber-js";
-import { useRouter } from "next/navigation";
+
 import {
   useCallback,
   useEffect,
@@ -48,6 +48,7 @@ import { AIDraftField } from "@/components/app/AIDraftField";
 import { IconButton } from "@/components/app/IconButton";
 import { Back, MyLocation } from "@/components/app/icons";
 import { notify } from "@/components/app/notify";
+import { useNavigate } from "@/components/app/useNavigate";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -205,7 +206,7 @@ export function CreatePlaceForm({
   edit,
 }: CreatePlaceFormProps) {
   const editing = edit !== undefined;
-  const router = useRouter();
+  const navigate = useNavigate();
   const fieldId = useId();
   const idOf = (name: keyof FormFields) => `${fieldId}-${name}`;
   /**
@@ -372,9 +373,9 @@ export function CreatePlaceForm({
 
   const handleSelectExisting = useCallback(
     (placeId: string) => {
-      router.push(`/map?placeId=${placeId}`);
+      navigate.push(`/map?placeId=${placeId}`);
     },
-    [router],
+    [navigate],
   );
 
   const handleConfirmNew = useCallback(() => {
@@ -487,7 +488,7 @@ export function CreatePlaceForm({
             tone: "success",
             description: "Only you can see it until it's been checked.",
           });
-          router.push(`/places/${edit.placeId}`);
+          navigate.push(`/places/${edit.placeId}`);
         } else {
           setServerError(result.error ?? "Something went wrong.");
         }
@@ -505,7 +506,7 @@ export function CreatePlaceForm({
               ? undefined
               : "Only you can see it until it's been checked.",
         });
-        router.push(`/map?placeId=${result.placeId}`);
+        navigate.push(`/map?placeId=${result.placeId}`);
       } else {
         setServerError(result.error ?? "Something went wrong.");
         if (result.duplicates?.length) {
@@ -528,7 +529,7 @@ export function CreatePlaceForm({
             variant="outline"
             size="sm"
             onClick={() =>
-              router.push(edit ? `/places/${edit.placeId}` : "/map")
+              navigate.push(edit ? `/places/${edit.placeId}` : "/map")
             }
           >
             <Back />

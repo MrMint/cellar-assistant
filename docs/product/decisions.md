@@ -574,3 +574,61 @@ reverse them. Each names the item it belongs to; none overrides an answer.
 - **e2e.** `m11-pairwise` builds its fixture from five teas (`createItem` needs no onboarding) and one review.
   It deletes the review and the list afterwards. The API has no item delete, so the teas remain, as in
   specs 11 and 12. It creates no places.
+
+### Imagery system (wave C "imagery": B03)
+
+- **Fourteen vessels, not sixteen (L19).** The Main board's plates, kept
+  where a style field we store drives them: wine Bordeaux (default),
+  Burgundy (`variety` pinot noir, chardonnay), Sparkling (`style`
+  SPARKLING, which wins over the variety), Alsace (`variety` riesling,
+  gewürztraminer); beer Tall-neck (default), Stubby (`style` lager, pils,
+  pilsner, pilsener, helles), Can (`style` IPA, india pale ale, sour,
+  gose); spirit Decanter (default), Square (`spiritType` whiskey, whisky,
+  Scotch, bourbon, rye), Tall (gin, vodka); sake Tokkuri; coffee Valve bag;
+  tea Tin (default), Pouch (`form` tea_bag, sachet, matcha_powder,
+  instant). **Port** is out (no fortified style exists, and DESSERT is
+  also Sauternes) and so is **Isshobin** (a bottle size, which no field
+  records). Matching is on whole words of the stored value, so
+  `PILSENER_PILSNER_PILS` is a pils and `GINGER_LIQUEUR` is not gin; an
+  unknown style is the type's vessel. The table is
+  `components/app/label-plate/silhouettes.ts`, pinned row by row in
+  `LabelPlate.test.tsx`.
+- **The style reaches the plate through a new optional prop.** LabelPlate's
+  existing props are unchanged; `styleFields` (the `StyleFields` shape
+  drink-soon derives, plus `variety`) is new and optional, so every caller
+  still draws its type's vessel until it passes one. The three plate
+  builders (`item/adapter.ts`, `item/ItemCard/adapter.ts`,
+  `home/continue.ts`) are outside this stream: wiring them is a hand-off.
+- **The plate keeps its printed label.** The board draws a bare silhouette
+  over an 18% tint; the shipped plate (N28) prints producer, name, vintage
+  and origin over the vessel, and its tests pin that. Taken from the board:
+  the 18% tint (was 15%) and the style's vessel, raised from 12% to 16% so
+  the shape reads behind the text.
+- **The glass: one coupe, coloured from a phrase table (L36).** Cocktails
+  are a coupe (the board's), food keeps the cloche, uncoloured. 94 phrases
+  map to 12 hues, most specific first ("dry vermouth" before "vermouth",
+  "ginger beer" before "beer"); the bar kind is read first, then the
+  generic item, then the bottle's name, then its type (coffee, beer, sake,
+  tea); anything else is **neutral**. The body is the dominant line — a
+  coloured hue outranks clear (gin, vodka, tonic), clear outranks neutral,
+  then the bigger pour (oz/ml/cl/dash…, an unknown unit as 10 ml, a
+  garnish as nothing), then the server's order — and the top band the next
+  line of a different hue. Every hue is a `color-mix` of `--ca-*` tokens,
+  so no colour is outside the token file and no token was added. The
+  recipe fragment already selected every field the glass reads: unchanged.
+- **The place hero replaces the category tile (Main board).** A 160 px,
+  20 px-rounded card toned from the place's category (wine, beer, spirit,
+  sake, coffee, tea, food, else neutral, by whole slug segment, so a
+  `barbecue_restaurant` is food, not a bar), two rings and the tone's glyph
+  at the top right, the name and category at the bottom left. A Google
+  photo fills the same frame when there is one — the separate photo block
+  under the header is gone — so the page does not jump when it arrives.
+  The loading shell draws the same hero from the server's name and
+  category. The name keeps the `type-title-1` h1 (28 px) the shell test
+  pins, where the board's 3-up tile shows 20 px.
+- **No PNG deleted (L22).** All seven illustrations are `CellarItemsEmpty`'s,
+  inside `EmptyState`, so all seven stay. ItemRecipes' fallback (a wine
+  photo for every cocktail, a beer photo for food) is now the drawn
+  `RecipeThumb`. AddItemClient and the brand card/details still use the
+  PNGs: their restored-markup tests (outside this stream) pin the images,
+  so swapping them is a hand-off.

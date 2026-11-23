@@ -22,7 +22,6 @@
  * filed, which was the place page's refetch race.
  */
 
-import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import {
   Camera,
@@ -34,6 +33,7 @@ import {
 } from "@/components/app/icons";
 import { Link } from "@/components/app/Link";
 import { ResponsiveDialog } from "@/components/app/ResponsiveDialog";
+import { useNavigate } from "@/components/app/useNavigate";
 import { kickAiJobs } from "@/components/home/ai-job-store";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -93,7 +93,7 @@ const PHASE_LABELS: Record<ScanPhase, string> = {
 };
 
 export function MenuScanner({ placeId, onScanComplete }: MenuScannerProps) {
-  const router = useRouter();
+  const navigate = useNavigate();
   const { getMenuScanStatus, uploadAndProcessMenuScan } = usePlaceActions();
   const [isScanning, setIsScanning] = useState(false);
   const [scanId, setScanId] = useState<string | null>(null);
@@ -141,7 +141,7 @@ export function MenuScanner({ placeId, onScanComplete }: MenuScannerProps) {
     if (isExtractionDone(now)) setIsScanning(false);
     if (opensResults && handledRef.current.opened !== scanId) {
       handledRef.current.opened = scanId;
-      router.push(`/map/scans/${scanId}`);
+      navigate.push(`/map/scans/${scanId}`);
     }
     if (isScanSettled(now) && settledRef.current !== scanId) {
       settledRef.current = scanId;
@@ -152,7 +152,7 @@ export function MenuScanner({ placeId, onScanComplete }: MenuScannerProps) {
     processingStatus,
     matchStatus,
     opensResults,
-    router,
+    navigate,
     onScanComplete,
   ]);
 

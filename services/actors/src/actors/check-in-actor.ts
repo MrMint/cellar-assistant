@@ -141,6 +141,54 @@ export type CheckInAggregate = {
 
 const ARC = ARCS.checkIns;
 
+/**
+ * What a check-in logs: one of the six item columns, or a recipe (ux-c M1).
+ * The table only says "at most one" (`check_ins_one_item <= 1`, ruling L44:
+ * a log outlives its recipe, whose delete sets `recipe_id` null), so
+ * "exactly one" is this actor's rule, checked on every row it writes.
+ */
+const TARGET_COLUMNS = [
+  "wineId",
+  "beerId",
+  "spiritId",
+  "coffeeId",
+  "sakeId",
+  "teaId",
+  "recipeId",
+] as const;
+
+/**
+ * Any row-shaped object: the six item columns may be spread in under a
+ * computed key (`ARC.values`), which the type system cannot see.
+ */
+type CheckInTarget = object;
+
+const columnOf = (row: CheckInTarget, column: string): string | null => {
+  const value = (row as Record<string, unknown>)[column];
+  return typeof value === "string" ? value : null;
+};
+
+/** The row's target columns, every one present (null when unset). */
+const targetOf = (
+  row: CheckInTarget,
+): Record<(typeof TARGET_COLUMNS)[number], string | null> =>
+  Object.fromEntries(
+    TARGET_COLUMNS.map((column) => [column, columnOf(row, column)]),
+  ) as Record<(typeof TARGET_COLUMNS)[number], string | null>;
+
+/** Refuses a row that does not name exactly one drink (L44). */
+export const requireOneTarget = (row: CheckInTarget): void => {
+  const count = TARGET_COLUMNS.filter(
+    (column) => columnOf(row, column) !== null,
+  ).length;
+  if (count === 1) return;
+  throw new ValidationError(
+    count === 0
+      ? "this log's drink has gone (its item or recipe was removed), so it can be removed but not changed"
+      : `a log names one drink, an item or a recipe, not ${count}`,
+  );
+};
+
 export class CheckInActor
   extends EntityActorBase<CheckInAggregate>
   implements CheckInActorInterface
@@ -282,6 +330,7 @@ export class CheckInActor
       updatedAt: now,
     }));
 
+    for (const row of rows) requireOneTarget(row);
     await this.tx(async (tx) => {
       await tx
         .insert(checkIns)
@@ -305,6 +354,7 @@ export class CheckInActor
       "only the drinker can change this log",
       aggregate,
     );
+    requireOneTarget(aggregate.row);
 
     const patch: Partial<typeof checkIns.$inferInsert> = {};
     if (input.score !== undefined) patch.score = requireScore(input.score);
@@ -486,7 +536,9 @@ export class CheckInActor
       return await this.#placeSeenBy(ctx, toEntryDto(aggregate, viewer));
     }
 
-    const item = ARC.requireRefOf(row);
+    // The companions log the same drink: an item or a recipe.
+    const target = targetOf(row);
+    requireOneTarget(target);
     const now = new Date();
     await this.tx(async (tx) => {
       if (dropped.length > 0) {
@@ -505,7 +557,7 @@ export class CheckInActor
             createdById: viewer,
             groupId: row.groupId,
             cellarItemId: row.cellarItemId,
-            ...ARC.values(item),
+            ...target,
             placeId: row.placeId,
             score: null,
             note: null,
@@ -625,6 +677,17 @@ export class CheckInActor
       this.key,
       ...values.map((gone) => gone.id).filter((id) => id !== this.key),
     ];
+    // A row whose drink went while it sat in the trash names nothing now
+    // (L44): the same refusal as the foreign-key case below.
+    for (const gone of values) {
+      try {
+        requireOneTarget(gone);
+      } catch {
+        throw new ConflictError(
+          `check-in ${this.key} can no longer be restored: what it logged has gone`,
+        );
+      }
+    }
 
     try {
       await this.tx(async (tx) => {

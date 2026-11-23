@@ -37,6 +37,7 @@ import {
   cellarItems,
   checkIns,
   itemBrands,
+  itemBrewPrefs,
   itemFavorites,
   itemImage,
   itemMatchSuggestions,
@@ -233,16 +234,17 @@ export const itemArc = <TTable extends Table>(
  * the item tables) and fails if one is missing here, if one carries fewer
  * than all six columns, or if its `num_nonnulls` check does not name them all.
  *
- * Three share their check with one more column, and say so where they are
+ * Some share their check with one more column, and say so where they are
  * read: `recipe_ingredients` (`generic_item_id`), `tier_list_items`
  * (`place_id`), `item_match_suggestions` (`suggested_recipe_id`), `want_to_try`
- * (`recipe_id`). And
+ * and `check_ins` (`recipe_id`, ux-c seams for the latter). And
  * `place_menu_items`' check is `<= 1`, because a menu line may be unmatched.
  */
 export const ARCS = {
   cellarItems: itemArc(cellarItems),
   checkIns: itemArc(checkIns),
   itemBrands: itemArc(itemBrands),
+  itemBrewPrefs: itemArc(itemBrewPrefs),
   itemFavorites: itemArc(itemFavorites),
   itemImage: itemArc(itemImage),
   itemMatchSuggestions: itemArc(itemMatchSuggestions, {

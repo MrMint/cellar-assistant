@@ -149,8 +149,9 @@ describe.skipIf(skip)("updated_at triggers", () => {
         if (!byTable.has(table)) problems.push(`${table}: listed but absent`);
       }
       expect(problems).toEqual([]);
-      // Not vacuous: the discovered set is the thirty-one this migration left.
-      expect(byTable.size - Object.keys(WRITER_STAMPED).length).toBe(31);
+      // Not vacuous: the discovered set is the thirty-one this migration left,
+      // plus item_brew_prefs (ux-c seams, `*_ux_c_seams`).
+      expect(byTable.size - Object.keys(WRITER_STAMPED).length).toBe(32);
     });
   });
 

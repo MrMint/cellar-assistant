@@ -1,4 +1,4 @@
-import { pgEnum, pgTable, uuid, text, serial, halfvec, timestamp, bigserial, integer, boolean, jsonb, real, json, numeric, date, customType, char, doublePrecision, uniqueIndex, index, foreignKey, type AnyPgColumn, primaryKey, unique, check } from "drizzle-orm/pg-core"
+import { pgEnum, pgTable, uuid, text, serial, smallint, halfvec, timestamp, bigserial, integer, boolean, jsonb, real, json, numeric, date, customType, char, doublePrecision, uniqueIndex, index, foreignKey, type AnyPgColumn, primaryKey, unique, check } from "drizzle-orm/pg-core"
 import { sql } from "drizzle-orm"
 // HAND-EDIT #4 (see ../../README.md): drizzle-kit rc.4 introspects `geography`
 // and `tsvector` as untyped `customType(...)` placeholders. `geography` and
@@ -168,6 +168,15 @@ export const cellarItems = pgTable("cellar_items", {
 	sourceMenuItemId: uuid("source_menu_item_id").references(() => placeMenuItems.id, { onDelete: "set null" } ),
 	sakeId: uuid("sake_id").references(() => sakes.id),
 	teaId: uuid("tea_id").references(() => teas.id),
+	// ux-c seams (M1, `migrations/*_ux_c_seams`): the bottle's own dates,
+	// price and spot. All nullable; the CHECKs below keep them coherent.
+	packagedOn: date("packaged_on"),
+	acquiredOn: date("acquired_on"),
+	drinkFrom: date("drink_from"),
+	drinkUntil: date("drink_until"),
+	priceAmount: numeric("price_amount", { precision: 10, scale: 2, mode: 'number' }),
+	priceCurrency: char("price_currency", { length: 3 }),
+	location: text(),
 	type: text().generatedAlwaysAs(sql`
 CASE
     WHEN (beer_id IS NOT NULL) THEN 'BEER'::text
@@ -181,7 +190,7 @@ END`),
 	index("idx_cellar_items_cellar_id").using("btree", table.cellarId.asc().nullsLast()),
 	index("idx_cellar_items_sake_id").using("btree", table.sakeId.asc().nullsLast()),
 	index("idx_cellar_items_tea_id").using("btree", table.teaId.asc().nullsLast()),
-check("cellar_items_source_type_check", sql`(source_type = ANY (ARRAY['manual'::text, 'menu_discovery'::text, 'menu_scan'::text, 'import'::text]))`),check("Ensure exactly one item Id", sql`(num_nonnulls(beer_id, wine_id, spirit_id, coffee_id, sake_id, tea_id) = 1)`),check("Percentage remaining between 0 and 100", sql`((percentage_remaining >= (0)::numeric) AND (percentage_remaining <= (100)::numeric))`),]);
+check("cellar_items_source_type_check", sql`(source_type = ANY (ARRAY['manual'::text, 'menu_discovery'::text, 'menu_scan'::text, 'import'::text]))`),check("Ensure exactly one item Id", sql`(num_nonnulls(beer_id, wine_id, spirit_id, coffee_id, sake_id, tea_id) = 1)`),check("Percentage remaining between 0 and 100", sql`((percentage_remaining >= (0)::numeric) AND (percentage_remaining <= (100)::numeric))`),check("cellar_items_drink_window", sql`((drink_from IS NULL) OR (drink_until IS NULL) OR (drink_from <= drink_until))`),check("cellar_items_price_amount_nonnegative", sql`((price_amount IS NULL) OR (price_amount >= (0)::numeric))`),check("cellar_items_price_currency_with_amount", sql`((price_amount IS NULL) = (price_currency IS NULL))`),check("cellar_items_location_length", sql`((location IS NULL) OR (char_length(location) <= 80))`),]);
 
 export const cellarOwners = pgTable("cellar_owners", {
 	userId: uuid("user_id").notNull().references(() => user.id, { onDelete: "restrict", onUpdate: "restrict" } ),
@@ -224,6 +233,9 @@ export const checkIns = pgTable("check_ins", {
 	tags: text().array().default([]).notNull(),
 	placeId: uuid("place_id").references(() => places.id, { onDelete: "set null" } ),
 	photoFileId: uuid("photo_file_id").references(() => files.id, { onDelete: "restrict", onUpdate: "restrict" } ),
+	// ux-c seams (M1): a check-in of a drink made from a recipe, in place of
+	// one of the six item columns (`check_ins_one_item`).
+	recipeId: uuid("recipe_id").references(() => recipes.id, { onDelete: "set null" } ),
 }, (table) => [
 	index("idx_check_ins_cellar_item_id_created_at").using("btree", table.cellarItemId.asc().nullsLast(), table.createdAt.asc().nullsLast()),
 	index("idx_check_ins_user_id_created_at").using("btree", table.userId.asc().nullsLast(), table.createdAt.asc().nullsLast()),
@@ -235,7 +247,8 @@ export const checkIns = pgTable("check_ins", {
 	index("idx_check_ins_sake_id").using("btree", table.sakeId.asc().nullsLast()),
 	index("idx_check_ins_tea_id").using("btree", table.teaId.asc().nullsLast()),
 	index("idx_check_ins_photo_file_id").using("btree", table.photoFileId.asc().nullsLast()),
-check("check_ins_one_item", sql`(num_nonnulls(wine_id, beer_id, spirit_id, coffee_id, sake_id, tea_id) = 1)`),check("check_ins_score_half_stars", sql`((score IS NULL) OR (score = ANY (ARRAY[(0.5)::double precision, (1)::double precision, (1.5)::double precision, (2)::double precision, (2.5)::double precision, (3)::double precision, (3.5)::double precision, (4)::double precision, (4.5)::double precision, (5)::double precision])))`),check("check_ins_note_length", sql`((note IS NULL) OR (char_length(note) <= 2000))`),check("check_ins_tags_count", sql`(cardinality(tags) <= 12)`),]);
+	index("idx_check_ins_recipe_id").using("btree", table.recipeId.asc().nullsLast()),
+check("check_ins_one_item", sql`(num_nonnulls(wine_id, beer_id, spirit_id, coffee_id, sake_id, tea_id, recipe_id) <= 1)`),check("check_ins_score_half_stars", sql`((score IS NULL) OR (score = ANY (ARRAY[(0.5)::double precision, (1)::double precision, (1.5)::double precision, (2)::double precision, (2.5)::double precision, (3)::double precision, (3.5)::double precision, (4)::double precision, (4.5)::double precision, (5)::double precision])))`),check("check_ins_note_length", sql`((note IS NULL) OR (char_length(note) <= 2000))`),check("check_ins_tags_count", sql`(cardinality(tags) <= 12)`),]);
 
 // X03 follow-up: a removed drink log, kept for its Undo
 // (`restoreDrinkLog`) — the removed `check_ins` row as JSON, keyed by its own
@@ -363,6 +376,26 @@ export const itemBrands = pgTable("item_brands", {
 	index("idx_item_brands_tea_id").using("btree", table.teaId.asc().nullsLast()),
 	index("idx_item_brands_wine_id").using("btree", table.wineId.asc().nullsLast()),
 check("exactly_one_item_reference", sql`(num_nonnulls(beer_id, wine_id, spirit_id, coffee_id, sake_id, tea_id) = 1)`),]);
+
+// ux-c seams (M1): a person's own brew settings for one item (the six item
+// columns mirror `want_to_try`: restrict FKs, one unique per column, exactly
+// one target). Stamped by `set_current_timestamp_updated_at`.
+export const itemBrewPrefs = pgTable("item_brew_prefs", {
+	id: uuid().defaultRandom().primaryKey(),
+	userId: uuid("user_id").notNull().references(() => user.id, { onDelete: "restrict" } ),
+	beerId: uuid("beer_id").references(() => beers.id, { onDelete: "restrict" } ),
+	wineId: uuid("wine_id").references(() => wines.id, { onDelete: "restrict" } ),
+	spiritId: uuid("spirit_id").references(() => spirits.id, { onDelete: "restrict" } ),
+	coffeeId: uuid("coffee_id").references(() => coffees.id, { onDelete: "restrict" } ),
+	sakeId: uuid("sake_id").references(() => sakes.id, { onDelete: "restrict" } ),
+	teaId: uuid("tea_id").references(() => teas.id, { onDelete: "restrict" } ),
+	waterTempC: smallint("water_temp_c"),
+	steepSeconds: integer("steep_seconds"),
+	doseGrams: real("dose_grams"),
+	waterMl: real("water_ml"),
+	updatedAt: timestamp("updated_at", { withTimezone: true }).default(sql`now()`).notNull(),
+}, (table) => [
+	unique("item_brew_prefs_user_id_beer_id_key").on(table.userId, table.beerId),	unique("item_brew_prefs_user_id_coffee_id_key").on(table.userId, table.coffeeId),	unique("item_brew_prefs_user_id_sake_id_key").on(table.userId, table.sakeId),	unique("item_brew_prefs_user_id_spirit_id_key").on(table.userId, table.spiritId),	unique("item_brew_prefs_user_id_tea_id_key").on(table.userId, table.teaId),	unique("item_brew_prefs_user_id_wine_id_key").on(table.userId, table.wineId),check("item_brew_prefs_one_target", sql`(num_nonnulls(beer_id, wine_id, spirit_id, coffee_id, sake_id, tea_id) = 1)`),check("item_brew_prefs_water_temp_c_range", sql`((water_temp_c IS NULL) OR ((water_temp_c >= 1) AND (water_temp_c <= 100)))`),check("item_brew_prefs_steep_seconds_positive", sql`((steep_seconds IS NULL) OR (steep_seconds > 0))`),check("item_brew_prefs_dose_grams_positive", sql`((dose_grams IS NULL) OR (dose_grams > (0)::double precision))`),check("item_brew_prefs_water_ml_positive", sql`((water_ml IS NULL) OR (water_ml > (0)::double precision))`),]);
 
 export const itemFavorites = pgTable("item_favorites", {
 	id: uuid().defaultRandom().primaryKey(),

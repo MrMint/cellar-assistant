@@ -1,10 +1,10 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import type { ReactNode } from "react";
 import { IconButton } from "@/components/app/IconButton";
 import { Close } from "@/components/app/icons";
 import { canGoBack } from "@/components/app/nav-history";
+import { useNavigate } from "@/components/app/useNavigate";
 import { cn } from "@/lib/utils";
 
 /**
@@ -20,15 +20,15 @@ export function CaptureClose({
   fallbackHref?: string;
   className?: string;
 }) {
-  const router = useRouter();
+  const navigate = useNavigate();
   return (
     <IconButton
       aria-label="Close"
       variant="ghost"
       className={cn("-ml-2 shrink-0", className)}
       onClick={() => {
-        if (canGoBack()) router.back();
-        else router.push(fallbackHref);
+        if (canGoBack()) navigate.back();
+        else navigate.push(fallbackHref);
       }}
     >
       <Close />
