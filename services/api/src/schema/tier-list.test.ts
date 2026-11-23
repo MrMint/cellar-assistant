@@ -5,7 +5,12 @@
  * itself is correct (that is `tier-list-actor.test.ts`, against real Postgres).
  */
 import type { PageArgs } from "@cellar-assistant/contracts";
-import { offsetPage } from "@cellar-assistant/contracts";
+import {
+  ForbiddenError,
+  NotFoundError,
+  offsetPage,
+  ValidationError,
+} from "@cellar-assistant/contracts";
 import { execute, parse } from "graphql";
 import { describe, expect, it } from "vitest";
 import { stubSidecar, testContext } from "../testing.ts";
@@ -437,5 +442,116 @@ describe("TierListItem.ownerReview (X23)", () => {
     ]);
     // `tierList(id:)` itself, then the loader once for the row.
     expect(calls.filter((call) => call.method === "get")).toHaveLength(2);
+  });
+});
+
+/**
+ * M7 (wave C "pairwise"): the positioned add reaches the actor whole, and
+ * every refusal the actor gives comes back on the mutation's own union — a
+ * list that does not exist and another user's private list alike, so the
+ * mutation is no more of an existence oracle than the actor (L6).
+ */
+describe("addTierListItem — the positioned add (M7)", () => {
+  const ENTRY_ID = "44444444-4444-4444-8444-444444444444";
+  const placedItem = {
+    id: "99999999-9999-4999-8999-999999999999",
+    tierListId: tierListDto.id,
+    band: 4,
+    position: 2,
+    notes: null,
+    entry: { type: "WINE" as const, id: ENTRY_ID },
+    createdAt: "2026-09-08T00:00:00.000Z",
+    updatedAt: "2026-09-08T00:00:00.000Z",
+  };
+  const placeQuery = (listId: string, where: string) => `
+    mutation {
+      addTierListItem(
+        tierListId: "${listId}"
+        input: { entry: { type: WINE, id: "${ENTRY_ID}" } ${where} }
+      ) {
+        __typename
+        ... on TierListItem { band position }
+      }
+    }
+  `;
+
+  it("passes band and position through, and leaves position out when unasked", async () => {
+    const { invoke, calls } = stubSidecar({
+      "TierListActor.addItem": () => placedItem,
+    });
+    const placed = await run(
+      placeQuery(tierListDto.id, "band: 4, position: 2"),
+      testContext(invoke, viewer),
+    );
+    expect(placed.errors).toBeUndefined();
+    expect(placed.data?.addTierListItem).toEqual({
+      __typename: "TierListItem",
+      band: 4,
+      position: 2,
+    });
+    await run(
+      placeQuery(tierListDto.id, "band: 4"),
+      testContext(invoke, viewer),
+    );
+    expect(
+      calls.filter((c) => c.method === "addItem").map((c) => c.args[1]),
+    ).toEqual([
+      {
+        entry: { type: "WINE", id: ENTRY_ID },
+        band: 4,
+        position: 2,
+        notes: null,
+      },
+      { entry: { type: "WINE", id: ENTRY_ID }, band: 4, notes: null },
+    ]);
+  });
+
+  it("answers a missing list and another user's private list alike, and Forbidden as Forbidden", async () => {
+    const OTHER = "33333333-3333-4333-8333-000000000001";
+    const PUBLIC = "33333333-3333-4333-8333-000000000002";
+    const { invoke } = stubSidecar({
+      "TierListActor.addItem": (actorId) => {
+        if (actorId === PUBLIC) {
+          throw new ForbiddenError(`tier list ${PUBLIC} is not yours`);
+        }
+        throw new NotFoundError(`TierListActor(${String(actorId)}) not found`);
+      },
+    });
+    const hidden = await run(
+      placeQuery(OTHER, "band: 4, position: 0"),
+      testContext(invoke, viewer),
+    );
+    const missing = await run(
+      placeQuery(tierListDto.id, "band: 4, position: 0"),
+      testContext(invoke, viewer),
+    );
+    expect(hidden.data?.addTierListItem).toEqual({
+      __typename: "NotFoundError",
+    });
+    expect(missing.data?.addTierListItem).toEqual(hidden.data?.addTierListItem);
+    const theirs = await run(
+      placeQuery(PUBLIC, "band: 4, position: 0"),
+      testContext(invoke, viewer),
+    );
+    expect(theirs.data?.addTierListItem).toEqual({
+      __typename: "ForbiddenError",
+    });
+  });
+
+  it("puts an out-of-range band or position on the union as a ValidationError", async () => {
+    const { invoke } = stubSidecar({
+      "TierListActor.addItem": () => {
+        throw new ValidationError(
+          "position must be an integer between 0 and 3",
+        );
+      },
+    });
+    const refused = await run(
+      placeQuery(tierListDto.id, "band: 4, position: 9"),
+      testContext(invoke, viewer),
+    );
+    expect(refused.data?.addTierListItem).toEqual({
+      __typename: "ValidationError",
+    });
   });
 });
