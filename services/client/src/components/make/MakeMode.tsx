@@ -3,7 +3,6 @@
 import { Minus, Plus, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useMutation } from "urql";
-import { Link } from "@/components/app/Link";
 import { notify } from "@/components/app/notify";
 import { useNavigate } from "@/components/app/useNavigate";
 import {
@@ -15,6 +14,7 @@ import type { RecipeDetailsItem } from "@/components/recipe/adapter";
 import { Checkbox } from "@/components/ui/checkbox";
 import { unwrapResult } from "@/lib/api/result";
 import { cn } from "@/lib/utils";
+import { leaveTo } from "./leave";
 import {
   baseServings,
   clampServings,
@@ -72,7 +72,7 @@ export const MakeMode = ({ recipe, viewerId }: MakeModeProps) => {
       ? null
       : (recipe.recipe_reviews?.find((r) => r.userId === viewerId) ?? null);
 
-  const leave = () => navigate.push(`/recipes/${recipe.id}`, { kind: "back" });
+  const leave = () => leaveTo(navigate, `/recipes/${recipe.id}`);
 
   const madeIt = async () => {
     setError(null);
@@ -112,7 +112,10 @@ export const MakeMode = ({ recipe, viewerId }: MakeModeProps) => {
 
   if (loggedId !== null) {
     return (
-      <main className="mx-auto flex min-h-dvh max-w-xl flex-col gap-6 bg-background px-4 py-8">
+      <div
+        data-slot="make-mode"
+        className="mx-auto flex min-h-full max-w-xl flex-col gap-6 bg-background px-4 py-8"
+      >
         <p className="type-overline text-brass">Made it</p>
         <h1 className="font-display text-[32px] text-ink-1 leading-10">
           {recipe.name}
@@ -130,19 +133,22 @@ export const MakeMode = ({ recipe, viewerId }: MakeModeProps) => {
               : { id: mine.id, score: mine.score, text: mine.text }
           }
         />
-        <Link
-          href={`/recipes/${recipe.id}`}
-          underline="none"
+        <button
+          type="button"
+          onClick={leave}
           className={cn(pill, "bg-surface-2 text-ink-1")}
         >
           Back to the recipe
-        </Link>
-      </main>
+        </button>
+      </div>
     );
   }
 
   return (
-    <main className="mx-auto flex min-h-dvh max-w-xl flex-col bg-background">
+    <div
+      data-slot="make-mode"
+      className="mx-auto flex min-h-full max-w-xl flex-col bg-background"
+    >
       <header className="flex items-center gap-3 px-4 pt-4">
         <button
           type="button"
@@ -288,7 +294,7 @@ export const MakeMode = ({ recipe, viewerId }: MakeModeProps) => {
           {last ? "Made it" : "Next"}
         </button>
       </footer>
-    </main>
+    </div>
   );
 };
 

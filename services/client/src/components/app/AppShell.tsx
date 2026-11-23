@@ -11,6 +11,17 @@ import { RouteTransition } from "./RouteTransition";
 import { SideRail } from "./SideRail";
 import { TabBar } from "./TabBar";
 
+const MAKE_MODE = /^\/recipes\/[^/]+\/make\/?$/;
+
+/**
+ * Routes that take the whole screen (no tab bar, no side rail, no padding):
+ * Make mode (L08 "full-screen", CR-5) and the recap deck (L04/L43), whose
+ * overlay otherwise sits over chrome that Tab still reaches (CR-14). Each
+ * draws its own Close, which goes back (`components/make/leave.ts`).
+ */
+export const isFullScreenRoute = (pathname: string): boolean =>
+  MAKE_MODE.test(pathname) || pathname === "/recap";
+
 /**
  * How the content area treats a route (what `ConditionalPaddingWrapper` did):
  * every `/map/*` route lays itself out edge to edge, and only the map canvas
@@ -26,13 +37,14 @@ export function contentLayout(pathname: string): {
   tabBar: boolean;
 } {
   const isMap = pathname === "/map" || pathname.startsWith("/map/");
+  const fullScreen = isFullScreenRoute(pathname);
   return {
-    padded: !isMap,
+    padded: !isMap && !fullScreen,
     scrolls: pathname !== "/map",
     // X10: search is a full-screen sheet on a phone, and a full-screen sheet
     // hides the tab bar (design §2), as does capture (X06: "It hides only in
     // capture"). The side rail stays from `sm` up.
-    tabBar: pathname !== "/search" && !isCaptureRoute(pathname),
+    tabBar: pathname !== "/search" && !isCaptureRoute(pathname) && !fullScreen,
   };
 }
 
@@ -60,6 +72,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   useNavHistoryTracker();
   usePointerDownPrefetch();
   const { padded, scrolls, tabBar } = contentLayout(pathname);
+  const rail = !isFullScreenRoute(pathname);
 
   return (
     <div
@@ -76,7 +89,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         tabBar && "max-sm:mb-[calc(-1*env(safe-area-inset-bottom))]",
       )}
     >
-      <SideRail className="hidden sm:flex" />
+      {rail && <SideRail className="hidden sm:flex" />}
       <RouteTransition>
         <main
           {...mainContentProps}

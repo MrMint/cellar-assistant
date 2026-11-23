@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "urql";
 import { ICON_STROKE, Place } from "@/components/app/icons";
 import { VesselSilhouette } from "@/components/app/LabelPlate";
+import { itemTypeTokens } from "@/components/app/TypeChip";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
@@ -56,7 +57,7 @@ function useBoard(tierListId: string) {
     () => new Map(),
   );
   const [complete, setComplete] = useState(false);
-  const [{ data, error }] = useQuery({
+  const [{ data, error, fetching, stale, operation }] = useQuery({
     query: GetTierListQuery,
     variables: { id: tierListId, first: TIER_LIST_ITEMS_PAGE_SIZE, after },
     requestPolicy: "network-only",
@@ -67,8 +68,14 @@ function useBoard(tierListId: string) {
     data === undefined ? null : unwrapResult(data.tierList, "TierList");
   const failed = error !== undefined || (result !== null && !result.ok);
 
+  // urql keeps the previous page's `data` while the next one is fetching, so
+  // a result counts only once it answers the cursor asked for (CR-1):
+  // otherwise page 1 is stored under page 2's cursor and the read stalls.
+  const answered =
+    !fetching && !stale && (operation?.variables.after ?? null) === after;
+
   useEffect(() => {
-    if (result === null || !result.ok || complete) return;
+    if (!answered || result === null || !result.ok || complete) return;
     const key = after ?? "";
     if (pages.has(key)) return;
     const entries = result.data.items.edges.map((edge): PlacementEntry => {
@@ -92,7 +99,7 @@ function useBoard(tierListId: string) {
     } else {
       setComplete(true);
     }
-  }, [after, complete, pages, result]);
+  }, [after, answered, complete, pages, result]);
 
   const board = useMemo(
     () => (complete ? Array.from(pages.values()).flat() : null),
@@ -203,6 +210,13 @@ export function PairwisePlacement({
     router.refresh();
   };
 
+  /** Back to the first question after a failed add (CR-2). */
+  const startOver = () => {
+    if (board === null) return;
+    setError(null);
+    setState(startPlacement(board, band));
+  };
+
   const live = (
     <p role="status" aria-live="polite" className="sr-only">
       {announcement}
@@ -265,6 +279,59 @@ export function PairwisePlacement({
               Undo
             </Button>
           )}
+        </div>
+      </div>
+    );
+  }
+
+  // A finished placement that is not placed: the add failed, or Undo took
+  // back an entry that had nothing to compare with (an empty band). Either
+  // way the sheet offers the next step, never a skeleton (CR-2).
+  if (
+    state !== null &&
+    board !== null &&
+    !saving &&
+    placementResult(state) !== null
+  ) {
+    const bandLabel = BAND_LABELS[band] ?? "Unrated";
+    return (
+      <div
+        data-slot="pairwise-pending"
+        className="flex min-h-[420px] flex-col items-center gap-4 pt-10 text-center"
+      >
+        {live}
+        {error !== null ? (
+          <p role="alert" className="text-destructive type-callout">
+            {error}
+          </p>
+        ) : (
+          <p className="text-ink-2 type-callout">
+            Took back {candidate.name}. It isn&apos;t on {bandLabel} now.
+          </p>
+        )}
+        <div className="mt-auto flex w-full flex-col gap-1">
+          <Button
+            className="h-13 w-full rounded-full"
+            onClick={() => void commit(state)}
+          >
+            {error !== null ? "Try again" : "Place it again"}
+          </Button>
+          {error !== null && state.asked > 0 && (
+            <Button
+              variant="ghost"
+              className="h-11 w-full text-primary"
+              onClick={startOver}
+            >
+              Start over
+            </Button>
+          )}
+          <Button
+            variant="ghost"
+            className="h-11 w-full text-ink-2"
+            onClick={onDone}
+          >
+            Close
+          </Button>
         </div>
       </div>
     );
@@ -427,7 +494,7 @@ function ChoiceCard({
         ) : (
           <VesselSilhouette
             type={type}
-            className="h-24 text-type-spirit-text"
+            className={cn("h-24", itemTypeTokens[type].textClass)}
           />
         )}
       </span>
