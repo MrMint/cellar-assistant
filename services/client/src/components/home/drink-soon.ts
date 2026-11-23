@@ -21,7 +21,7 @@ import {
   lookupShelfLife,
   type OpenedShelfLife,
   openedDrinkSoon,
-} from "@cellar-assistant/contracts";
+} from "@cellar-assistant/contracts/shelf-life";
 import type { ApiItemType } from "@/components/cellar-api/itemTypes";
 
 /** How long a style typically keeps once opened, in days. */

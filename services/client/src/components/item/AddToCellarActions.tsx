@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
-import { useClient, useMutation } from "urql";
+import { useClient, useMutation, useQuery } from "urql";
 import { IconButton } from "@/components/app/IconButton";
 import { Add, Cellar, Decrease } from "@/components/app/icons";
 import { notify } from "@/components/app/notify";
@@ -196,31 +196,37 @@ export const AddToCellarSheet = ({
 
   /**
    * After an add: had you had this before? Then offer a photo of the new
-   * bottle's label or receipt. Asked after the sheet has closed (the query
-   * is a round trip), so two modals never overlap; a failure offers nothing.
+   * bottle's label or receipt. The check is a paused query, unpaused by the
+   * add and read once by the effect below; it lands after the sheet has
+   * closed (a round trip), so two modals never overlap. A failure offers
+   * nothing.
    */
-  const offerRebuyPhoto = async (filed: readonly string[], target: string) => {
-    const first = filed[0];
-    if (first === undefined) return;
-    const answer = await client
-      .query(
-        ItemBottleHistoryQuery,
-        { itemId, type: itemType },
-        { requestPolicy: "network-only" },
-      )
-      .toPromise()
-      .catch(() => null);
-    const found = answer?.data?.item;
-    if (found?.__typename !== "QueryItemSuccess") return;
+  const [asking, setAsking] = useState<{
+    filed: readonly string[];
+    target: string;
+  } | null>(null);
+  const [history] = useQuery({
+    query: ItemBottleHistoryQuery,
+    variables: { itemId, type: itemType },
+    pause: asking === null,
+    requestPolicy: "network-only",
+  });
+  useEffect(() => {
+    if (asking === null || history.fetching || history.stale) return;
+    if (history.data === undefined && history.error === undefined) return;
+    setAsking(null);
+    const found = history.data?.item;
+    const first = asking.filed[0];
+    if (found?.__typename !== "QueryItemSuccess" || first === undefined) return;
     const offer = rebuyOffer({
       bottlesOfItem: found.data.myBottles.totalCount ?? 0,
-      added: filed.length,
+      added: asking.filed.length,
       name: found.data.name,
     });
     if (offer !== null) {
-      setRebuy({ ...offer, cellarId: target, cellarItemId: first });
+      setRebuy({ ...offer, cellarId: asking.target, cellarItemId: first });
     }
-  };
+  }, [asking, history]);
 
   /** Upload, attach as a private image, and make it this bottle's picture. */
   const saveRebuyPhoto = async (image: File) => {
@@ -326,7 +332,7 @@ export const AddToCellarSheet = ({
         void undo(filed, target);
       },
     });
-    void offerRebuyPhoto(filed, target);
+    setAsking({ filed, target });
   };
 
   return (

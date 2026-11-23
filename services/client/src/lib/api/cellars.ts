@@ -276,10 +276,11 @@ export const BottleFreshnessQuery = graphql(
           }
         }
       }
+      ...ActorErrorFields
     }
   }
 `,
-  [BottleFreshnessFragment],
+  [BottleFreshnessFragment, ActorErrorFieldsFragment],
 );
 
 /**

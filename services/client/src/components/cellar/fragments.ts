@@ -453,7 +453,8 @@ export const CellarSearchElsewhereQuery = graphql(
  * sealed ones whose window closes within three months, ranked by the server
  * (`Cellar.drinkSoon`). Owner-only: anyone else gets an empty page.
  */
-export const CellarDrinkSoonQuery = graphql(`
+export const CellarDrinkSoonQuery = graphql(
+  `
   query CellarDrinkSoon($cellarId: ID!, $first: Int!) {
     cellar(id: $cellarId) {
       __typename
@@ -491,6 +492,9 @@ export const CellarDrinkSoonQuery = graphql(`
           }
         }
       }
+      ...ActorErrorFields
     }
   }
-`);
+`,
+  [ActorErrorFieldsFragment],
+);

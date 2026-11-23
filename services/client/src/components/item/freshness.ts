@@ -18,7 +18,7 @@ import {
   lookupShelfLife,
   type ShelfLifeEntry,
   sealedShelfLife,
-} from "@cellar-assistant/contracts";
+} from "@cellar-assistant/contracts/shelf-life";
 import type { ApiItemType } from "@/components/cellar-api/itemTypes";
 
 /** The bottle's own fields, as `CellarItem` selects them. */

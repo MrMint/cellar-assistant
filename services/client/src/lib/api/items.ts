@@ -710,7 +710,8 @@ export const SetFavoriteMutation = graphql(
  * L02's re-buy check: how many bottles of this item you have had, in any
  * state, and its name for the offer's line.
  */
-export const ItemBottleHistoryQuery = graphql(`
+export const ItemBottleHistoryQuery = graphql(
+  `
   query ItemBottleHistory($itemId: ID!, $type: ItemType!) {
     item(id: $itemId, type: $type) {
       __typename
@@ -724,9 +725,12 @@ export const ItemBottleHistoryQuery = graphql(`
           }
         }
       }
+      ...ActorErrorFields
     }
   }
-`);
+`,
+  [ActorErrorFieldsFragment],
+);
 
 /**
  * Point an `item_image` row at an already-uploaded file.
