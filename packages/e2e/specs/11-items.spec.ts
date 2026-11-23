@@ -277,7 +277,7 @@ test("the log outlives the bottle: the item page still lists it", async ({
     log.locator('[data-slot="drink-log-entry"]').first(),
   ).toBeVisible({ timeout: 20_000 });
   // …and the tin is gone from Your tins (the section is not drawn).
-  await expect(
-    primary.getByRole("heading", { name: "Your tins" }),
-  ).toHaveCount(0);
+  await expect(primary.getByRole("heading", { name: "Your tins" })).toHaveCount(
+    0,
+  );
 });
