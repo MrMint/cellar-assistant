@@ -157,15 +157,29 @@ enum ActorErrorReason {
 }
 
 input AddCellarItemInput {
+  acquiredOn: Date
+
   """
   Mint it yourself to make the call idempotent (§8.4); otherwise the server does.
   """
   cellarItemId: ID
   displayImageId: ID
+  drinkFrom: Date
+  drinkUntil: Date
   emptyAt: DateTime
   item: ItemRefInput!
+
+  """At most 80 characters."""
+  location: String
   openAt: DateTime
+  packagedOn: Date
   percentageRemaining: Float
+
+  """Set with `priceCurrency`; null clears both."""
+  priceAmount: Float
+
+  """ISO 4217 ('EUR')."""
+  priceCurrency: String
   sourceMenuItemId: ID
   sourcePlaceId: ID
   sourceType: CellarItemSource
@@ -1037,6 +1051,29 @@ type Cellar {
   ): CellarDashboard!
 
   """
+  ux-c L02: opened bottles past their style's open life (most overdue first), then sealed ones whose window closes within three months (soonest first). Owners only: anyone else who may see the cellar gets an empty list.
+  """
+  drinkSoon(
+    """
+    An `edge.cursor` from a previous page. Opaque and owned by the actor that minted it: cursors are not interchangeable between fields.
+    """
+    after: String
+
+    """**Not supported.** See `last`. Paging is forward-only."""
+    before: String
+
+    """
+    How many edges to return, 1 to 100 inclusive; defaults to 20. Over the cap is a `VALIDATION` error, not a silent clamp.
+    """
+    first: Int
+
+    """
+    **Not supported.** Present because the Relay spec puts it here; passing it is a `VALIDATION` error rather than a silently forward page. Paging is forward-only — use `first`/`after`.
+    """
+    last: Int
+  ): DrinkSoonConnection!
+
+  """
   Emptied bottles — the status segment's Finished (X04). Not part of `itemCounts`, which counts what is still in the cellar (D13).
   """
   finishedCount: Int!
@@ -1183,6 +1220,9 @@ type CellarEdge {
 
 """A bottle in a cellar: the item, plus what has happened to it."""
 type CellarItem {
+  """Bought or received on. Owners only."""
+  acquiredOn: Date
+
   """
   The cellar this bottle is in, through the `Cellar` loader — whose actor applies `canSeeCellar` again, so a cellar that stopped being visible between reads nulls this field, not the page. One batched `CellarActor.get` per distinct cellar.
   """
@@ -1224,6 +1264,12 @@ type CellarItem {
 
   """Cosine distance to `semanticQuery` (0–2). Null on any other page."""
   distance: Float
+
+  """The owner's own start of the drink window; overrides the typical one."""
+  drinkFrom: Date
+
+  """The owner's own end of the drink window; overrides the typical one."""
+  drinkUntil: Date
   emptyAt: DateTime
   id: ID!
 
@@ -1232,12 +1278,26 @@ type CellarItem {
   """
   item: Item!
 
+  """Where it lives: 'Rack B, row 3'. Owners only."""
+  location: String
+
   """
   X04: your own logs from this bottle. Null for an anonymous viewer. One `CellarActor.myLogsOf` per cellar on the page.
   """
   myLog: BottleLogSummary
   openAt: DateTime
+
+  """
+  Bottled, canned, roasted or packed on. Owners only; null to anyone else.
+  """
+  packagedOn: Date
   percentageRemaining: Float!
+
+  """What it cost, with `priceCurrency`. Owners only."""
+  priceAmount: Float
+
+  """ISO 4217, upper case. Set exactly when `priceAmount` is."""
+  priceCurrency: String
   sourceMenuItemId: ID
   sourcePlaceId: ID
   sourceType: CellarItemSource
@@ -2047,6 +2107,77 @@ input DrinkLogBottleInput {
 input DrinkLogItemInput {
   id: ID!
   type: ItemType!
+}
+
+"""
+One bottle under Drink soon (ux-c L02): opened and past its style's shortest open life, or sealed with a window closing within three months. Deterministic: the owner's dates, else the shelf-life table.
+"""
+type DrinkSoonBottle {
+  bottle: CellarItem!
+
+  """Opened: whole days since."""
+  openDays: Int
+
+  """Opened: the style's typical shortest open life, in days."""
+  openLifeFromDays: Int
+
+  """Opened: the style's typical longest open life, in days."""
+  openLifeUntilDays: Int
+  reason: DrinkSoonReason!
+
+  """
+  The style the typical row is for ('IPA'): label it 'typical for …'. Null when only the owner's own dates made the window.
+  """
+  typicalFor: String
+  urgency: DrinkSoonUrgency!
+
+  """Sealed: the window, each end with its source."""
+  window: DrinkWindow
+}
+
+type DrinkSoonConnection {
+  edges: [DrinkSoonEdge!]!
+  pageInfo: PageInfo!
+
+  """Total rows matching the query, or null when counting is not cheap."""
+  totalCount: Int
+}
+
+type DrinkSoonEdge {
+  cursor: String!
+  node: DrinkSoonBottle!
+}
+
+enum DrinkSoonReason {
+  OPENED
+  SEALED
+}
+
+"""
+PAST: beyond its window. NOW: opened and inside its open life. SOON: sealed, its window closing within the horizon.
+"""
+enum DrinkSoonUrgency {
+  NOW
+  PAST
+  SOON
+}
+
+"""
+When a bottle is at its best. Each end is the owner's own date where they set one, otherwise the typical one for the style; either may be null.
+"""
+type DrinkWindow {
+  from: Date
+  fromSource: DrinkWindowSource
+  until: Date
+  untilSource: DrinkWindowSource
+}
+
+"""
+Where one end of a drink window came from: USER — the owner's own date; TYPICAL — the shelf-life table's rule of thumb for the style (D29: never a model estimate).
+"""
+enum DrinkWindowSource {
+  TYPICAL
+  USER
 }
 
 """
@@ -8145,10 +8276,23 @@ input UpdateCellarInput {
 }
 
 input UpdateCellarItemInput {
+  acquiredOn: Date
   displayImageId: ID
+  drinkFrom: Date
+  drinkUntil: Date
   emptyAt: DateTime
+
+  """At most 80 characters."""
+  location: String
   openAt: DateTime
+  packagedOn: Date
   percentageRemaining: Float
+
+  """Set with `priceCurrency`; null clears both."""
+  priceAmount: Float
+
+  """ISO 4217 ('EUR')."""
+  priceCurrency: String
 }
 
 union UpdateCellarItemResult = BudgetExceededError | CellarItem | ConflictError | ForbiddenError | NotFoundError | ValidationError
@@ -8437,6 +8581,29 @@ type Viewer {
 
   """The Me hub's counts (X18)."""
   counts: ViewerCounts!
+
+  """
+  Home's Drink soon (ux-c L02): across the cellars you created or co-own, opened bottles past their style's open life, then sealed ones whose window — your own dates, else the typical one for the style — closes within three months. Never an estimate (D29).
+  """
+  drinkSoon(
+    """
+    An `edge.cursor` from a previous page. Opaque and owned by the actor that minted it: cursors are not interchangeable between fields.
+    """
+    after: String
+
+    """**Not supported.** See `last`. Paging is forward-only."""
+    before: String
+
+    """
+    How many edges to return, 1 to 100 inclusive; defaults to 20. Over the cap is a `VALIDATION` error, not a silent clamp.
+    """
+    first: Int
+
+    """
+    **Not supported.** Present because the Relay spec puts it here; passing it is a `VALIDATION` error rather than a silently forward page. Paging is forward-only — use `first`/`after`.
+    """
+    last: Int
+  ): DrinkSoonConnection!
   email: String
   emailVerified: Boolean!
 

@@ -1888,7 +1888,7 @@ describe.skipIf(skip)("CellarActor concealment", () => {
     ["update", (actor, ctx) => actor.update(ctx, { name: "Mine now" })],
     ["delete", (actor, ctx) => actor.delete(ctx)],
     ["addItem", (actor, ctx) => actor.addItem(ctx, {} as never)],
-    ["drinkSoon", (actor, ctx) => actor.drinkSoon(ctx)],
+    ["drinkSoon", (actor, ctx) => actor.drinkSoon(ctx, page)],
     ["updateItem", (actor, ctx) => actor.updateItem(ctx, ITEM, {})],
     [
       "setItemPercentage",
@@ -2197,7 +2197,9 @@ describe.skipIf(skip)("CellarActor freshness (ux-c L02)", () => {
         drinkUntil: iso(Date.now() + 60 * day),
       });
 
-      const soon = await actor.drinkSoon(ctx);
+      const soon = (await actor.drinkSoon(ctx, page)).entries.map(
+        (entry) => entry.node,
+      );
       expect(soon.map((s) => [s.bottle.id, s.reason, s.urgency])).toEqual([
         [itemId, "OPENED", "PAST"],
         [ipa.id, "SEALED", "SOON"],
@@ -2219,7 +2221,9 @@ describe.skipIf(skip)("CellarActor freshness (ux-c L02)", () => {
       });
 
       // The friend may see the cellar, not its owner's private dates.
-      expect(await actor.drinkSoon(userCtx(friend, "r"))).toEqual([]);
+      expect(
+        (await actor.drinkSoon(userCtx(friend, "r"), page)).entries,
+      ).toEqual([]);
     });
   });
 });

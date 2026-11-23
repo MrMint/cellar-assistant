@@ -432,6 +432,19 @@ export type DrinkSoonDto = {
   readonly window: DrinkWindow | null;
   /** The style the typical row is for ("IPA"), or `null` for the person's own dates. */
   readonly typicalFor: string | null;
+  /** Opened: how far through its life, openDays / until (≥ 1 when past). */
+  readonly ratio: number | null;
+};
+
+/**
+ * Drink soon's order, the same in one cellar and across all of a viewer's:
+ * opened bottles first, most overdue first; then sealed ones, the window
+ * closing soonest first.
+ */
+export const compareDrinkSoon = (a: DrinkSoonDto, b: DrinkSoonDto): number => {
+  if (a.reason !== b.reason) return a.reason === "OPENED" ? -1 : 1;
+  if (a.reason === "OPENED") return (b.ratio ?? 0) - (a.ratio ?? 0);
+  return (a.window?.until ?? "").localeCompare(b.window?.until ?? "");
 };
 
 export type BottleLogSummaryDto = {
@@ -607,7 +620,7 @@ export type CellarActorInterface = {
    * window closes within the horizon (soonest first). Owners only, since it
    * reads their private dates: anyone else who may see the cellar gets `[]`.
    */
-  drinkSoon(ctx: Ctx): Promise<readonly DrinkSoonDto[]>;
+  drinkSoon(ctx: Ctx, page: PageArgs): Promise<Page<DrinkSoonDto>>;
   /**
    * X04: the viewer's own logs per bottle, aligned to `cellarItemIds` — the
    * Finished diary. Gated on the cellar; an id that is not one of its bottles

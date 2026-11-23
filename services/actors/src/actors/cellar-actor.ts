@@ -135,6 +135,7 @@ import {
   CELLAR_RECENT_DAYS,
   CellarActorDescriptor,
   ConflictError,
+  compareDrinkSoon,
   type DrinkSoonDto,
   ForbiddenError,
   ITEM_TYPES,
@@ -565,18 +566,17 @@ export class CellarActor
    * Owners only — it reads their private dates — so a viewer who may merely
    * see the cellar gets `[]`, and one who may not see it the usual refusal.
    */
-  async drinkSoon(ctx: Ctx): Promise<readonly DrinkSoonDto[]> {
+  async drinkSoon(ctx: Ctx, page: PageArgs): Promise<Page<DrinkSoonDto>> {
     const aggregate = this.requireAggregate();
     await this.requireVisible(ctx, aggregate);
-    if (!this.#isOwner(ctx, aggregate)) return [];
+    if (!this.#isOwner(ctx, aggregate)) return offsetPage([], page);
     const active = aggregate.items.filter((row) => row.emptyAt === null);
-    if (active.length === 0) return [];
+    if (active.length === 0) return offsetPage([], page);
 
     const styles = await itemStyles(this.db, active.map(itemRefOf));
     const now = Date.now();
     const today = new Date(now).toISOString().slice(0, 10);
-    const opened: { dto: DrinkSoonDto; ratio: number }[] = [];
-    const sealed: DrinkSoonDto[] = [];
+    const soon: DrinkSoonDto[] = [];
     for (const row of active) {
       const ref = itemRefOf(row);
       const style = styles.get(ref.id);
@@ -585,17 +585,15 @@ export class CellarActor
       if (row.openAt !== null) {
         const state = openedDrinkSoon(ref.type, style.fields, bottle, now);
         if (state === null) continue;
-        opened.push({
+        soon.push({
+          bottle,
+          reason: "OPENED",
+          urgency: state.urgency === "past" ? "PAST" : "NOW",
+          openDays: state.openDays,
+          openLifeDays: [state.entry.fromDays, state.entry.untilDays],
+          window: null,
+          typicalFor: state.entry.label,
           ratio: state.ratio,
-          dto: {
-            bottle,
-            reason: "OPENED",
-            urgency: state.urgency === "past" ? "PAST" : "NOW",
-            openDays: state.openDays,
-            openLifeDays: [state.entry.fromDays, state.entry.untilDays],
-            window: null,
-            typicalFor: state.entry.label,
-          },
         });
         continue;
       }
@@ -614,7 +612,7 @@ export class CellarActor
         today,
       );
       if (state === null) continue;
-      sealed.push({
+      soon.push({
         bottle,
         reason: "SEALED",
         urgency: state.urgency === "past" ? "PAST" : "SOON",
@@ -622,13 +620,10 @@ export class CellarActor
         openLifeDays: null,
         window: state.window,
         typicalFor: state.entry?.label ?? null,
+        ratio: null,
       });
     }
-    opened.sort((a, b) => b.ratio - a.ratio);
-    sealed.sort((a, b) =>
-      (a.window?.until ?? "").localeCompare(b.window?.until ?? ""),
-    );
-    return [...opened.map((entry) => entry.dto), ...sealed];
+    return offsetPage(soon.sort(compareDrinkSoon), page);
   }
 
   /**
