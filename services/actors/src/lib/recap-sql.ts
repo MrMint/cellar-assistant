@@ -31,6 +31,7 @@ import type { ItemType, RecapLogRow } from "@cellar-assistant/contracts";
 import { isItemType } from "@cellar-assistant/contracts";
 import { type SQL, sql } from "@cellar-assistant/db/orm";
 import type { DbOrTx } from "./db.ts";
+import { ARCS } from "./item-arcs.ts";
 import type { RecipeScope } from "./recipe-visibility.ts";
 import { recipeVisibleSql } from "./recipe-visibility.ts";
 
@@ -53,14 +54,9 @@ type Row = {
   readonly in_period: boolean;
 };
 
-const itemTypeSql = sql`case
-  when ci.wine_id is not null then 'WINE'
-  when ci.beer_id is not null then 'BEER'
-  when ci.spirit_id is not null then 'SPIRIT'
-  when ci.coffee_id is not null then 'COFFEE'
-  when ci.sake_id is not null then 'SAKE'
-  when ci.tea_id is not null then 'TEA'
-end`;
+const arc = ARCS.checkIns;
+const joinOn = (type: ItemType, alias: string): SQL =>
+  sql`${sql.identifier(alias)}.id = ${arc.column(type, "ci")}`;
 
 /**
  * The viewer's logs up to the window's end (all of them with no window).
@@ -82,9 +78,8 @@ export const readRecapLogs = async (
       : sql`ci.created_at < (${window.end}::timestamp at time zone ${window.timeZone})`;
   const result = await db.execute<Row>(sql`
     select
-      ${itemTypeSql} as item_type,
-      coalesce(ci.wine_id, ci.beer_id, ci.spirit_id, ci.coffee_id, ci.sake_id,
-               ci.tea_id)::text as item_id,
+      ${arc.typeExpr("ci")} as item_type,
+      ${arc.idExpr("ci")}::text as item_id,
       ci.recipe_id::text as recipe_id,
       coalesce(w.name, b.name, s.name, c.name, sk.name, t.name,
                case when r.id is not null and ${recipeVisibleSql(scope, "r")}
@@ -96,12 +91,12 @@ export const readRecapLogs = async (
       ci.score as score,
       (${inPeriod}) as in_period
     from public.check_ins ci
-    left join public.wines w on w.id = ci.wine_id
-    left join public.beers b on b.id = ci.beer_id
-    left join public.spirits s on s.id = ci.spirit_id
-    left join public.coffees c on c.id = ci.coffee_id
-    left join public.sakes sk on sk.id = ci.sake_id
-    left join public.teas t on t.id = ci.tea_id
+    left join public.wines w on ${joinOn("WINE", "w")}
+    left join public.beers b on ${joinOn("BEER", "b")}
+    left join public.spirits s on ${joinOn("SPIRIT", "s")}
+    left join public.coffees c on ${joinOn("COFFEE", "c")}
+    left join public.sakes sk on ${joinOn("SAKE", "sk")}
+    left join public.teas t on ${joinOn("TEA", "t")}
     left join public.recipes r on r.id = ci.recipe_id
     where ci.user_id = ${viewerId}::uuid and ${upTo}
     order by ci.created_at, ci.id
