@@ -603,6 +603,7 @@ export const menuScans = pgTable("menu_scans", {
 	processedAt: timestamp("processed_at", { withTimezone: true }),
 	createdAt: timestamp("created_at", { withTimezone: true }).default(sql`now()`),
 	updatedAt: timestamp("updated_at", { withTimezone: true }).default(sql`now()`),
+	headerName: text("header_name"),
 }, (table) => [
 	index("idx_menu_scans_location").using("gist", table.scanLocation.asc().nullsLast()),
 	index("idx_menu_scans_status").using("btree", table.processingStatus.asc().nullsLast()),
