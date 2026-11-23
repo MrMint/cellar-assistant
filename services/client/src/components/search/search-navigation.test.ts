@@ -307,7 +307,8 @@ describe("closeSearch", () => {
     return {
       calls,
       nav: {
-        push: (href: string, opts?: unknown) => calls.push(["push", href, opts]),
+        push: (href: string, opts?: unknown) =>
+          calls.push(["push", href, opts]),
         replace: (href: string, opts?: unknown) =>
           calls.push(["replace", href, opts]),
       },
