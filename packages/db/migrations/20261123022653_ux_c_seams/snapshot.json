@@ -18446,7 +18446,7 @@
       "table": "cellar_items"
     },
     {
-      "value": "(num_nonnulls(wine_id, beer_id, spirit_id, coffee_id, sake_id, tea_id, recipe_id) = 1)",
+      "value": "(num_nonnulls(wine_id, beer_id, spirit_id, coffee_id, sake_id, tea_id, recipe_id) <= 1)",
       "name": "check_ins_one_item",
       "entityType": "checks",
       "schema": "public",

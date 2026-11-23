@@ -64,7 +64,9 @@ const expectAccepted = async (db: DbOrTx, statement: SQL): Promise<void> => {
 describe.skipIf(skip)("ux_c_seams migration", () => {
   afterAll(closeTestDb);
 
-  it("check_ins_one_item: exactly one of the six item columns or recipe_id", async () => {
+  // L44: at most one, so a log outlives its recipe (`recipe_id` set null);
+  // CheckInActor requires exactly one on every write.
+  it("check_ins_one_item: at most one of the six item columns or recipe_id", async () => {
     await withTestDb(async (db) => {
       const userId = await seedUser(db);
       const tea = await seedItemOfType(db, "TEA", userId);
@@ -79,10 +81,21 @@ describe.skipIf(skip)("ux_c_seams migration", () => {
                 ${teaId}::uuid, ${recipe}::uuid)
       `;
 
-      await expectRejected(db, checkIn(null, null), "check_ins_one_item");
       await expectRejected(db, checkIn(tea.id, recipeId), "check_ins_one_item");
+      await expectAccepted(db, checkIn(null, null));
       await expectAccepted(db, checkIn(null, recipeId));
       await expectAccepted(db, checkIn(tea.id, null));
+
+      // Deleting the recipe keeps its log, with no target.
+      await db.execute(
+        sql`delete from public.recipes where id = ${recipeId}::uuid`,
+      );
+      const { rows } = await db.execute<{ n: number }>(sql`
+        select count(*)::int as n from public.check_ins
+        where user_id = ${userId}::uuid
+          and num_nonnulls(wine_id, beer_id, spirit_id, coffee_id, sake_id, tea_id, recipe_id) = 0
+      `);
+      expect(rows[0]?.n).toBe(2);
     });
   });
 

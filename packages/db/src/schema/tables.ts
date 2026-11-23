@@ -248,7 +248,7 @@ export const checkIns = pgTable("check_ins", {
 	index("idx_check_ins_tea_id").using("btree", table.teaId.asc().nullsLast()),
 	index("idx_check_ins_photo_file_id").using("btree", table.photoFileId.asc().nullsLast()),
 	index("idx_check_ins_recipe_id").using("btree", table.recipeId.asc().nullsLast()),
-check("check_ins_one_item", sql`(num_nonnulls(wine_id, beer_id, spirit_id, coffee_id, sake_id, tea_id, recipe_id) = 1)`),check("check_ins_score_half_stars", sql`((score IS NULL) OR (score = ANY (ARRAY[(0.5)::double precision, (1)::double precision, (1.5)::double precision, (2)::double precision, (2.5)::double precision, (3)::double precision, (3.5)::double precision, (4)::double precision, (4.5)::double precision, (5)::double precision])))`),check("check_ins_note_length", sql`((note IS NULL) OR (char_length(note) <= 2000))`),check("check_ins_tags_count", sql`(cardinality(tags) <= 12)`),]);
+check("check_ins_one_item", sql`(num_nonnulls(wine_id, beer_id, spirit_id, coffee_id, sake_id, tea_id, recipe_id) <= 1)`),check("check_ins_score_half_stars", sql`((score IS NULL) OR (score = ANY (ARRAY[(0.5)::double precision, (1)::double precision, (1.5)::double precision, (2)::double precision, (2.5)::double precision, (3)::double precision, (3.5)::double precision, (4)::double precision, (4.5)::double precision, (5)::double precision])))`),check("check_ins_note_length", sql`((note IS NULL) OR (char_length(note) <= 2000))`),check("check_ins_tags_count", sql`(cardinality(tags) <= 12)`),]);
 
 // X03 follow-up: a removed drink log, kept for its Undo
 // (`restoreDrinkLog`) — the removed `check_ins` row as JSON, keyed by its own

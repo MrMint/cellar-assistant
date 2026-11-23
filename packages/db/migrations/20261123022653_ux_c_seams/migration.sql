@@ -8,12 +8,13 @@
 --    location of at most 80 characters. All nullable, so existing rows are
 --    untouched; drink_from <= drink_until only when both are set.
 -- 2. check_ins.recipe_id: a check-in of a drink made from a recipe. It counts
---    as the target in check_ins_one_item, which widens to exactly one of the
---    six item columns or recipe_id, as want_to_try_one_target does. Indexed for
---    the recipe's own log. ON DELETE SET NULL as the contract states: note that
---    nulling the only target of a recipe check-in fails check_ins_one_item, so
---    a recipe with check-ins cannot be hard-deleted until its delete path
---    decides what those check-ins become.
+--    as a target in check_ins_one_item, which widens to AT MOST one of the six
+--    item columns or recipe_id. Indexed for the recipe's own log. ON DELETE
+--    SET NULL, and the check is <= 1 rather than = 1, by ruling L44: logs
+--    outlive their recipe, so deleting a recipe leaves its check-ins in place
+--    with no target instead of being blocked by them. "Exactly one target" on
+--    every new or changed row is CheckInActor's rule (requireOneTarget), since
+--    the table can no longer say it.
 -- 3. item_brew_prefs: a person's own brew settings for one item, mirroring
 --    want_to_try (RESTRICT foreign keys, one UNIQUE (user_id, <type>_id) per
 --    column, exactly one target), with a positive-value CHECK on each of the
@@ -68,5 +69,5 @@ ALTER TABLE "cellar_items" ADD CONSTRAINT "cellar_items_drink_window" CHECK (((d
 ALTER TABLE "cellar_items" ADD CONSTRAINT "cellar_items_price_amount_nonnegative" CHECK (((price_amount IS NULL) OR (price_amount >= (0)::numeric)));--> statement-breakpoint
 ALTER TABLE "cellar_items" ADD CONSTRAINT "cellar_items_price_currency_with_amount" CHECK (((price_amount IS NULL) = (price_currency IS NULL)));--> statement-breakpoint
 ALTER TABLE "cellar_items" ADD CONSTRAINT "cellar_items_location_length" CHECK (((location IS NULL) OR (char_length(location) <= 80)));--> statement-breakpoint
-ALTER TABLE "check_ins" DROP CONSTRAINT "check_ins_one_item", ADD CONSTRAINT "check_ins_one_item" CHECK ((num_nonnulls(wine_id, beer_id, spirit_id, coffee_id, sake_id, tea_id, recipe_id) = 1));--> statement-breakpoint
+ALTER TABLE "check_ins" DROP CONSTRAINT "check_ins_one_item", ADD CONSTRAINT "check_ins_one_item" CHECK ((num_nonnulls(wine_id, beer_id, spirit_id, coffee_id, sake_id, tea_id, recipe_id) <= 1));--> statement-breakpoint
 CREATE TRIGGER set_public_item_brew_prefs_updated_at BEFORE UPDATE ON public.item_brew_prefs FOR EACH ROW EXECUTE FUNCTION public.set_current_timestamp_updated_at();

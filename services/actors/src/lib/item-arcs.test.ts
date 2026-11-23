@@ -111,8 +111,9 @@ const PARTIAL_ARCS: Readonly<Record<string, string>> = {};
 const CHECK_SHAPE: Readonly<
   Record<string, { readonly extra: readonly string[]; readonly op: string }>
 > = {
-  // ux-c seams: a check-in of a drink made from a recipe.
-  check_ins: { extra: ["recipe_id"], op: "= 1" },
+  // ux-c seams: a check-in of a drink made from a recipe; at most one, so a
+  // log outlives its recipe (L44 — CheckInActor requires exactly one).
+  check_ins: { extra: ["recipe_id"], op: "<= 1" },
   item_match_suggestions: { extra: ["suggested_recipe_id"], op: "= 1" },
   // A menu line may be unmatched, so at most one — not exactly one.
   place_menu_items: { extra: [], op: "<= 1" },
