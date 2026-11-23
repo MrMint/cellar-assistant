@@ -124,12 +124,12 @@ test("the item page: hero, taste header, fact sheet, Your bottles, ActionBar", a
 
   // The bottle is the viewer's, still in the cellar: one row, Pour and Log.
   const bottles = primary.locator("section", {
-    has: primary.getByRole("heading", { name: "Your bottles" }),
+    has: primary.getByRole("heading", { name: "Your tins" }),
   });
   await expect(bottles.getByRole("link", { name: cellarName })).toBeVisible();
   await expect(bottles.getByText("Sealed")).toBeVisible();
   await expect(
-    bottles.getByRole("button", { name: `Pour from ${cellarName}` }),
+    bottles.getByRole("button", { name: `Steep from ${cellarName}` }),
   ).toBeVisible();
 
   // Section titles are overlines (CSS uppercase, which `innerText` applies),
@@ -227,7 +227,7 @@ test("the bottle URL is the item page with that bottle selected: pour it (which 
     cellarName,
   );
   const bottles = primary.locator("section", {
-    has: primary.getByRole("heading", { name: "Your bottles" }),
+    has: primary.getByRole("heading", { name: "Your tins" }),
   });
   // The selected bottle is marked.
   await expect(bottles.locator('[aria-current="page"]')).toHaveText(cellarName);
@@ -235,7 +235,7 @@ test("the bottle URL is the item page with that bottle selected: pour it (which 
   // X03: on a bottle of yours, Pour is the ActionBar's primary — there
   // before the bottle is opened, since the first pour opens it.
   const bar = primary.getByRole("toolbar", { name: "Item actions" });
-  await bar.getByRole("button", { name: "Pour", exact: true }).click();
+  await bar.getByRole("button", { name: "Steep", exact: true }).click();
   const sheet = primary.getByRole("dialog", { name: "Pour" });
   await sheet.getByRole("button", { name: /^Cup/ }).click();
   await sheet.getByRole("button", { name: "Pour 3 g" }).click();
@@ -276,8 +276,8 @@ test("the log outlives the bottle: the item page still lists it", async ({
   await expect(
     log.locator('[data-slot="drink-log-entry"]').first(),
   ).toBeVisible({ timeout: 20_000 });
-  // …and the bottle is gone from Your bottles (the section is not drawn).
+  // …and the tin is gone from Your tins (the section is not drawn).
   await expect(
-    primary.getByRole("heading", { name: "Your bottles" }),
+    primary.getByRole("heading", { name: "Your tins" }),
   ).toHaveCount(0);
 });

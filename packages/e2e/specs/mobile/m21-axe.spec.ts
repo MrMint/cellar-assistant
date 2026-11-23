@@ -386,10 +386,12 @@ test("touch targets: the item page's actions and the bottle page's Pour sheet pa
         .toEqual([]);
     });
   }
-  // The bottle page's Pour opens the Pour sheet: its chips and submit.
+  // The bottle page's Pour opens the Pour sheet: its chips and submit. A tea's
+  // action reads "Steep" (W-20, components/drink-log/type-words.ts); the sheet is
+  // still the Pour sheet.
   await page
     .getByRole("toolbar", { name: "Item actions" })
-    .getByRole("button", { name: "Pour", exact: true })
+    .getByRole("button", { name: "Steep", exact: true })
     .click();
   const sheet = page.getByRole("dialog", { name: "Pour" });
   await expect(sheet).toBeVisible();

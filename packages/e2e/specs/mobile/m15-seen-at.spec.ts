@@ -244,7 +244,9 @@ test("capture with no place nearby: add the place, then the scan is filed on it"
 
   const sheet = page.getByRole("dialog", { name: "Where's this menu?" });
   await expect(sheet).toBeVisible();
-  await expect(sheet).toContainText("Details pending");
+  // "Details pending" is only the out-of-budget prefill (D16); with no listing the
+  // hint asks for the signed name. Either way the name is the user's to type.
+  await expect(sheet).toContainText("Type the name as it's signed.");
   await expect(sheet).toContainText("Under review");
   expect(creates, "opening the sheet creates nothing").toBe(0);
 
