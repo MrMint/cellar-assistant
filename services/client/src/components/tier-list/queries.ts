@@ -294,7 +294,8 @@ export const DeleteTierListMutation = graphql(
 
 /**
  * `tierListItemId` is minted client-side so a retried add is idempotent; the
- * server appends at the end of `band` (no max-position read-then-insert race).
+ * server appends at the end of `band` (no max-position read-then-insert race),
+ * or with `position` (M7, pairwise placement) inserts at that index of it.
  */
 export const AddItemToTierListMutation = graphql(
   `

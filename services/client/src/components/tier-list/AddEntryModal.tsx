@@ -48,6 +48,7 @@ import {
 } from "./add-entry";
 import { BAND_LABELS, BAND_TONES, type TierListEntityType } from "./constants";
 import { bandForScore } from "./history";
+import { PairwisePlacement } from "./pairwise/PairwisePlacement";
 import {
   PICKER_PAGE_SIZE,
   SUGGESTIONS_PAGE_SIZE,
@@ -86,6 +87,11 @@ const ENTITY_LABELS: Record<TierListEntityType, string> = {
  * board reads **On this list**, disabled. The parent remounts the sheet on
  * every open (`key`), so a reopened one starts with nothing picked and no
  * stale search.
+ *
+ * L09: with exactly one pick, **Compare to place it** turns the sheet into
+ * the pairwise questions (`pairwise/PairwisePlacement`), which add it at the
+ * band and position the answers give — one edit, with its own Undo. Done
+ * closes the sheet; the page refreshes underneath it.
  */
 export function AddEntryModal({
   open,
@@ -117,6 +123,8 @@ export function AddEntryModal({
   const [searchError, setSearchError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [picks, setPicks] = useState<Picks>(() => new Map());
+  /** L09: the one pick being placed by comparison, while it is. */
+  const [placing, setPlacing] = useState<AddEntryCandidate | null>(null);
   /** A resubmit retires the search before it: only the newest may land. */
   const [searchGate] = useState(createLatestOnly);
 
@@ -229,6 +237,27 @@ export function AddEntryModal({
       : `Search ${ENTITY_LABELS[entityType]} by name or description`;
   const SearchGlyph = entityType === "place" ? Place : Search;
   const picked = Array.from(picks.values());
+  const [onlyPick] = picked;
+
+  if (placing !== null) {
+    return (
+      <ResponsiveDialog
+        open={open}
+        onOpenChange={(next) => {
+          if (!next) onClose();
+        }}
+        title={`Place ${placing.name}`}
+        hideTitle
+        className="md:max-w-[480px]"
+      >
+        <PairwisePlacement
+          tierListId={tierListId}
+          candidate={placing}
+          onDone={onClose}
+        />
+      </ResponsiveDialog>
+    );
+  }
 
   return (
     <ResponsiveDialog
@@ -239,14 +268,26 @@ export function AddEntryModal({
       title="Add entry"
       className="md:max-w-[480px]"
       footer={
-        <Button
-          className="w-full"
-          disabled={picked.length === 0 || busy}
-          onClick={() => onAdd(picked)}
-        >
-          {busy && <Spinner aria-hidden />}
-          {addButtonLabel(picked.length)}
-        </Button>
+        <div className="flex w-full flex-col gap-2">
+          {picked.length === 1 && onlyPick !== undefined && (
+            <Button
+              variant="secondary"
+              className="w-full"
+              disabled={busy}
+              onClick={() => setPlacing(onlyPick)}
+            >
+              Compare to place it
+            </Button>
+          )}
+          <Button
+            className="w-full"
+            disabled={picked.length === 0 || busy}
+            onClick={() => onAdd(picked)}
+          >
+            {busy && <Spinner aria-hidden />}
+            {addButtonLabel(picked.length)}
+          </Button>
+        </div>
       }
     >
       <div className="flex flex-col gap-4 pb-1">
