@@ -3,6 +3,7 @@
  * search, each row says why it is there, a row already on the board is
  * disabled, and two ticks are handed to the page as one add.
  */
+import { mock } from "bun:test";
 import assert from "node:assert/strict";
 import { afterEach, beforeEach, describe, test } from "node:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
@@ -21,6 +22,13 @@ window.matchMedia = ((query: string) => ({
   removeListener: () => {},
   dispatchEvent: () => false,
 })) as unknown as typeof window.matchMedia;
+
+// L09: the placement step refreshes the page after its add.
+mock.module("next/navigation", () => ({
+  useRouter: () => ({ push() {}, replace() {}, back() {}, refresh() {} }),
+  usePathname: () => "/tier-lists/tl-1",
+  useSearchParams: () => new URLSearchParams(),
+}));
 
 const { act } = await import("react");
 const { createRoot } = await import("react-dom/client");
@@ -210,5 +218,31 @@ describe("Add entry without typing (X16)", () => {
     const rioja = named("Rioja");
     assert.equal(rioja.disabled, true);
     assert.match(rioja.textContent ?? "", /On this list/);
+  });
+});
+
+describe("Compare to place it (L09)", () => {
+  const compare = () =>
+    [...document.querySelectorAll("button")].find(
+      (el) => el.textContent?.trim() === "Compare to place it",
+    );
+
+  test("is offered for exactly one pick, and not for none or two", async () => {
+    await render();
+    assert.equal(compare(), undefined);
+    await click(named("Barolo"));
+    assert.ok(compare());
+    await click(named("Rioja"));
+    assert.equal(compare(), undefined);
+  });
+
+  test("turns the sheet into the questions for that pick", async () => {
+    await render();
+    await click(named("Barolo"));
+    await click(compare() ?? document.body);
+    assert.ok(
+      document.querySelector('[aria-label="Place Barolo"], [role="status"]'),
+    );
+    assert.equal(added.length, 0);
   });
 });

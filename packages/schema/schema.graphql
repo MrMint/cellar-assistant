@@ -199,6 +199,11 @@ input AddTierListItemInput {
   notes: String
 
   """
+  M7: with `band`, insert at this index of the band (0 is its top, its length its end) and move the rest down one, as one history edit. Without it the entry is appended. `addTierListItem` only; `addTierListItems` refuses it.
+  """
+  position: Int
+
+  """
   Mint it yourself to make the call idempotent (§8.4); otherwise the server does.
   """
   tierListItemId: ID
@@ -3808,7 +3813,7 @@ type Mutation {
   addRecipeReview(input: AddRecipeReviewInput!, recipeId: ID!): AddRecipeReviewResult!
 
   """
-  Appends to the end of the given band (position computed in-turn, no read-modify-write race). Refuses a duplicate entry.
+  Appends to the end of the given band (position computed in-turn, no read-modify-write race), or with `position` inserts there (M7). Refuses a duplicate entry.
   """
   addTierListItem(input: AddTierListItemInput!, tierListId: ID!): AddTierListItemResult!
 

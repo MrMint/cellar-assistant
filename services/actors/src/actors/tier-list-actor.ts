@@ -350,6 +350,18 @@ const requireName = (name: string): string => {
   return trimmed;
 };
 
+/**
+ * M7: an index into a band of `length` rows — `0` its top, `length` its end.
+ */
+const requirePosition = (value: number, length: number): number => {
+  if (!Number.isInteger(value) || value < 0 || value > length) {
+    throw new ValidationError(
+      `position must be an integer between 0 and ${length} (the band's length), got ${value}`,
+    );
+  }
+  return value;
+};
+
 const requireBand = (value: number): number => {
   if (!Number.isInteger(value) || value < MIN_BAND || value > MAX_BAND) {
     throw new ValidationError(
@@ -730,6 +742,11 @@ export class TierListActor
     await this.#requireCreator(ctx, aggregate, "add to this tier list");
 
     const band = input.band === undefined ? MIN_BAND : requireBand(input.band);
+    // M7: a position names an index of a band, so it needs the band named
+    // too — "position 2 of whatever the default is" is a caller's mistake.
+    if (input.position !== undefined && input.band === undefined) {
+      throw new ValidationError("a position needs its band");
+    }
     const entry = requireEntry(input.entry);
     // X27: a place the viewer cannot see is a place that does not exist —
     // the same answer for a stranger's pending place as for an unknown id,
@@ -761,7 +778,16 @@ export class TierListActor
       );
     }
 
-    const position = aggregate.items.filter((row) => row.band === band).length;
+    // The band as it stands, top first. Without a position the entry goes on
+    // the end (§2.1); with one (M7) it goes in at that index and every row at
+    // or after it moves down one, in the same transaction and under the same
+    // one `ADD` — so Undo (`planBandOrders`) takes it out and closes the gap,
+    // and Redo puts it back at the recorded `position`.
+    const bandOrder = bandOrderOf(aggregate.items, band);
+    const position =
+      input.position === undefined
+        ? bandOrder.length
+        : requirePosition(input.position, bandOrder.length);
     const createdAt = new Date();
     const notes = input.notes ?? null;
 
@@ -782,6 +808,17 @@ export class TierListActor
         .onConflictDoNothing({ target: tierListItems.id })
         .returning({ id: tierListItems.id });
       if (inserted.length > 0) {
+        // The rows from the insertion point down each move one slot lower —
+        // only when the row really went in, so a redelivery that raced itself
+        // leaves no gap.
+        for (let i = position; i < bandOrder.length; i += 1) {
+          const id = bandOrder[i];
+          if (id === undefined) continue;
+          await tx
+            .update(tierListItems)
+            .set({ position: i + 1, updatedAt: createdAt })
+            .where(eq(tierListItems.id, id));
+        }
         await this.#record(tx, ctx, {
           kind: "ADD",
           rows: [
@@ -820,6 +857,14 @@ export class TierListActor
     if (inputs.length > MAX_BATCH_ADD) {
       throw new ValidationError(
         `addItems takes at most ${MAX_BATCH_ADD} entries, got ${inputs.length}`,
+      );
+    }
+    // M7's position is `addItem`'s alone: a batch appends each entry in the
+    // order given, and an index into a band the batch is still growing would
+    // mean nothing a caller could check.
+    if (inputs.some((input) => input.position !== undefined)) {
+      throw new ValidationError(
+        "addItems appends; use addItem to put one entry at a position",
       );
     }
     const asked = inputs.map((input) => ({

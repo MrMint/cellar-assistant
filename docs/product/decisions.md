@@ -586,3 +586,94 @@ reverse them. Each names the item it belongs to; none overrides an answer.
 - **e2e cleanup.** m06 deletes the teas it makes, the typed draft's
   included (`deleteTeas` in `fixtures/db.ts`). A recipe ingredient naming one
   of them is left in place and fails the delete, since no spec puts one there.
+
+### Pairwise placement (wave C "pairwise": L09)
+
+- **Where it starts.** Add entry offers **Compare to place it** when exactly one entry is picked. Several picks
+  stay one multi-add, as X16 has it, because a pairwise run places a single entry. The run starts in the band
+  the entry's rating gives it (`bandForScore`, X23). That is why the board's Skip line can name the band
+  ("Skip, put it at the end of Very Good").
+- **The search.** A binary search over the band's insertion slots, then one question across the line only
+  when the entry ended at the band's very top or bottom. That question goes against the bottom entry of the
+  band above, or the top entry of the band below. Only the adjacent band counts, and only bands 1 to 5.
+  Unrated is not a quality tier, so it is nobody's neighbour. Beating the band above's bottom entry puts the
+  new entry just above it. Losing to the band below's top entry puts it just below it. The budget is
+  ceil(log2(n+1)) + 1 questions at most. An empty band asks nothing and adds straight away.
+- **About the same** ends the run just below the entry it was compared with. Against a neighbour, it keeps the
+  entry at its own band's edge. **Skip** goes to the end of its own band at any step, as a plain add would.
+- **"N of M"** is the most questions still possible, recomputed after each answer. The board's fixed "1 of 3"
+  cannot be known in advance for a binary search, so the count can shrink as answers narrow it.
+- **M7.** `addTierListItem` takes `position` together with `band`. It inserts at that index, moves the rest of
+  the band down one, and records one `ADD`. Undo goes through the existing `planBandOrders`, which closes the
+  gap. Redo puts the entry back at the recorded position. A `position` without a `band`, or outside
+  `0..length`, is a `ValidationError`. `addTierListItems` refuses a `position`, because a batch appends. The
+  creator check runs before the position is validated. A stranger's bad index therefore answers `NotFound`,
+  the same as a missing list, and is not a validation oracle (L6).
+- **Undo on the result** steps that one edit back (`expectedSeq` from the add's own read-back) and returns to
+  the first question, as the board's prototype does ("restart"). **Done** closes the sheet. The page refreshes
+  after the add and after Undo, so its own Undo/Redo stays in step.
+- **Board differences.** The cards show the type's vessel silhouette, not a photo, because the board query
+  carries no images. Each card's eyebrow is the entry's band and its rank on the whole board ("Very Good · #3").
+  The result line says "Top of / Bottom of / First in <band>" at the edges, where there is no "Above X,
+  below Y" to give.
+- **e2e.** `m11-pairwise` builds its fixture from five teas (`createItem` needs no onboarding) and one review.
+  It deletes the review and the list afterwards. The API has no item delete, so the teas remain, as in
+  specs 11 and 12. It creates no places.
+
+### Imagery system (wave C "imagery": B03)
+
+- **Fourteen vessels, not sixteen (L19).** The Main board's plates, kept
+  where a style field we store drives them: wine Bordeaux (default),
+  Burgundy (`variety` pinot noir, chardonnay), Sparkling (`style`
+  SPARKLING, which wins over the variety), Alsace (`variety` riesling,
+  gewürztraminer); beer Tall-neck (default), Stubby (`style` lager, pils,
+  pilsner, pilsener, helles), Can (`style` IPA, india pale ale, sour,
+  gose); spirit Decanter (default), Square (`spiritType` whiskey, whisky,
+  Scotch, bourbon, rye), Tall (gin, vodka); sake Tokkuri; coffee Valve bag;
+  tea Tin (default), Pouch (`form` tea_bag, sachet, matcha_powder,
+  instant). **Port** is out (no fortified style exists, and DESSERT is
+  also Sauternes) and so is **Isshobin** (a bottle size, which no field
+  records). Matching is on whole words of the stored value, so
+  `PILSENER_PILSNER_PILS` is a pils and `GINGER_LIQUEUR` is not gin; an
+  unknown style is the type's vessel. The table is
+  `components/app/label-plate/silhouettes.ts`, pinned row by row in
+  `LabelPlate.test.tsx`.
+- **The style reaches the plate through a new optional prop.** LabelPlate's
+  existing props are unchanged; `styleFields` (the `StyleFields` shape
+  drink-soon derives, plus `variety`) is new and optional, so every caller
+  still draws its type's vessel until it passes one. The three plate
+  builders (`item/adapter.ts`, `item/ItemCard/adapter.ts`,
+  `home/continue.ts`) are outside this stream: wiring them is a hand-off.
+- **The plate keeps its printed label.** The board draws a bare silhouette
+  over an 18% tint; the shipped plate (N28) prints producer, name, vintage
+  and origin over the vessel, and its tests pin that. Taken from the board:
+  the 18% tint (was 15%) and the style's vessel, raised from 12% to 16% so
+  the shape reads behind the text.
+- **The glass: one coupe, coloured from a phrase table (L36).** Cocktails
+  are a coupe (the board's), food keeps the cloche, uncoloured. 94 phrases
+  map to 12 hues, most specific first ("dry vermouth" before "vermouth",
+  "ginger beer" before "beer"); the bar kind is read first, then the
+  generic item, then the bottle's name, then its type (coffee, beer, sake,
+  tea); anything else is **neutral**. The body is the dominant line — a
+  coloured hue outranks clear (gin, vodka, tonic), clear outranks neutral,
+  then the bigger pour (oz/ml/cl/dash…, an unknown unit as 10 ml, a
+  garnish as nothing), then the server's order — and the top band the next
+  line of a different hue. Every hue is a `color-mix` of `--ca-*` tokens,
+  so no colour is outside the token file and no token was added. The
+  recipe fragment already selected every field the glass reads: unchanged.
+- **The place hero replaces the category tile (Main board).** A 160 px,
+  20 px-rounded card toned from the place's category (wine, beer, spirit,
+  sake, coffee, tea, food, else neutral, by whole slug segment, so a
+  `barbecue_restaurant` is food, not a bar), two rings and the tone's glyph
+  at the top right, the name and category at the bottom left. A Google
+  photo fills the same frame when there is one — the separate photo block
+  under the header is gone — so the page does not jump when it arrives.
+  The loading shell draws the same hero from the server's name and
+  category. The name keeps the `type-title-1` h1 (28 px) the shell test
+  pins, where the board's 3-up tile shows 20 px.
+- **No PNG deleted (L22).** All seven illustrations are `CellarItemsEmpty`'s,
+  inside `EmptyState`, so all seven stay. ItemRecipes' fallback (a wine
+  photo for every cocktail, a beer photo for food) is now the drawn
+  `RecipeThumb`. AddItemClient and the brand card/details still use the
+  PNGs: their restored-markup tests (outside this stream) pin the images,
+  so swapping them is a hand-off.

@@ -2063,3 +2063,225 @@ describe.skipIf(skip)("TierListActor edit history (D4)", () => {
     });
   });
 });
+
+/* -------------------------------------------------------------------------- */
+/* M7 — the positioned add (wave C "pairwise")                                 */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Pairwise placement ends in one `addItem` with `band` and `position`: the
+ * entry goes in at that index, the band below it moves down one, and all of
+ * that is one `ADD` history entry — one Undo takes the placement back, one
+ * Redo puts it back in the same place (L20).
+ */
+describe.skipIf(skip)("TierListActor positioned add (M7)", () => {
+  afterAll(closeTestDb);
+
+  /** `band:position:entryId` for every row, board order. */
+  const board = async (actor: TierListActor, ctx: Ctx) =>
+    (await actor.items(ctx, page)).entries
+      .map((e) => e.node)
+      .slice()
+      .sort((a, b) => b.band - a.band || a.position - b.position)
+      .map((row) => `${row.band}:${row.position}:${row.entry.id}`);
+
+  /** A list with `names` appended to band 4 in order, and one more wine. */
+  const setup = async (db: DbOrTx, names = ["A", "B", "C"]) => {
+    const owner = await seedUser(db);
+    const ctx = userCtx(owner, "r-owner");
+    const id = await seedTierList(db, { createdById: owner });
+    const actor = await activate(newTierListActor(id, db));
+    const ranked: string[] = [];
+    for (const name of names) {
+      const wine = await seedWine(db, owner, name);
+      await actor.addItem(ctx, { entry: { type: "WINE", id: wine }, band: 4 });
+      ranked.push(wine);
+    }
+    const newcomer = await seedWine(db, owner, "New");
+    return { owner, ctx, id, actor, ranked, newcomer };
+  };
+
+  const historyRows = async (db: DbOrTx, id: string) =>
+    db
+      .select({ seq: tierListHistory.seq, kind: tierListHistory.kind })
+      .from(tierListHistory)
+      .where(eq(tierListHistory.tierListId, id));
+
+  it("inserts at the position and moves the rest of the band down one", async () => {
+    await withTestDb(async (db) => {
+      const { ctx, actor, ranked, newcomer } = await setup(db);
+      const [a, b, c] = ranked;
+
+      const placed = await actor.addItem(ctx, {
+        entry: { type: "WINE", id: newcomer },
+        band: 4,
+        position: 1,
+      });
+      expect(placed).toMatchObject({ band: 4, position: 1 });
+      expect(await board(actor, ctx)).toEqual([
+        `4:0:${a}`,
+        `4:1:${newcomer}`,
+        `4:2:${b}`,
+        `4:3:${c}`,
+      ]);
+    });
+  });
+
+  it("is one history entry: one Undo takes it back, one Redo restores the place", async () => {
+    await withTestDb(async (db) => {
+      const { id, ctx, actor, ranked, newcomer } = await setup(db);
+      const [a, b, c] = ranked;
+      const before = await board(actor, ctx);
+      const rowsBefore = await historyRows(db, id);
+
+      await actor.addItem(ctx, {
+        entry: { type: "WINE", id: newcomer },
+        band: 4,
+        position: 0,
+      });
+      const added = (await historyRows(db, id)).filter(
+        (row) => !rowsBefore.some((old) => old.seq === row.seq),
+      );
+      expect(added.map((row) => row.kind)).toEqual(["ADD"]);
+
+      const history = await actor.editHistory(ctx);
+      const undone = await actor.undo(ctx, history?.undo?.seq ?? -1);
+      expect(undone.applied.kind).toBe("ADD");
+      expect(await board(actor, ctx)).toEqual(before);
+
+      const again = await actor.editHistory(ctx);
+      await actor.redo(ctx, again?.redo?.seq ?? -1);
+      expect(await board(actor, ctx)).toEqual([
+        `4:0:${newcomer}`,
+        `4:1:${a}`,
+        `4:2:${b}`,
+        `4:3:${c}`,
+      ]);
+    });
+  });
+
+  it("appends at the band's length, and into an empty band at 0", async () => {
+    await withTestDb(async (db) => {
+      const { owner, ctx, actor, ranked, newcomer } = await setup(db);
+      await actor.addItem(ctx, {
+        entry: { type: "WINE", id: newcomer },
+        band: 4,
+        position: ranked.length,
+      });
+      const lone = await seedWine(db, owner, "Lone");
+      const first = await actor.addItem(ctx, {
+        entry: { type: "WINE", id: lone },
+        band: 2,
+        position: 0,
+      });
+      expect(first).toMatchObject({ band: 2, position: 0 });
+      expect((await board(actor, ctx)).slice(0, 4)).toEqual([
+        ...ranked.map((wine, i) => `4:${i}:${wine}`),
+        `4:3:${newcomer}`,
+      ]);
+    });
+  });
+
+  it.each([
+    ["below the top", { band: 4, position: -1 }],
+    ["past the end", { band: 4, position: 4 }],
+    ["not an integer", { band: 4, position: 1.5 }],
+    ["without a band", { position: 0 }],
+    ["in a band that does not exist", { band: 6, position: 0 }],
+  ])("refuses a position %s, writing nothing", async (_case, where) => {
+    await withTestDb(async (db) => {
+      const { id, ctx, actor, newcomer } = await setup(db);
+      const rowsBefore = await historyRows(db, id);
+      await expect(
+        actor.addItem(ctx, { entry: { type: "WINE", id: newcomer }, ...where }),
+      ).rejects.toBeInstanceOf(ValidationError);
+      expect(await historyRows(db, id)).toHaveLength(rowsBefore.length);
+      expect(await board(actor, ctx)).toHaveLength(3);
+    });
+  });
+
+  it("addItems appends and refuses a position", async () => {
+    await withTestDb(async (db) => {
+      const { ctx, actor, newcomer } = await setup(db);
+      await expect(
+        actor.addItems(ctx, [
+          { entry: { type: "WINE", id: newcomer }, band: 4, position: 0 },
+        ]),
+      ).rejects.toBeInstanceOf(ValidationError);
+    });
+  });
+
+  describe("write auth", () => {
+    const positioned = (wine: string) => ({
+      entry: { type: "WINE" as const, id: wine },
+      band: 4,
+      position: 0,
+    });
+
+    it("another user's private list answers exactly as a list that does not exist", async () => {
+      await withTestDb(async (db) => {
+        const { id, actor, newcomer } = await setup(db);
+        const stranger = userCtx(await seedUser(db), "r-stranger");
+        const absent = randomUUID();
+
+        const hidden = await refusalOf(
+          () => actor.addItem(stranger, positioned(newcomer)),
+          id,
+        );
+        const missing = await refusalOf(
+          async () =>
+            (await activate(newTierListActor(absent, db))).addItem(
+              stranger,
+              positioned(newcomer),
+            ),
+          absent,
+        );
+        expect(hidden.code).toBe("NOT_FOUND");
+        expect(hidden).toEqual(missing);
+      });
+    });
+
+    it("an out-of-range position from a stranger is still NotFound, not a validation oracle", async () => {
+      await withTestDb(async (db) => {
+        const { id, actor, newcomer } = await setup(db);
+        const stranger = userCtx(await seedUser(db), "r-stranger");
+        const refused = await refusalOf(
+          () =>
+            actor.addItem(stranger, {
+              entry: { type: "WINE", id: newcomer },
+              band: 9,
+              position: 99,
+            }),
+          id,
+        );
+        expect(refused.code).toBe("NOT_FOUND");
+      });
+    });
+
+    it("another user's public list is Forbidden, and nothing moves", async () => {
+      await withTestDb(async (db) => {
+        const owner = await seedUser(db);
+        const ownerCtx = userCtx(owner, "r-owner");
+        const id = await seedTierList(db, {
+          createdById: owner,
+          privacy: "PUBLIC",
+        });
+        const actor = await activate(newTierListActor(id, db));
+        const wine = await seedWine(db, owner, "A");
+        await actor.addItem(ownerCtx, {
+          entry: { type: "WINE", id: wine },
+          band: 4,
+        });
+        const before = await board(actor, ownerCtx);
+        const stranger = await seedUser(db);
+        const theirs = await seedWine(db, stranger, "Theirs");
+
+        await expect(
+          actor.addItem(userCtx(stranger, "r-x"), positioned(theirs)),
+        ).rejects.toBeInstanceOf(ForbiddenError);
+        expect(await board(actor, ownerCtx)).toEqual(before);
+        expect(await historyRows(db, id)).toHaveLength(1);
+      });
+    });
+  });
+});
