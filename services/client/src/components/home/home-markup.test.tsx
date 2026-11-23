@@ -315,6 +315,51 @@ describe("FriendsFeed", () => {
     );
     assert.equal(html, "");
   });
+
+  test("a friend's Made-it log shows a recipe thumb, not a place (H-13)", () => {
+    const node = {
+      __typename: "ActivityEntry",
+      id: "e1",
+      kind: "CHECKED_IN",
+      occurredAt: new Date().toISOString(),
+      rank: null,
+      cellarItemId: null,
+      user: {
+        __typename: "UserProfile",
+        id: "u2",
+        displayName: "Sam",
+        avatarUrl: null,
+      },
+      item: null,
+      place: null,
+      review: null,
+      tierListItem: null,
+      cellar: null,
+      checkIn: {
+        __typename: "ItemCheckIn",
+        id: "k1",
+        score: null,
+        note: null,
+        tags: [],
+        companionIds: [],
+        place: null,
+        companions: { edges: [] },
+        recipe: { __typename: "Recipe", id: "r1", name: "Negroni" },
+      },
+    } as unknown as Parameters<typeof FriendsFeed>[0]["initialNodes"][number];
+    const html = render(
+      <FriendsFeed
+        initialNodes={[node]}
+        initialCursor={null}
+        initialHasMore={false}
+        friendCount={1}
+        viewerId="v"
+      />,
+    );
+    assert.match(text(html), /Sam made Negroni/);
+    assert.match(html, /data-thumb="recipe"/);
+    assert.doesNotMatch(html, /data-thumb="place"/);
+  });
 });
 
 describe("NearbySection (D14)", () => {

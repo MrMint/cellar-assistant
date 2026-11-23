@@ -27,6 +27,9 @@ import { activityEntryFromNode } from "@/components/search/adapter";
 import type { ResultOf } from "@/lib/api/graphql";
 import type { HomeFriendsFeedQuery } from "./queries";
 
+/** L44: what a Made-it log whose recipe was deleted names. */
+export { DELETED_RECIPE_NAME } from "@/components/search/adapter";
+
 export type FeedNode = NonNullable<
   ResultOf<typeof HomeFriendsFeedQuery>["me"]
 >["friendsFeed"]["edges"][number]["node"];
@@ -44,43 +47,9 @@ export type FeedEntry = {
   readonly context: string;
   /**
    * ux-c L08: a "Made it" log — a recipe, not an item ("Sam made Negroni").
-   * `/search`'s adapter skips a row with no item, so these are built here.
+   * `activityEntryFromNode` builds them (H-12): the recipe stands for the item.
    */
   readonly made: boolean;
-};
-
-/** L44: what a Made-it log whose recipe was deleted names. */
-export const DELETED_RECIPE_NAME = "a recipe that was deleted";
-
-/**
- * A friend's Made-it log as a "drank" entry: the recipe stands where the
- * item would, and links into the recipe — or nowhere, once it was deleted.
- */
-const recipeLogEntry = (
-  node: FeedNode,
-  viewerId: string | null,
-): ActivityEntry | null => {
-  const log = node.checkIn;
-  if (node.kind !== "CHECKED_IN" || node.item !== null || log === null) {
-    return null;
-  }
-  const recipe = log.recipe;
-  return {
-    kind: "drank",
-    id: `drank-${log.id}`,
-    timestamp: node.occurredAt as string,
-    userId: node.user?.id ?? "",
-    userName: node.user?.displayName ?? "",
-    userAvatar: node.user?.avatarUrl ?? null,
-    itemName: recipe === null ? DELETED_RECIPE_NAME : recipe.name,
-    itemType: "RECIPE",
-    itemHref: recipe === null ? "" : `/recipes/${recipe.id}`,
-    save: null,
-    score: log.score,
-    note: log.note,
-    tags: log.tags,
-    context: drinkContext(node, viewerId),
-  };
 };
 
 /**
@@ -118,8 +87,7 @@ export const feedEntriesFromNodes = (
   viewerId: string | null,
 ): FeedEntry[] =>
   nodes.flatMap((node): FeedEntry[] => {
-    const recipe = recipeLogEntry(node, viewerId);
-    const entry = recipe ?? activityEntryFromNode(node, viewerId);
+    const entry = activityEntryFromNode(node, viewerId);
     if (entry === null) return [];
     const list = node.tierListItem?.tierList ?? null;
     const target =
@@ -137,7 +105,7 @@ export const feedEntriesFromNodes = (
         entry,
         target,
         context: drinkContext(node, viewerId),
-        made: recipe !== null,
+        made: entry.kind === "drank" && entry.itemType === "RECIPE",
       },
     ];
   });

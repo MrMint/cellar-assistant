@@ -311,6 +311,18 @@ const itemDisplayName = (item: NonNullable<ActivityNode["item"]>): string => {
   return vintage === undefined ? name : `${vintage} ${name}`;
 };
 
+/** L44: what a Made-it log whose recipe was deleted names. */
+export const DELETED_RECIPE_NAME = "a recipe that was deleted";
+
+/** "with Sam and Ana · at The Corner Bar", or "". */
+const logContext = (log: NonNullable<ActivityNode["checkIn"]>): string =>
+  entryContext({
+    companionNames: log.companions.edges.map((edge) => edge.node.displayName),
+    companionCount: log.companionIds.length,
+    placeName:
+      log.place === null ? null : (log.place.displayName ?? log.place.name),
+  });
+
 /**
  * One API entry → the old `ActivityEntry`, or `null` for a row whose edge the
  * server nulled (an item or list that stopped being visible between reads),
@@ -365,6 +377,27 @@ export const activityEntryFromNode = (
     };
   }
 
+  // ux-c L08: a recipe-only "Made it" log. The recipe stands where the item
+  // would, and links into the recipe, or nowhere once it was deleted (H-12).
+  if (node.kind === "CHECKED_IN" && node.item === null) {
+    const log = node.checkIn;
+    if (log === null) return null;
+    const recipe = log.recipe;
+    return {
+      ...base,
+      save: null,
+      kind: "drank",
+      id: `drank-${log.id}`,
+      itemName: recipe === null ? DELETED_RECIPE_NAME : recipe.name,
+      itemType: "RECIPE",
+      itemHref: recipe === null ? "" : `/recipes/${recipe.id}`,
+      score: log.score,
+      note: log.note,
+      tags: log.tags,
+      context: logContext(log),
+    };
+  }
+
   if (node.item === null) return null;
   const image = node.item.images.edges[0]?.node;
   const item = {
@@ -386,14 +419,7 @@ export const activityEntryFromNode = (
       score: log.score,
       note: log.note,
       tags: log.tags,
-      context: entryContext({
-        companionNames: log.companions.edges.map(
-          (edge) => edge.node.displayName,
-        ),
-        companionCount: log.companionIds.length,
-        placeName:
-          log.place === null ? null : (log.place.displayName ?? log.place.name),
-      }),
+      context: logContext(log),
     };
   }
 
