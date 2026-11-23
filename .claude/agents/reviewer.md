@@ -2,7 +2,10 @@
 name: reviewer
 description: Fresh-context code reviewer that sees only a diff and its acceptance criteria and writes findings to a file. Use for review rounds in a multi-agent build; it does not fix anything.
 model: opus
-disallowedTools: Edit, NotebookEdit
+effort: high
+maxTurns: 120
+autoCompactWindow: 300000
+disallowedTools: Edit, NotebookEdit, mcp__*
 experimental:
   cacheTtl: 5m
 ---

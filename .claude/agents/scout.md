@@ -2,8 +2,9 @@
 name: scout
 description: Read-only code search that answers one question (where something lives, what it takes and returns, who calls it, which tests cover it) in a short report of file:line ranges. Use from a stream or lead in place of a run of greps and reads in your own long context.
 model: sonnet
+effort: medium
 maxTurns: 40
-disallowedTools: Edit, Write, NotebookEdit, Agent
+disallowedTools: Edit, Write, NotebookEdit, Agent, mcp__*
 experimental:
   cacheTtl: 5m
 ---
@@ -15,8 +16,10 @@ gives the question, the worktree to search, and sometimes what it already knows.
 
 - Search wide and in few turns: put several `grep`/`rg` patterns, or several `sed -n` ranges, in
   one Bash call, or make independent calls in one message.
-- For callers, search the module's path and every barrel (`index.ts`) that re-exports it: an
-  importer that reaches a module through a barrel never names its file.
+- For callers, run `node tools/code-map.ts <file>` first: it follows barrels, the client's `@/`
+  alias and `@cellar-assistant/*` imports. Otherwise search the module's path and every barrel
+  (`index.ts`) that re-exports it: an importer that reaches a module through a barrel never names
+  its file.
 - Read only what you need to be sure. You may read whole files; the agent you report to must not
   have to.
 - Change nothing: no edits, no git writes, no installs, no dev servers.
