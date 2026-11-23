@@ -262,9 +262,10 @@ describe("pairwise placement (L09)", () => {
     await click(buttonNamed(/^Weller/));
 
     assert.equal(adds().length, 1);
-    assert.deepEqual(adds()[0]?.variables.input, {
-      tierListItemId: (adds()[0]?.variables.input as { tierListItemId: string })
-        .tierListItemId,
+    const { tierListItemId, ...placedInput } = (adds()[0]?.variables.input ??
+      {}) as { tierListItemId?: string };
+    assert.equal(typeof tierListItemId, "string");
+    assert.deepEqual(placedInput, {
       entry: { id: "s-new", type: "SPIRIT" },
       band: 4,
       position: 2,
