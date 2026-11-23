@@ -21,6 +21,7 @@ endpoint per entry in `MODEL_SEAMS` (`src/actors/budget-actor.ts`):
 | review of a user-submitted place | `PlaceReviewer` | `src/actors/place-creation-actor.ts` |
 | flavour chips from a drink log's note (`suggestFlavourTags`, X02) — text only, Ollama is fine | `FlavourTagSuggester` | `src/lib/flavour-tags.ts` |
 | image search (`itemSearch(imageFileId:)`), stored-photo vectors | `ImageEmbedder` (query and document slots) | `src/lib/image-embeddings.ts` |
+| the taste profile's one sentence (`tasteProfile.line`, L03; budget entry `taste_phrase`) — text only, never on thin data, abstains rather than guess | `TastePhraser` | `src/actors/taste-actor.ts` |
 
 **Image search needs an embedding that takes images**: `gemini-embedding-2`
 (`AI_PROVIDER=vertex-ai` or `google-ai`) when deployed, or locally
