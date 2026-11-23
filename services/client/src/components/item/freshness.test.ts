@@ -136,6 +136,20 @@ describe("freshnessModel — sealed", () => {
     expect(bar.today).toBeLessThan(bar.start + bar.width);
     expect(bar.axisFrom).toBe("2020");
   });
+
+  test("W-6: the axis ends on the owner's Drink until, not the padding past it", () => {
+    const m = freshnessModel(
+      bottle({ drinkUntil: "2026-12-31" }),
+      red2020,
+      TODAY,
+    );
+    expect(m.window?.untilSource).toBe("user");
+    expect(m.bar?.axisTo).toBe("2026");
+    // The board keeps the prompt while one end is still typical.
+    expect(m.sourceLine).toBe(
+      "From: typical for red wine, 2 years from vintage. Until: your date. Set your own to override.",
+    );
+  });
 });
 
 describe("freshnessModel — opened", () => {

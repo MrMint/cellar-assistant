@@ -401,7 +401,9 @@ function barOf(
     width: Math.max(0, end - start),
     today: pct(today),
     axisFrom: axis(lo),
-    axisTo: axis(hi),
+    // W-6: the last real date, not the padded edge — padding past "Dec 2026"
+    // read as "2027", which is no date anyone set.
+    axisTo: axis(hiRaw),
   };
 }
 
