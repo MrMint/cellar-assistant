@@ -258,7 +258,8 @@ export function useTierListActions() {
       entityId: string,
       entityType: string,
       band: number,
-      _position?: number,
+      /** M7: insert at this index of `band` (pairwise placement); else append. */
+      position?: number,
     ): Promise<TierListItemResult> => {
       if (!isValidListType(entityType)) {
         return { success: false, error: `Unknown entity type: ${entityType}` };
@@ -266,12 +267,19 @@ export function useTierListActions() {
       if (!Number.isInteger(band) || band < 0 || band > 5) {
         return { success: false, error: "Invalid band" };
       }
+      if (
+        position !== undefined &&
+        (!Number.isInteger(position) || position < 0)
+      ) {
+        return { success: false, error: "Invalid position" };
+      }
       const response = await addItem({
         tierListId,
         input: {
           tierListItemId: crypto.randomUUID(),
           entry: { id: entityId, type: entryTypeOf(entityType) },
           band,
+          ...(position === undefined ? {} : { position }),
         },
       });
       const failed = transportError(response.error);

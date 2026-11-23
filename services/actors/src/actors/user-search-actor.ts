@@ -54,6 +54,7 @@ import {
 } from "@cellar-assistant/contracts";
 import { friendRequests, friends } from "@cellar-assistant/db";
 import { eq, or } from "@cellar-assistant/db/orm";
+import { canSeeProfile } from "@cellar-assistant/policy";
 import type { ActorId, DaprClient } from "@dapr/dapr";
 import type { DbOrTx } from "../lib/db.ts";
 import { actorDb } from "../lib/db.ts";
@@ -61,6 +62,19 @@ import { requireSignedIn } from "../lib/guards.ts";
 import type { ProfileStore } from "../lib/profile-store.ts";
 import { betterAuthProfileStore } from "../lib/profile-store.ts";
 import { SearchActorBase } from "../lib/search-actor-base.ts";
+
+/**
+ * Leftovers 5 (L6): a person the viewer may not see is simply not a hit, the
+ * same as someone who does not exist, through the one profile rule
+ * (`canSeeProfile`). Nobody is hidden yet (L41), so this drops nothing today;
+ * when blocking lands, a page may hold fewer than `limit` hits rather than
+ * say who was left out.
+ */
+const visibleTo = (
+  ctx: Ctx,
+  hits: readonly UserSearchHit[],
+): readonly UserSearchHit[] =>
+  hits.filter((hit) => canSeeProfile(ctx, { userId: hit.userId }));
 
 export class UserSearchActor
   extends SearchActorBase<UserSearchInput, UserSearchHit>
@@ -127,7 +141,7 @@ export class UserSearchActor
       // accepted on Friends still read "Wants to be friends". Two small
       // reads and one capped store search per turn.
       this.doNotCache();
-      return this.#everyone(viewer, term, limit);
+      return visibleTo(ctx, await this.#everyone(viewer, term, limit));
     }
 
     // An admin ctx has no viewer of its own to exclude around; it searches the
@@ -135,11 +149,14 @@ export class UserSearchActor
     const excludeIds = viewer === null ? [] : await this.#excludedFor(viewer);
 
     const rows = await this.#profiles.search({ term, excludeIds, limit });
-    return rows.map((row) => ({
-      userId: row.id,
-      displayName: row.displayName,
-      avatarUrl: row.avatarUrl,
-    }));
+    return visibleTo(
+      ctx,
+      rows.map((row) => ({
+        userId: row.id,
+        displayName: row.displayName,
+        avatarUrl: row.avatarUrl,
+      })),
+    );
   }
 
   /**

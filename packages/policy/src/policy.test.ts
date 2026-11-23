@@ -22,6 +22,7 @@ import {
   canSeeCheckInDetails,
   canSeeItemImage,
   canSeePlace,
+  canSeeProfile,
   canSeeRecipe,
   canSeeTierList,
   canShareAnonymously,
@@ -657,5 +658,34 @@ describe("canSeeRecipe (X15 / D22)", () => {
         );
       }
     }
+  });
+});
+
+describe("canSeeProfile (leftovers 5, L41)", () => {
+  const someone = { userId: "33333333-3333-4333-8333-333333333333" };
+  const viewer = userCtx("11111111-1111-4111-8111-111111111111", "req");
+
+  it("a signed-in viewer sees every profile: nobody is hidden yet (L41)", () => {
+    expect(canSeeProfile(viewer, someone)).toBe(true);
+    expect(
+      canSeeProfile(viewer, { userId: "11111111-1111-4111-8111-111111111111" }),
+    ).toBe(true);
+  });
+
+  it("no profile — a missing user or a malformed id — is never visible, to anyone", () => {
+    for (const ctx of [
+      viewer,
+      adminCtx("root", "req"),
+      systemCtx("req"),
+      anonymousCtx("req"),
+    ]) {
+      expect(canSeeProfile(ctx, null)).toBe(false);
+    }
+  });
+
+  it("an anonymous viewer sees no profile; admin and system see them all", () => {
+    expect(canSeeProfile(anonymousCtx("req"), someone)).toBe(false);
+    expect(canSeeProfile(adminCtx("root", "req"), someone)).toBe(true);
+    expect(canSeeProfile(systemCtx("req"), someone)).toBe(true);
   });
 });

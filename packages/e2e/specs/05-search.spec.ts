@@ -1,4 +1,4 @@
-import { BASE_URL, storageStatePath } from "../fixtures/accounts.ts";
+import { BASE_URL } from "../fixtures/accounts.ts";
 import {
   aiCapabilities,
   createCellar,
@@ -12,7 +12,6 @@ import { deletePlace, insertPlace } from "../fixtures/db.ts";
 import {
   bodyText,
   expect,
-  newContext,
   settleNetwork,
   test,
   watch,
@@ -108,11 +107,10 @@ test("the search sheet: its title and Close, Scan, Photo — and no quick-link c
   // restored — 14-image-search drives it); no tabs, no Brands/Recipes chips:
   // the old page had none of them.
   //
-  // Photo is offered only where the stack can search by image (N07/D25:
-  // hide, don't refuse), so ask rather than assume. On an Ollama-only lane
-  // `imageSearch` is false and the button must be *absent*, not merely
-  // refused when tapped.
-  const { imageSearch } = await aiCapabilities(api);
+  // Photo is offered only where the stack can search by image or read a
+  // label (N07/D25: hide, don't refuse; L13), so ask rather than assume. With
+  // both off the button must be *absent*, not merely refused when tapped.
+  const { imageSearch, labelRead } = await aiCapabilities(api);
   const noise = watch(primary);
   await primary.goto("/search");
   // X10: a full-screen sheet with a title and Close; the greeting is Home's.
@@ -127,7 +125,9 @@ test("the search sheet: its title and Close, Scan, Photo — and no quick-link c
   ).toHaveCount(0);
   await expect(primary.getByRole("button", { name: "Scan" })).toBeVisible();
   const photo = primary.getByRole("button", { name: "Photo" });
-  if (imageSearch) await expect(photo).toBeVisible();
+  // L13: Photo also reads a label when the stack cannot search by image
+  // (X06's fallback), so it shows when either is on.
+  if (imageSearch || labelRead) await expect(photo).toBeVisible();
   else await expect(photo).toHaveCount(0);
   await expect(primary.getByRole("tab")).toHaveCount(0);
   // X01: the five chips duplicated the tabs and the Me hub, and are gone.
@@ -533,52 +533,61 @@ test("Home's Nearby Places renders from the geolocation cookie, nearest first (X
   }
 });
 
-test("the search sheet and Home are visible before any script runs", async ({
-  browser,
+test("the search sheet and Home draw their box and field once the app runs (L1)", async ({
+  primary,
 }) => {
-  // AnimateIn used to server-render `opacity:0` and wait for framer-motion to
-  // hydrate; with JavaScript off nothing but the search box ever appeared. The
-  // chips it animated are gone (X01), so hold the box itself to the rule —
-  // and the greeting to its own: it is the viewer's clock, so the server
-  // sends none (X01, observation 6).
-  const ctx = await newContext(browser, {
-    storageState: storageStatePath("primary"),
-    javaScriptEnabled: false,
-  });
-  try {
-    const page = await ctx.newPage();
-    await page.goto("/search");
-    const box = searchBox(page);
-    await expect(box).toBeVisible();
-    const restingOpacity = () =>
-      box.evaluate((el) => {
-        let node: Element | null = el;
-        let min = 1;
-        while (node) {
-          min = Math.min(min, Number(getComputedStyle(node).opacity));
-          node = node.parentElement;
-        }
-        return min;
-      });
-    await expect
-      .poll(restingOpacity, {
-        message: "the search box stays hidden without JavaScript",
-        timeout: 5_000,
-      })
-      .toBe(1);
-    // Home (X10): its search field is there, and no greeting from the
-    // server's clock (X01, observation 6).
-    await page.goto("/");
-    await expect(
-      page.getByRole("link", { name: "Search bottles, places and recipes" }),
-    ).toBeVisible();
-    await expect(
-      page.getByRole("heading", { name: /^Good (morning|afternoon|evening)/ }),
-      "the server rendered a greeting from its own clock",
-    ).toHaveCount(0);
-  } finally {
-    await ctx.close();
-  }
+  // The app needs JavaScript (L1, decisions.md "Search"): `/search`'s
+  // `loading.tsx` shell is what streams first, and without scripts nothing
+  // replaces it, so this no longer asserts a no-JS page. What still holds is
+  // the rule the no-JS spec guarded: AnimateIn's `opacity:0` once kept the box
+  // hidden until hydration, so the live box must rest fully visible, and it
+  // takes typing. The greeting is the viewer's clock (X01, observation 6).
+  const noise = watch(primary);
+  await primary.goto("/search");
+  const box = searchBox(primary);
+  await expect(box).toBeVisible();
+  const restingOpacity = () =>
+    box.evaluate((el) => {
+      let node: Element | null = el;
+      let min = 1;
+      while (node) {
+        min = Math.min(min, Number(getComputedStyle(node).opacity));
+        node = node.parentElement;
+      }
+      return min;
+    });
+  await expect
+    .poll(restingOpacity, {
+      message: "the search box stays hidden after hydration",
+      timeout: 5_000,
+    })
+    .toBe(1);
+  await box.fill("gin");
+  await expect(primary).toHaveURL(/\/search\?q=gin/);
+  await primary.goto("/");
+  await expect(
+    primary.getByRole("link", { name: "Search bottles, places and recipes" }),
+  ).toBeVisible();
+  expect(noise.pageErrors, "the search page or Home threw").toEqual([]);
+});
+
+test("Close then Back does not reopen the search sheet (leftovers 9)", async ({
+  primary,
+}) => {
+  await primary.goto("/");
+  await primary
+    .getByRole("link", { name: "Search bottles, places and recipes" })
+    .click();
+  await expect(primary).toHaveURL(/\/search/);
+  const box = searchBox(primary);
+  await box.fill("gin");
+  await expect(primary).toHaveURL(/\/search\?q=gin/);
+  await primary.getByRole("button", { name: "Close search" }).click();
+  await expect(primary).not.toHaveURL(/\/search/);
+  await primary.goBack();
+  // Close replaced the sheet's entry, so Back stays out of `/search`.
+  await primary.waitForLoadState("domcontentloaded");
+  await expect(primary).not.toHaveURL(/\/search/);
 });
 
 test("a text search has a Brands section, its See all into /brands (D1, D10)", async ({

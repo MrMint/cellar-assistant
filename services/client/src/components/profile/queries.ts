@@ -14,7 +14,11 @@
 import { ActorErrorFieldsFragment } from "@/lib/api/errors";
 import { graphql } from "@/lib/api/graphql";
 
-/** Lists and cellars on the page — a profile's worth, not a browser. */
+/**
+ * Lists and cellars per page: the first screenful, then "Show more" walks
+ * on (leftovers 6). Well under the server's cap (`MAX_PAGE_SIZE`, 100), which
+ * clamps anything larger rather than refusing it.
+ */
 export const PROFILE_SECTION_SIZE = 20;
 /** Log entries per page. */
 export const PROFILE_LOG_PAGE_SIZE = 10;
@@ -59,6 +63,29 @@ export const FriendLogEntryFragment = graphql(`
   }
 `);
 
+/** One of their tier lists, as the profile lists it. */
+export const FriendTierListRowFragment = graphql(`
+  fragment FriendTierListRow on TierList @_unmask {
+    __typename
+    id
+    name
+    itemCount
+    privacy
+  }
+`);
+
+/** One of their cellars, as the profile lists it. */
+export const FriendCellarRowFragment = graphql(`
+  fragment FriendCellarRow on Cellar @_unmask {
+    __typename
+    id
+    name
+    itemCounts {
+      total
+    }
+  }
+`);
+
 export const FriendProfileQuery = graphql(
   `
   query FriendProfile($userId: ID!, $sections: Int!, $logs: Int!) {
@@ -75,26 +102,27 @@ export const FriendProfileQuery = graphql(
         }
         tierLists(first: $sections) {
           totalCount
+          pageInfo {
+            hasNextPage
+            endCursor
+          }
           edges {
+            cursor
             node {
-              __typename
-              id
-              name
-              itemCount
-              privacy
+              ...FriendTierListRow
             }
           }
         }
         cellars(first: $sections) {
           totalCount
+          pageInfo {
+            hasNextPage
+            endCursor
+          }
           edges {
+            cursor
             node {
-              __typename
-              id
-              name
-              itemCounts {
-                total
-              }
+              ...FriendCellarRow
             }
           }
         }
@@ -116,7 +144,12 @@ export const FriendProfileQuery = graphql(
     }
   }
 `,
-  [ActorErrorFieldsFragment, FriendLogEntryFragment],
+  [
+    ActorErrorFieldsFragment,
+    FriendLogEntryFragment,
+    FriendTierListRowFragment,
+    FriendCellarRowFragment,
+  ],
 );
 
 /** The log, from `after` on — the "Show more" under the first page. */
@@ -146,4 +179,62 @@ export const FriendLogPageQuery = graphql(
   }
 `,
   [ActorErrorFieldsFragment, FriendLogEntryFragment],
+);
+
+/** Their tier lists, from `after` on — "Show more" under the first 20. */
+export const FriendTierListsPageQuery = graphql(
+  `
+  query FriendTierListsPage($userId: ID!, $first: Int!, $after: String) {
+    friendProfile(userId: $userId) {
+      __typename
+      ... on FriendProfile {
+        id
+        tierLists(first: $first, after: $after) {
+          totalCount
+          pageInfo {
+            hasNextPage
+            endCursor
+          }
+          edges {
+            cursor
+            node {
+              ...FriendTierListRow
+            }
+          }
+        }
+      }
+      ...ActorErrorFields
+    }
+  }
+`,
+  [ActorErrorFieldsFragment, FriendTierListRowFragment],
+);
+
+/** Their cellars, from `after` on — "Show more" under the first 20. */
+export const FriendCellarsPageQuery = graphql(
+  `
+  query FriendCellarsPage($userId: ID!, $first: Int!, $after: String) {
+    friendProfile(userId: $userId) {
+      __typename
+      ... on FriendProfile {
+        id
+        cellars(first: $first, after: $after) {
+          totalCount
+          pageInfo {
+            hasNextPage
+            endCursor
+          }
+          edges {
+            cursor
+            node {
+              ...FriendCellarRow
+            }
+          }
+        }
+      }
+      ...ActorErrorFields
+    }
+  }
+`,
+  [ActorErrorFieldsFragment, FriendCellarRowFragment],
 );

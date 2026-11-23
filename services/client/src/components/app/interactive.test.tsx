@@ -72,6 +72,8 @@ const { dismissNotification, notify, UNDO_TOAST_MS } = await import("./notify");
 const { AppShell } = await import("./AppShell");
 const { MAIN_CONTENT_ID } = await import("./main-content");
 const { SkipLink } = await import("./SkipLink");
+const { MapFilter } = await import("../map/core/MapFilter");
+const { TooltipProvider } = await import("../ui/tooltip");
 
 let container: HTMLElement;
 let root: ReturnType<typeof createRoot>;
@@ -203,6 +205,262 @@ describe("BottomSheet snaps", () => {
       document.querySelector('[data-slot="bottom-sheet"]')?.className ?? "";
     assert.doesNotMatch(cls, /direction=bottom\]:max-h-\[80vh\]/);
     assert.match(cls, /direction=bottom\]:max-h-\[90dvh\]/);
+  });
+});
+
+/*
+ * The physics around vaul (B04), driven with pointer events on the sheet.
+ * happy-dom does no layout, so these prove the wiring — release decisions,
+ * M6 and the stretch — and `sheet-physics.test.ts` proves the numbers.
+ */
+describe("BottomSheet physics", () => {
+  const sheet = () =>
+    document.querySelector<HTMLElement>('[data-slot="bottom-sheet"]');
+  /**
+   * `at` stamps the event's time, so a drag's speed is the test's, not the
+   * machine's: under load a real 20 ms wait can take 300 ms, and a flick
+   * reads as a slow drag.
+   */
+  const pointer = (type: string, y: number, at?: number) => {
+    const event = new PointerEvent(type, {
+      bubbles: true,
+      cancelable: true,
+      isPrimary: true,
+      pointerId: 1,
+      button: 0,
+      clientY: y,
+    });
+    if (at !== undefined)
+      Object.defineProperty(event, "timeStamp", { value: at });
+    return event;
+  };
+  /**
+   * Past the 500 ms settle: polled, because under a loaded machine (the
+   * whole suite at once) timers run late and a fixed wait flakes.
+   */
+  const settled = async (done: () => boolean, ms = 4000) => {
+    const until = Date.now() + ms;
+    while (!done() && Date.now() < until) await flush(50);
+  };
+  /** A quick drag: down, the moves (a frame apart), up. */
+  const drag = async (el: HTMLElement, ys: readonly number[]) => {
+    const [first, ...rest] = ys;
+    const t0 = performance.now();
+    let frame = 0;
+    const at = () => t0 + 16 * frame++;
+    await act(async () => {
+      el.dispatchEvent(pointer("pointerdown", first ?? 0, at()));
+    });
+    for (const y of rest.slice(0, -1)) {
+      await act(async () => {
+        el.dispatchEvent(pointer("pointermove", y, at()));
+        await new Promise((r) => setTimeout(r, 20));
+      });
+    }
+    await act(async () => {
+      el.dispatchEvent(pointer("pointerup", rest.at(-1) ?? first ?? 0, at()));
+    });
+  };
+  const Snapping = ({
+    onSnap,
+    onClose = () => {},
+    dismissible,
+  }: {
+    onSnap: (snap: string) => void;
+    onClose?: () => void;
+    dismissible?: boolean;
+  }) => {
+    const [open, setOpen] = useState(true);
+    return (
+      <BottomSheet
+        open={open}
+        onOpenChange={(next) => {
+          setOpen(next);
+          if (!next) onClose();
+        }}
+        title="Places"
+        snapPoints={["peek", "half", "full"]}
+        initialSnap="half"
+        onSnapChange={onSnap}
+        dismissible={dismissible}
+      >
+        <p>list</p>
+      </BottomSheet>
+    );
+  };
+
+  // vaul captures the pointer on press; happy-dom has no capture to give.
+  HTMLElement.prototype.setPointerCapture ??= () => {};
+  HTMLElement.prototype.releasePointerCapture ??= () => {};
+
+  test("M6: a flick up from half settles on full, reported once", async () => {
+    const snaps: string[] = [];
+    await render(<Snapping onSnap={(s) => snaps.push(s)} />);
+    await flush(30);
+    const el = sheet();
+    assert.ok(el);
+    // A browser computes `none`; happy-dom computes nothing, which vaul reads.
+    el.style.transform ||= "translate3d(0, 0px, 0)";
+    await drag(el, [500, 470, 430, 380]);
+    assert.deepEqual(snaps, [], "not before the snap has settled");
+    await settled(() => snaps.length > 0);
+    assert.deepEqual(snaps, ["full"]);
+    await flush(560);
+    assert.deepEqual(snaps, ["full"], "once");
+  });
+
+  test("M6: the snap it opens at is not a change", async () => {
+    const snaps: string[] = [];
+    await render(<Snapping onSnap={(s) => snaps.push(s)} />);
+    await flush(600);
+    assert.deepEqual(snaps, []);
+  });
+
+  test("M6: never on close — a hard flick down dismisses without a snap", async () => {
+    const snaps: string[] = [];
+    let closed = 0;
+    await render(
+      <Snapping
+        onSnap={(s) => snaps.push(s)}
+        onClose={() => {
+          closed += 1;
+        }}
+      />,
+    );
+    await flush(30);
+    const el = sheet();
+    assert.ok(el);
+    // A browser computes `none`; happy-dom computes nothing, which vaul reads.
+    el.style.transform ||= "translate3d(0, 0px, 0)";
+    await drag(el, [300, 360, 460, 600]);
+    await flush(700);
+    assert.equal(closed, 1, "the sheet asked to close");
+    assert.deepEqual(snaps, []);
+  });
+
+  test("a sheet that cannot be dismissed lands on peek instead", async () => {
+    const snaps: string[] = [];
+    let closed = 0;
+    await render(
+      <Snapping
+        dismissible={false}
+        onSnap={(s) => snaps.push(s)}
+        onClose={() => {
+          closed += 1;
+        }}
+      />,
+    );
+    await flush(30);
+    const el = sheet();
+    assert.ok(el);
+    // A browser computes `none`; happy-dom computes nothing, which vaul reads.
+    el.style.transform ||= "translate3d(0, 0px, 0)";
+    await drag(el, [300, 360, 460, 600]);
+    await settled(() => snaps.length > 0);
+    assert.equal(closed, 0);
+    assert.deepEqual(snaps, ["peek"]);
+  });
+
+  test("M6: never for a sheet without snapPoints", async () => {
+    const snaps: string[] = [];
+    await render(
+      <BottomSheet
+        open
+        onOpenChange={() => {}}
+        title="Add"
+        onSnapChange={(s) => snaps.push(s)}
+      >
+        <p>rows</p>
+      </BottomSheet>,
+    );
+    await flush(30);
+    const el = sheet();
+    assert.ok(el);
+    // A browser computes `none`; happy-dom computes nothing, which vaul reads.
+    el.style.transform ||= "translate3d(0, 0px, 0)";
+    await drag(el, [500, 470, 430, 380]);
+    await flush(600);
+    assert.deepEqual(snaps, []);
+  });
+
+  test("an upward drag on a content-sized sheet stretches it, and it springs back", async () => {
+    await render(
+      <BottomSheet open onOpenChange={() => {}} title="Add">
+        <p>rows</p>
+      </BottomSheet>,
+    );
+    await flush(30);
+    const el = sheet();
+    assert.ok(el);
+    // A browser computes `none`; happy-dom computes nothing, which vaul reads.
+    el.style.transform ||= "translate3d(0, 0px, 0)";
+    await act(async () => {
+      el.dispatchEvent(pointer("pointerdown", 500));
+    });
+    await act(async () => {
+      el.dispatchEvent(pointer("pointermove", 400));
+      await new Promise((r) => setTimeout(r, 40));
+    });
+    const stretched = /^0px (-[\d.]+)px$|^0 (-[\d.]+)px$/.exec(
+      el.style.translate,
+    );
+    assert.ok(stretched, `a negative translate, got "${el.style.translate}"`);
+    const px = Number(stretched[1] ?? stretched[2]);
+    assert.ok(px > -100 && px < 0, "less than the finger's 100 px");
+    await act(async () => {
+      el.dispatchEvent(pointer("pointerup", 400));
+    });
+    await flush(1500);
+    assert.equal(el.style.translate, "", "back at rest");
+  });
+});
+
+describe("MapFilter (L15)", () => {
+  const filters = (isMobile: boolean, onRating: (r?: number) => void) => (
+    <TooltipProvider>
+      <MapFilter
+        isMobile={isMobile}
+        onItemTypesChange={() => {}}
+        onSearchQueryChange={() => {}}
+        minRating={4}
+        onMinRatingChange={onRating}
+        onVisitStatusesChange={() => {}}
+      />
+    </TooltipProvider>
+  );
+
+  test("phone: More filters opens a bottom sheet; Reset is in its footer", async () => {
+    const ratings: (number | undefined)[] = [];
+    await render(filters(true, (r) => ratings.push(r)));
+    const more = container.querySelector('button[aria-label="More filters"]');
+    assert.equal(more?.getAttribute("aria-haspopup"), "dialog");
+    await click(more);
+    await flush(10);
+    const sheet = document.querySelector('[data-slot="bottom-sheet"]');
+    assert.ok(sheet, "the filters are a BottomSheet");
+    assert.equal(
+      document.getElementById(sheet.getAttribute("aria-labelledby") ?? "")
+        ?.textContent,
+      "Filters",
+    );
+    assert.ok(byText("Minimum Rating", sheet));
+    const footer = sheet.querySelector('[data-slot="drawer-footer"]');
+    await click(byText("Reset", footer ?? undefined));
+    assert.deepEqual(ratings, [undefined]);
+  });
+
+  test("from md: the popover, not a sheet", async () => {
+    viewportWidth = 1024;
+    await render(filters(false, () => {}));
+    await click(container.querySelector('button[aria-label="More filters"]'));
+    await flush(10);
+    assert.equal(document.querySelector('[data-slot="bottom-sheet"]'), null);
+    const panel = container.querySelector("#map-advanced-filters");
+    assert.ok(panel, "the panel renders in place, beside the button");
+    assert.ok(byText("Minimum Rating", panel));
+    // Let motion's enter finish: happy-dom rejects a cancelled animation's
+    // `finished`, and unmounting mid-enter would surface that as an error.
+    await flush(600);
   });
 });
 
@@ -613,6 +871,8 @@ describe("AppBar", () => {
     );
     await click(container.querySelector('button[aria-label="More actions"]'));
     await flush(10);
+    // The one BottomSheet, so it drags, snaps and stretches like the rest.
+    assert.ok(document.querySelector('[data-slot="bottom-sheet"]'));
     const del = [...document.querySelectorAll('[role="dialog"] button')].find(
       (b) => b.textContent === "Delete",
     );
@@ -625,6 +885,22 @@ describe("AppBar", () => {
       await new Promise((r) => setTimeout(r, 700));
     });
     assert.equal(deleted, 1);
+  });
+
+  test("overflow from md is a menu, not a sheet", async () => {
+    viewportWidth = 1024;
+    await render(
+      <AppBar
+        title="Barolo"
+        overflow={[{ label: "Edit", onSelect: () => {} }]}
+      />,
+    );
+    await flush(10);
+    const more = container.querySelector('button[aria-label="More actions"]');
+    assert.equal(more?.getAttribute("aria-haspopup"), "menu");
+    await click(more);
+    await flush(10);
+    assert.equal(document.querySelector('[data-slot="bottom-sheet"]'), null);
   });
 });
 

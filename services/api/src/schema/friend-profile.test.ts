@@ -8,6 +8,7 @@
  * intact.
  */
 import {
+  MAX_PAGE_SIZE,
   NotFoundError,
   PROFILE_NOT_SHARED,
   viewerCollectionActorId,
@@ -229,5 +230,62 @@ describe("friendProfile (X18)", () => {
       __typename: "ForbiddenError",
     });
     expect(calls).toEqual([]);
+  });
+});
+
+describe("friendProfile sections page within the server cap (leftovers 6)", () => {
+  const sidecar = () =>
+    stubSidecar({
+      "FriendsCollectionActor.profile": () => ({
+        userId: FRIEND,
+        since: "2026-10-01T00:00:00.000Z",
+      }),
+      "FriendsCollectionActor.profileTierLists": () => page([]),
+      "FriendsCollectionActor.profileCellars": () => page([]),
+      "FriendsCollectionActor.profileLogs": () => page([]),
+    });
+  const sections = (first: number, after?: string) => {
+    const args =
+      after === undefined
+        ? `first: ${first}`
+        : `first: ${first}, after: ${JSON.stringify(after)}`;
+    return `{ friendProfile(userId: "${FRIEND}") { __typename ... on FriendProfile {
+      tierLists(${args}) { totalCount }
+      cellars(${args}) { totalCount }
+      checkIns(${args}) { totalCount } } } }`;
+  };
+  const pageOf = (
+    calls: ReturnType<typeof stubSidecar>["calls"],
+    method: string,
+  ) => calls.find((call) => call.method === method)?.args[2];
+
+  it("clamps a request above the cap to the cap instead of blanking the profile", async () => {
+    const { invoke, calls } = sidecar();
+    const result = await run(sections(500), testContext(invoke, viewer));
+    expect(result.errors).toBeUndefined();
+    expect(result.data?.friendProfile).toMatchObject({
+      __typename: "FriendProfile",
+    });
+    for (const method of [
+      "profileTierLists",
+      "profileCellars",
+      "profileLogs",
+    ]) {
+      expect(pageOf(calls, method)).toMatchObject({ first: MAX_PAGE_SIZE });
+    }
+  });
+
+  it("passes a page past the first 20 through as asked: its size and its cursor", async () => {
+    const { invoke, calls } = sidecar();
+    const result = await run(sections(20, "k:19"), testContext(invoke, viewer));
+    expect(result.errors).toBeUndefined();
+    expect(pageOf(calls, "profileTierLists")).toEqual({
+      first: 20,
+      after: "k:19",
+    });
+    expect(pageOf(calls, "profileCellars")).toEqual({
+      first: 20,
+      after: "k:19",
+    });
   });
 });

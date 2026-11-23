@@ -7,6 +7,7 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import { searchStateFromParams } from "./adapter";
 import {
+  closeSearch,
   initialSearchNavState,
   landNavigation,
   planCommitNavigation,
@@ -297,5 +298,30 @@ describe("landNavigation", () => {
       inFlight: null,
       commitOnLand: false,
     });
+  });
+});
+
+describe("closeSearch", () => {
+  const record = () => {
+    const calls: Array<[string, string, unknown]> = [];
+    return {
+      calls,
+      nav: {
+        push: (href: string, opts?: unknown) =>
+          calls.push(["push", href, opts]),
+        replace: (href: string, opts?: unknown) =>
+          calls.push(["replace", href, opts]),
+      },
+    };
+  };
+  test("replaces the sheet's entry with where it was opened from", () => {
+    const { calls, nav } = record();
+    closeSearch(nav, "/cellars");
+    assert.deepEqual(calls, [["replace", "/cellars", { kind: "back" }]]);
+  });
+  test("goes Home on a cold open, still by replacing", () => {
+    const { calls, nav } = record();
+    closeSearch(nav, null);
+    assert.deepEqual(calls, [["replace", "/", { kind: "back" }]]);
   });
 });

@@ -28,6 +28,7 @@ import {
   ForbiddenError,
   NO_AI_CAPABILITIES,
   NotFoundError,
+  PROFILE_NOT_SHARED,
   pageArgs,
   parseInviteToken,
   systemCtx,
@@ -297,6 +298,76 @@ describe.skipIf(skip)("UserActor (B4)", () => {
       await expect(junk.getProfile(adminCtx("a", "r"))).rejects.toThrow(
         NotFoundError,
       );
+    });
+  });
+
+  describe("no account-existence oracle (leftovers 5, L6, L41)", () => {
+    /** What a refused turn says: the class, the code and the exact bytes. */
+    const refusal = async (turn: () => Promise<unknown>) => {
+      try {
+        await turn();
+      } catch (error) {
+        return {
+          name: (error as Error).constructor.name,
+          code: (error as { code?: unknown }).code,
+          message: (error as Error).message,
+        };
+      }
+      throw new Error("the turn was not refused");
+    };
+    const expected = {
+      name: "NotFoundError",
+      code: "NOT_FOUND",
+      message: PROFILE_NOT_SHARED,
+    };
+
+    it("answers a missing id and a malformed id with the same error, naming neither", async () => {
+      await withUserDb(async (db) => {
+        const viewer = await seedPerson(db, "Viewer");
+        const ctx = userCtx(viewer, "r");
+        const missingId = "00000000-0000-4000-8000-00000000abcd";
+        const missing = await userActor(missingId, db);
+        const malformed = await userActor("not-a-uuid", db);
+
+        const viaMissing = await refusal(() => missing.getProfile(ctx));
+        const viaMalformed = await refusal(() => malformed.getProfile(ctx));
+        expect(viaMissing).toEqual(expected);
+        expect(viaMalformed).toEqual(viaMissing);
+        // Dapr runs the pre-turn guard first; a malformed key is refused
+        // there, and in the same bytes.
+        expect(await refusal(() => malformed.onActorMethodPre())).toEqual(
+          expected,
+        );
+        expect(viaMissing.message).not.toContain(missingId);
+      });
+    });
+
+    it("answers an existing user's profile to any signed-in viewer (nobody is hidden yet)", async () => {
+      await withUserDb(async (db) => {
+        const viewer = await seedPerson(db, "Viewer");
+        const other = await seedPerson(db, "Other");
+        const profile = await (await userActor(other, db)).getProfile(
+          userCtx(viewer, "r"),
+        );
+        expect(profile).toMatchObject({ id: other, displayName: "Other" });
+      });
+    });
+
+    it("refuses an anonymous viewer the same way whether or not the id names someone", async () => {
+      await withUserDb(async (db) => {
+        const other = await seedPerson(db, "Other");
+        const anon = anonymousCtx("r");
+        const existing = await refusal(async () =>
+          (await userActor(other, db)).getProfile(anon),
+        );
+        const missing = await refusal(async () =>
+          (
+            await userActor("00000000-0000-4000-8000-00000000abce", db)
+          ).getProfile(anon),
+        );
+        expect(existing.name).toBe("ForbiddenError");
+        expect(missing).toEqual(existing);
+      });
     });
   });
 

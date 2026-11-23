@@ -770,6 +770,14 @@ const AddTierListItemInput = builder.inputType("AddTierListItemInput", {
   fields: (t) => ({
     entry: t.field({ type: TierListEntryRefInput, required: true }),
     band: t.int({ required: false, description: "Defaults to 0." }),
+    position: t.int({
+      required: false,
+      description:
+        "M7: with `band`, insert at this index of the band (0 is its top, " +
+        "its length its end) and move the rest down one, as one history " +
+        "edit. Without it the entry is appended. `addTierListItem` only; " +
+        "`addTierListItems` refuses it.",
+    }),
     notes: t.string({ required: false }),
     tierListItemId: t.id({
       required: false,
@@ -822,11 +830,13 @@ const UPDATE_TIER_LIST = {
 const toAddItemInput = (input: {
   entry: { type: TierListEntryType; id: string };
   band?: number | null;
+  position?: number | null;
   notes?: string | null;
   tierListItemId?: string | null;
 }): AddTierListItemInputType => ({
   entry: toEntryRef(input.entry),
   ...(present(input.band) ? { band: input.band } : {}),
+  ...(present(input.position) ? { position: input.position } : {}),
   notes: input.notes ?? null,
   ...(present(input.tierListItemId)
     ? { tierListItemId: String(input.tierListItemId) }
@@ -943,7 +953,8 @@ builder.mutationField("addTierListItem", (t) =>
     type: TierListItemType,
     description:
       "Appends to the end of the given band (position computed in-turn, " +
-      "no read-modify-write race). Refuses a duplicate entry.",
+      "no read-modify-write race), or with `position` inserts there (M7). " +
+      "Refuses a duplicate entry.",
     errors: {},
     args: {
       tierListId: t.arg.id({ required: true }),

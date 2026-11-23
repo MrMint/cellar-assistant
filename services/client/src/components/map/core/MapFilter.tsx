@@ -1,5 +1,6 @@
 import { AnimatePresence, motion } from "motion/react";
 import { type FC, type ReactNode, useEffect, useRef, useState } from "react";
+import { BottomSheet } from "@/components/app/BottomSheet";
 import { IconButton } from "@/components/app/IconButton";
 import {
   Check,
@@ -150,11 +151,11 @@ export const MapFilter: FC<MapFilterProps> = ({
 }: MapFilterProps) => {
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [tierListPickerOpen, setTierListPickerOpen] = useState(false);
-  const [mobilePanelTop, setMobilePanelTop] = useState<number>(88);
   const filterRef = useRef<HTMLDivElement>(null);
   const advancedFiltersPanelId = "map-advanced-filters";
 
-  // Close advanced filters when clicking outside
+  // Close the desktop popover when clicking outside. On a phone the filters
+  // are a BottomSheet, which owns its backdrop, Escape and drag-to-close.
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       const target = event.target as HTMLElement;
@@ -172,13 +173,13 @@ export const MapFilter: FC<MapFilterProps> = ({
       }
     };
 
-    if (showAdvanced) {
+    if (showAdvanced && !isMobile) {
       document.addEventListener("mousedown", handleClickOutside);
       return () => {
         document.removeEventListener("mousedown", handleClickOutside);
       };
     }
-  }, [showAdvanced]);
+  }, [showAdvanced, isMobile]);
 
   useEffect(() => {
     const handleEscape = (event: KeyboardEvent) => {
@@ -194,31 +195,12 @@ export const MapFilter: FC<MapFilterProps> = ({
       }
     };
 
-    if (showAdvanced) {
+    if (showAdvanced && !isMobile) {
       document.addEventListener("keydown", handleEscape);
       return () => {
         document.removeEventListener("keydown", handleEscape);
       };
     }
-  }, [showAdvanced]);
-
-  useEffect(() => {
-    if (!showAdvanced || !isMobile) return;
-
-    const updateMobilePanelTop = () => {
-      const rect = filterRef.current?.getBoundingClientRect();
-      if (!rect) return;
-      setMobilePanelTop(Math.round(rect.bottom + 8));
-    };
-
-    updateMobilePanelTop();
-    window.addEventListener("resize", updateMobilePanelTop);
-    window.addEventListener("scroll", updateMobilePanelTop, true);
-
-    return () => {
-      window.removeEventListener("resize", updateMobilePanelTop);
-      window.removeEventListener("scroll", updateMobilePanelTop, true);
-    };
   }, [showAdvanced, isMobile]);
 
   const hasAdvancedFilters =
@@ -263,6 +245,185 @@ export const MapFilter: FC<MapFilterProps> = ({
         : [...selectedTierListIds, id],
     );
   };
+
+  const resetFilters = () => {
+    onMinRatingChange(undefined);
+    onVisitStatusesChange([]);
+    onTierListsChange?.([]);
+  };
+
+  const sections = (
+    <>
+      {hasAdvancedFilters && (
+        <div className="flex flex-col gap-3">
+          <FilterSection label="Active Filters">
+            <div className="flex flex-wrap gap-2">
+              {minRating !== undefined && (
+                <ActiveFilter onRemove={() => onMinRatingChange(undefined)}>
+                  {`${minRating}+ stars`}
+                </ActiveFilter>
+              )}
+
+              {visitStatuses.map((status) => (
+                <ActiveFilter
+                  key={status}
+                  onRemove={() => {
+                    onVisitStatusesChange(
+                      visitStatuses.filter((s) => s !== status),
+                    );
+                  }}
+                >
+                  {getVisitStatusLabel(status)}
+                </ActiveFilter>
+              ))}
+
+              {selectedTierLists.map((tierList) => (
+                <ActiveFilter
+                  key={tierList.id}
+                  onRemove={() => toggleTierList(tierList.id)}
+                >
+                  {tierList.name}
+                </ActiveFilter>
+              ))}
+            </div>
+          </FilterSection>
+          <Separator />
+        </div>
+      )}
+
+      {/* Rating filter */}
+      <FilterSection label="Minimum Rating">
+        <SegmentedControl
+          aria-label="Minimum Rating"
+          options={RATING_OPTIONS}
+          value={minRating === undefined ? "any" : String(minRating)}
+          onValueChange={(value) =>
+            onMinRatingChange(value === "any" ? undefined : Number(value))
+          }
+        />
+      </FilterSection>
+
+      <Separator />
+
+      {/* Visit status filter */}
+      <FilterSection label="Visit Status">
+        <SegmentedControl
+          aria-label="Visit Status"
+          options={VISIT_OPTIONS}
+          value={visitMode}
+          onValueChange={setVisitMode}
+        />
+      </FilterSection>
+
+      {/* Tier list filter */}
+      {(tierLists.length > 0 || tierListsLoading) && (
+        <>
+          <Separator />
+          <FilterSection label="Tier Lists">
+            <Popover
+              open={tierListPickerOpen}
+              onOpenChange={setTierListPickerOpen}
+            >
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  role="combobox"
+                  aria-expanded={tierListPickerOpen}
+                  aria-label="Tier Lists"
+                  className="h-auto min-h-11 w-full justify-between whitespace-normal py-1.5 pr-3 pl-3 font-normal"
+                >
+                  {selectedTierLists.length > 0 ? (
+                    <span className="flex min-w-0 flex-wrap gap-1">
+                      {selectedTierLists.map((tierList) => (
+                        <span
+                          key={tierList.id}
+                          className="rounded-full bg-surface-3 px-2 py-0.5 text-ink-1 text-xs"
+                        >
+                          {tierList.name}
+                        </span>
+                      ))}
+                    </span>
+                  ) : (
+                    <span className="text-muted-foreground">
+                      Select tier lists...
+                    </span>
+                  )}
+                  {tierListsLoading ? (
+                    <Spinner className="text-ink-3" />
+                  ) : (
+                    <ChevronDown
+                      aria-hidden
+                      strokeWidth={ICON_STROKE}
+                      className="text-ink-3"
+                    />
+                  )}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent
+                align="start"
+                className="w-(--radix-popover-trigger-width) min-w-60 p-0"
+              >
+                <Command>
+                  <CommandInput placeholder="Search tier lists..." />
+                  <CommandList>
+                    <CommandEmpty>
+                      {tierListsLoading
+                        ? "Loading tier lists..."
+                        : "No tier lists"}
+                    </CommandEmpty>
+                    {tierLists.map((tierList) => {
+                      const selected = selectedTierListIds.includes(
+                        tierList.id,
+                      );
+                      return (
+                        <CommandItem
+                          key={tierList.id}
+                          value={tierList.id}
+                          keywords={[tierList.name]}
+                          // cmdk owns `aria-selected` (the
+                          // highlighted row); which lists are
+                          // chosen is `aria-checked`.
+                          aria-checked={selected}
+                          onSelect={() => toggleTierList(tierList.id)}
+                          className="min-h-11"
+                        >
+                          <Check
+                            aria-hidden
+                            strokeWidth={ICON_STROKE}
+                            className={cn(
+                              "text-ink-1",
+                              !selected && "invisible",
+                            )}
+                          />
+                          {tierList.name}
+                        </CommandItem>
+                      );
+                    })}
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
+            <p className="type-footnote">
+              Leave empty to include all tier lists.
+            </p>
+          </FilterSection>
+        </>
+      )}
+    </>
+  );
+
+  const actions = (
+    <div className="flex justify-between gap-2">
+      <Button
+        variant="destructive"
+        disabled={!hasAdvancedFilters}
+        onClick={resetFilters}
+      >
+        Reset
+      </Button>
+      <Button onClick={() => setShowAdvanced(false)}>Close</Button>
+    </div>
+  );
 
   return (
     <div ref={filterRef} className="relative flex flex-row">
@@ -312,6 +473,7 @@ export const MapFilter: FC<MapFilterProps> = ({
               aria-label="More filters"
               aria-expanded={showAdvanced}
               aria-controls={advancedFiltersPanelId}
+              aria-haspopup={isMobile ? "dialog" : undefined}
               size="sm"
               onClick={() => setShowAdvanced((prev) => !prev)}
               className={cn(
@@ -335,225 +497,43 @@ export const MapFilter: FC<MapFilterProps> = ({
         </Tooltip>
       </div>
 
-      {/* Advanced filters popup */}
-      <AnimatePresence>
-        {showAdvanced && (
-          <motion.div
-            key={isMobile ? "mobile" : "desktop"}
-            id={advancedFiltersPanelId}
-            initial={
-              isMobile
-                ? { y: -12, opacity: 0, scale: 0.98 }
-                : { y: -8, opacity: 0, scale: 0.98 }
-            }
-            animate={{ y: 0, opacity: 1, scale: 1 }}
-            exit={
-              isMobile
-                ? { y: -10, opacity: 0, scale: 0.98 }
-                : { y: -6, opacity: 0, scale: 0.98 }
-            }
-            transition={{ ...spring.snappy, opacity: tween("short") }}
-            className={cn(
-              "z-[1200]",
-              isMobile
-                ? "fixed inset-x-2"
-                : "absolute top-[calc(100%+8px)] right-0",
-            )}
-            style={isMobile ? { top: mobilePanelTop } : undefined}
-          >
-            <div
-              className={cn(
-                "overflow-y-auto rounded-md bg-surface-2 p-4 text-ink-1 shadow-lg",
-                !isMobile &&
-                  "max-h-[min(75vh,640px)] min-w-[340px] max-w-[420px]",
-              )}
-              style={
-                isMobile
-                  ? { maxHeight: `calc(100dvh - ${mobilePanelTop + 8}px)` }
-                  : undefined
-              }
+      {/* Advanced filters: a bottom sheet on a phone, a popover from md */}
+      {isMobile ? (
+        <BottomSheet
+          open={showAdvanced}
+          onOpenChange={setShowAdvanced}
+          title="Filters"
+          footer={actions}
+        >
+          <div id={advancedFiltersPanelId} className="flex flex-col gap-4 pb-2">
+            {sections}
+          </div>
+        </BottomSheet>
+      ) : (
+        <AnimatePresence>
+          {showAdvanced && (
+            <motion.div
+              key="desktop"
+              id={advancedFiltersPanelId}
+              initial={{ y: -8, opacity: 0, scale: 0.98 }}
+              animate={{ y: 0, opacity: 1, scale: 1 }}
+              exit={{ y: -6, opacity: 0, scale: 0.98 }}
+              transition={{ ...spring.snappy, opacity: tween("short") }}
+              className="absolute top-[calc(100%+8px)] right-0 z-[1200]"
             >
-              <div className="flex flex-col gap-4">
-                {hasAdvancedFilters && (
-                  <div className="flex flex-col gap-3">
-                    <FilterSection label="Active Filters">
-                      <div className="flex flex-wrap gap-2">
-                        {minRating !== undefined && (
-                          <ActiveFilter
-                            onRemove={() => onMinRatingChange(undefined)}
-                          >
-                            {`${minRating}+ stars`}
-                          </ActiveFilter>
-                        )}
-
-                        {visitStatuses.map((status) => (
-                          <ActiveFilter
-                            key={status}
-                            onRemove={() => {
-                              onVisitStatusesChange(
-                                visitStatuses.filter((s) => s !== status),
-                              );
-                            }}
-                          >
-                            {getVisitStatusLabel(status)}
-                          </ActiveFilter>
-                        ))}
-
-                        {selectedTierLists.map((tierList) => (
-                          <ActiveFilter
-                            key={tierList.id}
-                            onRemove={() => toggleTierList(tierList.id)}
-                          >
-                            {tierList.name}
-                          </ActiveFilter>
-                        ))}
-                      </div>
-                    </FilterSection>
-                    <Separator />
+              <div className="max-h-[min(75vh,640px)] min-w-[340px] max-w-[420px] overflow-y-auto rounded-md bg-surface-2 p-4 text-ink-1 shadow-lg">
+                <div className="flex flex-col gap-4">
+                  {sections}
+                  <Separator />
+                  <div className="sticky bottom-0 bg-surface-2 pt-1">
+                    {actions}
                   </div>
-                )}
-
-                {/* Rating filter */}
-                <FilterSection label="Minimum Rating">
-                  <SegmentedControl
-                    aria-label="Minimum Rating"
-                    options={RATING_OPTIONS}
-                    value={minRating === undefined ? "any" : String(minRating)}
-                    onValueChange={(value) =>
-                      onMinRatingChange(
-                        value === "any" ? undefined : Number(value),
-                      )
-                    }
-                  />
-                </FilterSection>
-
-                <Separator />
-
-                {/* Visit status filter */}
-                <FilterSection label="Visit Status">
-                  <SegmentedControl
-                    aria-label="Visit Status"
-                    options={VISIT_OPTIONS}
-                    value={visitMode}
-                    onValueChange={setVisitMode}
-                  />
-                </FilterSection>
-
-                {/* Tier list filter */}
-                {(tierLists.length > 0 || tierListsLoading) && (
-                  <>
-                    <Separator />
-                    <FilterSection label="Tier Lists">
-                      <Popover
-                        open={tierListPickerOpen}
-                        onOpenChange={setTierListPickerOpen}
-                      >
-                        <PopoverTrigger asChild>
-                          <Button
-                            variant="outline"
-                            role="combobox"
-                            aria-expanded={tierListPickerOpen}
-                            aria-label="Tier Lists"
-                            className="h-auto min-h-11 w-full justify-between whitespace-normal py-1.5 pr-3 pl-3 font-normal"
-                          >
-                            {selectedTierLists.length > 0 ? (
-                              <span className="flex min-w-0 flex-wrap gap-1">
-                                {selectedTierLists.map((tierList) => (
-                                  <span
-                                    key={tierList.id}
-                                    className="rounded-full bg-surface-3 px-2 py-0.5 text-ink-1 text-xs"
-                                  >
-                                    {tierList.name}
-                                  </span>
-                                ))}
-                              </span>
-                            ) : (
-                              <span className="text-muted-foreground">
-                                Select tier lists...
-                              </span>
-                            )}
-                            {tierListsLoading ? (
-                              <Spinner className="text-ink-3" />
-                            ) : (
-                              <ChevronDown
-                                aria-hidden
-                                strokeWidth={ICON_STROKE}
-                                className="text-ink-3"
-                              />
-                            )}
-                          </Button>
-                        </PopoverTrigger>
-                        <PopoverContent
-                          align="start"
-                          className="w-(--radix-popover-trigger-width) min-w-60 p-0"
-                        >
-                          <Command>
-                            <CommandInput placeholder="Search tier lists..." />
-                            <CommandList>
-                              <CommandEmpty>
-                                {tierListsLoading
-                                  ? "Loading tier lists..."
-                                  : "No tier lists"}
-                              </CommandEmpty>
-                              {tierLists.map((tierList) => {
-                                const selected = selectedTierListIds.includes(
-                                  tierList.id,
-                                );
-                                return (
-                                  <CommandItem
-                                    key={tierList.id}
-                                    value={tierList.id}
-                                    keywords={[tierList.name]}
-                                    // cmdk owns `aria-selected` (the
-                                    // highlighted row); which lists are
-                                    // chosen is `aria-checked`.
-                                    aria-checked={selected}
-                                    onSelect={() => toggleTierList(tierList.id)}
-                                    className="min-h-11"
-                                  >
-                                    <Check
-                                      aria-hidden
-                                      strokeWidth={ICON_STROKE}
-                                      className={cn(
-                                        "text-ink-1",
-                                        !selected && "invisible",
-                                      )}
-                                    />
-                                    {tierList.name}
-                                  </CommandItem>
-                                );
-                              })}
-                            </CommandList>
-                          </Command>
-                        </PopoverContent>
-                      </Popover>
-                      <p className="type-footnote">
-                        Leave empty to include all tier lists.
-                      </p>
-                    </FilterSection>
-                  </>
-                )}
-
-                <Separator />
-                <div className="sticky bottom-0 flex justify-between gap-2 bg-surface-2 pt-1">
-                  <Button
-                    variant="destructive"
-                    disabled={!hasAdvancedFilters}
-                    onClick={() => {
-                      onMinRatingChange(undefined);
-                      onVisitStatusesChange([]);
-                      onTierListsChange?.([]);
-                    }}
-                  >
-                    Reset
-                  </Button>
-                  <Button onClick={() => setShowAdvanced(false)}>Close</Button>
                 </div>
               </div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      )}
     </div>
   );
 };
