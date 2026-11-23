@@ -56,6 +56,11 @@ import {
   unconfiguredPlaceReviewer,
 } from "../../actors/place-creation-actor.ts";
 import {
+  setTastePhraser,
+  tastePhraser,
+  unconfiguredTastePhraser,
+} from "../../actors/taste-actor.ts";
+import {
   insightsGenerator,
   noInsightsGenerator,
   setInsightsGenerator,
@@ -100,6 +105,7 @@ const restoreSeams = (): void => {
   setMenuMatchVerifier(unconfiguredMenuMatchVerifier);
   setPlaceReviewer(unconfiguredPlaceReviewer);
   setRecipePhotoExtractor(unconfiguredRecipePhotoExtractor);
+  setTastePhraser(unconfiguredTastePhraser);
 };
 
 afterEach(() => {
@@ -351,6 +357,20 @@ describe("installAI leaves the seams loud when nothing is configured", () => {
         notes: null,
       }),
     ).rejects.toThrow(/no AI provider is configured to read a recipe photo/);
+    // H-10. Loud at the seam; `TasteActor.profile` turns the throw into the
+    // deterministic line (taste-actor.test.ts).
+    await expect(
+      tastePhraser()(ctx, {
+        ratingCount: 10,
+        types: [{ type: "WINE", count: 10 }],
+        archetype: {
+          key: "DEVOTED",
+          title: "Devoted to Nebbiolo",
+          loves: [{ type: "WINE", label: "Nebbiolo", count: 4, average: 5 }],
+          lessKeen: [],
+        },
+      }),
+    ).rejects.toThrow(/no AI provider wired for taste_phrase/);
   });
 
   it("throws — refusing to boot — when AI_PROVIDER is set but incomplete", () => {
@@ -376,6 +396,7 @@ describe("installAI leaves the seams loud when nothing is configured", () => {
     // written, and this line is the difference.
     expect(placeReviewer()).not.toBe(unconfiguredPlaceReviewer);
     expect(recipePhotoExtractor()).not.toBe(unconfiguredRecipePhotoExtractor);
+    expect(tastePhraser()).not.toBe(unconfiguredTastePhraser);
   });
 });
 

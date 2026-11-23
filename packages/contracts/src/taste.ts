@@ -115,7 +115,8 @@ export const TasteActorDescriptor: ActorDescriptor<TasteActorInterface> = {
   actorType: "TasteActor",
   category: "view",
   methods: {
-    profile: {},
+    // H-10: phrases its line through the `taste_phrase` model seam.
+    profile: { modelBacked: true },
     agreement: {},
     friendAgreements: {},
   },

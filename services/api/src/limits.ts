@@ -228,6 +228,8 @@ export const MODEL_BACKED_FIELDS: ReadonlyMap<string, ModelBackedField> =
       { via: ["CellarActor.itemGroups"], onlyWithArgument: "search" },
     ],
     // A vision or LLM call inside the request.
+    // L03/H-10: the profile's line, phrased through `taste_phrase`.
+    ["Query.tasteProfile", { via: ["TasteActor.profile"] }],
     ["Mutation.startItemOnboarding", { via: ["ItemOnboardingActor.start"] }],
     // X02: a typed note's flavour words (`flavour_tags`).
     [

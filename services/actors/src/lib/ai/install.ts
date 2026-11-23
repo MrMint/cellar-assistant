@@ -28,6 +28,10 @@ import {
   MODEL_SEAMS,
   readModelBudgetPolicy,
 } from "../../actors/budget-actor.ts";
+import {
+  providerTastePhraser,
+  setTastePhraser,
+} from "../../actors/taste-actor.ts";
 import { setInsightsGenerator } from "../../actors/tier-list-actor.ts";
 import { EMBEDDING_DIMENSIONS, setEmbedder } from "../embeddings.ts";
 import { setFlavourTagSuggester } from "../flavour-tags.ts";
@@ -157,6 +161,12 @@ export const SEAMS = {
       setRecipePhotoExtractor(
         providerRecipePhotoExtractor(provider, loadImages),
       ),
+  },
+  // L03 (H-10): the taste profile's one sentence. `TasteActor.profile` never
+  // calls it on thin data and keeps the deterministic line on any throw.
+  taste_phrase: {
+    entityType: "taste_profile",
+    install: (provider) => setTastePhraser(providerTastePhraser(provider)),
   },
   tier_list_insights: {
     entityType: "tier_list",

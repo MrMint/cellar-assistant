@@ -386,6 +386,8 @@ export const MODEL_SEAMS = [
   "menu_match",
   "place_review",
   "recipe_photo",
+  // L03/L47 (H-10): one sentence phrasing the deterministic taste archetype.
+  "taste_phrase",
   "tier_list_insights",
 ] as const;
 
@@ -514,6 +516,9 @@ export const MODEL_SPENDERS: Readonly<Record<ModelSeam, ModelSpender>> = {
   menu_match: { maxMonthlyRequests: 20_000, defaultMonthlyBudgetCents: 200 },
   place_review: { maxMonthlyRequests: 20_000, defaultMonthlyBudgetCents: 200 },
   recipe_photo: { maxMonthlyRequests: 5_000, defaultMonthlyBudgetCents: 500 },
+  // L03 (H-10). A short prompt of computed facts in, one sentence (~60 tokens)
+  // out, on "low", at most once per taste-profile read with an archetype.
+  taste_phrase: { maxMonthlyRequests: 20_000, defaultMonthlyBudgetCents: 200 },
   tier_list_insights: {
     maxMonthlyRequests: 20_000,
     defaultMonthlyBudgetCents: 200,
@@ -850,6 +855,8 @@ export const USER_CAPS: Readonly<Record<string, UserCap>> = {
   "ai_model/menu_match": { hourly: 400, daily: 1_500 },
   "ai_model/place_review": { hourly: 100, daily: 500 },
   "ai_model/recipe_photo": { hourly: 20, daily: 60 },
+  // L03: one per taste-profile read; a person reloading the page all hour.
+  "ai_model/taste_phrase": { hourly: 60, daily: 300 },
   "ai_model/tier_list_insights": { hourly: 30, daily: 150 },
   "google_places/autocomplete": { hourly: 300, daily: 1_500 },
   "google_places/nearby_search": { hourly: 60, daily: 300 },

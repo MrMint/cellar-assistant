@@ -149,6 +149,8 @@ export const OUTPUT_TOKEN_ESTIMATES: Readonly<Record<ModelSeam, number>> = {
   menu_match: 512,
   place_review: 512,
   recipe_photo: 4096,
+  // L03: `{ factsSupportALine, line }`, one sentence of at most 30 words.
+  taste_phrase: 64,
   tier_list_insights: 1024,
 };
 
