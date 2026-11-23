@@ -86,3 +86,30 @@ describe("typical brew table (ux-c L08, L3)", () => {
     assert.equal(formatBrewFact({ key: "waterMl", value: 250 }), "250 ml");
   });
 });
+
+describe("W-23 · the re-steep line", () => {
+  test("oolong reads as the board's line", () => {
+    const guide = brewGuide(typicalBrew("TEA", { category: "oolong" }), null);
+    assert.equal(guide?.resteepLine, "3–4 more steeps, add 15 s each.");
+  });
+  test("a whole minute reads as minutes", () => {
+    const guide = brewGuide(typicalBrew("TEA", { category: "white" }), null);
+    assert.equal(guide?.resteepLine, "1–2 more steeps, add 1 min each.");
+  });
+  test("teas not usually re-steeped, coffee and an all-yours guide have none", () => {
+    for (const row of [
+      typicalBrew("TEA", { category: "black" }),
+      typicalBrew("TEA", { form: "matcha_powder" }),
+      typicalBrew("COFFEE", { roastLevel: "MEDIUM" }),
+    ]) {
+      assert.equal(brewGuide(row, null)?.resteepLine, null);
+    }
+    const mine = brewGuide(null, {
+      waterTempC: 85,
+      steepSeconds: null,
+      doseGrams: null,
+      waterMl: null,
+    });
+    assert.equal(mine?.resteepLine, null);
+  });
+});
