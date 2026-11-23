@@ -1,6 +1,13 @@
 "use client";
 
-import { type ReactNode, useEffect, useRef, useState } from "react";
+import { useReducedMotion } from "motion/react";
+import {
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import {
   Drawer,
   DrawerContent,
@@ -10,15 +17,19 @@ import {
   DrawerTitle,
 } from "@/components/ui/drawer";
 import { cn } from "@/lib/utils";
+import { type SnapDecision, settleMs, VAUL_SETTLE_MS } from "./sheet-physics";
 import { keepOpenForToasts } from "./toastLayer";
 import { useReturnFocus } from "./useReturnFocus";
+import { useSheetDrag } from "./useSheetDrag";
 
 export type SheetSnap = "peek" | "half" | "full";
 
-/** vaul's close transition (`TRANSITIONS.DURATION`, 0.5 s). */
-const CLOSE_MS = 500;
-/** vaul's open and snap transitions take the same 0.5 s. */
-const SETTLE_MS = CLOSE_MS;
+/**
+ * vaul's close transition (`TRANSITIONS.DURATION`, 0.5 s). vaul keeps the
+ * sheet mounted that long under reduced motion too, so `onClosed` waits it out
+ * either way.
+ */
+const CLOSE_MS = VAUL_SETTLE_MS;
 
 /** Snap names → how much of the viewport height the sheet shows. */
 export const SNAP_FRACTION: Readonly<Record<SheetSnap, number>> = {
@@ -106,6 +117,7 @@ function useOpenSheetSignal(
   open: boolean,
   nodeRef: { readonly current: HTMLElement | null },
   snap: unknown,
+  settleAfterMs: number,
 ): void {
   const entryRef = useRef<OpenSheet | null>(null);
 
@@ -133,12 +145,12 @@ function useOpenSheetSignal(
       if (event.target !== null && event.target === nodeRef.current) settle();
     };
     document.addEventListener("transitionend", onTransitionEnd, true);
-    const timer = window.setTimeout(settle, SETTLE_MS);
+    const timer = window.setTimeout(settle, settleAfterMs);
     return () => {
       document.removeEventListener("transitionend", onTransitionEnd, true);
       window.clearTimeout(timer);
     };
-  }, [open, nodeRef, snap]);
+  }, [open, nodeRef, snap, settleAfterMs]);
 }
 
 export type BottomSheetProps = {
@@ -158,6 +170,13 @@ export type BottomSheetProps = {
   snapPoints?: readonly SheetSnap[];
   /** Which of `snapPoints` it opens at; defaults to the first. */
   initialSnap?: SheetSnap;
+  /**
+   * ux-c M6: runs when the sheet settles on a different snap point than the
+   * one it rested at — after a drag or a fling, once the snap transition is
+   * over. Never for a sheet without `snapPoints`, never on close, and not for
+   * the `initialSnap` it opens at.
+   */
+  onSnapChange?: (snap: SheetSnap) => void;
   /** `false`: no drag-down or backdrop dismiss (a blocking step). */
   dismissible?: boolean;
   /**
@@ -192,6 +211,7 @@ export function BottomSheet({
   description,
   snapPoints,
   initialSnap,
+  onSnapChange,
   dismissible = true,
   onClosed,
   role = "dialog",
@@ -207,7 +227,113 @@ export function BottomSheet({
   const [snap, setSnap] = useState<number | string | null | undefined>(initial);
   const returnFocus = useReturnFocus(open);
   const contentRef = useRef<HTMLDivElement | null>(null);
-  useOpenSheetSignal(open, contentRef, snap);
+  const reducedMotion = useReducedMotion() ?? false;
+  const settleAfterMs = settleMs(reducedMotion);
+  useOpenSheetSignal(open, contentRef, snap, settleAfterMs);
+
+  // A close vaul starts (drag, fling, backdrop, Escape) passes through here,
+  // and vaul may still pick a snap in the same release: from then on, nothing
+  // is a snap change (M6: never on close).
+  const closingRef = useRef(false);
+  const onOpenChangeRef = useRef(onOpenChange);
+  onOpenChangeRef.current = onOpenChange;
+  const onVaulOpenChange = useCallback((next: boolean) => {
+    if (!next) closingRef.current = true;
+    onOpenChangeRef.current(next);
+  }, []);
+
+  // The release decision from `useSheetDrag`, made from the release velocity
+  // during the pointerup, before vaul's handler. vaul's own pick uses the
+  // whole drag's average speed; ours replaces it as vaul reports it. vaul
+  // reports nothing when it picks the snap it is already on (a controlled
+  // value it does not change), so a decision still pending a tick later is
+  // applied then. A close vaul started always wins.
+  const releaseRef = useRef<SnapDecision | null>(null);
+  const fractionsRef = useRef(fractions);
+  fractionsRef.current = fractions;
+  const dismissibleRef = useRef(dismissible);
+  dismissibleRef.current = dismissible;
+  const applyRelease = useCallback(
+    (decision: SnapDecision, fallback: number | string | null | undefined) => {
+      if (decision.kind === "dismiss" && dismissibleRef.current) {
+        onVaulOpenChange(false);
+        return;
+      }
+      const index = decision.kind === "snap" ? decision.index : 0;
+      setSnap(fractionsRef.current?.[index] ?? fallback);
+    },
+    [onVaulOpenChange],
+  );
+  const onRelease = useCallback(
+    (decision: SnapDecision) => {
+      releaseRef.current = decision;
+      window.setTimeout(() => {
+        if (releaseRef.current !== decision) return;
+        releaseRef.current = null;
+        if (!closingRef.current) applyRelease(decision, undefined);
+      }, 0);
+    },
+    [applyRelease],
+  );
+  const onVaulSnap = useCallback(
+    (next: number | string | null) => {
+      const decision = releaseRef.current;
+      releaseRef.current = null;
+      if (closingRef.current || decision === null) {
+        setSnap(next);
+        return;
+      }
+      applyRelease(decision, next);
+    },
+    [applyRelease],
+  );
+
+  useSheetDrag({
+    open,
+    nodeRef: contentRef,
+    fractions,
+    activeFraction: typeof snap === "number" ? snap : null,
+    dismissible,
+    onRelease,
+  });
+
+  // M6: report a new resting snap once it has settled, unless the sheet is
+  // closing by then. `settledRef` is the snap it last rested at, reset to
+  // `initialSnap` on every open.
+  const onSnapChangeRef = useRef(onSnapChange);
+  onSnapChangeRef.current = onSnapChange;
+  const settledRef = useRef<number | string | null | undefined>(initial);
+  // Set while a re-open's reset to `initialSnap` has not rendered yet: the
+  // snap left over from last time is not a change.
+  const resettingRef = useRef(false);
+
+  // Re-opening starts from the declared snap, not wherever it was left.
+  useEffect(() => {
+    if (!open) return;
+    closingRef.current = false;
+    settledRef.current = initial;
+    resettingRef.current = true;
+    setSnap(initial);
+  }, [open, initial]);
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `fractions` and `snapPoints` are new arrays each render; `snap` is one of `fractions`, so it is the trigger.
+  useEffect(() => {
+    if (resettingRef.current) {
+      if (snap === settledRef.current) resettingRef.current = false;
+      return;
+    }
+    if (!open || fractions === undefined || snapPoints === undefined) return;
+    if (snap === settledRef.current || typeof snap !== "number") return;
+    const index = fractions.indexOf(snap);
+    const name = snapPoints[index];
+    if (name === undefined) return;
+    const timer = window.setTimeout(() => {
+      if (closingRef.current) return;
+      settledRef.current = snap;
+      onSnapChangeRef.current?.(name);
+    }, settleAfterMs);
+    return () => window.clearTimeout(timer);
+  }, [open, snap, settleAfterMs]);
 
   // `onClosed` once the close transition is over, **however** the sheet was
   // closed. vaul's own `onAnimationEnd` fires only for a close vaul started
@@ -226,24 +352,19 @@ export function BottomSheet({
     return () => window.clearTimeout(timer);
   }, [open]);
 
-  // Re-opening starts from the declared snap, not wherever it was left.
-  useEffect(() => {
-    if (open) setSnap(initial);
-  }, [open, initial]);
-
   const snapProps =
     fractions === undefined
       ? {}
       : {
           snapPoints: fractions,
           activeSnapPoint: snap ?? null,
-          setActiveSnapPoint: setSnap,
+          setActiveSnapPoint: onVaulSnap,
         };
 
   return (
     <Drawer
       open={open}
-      onOpenChange={onOpenChange}
+      onOpenChange={onVaulOpenChange}
       dismissible={dismissible}
       shouldScaleBackground={false}
       {...snapProps}

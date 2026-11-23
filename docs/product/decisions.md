@@ -632,3 +632,45 @@ reverse them. Each names the item it belongs to; none overrides an answer.
   `RecipeThumb`. AddItemClient and the brand card/details still use the
   PNGs: their restored-markup tests (outside this stream) pin the images,
   so swapping them is a hand-off.
+
+### BottomSheet physics (wave C "sheetphysics": B04, M6)
+
+- **vaul stays the engine; each criterion is vaul's or ours (L21, D20).**
+  vaul's: transform-only movement (`translate3d`), following the finger,
+  scroll handoff (its `shouldDrag`: a list that can scroll takes the drag,
+  and at `scrollTop` 0 a downward drag moves the sheet), dismissal
+  thresholds, focus trap, Escape and aria. Ours (`useSheetDrag` +
+  `sheet-physics.ts`): velocity-aware snapping by release velocity,
+  rubber-band past the ends, and `onSnapChange` (M6). Reduced motion was
+  already `globals.css`'s: vaul's transitions go to 0 s (instant snaps), and
+  our stretch snaps back without a spring.
+- **Release velocity, not vaul's average.** vaul divides the whole drag's
+  distance by its time, so a slow drag that ends in a flick reads as slow
+  and a fast drag that stops before lifting reads as a flick. We take the
+  last 100 ms of samples (or the last segment, when a slow frame leaves
+  none), project 200 ms ahead and take the nearest stop; at 0.4 px/ms (vaul's
+  own threshold) a release always reaches the next stop its way. UIKit's
+  full deceleration projection (about 500 ms) threw a sheet two snaps on an
+  ordinary flick, so 200 ms. Our decision replaces vaul's as vaul reports
+  it; vaul reports nothing when it keeps the current snap, so a pending
+  decision is applied a tick later. A close vaul starts always wins.
+- **The stretch is on `translate`, not `transform`.** vaul writes
+  `transform` inline on every move; motion's `y` would overwrite it. The CSS
+  `translate` property composes with `transform`, so the stretch stays a
+  compositor-only transform and the two never fight. It applies only where
+  vaul hard-stops: above `full` (and above a content-sized sheet when vaul is
+  not already dragging, since vaul stretches that case itself once it is),
+  and below the lowest stop of a sheet that cannot be dismissed (vaul does
+  not move those at all). It never applies while the content owns the drag.
+- **M6 fires on settle.** After the snap transition (0 under reduced
+  motion), only for a snap other than the one the sheet last rested at;
+  re-opening resets that to `initialSnap` without firing. A close started
+  by vaul marks the sheet closing before vaul picks a snap in the same
+  release, so nothing fires on close.
+- **MapFilter (L15).** On a phone the filters are a `BottomSheet` titled
+  "Filters" with Reset and Close in its footer, replacing a fixed panel
+  measured under the filter bar; the sheet's own backdrop, Escape and drag
+  replace the panel's click-outside and Escape listeners, which now run on
+  desktop only. The desktop popover is unchanged; the tier-list combobox
+  inside stays a popover.
+
