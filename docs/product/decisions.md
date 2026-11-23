@@ -812,3 +812,37 @@ reverse them. Each names the item it belongs to; none overrides an answer.
   fragment lacks Wine `style`, Spirit `spiritType` and Tea `form`, so a card
   shows variety/beer/tea-category vessels until it selects them (hand-off).
 
+
+### Recap and breadth stamps (wave C "recap": L04)
+
+- **The drink date is `check_ins.created_at`.** There is no `drank_at` column;
+  `logDrink` writes the drank-at time there. A period is read in the viewer's
+  IANA zone (`timestamp at time zone`), UTC when none is given, so a 23:30
+  log on 31 October in Los Angeles is October's.
+- **One read, pure selection.** `RecapActor` (view actor, keyed by the
+  viewer, read-only) runs one query over the viewer's history up to the
+  period's end, each row flagged in-period (`recap-sql.ts`), and
+  `recap-cards.ts` derives cards and stamps. "New" means not in the rows
+  before the period, so no second query.
+- **What counts.** Regions are an item's region, else its country. Styles are
+  per type: wine variety (else style), beer style, spirit type, coffee process
+  (else roast), sake type, tea category, keyed by type so a wine "Rosé" and a
+  sake "Rosé" are two. Logs whose bottle or recipe was deleted count toward
+  nothing. A recipe's name appears in a chip only while the viewer may still
+  see the recipe; the count keeps it, since the log is the viewer's own.
+- **Cards and thresholds.** New to you 3, kinds of drink 2, styles 3,
+  regions 3, recipes made 2, top rated 3 (distinct items scored), plus a stamp
+  card for each stamp tier crossed inside the period. No card counts logs.
+- **Stamp tiers.** Styles 5/10/25/50/100, regions 5/10/25/50, kinds of drink
+  3/6, recipes made 3/10/25/50. The kind list is pinned by a test.
+- **The share-image URL names the owner** (`/api/recap/<owner>/<period>/<card>`),
+  so another user's request is a concrete refusal and the same 404 as a
+  missing period or card. It is only ever fetched by the owner's own page; the
+  share carries the file alone (no url, no text), so the URL never leaves the
+  device. Signed out, the app proxy redirects to sign-in before the route
+  runs (the route would also answer 404).
+- **Board differences (L43).** The board's "wine regions" reads "regions":
+  regions count across types. The board cycles cards on tap; so does the deck.
+  Satori has no Fraunces, so the share image uses the default face at the
+  board's hierarchy. The Me entry is a "Your <month> recap" row inside the
+  `MeStamps` slot, since `MeHub` is not this stream's file.
