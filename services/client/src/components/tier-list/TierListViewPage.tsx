@@ -34,6 +34,7 @@ import {
   useState,
 } from "react";
 import { ActionBar } from "@/components/app/ActionBar";
+import { AppBar } from "@/components/app/AppBar";
 import { EmptyState } from "@/components/app/EmptyState";
 import { IconButton } from "@/components/app/IconButton";
 import {
@@ -409,6 +410,9 @@ export function TierListViewPage({
 
   return (
     <div className="mx-auto flex w-full max-w-[800px] flex-col gap-4 sm:px-4">
+      {/* W-10: Back, like every other pushed page; the large title below
+          stays the page's h1 (and the morph target), so the bar has none. */}
+      <AppBar parent="/tier-lists" />
       {/* Header. Only the title shares its row with the actions: at 390 an
           owner of a place list has four of them, and a description in the
           title's column wrapped every two or three words. */}

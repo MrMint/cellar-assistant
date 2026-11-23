@@ -191,6 +191,7 @@ import {
   tierListHistory,
   tierListItems,
   tierLists,
+  user,
 } from "@cellar-assistant/db";
 import { and, eq, inArray, sql } from "@cellar-assistant/db/orm";
 import {
@@ -199,6 +200,7 @@ import {
   isOwner,
 } from "@cellar-assistant/policy";
 import type { ActorId, DaprClient } from "@dapr/dapr";
+import { handleForId, isEmailShaped } from "../auth/display-name.ts";
 import { EntityActorBase } from "../lib/actor-base.ts";
 import { aiCapabilities } from "../lib/ai/capabilities.ts";
 import type { DbOrTx } from "../lib/db.ts";
@@ -349,6 +351,32 @@ const requireName = (name: string): string => {
     );
   }
   return trimmed;
+};
+
+/**
+ * W-19: a copy's default name says it is yours and whose it was —
+ * `Sam's reds (from Sam)` — or `… (copy)` for a copy of your own list. The
+ * owner is named by their first name (or the handle a missing or
+ * email-shaped name gets everywhere else), and the source name is shortened
+ * so the whole stays inside {@link requireName}'s 200 characters.
+ */
+export const cloneName = (
+  sourceName: string,
+  owner: { readonly id: string; readonly name: string } | null,
+  viewerId: string,
+): string => {
+  const base = sourceName.trim();
+  const ownName = owner === null || owner.id === viewerId;
+  const shown =
+    owner === null || ownName
+      ? null
+      : owner.name.trim() === "" || isEmailShaped(owner.name)
+        ? handleForId(owner.id)
+        : (owner.name.trim().split(/\s+/)[0] ?? owner.name.trim());
+  const suffix = shown === null ? " (copy)" : ` (from ${shown})`;
+  const room = Math.max(1, 200 - suffix.length);
+  const head = base.length > room ? `${base.slice(0, room - 1)}…` : base;
+  return `${head}${suffix}`;
 };
 
 /**
@@ -739,11 +767,15 @@ export class TierListActor
         return [{ entry, band: row.band, notes: null, id: randomUUID() }];
       }),
     );
+    const [owner] = await this.db
+      .select({ id: user.id, name: user.name })
+      .from(user)
+      .where(eq(user.id, found.createdById));
     const name = requireName(
       input.name === undefined ||
         input.name === null ||
         input.name.trim() === ""
-        ? found.name
+        ? cloneName(found.name, owner ?? null, creator)
         : input.name,
     );
 

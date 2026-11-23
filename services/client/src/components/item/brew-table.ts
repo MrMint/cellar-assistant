@@ -18,6 +18,18 @@ export type BrewNumbers = {
 export type BrewRow = BrewNumbers & {
   /** "rolled oolong", "medium roast": what "typical for …" names. */
   readonly label: string;
+  /**
+   * W-23, board BrewGuide ("3–4 more steeps, add 15 s each"): how many more
+   * steeps the leaves give, and how much longer each one runs. Only teas that
+   * are usually re-steeped have one; black, herbal and the rest do not.
+   */
+  readonly resteeps?: Resteeps;
+};
+
+export type Resteeps = {
+  readonly min: number;
+  readonly max: number;
+  readonly addSeconds: number;
 };
 
 export type BrewStyle = {
@@ -34,17 +46,31 @@ const tea = (
   waterTempC: number,
   steepSeconds: number,
   doseGrams: number,
-): BrewRow => ({ label, waterTempC, steepSeconds, doseGrams, waterMl: 250 });
+  resteeps?: Resteeps,
+): BrewRow => ({
+  label,
+  waterTempC,
+  steepSeconds,
+  doseGrams,
+  waterMl: 250,
+  ...(resteeps === undefined ? {} : { resteeps }),
+});
+
+const more = (min: number, max: number, addSeconds: number): Resteeps => ({
+  min,
+  max,
+  addSeconds,
+});
 
 /** One cup, western style. `blend` and unknown categories have no row. */
 const TEA_BY_CATEGORY: Readonly<Record<string, BrewRow>> = {
-  green: tea("green tea", 80, 120, 2.5),
-  white: tea("white tea", 85, 240, 3),
-  yellow: tea("yellow tea", 80, 180, 3),
-  oolong: tea("oolong", 90, 180, 3),
+  green: tea("green tea", 80, 120, 2.5, more(1, 2, 30)),
+  white: tea("white tea", 85, 240, 3, more(1, 2, 60)),
+  yellow: tea("yellow tea", 80, 180, 3, more(1, 2, 30)),
+  oolong: tea("oolong", 90, 180, 3, more(3, 4, 15)),
   black: tea("black tea", 95, 240, 2.5),
-  dark: tea("dark tea", 95, 240, 3),
-  pu_erh: tea("pu-erh", 95, 240, 3),
+  dark: tea("dark tea", 95, 240, 3, more(2, 3, 30)),
+  pu_erh: tea("pu-erh", 95, 240, 3, more(2, 3, 30)),
   herbal: tea("herbal tea", 100, 300, 2),
   rooibos: tea("rooibos", 100, 300, 2.5),
   mate: tea("mate", 75, 300, 3),
@@ -106,6 +132,8 @@ export type BrewFact = {
 export type BrewGuide = {
   /** The typical row's label, or `null` when the guide is all yours. */
   readonly typicalFor: string | null;
+  /** "3–4 more steeps, add 15 s each.", when the typical row has one. */
+  readonly resteepLine: string | null;
   readonly facts: readonly BrewFact[];
   /** The timer's length: your steep, else the typical one, else none. */
   readonly steepSeconds: number | null;
@@ -137,10 +165,22 @@ export const brewGuide = (
   if (facts.length === 0) return null;
   return {
     typicalFor: row?.label ?? null,
+    resteepLine: resteepLine(row?.resteeps),
     facts,
     steepSeconds:
       facts.find((fact) => fact.key === "steepSeconds")?.value ?? null,
   };
+};
+
+/** The board's re-steep line: "3–4 more steeps, add 15 s each." */
+export const resteepLine = (resteeps: Resteeps | undefined): string | null => {
+  if (resteeps === undefined) return null;
+  const { min, max, addSeconds } = resteeps;
+  const count = min === max ? `${min}` : `${min}–${max}`;
+  const noun = max === 1 ? "steep" : "steeps";
+  const add =
+    addSeconds % 60 === 0 ? `${addSeconds / 60} min` : `${addSeconds} s`;
+  return `${count} more ${noun}, add ${add} each.`;
 };
 
 /** How a fact reads in the grid: `80 °C`, `3:00`, `2.5 g`, `250 ml`. */

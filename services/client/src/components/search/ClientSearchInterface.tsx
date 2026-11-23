@@ -247,6 +247,12 @@ export const ClientSearchInterface = ({
                 </InputGroupAddon>
                 <InputGroupInput
                   ref={inputRef}
+                  // W-12: the sheet opens ready to type, so a phone brings its
+                  // keyboard up. Only an empty sheet: opened on `?q=`, the
+                  // results are what you came for, not a keyboard over them.
+                  // The box never remounts while you type (N01), so this
+                  // fires once, when the sheet opens.
+                  autoFocus={!urlQuery}
                   aria-label="Search your collection"
                   enterKeyHint="search"
                   placeholder={

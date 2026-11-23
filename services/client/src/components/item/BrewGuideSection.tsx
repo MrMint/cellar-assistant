@@ -149,6 +149,7 @@ function GuideCard({
         <p className="type-footnote text-ink-3">
           Typical for {guide.typicalFor}
           {yours ? "; your own numbers are saved for this one." : "."}
+          {guide.resteepLine === null ? null : ` ${guide.resteepLine}`}
         </p>
       )}
       {guide.steepSeconds !== null && (

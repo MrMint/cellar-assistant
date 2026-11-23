@@ -5,6 +5,10 @@ import { useMutation, useQuery } from "urql";
 import { BottomSheet } from "@/components/app/BottomSheet";
 import { InsetSection, ListRow } from "@/components/app/Page";
 import type { ApiItemType } from "@/components/cellar-api/itemTypes";
+import {
+  thisContainerLabel,
+  typeWords,
+} from "@/components/drink-log/type-words";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -142,27 +146,35 @@ export function DrinkingWindowCard({ model }: { model: FreshnessModel }) {
   );
 }
 
-const FIELDS: readonly {
+/** The sheet's date fields, in the type's words (W-20). */
+const fieldsFor = (
+  type: string,
+): readonly {
   key: keyof FreshnessDraft;
   label: string;
   type: "date" | "text";
-}[] = [
-  { key: "acquiredOn", label: "Bought", type: "date" },
-  { key: "packagedOn", label: "Bottled", type: "date" },
-  { key: "drinkFrom", label: "Drink from", type: "date" },
-  { key: "drinkUntil", label: "Drink until", type: "date" },
-];
+}[] => {
+  const words = typeWords(type);
+  return [
+    { key: "acquiredOn", label: "Bought", type: "date" },
+    { key: "packagedOn", label: words.packaged, type: "date" },
+    { key: "drinkFrom", label: words.windowFrom, type: "date" },
+    { key: "drinkUntil", label: words.windowUntil, type: "date" },
+  ];
+};
 
 function EditSheet({
   open,
   onOpenChange,
   bottle,
+  itemType,
   cellarId,
   cellarItemId,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   bottle: FreshnessBottle;
+  itemType: string;
   cellarId: string;
   cellarItemId: string;
 }) {
@@ -201,7 +213,7 @@ function EditSheet({
     <BottomSheet
       open={open}
       onOpenChange={onOpenChange}
-      title="This bottle"
+      title={thisContainerLabel(itemType)}
       description={FOOTNOTE}
       footer={
         <Button className="w-full" onClick={save} disabled={pending}>
@@ -216,7 +228,7 @@ function EditSheet({
           save();
         }}
       >
-        {FIELDS.map((field) => (
+        {fieldsFor(itemType).map((field) => (
           <div key={field.key} className="flex flex-col gap-1.5">
             <Label htmlFor={`fresh-${field.key}`}>{field.label}</Label>
             <Input
@@ -273,13 +285,16 @@ function EditSheet({
 export function ThisBottleRows({
   model,
   onEdit,
+  itemType = "WINE",
 }: {
   model: FreshnessModel;
   onEdit: () => void;
+  /** W-20: "This tin", "This bag". */
+  itemType?: string;
 }) {
   return (
     <InsetSection
-      label="This bottle"
+      label={thisContainerLabel(itemType)}
       data-slot="this-bottle"
       action={
         <Button size="sm" variant="ghost" className="min-h-11" onClick={onEdit}>
@@ -371,12 +386,13 @@ export function BottleFreshnessFields({
   return (
     <div data-slot="bottle-freshness" className="flex flex-col gap-6 pt-4">
       <DrinkingWindowCard model={model} />
-      <ThisBottleRows model={model} onEdit={edit} />
+      <ThisBottleRows model={model} onEdit={edit} itemType={item.type} />
       <EditSheet
         key={opened}
         open={editing}
         onOpenChange={setEditing}
         bottle={bottle}
+        itemType={item.type}
         cellarId={cellarId}
         cellarItemId={cellarItemId}
       />

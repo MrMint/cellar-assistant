@@ -20,6 +20,7 @@ import {
   sealedShelfLife,
 } from "@cellar-assistant/contracts/shelf-life";
 import type { ApiItemType } from "@/components/cellar-api/itemTypes";
+import { typeWords } from "@/components/drink-log/type-words";
 
 /** The bottle's own fields, as `CellarItem` selects them. */
 export type FreshnessBottle = {
@@ -222,6 +223,8 @@ export const freshnessModel = (
     bottle.openAt !== null && bottle.emptyAt === null ? opened : sealed;
   const entry = window === opened ? openEntry : sealedEntry;
 
+  // W-20: a tin of tea is packed and best by, a bag of coffee roasted.
+  const words = typeWords(item.type);
   const rows: FreshnessRow[] = [
     {
       field: "acquiredOn",
@@ -231,19 +234,19 @@ export const freshnessModel = (
     },
     {
       field: "packagedOn",
-      label: "Bottled",
+      label: words.packaged,
       value: bottle.packagedOn === null ? null : formatDay(bottle.packagedOn),
       source: bottle.packagedOn === null ? null : "user",
     },
     windowRow(
       "drinkFrom",
-      "Drink from",
+      words.windowFrom,
       sealed?.from ?? null,
       sealed?.fromSource ?? null,
     ),
     windowRow(
       "drinkUntil",
-      "Drink until",
+      words.windowUntil,
       sealed?.until ?? null,
       sealed?.untilSource ?? null,
     ),
@@ -401,7 +404,9 @@ function barOf(
     width: Math.max(0, end - start),
     today: pct(today),
     axisFrom: axis(lo),
-    axisTo: axis(hi),
+    // W-6: the last real date, not the padded edge — padding past "Dec 2026"
+    // read as "2027", which is no date anyone set.
+    axisTo: axis(hiRaw),
   };
 }
 

@@ -33,6 +33,7 @@ import {
   UserSearchQuery,
 } from "./fragments";
 import { InviteFriendButton } from "./InviteFriendButton";
+import { openIncomingRequests } from "./open-requests";
 
 /** How often the friends and requests lists refresh in the background — there
  * is no subscription in the new stack (plan §6 D8: "polling replaces the
@@ -307,10 +308,16 @@ export const FriendsClient = () => {
     }
   };
 
-  const incoming = incomingList.rows;
+  const friendRows = friendsList.rows;
+  // W-13: an accepted request stays in the list until the requester's actor
+  // deletes it; the friendship is already written, so it is closed here.
+  const incoming = openIncomingRequests(
+    incomingList.rows,
+    friendRows.map((row) => row.user.id),
+  );
   const outgoing = outgoingList.rows;
 
-  const handleSendRequest = (userId: string) => {
+  const handleSendRequest = (userId: string, displayName: string) => {
     void withPending(userId, async () => {
       const result = await sendFriendRequest({ userId });
       const payload = result.data?.sendFriendRequest;
@@ -319,6 +326,8 @@ export const FriendsClient = () => {
         setBanner(null);
         refreshLists();
         reexecuteSearch({ requestPolicy: "network-only" });
+        // W-13: the row only moves to Outgoing on the re-read; say it went.
+        notify(`Friend request sent to ${displayName}`);
         return;
       }
       if (payload !== undefined && "code" in payload) {
@@ -411,8 +420,6 @@ export const FriendsClient = () => {
       });
     });
   };
-
-  const friendRows = friendsList.rows;
 
   // A7e made `userSearch` a result union; narrowed the same way `myFriends`
   // above already is, so a refusal shows an empty list rather than crashing.
@@ -525,7 +532,9 @@ export const FriendsClient = () => {
                   pending={
                     pendingIds.has(edge.node.userId) || searchResult.fetching
                   }
-                  onClick={() => handleSendRequest(edge.node.userId)}
+                  onClick={() =>
+                    handleSendRequest(edge.node.userId, edge.node.displayName)
+                  }
                 >
                   Request
                 </RowButton>
