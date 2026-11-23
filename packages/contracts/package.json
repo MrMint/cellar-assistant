@@ -21,6 +21,7 @@
     "./proxy": "./src/proxy.ts",
     "./quantity": "./src/quantity.ts",
     "./shelf-life": "./src/shelf-life.ts",
+    "./recap": "./src/recap.ts",
     "./bands": "./src/bands.ts"
   },
   "scripts": {

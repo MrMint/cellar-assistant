@@ -25,6 +25,7 @@ export * from "./place-categories.ts";
 export * from "./places.ts";
 export * from "./proxy.ts";
 export * from "./quantity.ts";
+export * from "./recap.ts";
 export * from "./recipes.ts";
 export * from "./reference.ts";
 export * from "./search.ts";
