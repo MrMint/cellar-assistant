@@ -9,6 +9,7 @@ import { ConfirmSheet } from "@/components/app/ConfirmSheet";
 import { Lock, People, Public } from "@/components/app/icons";
 import { Link } from "@/components/app/Link";
 import { notify } from "@/components/app/notify";
+import { useNavigate } from "@/components/app/useNavigate";
 import { MakeabilitySummary } from "@/components/bar/Availability";
 import { ApiError } from "@/components/cellar-api/ApiError";
 import { Badge } from "@/components/ui/badge";
@@ -91,6 +92,7 @@ export const RecipeDetails = ({
   titleLevel = "h2",
 }: RecipeDetailsProps) => {
   const router = useRouter();
+  const navigate = useNavigate();
   const reviews = recipe.recipe_reviews ?? [];
   const isOwner =
     viewerId !== null &&
@@ -133,7 +135,7 @@ export const RecipeDetails = ({
     }
     setConfirmingDelete(false);
     notify(`Deleted ${recipe.name}.`);
-    router.replace("/recipes");
+    navigate.replace("/recipes", { kind: "back" });
     router.refresh();
   };
   const changed = () => {
@@ -153,7 +155,10 @@ export const RecipeDetails = ({
                 shareItem,
                 {
                   label: isDraft ? "Review draft" : "Edit recipe",
-                  onSelect: () => router.push(`/recipes/${recipe.id}/edit`),
+                  onSelect: () =>
+                    navigate.push(`/recipes/${recipe.id}/edit`, {
+                      kind: "forward",
+                    }),
                 },
                 {
                   label: isDraft ? "Discard draft" : "Delete recipe",
