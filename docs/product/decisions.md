@@ -541,3 +541,36 @@ reverse them. Each names the item it belongs to; none overrides an answer.
   per-type routes read the cellar like `/items/add` does, so the success
   sheet says "… is in Home Cellar", a cellar that does not exist is a 404,
   and a viewer who may not add there gets the note instead of a camera.
+
+### Pairwise placement (wave C "pairwise": L09)
+
+- **Where it starts.** Add entry offers **Compare to place it** when exactly one entry is picked. Several picks
+  stay one multi-add, as X16 has it, because a pairwise run places a single entry. The run starts in the band
+  the entry's rating gives it (`bandForScore`, X23). That is why the board's Skip line can name the band
+  ("Skip, put it at the end of Very Good").
+- **The search.** A binary search over the band's insertion slots, then one question across the line only
+  when the entry ended at the band's very top or bottom. That question goes against the bottom entry of the
+  band above, or the top entry of the band below. Only the adjacent band counts, and only bands 1 to 5.
+  Unrated is not a quality tier, so it is nobody's neighbour. Beating the band above's bottom entry puts the
+  new entry just above it. Losing to the band below's top entry puts it just below it. The budget is
+  ceil(log2(n+1)) + 1 questions at most. An empty band asks nothing and adds straight away.
+- **About the same** ends the run just below the entry it was compared with. Against a neighbour, it keeps the
+  entry at its own band's edge. **Skip** goes to the end of its own band at any step, as a plain add would.
+- **"N of M"** is the most questions still possible, recomputed after each answer. The board's fixed "1 of 3"
+  cannot be known in advance for a binary search, so the count can shrink as answers narrow it.
+- **M7.** `addTierListItem` takes `position` together with `band`. It inserts at that index, moves the rest of
+  the band down one, and records one `ADD`. Undo goes through the existing `planBandOrders`, which closes the
+  gap. Redo puts the entry back at the recorded position. A `position` without a `band`, or outside
+  `0..length`, is a `ValidationError`. `addTierListItems` refuses a `position`, because a batch appends. The
+  creator check runs before the position is validated. A stranger's bad index therefore answers `NotFound`,
+  the same as a missing list, and is not a validation oracle (L6).
+- **Undo on the result** steps that one edit back (`expectedSeq` from the add's own read-back) and returns to
+  the first question, as the board's prototype does ("restart"). **Done** closes the sheet. The page refreshes
+  after the add and after Undo, so its own Undo/Redo stays in step.
+- **Board differences.** The cards show the type's vessel silhouette, not a photo, because the board query
+  carries no images. Each card's eyebrow is the entry's band and its rank on the whole board ("Very Good · #3").
+  The result line says "Top of / Bottom of / First in <band>" at the edges, where there is no "Above X,
+  below Y" to give.
+- **e2e.** `m11-pairwise` builds its fixture from five teas (`createItem` needs no onboarding) and one review.
+  It deletes the review and the list afterwards. The API has no item delete, so the teas remain, as in
+  specs 11 and 12. It creates no places.
