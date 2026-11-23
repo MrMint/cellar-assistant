@@ -16,6 +16,8 @@
 import {
   ConflictError,
   ForbiddenError,
+  NotFoundError,
+  PROFILE_NOT_SHARED,
   ValidationError,
 } from "@cellar-assistant/contracts";
 import { execute, parse } from "graphql";
@@ -129,6 +131,65 @@ describe("user profile", () => {
       code: "FORBIDDEN",
       message: "sign in to view a profile",
     });
+  });
+});
+
+describe("Query.user is no account-existence oracle (leftovers 5, L6, L41)", () => {
+  const MISSING = "33333333-3333-4333-8333-333333333333";
+  const query = (id: string) =>
+    `{ user(id: ${JSON.stringify(id)}) { __typename ... on UserProfile { id displayName } ... on ActorError { code message } } }`;
+  /** The actor as it answers now: a profile for BOB, the one refusal else. */
+  const sidecar = () =>
+    stubSidecar({
+      "UserActor.getProfile": (actorId) => {
+        if (actorId === BOB) return profile(BOB, "Bob");
+        throw new NotFoundError(PROFILE_NOT_SHARED);
+      },
+    });
+
+  it("answers an existing user with their profile", async () => {
+    const { invoke } = sidecar();
+    const result = await run(query(BOB), testContext(invoke, alice));
+    expect(result.errors).toBeUndefined();
+    expect(result.data?.user).toEqual({
+      __typename: "UserProfile",
+      id: BOB,
+      displayName: "Bob",
+    });
+  });
+
+  it("answers a missing id and a malformed id in the same bytes", async () => {
+    const answers = [];
+    for (const id of [MISSING, "not-a-uuid", "../UserActor/x", ""]) {
+      const { invoke } = sidecar();
+      const result = await run(query(id), testContext(invoke, alice));
+      expect(result.errors).toBeUndefined();
+      answers.push(result.data?.user);
+    }
+    expect(answers[0]).toEqual({
+      __typename: "NotFoundError",
+      code: "NOT_FOUND",
+      message: PROFILE_NOT_SHARED,
+    });
+    for (const answer of answers) expect(answer).toEqual(answers[0]);
+  });
+
+  it("never sends a malformed id to an actor", async () => {
+    const { invoke, calls } = sidecar();
+    await run(query("not-a-uuid"), testContext(invoke, alice));
+    expect(calls).toEqual([]);
+  });
+
+  it("refuses an anonymous caller alike for a real, a missing and a malformed id", async () => {
+    const answers = [];
+    for (const id of [BOB, MISSING, "not-a-uuid"]) {
+      const { invoke, calls } = sidecar();
+      const result = await run(query(id), testContext(invoke));
+      answers.push(result.data?.user);
+      expect(calls).toEqual([]);
+    }
+    expect(answers[0]).toMatchObject({ __typename: "ForbiddenError" });
+    for (const answer of answers) expect(answer).toEqual(answers[0]);
   });
 });
 

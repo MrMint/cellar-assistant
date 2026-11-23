@@ -19,6 +19,7 @@ import type { FriendProfileDto } from "@cellar-assistant/contracts";
 import {
   ForbiddenError,
   FriendsCollectionActorDescriptor,
+  MAX_PAGE_SIZE,
   UserActorDescriptor,
   viewerCollectionActorId,
 } from "@cellar-assistant/contracts";
@@ -40,6 +41,25 @@ const friendsOf = (context: ApiContext, what: string) => {
     viewerCollectionActorId(viewerId),
   );
 };
+
+/**
+ * A profile section's page, `first` clamped to the server cap (leftovers 6).
+ *
+ * Everywhere else an over-cap `first` is a `VALIDATION` error (A7g). Here the
+ * three sections sit under one `friendProfile` union member, so one section's
+ * error would null the whole profile, not just its own list: a "Show more"
+ * asking for too much would blank the page it was extending. Clamping keeps
+ * the cap (the actor never reads more than {@link MAX_PAGE_SIZE} rows) without
+ * that failure. `after` passes through untouched.
+ */
+const sectionPage = (args: { first?: number | null; after?: string | null }) =>
+  toPageArgs({
+    ...args,
+    first:
+      args.first === undefined || args.first === null
+        ? args.first
+        : Math.min(args.first, MAX_PAGE_SIZE),
+  });
 
 /* -------------------------------------------------------------------------- */
 /* Viewer.counts                                                               */
@@ -122,7 +142,7 @@ const FriendProfileType = builder
           connectionFromPage(
             await friendsOf(context, "see a profile").profileTierLists(
               { profileOf: profile.userId },
-              toPageArgs(args),
+              sectionPage(args),
             ),
           ),
       }),
@@ -136,7 +156,7 @@ const FriendProfileType = builder
           connectionFromPage(
             await friendsOf(context, "see a profile").profileCellars(
               { profileOf: profile.userId },
-              toPageArgs(args),
+              sectionPage(args),
             ),
           ),
       }),
@@ -150,7 +170,7 @@ const FriendProfileType = builder
           connectionFromPage(
             await friendsOf(context, "see a profile").profileLogs(
               { profileOf: profile.userId },
-              toPageArgs(args),
+              sectionPage(args),
             ),
           ),
       }),

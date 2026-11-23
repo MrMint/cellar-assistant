@@ -721,3 +721,75 @@ describe.skipIf(skip)("FriendsCollectionActor", () => {
     });
   });
 });
+
+describe.skipIf(skip)(
+  "FriendsCollectionActor — a friend's profile pages past 20 (leftovers 6)",
+  () => {
+    afterAll(closeTestDb);
+
+    it("walks tier lists and cellars past the first 20 with `after`, each once", async () => {
+      await withTestDb(async (db) => {
+        const viewer = await seedUser(db);
+        const friend = await seedUser(db);
+        await seedFriendship(db, viewer, friend);
+        const lists: string[] = [];
+        const cellars: string[] = [];
+        for (let index = 0; index < 25; index += 1) {
+          lists.push(
+            await seedTierList(db, {
+              createdById: friend,
+              privacy: "FRIENDS",
+              name: `List ${index}`,
+            }),
+          );
+          cellars.push(
+            await seedCellar(db, {
+              createdById: friend,
+              privacy: "FRIENDS",
+              name: `Cellar ${index}`,
+            }),
+          );
+        }
+        const actor = await activate(
+          createActor(FriendsCollectionActor, viewer, db),
+        );
+        const ctx = userCtx(viewer, "r");
+        const filter = { profileOf: friend };
+
+        for (const read of [
+          (page: ReturnType<typeof pageArgs>) =>
+            actor.profileTierLists(ctx, filter, page),
+          (page: ReturnType<typeof pageArgs>) =>
+            actor.profileCellars(ctx, filter, page),
+        ]) {
+          const first = await read(pageArgs({ first: 20 }));
+          expect(first.entries).toHaveLength(20);
+          expect(first.hasNextPage).toBe(true);
+          expect(first.totalCount).toBe(25);
+          const after = first.entries.at(-1)?.cursor ?? null;
+          const rest = await read(pageArgs({ first: 20, after }));
+          expect(rest.entries).toHaveLength(5);
+          expect(rest.hasNextPage).toBe(false);
+          const seen = [...first.entries, ...rest.entries].map((e) => e.node);
+          expect(new Set(seen).size).toBe(25);
+        }
+        const all = await actor.profileTierLists(
+          ctx,
+          filter,
+          pageArgs({ first: 20 }),
+        );
+        expect(lists).toEqual(
+          expect.arrayContaining(all.entries.map((e) => e.node)),
+        );
+        const someCellars = await actor.profileCellars(
+          ctx,
+          filter,
+          pageArgs({ first: 20 }),
+        );
+        expect(cellars).toEqual(
+          expect.arrayContaining(someCellars.entries.map((e) => e.node)),
+        );
+      });
+    });
+  },
+);

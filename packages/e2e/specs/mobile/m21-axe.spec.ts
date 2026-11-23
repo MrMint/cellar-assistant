@@ -350,6 +350,57 @@ test("an open overlay: an AppBar's ⋯ sheet", async ({ page }) => {
   await expectNoGatingViolations(page, `/teas/${ids.tea} + ⋯ sheet`);
 });
 
+/**
+ * axe's `target-size` over one region only. Leftovers 4 / L31: the page-level
+ * pass on the item and bottle pages spans several batch-2 streams' files and
+ * is the verify round's; each stream holds its own controls, so this scopes
+ * to the ones leftovers owns (the Item actions toolbar and the Pour sheet).
+ */
+async function targetSizeIn(page: Page, selector: string): Promise<Finding[]> {
+  const results = await new AxeBuilder({ page })
+    .withRules(["target-size"])
+    .include(selector)
+    .analyze();
+  return results.violations.map((v) => ({
+    impact: v.impact ?? "unknown",
+    id: v.id,
+    help: v.help,
+    nodes: v.nodes.slice(0, 5).map((n) => n.target.join(" ")),
+  }));
+}
+
+test("touch targets: the item page's actions and the bottle page's Pour sheet pass target-size", async ({
+  page,
+}) => {
+  const toolbar = '[role="toolbar"][aria-label="Item actions"]';
+  for (const route of [
+    `/teas/${ids.tea}`,
+    `/cellars/${ids.cellar}/teas/${ids.bottle}`,
+  ]) {
+    await test.step(route, async () => {
+      await page.goto(route);
+      await settled(page);
+      await expect(page.locator(toolbar)).toBeVisible();
+      expect
+        .soft(await targetSizeIn(page, toolbar), `${route}: Item actions`)
+        .toEqual([]);
+    });
+  }
+  // The bottle page's Pour opens the Pour sheet: its chips and submit.
+  await page
+    .getByRole("toolbar", { name: "Item actions" })
+    .getByRole("button", { name: "Pour", exact: true })
+    .click();
+  const sheet = page.getByRole("dialog", { name: "Pour" });
+  await expect(sheet).toBeVisible();
+  expect
+    .soft(
+      await targetSizeIn(page, '[role="dialog"]'),
+      "the Pour sheet: target-size",
+    )
+    .toEqual([]);
+});
+
 test("the skip link is the first Tab stop and lands focus in main", async ({
   page,
 }) => {

@@ -293,14 +293,24 @@ reverse them. Each names the item it belongs to; none overrides an answer.
   your bar. The meaning half is cut at 0.45 and 0.05 past the nearest, measured
   on hand-written recipes (the N05 set has none) — re-measure when it has some.
 - **People.** Anyone by name: friends first, then requests either way, then
-  everyone else with an Add button that sends the request in place. Friends
-  and requests open Friends (there is no profile page).
+  everyone else with an Add button that sends the request in place. A friend
+  opens their profile (`/users/<id>`, "Me hub v1"); a request opens Friends,
+  where it is answered, since the profile answers friends only (updated in
+  wave C "leftovers": the rows predate friend profiles).
 - **Places.** Searched within about 30 km of your last known position (the
   location cookie the map and Home write). Without one, only places whose name
   matched are shown — a category-only match would be a bar anywhere on earth.
 - **No AI.** Every section answers by name when the phrase cannot be embedded
   (places and recipes gained that fallback here), and the page says "Matching
   names only: search by meaning is off." when `semanticSearch` is false.
+- **The app needs JavaScript (L1, wave C "leftovers").** `/search` keeps its
+  `loading.tsx` shell: it is what a navigation into the sheet shows while the
+  page streams. Without scripts nothing replaces it, so the no-JS spec is
+  gone; the spec now holds the live box to what that one guarded (fully
+  visible once hydrated, no `opacity:0` left behind, takes typing).
+- **Close replaces (wave C "leftovers").** Close swaps the sheet's history
+  entry for the page it was opened from, so Back after Close does not reopen
+  `/search`.
 ### Home "Today" and the AI inbox (wave B "home": X10, D1)
 
 - **`/` is Home.** The redirect to `/search` is gone; the Home tab points at
@@ -542,6 +552,41 @@ reverse them. Each names the item it belongs to; none overrides an answer.
   sheet says "… is in Home Cellar", a cellar that does not exist is a 404,
   and a viewer who may not add there gets the note instead of a camera.
 
+### Wave B leftovers (wave C "leftovers": items 1–9)
+
+- **Toasts sit above an open sheet.** While a mobile sheet is open the
+  toaster's bottom offset is the sheet's top edge plus 12 px (`--sheet-inset`,
+  M5), and the tab bar's offset otherwise, so the "Finished" Undo no longer
+  covers the rating sheet's Save. A near-full-height sheet caps the toast at
+  96 px below the top of the screen, over the sheet's header rather than off
+  screen.
+- **No account-existence oracle on `user` and `userSearch` (L6, L41).** One
+  policy rule, `canSeeProfile`, decides who may know a user exists; today it
+  admits every signed-in viewer. A missing id, a malformed id and (once there
+  is one) a hidden profile all answer `NotFoundError` with the profile
+  wording, "This profile doesn't exist or isn't shared with you." The actor
+  used to name the key in its refusal, so a uuid and junk answered in
+  different bytes; `UserActor` now refuses every absent case with that one
+  message, an invite with a wrong secret included. Sign-in is checked before
+  existence: the old order told an anonymous caller NotFound for nobody and
+  Forbidden for someone. The API answers a malformed id without sending it
+  to an actor. A hidden person is dropped from `userSearch` like someone who
+  does not exist, so a page can hold fewer than `limit` hits once blocking
+  lands.
+- **Friend-profile lists page.** Tier lists and cellars on `/users/<id>`
+  show 20, then "Show more" walks the connection, as the drink log does; the
+  "Showing 20 of 26" line is gone. The sections clamp `first` to the server's
+  cap (100) instead of the usual `VALIDATION` error: all three sit under one
+  `friendProfile` answer, and one over-large section would otherwise blank
+  the whole profile.
+- **Touch targets.** The item page's action bar and the Pour sheet already
+  met 44 px (icon buttons are 44, chips and the Move-to button extend their
+  hit area); m21 now runs axe `target-size` on just those regions. The
+  page-level pass belongs to the verify round (L31).
+- **e2e cleanup.** m06 deletes the teas it makes, the typed draft's
+  included (`deleteTeas` in `fixtures/db.ts`). A recipe ingredient naming one
+  of them is left in place and fails the delete, since no spec puts one there.
+
 ### Pairwise placement (wave C "pairwise": L09)
 
 - **Where it starts.** Add entry offers **Compare to place it** when exactly one entry is picked. Several picks
@@ -632,6 +677,47 @@ reverse them. Each names the item it belongs to; none overrides an answer.
   `RecipeThumb`. AddItemClient and the brand card/details still use the
   PNGs: their restored-markup tests (outside this stream) pin the images,
   so swapping them is a hand-off.
+
+### BottomSheet physics (wave C "sheetphysics": B04, M6)
+
+- **vaul stays the engine; each criterion is vaul's or ours (L21, D20).**
+  vaul's: transform-only movement (`translate3d`), following the finger,
+  scroll handoff (its `shouldDrag`: a list that can scroll takes the drag,
+  and at `scrollTop` 0 a downward drag moves the sheet), dismissal
+  thresholds, focus trap, Escape and aria. Ours (`useSheetDrag` +
+  `sheet-physics.ts`): velocity-aware snapping by release velocity,
+  rubber-band past the ends, and `onSnapChange` (M6). Reduced motion was
+  already `globals.css`'s: vaul's transitions go to 0 s (instant snaps), and
+  our stretch snaps back without a spring.
+- **Release velocity, not vaul's average.** vaul divides the whole drag's
+  distance by its time, so a slow drag that ends in a flick reads as slow
+  and a fast drag that stops before lifting reads as a flick. We take the
+  last 100 ms of samples (or the last segment, when a slow frame leaves
+  none), project 200 ms ahead and take the nearest stop; at 0.4 px/ms (vaul's
+  own threshold) a release always reaches the next stop its way. UIKit's
+  full deceleration projection (about 500 ms) threw a sheet two snaps on an
+  ordinary flick, so 200 ms. Our decision replaces vaul's as vaul reports
+  it; vaul reports nothing when it keeps the current snap, so a pending
+  decision is applied a tick later. A close vaul starts always wins.
+- **The stretch is on `translate`, not `transform`.** vaul writes
+  `transform` inline on every move; motion's `y` would overwrite it. The CSS
+  `translate` property composes with `transform`, so the stretch stays a
+  compositor-only transform and the two never fight. It applies only where
+  vaul hard-stops: above `full` (and above a content-sized sheet when vaul is
+  not already dragging, since vaul stretches that case itself once it is),
+  and below the lowest stop of a sheet that cannot be dismissed (vaul does
+  not move those at all). It never applies while the content owns the drag.
+- **M6 fires on settle.** After the snap transition (0 under reduced
+  motion), only for a snap other than the one the sheet last rested at;
+  re-opening resets that to `initialSnap` without firing. A close started
+  by vaul marks the sheet closing before vaul picks a snap in the same
+  release, so nothing fires on close.
+- **MapFilter (L15).** On a phone the filters are a `BottomSheet` titled
+  "Filters" with Reset and Close in its footer, replacing a fixed panel
+  measured under the filter bar; the sheet's own backdrop, Escape and drag
+  replace the panel's click-outside and Escape listeners, which now run on
+  desktop only. The desktop popover is unchanged; the tier-list combobox
+  inside stays a popover.
 
 ### Route motion (wave C "routemotion": B05, H-2)
 

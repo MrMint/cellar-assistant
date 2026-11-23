@@ -1,59 +1,13 @@
 import { AppBar } from "@/components/app/AppBar";
 import { EmptyState } from "@/components/app/EmptyState";
-import {
-  Cellar,
-  ChevronRight,
-  ICON_STROKE,
-  People,
-  Ranked,
-} from "@/components/app/icons";
-import { Link } from "@/components/app/Link";
+import { People } from "@/components/app/icons";
 import { LoadingShell, ShellBlocks } from "@/components/app/LoadingShell";
-import { InsetSection, ListRow, Page } from "@/components/app/Page";
+import { Page } from "@/components/app/Page";
 import { UserAvatar } from "@/components/app/UserAvatar";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  type FriendProfileView,
-  moreLine,
-  type ProfileCellarRow,
-  type ProfileListRow,
-  sharesNothing,
-} from "./adapter";
+import { type FriendProfileView, sharesNothing } from "./adapter";
 import { FriendLog } from "./FriendLog";
-
-const Chevron = () => (
-  <ChevronRight aria-hidden className="size-5" strokeWidth={ICON_STROKE} />
-);
-
-/** One row into a tier list or a cellar of theirs. */
-function LinkRow({
-  row,
-  icon: Icon,
-}: {
-  row: ProfileListRow | ProfileCellarRow;
-  icon: typeof Ranked;
-}) {
-  return (
-    <ListRow
-      leading={
-        <Icon aria-hidden className="size-5" strokeWidth={ICON_STROKE} />
-      }
-      title={
-        <Link href={row.href} overlay underline="none" className="text-ink-1">
-          {row.name}
-        </Link>
-      }
-      description={row.description || undefined}
-      trailing={<Chevron />}
-    />
-  );
-}
-
-function More({ line }: { line: string | null }) {
-  return line === null ? null : (
-    <p className="type-footnote px-4 py-2">{line}</p>
-  );
-}
+import { FriendCellars, FriendTierLists } from "./FriendSections";
 
 /**
  * `/users/[id]` — a friend's read-only profile (X18): who, since when, then
@@ -93,23 +47,14 @@ export function FriendProfile({ view }: { view: FriendProfileView }) {
         />
       ) : (
         <>
-          {view.tierLists.length > 0 && (
-            <InsetSection label="Tier lists" data-section="tier-lists">
-              {view.tierLists.map((row) => (
-                <LinkRow key={row.id} row={row} icon={Ranked} />
-              ))}
-              <More
-                line={moreLine(view.tierLists.length, view.tierListCount)}
-              />
-            </InsetSection>
+          {view.tierLists.rows.length > 0 && (
+            <FriendTierLists
+              userId={view.userId}
+              initialPage={view.tierLists}
+            />
           )}
-          {view.cellars.length > 0 && (
-            <InsetSection label="Cellars" data-section="cellars">
-              {view.cellars.map((row) => (
-                <LinkRow key={row.id} row={row} icon={Cellar} />
-              ))}
-              <More line={moreLine(view.cellars.length, view.cellarCount)} />
-            </InsetSection>
+          {view.cellars.rows.length > 0 && (
+            <FriendCellars userId={view.userId} initialPage={view.cellars} />
           )}
           {view.logs.rows.length > 0 && (
             <FriendLog userId={view.userId} initialPage={view.logs} />

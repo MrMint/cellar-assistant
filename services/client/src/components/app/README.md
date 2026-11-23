@@ -309,6 +309,21 @@ never hand vaul the visible fraction). Glass surface, safe-area bottom
 padding, no background scaling; under reduced motion it fades instead of
 sliding (`globals.css`).
 
+Sheet physics (ux-c B04). vaul still drives the sheet: it follows the
+finger with `transform` only, hands a drag to the content while the content
+can scroll (at `scrollTop` 0 a downward drag moves the sheet), and owns the
+close thresholds. Around it, `useSheetDrag` adds what vaul lacks: a snapping
+release lands where its *release* velocity throws it (`resolveSnap`: a
+projection of 200 ms, and a flick of 0.4 px/ms or more always reaches the
+next stop), not where vaul's whole-drag average does; and the ends vaul
+hard-stops at (above `full`, above a content-sized sheet, below the lowest
+stop of a `dismissible={false}` sheet) rubber-band, through the CSS
+`translate` property so they compose with vaul's `transform`, and spring
+back with `spring.sheet` (at once under reduced motion). `onSnapChange?:
+(snap) => void` (M6) runs when the sheet settles on a different snap — never
+without `snapPoints`, never on close, not for the `initialSnap`. The maths is
+pure and tested in `sheet-physics.ts`; nothing a caller passes changed.
+
 **`ResponsiveDialog`** — the same props (+ `role="alertdialog"`): a
 `BottomSheet` below `md`, a centred `ui/dialog` from `md`. Use it for every
 former Joy `Modal`.

@@ -506,3 +506,27 @@ export const isRecipeShared = (recipe: {
 export const canShareItemImageAnonymously = (image: {
   readonly isPublic: boolean;
 }): boolean => image.isPublic;
+
+/**
+ * A user's profile — who they are, as `Query.user`, `userSearch` and the
+ * `UserProfile` loader answer it (leftovers 5, L6).
+ *
+ * `null` is "no profile": an id that names nobody *and* a string that is not
+ * an id at all. Both are refused here, exactly like a profile the viewer may
+ * not see, so the caller has one refusal to give for all three and none of
+ * them is an oracle for whether an account exists (D24).
+ *
+ * **Nobody is hidden yet (L41, owner 2026-11-22):** every signed-in user may
+ * see every profile. Blocking will add its rule here, and every caller picks
+ * it up without changing how it refuses.
+ */
+export type ProfileSubject = { readonly userId: string };
+
+export const canSeeProfile = (
+  ctx: Ctx,
+  profile: ProfileSubject | null,
+): boolean => {
+  if (profile === null) return false;
+  if (bypassesPolicy(ctx)) return true;
+  return ctx.viewerId !== null;
+};

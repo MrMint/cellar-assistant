@@ -11,9 +11,13 @@ import { type Page, toPage } from "@/lib/paging/paged-connection";
 import { formatVintage } from "@/utilities";
 import { displayItemName } from "@/utilities/smart-title-case";
 import type {
+  FriendCellarRowFragment,
+  FriendCellarsPageQuery,
   FriendLogEntryFragment,
   FriendLogPageQuery,
   FriendProfileQuery,
+  FriendTierListRowFragment,
+  FriendTierListsPageQuery,
 } from "./queries";
 
 type Profile = Extract<
@@ -21,6 +25,8 @@ type Profile = Extract<
   { __typename: "FriendProfile" }
 >;
 type LogEntry = ResultOf<typeof FriendLogEntryFragment>;
+type ListNode = ResultOf<typeof FriendTierListRowFragment>;
+type CellarNode = ResultOf<typeof FriendCellarRowFragment>;
 
 export type ProfileListRow = {
   readonly id: string;
@@ -58,10 +64,9 @@ export type FriendProfileView = {
   readonly avatarUrl: string | null;
   /** "Friends since Oct 2026". */
   readonly sinceLine: string;
-  readonly tierLists: readonly ProfileListRow[];
-  readonly tierListCount: number;
-  readonly cellars: readonly ProfileCellarRow[];
-  readonly cellarCount: number;
+  /** The first page of each; "Show more" walks on (leftovers 6). */
+  readonly tierLists: Page<ProfileListRow>;
+  readonly cellars: Page<ProfileCellarRow>;
   readonly logs: Page<ProfileLogRow>;
 };
 
@@ -100,9 +105,7 @@ const PRIVACY_WORDS: Record<string, string> = {
 const entries = (count: number): string =>
   `${count} ${count === 1 ? "entry" : "entries"}`;
 
-export const listRow = (
-  node: Profile["tierLists"]["edges"][number]["node"],
-): ProfileListRow => ({
+export const listRow = (node: ListNode): ProfileListRow => ({
   id: node.id,
   name: node.name,
   href: `/tier-lists/${node.id}`,
@@ -114,9 +117,7 @@ export const listRow = (
     .join(" · "),
 });
 
-export const cellarRow = (
-  node: Profile["cellars"]["edges"][number]["node"],
-): ProfileCellarRow => {
+export const cellarRow = (node: CellarNode): ProfileCellarRow => {
   const bottles = node.itemCounts.total;
   return {
     id: node.id,
@@ -167,8 +168,8 @@ export const logRow = (entry: LogEntry): ProfileLogRow => {
   };
 };
 
-type LogConnection = {
-  readonly edges: readonly { readonly node: LogEntry }[];
+type Connection<TNode> = {
+  readonly edges: readonly { readonly node: TNode }[];
   readonly pageInfo: {
     readonly hasNextPage: boolean;
     readonly endCursor?: string | null;
@@ -177,8 +178,41 @@ type LogConnection = {
 };
 
 /** One page of `FriendProfile.checkIns` → rows. */
-export const logPage = (connection: LogConnection): Page<ProfileLogRow> =>
-  toPage(connection, (edge) => logRow(edge.node));
+export const logPage = (
+  connection: Connection<LogEntry>,
+): Page<ProfileLogRow> => toPage(connection, (edge) => logRow(edge.node));
+
+/** One page of `FriendProfile.tierLists` → rows. */
+export const listPage = (
+  connection: Connection<ListNode>,
+): Page<ProfileListRow> => toPage(connection, (edge) => listRow(edge.node));
+
+/** One page of `FriendProfile.cellars` → rows. */
+export const cellarPage = (
+  connection: Connection<CellarNode>,
+): Page<ProfileCellarRow> => toPage(connection, (edge) => cellarRow(edge.node));
+
+/** `FriendTierListsPage`'s answer → the next page, or its refusal. */
+export const listPageResult = (
+  answer:
+    | ResultOf<typeof FriendTierListsPageQuery>["friendProfile"]
+    | undefined,
+): ApiResult<Page<ProfileListRow>> => {
+  const result = unwrapResult(answer, "FriendProfile");
+  return result.ok
+    ? { ok: true, data: listPage(result.data.tierLists) }
+    : result;
+};
+
+/** `FriendCellarsPage`'s answer → the next page, or its refusal. */
+export const cellarPageResult = (
+  answer: ResultOf<typeof FriendCellarsPageQuery>["friendProfile"] | undefined,
+): ApiResult<Page<ProfileCellarRow>> => {
+  const result = unwrapResult(answer, "FriendProfile");
+  return result.ok
+    ? { ok: true, data: cellarPage(result.data.cellars) }
+    : result;
+};
 
 /** `FriendLogPage`'s answer → the next page, or the refusal it carried. */
 export const logPageResult = (
@@ -194,19 +228,13 @@ export const friendProfileView = (profile: Profile): FriendProfileView => ({
   name: profile.user.displayName,
   avatarUrl: profile.user.avatarUrl ?? null,
   sinceLine: friendsSinceLine(profile.since as string),
-  tierLists: profile.tierLists.edges.map((edge) => listRow(edge.node)),
-  tierListCount: profile.tierLists.totalCount ?? profile.tierLists.edges.length,
-  cellars: profile.cellars.edges.map((edge) => cellarRow(edge.node)),
-  cellarCount: profile.cellars.totalCount ?? profile.cellars.edges.length,
+  tierLists: listPage(profile.tierLists),
+  cellars: cellarPage(profile.cellars),
   logs: logPage(profile.checkIns),
 });
 
 /** Whether the friend has shared anything at all with the viewer. */
 export const sharesNothing = (view: FriendProfileView): boolean =>
-  view.tierLists.length === 0 &&
-  view.cellars.length === 0 &&
+  view.tierLists.rows.length === 0 &&
+  view.cellars.rows.length === 0 &&
   view.logs.rows.length === 0;
-
-/** "Showing 20 of 26" under a section the page did not show whole. */
-export const moreLine = (shown: number, total: number): string | null =>
-  total > shown ? `Showing ${shown} of ${total}` : null;

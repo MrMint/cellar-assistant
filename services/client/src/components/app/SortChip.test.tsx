@@ -85,6 +85,10 @@ describe("SortChip", () => {
     });
     const group = document.querySelector('[role="radiogroup"]');
     assert.ok(group, "the sheet holds a radio group");
+    assert.ok(
+      group?.closest('[data-slot="bottom-sheet"]'),
+      "in the one BottomSheet, so it has the sheet physics",
+    );
     const rows = [...(group?.querySelectorAll('[role="radio"]') ?? [])];
     assert.deepEqual(
       rows.map((row) => [row.textContent, row.getAttribute("aria-checked")]),
