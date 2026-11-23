@@ -3,21 +3,25 @@
  *
  * An opened bottle keeps for about as long as its style keeps once air gets
  * in: a red wine a few days, a sparkling one a day or two, a vermouth a
- * month, a bourbon a year or two. This is that table, and nothing else
- * decides it — no model estimate, not even as a fallback (D29: "a model
- * window is the same quietly plausible number as a valuation"). Every window
- * is labelled with the style it came from ("typical for red wine once
- * open"), so it reads as a rule of thumb rather than a judgement about this
- * bottle. **A style the table does not name shows no window.**
+ * month, a bourbon a year or two. That table now lives in
+ * `@cellar-assistant/contracts`' `SHELF_LIFE`, as basis `"opened"` (plan L18:
+ * one table for sealed and opened bottles), and nothing else decides it — no
+ * model estimate, not even as a fallback. Every window is labelled with the
+ * style it came from ("typical for red wine once open"), so it reads as a
+ * rule of thumb rather than a judgement about this bottle. **A style the
+ * table does not name shows no window.**
  *
- * What it reads is what the API already has: the bottle's `openAt` and the
- * item's style field (`Wine.style`, `Sake.category`, `Spirit.spiritType`,
- * `Tea.category` / `form`). The fuller version — per-bottle packaged and
- * acquired dates, the user's own drink-from/until overriding the table — is
- * roadmap L02.
+ * Sealed bottles whose window closes within the horizon join the list from
+ * the server (`me.drinkSoon`, computed with the same contracts functions);
+ * this module is the opened half, read from `me.openBottles`.
  *
  * Pure: no React, no clock (the caller passes `now`) — `drink-soon.test.ts`.
  */
+import {
+  lookupShelfLife,
+  type OpenedShelfLife,
+  openedDrinkSoon,
+} from "@cellar-assistant/contracts";
 import type { ApiItemType } from "@/components/cellar-api/itemTypes";
 
 /** How long a style typically keeps once opened, in days. */
@@ -28,82 +32,11 @@ export type OpenLife = {
   readonly label: string;
 };
 
-const life = (minDays: number, maxDays: number, label: string): OpenLife => ({
-  minDays,
-  maxDays,
-  label,
+const openLifeOf = (entry: OpenedShelfLife): OpenLife => ({
+  minDays: entry.fromDays,
+  maxDays: entry.untilDays,
+  label: entry.label,
 });
-
-/** `Wine.style` (the `wine_style` reference table). */
-const WINE: Readonly<Record<string, OpenLife>> = {
-  SPARKLING: life(1, 3, "sparkling wine"),
-  RED: life(3, 5, "red wine"),
-  WHITE: life(3, 5, "white wine"),
-  ROSE: life(3, 5, "rosé"),
-  DESSERT: life(7, 28, "dessert wine"),
-};
-
-/** `Sake.category` (the `sake_category` reference table). */
-const SAKE: Readonly<Record<string, OpenLife>> = {
-  namazake: life(3, 7, "namazake"),
-  nigorizake: life(3, 7, "nigori"),
-  ginjo: life(5, 10, "ginjo"),
-  daiginjo: life(5, 10, "daiginjo"),
-  junmai_ginjo: life(5, 10, "junmai ginjo"),
-  junmai_daiginjo: life(5, 10, "junmai daiginjo"),
-  junmai: life(7, 21, "junmai"),
-  honjozo: life(7, 21, "honjozo"),
-  tokubetsu_junmai: life(7, 21, "tokubetsu junmai"),
-  tokubetsu_honjozo: life(7, 21, "tokubetsu honjozo"),
-  futsushu: life(7, 21, "futsushu"),
-  genshu: life(7, 21, "genshu"),
-  taruzake: life(7, 21, "taruzake"),
-  koshu: life(30, 90, "koshu"),
-};
-
-/** `Spirit.spiritType` (the `spirit_type` reference table). */
-const SPIRIT: Readonly<Record<string, OpenLife>> = {
-  AMARO_APERITIF_VERMOUTH: life(30, 60, "vermouth and aperitifs"),
-  LIQUEURS: life(180, 365, "liqueur"),
-  VODKA: life(365, 730, "vodka"),
-  BOURBON: life(365, 730, "bourbon"),
-  TEQUILA: life(365, 730, "tequila"),
-  RUM: life(365, 730, "rum"),
-  GIN: life(365, 730, "gin"),
-  SCOTCH: life(365, 730, "Scotch"),
-  WHISKEY: life(365, 730, "whiskey"),
-  BRANDY_COGNAC: life(365, 730, "brandy"),
-  MEZCAL: life(365, 730, "mezcal"),
-  SOJU: life(180, 365, "soju"),
-  BAIJIU: life(365, 730, "baijiu"),
-};
-
-/** `Tea.category` (the `tea_category` reference table). */
-const TEA: Readonly<Record<string, OpenLife>> = {
-  green: life(60, 180, "green tea"),
-  white: life(60, 180, "white tea"),
-  yellow: life(60, 180, "yellow tea"),
-  oolong: life(180, 365, "oolong"),
-  black: life(180, 365, "black tea"),
-  dark: life(365, 730, "dark tea"),
-  pu_erh: life(365, 730, "pu-erh"),
-  herbal: life(180, 365, "herbal tea"),
-  rooibos: life(180, 365, "rooibos"),
-  mate: life(180, 365, "mate"),
-  chai: life(180, 365, "chai"),
-  blend: life(180, 365, "blended tea"),
-};
-
-/** Matcha goes stale fastest of any tea, whatever its category says. */
-const MATCHA = life(30, 60, "matcha");
-
-/**
- * Two types whose open life does not depend on their style: any beer is
- * best the day it is opened (a growler or a crowler, a day or two), and
- * roasted beans fade over a few weeks once the bag is open.
- */
-const BEER = life(1, 2, "beer");
-const COFFEE = life(14, 30, "coffee beans");
 
 /** The item's style fields, as the Home query selects them. */
 export type StyleFields = {
@@ -120,24 +53,9 @@ export const openLifeFor = ({
   style,
   form,
 }: StyleFields): OpenLife | null => {
-  switch (type) {
-    case "BEER":
-      return BEER;
-    case "COFFEE":
-      return COFFEE;
-    case "WINE":
-      return style === null ? null : (WINE[style] ?? null);
-    case "SAKE":
-      return style === null ? null : (SAKE[style] ?? null);
-    case "SPIRIT":
-      return style === null ? null : (SPIRIT[style] ?? null);
-    case "TEA":
-      if (form === "matcha_powder") return MATCHA;
-      return style === null ? null : (TEA[style] ?? null);
-  }
+  const entry = lookupShelfLife(type, { style, form: form ?? null }, "opened");
+  return entry === null ? null : openLifeOf(entry);
 };
-
-const DAY_MS = 86_400_000;
 
 /** "3–5 days", "2–4 weeks", "1–2 months", "6–12 months", "1–2 years". */
 export const formatSpan = ({ minDays, maxDays }: OpenLife): string => {
@@ -194,19 +112,20 @@ export const drinkSoonState = (
   },
   now: number,
 ): DrinkSoonState | null => {
-  if (bottle.openAt === null || (bottle.emptyAt ?? null) !== null) return null;
-  const opened = Date.parse(bottle.openAt);
-  if (Number.isNaN(opened) || opened > now) return null;
-  const open = openLifeFor(bottle);
-  if (open === null) return null;
-  const openDays = Math.floor((now - opened) / DAY_MS);
-  if (openDays < open.minDays) return null;
-  return {
-    urgency: openDays > open.maxDays ? "past" : "now",
-    openDays,
-    life: open,
-    ratio: openDays / open.maxDays,
-  };
+  const state = openedDrinkSoon(
+    bottle.type,
+    { style: bottle.style, form: bottle.form ?? null },
+    bottle,
+    now,
+  );
+  return state === null
+    ? null
+    : {
+        urgency: state.urgency,
+        openDays: state.openDays,
+        life: openLifeOf(state.entry),
+        ratio: state.ratio,
+      };
 };
 
 /** The bottles under "Drink soon", most overdue first. */
