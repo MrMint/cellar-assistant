@@ -46,6 +46,7 @@ import type { Ctx } from "./ctx.ts";
 import type { PermissionType } from "./enums.ts";
 import type { ItemRef, ItemType } from "./items.ts";
 import type { CappedList, Page, PageArgs } from "./page.ts";
+import type { DrinkWindow } from "./shelf-life.ts";
 
 /* -------------------------------------------------------------------------- */
 /* Wire shapes                                                                 */
@@ -106,7 +107,43 @@ export type CellarItemSource = (typeof CELLAR_ITEM_SOURCES)[number];
 export const isCellarItemSource = (value: string): value is CellarItemSource =>
   (CELLAR_ITEM_SOURCES as readonly string[]).includes(value);
 
-export type CellarItemDto = {
+/**
+ * A bottle's own dates, price and place on the shelf (ux-c L02, M1's columns).
+ * All optional. Dates are ISO `yyyy-mm-dd`; `priceAmount` and `priceCurrency`
+ * (ISO 4217, upper case) are set together or not at all; `location` is free
+ * text ("Rack B, row 3"), at most {@link BOTTLE_LOCATION_MAX} characters.
+ *
+ * **Private to the cellar's owners** (the board: "Dates and price are yours
+ * and stay private"): a viewer who may see the cellar but not change it reads
+ * every one of these as `null`.
+ */
+export type BottleFreshness = {
+  /** Bottled, canned, roasted or packed on. */
+  readonly packagedOn: string | null;
+  /** Bought or received on. */
+  readonly acquiredOn: string | null;
+  readonly drinkFrom: string | null;
+  readonly drinkUntil: string | null;
+  readonly priceAmount: number | null;
+  readonly priceCurrency: string | null;
+  readonly location: string | null;
+};
+
+export const BOTTLE_FRESHNESS_FIELDS = [
+  "packagedOn",
+  "acquiredOn",
+  "drinkFrom",
+  "drinkUntil",
+  "priceAmount",
+  "priceCurrency",
+  "location",
+] as const satisfies readonly (keyof BottleFreshness)[];
+
+export const BOTTLE_LOCATION_MAX = 80;
+/** `numeric(10,2)`'s ceiling. */
+export const BOTTLE_PRICE_MAX = 99_999_999.99;
+
+export type CellarItemDto = BottleFreshness & {
   readonly id: string;
   readonly cellarId: string;
   /** `cellar_items.created_by` — who put it in the cellar. */
@@ -195,6 +232,15 @@ export type AddCellarItemInput = {
   readonly sourceType?: CellarItemSource | null;
   readonly sourcePlaceId?: string | null;
   readonly sourceMenuItemId?: string | null;
+} & BottleFreshnessInput;
+
+/**
+ * The freshness fields as a write takes them: absent leaves a field alone,
+ * `null` clears it. Price is one pair: give both, or clear the amount (which
+ * clears the currency with it).
+ */
+export type BottleFreshnessInput = {
+  readonly [K in keyof BottleFreshness]?: BottleFreshness[K];
 };
 
 export type UpdateCellarItemInput = {
@@ -202,7 +248,7 @@ export type UpdateCellarItemInput = {
   readonly displayImageId?: string | null;
   readonly openAt?: string | null;
   readonly emptyAt?: string | null;
-};
+} & BottleFreshnessInput;
 
 /**
  * In-cellar orderings. §2.1 loads every `cellar_items` row on activate ("a
@@ -368,6 +414,26 @@ export const CELLAR_LOG_MONTHS = 12;
  * X04: the viewer's **own** logs from one bottle — the Finished diary's "your
  * log". Never anyone else's: a co-owner's notes stay on their own item page.
  */
+/**
+ * One bottle under Drink soon (ux-c L02, plan L18): opened and past its
+ * style's shortest open life, or sealed with a window — the person's own
+ * dates or the typical one — closing within `DRINK_SOON_HORIZON_MONTHS`.
+ */
+export type DrinkSoonDto = {
+  readonly bottle: CellarItemDto;
+  readonly reason: "OPENED" | "SEALED";
+  /** `PAST` beyond its window; `NOW` opened and inside it; `SOON` sealed, closing. */
+  readonly urgency: "PAST" | "NOW" | "SOON";
+  /** Opened: whole days since. `null` for a sealed bottle. */
+  readonly openDays: number | null;
+  /** Opened: the typical life in days, `[from, until]`. */
+  readonly openLifeDays: readonly [number, number] | null;
+  /** Sealed: the window, each end with its source. */
+  readonly window: DrinkWindow | null;
+  /** The style the typical row is for ("IPA"), or `null` for the person's own dates. */
+  readonly typicalFor: string | null;
+};
+
 export type BottleLogSummaryDto = {
   readonly count: number;
   readonly firstAt: string | null;
@@ -536,6 +602,13 @@ export type CellarActorInterface = {
   /** X04 / D3: the dashboard above the grid. Gated as `get`. */
   dashboard(ctx: Ctx, args: CellarDashboardArgs): Promise<CellarDashboardDto>;
   /**
+   * ux-c L02 / L18: this cellar's Drink soon — opened bottles past their
+   * style's shortest open life (most overdue first), then sealed ones whose
+   * window closes within the horizon (soonest first). Owners only, since it
+   * reads their private dates: anyone else who may see the cellar gets `[]`.
+   */
+  drinkSoon(ctx: Ctx): Promise<readonly DrinkSoonDto[]>;
+  /**
    * X04: the viewer's own logs per bottle, aligned to `cellarItemIds` — the
    * Finished diary. Gated on the cellar; an id that is not one of its bottles
    * (or a bottle the viewer never logged) answers a zero summary.
@@ -616,6 +689,7 @@ export const CellarActorDescriptor: ActorDescriptor<
     dashboard: {},
     myLogsOf: {},
     nameMatches: {},
+    drinkSoon: {},
   },
   internalMethods: {
     createStarter: {},

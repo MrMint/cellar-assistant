@@ -126,21 +126,29 @@ import type {
   UpdateCellarItemInput,
 } from "@cellar-assistant/contracts";
 import {
+  BOTTLE_LOCATION_MAX,
+  BOTTLE_PRICE_MAX,
+  type BottleFreshness,
+  type BottleFreshnessInput,
   CELLAR_ALMOST_EMPTY_AT,
   CELLAR_LOG_MONTHS,
   CELLAR_RECENT_DAYS,
   CellarActorDescriptor,
   ConflictError,
+  type DrinkSoonDto,
   ForbiddenError,
   ITEM_TYPES,
   isCellarItemSource,
   isItemType,
   NotFoundError,
   offsetPage,
+  openedDrinkSoon,
   orderOwnBottles,
   REVERSE_EDGE_CAP,
   requireReverseEdgeBatch,
   STARTER_CELLAR_NAME,
+  type StyleFields,
+  sealedDrinkSoon,
   ValidationError,
 } from "@cellar-assistant/contracts";
 import {
@@ -174,6 +182,7 @@ import { idempotencyKey } from "../lib/delivery.ts";
 import { daprEmbedQuery, type EmbedQuery } from "../lib/embedding-client.ts";
 import { requireSystem } from "../lib/guards.ts";
 import { ARCS } from "../lib/item-arcs.ts";
+import { ITEM_TABLES } from "../lib/item-bindings.ts";
 import { itemNames } from "../lib/item-names.ts";
 import { starterCellarId } from "../lib/starter-cellar.ts";
 import { placeIsVisible } from "../lib/unshared-places.ts";
@@ -304,7 +313,7 @@ export class CellarActor
         ? await this.#sorted(rows, args.sort)
         : await this.#semanticallySorted(ctx, rows, query);
 
-    return offsetPage(dtos, args.page);
+    return offsetPage(dtos.map(this.#shown(ctx, aggregate)), args.page);
   }
 
   async checkIns(ctx: Ctx, page: PageArgs): Promise<Page<CheckInDto>> {
@@ -323,7 +332,10 @@ export class CellarActor
   async item(ctx: Ctx, cellarItemId: string): Promise<CellarItemDto> {
     const aggregate = this.requireAggregate();
     await this.requireVisible(ctx, aggregate);
-    return toItemDto(this.#requireItem(cellarItemId), null);
+    return this.#shown(
+      ctx,
+      aggregate,
+    )(toItemDto(this.#requireItem(cellarItemId), null));
   }
 
   /**
@@ -346,7 +358,9 @@ export class CellarActor
     const active = bottles.filter((row) => row.emptyAt === null);
     const pool = active.length > 0 ? active : bottles;
     const [only, ...more] = pool;
-    return only === undefined || more.length > 0 ? null : toItemDto(only, null);
+    return only === undefined || more.length > 0
+      ? null
+      : this.#shown(ctx, aggregate)(toItemDto(only, null));
   }
 
   /**
@@ -369,6 +383,7 @@ export class CellarActor
       }
     }
     const rows = filtered(aggregate.items, null, status);
+    const shown = this.#shown(ctx, aggregate);
     return items.map((item) => {
       const wanted = String(item.id).toLowerCase();
       return orderOwnBottles(
@@ -377,7 +392,7 @@ export class CellarActor
             const ref = itemRefOf(row);
             return ref.type === item.type && ref.id === wanted;
           })
-          .map((row) => toItemDto(row, null)),
+          .map((row) => shown(toItemDto(row, null))),
       );
     });
   }
@@ -458,7 +473,11 @@ export class CellarActor
           : hits;
     }
 
-    const groups = toGroups(ordered, args.group ?? true);
+    const shown = this.#shown(ctx, aggregate);
+    const groups = toGroups(
+      ordered.map((entry) => ({ ...entry, dto: shown(entry.dto) })),
+      args.group ?? true,
+    );
     return {
       ...offsetPage(groups, args.page),
       bottleCount: ordered.length,
@@ -535,6 +554,84 @@ export class CellarActor
   }
 
   /**
+   * ux-c L02 / L18: Drink soon. Opened bottles past their style's shortest
+   * open life, most overdue first; then sealed ones whose window — the
+   * owner's own dates, else the table's typical one — closes within the
+   * horizon, soonest first. Both rules are `@cellar-assistant/contracts`'
+   * (`openedDrinkSoon`, `sealedDrinkSoon`), the same ones Home runs, and
+   * neither estimates anything: a style with no row and no date of the
+   * owner's never appears (D29).
+   *
+   * Owners only — it reads their private dates — so a viewer who may merely
+   * see the cellar gets `[]`, and one who may not see it the usual refusal.
+   */
+  async drinkSoon(ctx: Ctx): Promise<readonly DrinkSoonDto[]> {
+    const aggregate = this.requireAggregate();
+    await this.requireVisible(ctx, aggregate);
+    if (!this.#isOwner(ctx, aggregate)) return [];
+    const active = aggregate.items.filter((row) => row.emptyAt === null);
+    if (active.length === 0) return [];
+
+    const styles = await itemStyles(this.db, active.map(itemRefOf));
+    const now = Date.now();
+    const today = new Date(now).toISOString().slice(0, 10);
+    const opened: { dto: DrinkSoonDto; ratio: number }[] = [];
+    const sealed: DrinkSoonDto[] = [];
+    for (const row of active) {
+      const ref = itemRefOf(row);
+      const style = styles.get(ref.id);
+      if (style === undefined) continue; // the item row is gone
+      const bottle = toItemDto(row, null);
+      if (row.openAt !== null) {
+        const state = openedDrinkSoon(ref.type, style.fields, bottle, now);
+        if (state === null) continue;
+        opened.push({
+          ratio: state.ratio,
+          dto: {
+            bottle,
+            reason: "OPENED",
+            urgency: state.urgency === "past" ? "PAST" : "NOW",
+            openDays: state.openDays,
+            openLifeDays: [state.entry.fromDays, state.entry.untilDays],
+            window: null,
+            typicalFor: state.entry.label,
+          },
+        });
+        continue;
+      }
+      const state = sealedDrinkSoon(
+        ref.type,
+        style.fields,
+        {
+          packagedOn: bottle.packagedOn,
+          acquiredOn: bottle.acquiredOn,
+          openedAt: null,
+          vintageYear: style.vintageYear,
+          drinkFrom: bottle.drinkFrom,
+          drinkUntil: bottle.drinkUntil,
+          emptyAt: bottle.emptyAt,
+        },
+        today,
+      );
+      if (state === null) continue;
+      sealed.push({
+        bottle,
+        reason: "SEALED",
+        urgency: state.urgency === "past" ? "PAST" : "SOON",
+        openDays: null,
+        openLifeDays: null,
+        window: state.window,
+        typicalFor: state.entry?.label ?? null,
+      });
+    }
+    opened.sort((a, b) => b.ratio - a.ratio);
+    sealed.sort((a, b) =>
+      (a.window?.until ?? "").localeCompare(b.window?.until ?? ""),
+    );
+    return [...opened.map((entry) => entry.dto), ...sealed];
+  }
+
+  /**
    * X04: the Finished diary's "your log" — the viewer's **own** logs from
    * each bottle, never a co-owner's or a friend's (their notes are theirs;
    * `checkIns` already tells the cellar *that* they drank). Gated on the
@@ -594,9 +691,10 @@ export class CellarActor
     }
     const rows = aggregate.items.filter((row) => row.emptyAt === null);
     const matches = await this.#namedOnly(rows, query);
+    const shown = this.#shown(ctx, aggregate);
     const groups = toGroups(
       matches.map((hit) => ({
-        dto: toItemDto(hit.value, hit.distance),
+        dto: shown(toItemDto(hit.value, hit.distance)),
         match: hit.match,
       })),
       true,
@@ -865,6 +963,7 @@ export class CellarActor
     // still under review — is answered as an unknown one, rather than
     // accepted by the foreign key and so confirmed to exist.
     const sourcePlaceId = input.sourcePlaceId ?? null;
+    const freshness = freshnessColumns(input, null);
     if (
       sourcePlaceId !== null &&
       !(await placeIsVisible(this.db, ctx, sourcePlaceId))
@@ -887,6 +986,7 @@ export class CellarActor
           sourceType: input.sourceType ?? null,
           sourcePlaceId,
           sourceMenuItemId: input.sourceMenuItemId ?? null,
+          ...freshness,
         })
         // Belt and braces for a redelivery racing itself: the pre-check above
         // reads the activation's cache, this reads Postgres.
@@ -903,9 +1003,13 @@ export class CellarActor
   ): Promise<CellarItemDto> {
     const aggregate = this.requireAggregate();
     await this.#requireOwner(ctx, aggregate);
-    const { id } = this.#requireItem(cellarItemId);
+    const current = this.#requireItem(cellarItemId);
+    const { id } = current;
 
-    const patch: Partial<typeof cellarItems.$inferInsert> = {};
+    const patch: Partial<typeof cellarItems.$inferInsert> = freshnessColumns(
+      input,
+      current,
+    );
     if (input.percentageRemaining !== undefined) {
       patch.percentageRemaining = requirePercentage(input.percentageRemaining);
     }
@@ -991,6 +1095,25 @@ export class CellarActor
     return canSeeCellar(
       ctx,
       await cellarVisibility(this.db, ctx, access(aggregate)),
+    );
+  }
+
+  /**
+   * ux-c L02: a bottle's dates, price and place are its owners' — anyone else
+   * who may see the cellar reads them as `null`. The mapper for one read.
+   */
+  #shown(
+    ctx: Ctx,
+    aggregate: CellarAggregate,
+  ): (dto: CellarItemDto) => CellarItemDto {
+    return this.#isOwner(ctx, aggregate)
+      ? (dto) => dto
+      : (dto) => ({ ...dto, ...HIDDEN_FRESHNESS });
+  }
+
+  #isOwner(ctx: Ctx, aggregate: CellarAggregate): boolean {
+    return (
+      bypassesPolicy(ctx) || isCellarOwner(access(aggregate), ctx.viewerId)
     );
   }
 
@@ -1195,7 +1318,113 @@ const toItemDto = (
   distance,
   createdAt: requiredIso(row.createdAt),
   updatedAt: requiredIso(row.updatedAt),
+  packagedOn: row.packagedOn,
+  acquiredOn: row.acquiredOn,
+  drinkFrom: row.drinkFrom,
+  drinkUntil: row.drinkUntil,
+  priceAmount: row.priceAmount === null ? null : Number(row.priceAmount),
+  priceCurrency: row.priceCurrency,
+  location: row.location,
 });
+
+/**
+ * Each item's style fields and vintage year, the shelf-life table's keys
+ * (ux-c M3), read fresh like `itemNames`: the item tables are `ItemActor`'s
+ * to write, so this actor may not cache them (§1.3). One `select` per type
+ * present.
+ */
+const itemStyles = async (
+  db: DbOrTx,
+  refs: readonly ItemRef[],
+): Promise<
+  Map<string, { fields: StyleFields; vintageYear: number | null }>
+> => {
+  const ids = (type: ItemType) => [
+    ...new Set(refs.filter((ref) => ref.type === type).map((ref) => ref.id)),
+  ];
+  const out = new Map<
+    string,
+    { fields: StyleFields; vintageYear: number | null }
+  >();
+  const yearOf = (date: string | null): number | null =>
+    date === null ? null : Number(date.slice(0, 4));
+  const reads: Promise<void>[] = [];
+  const read = <R>(
+    type: ItemType,
+    query: (wanted: string[]) => Promise<R[]>,
+    shape: (
+      row: R,
+    ) => [string, { fields: StyleFields; vintageYear: number | null }],
+  ) => {
+    const wanted = ids(type);
+    if (wanted.length === 0) return;
+    reads.push(
+      query(wanted).then((rows) => {
+        for (const row of rows) out.set(...shape(row));
+      }),
+    );
+  };
+  const { WINE, BEER, SPIRIT, SAKE, TEA, COFFEE } = ITEM_TABLES;
+  read(
+    "WINE",
+    (w) =>
+      db
+        .select({ id: WINE.id, style: WINE.style, vintage: WINE.vintage })
+        .from(WINE)
+        .where(inArray(WINE.id, w)),
+    (r) => [
+      r.id,
+      { fields: { style: r.style }, vintageYear: yearOf(r.vintage) },
+    ],
+  );
+  read(
+    "BEER",
+    (w) =>
+      db
+        .select({ id: BEER.id, style: BEER.style })
+        .from(BEER)
+        .where(inArray(BEER.id, w)),
+    (r) => [r.id, { fields: { style: r.style }, vintageYear: null }],
+  );
+  read(
+    "SPIRIT",
+    (w) =>
+      db
+        .select({ id: SPIRIT.id, style: SPIRIT.type })
+        .from(SPIRIT)
+        .where(inArray(SPIRIT.id, w)),
+    (r) => [r.id, { fields: { style: r.style }, vintageYear: null }],
+  );
+  read(
+    "SAKE",
+    (w) =>
+      db
+        .select({ id: SAKE.id, style: SAKE.category, vintage: SAKE.vintage })
+        .from(SAKE)
+        .where(inArray(SAKE.id, w)),
+    (r) => [r.id, { fields: { style: r.style }, vintageYear: r.vintage }],
+  );
+  read(
+    "TEA",
+    (w) =>
+      db
+        .select({ id: TEA.id, style: TEA.category, form: TEA.form })
+        .from(TEA)
+        .where(inArray(TEA.id, w)),
+    (r) => [
+      r.id,
+      { fields: { style: r.style, form: r.form }, vintageYear: null },
+    ],
+  );
+  read(
+    "COFFEE",
+    (w) =>
+      db.select({ id: COFFEE.id }).from(COFFEE).where(inArray(COFFEE.id, w)),
+    (r) => [r.id, { fields: { style: null }, vintageYear: null }],
+  );
+  await Promise.all(reads);
+  return out;
+};
 
 const toCheckInDto = (row: BottleCheckInRow): CheckInDto => ({
   id: row.id,
@@ -1447,6 +1676,124 @@ const parseInstant = (
     throw new ValidationError(`${what} must be an ISO-8601 instant`);
   }
   return parsed;
+};
+
+/* ux-c L02: a bottle's own dates, price and place ------------------------- */
+
+const CALENDAR_DATE = /^(\d{4})-(\d{2})-(\d{2})$/;
+const CURRENCY = /^[A-Z]{3}$/;
+
+/** A `yyyy-mm-dd` that names a real day, or null; anything else refuses. */
+const parseCalendarDate = (
+  value: string | null | undefined,
+  what: string,
+): string | null => {
+  if (value === null || value === undefined) return null;
+  const m = CALENDAR_DATE.exec(String(value));
+  const day =
+    m === null
+      ? null
+      : new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])));
+  if (m === null || day === null || day.toISOString().slice(0, 10) !== value) {
+    throw new ValidationError(`${what} must be a calendar date, yyyy-mm-dd`);
+  }
+  return value;
+};
+
+/**
+ * The freshness half of a write, validated, as columns. Fields left out are
+ * left out (a patch leaves them alone). `current` is the stored row on an
+ * update, so a one-sided change is still checked against the other end.
+ */
+const freshnessColumns = (
+  input: BottleFreshnessInput,
+  current: Pick<
+    CellarItemRow,
+    "drinkFrom" | "drinkUntil" | "priceAmount" | "priceCurrency"
+  > | null,
+): Partial<typeof cellarItems.$inferInsert> => {
+  const out: Partial<typeof cellarItems.$inferInsert> = {};
+  if (input.packagedOn !== undefined) {
+    out.packagedOn = parseCalendarDate(input.packagedOn, "packagedOn");
+  }
+  if (input.acquiredOn !== undefined) {
+    out.acquiredOn = parseCalendarDate(input.acquiredOn, "acquiredOn");
+  }
+  if (input.drinkFrom !== undefined) {
+    out.drinkFrom = parseCalendarDate(input.drinkFrom, "drinkFrom");
+  }
+  if (input.drinkUntil !== undefined) {
+    out.drinkUntil = parseCalendarDate(input.drinkUntil, "drinkUntil");
+  }
+  const from =
+    out.drinkFrom !== undefined ? out.drinkFrom : (current?.drinkFrom ?? null);
+  const until =
+    out.drinkUntil !== undefined
+      ? out.drinkUntil
+      : (current?.drinkUntil ?? null);
+  if (from !== null && until !== null && from > until) {
+    throw new ValidationError("drinkFrom must not be after drinkUntil");
+  }
+
+  if (input.priceAmount !== undefined) {
+    const amount = input.priceAmount;
+    if (
+      amount !== null &&
+      (!Number.isFinite(amount) || amount < 0 || amount > BOTTLE_PRICE_MAX)
+    ) {
+      throw new ValidationError(
+        `priceAmount must be between 0 and ${BOTTLE_PRICE_MAX}`,
+      );
+    }
+    out.priceAmount = amount === null ? null : Math.round(amount * 100) / 100;
+    // Clearing the amount clears its currency: the pair is set together.
+    if (amount === null) out.priceCurrency = null;
+  }
+  if (input.priceCurrency !== undefined && input.priceCurrency !== null) {
+    const code = String(input.priceCurrency).trim().toUpperCase();
+    if (!CURRENCY.test(code)) {
+      throw new ValidationError(
+        "priceCurrency must be a three-letter ISO 4217 code",
+      );
+    }
+    out.priceCurrency = code;
+  } else if (input.priceCurrency === null) {
+    out.priceCurrency = null;
+  }
+  const amount =
+    out.priceAmount !== undefined
+      ? out.priceAmount
+      : (current?.priceAmount ?? null);
+  const currency =
+    out.priceCurrency !== undefined
+      ? out.priceCurrency
+      : (current?.priceCurrency ?? null);
+  if ((amount === null) !== (currency === null)) {
+    throw new ValidationError(
+      "priceAmount and priceCurrency are set together, or not at all",
+    );
+  }
+
+  if (input.location !== undefined) {
+    const place = input.location === null ? "" : String(input.location).trim();
+    if (place.length > BOTTLE_LOCATION_MAX) {
+      throw new ValidationError(
+        `location must be at most ${BOTTLE_LOCATION_MAX} characters`,
+      );
+    }
+    out.location = place === "" ? null : place;
+  }
+  return out;
+};
+
+const HIDDEN_FRESHNESS: BottleFreshness = {
+  packagedOn: null,
+  acquiredOn: null,
+  drinkFrom: null,
+  drinkUntil: null,
+  priceAmount: null,
+  priceCurrency: null,
+  location: null,
 };
 
 /**

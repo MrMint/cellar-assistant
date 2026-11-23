@@ -1888,6 +1888,7 @@ describe.skipIf(skip)("CellarActor concealment", () => {
     ["update", (actor, ctx) => actor.update(ctx, { name: "Mine now" })],
     ["delete", (actor, ctx) => actor.delete(ctx)],
     ["addItem", (actor, ctx) => actor.addItem(ctx, {} as never)],
+    ["drinkSoon", (actor, ctx) => actor.drinkSoon(ctx)],
     ["updateItem", (actor, ctx) => actor.updateItem(ctx, ITEM, {})],
     [
       "setItemPercentage",
@@ -1931,6 +1932,294 @@ describe.skipIf(skip)("CellarActor concealment", () => {
       );
       expect(hidden).toEqual(missing);
       expect(hidden.code).toBe("NOT_FOUND");
+    });
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/* ux-c L02 — a bottle's own dates, price and place; Drink soon                */
+/* -------------------------------------------------------------------------- */
+
+describe.skipIf(skip)("CellarActor freshness (ux-c L02)", () => {
+  afterAll(closeTestDb);
+
+  const FRESH = {
+    packagedOn: "2025-06-01",
+    acquiredOn: "2026-01-15",
+    drinkFrom: "2026-02-01",
+    drinkUntil: "2030-12-31",
+    priceAmount: 58,
+    priceCurrency: "EUR",
+    location: "Rack B, row 3",
+  } as const;
+
+  const freshOf = (dto: Record<string, unknown>) => ({
+    packagedOn: dto.packagedOn,
+    acquiredOn: dto.acquiredOn,
+    drinkFrom: dto.drinkFrom,
+    drinkUntil: dto.drinkUntil,
+    priceAmount: dto.priceAmount,
+    priceCurrency: dto.priceCurrency,
+    location: dto.location,
+  });
+
+  const NONE = {
+    packagedOn: null,
+    acquiredOn: null,
+    drinkFrom: null,
+    drinkUntil: null,
+    priceAmount: null,
+    priceCurrency: null,
+    location: null,
+  };
+
+  it("the owner writes each field, reads it back, and clears it with null", async () => {
+    await withTestDb(async (db) => {
+      const { owner, actor, itemId } = await seedScenario(db, "PRIVATE");
+      const ctx = userCtx(owner, "r");
+      const written = await actor.updateItem(ctx, itemId, FRESH);
+      expect(freshOf(written)).toEqual(FRESH);
+      const read = await actor.item(ctx, itemId);
+      expect(freshOf(read ?? {})).toEqual(FRESH);
+
+      // Absent leaves a field alone; null clears it.
+      const partial = await actor.updateItem(ctx, itemId, {
+        location: null,
+        priceAmount: null,
+      });
+      expect(freshOf(partial)).toEqual({
+        ...FRESH,
+        location: null,
+        priceAmount: null,
+        priceCurrency: null,
+      });
+    });
+  });
+
+  it("addItem takes them too, all optional", async () => {
+    await withTestDb(async (db) => {
+      const { owner, actor, wine } = await seedScenario(db, "PRIVATE");
+      const ctx = userCtx(owner, "r");
+      const bare = await actor.addItem(ctx, { item: wine });
+      expect(freshOf(bare)).toEqual(NONE);
+      const dated = await actor.addItem(ctx, {
+        item: wine,
+        acquiredOn: "2026-11-01",
+        priceAmount: 12.5,
+        priceCurrency: "usd",
+        location: "  Fridge door  ",
+      });
+      expect(freshOf(dated)).toMatchObject({
+        acquiredOn: "2026-11-01",
+        priceAmount: 12.5,
+        priceCurrency: "USD",
+        location: "Fridge door",
+      });
+    });
+  });
+
+  it.each([
+    ["an impossible date", { packagedOn: "2026-02-30" }],
+    ["a timestamp for a date", { drinkFrom: "2026-02-01T10:00:00Z" }],
+    ["from after until", { drinkFrom: "2031-01-01", drinkUntil: "2030-01-01" }],
+    ["a negative price", { priceAmount: -1, priceCurrency: "EUR" }],
+    ["a price past numeric(10,2)", { priceAmount: 1e9, priceCurrency: "EUR" }],
+    ["a price with no currency", { priceAmount: 10 }],
+    ["a currency with no price", { priceCurrency: "EUR" }],
+    [
+      "a currency that is not ISO 4217",
+      { priceAmount: 10, priceCurrency: "EURO" },
+    ],
+    ["a location over 80 characters", { location: "x".repeat(81) }],
+  ] as const)("refuses %s with a ValidationError", async (_what, input) => {
+    await withTestDb(async (db) => {
+      const { owner, actor, itemId } = await seedScenario(db, "PRIVATE");
+      await expect(
+        actor.updateItem(userCtx(owner, "r"), itemId, input),
+      ).rejects.toBeInstanceOf(ValidationError);
+    });
+  });
+
+  it("checks from-before-until against the stored other end", async () => {
+    await withTestDb(async (db) => {
+      const { owner, actor, itemId } = await seedScenario(db, "PRIVATE");
+      const ctx = userCtx(owner, "r");
+      await actor.updateItem(ctx, itemId, { drinkUntil: "2027-01-01" });
+      await expect(
+        actor.updateItem(ctx, itemId, { drinkFrom: "2028-01-01" }),
+      ).rejects.toBeInstanceOf(ValidationError);
+    });
+  });
+
+  it("another user's bottle: refused, and concealed where the cellar is hidden", async () => {
+    await withTestDb(async (db) => {
+      // PRIVATE: the stranger cannot see the cellar, so the refusal is the
+      // same one a cellar that does not exist gets.
+      const hidden = await seedScenario(db, "PRIVATE");
+      const stranger = userCtx(hidden.stranger, "r");
+      const absent = randomUUID();
+      const refused = await refusalOf(
+        () => hidden.actor.updateItem(stranger, hidden.itemId, FRESH),
+        hidden.cellarId,
+      );
+      const missing = await refusalOf(
+        async () =>
+          (await activate(newCellarActor(absent, db))).updateItem(
+            stranger,
+            hidden.itemId,
+            FRESH,
+          ),
+        absent,
+      );
+      expect(refused).toEqual(missing);
+      expect(refused.code).toBe("NOT_FOUND");
+
+      // FRIENDS: the friend sees the cellar but may not change it.
+      const shared = await seedScenario(db, "FRIENDS");
+      await expect(
+        shared.actor.updateItem(userCtx(shared.friend, "r"), shared.itemId, {
+          location: "Mine now",
+        }),
+      ).rejects.toBeInstanceOf(ForbiddenError);
+      const after = await shared.actor.item(
+        userCtx(shared.owner, "r"),
+        shared.itemId,
+      );
+      expect(after?.location).toBeNull();
+    });
+  });
+
+  it("a bottle from a cellar you don't co-own answers exactly like an id that doesn't exist", async () => {
+    await withTestDb(async (db) => {
+      const theirs = await seedScenario(db, "PUBLIC");
+      const me = await seedUser(db);
+      const mine = await seedCellar(db, { createdById: me });
+      const myActor = await activate(newCellarActor(mine, db));
+      const ctx = userCtx(me, "r");
+
+      const foreign = await refusalOf(
+        () => myActor.updateItem(ctx, theirs.itemId, FRESH),
+        theirs.itemId,
+      );
+      const ghost = randomUUID();
+      const nothing = await refusalOf(
+        () => myActor.updateItem(ctx, ghost, FRESH),
+        ghost,
+      );
+      expect(foreign).toEqual(nothing);
+      expect(foreign.code).toBe("NOT_FOUND");
+
+      // And the PUBLIC cellar itself: visible, not mine — forbidden.
+      await expect(
+        theirs.actor.updateItem(ctx, theirs.itemId, FRESH),
+      ).rejects.toBeInstanceOf(ForbiddenError);
+      const untouched = await theirs.actor.item(
+        userCtx(theirs.owner, "r"),
+        theirs.itemId,
+      );
+      expect(freshOf(untouched ?? {})).toEqual(NONE);
+    });
+  });
+
+  it("a co-owner may write them, per the cellar's own rules", async () => {
+    await withTestDb(async (db) => {
+      const owner = await seedUser(db);
+      const coOwner = await seedUser(db);
+      const cellarId = await seedCellar(db, {
+        createdById: owner,
+        coOwnerIds: [coOwner],
+      });
+      const actor = await activate(newCellarActor(cellarId, db));
+      const bottle = await actor.addItem(userCtx(owner, "r"), {
+        item: await seedWine(db, owner),
+      });
+      const written = await actor.updateItem(userCtx(coOwner, "r"), bottle.id, {
+        location: "Hall cupboard",
+      });
+      expect(written.location).toBe("Hall cupboard");
+    });
+  });
+
+  it("they stay private: a viewer who may only see the cellar reads null", async () => {
+    await withTestDb(async (db) => {
+      const shared = await seedScenario(db, "FRIENDS");
+      await shared.actor.updateItem(
+        userCtx(shared.owner, "r"),
+        shared.itemId,
+        FRESH,
+      );
+      const asFriend = await shared.actor.items(userCtx(shared.friend, "r"), {
+        page,
+      });
+      expect(asFriend.entries.map((e) => freshOf(e.node))).toEqual([NONE]);
+      const one = await shared.actor.item(
+        userCtx(shared.friend, "r"),
+        shared.itemId,
+      );
+      expect(freshOf(one ?? {})).toEqual(NONE);
+      const asOwner = await shared.actor.items(userCtx(shared.owner, "r"), {
+        page,
+      });
+      expect(asOwner.entries.map((e) => freshOf(e.node))).toEqual([FRESH]);
+    });
+  });
+
+  it("drinkSoon: opened bottles past their style's span, then sealed ones closing", async () => {
+    await withTestDb(async (db) => {
+      const { owner, friend, actor, itemId, wine } = await seedScenario(
+        db,
+        "FRIENDS",
+      );
+      const ctx = userCtx(owner, "r");
+      const day = 86_400_000;
+      const iso = (ms: number) => new Date(ms).toISOString().slice(0, 10);
+      // The scenario's red, opened ten days ago: past its 3–5 days.
+      await actor.updateItem(ctx, itemId, {
+        openAt: new Date(Date.now() - 10 * day).toISOString(),
+      });
+      // A sealed IPA canned seven weeks ago: typical until three months on.
+      await db.execute(
+        sql`insert into public.beer_style (value) values ('INDIA_PALE_ALE') on conflict do nothing`,
+      );
+      const ipaId = await seedBeer(db, owner, "Pliny");
+      await db.execute(
+        sql`update public.beers set style = 'INDIA_PALE_ALE' where id = ${ipaId}::uuid`,
+      );
+      const ipa = await actor.addItem(ctx, {
+        item: { type: "BEER", id: ipaId },
+        packagedOn: iso(Date.now() - 49 * day),
+      });
+      // A sealed red from the scenario's 2020 vintage: typical until 2030.
+      await actor.addItem(ctx, { item: wine });
+      // A sealed red with the owner's own date in two months.
+      const mine = await actor.addItem(ctx, {
+        item: wine,
+        drinkUntil: iso(Date.now() + 60 * day),
+      });
+
+      const soon = await actor.drinkSoon(ctx);
+      expect(soon.map((s) => [s.bottle.id, s.reason, s.urgency])).toEqual([
+        [itemId, "OPENED", "PAST"],
+        [ipa.id, "SEALED", "SOON"],
+        [mine.id, "SEALED", "SOON"],
+      ]);
+      expect(soon[0]).toMatchObject({
+        openDays: 10,
+        openLifeDays: [3, 5],
+        typicalFor: "red wine",
+      });
+      expect(soon[1]).toMatchObject({
+        typicalFor: "IPA",
+        window: { untilSource: "typical" },
+      });
+      // The owner's own end wins; its start is still the typical one.
+      expect(soon[2]).toMatchObject({
+        typicalFor: "red wine",
+        window: { fromSource: "typical", untilSource: "user" },
+      });
+
+      // The friend may see the cellar, not its owner's private dates.
+      expect(await actor.drinkSoon(userCtx(friend, "r"))).toEqual([]);
     });
   });
 });
