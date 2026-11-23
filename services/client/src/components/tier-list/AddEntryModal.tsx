@@ -269,16 +269,21 @@ export function AddEntryModal({
       className="md:max-w-[480px]"
       footer={
         <div className="flex w-full flex-col gap-2">
-          {picked.length === 1 && onlyPick !== undefined && (
-            <Button
-              variant="secondary"
-              className="w-full"
-              disabled={busy}
-              onClick={() => setPlacing(onlyPick)}
-            >
-              Compare to place it
-            </Button>
-          )}
+          {/* W-1: an unrated pick has no band to compare within; plain Add
+              puts it in Unrated, so Compare is not offered for it. */}
+          {picked.length === 1 &&
+            onlyPick !== undefined &&
+            onlyPick.myScore !== null &&
+            onlyPick.myScore !== undefined && (
+              <Button
+                variant="secondary"
+                className="w-full"
+                disabled={busy}
+                onClick={() => setPlacing(onlyPick)}
+              >
+                Compare to place it
+              </Button>
+            )}
           <Button
             className="w-full"
             disabled={picked.length === 0 || busy}

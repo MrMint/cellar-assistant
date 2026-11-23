@@ -86,5 +86,8 @@ describe("TierListViewPage title morph (H-7)", () => {
       html,
       /<span data-morph="\(self\)"><h1\b[^>]*>Best Bars<\/h1><\/span>/,
     );
+    // W-10: a pushed page has Back, as every other one does.
+    assert.match(html, /aria-label="Back"/);
+    assert.equal(html.match(/<h1\b/g)?.length, 1, "one h1: the list's name");
   });
 });

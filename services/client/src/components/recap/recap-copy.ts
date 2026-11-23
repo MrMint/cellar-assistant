@@ -13,7 +13,7 @@ import type {
   RecapCardKind,
   RecapPeriod,
 } from "@cellar-assistant/contracts/recap";
-import { stampLabel, stampNoun } from "@/lib/stamps/stamps";
+import { stampLabel, stampNoun, stampTierText } from "@/lib/stamps/stamps";
 
 export type RecapCardView = {
   readonly kind: RecapCardKind;
@@ -114,7 +114,9 @@ export const recapCardCopy = (card: RecapCardView): RecapCardCopy => {
         overline: "Stamp earned",
         big: "",
         title:
-          stamp?.kind === "RECIPES" ? `${stamp.tier} recipes\nmade` : title,
+          stamp?.kind === "RECIPES"
+            ? `${stampTierText(stamp.tier)} recipes\nmade`
+            : title,
         chips: [],
         tone: "raised",
         accent: "brass",
@@ -131,7 +133,7 @@ export const stampFace = (stamp: {
   readonly kind: BreadthStampKind;
   readonly tier: number;
 }): { readonly count: string; readonly noun: string } => ({
-  count: String(stamp.tier),
+  count: stampTierText(stamp.tier),
   noun: stampNoun(stamp.kind, stamp.tier),
 });
 

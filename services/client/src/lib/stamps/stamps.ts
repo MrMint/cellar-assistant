@@ -21,11 +21,19 @@ export const stampNoun = (kind: BreadthStampKind, count: number): string => {
   return count === 1 ? one : many;
 };
 
-/** The earned tier as words: "5 regions", "3 kinds of drink". */
+/**
+ * A tier as a number that cannot be read as a count: "3+". A stamp is the
+ * highest tier reached, so beside a recap card that says "5 kinds of drink"
+ * a bare "3 kinds of drink" contradicted it (W-18).
+ */
+export const stampTierText = (tier: number): string => `${tier}+`;
+
+/** The earned tier as words: "5+ regions", "3+ kinds of drink". */
 export const stampLabel = (stamp: {
   readonly kind: BreadthStampKind;
   readonly tier: number;
-}): string => `${stamp.tier} ${stampNoun(stamp.kind, stamp.tier)}`;
+}): string =>
+  `${stampTierText(stamp.tier)} ${stampNoun(stamp.kind, stamp.tier)}`;
 
 /** For assistive tech: "Stamp: 5 regions (6 so far)". */
 export const stampDescription = (stamp: {

@@ -57,7 +57,7 @@ import {
   withTestDb,
 } from "../lib/testing.ts";
 import type { InsightsGenerator } from "./tier-list-actor.ts";
-import { TierListActor } from "./tier-list-actor.ts";
+import { cloneName, TierListActor } from "./tier-list-actor.ts";
 
 const daprClient = (): DaprClient =>
   new DaprClient({ daprHost: "127.0.0.1", daprPort: "3502" });
@@ -2286,12 +2286,35 @@ describe.skipIf(skip)("TierListActor positioned add (M7)", () => {
   });
 });
 
+describe("cloneName (W-19)", () => {
+  const viewer = "00000000-0000-4000-8000-000000000001";
+  const friend = "00000000-0000-4000-8000-000000000002";
+  it("names a friend's copy after its owner, by first name", () => {
+    expect(
+      cloneName("Sam's reds", { id: friend, name: "Sam Ortiz" }, viewer),
+    ).toBe("Sam's reds (from Sam)");
+  });
+  it("calls a copy of your own list a copy", () => {
+    expect(cloneName("Reds", { id: viewer, name: "Riley" }, viewer)).toBe(
+      "Reds (copy)",
+    );
+  });
+  it("never shows an email, and stays inside 200 characters", () => {
+    expect(
+      cloneName("Reds", { id: friend, name: "sam@example.com" }, viewer),
+    ).not.toMatch(/@/);
+    expect(
+      cloneName("x".repeat(200), { id: friend, name: "Sam" }, viewer).length,
+    ).toBeLessThanOrEqual(200);
+  });
+});
+
 describe.skipIf(skip)("TierListActor clone (L03)", () => {
   afterAll(closeTestDb);
 
   /** A friend's list of three wines across two bands, with a note. */
   const setup = async (db: DbOrTx, privacy: PermissionType) => {
-    const owner = await seedUser(db);
+    const owner = await seedUser(db, { displayName: "Maya Lin" });
     const viewer = await seedUser(db);
     await seedFriendship(db, owner, viewer);
     const ownerCtx = userCtx(owner, "r-owner");
@@ -2326,7 +2349,8 @@ describe.skipIf(skip)("TierListActor clone (L03)", () => {
       const dto = await copy.clone(viewerCtx, { sourceTierListId: id });
       expect(dto).toMatchObject({
         id: copyId,
-        name: "Maya's reds",
+        // W-19: the copy reads as yours, and says whose it was.
+        name: "Maya's reds (from Maya)",
         privacy: "PRIVATE",
         createdById: viewer,
       });

@@ -393,9 +393,20 @@ describe("pairwise placement (L09)", () => {
     assert.ok(buttonNamed(/^Bottle 65, Very Good number 66$/));
   });
 
-  test("Undo into an empty band offers to place it again (CR-2)", async () => {
-    // Excellent (band 5) is empty on this board: no question, straight in.
+  test("an empty band saves nothing until asked (W-1)", async () => {
+    // Outstanding (band 5) is empty on this board: nothing to compare with.
     await render({ myScore: 5 });
+    assert.equal(adds().length, 0, "nothing saved before a tap");
+    assert.ok(document.querySelector('[data-slot="pairwise-pending"]'));
+    assert.match(document.body.textContent ?? "", /Nothing in Outstanding/);
+    await click(buttonNamed(/^Place it$/));
+    assert.equal(adds().length, 1);
+    assert.ok(document.querySelector('[data-slot="pairwise-result"]'));
+  });
+
+  test("Undo into an empty band offers to place it again (CR-2)", async () => {
+    await render({ myScore: 5 });
+    await click(buttonNamed(/^Place it$/));
     assert.equal(adds().length, 1);
     await click(buttonNamed(/^Undo$/));
     const panel = document.querySelector('[data-slot="pairwise-pending"]');

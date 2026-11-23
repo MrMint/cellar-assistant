@@ -235,7 +235,13 @@ describe("computeStamps", () => {
 
 describe("displayValue", () => {
   it("humanises enum values and leaves free text", () => {
-    expect(displayValue("JUNMAI_DAIGINJO")).toBe("Junmai daiginjo");
+    expect(displayValue("JUNMAI_DAIGINJO")).toBe("Junmai Daiginjo");
+  });
+  it("W-17: cases proper nouns and style names as the item page does", () => {
+    expect(displayValue("UNITED_STATES")).toBe("United States");
+    expect(displayValue("INDIA_PALE_ALE")).toBe("India Pale Ale");
+    expect(displayValue("oolong")).toBe("Oolong");
+    expect(displayValue("Côte de Nuits")).toBe("Côte de Nuits");
     expect(displayValue("Saint-Julien")).toBe("Saint-Julien");
   });
 });

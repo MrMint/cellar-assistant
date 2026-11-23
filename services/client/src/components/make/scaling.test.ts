@@ -49,10 +49,29 @@ describe("Make mode scaling (ux-c L08)", () => {
   test("a line with no number keeps its words and says how many times", () => {
     const dash = { quantity: null, unit: null, amount: "2 dashes" };
     assert.equal(scaledAmount(dash, 1), "2 dashes");
-    assert.equal(scaledAmount(dash, 3), "2 dashes × 3");
+    assert.equal(scaledAmount(dash, 3), "6 dashes");
+    const top = { quantity: null, unit: null, amount: "to top" };
+    assert.equal(scaledAmount(top, 3), "to top × 3");
     assert.equal(
       scaledAmount({ quantity: null, unit: null, amount: null }, 3),
       "",
+    );
+  });
+
+  test("W-3: a printed amount with no quantity scales its number", () => {
+    const gin = { quantity: null, unit: null, amount: "30 ml" };
+    assert.equal(scaledAmount(gin, 2), "60 ml");
+    assert.equal(
+      scaledAmount({ quantity: null, unit: null, amount: "1 1/2 oz" }, 2),
+      "3 oz",
+    );
+    assert.equal(
+      scaledAmount({ quantity: null, unit: null, amount: "¾ oz gin" }, 2),
+      "1½ oz gin",
+    );
+    assert.equal(
+      scaledAmount({ quantity: null, unit: null, amount: "22.5 ml" }, 2),
+      "45 ml",
     );
   });
 

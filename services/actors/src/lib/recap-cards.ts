@@ -36,12 +36,26 @@ const TYPE_LABELS: Readonly<Record<ItemType, string>> = {
   TEA: "Tea",
 };
 
-/** `JUNMAI_DAIGINJO` → `Junmai daiginjo`; free text is left as written. */
+const titleWords = (words: readonly string[]): string =>
+  words
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+
+/**
+ * A stored style or region as a chip, cased the way the item page prints it
+ * (the client's `formatEnum`, W-17): `UNITED_STATES` → `United States`,
+ * `INDIA_PALE_ALE` → `India Pale Ale`, a lower-case value such as `oolong` →
+ * `Oolong`. Free text that already carries capitals ("Saint-Julien") is left
+ * as written.
+ */
 export const displayValue = (raw: string): string => {
   const trimmed = raw.trim();
   if (/^[A-Z0-9_]+$/.test(trimmed)) {
-    const words = trimmed.toLowerCase().split("_").filter(Boolean).join(" ");
-    return words.charAt(0).toUpperCase() + words.slice(1);
+    return titleWords(trimmed.toLowerCase().split("_"));
+  }
+  if (trimmed === trimmed.toLowerCase()) {
+    return titleWords(trimmed.split(/\s+/));
   }
   return trimmed;
 };
