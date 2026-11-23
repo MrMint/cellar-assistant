@@ -8,7 +8,7 @@ import { graphql, type ResultOf } from "@/lib/api/graphql";
 import { unwrapResult } from "@/lib/api/result";
 import type { RecapCardView } from "./recap-copy";
 
-const RecapCardFieldsFragment = graphql(`
+export const RecapCardFieldsFragment = graphql(`
   fragment RecapCardFields on RecapCard @_unmask {
     kind
     count
@@ -17,7 +17,7 @@ const RecapCardFieldsFragment = graphql(`
   }
 `);
 
-const BreadthStampSetFragment = graphql(`
+export const BreadthStampSetFragment = graphql(`
   fragment BreadthStampSetFields on BreadthStamps @_unmask {
     __typename
     styles {
