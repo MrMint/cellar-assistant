@@ -632,3 +632,51 @@ reverse them. Each names the item it belongs to; none overrides an answer.
   `RecipeThumb`. AddItemClient and the brand card/details still use the
   PNGs: their restored-markup tests (outside this stream) pin the images,
   so swapping them is a hand-off.
+
+### Route motion (wave C "routemotion": B05, H-2)
+
+- **The page transition is an `update` of the shell's `<main>`, not
+  per-page wrappers.** Next's guide puts a `<ViewTransition>` in every
+  `page.tsx` because a layout's enter/exit never fire; `main` stays mounted,
+  so wrapping it once in `AppShell` and mapping the types on `update` gives
+  every route the same motion without touching 60 pages, and the snapshot
+  is exactly the scroller's visible box.
+- **Kinds are inferred, then overridable.** A call site that says nothing
+  gets: same path → none (filters, query strings), another tab's root →
+  tab, a path ancestor → back (so AppBar's cold-link Back to its `parent`
+  slides back), anything else → forward. `/` is nobody's ancestor. A
+  `replace` follows the same rule, so a form that replaces itself with its
+  result slides forward and a filter stays put.
+- **Browser Back gets a type from the stack.** Next's popstate carries none.
+  `RouteTransition` listens to `popstate` and, in the same event, starts a
+  transition that adds the type and sets a no-op state: React queues the
+  type on the root in the shared transition lane, so the traverse's commit
+  carries it. Landing on the entry below the stack's top is Back, anything
+  else Forward; a move between two tab roots is a tab crossfade either way.
+  `navigate.back()` states its kind instead of relying on the stack.
+- **Reduced motion and no API: no types at all,** read through motion's
+  `useReducedMotion` (the ui-platform guard forbids a hand-rolled query), so
+  nothing is named or animated and the router call is byte-for-byte what it
+  was before B05. The CSS also zeroes any view-transition animation under
+  the media query, as a backstop.
+- **Bars are anchored by `data-slot` in CSS,** not by editing AppBar: the tab
+  bar, side rail and app bar each get a `view-transition-name` whose old
+  snapshot is hidden and new one not animated. The root's own crossfade is
+  off, so only the page moves.
+- **Title morph names come from the path** (`title_cellars_…`), so a card
+  needs only its `href` and the page only its pathname. Wired: `ItemCard`
+  (search, favourites, rankings) → `ItemHero`, and `TierListCard`'s side.
+  The cellar grid draws `BottleCard`, not `ItemCard`, and the tier list's
+  heading is in `TierListViewPage`, both outside this stream: hand-offs.
+- **`app/Link` is now a client component** (it reads the pathname to infer
+  the kind). Server components still render it; the props they pass were
+  already serialisable, since `next/link` is itself a client component.
+- **H-2: plates carry style fields.** `plateStyleFields(type, …)` maps WINE
+  `style`+`variety`, BEER `style`, SPIRIT `spiritType` (else `style`), TEA
+  `category`+`form`; sake and coffee have one vessel. The item page's
+  attributes already select every field (`ItemView.plateStyle`); the page
+  draws it once `ItemPageView` passes `styleFields={item.plateStyle}` to its
+  `LabelPlate`, a one-line hand-off (not this stream's file). The card
+  fragment lacks Wine `style`, Spirit `spiritType` and Tea `form`, so a card
+  shows variety/beer/tea-category vessels until it selects them (hand-off).
+
