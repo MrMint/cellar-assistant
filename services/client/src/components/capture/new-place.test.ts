@@ -8,6 +8,7 @@ import {
   nearbyWithCreated,
   newPlaceInput,
   offerNewPlace,
+  pinnedLine,
 } from "./new-place";
 
 const HERE = { latitude: 37.7749, longitude: -122.4194 };
@@ -193,5 +194,22 @@ describe("L10 · the menu header's rename is only ever a proposal", () => {
     ).toEqual({ ...place, name: "Bar Lumen" });
     // @ts-expect-error — `confirmed: false` is not a confirm.
     headerRenameInput(place, { proposal: "Bar Lumen", confirmed: false });
+  });
+});
+
+describe("W-16 · the pin says how good the fix is", () => {
+  test("a fix with an accuracy reads as the board's line", () => {
+    expect(pinnedLine(12.4)).toBe(
+      "Pinned at your location, about 12 m accurate",
+    );
+    expect(pinnedLine(0.3)).toBe("Pinned at your location, about 1 m accurate");
+    expect(pinnedLine(143)).toBe(
+      "Pinned at your location, about 140 m accurate",
+    );
+  });
+  test("no accuracy, or a nonsense one, reads as before", () => {
+    expect(pinnedLine(undefined)).toBe("Pinned at your location");
+    expect(pinnedLine(null)).toBe("Pinned at your location");
+    expect(pinnedLine(Number.NaN)).toBe("Pinned at your location");
   });
 });

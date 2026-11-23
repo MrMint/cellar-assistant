@@ -450,7 +450,7 @@ describe("NewPlaceSheet (L10: scan anywhere)", () => {
       <NewPlaceSheet
         open
         onOpenChange={() => {}}
-        location={HERE}
+        location={{ ...HERE, accuracy: 12 }}
         hasPhoto
         onCreated={(place) => created.push(place)}
         onPickInstead={() => {}}
@@ -463,6 +463,11 @@ describe("NewPlaceSheet (L10: scan anywhere)", () => {
       /Suggested from the nearest listing/,
     );
     assert.match(document.body.textContent ?? "", /Under review/);
+    // W-16: the pin says how good the fix is.
+    assert.match(
+      document.body.textContent ?? "",
+      /Pinned at your location, about 12 m accurate/,
+    );
     // The listing said "bar": that chip is picked.
     assert.equal(
       document.querySelector('[role="radio"][aria-checked="true"]')

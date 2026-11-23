@@ -199,3 +199,22 @@ export const headerRenameInput = (
   place: Omit<CreatePlaceInput, "name" | "placeId">,
   confirmed: { proposal: string; confirmed: true },
 ): CreatePlaceInput => ({ ...place, name: confirmed.proposal });
+
+/**
+ * W-16, board ScanNewPlace: "Pinned at your location, about 12 m accurate".
+ * The accuracy is the fix's own radius, rounded to what a person can use; a
+ * fix that does not say how good it is reads as before.
+ */
+export const pinnedLine = (accuracy: number | null | undefined): string => {
+  if (accuracy === null || accuracy === undefined) {
+    return "Pinned at your location";
+  }
+  if (!Number.isFinite(accuracy) || accuracy < 0) {
+    return "Pinned at your location";
+  }
+  const meters =
+    accuracy < 100
+      ? Math.max(1, Math.round(accuracy))
+      : Math.round(accuracy / 10) * 10;
+  return `Pinned at your location, about ${meters} m accurate`;
+};
