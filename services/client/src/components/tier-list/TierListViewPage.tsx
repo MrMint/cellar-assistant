@@ -54,6 +54,7 @@ import {
 } from "@/components/app/icons";
 import { Link } from "@/components/app/Link";
 import { notify } from "@/components/app/notify";
+import { MorphTitle } from "@/components/app/RouteTransition";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -413,9 +414,12 @@ export function TierListViewPage({
           title's column wrapped every two or three words. */}
       <div className="flex flex-col gap-1">
         <div className="flex items-start justify-between gap-4">
-          <h1 className="type-title-1 min-w-0 flex-1 break-words text-ink-1">
-            {data.name}
-          </h1>
+          {/* B05: the target of TierListCard's title morph (H-7). */}
+          <MorphTitle>
+            <h1 className="type-title-1 min-w-0 flex-1 break-words text-ink-1">
+              {data.name}
+            </h1>
+          </MorphTitle>
           {!isArranging && (
             <div className="flex shrink-0 gap-1">
               {data.listType === "place" && (

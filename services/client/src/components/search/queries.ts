@@ -233,6 +233,11 @@ export const SearchRecentActivityQuery = graphql(`
               note
               tags
               companionIds
+              recipe {
+                __typename
+                id
+                name
+              }
               place {
                 __typename
                 id

@@ -3,8 +3,9 @@
 /**
  * `82450ad1:src/components/brand/BrandCard.tsx`, restored. One change: a
  * logo renders through a plain `<img>` rather than `next/image`, because
- * `logoUrl` can be any host (see the inline note). The placeholder is still
- * `next/image` over the bundled `cellar1.png`.
+ * `logoUrl` can be any host (see the inline note). A brand with no logo shows
+ * {@link BrandPlate}, its initial on a quiet plate, in place of the old
+ * bundled `cellar1.png` (H-3, L22: no raster).
  *
  * On the app primitives: a borderless `surface-1` tile (design §3.3) in
  * place of Joy's outlined `InteractiveCard`, the type chip from
@@ -13,13 +14,41 @@
  * a button) is stretched over it.
  */
 
-import Image from "next/image";
 import { isNil, isNotNil } from "ramda";
 import type { ReactNode } from "react";
 import { Cocktail, ICON_STROKE, Place } from "@/components/app/icons";
 import { Link } from "@/components/app/Link";
-import cellar1 from "@/images/cellar1.png"; // Using as brand placeholder
+import { cn } from "@/lib/utils";
 import { BrandTypeChip } from "./brand-type-display";
+
+/**
+ * A brand with no logo (H-3): its initial on a `surface-2` plate. Decorative
+ * — the brand's name is always beside it — so it is hidden from the a11y tree.
+ * It fills its container; the caller sets the shape.
+ */
+export function BrandPlate({
+  name,
+  className,
+}: {
+  name: string;
+  className?: string;
+}) {
+  const initial = Array.from(name.trim())[0]?.toLocaleUpperCase() ?? "";
+  return (
+    <span
+      data-slot="brand-plate"
+      aria-hidden
+      className={cn(
+        "flex size-full select-none items-center justify-center bg-surface-2 text-ink-2 [container-type:size]",
+        className,
+      )}
+    >
+      <span className="font-display font-semibold text-[length:clamp(24px,40cqmin,96px)] leading-none">
+        {initial}
+      </span>
+    </span>
+  );
+}
 
 export type BrandCardItem = {
   id: string;
@@ -72,13 +101,7 @@ export const BrandCard = ({ brand, href, onClick }: BrandCardProps) => {
           />
         )}
         {isNil(brand.logo_url) && (
-          <Image
-            src={cellar1}
-            alt={`${brand.name} placeholder`}
-            fill
-            placeholder="blur"
-            className="object-contain"
-          />
+          <BrandPlate name={brand.name} className="absolute inset-0" />
         )}
 
         {/* Brand type badge */}

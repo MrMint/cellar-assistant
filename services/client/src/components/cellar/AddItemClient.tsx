@@ -1,25 +1,21 @@
 "use client";
 
-import Image, { type StaticImageData } from "next/image";
+import { VesselSilhouette } from "@/components/app/LabelPlate";
 import { Link } from "@/components/app/Link";
-import beer1 from "@/images/beer1.png";
-import coffee1 from "@/images/coffee1.png";
-import sake1 from "@/images/sake1.png";
-import spirit1 from "@/images/spirit1.png";
-import tea1 from "@/images/tea1.png";
-import wine1 from "@/images/wine1.png";
+import { itemTypeTokens } from "@/components/app/TypeChip";
+import type { ApiItemType } from "@/components/cellar-api/itemTypes";
 import { cn } from "@/lib/utils";
 
 type ItemType = "Beer" | "Wine" | "Spirit" | "Coffee" | "Sake" | "Tea";
 
-/** Each type's illustration and its alt text, as the old cards had them. */
-const ART: Readonly<Record<ItemType, { src: StaticImageData; alt: string }>> = {
-  Beer: { src: beer1, alt: "An image of a beer glass" },
-  Wine: { src: wine1, alt: "An image of a wine bottle" },
-  Spirit: { src: spirit1, alt: "An image of a liquor bottle" },
-  Coffee: { src: coffee1, alt: "A bag of coffee beans" },
-  Sake: { src: sake1, alt: "A sake bottle" },
-  Tea: { src: tea1, alt: "A tea container" },
+/** Each card's plate type (H-3, L22: its vessel on its tint, no raster). */
+const PLATE_TYPE: Readonly<Record<ItemType, ApiItemType>> = {
+  Beer: "BEER",
+  Wine: "WINE",
+  Spirit: "SPIRIT",
+  Coffee: "COFFEE",
+  Sake: "SAKE",
+  Tea: "TEA",
 };
 
 type AddItemTypeCardProps = {
@@ -37,14 +33,17 @@ const AddItemTypeCard = ({ type, href }: AddItemTypeCardProps) => (
         "transition-[background-color,transform] duration-(--ca-dur-micro) ease-standard hover:bg-surface-2 has-[a:active]:scale-97 motion-reduce:has-[a:active]:scale-100",
     )}
   >
-    <div className="relative aspect-square">
-      <Image
-        src={ART[type].src}
-        alt={ART[type].alt}
-        fill
-        placeholder="blur"
-        className="object-cover"
-      />
+    {/* Decorative: the card's name says the type. */}
+    <div
+      data-slot="type-plate"
+      data-type={PLATE_TYPE[type]}
+      className={cn(
+        "relative flex aspect-square items-center justify-center",
+        itemTypeTokens[PLATE_TYPE[type]].tintClass,
+        itemTypeTokens[PLATE_TYPE[type]].textClass,
+      )}
+    >
+      <VesselSilhouette type={PLATE_TYPE[type]} className="h-3/5 w-auto" />
     </div>
     <div className="flex p-4">
       {href === undefined ? (
@@ -72,7 +71,7 @@ interface AddItemClientProps {
 
 /**
  * `82450ad1:src/components/cellar/AddItemClient.tsx`, restored: the heading,
- * the permission note, and six image cards in the old order linking to the
+ * the permission note, and six type cards in the old order linking to the
  * onboarding routes (`/cellars/<id>/<type>s/add`, or `/add/<type>s`).
  *
  * The old component read the cellar's name and owners with a client query;

@@ -50,11 +50,11 @@ export type ItemCardSource = {
   variety?: string | null;
   beerStyle?: string | null;
   spiritStyle?: string | null;
-  /** Wine's own `style` (sparkling, …); `ItemCardFragment` does not select it yet. */
+  /** Wine's own `style` (sparkling, …). */
   wineStyle?: string | null;
-  /** Spirit's `spiritType`, the vessel's field; not selected by the card fragment yet. */
+  /** Spirit's `spiritType`, the vessel's field. */
   spiritType?: string | null;
-  /** Tea's `form`; not selected by the card fragment yet. */
+  /** Tea's `form`. */
   form?: string | null;
   roastLevel?: string | null;
   /** Sake and tea's subtitle descriptor. */
