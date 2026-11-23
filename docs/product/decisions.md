@@ -551,3 +551,38 @@ reverse them. Each names the item it belongs to; none overrides an answer.
   per-type routes read the cellar like `/items/add` does, so the success
   sheet says "… is in Home Cellar", a cellar that does not exist is a 404,
   and a viewer who may not add there gets the note instead of a camera.
+
+### Wave B leftovers (wave C "leftovers": items 1–9)
+
+- **Toasts sit above an open sheet.** While a mobile sheet is open the
+  toaster's bottom offset is the sheet's top edge plus 12 px (`--sheet-inset`,
+  M5), and the tab bar's offset otherwise, so the "Finished" Undo no longer
+  covers the rating sheet's Save. A near-full-height sheet caps the toast at
+  96 px below the top of the screen, over the sheet's header rather than off
+  screen.
+- **No account-existence oracle on `user` and `userSearch` (L6, L41).** One
+  policy rule, `canSeeProfile`, decides who may know a user exists; today it
+  admits every signed-in viewer. A missing id, a malformed id and (once there
+  is one) a hidden profile all answer `NotFoundError` with the profile
+  wording, "This profile doesn't exist or isn't shared with you." The actor
+  used to name the key in its refusal, so a uuid and junk answered in
+  different bytes; `UserActor` now refuses every absent case with that one
+  message, an invite with a wrong secret included. Sign-in is checked before
+  existence: the old order told an anonymous caller NotFound for nobody and
+  Forbidden for someone. The API answers a malformed id without sending it
+  to an actor. A hidden person is dropped from `userSearch` like someone who
+  does not exist, so a page can hold fewer than `limit` hits once blocking
+  lands.
+- **Friend-profile lists page.** Tier lists and cellars on `/users/<id>`
+  show 20, then "Show more" walks the connection, as the drink log does; the
+  "Showing 20 of 26" line is gone. The sections clamp `first` to the server's
+  cap (100) instead of the usual `VALIDATION` error: all three sit under one
+  `friendProfile` answer, and one over-large section would otherwise blank
+  the whole profile.
+- **Touch targets.** The item page's action bar and the Pour sheet already
+  met 44 px (icon buttons are 44, chips and the Move-to button extend their
+  hit area); m21 now runs axe `target-size` on just those regions. The
+  page-level pass belongs to the verify round (L31).
+- **e2e cleanup.** m06 deletes the teas it makes, the typed draft's
+  included (`deleteTeas` in `fixtures/db.ts`). A recipe ingredient naming one
+  of them is left in place and fails the delete, since no spec puts one there.
