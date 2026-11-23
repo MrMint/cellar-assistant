@@ -11,6 +11,14 @@ interface LocationPrePromptProps {
   /** Raises the browser's own location prompt. */
   onContinue: () => void;
   onDismiss: () => void;
+  /**
+   * L10: the one line, for a surface other than the map (the menu scanner's
+   * "find the place this menu is from"). One sentence, as D14 asks.
+   */
+  copy?: string;
+  continueLabel?: string;
+  dismissLabel?: string;
+  disabled?: boolean;
 }
 
 /**
@@ -20,6 +28,10 @@ interface LocationPrePromptProps {
 export function LocationPrePrompt({
   onContinue,
   onDismiss,
+  copy = LOCATION_PRE_PROMPT_COPY,
+  continueLabel = "Continue",
+  dismissLabel = "Not now",
+  disabled = false,
 }: LocationPrePromptProps) {
   return (
     <div
@@ -33,13 +45,15 @@ export function LocationPrePrompt({
           strokeWidth={ICON_STROKE}
           className="size-4 shrink-0 text-ink-2"
         />
-        <p className="type-callout">{LOCATION_PRE_PROMPT_COPY}</p>
+        <p className="type-callout">{copy}</p>
       </div>
       <div className="flex justify-end gap-2">
-        <Button variant="ghost" onClick={onDismiss}>
-          Not now
+        <Button variant="ghost" onClick={onDismiss} disabled={disabled}>
+          {dismissLabel}
         </Button>
-        <Button onClick={onContinue}>Continue</Button>
+        <Button onClick={onContinue} disabled={disabled}>
+          {continueLabel}
+        </Button>
       </div>
     </div>
   );

@@ -232,6 +232,7 @@ export const scanRowToDto = (
   processedAt: iso(row.processedAt),
   createdAt: iso(row.createdAt),
   updatedAt: iso(row.updatedAt),
+  headerName: row.headerName ?? null,
 });
 
 /** `item_match_suggestions`' arc: its six `suggested_<type>_id` columns. */
@@ -838,6 +839,11 @@ export class MenuScanActor
           processingDurationMs: durationMs,
           confidenceScore: clamp01(result.confidence).toFixed(2),
           itemsDetected: items.length,
+          // L10: stored, never applied — the place keeps its name until its
+          // creator confirms the rename (L24).
+          headerName: result.noMenuDetected
+            ? null
+            : (result.headerName ?? null),
           processedAt: new Date(),
           updatedAt: new Date(),
         })

@@ -70,8 +70,10 @@ import * as friendFragments from "@/components/friend/fragments";
 import * as homeQueries from "@/components/home/queries";
 import * as itemFragments from "@/components/item/fragments";
 import * as itemCardFragments from "@/components/item/ItemCard/fragments";
+import * as itemSeenAt from "@/components/item/seen-at";
 import * as makeBrewQueries from "@/components/make/brew-queries";
 import * as mapQueries from "@/components/map/queries";
+import * as scanHeaderRename from "@/components/map/scanning/header-rename";
 import * as menuLinesQueries from "@/components/menu-lines/queries";
 import * as pourQueries from "@/components/pour/queries";
 import * as profileQueries from "@/components/profile/queries";
@@ -116,8 +118,10 @@ const MODULES: Readonly<Record<string, Record<string, unknown>>> = {
   "components/home/queries.ts": homeQueries,
   "components/item/ItemCard/fragments.ts": itemCardFragments,
   "components/item/fragments.ts": itemFragments,
+  "components/item/seen-at.ts": itemSeenAt,
   "components/make/brew-queries.ts": makeBrewQueries,
   "components/map/queries.ts": mapQueries,
+  "components/map/scanning/header-rename.ts": scanHeaderRename,
   "components/menu-lines/queries.ts": menuLinesQueries,
   "components/pour/queries.ts": pourQueries,
   "components/profile/queries.ts": profileQueries,

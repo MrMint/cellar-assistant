@@ -132,6 +132,9 @@ const GUARDED: readonly Guarded[] = [
       // X09: `friendshipsOf` / `friendIdsOf` for `friendsScore` — Drizzle
       // reads of `friends`, guarded below.
       "../lib/visibility.ts",
+      // L10: `seenAt` — Drizzle reads composed with the policy's canSee*
+      // rules, guarded below.
+      "../lib/seen-at.ts",
     ],
     // §8.5's "entity → FileActor, BudgetActor, EmbeddingActor,
     // BrandRegistryActor, BarcodeActor". `ItemActor` uses two of the five,
@@ -305,6 +308,21 @@ const GUARDED: readonly Guarded[] = [
       "../lib/recipe-visibility.ts",
       // X18: `cellarOwnedBySql` for the Me hub's counts — guarded above.
       "../lib/cellar-ownership.ts",
+    ],
+    sidecarTargets: [],
+  },
+  {
+    // L10: Seen at — the item's menu lines and logs, kept through
+    // `canSeePlace` / `canSeeCheckInDetails`. Reads only; no actor, no model.
+    file: "../lib/seen-at.ts",
+    imports: [
+      "@cellar-assistant/contracts",
+      "@cellar-assistant/db",
+      "@cellar-assistant/db/orm",
+      "@cellar-assistant/policy",
+      "./db.ts",
+      "./item-arcs.ts",
+      "./visibility.ts",
     ],
     sidecarTargets: [],
   },

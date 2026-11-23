@@ -894,3 +894,48 @@ reverse them. Each names the item it belongs to; none overrides an answer.
   "Back to the recipe", not a sheet. The BrewGuide board's facts grid shows
   only the numbers that exist (matcha has no time), and the coffee row's
   "V60" method name is not shown — the table has one method per type.
+
+### Seen at and scan-anywhere new place (wave C "seenat": L10)
+
+- **Seen at is one actor read that composes the existing rules.**
+  `ItemActor.seenAt` (`services/actors/src/lib/seen-at.ts`) gathers the
+  item's menu lines (`place_menu_items` by item column) and its logs with a
+  place (`check_ins.place_id`) by the viewer, their friends and the viewer's
+  own outings, then keeps a place only through `canSeePlace` and a log only
+  through `canSeeCheckInDetails` — the place is a detail of the log. Every
+  refusal is an omission: a missing item, a private place and a log the
+  viewer may not see all answer `[]` (tests shown failing with the checks
+  removed first). Anonymous viewers get `[]`. No new policy.
+- **A private log is not a thing yet.** `check_ins` has no privacy column, so
+  "a friend's private log" is tested as a friend's log at the friend's
+  pending place plus a stranger's log. A per-log privacy setting belongs to
+  `packages/policy` (the make stream) and Seen at will follow it there.
+- **One row per place, with one reason:** your own log beats a menu, which
+  beats a friend's; newest within a kind. Nearest first when the browser
+  *already* shares a position (the item page never asks — D14 asks on
+  demand), newest first otherwise; at most 20 (`SEEN_AT_MAX`). The API
+  field is `Item.seenAt(near, first): SeenAtConnection`.
+- **The menu header is an abstaining field, read after `rawText`.**
+  `venueNameIsPrinted` then `venueName` follow `confidence` and precede
+  `items`, neither required, and the seam keeps a name only when the flag is
+  true, it is 2–120 characters and it appears in the read text. It is stored
+  as the new nullable `menu_scans.header_name` (migration
+  `20261123055037_ux_c_seenat`, ruling L46) and never renames a place by
+  itself: the results page offers "This menu says 'X'. Rename the place?" only
+  for the person's own place still Under review, and only Rename resubmits
+  (the type of `headerRenameInput` takes `confirmed: true`).
+- **The inline new place is settled before upload (L24).** With a fix and no
+  saved place within 50 m, capture offers "Add this place"; a shutter with no
+  place opens the same sheet with the photo held. The place is created only
+  on "Add place", saved pending — Under review (D28) — with a client-minted
+  `placeId` kept for the open sheet so a retry converges (N09), and the bounds
+  checked before a round trip. The prefill spends one budgeted Google nearby
+  read; when D16 says no the sheet says "Details pending" and invents no name.
+  No `google_place_id` is bound, so nothing is enriched on create.
+- **Location asks our line first.** The capture card's prompt is
+  `LocationPrePrompt` with "Use your location to find the place this menu is
+  from." before the OS sheet; the pre-prompt took optional copy and labels,
+  its defaults unchanged.
+- **No seam for taste (L47 → H-10).** The taste_phrase seam was dropped from
+  this stream; the proposed cap (20 000 requests / 200 cents a month) is
+  recorded for whoever adds it with `install.ts` and `budget.ts`.

@@ -685,6 +685,15 @@ type Beer implements Item {
   Computed in the actor from the loaded reviews — this is what replaces the `_aggregate` calls (§2.1).
   """
   score: ItemScore!
+
+  """
+  L10: where this item was seen — on a menu scanned at a place you may see, in your own logs, or in friends' logs they share with you. One row per place; nearest first with `near`, newest first without. A place or log you may not see is left out, never refused.
+  """
+  seenAt(
+    """At most 20."""
+    first: Int
+    near: LngLatInput
+  ): SeenAtConnection!
   style: String
 
   """
@@ -1753,6 +1762,15 @@ type Coffee implements Item {
   Computed in the actor from the loaded reviews — this is what replaces the `_aggregate` calls (§2.1).
   """
   score: ItemScore!
+
+  """
+  L10: where this item was seen — on a menu scanned at a place you may see, in your own logs, or in friends' logs they share with you. One row per place; nearest first with `near`, newest first without. A place or log you may not see is left out, never refused.
+  """
+  seenAt(
+    """At most 20."""
+    first: Int
+    near: LngLatInput
+  ): SeenAtConnection!
   species: String
 
   """
@@ -3073,6 +3091,15 @@ interface Item {
   score: ItemScore!
 
   """
+  L10: where this item was seen — on a menu scanned at a place you may see, in your own logs, or in friends' logs they share with you. One row per place; nearest first with `near`, newest first without. A place or log you may not see is left out, never refused.
+  """
+  seenAt(
+    """At most 20."""
+    first: Int
+    near: LngLatInput
+  ): SeenAtConnection!
+
+  """
   The tier lists ranking this, as their rows (band, position, list) — only lists you may see (`canSeeTierList`): a private list's row, and so its name, never appears. Most recently changed list first; at most 100 rows reachable, `totalCount` exact. One batched call per page of parents. Empty for an anonymous viewer.
   """
   tierListEntries(
@@ -3834,6 +3861,11 @@ type MenuScan {
   createdAt: DateTime
   estimatedPlaceId: ID
   extractedText: String
+
+  """
+  L10: the venue name the menu itself prints, or null when the model declined to read one. A proposal only — the place keeps its name until its creator confirms a rename.
+  """
+  headerName: String
   id: ID!
   itemsDetected: Int!
 
@@ -7084,6 +7116,15 @@ type Sake implements Item {
   Computed in the actor from the loaded reviews — this is what replaces the `_aggregate` calls (§2.1).
   """
   score: ItemScore!
+
+  """
+  L10: where this item was seen — on a menu scanned at a place you may see, in your own logs, or in friends' logs they share with you. One row per place; nearest first with `near`, newest first without. A place or log you may not see is left out, never refused.
+  """
+  seenAt(
+    """At most 20."""
+    first: Int
+    near: LngLatInput
+  ): SeenAtConnection!
   servingTemperature: String
 
   """
@@ -7152,6 +7193,43 @@ enum SakeServingTemperature {
   room_temperature
   tobikiri_kan
   yuki_hie
+}
+
+type SeenAtConnection {
+  edges: [SeenAtEdge!]!
+  pageInfo: PageInfo!
+
+  """Total rows matching the query, or null when counting is not cheap."""
+  totalCount: Int
+}
+
+type SeenAtEdge {
+  cursor: String!
+  node: SeenAtPlace!
+}
+
+"""
+Why a place is in an item's Seen at: your own log there, a menu scanned there, or a friend's log there (strongest first).
+"""
+enum SeenAtKind {
+  FRIEND_LOG
+  MENU
+  OWN_LOG
+}
+
+"""One place in an item's Seen at, with its strongest reason."""
+type SeenAtPlace {
+  """When the menu was scanned, or the log made."""
+  at: DateTime
+
+  """From `near`; null without it."""
+  distanceMeters: Float
+
+  """FRIEND_LOG only: whose log it was."""
+  friendName: String
+  kind: SeenAtKind!
+  place: Place!
+  placeName: String!
 }
 
 union SendFriendRequestResult = BudgetExceededError | ConflictError | ForbiddenError | FriendRequest | NotFoundError | ValidationError
@@ -7624,6 +7702,15 @@ type Spirit implements Item {
   """
   score: ItemScore!
 
+  """
+  L10: where this item was seen — on a menu scanned at a place you may see, in your own logs, or in friends' logs they share with you. One row per place; nearest first with `near`, newest first without. A place or log you may not see is left out, never refused.
+  """
+  seenAt(
+    """At most 20."""
+    first: Int
+    near: LngLatInput
+  ): SeenAtConnection!
+
   """`spirits.type`, a reference-table value."""
   spiritType: String!
   style: String
@@ -7960,6 +8047,15 @@ type Tea implements Item {
   Computed in the actor from the loaded reviews — this is what replaces the `_aggregate` calls (§2.1).
   """
   score: ItemScore!
+
+  """
+  L10: where this item was seen — on a menu scanned at a place you may see, in your own logs, or in friends' logs they share with you. One row per place; nearest first with `near`, newest first without. A place or log you may not see is left out, never refused.
+  """
+  seenAt(
+    """At most 20."""
+    first: Int
+    near: LngLatInput
+  ): SeenAtConnection!
   steepingTemperature: String
   steepingTime: String
 
@@ -9348,6 +9444,15 @@ type Wine implements Item {
   Computed in the actor from the loaded reviews — this is what replaces the `_aggregate` calls (§2.1).
   """
   score: ItemScore!
+
+  """
+  L10: where this item was seen — on a menu scanned at a place you may see, in your own logs, or in friends' logs they share with you. One row per place; nearest first with `near`, newest first without. A place or log you may not see is left out, never refused.
+  """
+  seenAt(
+    """At most 20."""
+    first: Int
+    near: LngLatInput
+  ): SeenAtConnection!
   specialDesignation: String
   style: String
 

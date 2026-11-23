@@ -103,6 +103,22 @@ describe("Query.menuScan", () => {
     });
   });
 
+  it("headerName (L10) is the scan's stored proposal, null when the read abstained or predates it", async () => {
+    for (const [dto, expected] of [
+      [{ ...scanDto, headerName: "Bar Lumen" }, "Bar Lumen"],
+      [{ ...scanDto, headerName: null }, null],
+      [scanDto, null],
+    ] as const) {
+      const { invoke } = stubSidecar({ "MenuScanActor.get": () => dto });
+      const result = await run(
+        `{ menuScan(id: "${SCAN_ID}") { ... on MenuScan { headerName } } }`,
+        testContext(invoke, viewer),
+      );
+      expect(result.errors).toBeUndefined();
+      expect(result.data?.menuScan).toEqual({ headerName: expected });
+    }
+  });
+
   it("matchCounts is served by MenuScanActor.matchCounts, only when selected", async () => {
     const { invoke, calls } = stubSidecar({
       "MenuScanActor.get": () => scanDto,

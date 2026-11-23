@@ -580,6 +580,26 @@ export const providerItemSuggestions =
  * same defect at resolutions no size check could ever separate from a real
  * menu.
  */
+/** `menu_scans.header_name` is shown in a sheet title; longer is not a name. */
+const MENU_HEADER_NAME_MAX = 120;
+
+/**
+ * L10: the menu header's venue name, or `null` for every way of abstaining.
+ * The verdict is read first (L4): no `venueNameIsPrinted: true`, no name,
+ * whatever `venueName` says. A name that is not in the page's own `rawText`
+ * was not read off the page, so it is dropped rather than proposed.
+ */
+export const menuHeaderName = (
+  parsed: Record<string, unknown>,
+  rawText: string,
+): string | null => {
+  if (bool(parsed.venueNameIsPrinted) !== true) return null;
+  const name = str(parsed.venueName)?.replace(/\s+/g, " ").trim() ?? "";
+  if (name.length < 2 || name.length > MENU_HEADER_NAME_MAX) return null;
+  const haystack = rawText.replace(/\s+/g, " ").toLowerCase();
+  return haystack.includes(name.toLowerCase()) ? name : null;
+};
+
 export const providerMenuExtraction =
   (provider: ProviderFor, loadImages: ImageLoader): MenuExtractionProvider =>
   async (ctx, request) => {
@@ -668,6 +688,7 @@ export const providerMenuExtraction =
       durationMs: Date.now() - started,
       noMenuDetected: false,
       imageDescription,
+      headerName: menuHeaderName(parsed, rawText),
     };
   };
 

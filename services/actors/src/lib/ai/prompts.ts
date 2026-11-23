@@ -1016,6 +1016,24 @@ export const MENU_EXTRACTION_SCHEMA: JsonSchema = {
         "never a description of the image, and never text you cannot see.",
     ),
     confidence: number_("0 to 1 — legibility and completeness of the page."),
+    // L10 (wave C seenat): the venue's own name as the menu prints it, for a
+    // rename the person confirms (L24) and never for anything applied by
+    // itself. The abstention comes first — property order is generation
+    // order (L4) — so "no name is printed" is decided before a name can be
+    // written, and the name is not required, so declining it is reachable.
+    venueNameIsPrinted: {
+      type: "boolean",
+      description:
+        "Decide this before writing any venue name. True only when the menu " +
+        "itself prints the name of the bar, restaurant or shop it belongs to " +
+        "(usually a heading or a logo line). False when it does not, when " +
+        "you are unsure, or when there is no legible menu.",
+    },
+    venueName: string_(
+      "Only when `venueNameIsPrinted` is true: that name exactly as printed, " +
+        "and it must appear in `rawText`. Otherwise an empty string. Never a " +
+        "guess from the kind of menu or the dishes on it.",
+    ),
     items: {
       type: "array",
       description: "One entry per drink or item listed on the menu.",
@@ -1135,7 +1153,11 @@ Rules:
   the whole page, including headings and prices — not a summary, and not a
   description of the image. Every item you list must appear in it.
 - A page that is genuinely a menu but too blurred to read is \`menuIsLegible\`
-  false, with a low \`confidence\`.`;
+  false, with a low \`confidence\`.
+- \`venueNameIsPrinted\` is true only when the menu prints the venue's own
+  name; then \`venueName\` is that name verbatim, as it appears in
+  \`rawText\`. Otherwise \`venueNameIsPrinted\` is false and \`venueName\`
+  is empty. Most menus do not print it, and false is the usual answer.`;
 
 /* -------------------------------------------------------------------------- */
 /* B8 · match verification (the 0.4–0.9 band)                                  */
