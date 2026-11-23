@@ -214,16 +214,19 @@ export function useSheetDrag({
       });
     };
 
-    // vaul mounts the content in a portal after this effect may run: attach
-    // on the next frame, when the node is there.
-    const attach = requestAnimationFrame(() => {
+    const listen = (): boolean => {
+      if (node !== null) return true;
       node = nodeRef.current;
-      if (node === null) return;
+      if (node === null) return false;
       node.addEventListener("pointerdown", onDown);
       node.addEventListener("pointermove", onMove);
       node.addEventListener("pointerup", onUp);
       node.addEventListener("pointercancel", onUp);
-    });
+      return true;
+    };
+    // The content is usually mounted by now; if vaul's portal has not put it
+    // there yet, try again on the next frame.
+    const attach = listen() ? 0 : requestAnimationFrame(listen);
 
     return () => {
       cancelAnimationFrame(attach);

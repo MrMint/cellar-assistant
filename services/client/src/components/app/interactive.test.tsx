@@ -216,8 +216,13 @@ describe("BottomSheet snaps", () => {
 describe("BottomSheet physics", () => {
   const sheet = () =>
     document.querySelector<HTMLElement>('[data-slot="bottom-sheet"]');
-  const pointer = (type: string, y: number) =>
-    new PointerEvent(type, {
+  /**
+   * `at` stamps the event's time, so a drag's speed is the test's, not the
+   * machine's: under load a real 20 ms wait can take 300 ms, and a flick
+   * reads as a slow drag.
+   */
+  const pointer = (type: string, y: number, at?: number) => {
+    const event = new PointerEvent(type, {
       bubbles: true,
       cancelable: true,
       isPrimary: true,
@@ -225,20 +230,35 @@ describe("BottomSheet physics", () => {
       button: 0,
       clientY: y,
     });
+    if (at !== undefined)
+      Object.defineProperty(event, "timeStamp", { value: at });
+    return event;
+  };
+  /**
+   * Past the 500 ms settle: polled, because under a loaded machine (the
+   * whole suite at once) timers run late and a fixed wait flakes.
+   */
+  const settled = async (done: () => boolean, ms = 4000) => {
+    const until = Date.now() + ms;
+    while (!done() && Date.now() < until) await flush(50);
+  };
   /** A quick drag: down, the moves (a frame apart), up. */
   const drag = async (el: HTMLElement, ys: readonly number[]) => {
     const [first, ...rest] = ys;
+    const t0 = performance.now();
+    let frame = 0;
+    const at = () => t0 + 16 * frame++;
     await act(async () => {
-      el.dispatchEvent(pointer("pointerdown", first ?? 0));
+      el.dispatchEvent(pointer("pointerdown", first ?? 0, at()));
     });
     for (const y of rest.slice(0, -1)) {
       await act(async () => {
-        el.dispatchEvent(pointer("pointermove", y));
+        el.dispatchEvent(pointer("pointermove", y, at()));
         await new Promise((r) => setTimeout(r, 20));
       });
     }
     await act(async () => {
-      el.dispatchEvent(pointer("pointerup", rest.at(-1) ?? first ?? 0));
+      el.dispatchEvent(pointer("pointerup", rest.at(-1) ?? first ?? 0, at()));
     });
   };
   const Snapping = ({
@@ -283,7 +303,7 @@ describe("BottomSheet physics", () => {
     el.style.transform ||= "translate3d(0, 0px, 0)";
     await drag(el, [500, 470, 430, 380]);
     assert.deepEqual(snaps, [], "not before the snap has settled");
-    await flush(700);
+    await settled(() => snaps.length > 0);
     assert.deepEqual(snaps, ["full"]);
     await flush(560);
     assert.deepEqual(snaps, ["full"], "once");
@@ -336,7 +356,7 @@ describe("BottomSheet physics", () => {
     // A browser computes `none`; happy-dom computes nothing, which vaul reads.
     el.style.transform ||= "translate3d(0, 0px, 0)";
     await drag(el, [300, 360, 460, 600]);
-    await flush(700);
+    await settled(() => snaps.length > 0);
     assert.equal(closed, 0);
     assert.deepEqual(snaps, ["peek"]);
   });
