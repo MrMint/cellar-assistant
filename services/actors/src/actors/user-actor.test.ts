@@ -2612,6 +2612,24 @@ describe("brew prefs (ux-c L08) — the viewer's own, nobody else's", () => {
     });
   });
 
+  it("takes any dose and water above zero, as the contract and DB do (CB-2)", async () => {
+    await withUserDb(async (db) => {
+      const alice = await seedPerson(db, "Alice");
+      const teaId = await seedTea(db, alice);
+      const actor = await userActor(alice, db);
+      const ctx = userCtx(alice, "r");
+      const saved = await actor.setBrewPrefs(ctx, {
+        item: { type: "TEA", id: teaId },
+        waterTempC: null,
+        steepSeconds: null,
+        doseGrams: 0.05,
+        waterMl: 0.5,
+      });
+      expect(saved?.doseGrams).toBeCloseTo(0.05);
+      expect(saved?.waterMl).toBeCloseTo(0.5);
+    });
+  });
+
   it("refuses out-of-range numbers and non-brew item types", async () => {
     await withUserDb(async (db) => {
       const alice = await seedPerson(db, "Alice");
@@ -2630,6 +2648,12 @@ describe("brew prefs (ux-c L08) — the viewer's own, nobody else's", () => {
       ).rejects.toBeInstanceOf(ValidationError);
       await expect(
         actor.setBrewPrefs(ctx, { ...base, steepSeconds: 0 }),
+      ).rejects.toBeInstanceOf(ValidationError);
+      await expect(
+        actor.setBrewPrefs(ctx, { ...base, doseGrams: 0 }),
+      ).rejects.toBeInstanceOf(ValidationError);
+      await expect(
+        actor.setBrewPrefs(ctx, { ...base, waterMl: -1 }),
       ).rejects.toBeInstanceOf(ValidationError);
       await expect(
         actor.brewPrefs(ctx, { type: "WINE", id: teaId }),
