@@ -70,6 +70,7 @@ import * as friendFragments from "@/components/friend/fragments";
 import * as homeQueries from "@/components/home/queries";
 import * as itemFragments from "@/components/item/fragments";
 import * as itemCardFragments from "@/components/item/ItemCard/fragments";
+import * as itemSeenAt from "@/components/item/seen-at";
 import * as mapQueries from "@/components/map/queries";
 import * as menuLinesQueries from "@/components/menu-lines/queries";
 import * as pourQueries from "@/components/pour/queries";
@@ -114,6 +115,7 @@ const MODULES: Readonly<Record<string, Record<string, unknown>>> = {
   "components/home/queries.ts": homeQueries,
   "components/item/ItemCard/fragments.ts": itemCardFragments,
   "components/item/fragments.ts": itemFragments,
+  "components/item/seen-at.ts": itemSeenAt,
   "components/map/queries.ts": mapQueries,
   "components/menu-lines/queries.ts": menuLinesQueries,
   "components/pour/queries.ts": pourQueries,
