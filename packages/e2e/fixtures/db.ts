@@ -483,3 +483,18 @@ export function deleteTeas(teaIds: readonly string[]): void {
     );
   }
 }
+
+/**
+ * ux-c L08: the drink logs naming a recipe ("Made it"), by id. No API read
+ * lists your own logs of a recipe (`friendProfile` is never yourself), so
+ * m10 checks the write and its Undo here, and cleans up with the ids.
+ */
+export function recipeLogIds(recipeId: string): string[] {
+  if (!UUID_PATTERN.test(recipeId)) {
+    throw new Error(`recipeLogIds: not a uuid: ${recipeId}`);
+  }
+  const output = psql(
+    `select id from check_ins where recipe_id = '${recipeId}' order by id`,
+  );
+  return output === "" ? [] : output.split("\n").map((line) => line.trim());
+}

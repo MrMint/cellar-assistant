@@ -6,7 +6,11 @@
  * Each maps onto one `CheckInActor` (or collection actor) call, addressed by
  * the id the client minted, and no visibility is decided here.
  */
-import { ForbiddenError, itemActorId } from "@cellar-assistant/contracts";
+import {
+  ForbiddenError,
+  itemActorId,
+  NotFoundError,
+} from "@cellar-assistant/contracts";
 import { execute, parse } from "graphql";
 import { describe, expect, it } from "vitest";
 import { stubSidecar, testContext } from "../testing.ts";
@@ -30,7 +34,11 @@ const entry = {
   id: LOG_ID,
   userId: viewer.id,
   createdById: viewer.id,
-  item: { type: "WINE" as const, id: WINE_ID },
+  item: { type: "WINE" as const, id: WINE_ID } as {
+    type: "WINE";
+    id: string;
+  } | null,
+  recipe: null as { id: string } | null,
   score: 4,
   note: "dark cherry",
   tags: ["cherry"],
@@ -110,6 +118,77 @@ describe("logDrink", () => {
     expect(result.data?.logDrink).toEqual({
       __typename: "ForbiddenError",
       code: "FORBIDDEN",
+    });
+  });
+});
+
+describe("ux-c L08 · Made it — a recipe-only log", () => {
+  const RECIPE_ID = "66666666-6666-4666-8666-666666666666";
+  const recipeEntry = { ...entry, item: null, recipe: { id: RECIPE_ID } };
+  const recipeDto = {
+    id: RECIPE_ID,
+    name: "Negroni",
+    description: null,
+    type: "cocktail" as const,
+    createdById: FRIEND,
+    recipeGroupId: "77777777-7777-4777-8777-777777777777",
+    canonicalRecipeId: null,
+    difficultyLevel: 2,
+    prepTimeMinutes: 5,
+    servingSize: 1,
+    imageUrl: null,
+    version: 1,
+    ingredientCount: 0,
+    instructionCount: 0,
+    createdAt: "2026-10-08T20:00:00.000Z",
+    updatedAt: "2026-10-08T20:00:00.000Z",
+  };
+
+  it("passes recipeId alone, and the entry has a recipe and no item", async () => {
+    const { invoke, calls } = stubSidecar({
+      "CheckInActor.log": () => ({
+        entry: recipeEntry,
+        rows: [{ id: LOG_ID, userId: viewer.id }],
+        cellarItemId: null,
+      }),
+      "RecipeActor.get": () => recipeDto,
+    });
+    const result = await run(
+      `mutation { logDrink(id: "${LOG_ID}", input: { recipeId: "${RECIPE_ID}" }) {
+           __typename ... on LoggedDrinkPayload {
+             entry { id item { id } recipe { id name } } } } }`,
+      testContext(invoke, viewer),
+    );
+    expect(result.errors).toBeUndefined();
+    expect(calls[0]?.args.slice(1)).toEqual([{ recipeId: RECIPE_ID }]);
+    expect(result.data?.logDrink).toEqual({
+      __typename: "LoggedDrinkPayload",
+      entry: {
+        id: LOG_ID,
+        item: null,
+        recipe: { id: RECIPE_ID, name: "Negroni" },
+      },
+    });
+  });
+
+  it("a recipe the viewer can no longer load reads as null, not a field error", async () => {
+    const { invoke } = stubSidecar({
+      "CheckInActor.get": () => recipeEntry,
+      "CheckInActor.update": () => recipeEntry,
+      "RecipeActor.get": () => {
+        throw new NotFoundError(`recipe ${RECIPE_ID} not found`);
+      },
+    });
+    const result = await run(
+      `mutation { updateDrinkLog(id: "${LOG_ID}", input: { note: "x" }) {
+           __typename ... on ItemCheckIn { item { id } recipe { id } } } }`,
+      testContext(invoke, viewer),
+    );
+    expect(result.errors).toBeUndefined();
+    expect(result.data?.updateDrinkLog).toEqual({
+      __typename: "ItemCheckIn",
+      item: null,
+      recipe: null,
     });
   });
 });
@@ -286,6 +365,6 @@ describe("Item.checkIns(scope:)", () => {
     expect(result.errors).toBeUndefined();
     const lists = calls.filter((c) => c.method === "list");
     expect(lists.map((c) => c.args.at(-1))).toEqual(["MINE", "ALL"]);
-    expect(itemActorId(entry.item)).toContain(WINE_ID);
+    expect(itemActorId({ type: "WINE", id: WINE_ID })).toContain(WINE_ID);
   });
 });

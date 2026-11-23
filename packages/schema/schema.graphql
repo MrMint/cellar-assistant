@@ -629,6 +629,11 @@ type Beer implements Item {
   ): CellarItemConnection!
 
   """
+  ux-c L08: your steep (tea) or brew (coffee) overrides for this item, or null — none saved, another item type, or signed out.
+  """
+  myBrewPrefs: BrewPrefs
+
+  """
   Your own newest review of this item, or null — including for an anonymous viewer.
   """
   myReview: ItemReview
@@ -968,6 +973,24 @@ type BreadthStamps {
   regions: BreadthStamp
   styles: BreadthStamp
   types: BreadthStamp
+}
+
+"""
+Your own steep or brew numbers for one tea or coffee (ux-c L08). Each overrides the guide's typical row; null keeps the typical number.
+"""
+type BrewPrefs {
+  """Leaf or ground coffee, grams."""
+  doseGrams: Float
+
+  """First steep, or the whole brew, in seconds."""
+  steepSeconds: Int
+  updatedAt: DateTime!
+
+  """Water, millilitres."""
+  waterMl: Float
+
+  """Water temperature, °C (1–100)."""
+  waterTempC: Int
 }
 
 """BudgetActor.reserve denied a paid external call."""
@@ -1679,6 +1702,11 @@ type Coffee implements Item {
     last: Int
     status: CellarItemStatus = ACTIVE
   ): CellarItemConnection!
+
+  """
+  ux-c L08: your steep (tea) or brew (coffee) overrides for this item, or null — none saved, another item type, or signed out.
+  """
+  myBrewPrefs: BrewPrefs
 
   """
   Your own newest review of this item, or null — including for an anonymous viewer.
@@ -3005,6 +3033,11 @@ interface Item {
   ): CellarItemConnection!
 
   """
+  ux-c L08: your steep (tea) or brew (coffee) overrides for this item, or null — none saved, another item type, or signed out.
+  """
+  myBrewPrefs: BrewPrefs
+
+  """
   Your own newest review of this item, or null — including for an anonymous viewer.
   """
   myReview: ItemReview
@@ -3171,8 +3204,10 @@ type ItemCheckIn {
   """The entry is about you: you may edit it."""
   isMine: Boolean!
 
-  """The item, echoed back. Resolved through its DataLoader."""
-  item: Item!
+  """
+  The item, echoed back. Resolved through its DataLoader. Null for a recipe log ("Made it", ux-c L08): then `recipe` names the recipe, or is null too when the recipe was deleted since.
+  """
+  item: Item
   note: String
 
   """
@@ -3182,6 +3217,11 @@ type ItemCheckIn {
 
   """Where it was drunk, when the drinker said."""
   place: Place
+
+  """
+  ux-c L08: the recipe a "Made it" log names — then `item` is null. Null for an item log, and for a log whose recipe was deleted since (render it as "a recipe that was deleted"). A recipe log is only ever served to a viewer who may see the recipe (`canSeeRecipeLog`).
+  """
+  recipe: Recipe
 
   """Half stars, 0.5–5, or null. Never the review."""
   score: Float
@@ -3525,7 +3565,7 @@ input LngLatInput {
 }
 
 """
-A drink you had. `item` or `bottle` (or both, agreeing). Everything else is optional; a score here is this glass's, not the item's review.
+A drink you had. `item` or `bottle` (or both, agreeing), or a `recipeId` alone. Everything else is optional; a score here is this glass's, not the item's review.
 """
 input LogDrinkInput {
   bottle: DrinkLogBottleInput
@@ -3552,6 +3592,11 @@ input LogDrinkInput {
   """A verified upload of your own (`createUploadTarget`)."""
   photoFileId: ID
   placeId: ID
+
+  """
+  ux-c L08 "Made it": a recipe you made. A recipe log names the recipe only — pass no `item` or `bottle` with it. A recipe you may not see answers like one that does not exist.
+  """
+  recipeId: ID
 
   """Half stars, 0.5 to 5."""
   score: Float
@@ -4287,6 +4332,25 @@ type Mutation {
 
   """Admin only (BrandActor.setParent). Pass null to clear the parent."""
   setBrandParent(id: ID!, parentBrandId: ID): SetBrandParentResult!
+
+  """
+  ux-c L08: save your own steep or brew numbers for a tea or coffee — all four at once, replacing what you had; all four null goes back to typical. An item that does not exist answers NOT_FOUND.
+  """
+  setBrewPrefs(
+    """Grams, > 0. Null or absent: typical."""
+    doseGrams: Float
+    itemId: ID!
+    itemType: ItemType!
+
+    """Seconds, > 0. Null or absent: typical."""
+    steepSeconds: Int
+
+    """Millilitres, > 0. Null or absent: typical."""
+    waterMl: Float
+
+    """°C, 1–100. Null or absent: typical."""
+    waterTempC: Int
+  ): SetBrewPrefsResult!
   setCellarItemPercentage(cellarId: ID!, cellarItemId: ID!, percentageRemaining: Float!): SetCellarItemPercentageResult!
 
   """
@@ -6987,6 +7051,11 @@ type Sake implements Item {
   ): CellarItemConnection!
 
   """
+  ux-c L08: your steep (tea) or brew (coffee) overrides for this item, or null — none saved, another item type, or signed out.
+  """
+  myBrewPrefs: BrewPrefs
+
+  """
   Your own newest review of this item, or null — including for an anonymous viewer.
   """
   myReview: ItemReview
@@ -7168,6 +7237,16 @@ union SendFriendRequestResult = BudgetExceededError | ConflictError | ForbiddenE
 union SetBarPantryItemResult = BarPantryEntry | BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | ValidationError
 
 union SetBrandParentResult = Brand | BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | ValidationError
+
+"""
+What you have saved now. Select `item { myBrewPrefs { … } }` and a normalised cache updates itself.
+"""
+type SetBrewPrefsPayload {
+  item: Item!
+  prefs: BrewPrefs
+}
+
+union SetBrewPrefsResult = BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | SetBrewPrefsPayload | ValidationError
 
 union SetCellarItemPercentageResult = BudgetExceededError | CellarItem | ConflictError | ForbiddenError | NotFoundError | ValidationError
 
@@ -7566,6 +7645,11 @@ type Spirit implements Item {
   ): CellarItemConnection!
 
   """
+  ux-c L08: your steep (tea) or brew (coffee) overrides for this item, or null — none saved, another item type, or signed out.
+  """
+  myBrewPrefs: BrewPrefs
+
+  """
   Your own newest review of this item, or null — including for an anonymous viewer.
   """
   myReview: ItemReview
@@ -7902,6 +7986,11 @@ type Tea implements Item {
     last: Int
     status: CellarItemStatus = ACTIVE
   ): CellarItemConnection!
+
+  """
+  ux-c L08: your steep (tea) or brew (coffee) overrides for this item, or null — none saved, another item type, or signed out.
+  """
+  myBrewPrefs: BrewPrefs
 
   """
   Your own newest review of this item, or null — including for an anonymous viewer.
@@ -9296,6 +9385,11 @@ type Wine implements Item {
     last: Int
     status: CellarItemStatus = ACTIVE
   ): CellarItemConnection!
+
+  """
+  ux-c L08: your steep (tea) or brew (coffee) overrides for this item, or null — none saved, another item type, or signed out.
+  """
+  myBrewPrefs: BrewPrefs
 
   """
   Your own newest review of this item, or null — including for an anonymous viewer.

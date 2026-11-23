@@ -7,6 +7,7 @@
  * visible from both sides; and request direction is computed relative to the
  * viewer rather than stored.
  */
+import { randomUUID } from "node:crypto";
 import {
   type ActivityFilter,
   ForbiddenError,
@@ -26,6 +27,7 @@ import {
   seedFriendship,
   seedItemReview,
   seedPlace,
+  seedRecipe,
   seedTierList,
   seedTierListPlace,
   seedWine,
@@ -252,6 +254,70 @@ describe.skipIf(skip)("FriendsCollectionActor", () => {
         expect(roundEntry?.userId).toBe(friend);
         expect(roundEntry?.checkIn?.companionIds).toEqual([viewer]);
         expect(roundEntry?.item).toEqual(wine);
+      });
+    });
+
+    it("CHECKED_IN (ux-c L08): a friend's Made-it log shows only when the viewer may see its recipe", async () => {
+      await withTestDb(async (db) => {
+        const viewer = await seedUser(db);
+        const friend = await seedUser(db);
+        await seedFriendship(db, viewer, friend);
+        const open = await seedRecipe(db, {
+          name: "Feed spritz",
+          createdById: friend,
+        });
+        const secret = await seedRecipe(db, {
+          name: "Friend's private shrub",
+          createdById: friend,
+          privacy: "PRIVATE",
+        });
+        const gone = await seedRecipe(db, {
+          name: "Deleted daiquiri",
+          createdById: friend,
+        });
+        const recipeLog = async (recipeId: string): Promise<string> => {
+          const id = randomUUID();
+          await db.execute(sql`
+            insert into public.check_ins
+              (id, group_id, user_id, created_by_id, recipe_id)
+            values (${id}::uuid, ${id}::uuid, ${friend}::uuid,
+                    ${friend}::uuid, ${recipeId}::uuid)
+          `);
+          return id;
+        };
+        const openLog = await recipeLog(open);
+        const secretLog = await recipeLog(secret);
+        const goneLog = await recipeLog(gone);
+        await db.execute(
+          sql`delete from public.recipes where id = ${gone}::uuid`,
+        );
+
+        const { entries } = await activityOf(db, viewer, {
+          kinds: ["CHECKED_IN"],
+          limit: 6,
+        });
+        const ids = entries.map((e) => e.id);
+        expect(ids.sort()).toEqual([openLog, goneLog].sort());
+        expect(ids).not.toContain(secretLog);
+        const made = entries.find((e) => e.id === openLog);
+        expect(made?.item).toBeNull();
+        expect(made?.checkIn?.recipe).toEqual({ id: open });
+        // L44: the recipe went; the log stays, naming nothing.
+        const orphan = entries.find((e) => e.id === goneLog);
+        expect(orphan?.checkIn).toMatchObject({ item: null, recipe: null });
+
+        // The friend's profile log follows the same rule.
+        const actor = await activate(
+          createActor(FriendsCollectionActor, viewer, db),
+        );
+        const logs = await actor.profileLogs(
+          userCtx(viewer, "r"),
+          { profileOf: friend },
+          pageArgs({ first: 10 }),
+        );
+        expect(logs.entries.map((e) => e.node.id).sort()).toEqual(
+          [openLog, goneLog].sort(),
+        );
       });
     });
 

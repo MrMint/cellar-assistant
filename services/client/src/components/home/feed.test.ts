@@ -120,8 +120,32 @@ const drank = (
       companions: {
         edges: (extra.companions ?? []).map((node) => ({ node })),
       },
+      recipe: null,
     },
   }) as unknown as FeedNode;
+
+/** ux-c L08: a Made-it log — a recipe, no item; `null` once deleted (L44). */
+const made = (
+  user: typeof SAM,
+  minutesAgo: number,
+  recipe: string | null,
+  extra: { score?: number | null; companionIds?: string[] } = {},
+) => {
+  const node = drank(user, minutesAgo, "unused", extra) as unknown as {
+    checkIn: Record<string, unknown>;
+  };
+  return {
+    ...node,
+    item: null,
+    checkIn: {
+      ...node.checkIn,
+      recipe:
+        recipe === null
+          ? null
+          : { __typename: "Recipe", id: `r-${recipe}`, name: recipe },
+    },
+  } as unknown as FeedNode;
+};
 
 const ranked = (
   user: typeof SAM,
@@ -190,6 +214,42 @@ describe("sentences", () => {
       drank(SAM, 1, "Negroni", { note: "Bitter, bright" }),
     ]);
     assert.equal(had?.detail, "Bitter, bright");
+  });
+});
+
+describe("Made it (ux-c L08)", () => {
+  test("a friend's recipe log reads 'made', linking the recipe", () => {
+    const [burst] = bursts([made(SAM, 1, "Negroni", { score: 4 })]);
+    assert.equal(
+      sentenceText(burst?.sentence ?? []),
+      "Sam Lee made Negroni · ★4",
+    );
+    assert.deepEqual(
+      burst?.sentence.filter((t) => t.href !== undefined).map((t) => t.href),
+      ["/recipes/r-Negroni"],
+    );
+    assert.equal(burst?.entries[0]?.itemType, "RECIPE");
+  });
+
+  test("L44: a log whose recipe was deleted says so, and links nowhere", () => {
+    const [burst] = bursts([made(ANA, 1, null)]);
+    assert.equal(
+      sentenceText(burst?.sentence ?? []),
+      "Ana made a recipe that was deleted",
+    );
+    assert.equal(
+      burst?.sentence.some((t) => t.href !== undefined),
+      false,
+    );
+  });
+
+  test("an item log next to a recipe log still reads 'had'", () => {
+    const [first, second] = bursts([
+      drank(SAM, 1, "Lagavulin"),
+      made(ANA, 2, "Daiquiri"),
+    ]);
+    assert.equal(sentenceText(first?.sentence ?? []), "Sam Lee had Lagavulin");
+    assert.equal(sentenceText(second?.sentence ?? []), "Ana made Daiquiri");
   });
 });
 

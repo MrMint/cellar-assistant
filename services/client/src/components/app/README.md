@@ -554,7 +554,6 @@ bars stay put. The pieces:
   not animate. Render at most one `AppBar` at a time (two would share a name
   and the browser skips the transition).
 
-
 ## Recap and stamps (L04)
 
 `/recap` is a full-screen deck (`components/recap/RecapDeck.tsx`, a `fixed
@@ -568,6 +567,15 @@ the PNG as a `File` (no url, no text) and falls back to a download.
 `RecapStamp` is the round stamp, used by the deck and by Me's `MeStamps`,
 which renders nothing until mounted and loaded. Stamp words are
 `lib/stamps/stamps.ts`: counts of distinct things only.
+
+## Make mode and the brew timer (L08)
+
+`components/make/` holds Make mode (`MakeMode`, at `/recipes/[id]/make`) and
+the pieces it shares with the Steep / Brew guide: `timer.ts` (a pure
+countdown: idle, running, paused, done — every transition takes `now`) behind
+`useCountdown`, and `wake-lock.ts` (feature-detected Screen Wake Lock)
+behind `useWakeLock`. Reach for `useCountdown` for any countdown rather than
+a new interval, and never assume `navigator.wakeLock` exists.
 
 **Seen at and the inline new place (wave C "seenat", L10).** The item page's
 "Seen at" slot is `item/SeenAtSection.tsx`: it mounts after hydration, reads

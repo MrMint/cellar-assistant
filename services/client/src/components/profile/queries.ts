@@ -60,6 +60,11 @@ export const FriendLogEntryFragment = graphql(`
         vintageYear
       }
     }
+    recipe {
+      __typename
+      id
+      name
+    }
   }
 `);
 
