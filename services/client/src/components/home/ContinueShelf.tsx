@@ -184,7 +184,7 @@ export function ContinueSection({
           {sealed.map((bottle) => (
             <ListRow
               key={bottle.id}
-              data-slot="drink-soon-sealed"
+              data-kind="drink-soon-sealed"
               leading={
                 <span
                   className={cn(

@@ -1,7 +1,7 @@
 "use client";
 
 import * as nextNavigation from "next/navigation";
-import { useEffect } from "react";
+import { useLayoutEffect } from "react";
 
 /**
  * In-app history, per tab session, so AppBar's Back can tell "there is a page
@@ -98,7 +98,10 @@ export function useNavHistoryTracker(): void {
   const pathname = (
     nextNavigation as Partial<typeof nextNavigation>
   ).usePathname?.();
-  useEffect(() => {
+  // A layout effect, not a passive one: React holds passive effects back
+  // until a View Transition finishes, so a Back during the slide would read a
+  // stack without this page and play no motion (E-6, W-9).
+  useLayoutEffect(() => {
     if (pathname) recordNavigation(pathname);
   }, [pathname]);
 }

@@ -96,10 +96,7 @@ describe("re-buy photo (L02)", () => {
     // Two bottles in all after adding one: you had one before.
     assert.deepEqual(
       rebuyOffer({ bottlesOfItem: 2, added: 1, name: "Barolo" }),
-      {
-        title: "Another Barolo added",
-        body: "Snap its label or receipt to keep this bottle's price and date.",
-      },
+      { title: "Another Barolo added" },
     );
     // A first bottle (or a first case): nothing to tell apart yet.
     assert.equal(rebuyOffer({ bottlesOfItem: 1, added: 1, name: "x" }), null);

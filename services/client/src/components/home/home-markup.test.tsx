@@ -275,6 +275,13 @@ describe("ContinueSection", () => {
     );
     assert.match(html, /aria-label="Open Hazy One"/);
     assert.match(html, /href="\/cellars\/c1\/beers\/s1"/);
+    // H-19: a sealed row is still a list row (m07-home-today finds rows by
+    // `data-slot="list-row"`); what kind of row it is goes in `data-kind`.
+    assert.match(
+      html,
+      /data-slot="list-row"[^>]*data-kind="drink-soon-sealed"/,
+      "the sealed row keeps ListRow's slot",
+    );
 
     // Nothing open: no shelf, but the sealed rows still draw.
     const only = render(
