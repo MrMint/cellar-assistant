@@ -1,5 +1,9 @@
 import { createCellar, unique } from "../../fixtures/data.ts";
-import { deleteCellarWithContents } from "../../fixtures/db.ts";
+import {
+  deleteCellarWithContents,
+  deleteTeas,
+  teaIdsInCellar,
+} from "../../fixtures/db.ts";
 import { expect, stubCamera, test } from "../../fixtures/mobile.ts";
 import { Gql } from "../../fixtures/test.ts";
 
@@ -17,7 +21,8 @@ import { Gql } from "../../fixtures/test.ts";
  *
  * The camera is refused (`stubCamera`), so nothing is photographed and no
  * model is asked anything; the draft is typed. One cellar and one tea are
- * created through the API and removed afterwards; no places are created.
+ * created through the API, one more tea by the typed draft; all of them are
+ * removed afterwards (`deleteTeas`). No places are created.
  */
 
 test.describe.configure({ mode: "serial" });
@@ -69,7 +74,12 @@ test.beforeAll(async () => {
 });
 
 test.afterAll(() => {
+  // Leftovers 7: the teas go too — the API-made one and the typed draft the
+  // first test files, read off the cellar before its bottles are removed.
+  const teas = new Set(cellarId === "" ? [] : teaIdsInCellar(cellarId));
+  if (teaId !== "") teas.add(teaId);
   if (cellarId !== "") deleteCellarWithContents(cellarId);
+  deleteTeas([...teas]);
 });
 
 test("the cellar's add page: one camera, a remembered type, a draft, +1 bottle", async ({

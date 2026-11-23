@@ -423,3 +423,63 @@ export function deleteScannedMenu(scanId: string, fileId: string): void {
       `delete from files where id = '${fileId}'`,
   );
 }
+
+/**
+ * The teas filed into a cellar, by id: read them *before*
+ * {@link deleteCellarWithContents} removes the bottles that name them, so a
+ * spec can delete a tea its UI created (a typed draft) along with the one it
+ * created through the API.
+ */
+export function teaIdsInCellar(cellarId: string): string[] {
+  if (!UUID_PATTERN.test(cellarId)) {
+    throw new Error(`teaIdsInCellar: not a uuid: ${cellarId}`);
+  }
+  const output = psql(
+    "select distinct tea_id from cellar_items " +
+      `where cellar_id = '${cellarId}' and tea_id is not null`,
+  );
+  return output === "" ? [] : output.split("\n").map((line) => line.trim());
+}
+
+/**
+ * Delete teas a spec created (leftovers 7: m06 left one per run). There is no
+ * item delete in the API, the same gap {@link deleteCellarWithContents} fills.
+ * The tea's own rows go first — every foreign key onto `teas` is RESTRICT or
+ * plain — in one transaction, so a run either removes a tea whole or not at
+ * all. A recipe ingredient naming the tea is *not* removed: no spec here puts
+ * one there, so one existing is someone else's data and the delete fails
+ * loudly instead. Throws unless every id named a tea.
+ */
+export function deleteTeas(teaIds: readonly string[]): void {
+  if (teaIds.length === 0) return;
+  for (const id of teaIds) {
+    if (!UUID_PATTERN.test(id)) {
+      throw new Error(`deleteTeas: not a uuid: ${id}`);
+    }
+  }
+  const ids = teaIds.map((id) => `'${id}'`).join(", ");
+  const output = psql(
+    "begin; " +
+      `delete from check_ins where tea_id in (${ids}) or cellar_item_id in ` +
+      `(select id from cellar_items where tea_id in (${ids})); ` +
+      `delete from cellar_items where tea_id in (${ids}); ` +
+      `delete from item_brew_prefs where tea_id in (${ids}); ` +
+      `delete from want_to_try where tea_id in (${ids}); ` +
+      `delete from tier_list_items where tea_id in (${ids}); ` +
+      `delete from item_reviews where tea_id in (${ids}); ` +
+      `delete from item_favorites where tea_id in (${ids}); ` +
+      `delete from item_image where tea_id in (${ids}); ` +
+      `delete from item_vectors where tea_id in (${ids}); ` +
+      `delete from item_brands where tea_id in (${ids}); ` +
+      `delete from item_match_suggestions where suggested_tea_id in (${ids}); ` +
+      `with deleted as (delete from teas where id in (${ids}) returning 1) ` +
+      "select count(*) from deleted; " +
+      "commit;",
+  );
+  if (output !== String(teaIds.length)) {
+    throw new Error(
+      `deleteTeas: expected to delete ${teaIds.length} tea(s) in ` +
+        `${CONTAINER}/${DB_NAME}, psql said ${JSON.stringify(output)}.`,
+    );
+  }
+}
