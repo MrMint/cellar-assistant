@@ -82,5 +82,8 @@ import "./share.ts";
 // `Cellar` and `ItemCheckIn` connections and whose person is a `UserProfile`
 // — refs from four modules, so it comes after every one of them.
 import "./friend-profile.ts";
+// L03 (wave C "taste"): the taste profile and agreement. References
+// `ItemType` from `item.ts`; adds three Query fields.
+import "./taste.ts";
 
 export const schema = builder.toSchema();

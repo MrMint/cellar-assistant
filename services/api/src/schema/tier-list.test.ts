@@ -555,3 +555,47 @@ describe("addTierListItem — the positioned add (M7)", () => {
     });
   });
 });
+
+describe("cloneTierList (L03)", () => {
+  const SOURCE = "44444444-4444-4444-8444-444444444444";
+
+  it("mints a new id and asks that actor to copy the source", async () => {
+    const { invoke, calls } = stubSidecar({
+      "TierListActor.clone": (actorId) => ({ ...tierListDto, id: actorId }),
+    });
+    const result = await run(
+      `mutation { cloneTierList(sourceTierListId: "${SOURCE}") {
+         __typename ... on TierList { id privacy }
+       } }`,
+      testContext(invoke, viewer),
+    );
+    expect(result.errors).toBeUndefined();
+    const call = calls[0];
+    expect(call).toMatchObject({ actorType: "TierListActor", method: "clone" });
+    expect(call?.actorId).not.toBe(SOURCE);
+    expect(call?.args[1]).toEqual({ sourceTierListId: SOURCE, name: null });
+    expect(result.data?.cloneTierList).toEqual({
+      __typename: "TierList",
+      id: call?.actorId,
+      privacy: "PRIVATE",
+    });
+  });
+
+  it("a list you cannot see is a NotFoundError on the union", async () => {
+    const { invoke } = stubSidecar({
+      "TierListActor.clone": () => {
+        throw new NotFoundError(`tier list ${SOURCE} does not exist`);
+      },
+    });
+    const result = await run(
+      `mutation { cloneTierList(sourceTierListId: "${SOURCE}") {
+         __typename ... on ActorError { code }
+       } }`,
+      testContext(invoke, viewer),
+    );
+    expect(result.data?.cloneTierList).toEqual({
+      __typename: "NotFoundError",
+      code: "NOT_FOUND",
+    });
+  });
+});

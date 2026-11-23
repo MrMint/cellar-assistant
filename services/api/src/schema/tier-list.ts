@@ -918,6 +918,27 @@ builder.mutationField("createTierList", (t) =>
   }),
 );
 
+builder.mutationField("cloneTierList", (t) =>
+  t.field({
+    type: TierListType,
+    description:
+      "L03: copies a tier list you may see into a new PRIVATE list of " +
+      "yours — the entries in band and order, not the notes. A list you " +
+      "may not see answers NotFound, like a missing one. Undo is " +
+      "`deleteTierList` on the copy.",
+    errors: {},
+    args: {
+      sourceTierListId: t.arg.id({ required: true }),
+      name: t.arg.string({ required: false }),
+    },
+    resolve: (_root, args, context) =>
+      context.actor(TierListActorDescriptor, randomUUID()).clone({
+        sourceTierListId: String(args.sourceTierListId),
+        name: args.name ?? null,
+      }),
+  }),
+);
+
 builder.mutationField("updateTierList", (t) =>
   t.field({
     type: TierListType,

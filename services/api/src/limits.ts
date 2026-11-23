@@ -246,6 +246,7 @@ export const MODEL_BACKED_FIELDS: ReadonlyMap<string, ModelBackedField> =
     // X16: a multi-add, and a list started from your ratings, are edits.
     ["Mutation.addTierListItems", { via: ["TierListActor.addItems"] }],
     ["Mutation.createTierList", { via: ["TierListActor.create"] }],
+    ["Mutation.cloneTierList", { via: ["TierListActor.clone"] }],
     ["Mutation.removeTierListItem", { via: ["TierListActor.removeItem"] }],
     ["Mutation.reorderTierListBand", { via: ["TierListActor.reorderBand"] }],
     ["Mutation.undoTierListEdit", { via: ["TierListActor.undo"] }],

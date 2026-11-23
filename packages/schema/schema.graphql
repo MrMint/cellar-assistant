@@ -1483,6 +1483,8 @@ type CheckInEdge {
 
 union CheckInResult = BudgetExceededError | CheckIn | ConflictError | ForbiddenError | NotFoundError | ValidationError
 
+union CloneTierListResult = BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | TierList | ValidationError
+
 union CloseItemOnboardingResult = BudgetExceededError | ConflictError | ForbiddenError | ItemOnboarding | NotFoundError | ValidationError
 
 type Coffee implements Item {
@@ -3980,6 +3982,11 @@ type Mutation {
   ): CheckInResult!
 
   """
+  L03: copies a tier list you may see into a new PRIVATE list of yours — the entries in band and order, not the notes. A list you may not see answers NotFound, like a missing one. Undo is `deleteTierList` on the copy.
+  """
+  cloneTierList(name: String, sourceTierListId: ID!): CloneTierListResult!
+
+  """
   Closes a session whose bottle turned out to be an item the catalogue already held (the quick-add, or “Is it this one? +1 bottle”): its status becomes `MATCHED` and nothing is created. Idempotent; a session that already `CONFIRMED` an item of its own stays `CONFIRMED`.
   """
   closeItemOnboarding(onboardingId: ID!): CloseItemOnboardingResult!
@@ -5157,6 +5164,9 @@ type Query {
   """
   friendProfile(userId: ID!): QueryFriendProfileResult!
 
+  """L03: agreement with each of your friends, most shared first."""
+  friendTasteAgreements: QueryFriendTasteAgreementsResult!
+
   """One `generic_items` row. Not an Item — see `GenericItem`."""
   genericItem(id: ID!): QueryGenericItemResult!
 
@@ -5690,6 +5700,14 @@ type Query {
   sharedTierList(id: ID!): QuerySharedTierListResult!
 
   """
+  L03: agreement with one user. A malformed id, a missing user and one you may not see answer alike (NotFound).
+  """
+  tasteAgreement(userId: ID!): QueryTasteAgreementResult!
+
+  """L03: the viewer's own taste profile."""
+  tasteProfile: QueryTasteProfileResult!
+
+  """
   One tier list by id. `NotFoundError` covers both 'no such list' and 'not yours to see' (§1.6).
   """
   tierList(id: ID!): QueryTierListResult!
@@ -5766,6 +5784,12 @@ union QueryFriendInvitePreviewResult = BudgetExceededError | ConflictError | For
 
 union QueryFriendProfileResult = BudgetExceededError | ConflictError | ForbiddenError | FriendProfile | NotFoundError | ValidationError
 
+union QueryFriendTasteAgreementsResult = BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | QueryFriendTasteAgreementsSuccess | ValidationError
+
+type QueryFriendTasteAgreementsSuccess {
+  data: [TasteAgreement!]!
+}
+
 union QueryGenericItemResult = BudgetExceededError | ConflictError | ForbiddenError | GenericItem | NotFoundError | ValidationError
 
 union QueryItemOnboardingResult = BudgetExceededError | ConflictError | ForbiddenError | ItemOnboarding | NotFoundError | ValidationError
@@ -5825,6 +5849,10 @@ union QuerySharedItemResult = BudgetExceededError | ConflictError | ForbiddenErr
 union QuerySharedRecipeResult = BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | SharedRecipe | ValidationError
 
 union QuerySharedTierListResult = BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | SharedTierList | ValidationError
+
+union QueryTasteAgreementResult = BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | TasteAgreement | ValidationError
+
+union QueryTasteProfileResult = BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | TasteProfile | ValidationError
 
 union QueryTierListResult = BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | TierList | ValidationError
 
@@ -7557,6 +7585,72 @@ input SuggestItemDetailsInput {
 union SuggestItemDetailsResult = BudgetExceededError | ConflictError | ForbiddenError | ItemDetailSuggestions | NotFoundError | ValidationError
 
 union SuggestNewItemDetailsResult = BudgetExceededError | ConflictError | ForbiddenError | ItemDetailSuggestions | NotFoundError | ValidationError
+
+"""
+Items you and this user both rated, counting only ratings you may see, and how many of them you agree on. `agreed` is null below 5 shared items. Never a percentage.
+"""
+type TasteAgreement {
+  agreed: Int
+  avatarUrl: String
+  byType: [TasteAgreementByType!]!
+  name: String!
+  shared: Int!
+  userId: ID!
+}
+
+type TasteAgreementByType {
+  agreed: Int
+  itemType: ItemType!
+  shared: Int!
+}
+
+type TasteArchetype {
+  key: TasteArchetypeKey!
+  lessKeen: [TasteStyle!]!
+  loves: [TasteStyle!]!
+  title: String!
+}
+
+"""
+Which deterministic rule named the archetype (decisions.md, "Taste profile and friend agreement").
+"""
+enum TasteArchetypeKey {
+  DECISIVE
+  DEVOTED
+  EXACTING
+  EXPLORER
+  FOCUSED
+  GENEROUS
+}
+
+"""
+Your cross-type archetype from your own ratings. Deterministic; a model may only phrase `line`, and `linePhrasedByAi` says when it did.
+"""
+type TasteProfile {
+  """Null while the data is too thin to name one."""
+  archetype: TasteArchetype
+  line: String!
+  linePhrasedByAi: Boolean!
+  ratingCount: Int!
+  types: [TasteTypeCount!]!
+}
+
+"""A style you have rated at least twice."""
+type TasteStyle {
+  """Half-star scale."""
+  average: Float!
+  count: Int!
+  itemType: ItemType!
+
+  """The style value as stored: a variety, a beer style, …"""
+  label: String!
+}
+
+type TasteTypeCount {
+  """Distinct items rated."""
+  count: Int!
+  itemType: ItemType!
+}
 
 type Tea implements Item {
   barcode: String
