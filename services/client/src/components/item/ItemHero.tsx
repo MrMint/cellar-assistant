@@ -61,10 +61,12 @@ export function ItemHero({
           )}
         </div>
         <div className="flex items-start gap-2">
-          <h1 className="type-title-1 min-w-0 flex-1 break-words text-ink-1">
-            {/* B05: where a card's title lands (named for this page's path). */}
-            <MorphTitle>{name}</MorphTitle>
-          </h1>
+          {/* B05: where a card's title lands (named for this page's path). */}
+          <MorphTitle>
+            <h1 className="type-title-1 min-w-0 flex-1 break-words text-ink-1">
+              {name}
+            </h1>
+          </MorphTitle>
           <LoveButton
             itemId={itemId}
             type={type}

@@ -2,7 +2,7 @@
 
 import { useReducedMotion } from "motion/react";
 import NextLink from "next/link";
-import { usePathname } from "next/navigation";
+import * as navigation from "next/navigation";
 import type { ComponentProps } from "react";
 import { cn } from "@/lib/utils";
 import {
@@ -29,6 +29,16 @@ export type LinkProps = ComponentProps<typeof NextLink> & {
    */
   kind?: TransitionKind;
 };
+
+/**
+ * The current pathname, `/` when unknown. Read off the module namespace:
+ * a test's partial `next/navigation` mock may have no `usePathname`, and a
+ * named import of a missing export fails the whole file at load.
+ */
+export function useCurrentPath(): string {
+  const readPathname = (navigation as Partial<typeof navigation>).usePathname;
+  return readPathname?.() ?? "/";
+}
 
 /** The pathname a `next/link` href points at. */
 const hrefPath = (href: LinkProps["href"], from: string): string =>
@@ -59,7 +69,7 @@ export function Link({
   transitionTypes,
   ...props
 }: LinkProps) {
-  const pathname = usePathname() ?? "/";
+  const pathname = useCurrentPath();
   const reducedMotion = useReducedMotion() ?? false;
   const types =
     transitionTypes ??

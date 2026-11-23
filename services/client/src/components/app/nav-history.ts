@@ -1,6 +1,6 @@
 "use client";
 
-import { usePathname } from "next/navigation";
+import * as nextNavigation from "next/navigation";
 import { useEffect } from "react";
 
 /**
@@ -94,7 +94,10 @@ export function canGoBack(): boolean {
 
 /** Mount once inside the shell: records every pathname change. */
 export function useNavHistoryTracker(): void {
-  const pathname = usePathname();
+  // Off the namespace: a test's partial `next/navigation` mock may lack it.
+  const pathname = (
+    nextNavigation as Partial<typeof nextNavigation>
+  ).usePathname?.();
   useEffect(() => {
     if (pathname) recordNavigation(pathname);
   }, [pathname]);

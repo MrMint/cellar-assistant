@@ -69,7 +69,7 @@ export function TierListCard({ tierList, onNavigate }: TierListCardProps) {
           >
             {/* B05: flies into the list page's heading. */}
             <MorphTitle href={`/tier-lists/${tierList.id}`}>
-              {tierList.name}
+              <span className="block">{tierList.name}</span>
             </MorphTitle>
           </Link>
         </h3>

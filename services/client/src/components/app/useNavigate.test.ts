@@ -42,7 +42,12 @@ mock.module("next/navigation", () => ({
 
 /** The viewer's reduced-motion preference, as motion's hook reports it. */
 let reduced = false;
-mock.module("motion/react", () => ({ useReducedMotion: () => reduced }));
+const realMotion = await import("motion/react");
+// Spread the real module: bun's module mocks outlive this file.
+mock.module("motion/react", () => ({
+  ...realMotion,
+  useReducedMotion: () => reduced,
+}));
 
 const React = await import("react");
 const { act } = React;

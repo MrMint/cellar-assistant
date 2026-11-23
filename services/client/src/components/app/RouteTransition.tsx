@@ -1,9 +1,9 @@
 "use client";
 
 import { useReducedMotion } from "motion/react";
-import { usePathname } from "next/navigation";
 import {
   addTransitionType,
+  type ReactElement,
   type ReactNode,
   startTransition,
   useEffect,
@@ -11,7 +11,7 @@ import {
   useState,
   ViewTransition,
 } from "react";
-import { cn } from "@/lib/utils";
+import { useCurrentPath } from "./Link";
 import { readNavStack } from "./nav-history";
 import {
   morphName,
@@ -108,30 +108,26 @@ export function RouteTransition({ children }: { children: ReactNode }) {
 
 /**
  * A title that morphs into the page it links to (B05: a card's title →
- * that page's heading). Give the card's copy the card's `href`; the page's
- * copy needs nothing, it is named for the current pathname. A block, so a
- * heading that wraps is still one box (a fragmented inline box would make
- * the browser skip the whole transition).
+ * that page's heading). Wrap one element: the card's title with the card's
+ * `href`, the page's heading with nothing (it is named for the current
+ * pathname). Make it a block — a heading that wraps is then still one box;
+ * a fragmented inline box would make the browser skip the transition.
  */
 export function MorphTitle({
   href,
-  className,
   children,
 }: {
   href?: string;
-  className?: string;
-  children: ReactNode;
+  children: ReactElement;
 }) {
-  const pathname = usePathname() ?? "/";
+  const pathname = useCurrentPath();
   return (
     <ViewTransition
       name={morphName(href ?? pathname)}
       share={MORPH}
       default="none"
     >
-      <span data-slot="morph-title" className={cn("block", className)}>
-        {children}
-      </span>
+      {children}
     </ViewTransition>
   );
 }

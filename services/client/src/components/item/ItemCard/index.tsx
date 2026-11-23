@@ -229,8 +229,10 @@ export const ItemCard = ({ item, href, onClick, type }: ItemCardProps) => {
             className="type-headline min-w-0 text-ink-1 focus-visible:after:rounded-md focus-visible:after:ring-inset"
           >
             {/* B05: the title flies into the item page's heading. */}
-            <MorphTitle href={href} className="truncate">
-              {title}
+            <MorphTitle href={href}>
+              <span data-slot="morph-title" className="block truncate">
+                {title}
+              </span>
             </MorphTitle>
           </Link>
           {subtitle}
