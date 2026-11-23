@@ -36,6 +36,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ModelReserveInput } from "../../actors/budget-actor.ts";
 import { MODEL_SEAMS } from "../../actors/budget-actor.ts";
 import { placeReviewer } from "../../actors/place-creation-actor.ts";
+import { tastePhraser } from "../../actors/taste-actor.ts";
 import { insightsGenerator } from "../../actors/tier-list-actor.ts";
 import { embedder } from "../embeddings.ts";
 import { flavourTagSuggester } from "../flavour-tags.ts";
@@ -133,6 +134,9 @@ const ANSWER = {
   // item suggestions (X19)
   productNote: "Château Margaux, the Bordeaux first growth.",
   recognised: true,
+  // taste phrase (L03, H-10)
+  factsSupportALine: true,
+  line: "You lean towards Nebbiolo.",
 };
 
 const loadImages: ImageLoader = async (_c, ids) =>
@@ -214,6 +218,17 @@ const drive: Readonly<Record<string, (c: Ctx) => Promise<unknown>>> = {
     asImageModel(() => documentImageEmbedder()(c, { fileId: "f-1" })),
   image_search: (c) =>
     asImageModel(() => queryImageEmbedder()(c, { fileId: "f-1" })),
+  taste_phrase: (c) =>
+    tastePhraser()(c, {
+      ratingCount: 10,
+      types: [{ type: "WINE", count: 10 }],
+      archetype: {
+        key: "DEVOTED",
+        title: "Devoted to Nebbiolo",
+        loves: [{ type: "WINE", label: "Nebbiolo", count: 4, average: 5 }],
+        lessKeen: [],
+      },
+    }),
   tier_list_insights: (c) =>
     insightsGenerator()(c, {
       tierListId: "t-1",

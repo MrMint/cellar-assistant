@@ -29,9 +29,10 @@
  * The archetype is deterministic. A {@link TastePhraser} may turn it into one
  * sentence; it is never called on thin data (no archetype), it may abstain,
  * and any answer that is not grounded in the facts it was given is dropped for
- * the plain line. Production installs no phraser in this batch (L47: the
- * `taste_phrase` budget seam is not wired yet), so the deterministic line is
- * what ships; `providerTastePhraser` is the implementation the seam installs.
+ * the plain line. `installAI` installs `providerTastePhraser` behind the
+ * metered `taste_phrase` seam (H-10, L47); with `AI_PROVIDER` unset the seam
+ * stays at {@link unconfiguredTastePhraser}, which throws, and a throw — like a
+ * budget refusal or an abstention — leaves the deterministic line.
  */
 import type {
   ActorCategory,
@@ -93,8 +94,35 @@ export type TastePhraser = (
   input: TastePhraseInput,
 ) => Promise<string | null>;
 
-/** Production in batch 3 (L47): no seam installed, so always abstain. */
+/** A phraser that always abstains. Tests inject it; production never does. */
 export const noTastePhraser: TastePhraser = async () => null;
+
+/**
+ * The seam's default before `installAI` fills it: loud, like every other
+ * seam's (`no-silent-fallback.test.ts`). `TasteActor.profile` treats the throw
+ * as an abstention, so the page still answers with the deterministic line.
+ */
+export const unconfiguredTastePhraser: TastePhraser = async () => {
+  throw new ConflictError(
+    "TasteActor.profile has no AI provider wired for taste_phrase: " +
+      "AI_PROVIDER is unset, so `installAI()` installed nothing at boot. See " +
+      "services/actors/README.md · Local AI.",
+    "AI_UNCONFIGURED",
+  );
+};
+
+/**
+ * The installed phraser. A registry rather than a wider constructor for the
+ * reason `setInsightsGenerator` gives: Dapr builds an actor from
+ * `(daprClient, id)` alone.
+ */
+let installedTastePhraser: TastePhraser = unconfiguredTastePhraser;
+
+export const setTastePhraser = (next: TastePhraser): void => {
+  installedTastePhraser = next;
+};
+
+export const tastePhraser = (): TastePhraser => installedTastePhraser;
 
 /**
  * Property order is generation order: the model first says whether the facts
@@ -151,7 +179,7 @@ export const groundTasteLine = (
   return named ? line : null;
 };
 
-/** What the `taste_phrase` seam installs once the budget knows it (H-10). */
+/** What the `taste_phrase` seam installs (H-10): one "low" call, abstain first. */
 export const providerTastePhraser =
   (provider: ProviderFor): TastePhraser =>
   async (ctx, input) => {
@@ -271,7 +299,7 @@ export class TasteActor extends ActorBase implements TasteActorInterface {
     daprClient: DaprClient,
     id: ActorId,
     db: DbOrTx = actorDb(),
-    phraser: TastePhraser = noTastePhraser,
+    phraser: TastePhraser = tastePhraser(),
   ) {
     super(daprClient, id, db);
     this.#phraser = phraser;

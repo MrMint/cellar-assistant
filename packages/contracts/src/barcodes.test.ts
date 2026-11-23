@@ -502,7 +502,9 @@ describe("displayBarcode", () => {
     expect(failures, `${failed} of ${checked} pairs failed`).toEqual([]);
     // Guards the loop itself: a sampler that generated nothing passes vacuously.
     expect(checked).toBeGreaterThan(400_000);
-  });
+    // H-4: ~5.6 s alone on a laptop and more under a loaded turbo run. The
+    // coverage is the point, so the budget moves rather than the sample.
+  }, 30_000);
 
   it("shows a real UPC-E for every suppressible UPC-A it samples", () => {
     // compressUpcA is expandUpcE backwards; every 8-digit UPC-E whose UPC-A

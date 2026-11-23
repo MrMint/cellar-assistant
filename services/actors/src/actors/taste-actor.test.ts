@@ -10,6 +10,7 @@
  */
 import {
   AGREEMENT_MIN_SHARED,
+  BudgetExceededError,
   type Ctx,
   type ItemRef,
   NotFoundError,
@@ -18,6 +19,8 @@ import {
 import { sql } from "@cellar-assistant/db/orm";
 import { ActorId, DaprClient } from "@dapr/dapr";
 import { afterAll, describe, expect, it, vi } from "vitest";
+import { type ModelBudget, meteredProviderFor } from "../lib/ai/budget.ts";
+import type { AIProvider, ProviderFor } from "../lib/ai/types.ts";
 import type { DbOrTx } from "../lib/db.ts";
 import {
   seedCheckIn,
@@ -36,10 +39,157 @@ import {
 } from "../lib/testing.ts";
 import {
   noTastePhraser,
+  providerTastePhraser,
   ratingsOf,
+  setTastePhraser,
   TasteActor,
+  type TastePhraseInput,
   type TastePhraser,
+  tastePhraser,
+  unconfiguredTastePhraser,
 } from "./taste-actor.ts";
+
+/* -------------------------------------------------------------------------- */
+/* The installed `taste_phrase` seam (H-10), without a database                */
+/* -------------------------------------------------------------------------- */
+
+const PHRASE_INPUT: TastePhraseInput = {
+  ratingCount: 10,
+  types: [{ type: "WINE", count: 10 }],
+  archetype: {
+    key: "DEVOTED",
+    title: "Devoted to Nebbiolo",
+    loves: [{ type: "WINE", label: "Nebbiolo", count: 4, average: 5 }],
+    lessKeen: [{ type: "WINE", label: "Merlot", count: 3, average: 2 }],
+  },
+};
+
+/** A provider that answers `answer` and counts its calls. */
+const modelAnswering = (answer: unknown) => {
+  const calls: string[] = [];
+  const provider: AIProvider = {
+    name: "vertex-ai",
+    getAvailableQualities: () => ["low", "medium", "high"],
+    async generateContent(request, quality) {
+      calls.push(`${quality}:${request.prompt.slice(0, 12)}`);
+      return {
+        content: JSON.stringify(answer),
+        metadata: {
+          model: "gemini-3.5-flash-lite",
+          provider: "vertex-ai",
+          processingTime: 1,
+          inputTokens: 100,
+          outputTokens: 10,
+        },
+      };
+    },
+    async generateEmbeddings() {
+      throw new Error("taste_phrase never embeds");
+    },
+  };
+  return { provider, calls };
+};
+
+/** The budget `BudgetActor` would be, answering `allowed` and recording seams. */
+const budgetAllowing = (allowed: boolean) => {
+  const seams: string[] = [];
+  const budget: ModelBudget = {
+    reserve: async (_c, input) => {
+      seams.push(input.seam);
+      return {
+        allowed,
+        effectiveCostCents: 0,
+        currentSpendCents: 0,
+        limitCents: 200,
+        requestCount: 0,
+        freeTierLimit: 0,
+        isEnabled: true,
+        reason: allowed ? "charged" : "monthly budget exhausted",
+        usageId: allowed ? "u-1" : null,
+      };
+    },
+    settle: async () => {},
+    release: async () => {},
+  };
+  return { budget, seams };
+};
+
+const MODELS = {
+  low: "gemini-3.5-flash-lite",
+  medium: "gemini-3.5-flash",
+  high: "gemini-2.5-pro",
+  embedding: "text-embedding-004",
+};
+
+/** `providerTastePhraser` behind the metered `taste_phrase` seam, as installed. */
+const meteredPhraser = (answer: unknown, allowed = true) => {
+  const model = modelAnswering(answer);
+  const meter = budgetAllowing(allowed);
+  const providerFor: ProviderFor = meteredProviderFor(
+    model.provider,
+    "taste_phrase",
+    MODELS,
+    { budget: meter.budget },
+  );
+  return {
+    phraser: providerTastePhraser(providerFor),
+    calls: model.calls,
+    seams: meter.seams,
+  };
+};
+
+const anyCtx: Ctx = {
+  viewerId: "11111111-1111-4111-8111-111111111111",
+  kind: "user",
+  requestId: "r",
+};
+
+describe("the taste_phrase seam (H-10)", () => {
+  it("is charged to taste_phrase, on the low model, once per phrasing", async () => {
+    const { phraser, calls, seams } = meteredPhraser({
+      factsSupportALine: true,
+      line: "You lean towards Nebbiolo and away from Merlot.",
+    });
+    await expect(phraser(anyCtx, PHRASE_INPUT)).resolves.toBe(
+      "You lean towards Nebbiolo and away from Merlot.",
+    );
+    expect(seams).toEqual(["taste_phrase"]);
+    expect(calls).toEqual(["low:You describe"]);
+  });
+
+  it("abstains when the model says the facts do not support a line", async () => {
+    const { phraser } = meteredPhraser({
+      factsSupportALine: false,
+      line: "Something anyway about Nebbiolo.",
+    });
+    await expect(phraser(anyCtx, PHRASE_INPUT)).resolves.toBeNull();
+  });
+
+  it("drops a line that names no given style or carries a number", async () => {
+    for (const line of ["You like red wine.", "You rate Nebbiolo 5 of 5."]) {
+      const { phraser } = meteredPhraser({ factsSupportALine: true, line });
+      await expect(phraser(anyCtx, PHRASE_INPUT), line).resolves.toBeNull();
+    }
+  });
+
+  it("a budget refusal throws BudgetExceededError and never reaches the model", async () => {
+    const { phraser, calls } = meteredPhraser(
+      { factsSupportALine: true, line: "You lean towards Nebbiolo." },
+      false,
+    );
+    await expect(phraser(anyCtx, PHRASE_INPUT)).rejects.toThrow(
+      BudgetExceededError,
+    );
+    expect(calls).toEqual([]);
+  });
+
+  it("defaults to a loud, unconfigured phraser until installAI fills it", async () => {
+    expect(tastePhraser()).toBe(unconfiguredTastePhraser);
+    await expect(
+      unconfiguredTastePhraser(anyCtx, PHRASE_INPUT),
+    ).rejects.toThrow(/no AI provider wired for taste_phrase/);
+  });
+});
 
 const { skip } = await resolveTestDatabase();
 
@@ -176,6 +326,75 @@ describe.skipIf(skip)("TasteActor", () => {
           expect(profile.line).toBe(plain);
           expect(profile.linePhrasedByAi).toBe(false);
         }
+      });
+    });
+
+    const PLAIN_TEN =
+      "You rate Nebbiolo and Syrah highest and Merlot lowest, across 1 type.";
+
+    it("an actor built the way Dapr builds it uses the installed taste_phrase seam", async () => {
+      await withTestDb(async (db) => {
+        const viewer = await seedUser(db);
+        await seedTen(db, viewer);
+        const installed = vi.fn<TastePhraser>(
+          async () => "You lean towards Nebbiolo.",
+        );
+        setTastePhraser(installed);
+        try {
+          const actor = await activate(
+            new TasteActor(
+              new DaprClient({ daprHost: "127.0.0.1", daprPort: "3502" }),
+              new ActorId(viewer),
+              db,
+            ),
+          );
+          const profile = await actor.profile(userCtx(viewer));
+          expect(installed).toHaveBeenCalledTimes(1);
+          expect(profile.line).toBe("You lean towards Nebbiolo.");
+          expect(profile.linePhrasedByAi).toBe(true);
+        } finally {
+          setTastePhraser(unconfiguredTastePhraser);
+        }
+      });
+    });
+
+    it("through the metered seam: thin data never charges, and abstention or refusal keep the plain line", async () => {
+      await withTestDb(async (db) => {
+        const thin = await seedUser(db);
+        for (let i = 0; i < 3; i += 1) {
+          await seedItemReview(db, thin, await wineOf(db, thin, "Syrah"), 4);
+        }
+        const unused = meteredPhraser({
+          factsSupportALine: true,
+          line: "You lean towards Syrah.",
+        });
+        const thinProfile = await (
+          await newActor(thin, db, unused.phraser)
+        ).profile(userCtx(thin));
+        expect(unused.seams).toEqual([]);
+        expect(unused.calls).toEqual([]);
+        expect(thinProfile.linePhrasedByAi).toBe(false);
+
+        const viewer = await seedUser(db);
+        await seedTen(db, viewer);
+        const abstaining = meteredPhraser({
+          factsSupportALine: false,
+          line: null,
+        });
+        const refused = meteredPhraser(
+          { factsSupportALine: true, line: "You lean towards Nebbiolo." },
+          false,
+        );
+        for (const { phraser } of [abstaining, refused]) {
+          const profile = await (await newActor(viewer, db, phraser)).profile(
+            userCtx(viewer),
+          );
+          expect(profile.line).toBe(PLAIN_TEN);
+          expect(profile.linePhrasedByAi).toBe(false);
+        }
+        expect(abstaining.calls).toHaveLength(1);
+        expect(refused.seams).toEqual(["taste_phrase"]);
+        expect(refused.calls).toEqual([]);
       });
     });
   });

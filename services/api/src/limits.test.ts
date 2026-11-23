@@ -756,10 +756,15 @@ const timed = <T>(run: () => T): { result: T; ms: number } => {
 /**
  * Generous for work that is linear in a document of a few KB — it measures
  * well under a millisecond — and some thirty orders of magnitude short of what
- * the exponential walk needed for the same documents, so a regression cannot
- * sneak under it on a slow CI runner.
+ * the exponential walk needed for the same documents (2^60 and 2^200 fields),
+ * so a regression cannot sneak under it on a slow CI runner.
+ *
+ * It was 100 ms, and that failed under load (H-5): a turbo run with every
+ * package's suite at once put a linear walk past it. A wall-clock budget only
+ * has to separate linear from exponential here, and a second does that with
+ * the same thirty orders of magnitude to spare.
  */
-const LINEAR_BUDGET_MS = 100;
+const LINEAR_BUDGET_MS = 1_000;
 
 describe("fragments are walked once and charged at every spread site", () => {
   it("still charges the doubling document its full 2^n", () => {
