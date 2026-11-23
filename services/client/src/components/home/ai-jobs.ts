@@ -63,8 +63,8 @@ export const aiJobHref = (job: AiJob): string | null => {
 export const aiJobOutcome = (
   job: AiJob,
   options: { now?: Date } = {},
-): AiOutcome =>
-  aiOutcome(
+): AiOutcome => {
+  const outcome = aiOutcome(
     {
       code: job.failureCode,
       reason: job.failureReason,
@@ -72,6 +72,26 @@ export const aiJobOutcome = (
     },
     options,
   );
+  // W-22: insights are background work nobody asked for, and a list too new
+  // (or too thin) to read is not an error. Only a limit keeps its own words;
+  // everything else is a calm line, never red, never "Try again" — the next
+  // change to the list asks again by itself (tierListInsightsStatus).
+  if (
+    job.kind === "TIER_LIST_INSIGHTS" &&
+    outcome.kind !== "user-cap" &&
+    outcome.kind !== "service-budget"
+  ) {
+    return {
+      kind: outcome.kind,
+      title: "Not yet",
+      message: "Insights come as the list grows.",
+      retryAt: null,
+      canRetry: false,
+      tone: "neutral",
+    };
+  }
+  return outcome;
+};
 
 /** The tray's line while a job runs: "Reading the menu at Cork & Barrel". */
 export const runningLine = (job: AiJob): string => {

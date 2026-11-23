@@ -66,7 +66,7 @@ export const leadingNumber = (
   text: string,
 ): { value: number; rest: string } | null => {
   const match =
-    /^(?:(\d+(?:\.\d+)?)(?:[\s-]+(\d+)\/(\d+)|\s*([⅛¼⅓⅜½⅝⅔¾⅞]))?|(\d+)\/(\d+)|([⅛¼⅓⅜½⅝⅔¾⅞]))(?=\s|$)\s*(.*)$/u.exec(
+    /^(?:(\d+(?:\.\d+)?)(?:[\s-]+(\d+)\/(\d+)|\s*([⅛¼⅓⅜½⅝⅔¾⅞]))?|(\d+)\/(\d+)|([⅛¼⅓⅜½⅝⅔¾⅞]))(?=\s|$)\s*(.*)$/.exec(
       text.trim(),
     );
   if (match === null) return null;
