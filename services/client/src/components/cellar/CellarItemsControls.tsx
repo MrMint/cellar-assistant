@@ -1,10 +1,10 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { parseAsArrayOf, parseAsString, useQueryState } from "nuqs";
 import { type ReactNode, useEffect, useRef, useTransition } from "react";
 import { SegmentedControl } from "@/components/app/SegmentedControl";
 import { SortChip } from "@/components/app/SortChip";
+import { useNavigate } from "@/components/app/useNavigate";
 import type { ApiItemType as ItemTypeValue } from "@/components/cellar-api/itemTypes";
 import { HeaderBar } from "@/components/common/HeaderBar";
 import { AddItemButton } from "./AddItemButton";
@@ -79,7 +79,7 @@ export function CellarItemsControls({
   finishedCount,
   dashboard,
 }: CellarItemsControlsProps) {
-  const router = useRouter();
+  const navigate = useNavigate();
   const [isPending, startTransition] = useTransition();
   const hasMounted = useRef(false);
 
@@ -155,7 +155,7 @@ export function CellarItemsControls({
             ? [
                 {
                   label: "Edit cellar",
-                  onSelect: () => router.push(`/cellars/${cellarId}/edit`),
+                  onSelect: () => navigate.push(`/cellars/${cellarId}/edit`),
                 },
               ]
             : undefined

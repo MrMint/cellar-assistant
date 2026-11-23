@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useCallback } from "react";
+import { useNavigate } from "@/components/app/useNavigate";
 import { CellarForm } from "@/components/cellar/CellarForm";
 import { ApiError } from "@/components/cellar-api/ApiError";
 import { PageLoading } from "@/components/common/PageLoading";
@@ -18,15 +19,16 @@ import { useAllFriends } from "./useAllFriends";
  */
 export function AddCellarClient() {
   const router = useRouter();
+  const navigate = useNavigate();
 
   const friends = useAllFriends();
 
   const handleSubmitted = useCallback(
     (id: string) => {
-      router.push(`/cellars/${id}/items`);
+      navigate.push(`/cellars/${id}/items`);
       router.refresh();
     },
-    [router],
+    [navigate, router],
   );
 
   if (friends.loading) return <PageLoading />;

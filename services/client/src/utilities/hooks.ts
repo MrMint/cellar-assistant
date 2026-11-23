@@ -8,7 +8,7 @@
  * keeps its own `?scope=` (N15, `components/ranking/RankingsClient.tsx`).
  */
 
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { isEmpty, isNotNil } from "ramda";
 import {
   startTransition,
@@ -19,6 +19,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { useNavigate } from "@/components/app/useNavigate";
 import {
   ITEM_TYPES,
   type ApiItemType as ItemTypeValue,
@@ -178,7 +179,7 @@ export function useInterval(callback: () => void, delay: number) {
 }
 
 export const useTypesFilterState = () => {
-  const router = useRouter();
+  const navigate = useNavigate();
   const searchParams = new URLSearchParams(useSearchParams());
 
   const parsedTypes = parseTypesParam(searchParams.get("types"));
@@ -193,7 +194,7 @@ export const useTypesFilterState = () => {
       startTransition(() => setOptimisticTypes(t));
       searchParams.set("types", JSON.stringify(t));
     }
-    router.replace(`?${searchParams}`);
+    navigate.replace(`?${searchParams}`);
   };
 
   return { types: optimisticTypes, setTypes };

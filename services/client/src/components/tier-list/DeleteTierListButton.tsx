@@ -5,6 +5,7 @@ import { useCallback, useState } from "react";
 import { useMutation } from "urql";
 import { ConfirmSheet } from "@/components/app/ConfirmSheet";
 import { Delete, ICON_STROKE } from "@/components/app/icons";
+import { useNavigate } from "@/components/app/useNavigate";
 import { Button } from "@/components/ui/button";
 import { type ApiFailure, unwrapResult } from "@/lib/api/result";
 import { DeleteTierListMutation } from "./queries";
@@ -34,6 +35,7 @@ export function DeleteTierListButton({
   itemCount: number;
 }) {
   const router = useRouter();
+  const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<ApiFailure | null>(null);
   const [{ fetching }, deleteTierList] = useMutation(DeleteTierListMutation);
@@ -50,9 +52,9 @@ export function DeleteTierListButton({
       return;
     }
     setOpen(false);
-    router.push("/tier-lists");
+    navigate.push("/tier-lists");
     router.refresh();
-  }, [deleteTierList, router, tierListId]);
+  }, [deleteTierList, navigate, router, tierListId]);
 
   return (
     <>

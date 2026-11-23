@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useCallback } from "react";
+import { useNavigate } from "@/components/app/useNavigate";
 import {
   CellarForm,
   type Permission_Type_Enum,
@@ -40,13 +41,14 @@ interface EditCellarClientProps {
  */
 export const EditCellarClient = ({ cellar, viewer }: EditCellarClientProps) => {
   const router = useRouter();
+  const navigate = useNavigate();
 
   const friends = useAllFriends();
 
   const handleSubmitted = useCallback(() => {
-    router.push(`/cellars`);
+    navigate.push(`/cellars`);
     router.refresh();
-  }, [router]);
+  }, [navigate, router]);
 
   if (friends.loading) return <PageLoading />;
   if (friends.failure !== null && friends.rows.length === 0) {

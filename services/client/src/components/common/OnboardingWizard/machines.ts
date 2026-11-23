@@ -52,7 +52,7 @@ import type { CatalogMatch } from "./catalog-match";
  */
 export const CATALOG_MATCH_TIMEOUT_MS = 8000;
 
-/** `router.push` is all the machine needs of Next's router. */
+/** `push` is all the machine needs of `useNavigate()`. */
 type Navigate = { push: (href: string) => void };
 
 /** What the page tells the read about itself, to track it (X05). */
@@ -119,7 +119,7 @@ export const OnboardingMachine = createMachine(
       input: {
         urqlClient: Client;
         cellarId?: string | null;
-        router: Navigate;
+        navigate: Navigate;
         itemType: ApiItemType;
         /** Track the read for background continuation (X05). */
         draft?: DraftInput;
@@ -179,7 +179,7 @@ export const OnboardingMachine = createMachine(
         /** Minted up front so a retried add files one bottle. */
         newCellarItemId: string;
         cellarId?: string;
-        router: Navigate;
+        navigate: Navigate;
         retryCount: number;
         /** AI analysis confidence score (0-1) */
         confidence?: number;
@@ -271,7 +271,7 @@ export const OnboardingMachine = createMachine(
       newCellarItemId: crypto.randomUUID(),
       urqlClient: input.urqlClient,
       cellarId: input.cellarId ?? undefined,
-      router: input.router,
+      navigate: input.navigate,
       retryCount: 0,
       quickAddEnabled: true, // Enable quick add by default
       declinedItemIds: [],
@@ -777,7 +777,7 @@ export const OnboardingMachine = createMachine(
           SNAP_ANOTHER: {
             actions: ({ context }) => {
               if (context.onRestart !== undefined) context.onRestart();
-              else context.router.push(addAnotherHref(context.cellarId));
+              else context.navigate.push(addAnotherHref(context.cellarId));
             },
             target: "done",
           },
@@ -849,7 +849,7 @@ export const OnboardingMachine = createMachine(
       }),
       goToResult: ({ context }) => {
         // In a cellar, the bottle; otherwise the item.
-        context.router.push(
+        context.navigate.push(
           finishedHref({
             type: context.itemType,
             itemId: context.existingItemId ?? "",

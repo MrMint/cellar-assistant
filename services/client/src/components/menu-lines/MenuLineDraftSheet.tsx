@@ -1,6 +1,5 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import {
   type FieldPath,
@@ -19,6 +18,7 @@ import {
   itemTypeTokens,
   TypeGlyph,
 } from "@/components/app/TypeChip";
+import { useNavigate } from "@/components/app/useNavigate";
 import type { ApiItemType } from "@/components/cellar-api/itemTypes";
 import { AiStatus } from "@/components/common/AiStatus";
 import { createOnboardedItem } from "@/components/common/OnboardingWizard/actors/createItem";
@@ -125,7 +125,7 @@ export function MenuLineDraftSheet({
   onOpenChange,
   onChanged,
 }: MenuLineDraftSheetProps) {
-  const router = useRouter();
+  const navigate = useNavigate();
   const client = useClient();
   const capabilities = useAiCapabilities();
   const [, suggestDetails] = useMutation(SuggestNewItemDetailsMutation);
@@ -388,7 +388,7 @@ export function MenuLineDraftSheet({
         : "Open it to log, save or rank it.",
       ...(href === null
         ? {}
-        : { actionLabel: "Open", undo: () => router.push(href) }),
+        : { actionLabel: "Open", undo: () => navigate.push(href) }),
     });
   };
 

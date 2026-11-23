@@ -5,8 +5,8 @@
  * fragment is unmasked (`@_unmask`), so there is nothing to read.
  */
 
-import { useRouter } from "next/navigation";
 import { useCallback } from "react";
+import { useNavigate } from "@/components/app/useNavigate";
 import type { ResultOf } from "@/lib/api/graphql";
 import type { TierListEditFragment } from "./fragments";
 import { TierListForm } from "./TierListForm";
@@ -16,14 +16,14 @@ interface EditTierListClientProps {
 }
 
 export function EditTierListClient({ tierList }: EditTierListClientProps) {
-  const router = useRouter();
+  const navigate = useNavigate();
   const data = tierList;
 
   const handleSubmitted = useCallback(
     (id: string) => {
-      router.push(`/tier-lists/${id}`);
+      navigate.push(`/tier-lists/${id}`);
     },
-    [router],
+    [navigate],
   );
 
   return (

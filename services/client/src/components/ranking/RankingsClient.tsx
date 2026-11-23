@@ -1,6 +1,6 @@
 "use client";
 
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import {
   startTransition,
   useCallback,
@@ -14,6 +14,7 @@ import { EmptyState } from "@/components/app/EmptyState";
 import { Leaderboard } from "@/components/app/icons";
 import { Link } from "@/components/app/Link";
 import { SegmentedControl } from "@/components/app/SegmentedControl";
+import { useNavigate } from "@/components/app/useNavigate";
 import { CellarItemsFilter } from "@/components/cellar/CellarItemsFilter";
 import { virtualTotal } from "@/components/cellar/virtualTotal";
 import { ApiError } from "@/components/cellar-api/ApiError";
@@ -51,7 +52,7 @@ const filtersKey = (filters: Filters) => `${filters.segment}|${filters.types}`;
  * the moment it is tapped rather than when the URL catches up.
  */
 function useRankingSegment(): [RankingSegment, (next: RankingSegment) => void] {
-  const router = useRouter();
+  const navigate = useNavigate();
   const pathname = usePathname() ?? "/rankings";
   const searchParams = useSearchParams();
   const fromUrl = segmentFromParam(searchParams?.get("scope"));
@@ -64,10 +65,10 @@ function useRankingSegment(): [RankingSegment, (next: RankingSegment) => void] {
       const query = params.toString();
       startTransition(() => {
         setOptimistic(next);
-        router.replace(query === "" ? pathname : `${pathname}?${query}`);
+        navigate.replace(query === "" ? pathname : `${pathname}?${query}`);
       });
     },
-    [router, pathname, searchParams, setOptimistic],
+    [navigate, pathname, searchParams, setOptimistic],
   );
   return [segment, setSegment];
 }
