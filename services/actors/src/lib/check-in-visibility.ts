@@ -20,9 +20,16 @@
  * the drinker, their companions and their friends. And the fourth branch
  * admits the *entry* only — that a bottle was drunk, when and by whom — never
  * what the drinker said about it (`canSeeCheckInDetails`, below).
+ *
+ * ux-c L08: a "Made it" log names a recipe, and is visible only to a viewer
+ * who may also see that recipe (`canSeeRecipeLog`) — `recipeRefVisibleSql`,
+ * which is false for a recipe id that names nothing, as the policy is for a
+ * recipe it was not handed. A log whose recipe was deleted (`recipe_id` set
+ * null, L44) is an ordinary bottle-less check-in.
  */
 import { type SQL, sql } from "@cellar-assistant/db/orm";
 import { uuidArray } from "./collection-sql.ts";
+import { recipeRefVisibleSql } from "./recipe-visibility.ts";
 import { canSeeSql, type VisibilityScope } from "./visibility-sql.ts";
 
 /** `alias` is the `check_ins` row's alias in the caller's query (`ci`). */
@@ -39,14 +46,18 @@ export const canSeeCheckInSql = (
     privacy: sql`vc.privacy`,
     coOwnedCellarId: sql`vc.id`,
   });
-  return sql`(
+  const recipe = recipeRefVisibleSql(
+    { kind: "viewer", viewer: scope.viewer, friendIds: scope.friendIds },
+    sql`${row}.recipe_id`,
+  );
+  return sql`((
     ${personal}
     or exists (
       select 1 from public.cellar_items vi
       join public.cellars vc on vc.id = vi.cellar_id
       where vi.id = ${row}.cellar_item_id and ${cellar}
     )
-  )`;
+  ) and (${row}.recipe_id is null or ${recipe}))`;
 };
 
 /**

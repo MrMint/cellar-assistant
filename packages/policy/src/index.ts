@@ -489,6 +489,34 @@ export const canSeeRecipe = (ctx: Ctx, recipe: RecipeVisibility): boolean => {
 };
 
 /**
+ * ux-c L08 (L6, L28): a "Made it" log — a check-in that names a recipe.
+ *
+ * The log's own audience (`canSeeCheckIn`: the drinker, a companion, a
+ * friend) is not enough, because the entry names the recipe: a friend's log
+ * on somebody's PRIVATE recipe would leak that the recipe exists, and what
+ * it is called. So a recipe log is visible only to a viewer who may see
+ * **both** the log and the recipe.
+ *
+ * `recipe` is `null` when the caller could not load the recipe the log
+ * names; that answers `false`, exactly like a recipe the viewer may not see,
+ * so neither the log nor the recipe id is an existence oracle. (A log whose
+ * recipe was *deleted* names no recipe at all — `recipe_id` is set null, L44
+ * — and is just a check-in: callers ask `canSeeCheckIn` for it.)
+ */
+export type RecipeLogVisibility = CheckInVisibility & {
+  readonly recipe: RecipeVisibility | null;
+};
+
+export const canSeeRecipeLog = (
+  ctx: Ctx,
+  log: RecipeLogVisibility,
+): boolean => {
+  if (bypassesPolicy(ctx)) return true;
+  if (log.recipe === null) return false;
+  return canSeeCheckIn(ctx, log) && canSeeRecipe(ctx, log.recipe);
+};
+
+/**
  * Shared with everyone: PUBLIC and not a draft. What a read with no viewer of
  * its own may use — a share page, and the menu matcher, whose answer lands
  * on a place's menu where any visitor reads it.

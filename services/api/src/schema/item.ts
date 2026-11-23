@@ -533,8 +533,13 @@ ItemCheckInType.implement({
     }),
     item: t.field({
       type: ItemInterface,
-      description: "The item, echoed back. Resolved through its DataLoader.",
-      resolve: (checkIn) => itemActorId(checkIn.item),
+      nullable: true,
+      description:
+        "The item, echoed back. Resolved through its DataLoader. Null for a " +
+        'recipe log ("Made it", ux-c L08): then `recipe` names the recipe, ' +
+        "or is null too when the recipe was deleted since.",
+      resolve: (checkIn) =>
+        checkIn.item === null ? null : itemActorId(checkIn.item),
     }),
     createdAt: t.expose("createdAt", { type: "DateTime" }),
     updatedAt: t.expose("updatedAt", { type: "DateTime" }),

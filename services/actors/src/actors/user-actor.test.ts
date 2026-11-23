@@ -2513,6 +2513,132 @@ describe.skipIf(skip)("UserActor (B4)", () => {
 });
 
 /* -------------------------------------------------------------------------- */
+/* Brew prefs — ux-c L08                                                       */
+/* -------------------------------------------------------------------------- */
+
+describe("brew prefs (ux-c L08) — the viewer's own, nobody else's", () => {
+  it("sets, reads back, updates and clears a tea's overrides", async () => {
+    await withUserDb(async (db) => {
+      const alice = await seedPerson(db, "Alice");
+      const teaId = await seedTea(db, alice);
+      const actor = await userActor(alice, db);
+      const ctx = userCtx(alice, "r");
+      const item = { type: "TEA", id: teaId } as const;
+
+      expect(await actor.brewPrefs(ctx, item)).toBeNull();
+      expect(
+        await actor.setBrewPrefs(ctx, {
+          item,
+          waterTempC: 90,
+          steepSeconds: null,
+          doseGrams: null,
+          waterMl: null,
+        }),
+      ).toMatchObject({ item, waterTempC: 90, steepSeconds: null });
+      await actor.setBrewPrefs(ctx, {
+        item,
+        waterTempC: 85,
+        steepSeconds: 50,
+        doseGrams: 5,
+        waterMl: null,
+      });
+      expect(await actor.brewPrefs(ctx, item)).toMatchObject({
+        waterTempC: 85,
+        steepSeconds: 50,
+        doseGrams: 5,
+        waterMl: null,
+      });
+      // All four cleared is back to typical: no row.
+      expect(
+        await actor.setBrewPrefs(ctx, {
+          item,
+          waterTempC: null,
+          steepSeconds: null,
+          doseGrams: null,
+          waterMl: null,
+        }),
+      ).toBeNull();
+      expect(await actor.brewPrefs(ctx, item)).toBeNull();
+    });
+  });
+
+  it("answers another user's prefs exactly like a missing item", async () => {
+    await withUserDb(async (db) => {
+      const alice = await seedPerson(db, "Alice");
+      const bob = await seedPerson(db, "Bob");
+      const teaId = await seedTea(db, alice);
+      const missingId = "00000000-0000-4000-8000-00000000beef";
+      const aliceActor = await userActor(alice, db);
+      const aliceCtx = userCtx(alice, "r");
+      const bobCtx = userCtx(bob, "r");
+      const tea = { type: "TEA", id: teaId } as const;
+      await aliceActor.setBrewPrefs(aliceCtx, {
+        item: tea,
+        waterTempC: 90,
+        steepSeconds: null,
+        doseGrams: null,
+        waterMl: null,
+      });
+
+      const refusal = async (run: () => Promise<unknown>) => {
+        const caught = await run().then(
+          () => null,
+          (error: unknown) => error,
+        );
+        expect(caught).toBeInstanceOf(NotFoundError);
+        return (caught as Error).message.replace(/[0-9a-f-]{36}/g, "<id>");
+      };
+      // Bob, on Alice's actor: reading and writing her prefs.
+      const othersRead = await refusal(() => aliceActor.brewPrefs(bobCtx, tea));
+      const othersWrite = await refusal(() =>
+        aliceActor.setBrewPrefs(bobCtx, {
+          item: tea,
+          waterTempC: 20,
+          steepSeconds: null,
+          doseGrams: null,
+          waterMl: null,
+        }),
+      );
+      // Alice, on her own actor, naming a tea that does not exist.
+      const missing = await refusal(() =>
+        aliceActor.brewPrefs(aliceCtx, { type: "TEA", id: missingId }),
+      );
+      expect(othersRead).toBe(missing);
+      expect(othersWrite).toBe(missing);
+      // And Alice's row is untouched by Bob's attempt.
+      expect(await aliceActor.brewPrefs(aliceCtx, tea)).toMatchObject({
+        waterTempC: 90,
+      });
+    });
+  });
+
+  it("refuses out-of-range numbers and non-brew item types", async () => {
+    await withUserDb(async (db) => {
+      const alice = await seedPerson(db, "Alice");
+      const teaId = await seedTea(db, alice);
+      const actor = await userActor(alice, db);
+      const ctx = userCtx(alice, "r");
+      const base = {
+        item: { type: "TEA", id: teaId },
+        waterTempC: null,
+        steepSeconds: null,
+        doseGrams: null,
+        waterMl: null,
+      } as const;
+      await expect(
+        actor.setBrewPrefs(ctx, { ...base, waterTempC: 101 }),
+      ).rejects.toBeInstanceOf(ValidationError);
+      await expect(
+        actor.setBrewPrefs(ctx, { ...base, steepSeconds: 0 }),
+      ).rejects.toBeInstanceOf(ValidationError);
+      await expect(
+        actor.brewPrefs(ctx, { type: "WINE", id: teaId }),
+      ).rejects.toBeInstanceOf(ValidationError);
+    });
+  });
+});
+
+/* -------------------------------------------------------------------------- */
 /* Static guard — §2.1's "no AI or external call inside a UserActor turn"      */
 /* -------------------------------------------------------------------------- */
 
