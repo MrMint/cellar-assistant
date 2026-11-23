@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
+import { pinnedLine } from "@/components/capture/new-place";
 import {
   createGeolocationStore,
   type GeolocationDeps,
@@ -47,8 +48,10 @@ function fakeBrowser(permission: string | null) {
     deps,
     calls,
     status,
-    fix: (latitude: number, longitude: number) =>
-      success?.({ coords: { latitude, longitude } } as GeolocationPosition),
+    fix: (latitude: number, longitude: number, accuracy?: number) =>
+      success?.({
+        coords: { latitude, longitude, accuracy },
+      } as GeolocationPosition),
     deny: () =>
       failure?.({
         code: 1,
@@ -85,6 +88,7 @@ describe("geolocation store (D14)", () => {
     assert.deepEqual(store.getSnapshot().location, {
       latitude: 43.07,
       longitude: -89.38,
+      accuracy: null,
     });
     assert.equal(store.getSnapshot().permission, "granted");
     assert.ok(browser.calls.includes("cookie"));
@@ -188,6 +192,7 @@ describe("geolocation store (D14)", () => {
     assert.deepEqual(store.getSnapshot().location, {
       latitude: 1,
       longitude: 2,
+      accuracy: null,
     });
   });
 
@@ -214,5 +219,47 @@ describe("geolocation store (D14)", () => {
     assert.equal(state.permission, "unsupported");
     assert.equal(state.loading, false);
     assert.equal(locationButtonAction(state), "unsupported");
+  });
+
+  test("H-22: the fix keeps its accuracy, through to the new-place sheet's line", async () => {
+    const browser = fakeBrowser("granted");
+    const store = createGeolocationStore(browser.deps);
+    store.subscribe(() => {});
+    await flush();
+    browser.fix(51.5, -0.12, 12.4);
+    const location = store.getSnapshot().location;
+    assert.deepEqual(location, {
+      latitude: 51.5,
+      longitude: -0.12,
+      accuracy: 12.4,
+    });
+    assert.equal(
+      pinnedLine(location?.accuracy),
+      "Pinned at your location, about 12 m accurate",
+    );
+  });
+
+  test("H-22: a sharper fix at the same spot updates the accuracy without a second cookie write", async () => {
+    const browser = fakeBrowser("granted");
+    const store = createGeolocationStore(browser.deps);
+    store.subscribe(() => {});
+    await flush();
+    browser.fix(51.5, -0.12, 80);
+    browser.fix(51.5, -0.12, 9);
+    assert.equal(store.getSnapshot().location?.accuracy, 9);
+    assert.equal(
+      browser.calls.filter((call) => call === "cookie").length,
+      1,
+      "the position did not move",
+    );
+  });
+
+  test("H-22: a fix without an accuracy is null, and the line says so plainly", async () => {
+    const browser = fakeBrowser("granted");
+    const store = createGeolocationStore(browser.deps);
+    store.subscribe(() => {});
+    await flush();
+    browser.fix(51.5, -0.12);
+    assert.equal(store.getSnapshot().location?.accuracy, null);
   });
 });

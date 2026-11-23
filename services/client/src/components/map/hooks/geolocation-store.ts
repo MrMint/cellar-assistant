@@ -34,7 +34,16 @@ export type GeoPermission =
   | "unsupported";
 
 export interface GeolocationState {
-  readonly location: { latitude: number; longitude: number } | null;
+  /**
+   * The latest fix. `accuracy` is the fix's own radius in metres
+   * (`coords.accuracy`), or `null` when the browser gave none — the new-place
+   * sheet's "about N m accurate" line reads it (H-22, W-16).
+   */
+  readonly location: {
+    latitude: number;
+    longitude: number;
+    accuracy?: number | null;
+  } | null;
   /**
    * True while the map should hold off drawing for a position: the
    * permission is still being looked up, or a watch has started and no fix
@@ -118,7 +127,11 @@ export function createGeolocationStore(
   deps: GeolocationDeps,
 ): GeolocationStore {
   let state: GeolocationState = INITIAL_GEOLOCATION_STATE;
-  let lastCoords: { latitude: number; longitude: number } | null = null;
+  let lastCoords: {
+    latitude: number;
+    longitude: number;
+    accuracy: number | null;
+  } | null = null;
   const listeners = new Set<() => void>();
   let initialized = false;
 
@@ -131,17 +144,27 @@ export function createGeolocationStore(
 
   const handleSuccess = (position: GeolocationPosition) => {
     const { latitude, longitude } = position.coords;
+    const reported = position.coords.accuracy;
+    const accuracy =
+      typeof reported === "number" && Number.isFinite(reported)
+        ? reported
+        : null;
     if (
       lastCoords &&
       Math.abs(lastCoords.latitude - latitude) < COORDINATE_EPSILON &&
-      Math.abs(lastCoords.longitude - longitude) < COORDINATE_EPSILON
+      Math.abs(lastCoords.longitude - longitude) < COORDINATE_EPSILON &&
+      lastCoords.accuracy === accuracy
     ) {
       return;
     }
-    lastCoords = { latitude, longitude };
-    deps.onFix(latitude, longitude);
+    const moved =
+      lastCoords === null ||
+      Math.abs(lastCoords.latitude - latitude) >= COORDINATE_EPSILON ||
+      Math.abs(lastCoords.longitude - longitude) >= COORDINATE_EPSILON;
+    lastCoords = { latitude, longitude, accuracy };
+    if (moved) deps.onFix(latitude, longitude);
     set({
-      location: { latitude, longitude },
+      location: { latitude, longitude, accuracy },
       loading: false,
       error: null,
       permission: "granted",
