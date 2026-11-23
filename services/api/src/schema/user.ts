@@ -37,6 +37,8 @@ import {
   FRIEND_REQUEST_DIRECTIONS,
   FriendsCollectionActorDescriptor,
   itemActorId,
+  NotFoundError,
+  PROFILE_NOT_SHARED,
   UserActorDescriptor,
   viewerCollectionActorId,
 } from "@cellar-assistant/contracts";
@@ -369,16 +371,34 @@ const RECORD_PLACE_INTERACTION = {
 /* Queries                                                                    */
 /* -------------------------------------------------------------------------- */
 
+/** A user id: a uuid, any case (the hop lowercases it, `../context.ts`). */
+const USER_ID =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 builder.queryField("user", (t) =>
   t.field({
     type: UserProfileType,
     description:
       "One user's public profile. Any signed-in viewer may read it; `email` " +
-      "comes back null unless the viewer is the owner.",
+      "comes back null unless the viewer is the owner. An id that names " +
+      "nobody, a malformed id and a profile the viewer may not see all get " +
+      "the same `NotFoundError`, so the answer never says whether an " +
+      "account exists.",
     args: { id: t.arg.id({ required: true }) },
     errors: {},
-    resolve: (_root, args, context) =>
-      context.actor(UserActorDescriptor, String(args.id)).getProfile(),
+    resolve: (_root, args, context) => {
+      // Leftovers 5 (L6, D24). Anonymous first, for every id alike: the
+      // actor says the same, but a malformed id must not be the one case
+      // that answers differently. A malformed id never makes the hop (Dapr
+      // routes on the raw string); it gets the actor's own refusal, byte
+      // for byte, which `UserActor.refuseAsAbsent` gives a missing user.
+      if (context.ctx.viewerId === null) {
+        throw new ForbiddenError("sign in to view a profile");
+      }
+      const id = String(args.id);
+      if (!USER_ID.test(id)) throw new NotFoundError(PROFILE_NOT_SHARED);
+      return context.actor(UserActorDescriptor, id).getProfile();
+    },
   }),
 );
 

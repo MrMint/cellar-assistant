@@ -180,6 +180,7 @@ import {
   NotFoundError,
   offsetPage,
   PANTRY_KINDS,
+  PROFILE_NOT_SHARED,
   requireReverseEdgeBatch,
   UserActorDescriptor,
   ValidationError,
@@ -198,7 +199,12 @@ import {
   wantToTry,
 } from "@cellar-assistant/db";
 import { and, eq, inArray, or, sql } from "@cellar-assistant/db/orm";
-import { type Friendship, isFriend, isOwner } from "@cellar-assistant/policy";
+import {
+  canSeeProfile,
+  type Friendship,
+  isFriend,
+  isOwner,
+} from "@cellar-assistant/policy";
 import type { ActorId, DaprClient } from "@dapr/dapr";
 import { handleForId, isEmailShaped } from "../auth/display-name.ts";
 import { absentRow, EntityActorBase } from "../lib/actor-base.ts";
@@ -377,6 +383,24 @@ export class UserActor
     this.#profiles = profiles;
   }
 
+  /**
+   * Leftovers 5 (L6, D24): every "no such user" this actor gives is one
+   * key-free message, the one a refused profile gets everywhere
+   * ({@link PROFILE_NOT_SHARED}). The base's wording names the key
+   * (`UserActor(<key>) has no row`), so a missing uuid and a malformed id
+   * answered in different bytes, and both differed from a hidden profile.
+   * This covers the base's pre-turn refusal of a malformed key, a missing
+   * row, a profile `canSeeProfile` hides, and a wrong invite secret.
+   */
+  protected override refuseAsAbsent(): never {
+    throw new NotFoundError(PROFILE_NOT_SHARED);
+  }
+
+  /** Who may know this user exists: `canSeeProfile`, the one rule. */
+  protected override canSee(ctx: Ctx, _aggregate: UserAggregate): boolean {
+    return canSeeProfile(ctx, { userId: this.key });
+  }
+
   /* ---------------------------------------------------------------------- */
   /* Activation                                                              */
   /* ---------------------------------------------------------------------- */
@@ -504,8 +528,10 @@ export class UserActor
    * is what gives this method a real owner/friend/stranger distinction.
    */
   async getProfile(ctx: Ctx): Promise<UserProfileDto> {
-    this.requireAggregate();
+    // Signed in first: the other order told an anonymous caller NotFound for
+    // an id that names nobody and Forbidden for one that does (leftovers 5).
     requireSignedIn(ctx, "view a profile");
+    await this.requireVisible(ctx);
     return this.#toProfile(ctx, await this.#profileFields(this.key));
   }
 
