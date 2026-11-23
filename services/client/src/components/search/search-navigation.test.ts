@@ -9,11 +9,11 @@ import { searchStateFromParams } from "./adapter";
 import {
   closeSearch,
   initialSearchNavState,
-  readSessionHistory,
   landNavigation,
   planCommitNavigation,
   planLandedNavigation,
   planTypingNavigation,
+  readSessionHistory,
   type SearchNavigation,
   type SearchNavState,
   syncFromUrl,
@@ -375,7 +375,7 @@ describe("closeSearch", () => {
 });
 
 describe("readSessionHistory (CR-3)", () => {
-  const withWindow = <T,>(value: unknown, run: () => T): T => {
+  const withWindow = <T>(value: unknown, run: () => T): T => {
     const global = globalThis as { window?: unknown };
     const saved = global.window;
     global.window = value;
