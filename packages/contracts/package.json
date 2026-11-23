@@ -21,7 +21,8 @@
     "./proxy": "./src/proxy.ts",
     "./quantity": "./src/quantity.ts",
     "./shelf-life": "./src/shelf-life.ts",
-    "./bands": "./src/bands.ts"
+    "./bands": "./src/bands.ts",
+    "./taste": "./src/taste.ts"
   },
   "scripts": {
     "build": "echo 'no build step: consumed as TypeScript source'",

@@ -4,6 +4,7 @@ import { People } from "@/components/app/icons";
 import { LoadingShell, ShellBlocks } from "@/components/app/LoadingShell";
 import { Page } from "@/components/app/Page";
 import { UserAvatar } from "@/components/app/UserAvatar";
+import { TasteCompareSection } from "@/components/taste/TasteCompareSection";
 import { Skeleton } from "@/components/ui/skeleton";
 import { type FriendProfileView, sharesNothing } from "./adapter";
 import { FriendLog } from "./FriendLog";
@@ -38,6 +39,13 @@ export function FriendProfile({ view }: { view: FriendProfileView }) {
           <p className="type-footnote truncate">{view.sinceLine}</p>
         </div>
       </header>
+
+      {/* L03, L30: agreement as a count, and their lists to copy. A slot:
+          nothing until it has its own answer. */}
+      <TasteCompareSection
+        userId={view.userId}
+        lists={view.tierLists.rows.map(({ id, name }) => ({ id, name }))}
+      />
 
       {sharesNothing(view) ? (
         <EmptyState

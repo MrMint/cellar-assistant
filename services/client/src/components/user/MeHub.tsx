@@ -2,6 +2,7 @@ import {
   type AppIcon,
   ChevronRight,
   Edit,
+  Explore,
   Leaderboard,
   Love,
   People,
@@ -58,6 +59,13 @@ export const ME_SECTIONS: readonly {
     label: "Lists",
     links: [
       { label: "Top rated", href: "/rankings", icon: Leaderboard },
+      // L03: your archetype, and where you and each friend agree.
+      {
+        label: "Taste profile",
+        href: "/taste-profile",
+        icon: Explore,
+        description: "Your archetype and friends",
+      },
       {
         label: "Loved",
         href: "/favorites",

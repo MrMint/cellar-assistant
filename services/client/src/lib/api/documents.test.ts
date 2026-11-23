@@ -82,6 +82,7 @@ import * as searchQueries from "@/components/search/queries";
 import * as universalSearch from "@/components/search/universal-search";
 import { SECTION_LIMITS } from "@/components/search/universal-search";
 import * as shareQueries from "@/components/share/queries";
+import * as tasteQueries from "@/components/taste/queries";
 import * as tierListFragments from "@/components/tier-list/fragments";
 import * as tierListQueries from "@/components/tier-list/queries";
 import * as userFragments from "@/components/user/fragments";
@@ -125,6 +126,7 @@ const MODULES: Readonly<Record<string, Record<string, unknown>>> = {
   "components/search/queries.ts": searchQueries,
   "components/search/universal-search.ts": universalSearch,
   "components/share/queries.ts": shareQueries,
+  "components/taste/queries.ts": tasteQueries,
   "components/tier-list/fragments.ts": tierListFragments,
   "components/tier-list/queries.ts": tierListQueries,
   "components/user/fragments.ts": userFragments,
