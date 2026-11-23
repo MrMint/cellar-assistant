@@ -222,6 +222,68 @@ export const EmptyCellarItemMutation = graphql(
 );
 
 /**
+ * L02: a bottle's own dates, price and place, and the item fields the
+ * shelf-life table keys on. Owner-only on the server: anyone else reads null.
+ */
+export const BottleFreshnessFragment = graphql(`
+  fragment BottleFreshness on CellarItem {
+    __typename
+    id
+    openAt
+    emptyAt
+    packagedOn
+    acquiredOn
+    drinkFrom
+    drinkUntil
+    priceAmount
+    priceCurrency
+    location
+  }
+`);
+
+/** The bottle page's freshness card: the bottle, and its item's style keys. */
+export const BottleFreshnessQuery = graphql(
+  `
+  query BottleFreshness($cellarId: ID!, $cellarItemId: ID!) {
+    cellar(id: $cellarId) {
+      __typename
+      ... on Cellar {
+        id
+        item(id: $cellarItemId) {
+          ...BottleFreshness
+          item {
+            __typename
+            id
+            type
+            ... on Wine {
+              wineStyle: style
+              vintage
+            }
+            ... on Beer {
+              beerStyle: style
+            }
+            ... on Spirit {
+              spiritType
+            }
+            ... on Sake {
+              category
+              vintageYear
+            }
+            ... on Tea {
+              teaCategory: category
+              form
+            }
+          }
+        }
+      }
+      ...ActorErrorFields
+    }
+  }
+`,
+  [BottleFreshnessFragment, ActorErrorFieldsFragment],
+);
+
+/**
  * A partial patch of one bottle. The client's one use is Undo after
  * finishing (N13a): `emptyAt: null` puts the bottle back in the cellar.
  */
@@ -240,12 +302,13 @@ export const UpdateCellarItemMutation = graphql(
       __typename
       ... on CellarItem {
         ...CellarItemRow
+        ...BottleFreshness
       }
       ...ActorErrorFields
     }
   }
 `,
-  [CellarItemRowFragment, ActorErrorFieldsFragment],
+  [CellarItemRowFragment, BottleFreshnessFragment, ActorErrorFieldsFragment],
 );
 
 export const SetCellarItemPercentageMutation = graphql(

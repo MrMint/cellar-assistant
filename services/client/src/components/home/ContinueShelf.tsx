@@ -14,7 +14,7 @@ import { useDrinkLogFeedback } from "@/components/drink-log/useDrinkLogFeedback"
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { getNextPlaceholder } from "@/utilities";
-import type { OpenBottle } from "./continue";
+import type { OpenBottle, SealedSoon } from "./continue";
 import { drinkSoonList, typicalLine } from "./drink-soon";
 import { CONTINUE_LIMIT } from "./queries";
 
@@ -76,6 +76,7 @@ const usePour = () => {
 export function ContinueSection({
   bottles,
   total = bottles.length,
+  sealed = [],
   serverNow,
 }: {
   /**
@@ -86,42 +87,46 @@ export function ContinueSection({
   bottles: readonly OpenBottle[];
   /** How many are open in all (the connection's count), for "N open". */
   total?: number;
+  /** L02: sealed bottles whose window closes soon, after the opened ones. */
+  sealed?: readonly SealedSoon[];
   serverNow: number;
 }) {
   const now = useNow(serverNow);
   const { pour, sheet } = usePour();
   const soon = drinkSoonList(bottles, now);
-  if (bottles.length === 0) return null;
+  if (bottles.length === 0 && sealed.length === 0) return null;
   const shelf = bottles.slice(0, CONTINUE_LIMIT);
 
   return (
     <>
-      <section
-        aria-labelledby="continue-heading"
-        className="flex flex-col gap-2"
-      >
-        <div className="flex min-h-6 items-end justify-between px-4">
-          <h2 id="continue-heading" className="type-overline text-ink-3">
-            Continue
-          </h2>
-          <span className="type-footnote">
-            {Math.max(total, bottles.length)} open
-          </span>
-        </div>
-        <ul className="-mx-4 flex snap-x snap-mandatory scroll-px-4 gap-3 overflow-x-auto px-4 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          {shelf.map((bottle) => (
-            <li key={bottle.id} className="w-36 shrink-0 snap-start">
-              <OpenBottleCard
-                bottle={bottle}
-                now={now}
-                onPour={() => pour(bottle)}
-              />
-            </li>
-          ))}
-        </ul>
-      </section>
+      {shelf.length > 0 && (
+        <section
+          aria-labelledby="continue-heading"
+          className="flex flex-col gap-2"
+        >
+          <div className="flex min-h-6 items-end justify-between px-4">
+            <h2 id="continue-heading" className="type-overline text-ink-3">
+              Continue
+            </h2>
+            <span className="type-footnote">
+              {Math.max(total, bottles.length)} open
+            </span>
+          </div>
+          <ul className="-mx-4 flex snap-x snap-mandatory scroll-px-4 gap-3 overflow-x-auto px-4 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {shelf.map((bottle) => (
+              <li key={bottle.id} className="w-36 shrink-0 snap-start">
+                <OpenBottleCard
+                  bottle={bottle}
+                  now={now}
+                  onPour={() => pour(bottle)}
+                />
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
-      {soon.length > 0 && (
+      {(soon.length > 0 || sealed.length > 0) && (
         <InsetSection label="Drink soon" aria-label="Drink soon">
           {soon.map(({ bottle, state }) => (
             <ListRow
@@ -168,9 +173,57 @@ export function ContinueSection({
                   aria-haspopup="dialog"
                   aria-label={`Pour ${bottle.name}`}
                   onClick={() => pour(bottle)}
+                  className="min-h-11 min-w-11"
                 >
                   <Pour aria-hidden strokeWidth={ICON_STROKE} />
                   Pour
+                </Button>
+              }
+            />
+          ))}
+          {sealed.map((bottle) => (
+            <ListRow
+              key={bottle.id}
+              data-slot="drink-soon-sealed"
+              leading={
+                <span
+                  className={cn(
+                    "flex size-9 items-center justify-center rounded-md",
+                    itemTypeTokens[bottle.type].tintClass,
+                  )}
+                >
+                  <TypeGlyph type={bottle.type} className="size-5" />
+                </span>
+              }
+              title={
+                <Link
+                  href={bottle.href}
+                  overlay
+                  underline="none"
+                  className="text-ink-1"
+                >
+                  {bottle.title}
+                </Link>
+              }
+              description={
+                <span className={cn(bottle.past && "text-ink-1")}>
+                  {bottle.line}
+                </span>
+              }
+              trailing={
+                <Button
+                  asChild
+                  variant="secondary"
+                  size="sm"
+                  className="min-h-11 min-w-11"
+                >
+                  <Link
+                    href={bottle.href}
+                    underline="none"
+                    aria-label={`Open ${bottle.name}`}
+                  >
+                    Open
+                  </Link>
                 </Button>
               }
             />
@@ -214,7 +267,11 @@ function OpenBottleCard({
             className="object-cover"
           />
         ) : (
-          <LabelPlate type={bottle.type} plate={bottle.plate} />
+          <LabelPlate
+            type={bottle.type}
+            plate={bottle.plate}
+            styleFields={bottle.styleFields}
+          />
         )}
         <div
           aria-hidden
@@ -252,7 +309,7 @@ function OpenBottleCard({
           aria-haspopup="dialog"
           aria-label={`Pour ${bottle.name}`}
           onClick={onPour}
-          className="relative z-10 mt-1 w-full"
+          className="relative z-10 mt-1 min-h-11 w-full"
         >
           <Pour aria-hidden strokeWidth={ICON_STROKE} />
           Pour

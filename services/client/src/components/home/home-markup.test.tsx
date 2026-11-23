@@ -195,6 +195,7 @@ describe("ContinueSection", () => {
     percentageRemaining: 40,
     style,
     form: null,
+    styleFields: { style, variety: null, form: null },
   });
 
   test("open bottles with Pour, and Drink soon labelled by its style", () => {
@@ -232,6 +233,55 @@ describe("ContinueSection", () => {
     assert.match(text(html), /Drink soon/);
     assert.equal(html.match(/aria-label="Pour Wine old"/g)?.length, 1);
     assert.match(text(html), /Open 9 days · Typical for red wine/);
+  });
+
+  test("Pour is at least 44x44 on the shelf and in Drink soon (L27)", () => {
+    const html = render(
+      <ContinueSection bottles={[bottle("a", "RED", 6)]} serverNow={NOW} />,
+    );
+    const pours = [
+      ...html.matchAll(/<button[^>]*aria-label="Pour Wine a"[^>]*>/g),
+    ].map((m) => m[0]);
+    assert.equal(pours.length, 2);
+    for (const tag of pours) assert.match(tag, /min-h-11/);
+    // The row's Pour is a compact button, so it carries its width too.
+    assert.ok(pours.some((tag) => /min-w-11/.test(tag)));
+  });
+
+  test("Drink soon: opened first, then sealed bottles closing soon (L02)", () => {
+    const sealed = [
+      {
+        id: "s1",
+        href: "/cellars/c1/beers/s1",
+        type: "BEER" as const,
+        title: "Hazy One",
+        name: "Hazy One",
+        past: false,
+        line: "Sealed · window ends Jan 2027 · typical for IPA",
+      },
+    ];
+    const html = render(
+      <ContinueSection
+        bottles={[bottle("a", "RED", 6)]}
+        sealed={sealed}
+        serverNow={NOW}
+      />,
+    );
+    const words = text(html);
+    assert.match(words, /Sealed · window ends Jan 2027 · typical for IPA/);
+    assert.ok(
+      words.indexOf("Typical for red wine") < words.indexOf("Sealed ·"),
+      "opened rows come first",
+    );
+    assert.match(html, /aria-label="Open Hazy One"/);
+    assert.match(html, /href="\/cellars\/c1\/beers\/s1"/);
+
+    // Nothing open: no shelf, but the sealed rows still draw.
+    const only = render(
+      <ContinueSection bottles={[]} sealed={sealed} serverNow={NOW} />,
+    );
+    assert.doesNotMatch(text(only), /Continue/);
+    assert.match(text(only), /Drink soon/);
   });
 
   test("nothing open, nothing drawn", () => {

@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
-import { useMutation } from "urql";
+import { useClient, useMutation, useQuery } from "urql";
 import { IconButton } from "@/components/app/IconButton";
 import { Add, Cellar, Decrease } from "@/components/app/icons";
 import { notify } from "@/components/app/notify";
@@ -14,14 +14,23 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Spinner } from "@/components/ui/spinner";
 import { Switch } from "@/components/ui/switch";
 import { RemoveItemFromCellarMutation } from "@/lib/api/cellars";
-import { AddItemToCellarFromItemMutation } from "@/lib/api/items";
+import { UploadRejectedError, uploadFile } from "@/lib/api/files";
+import { readFragment } from "@/lib/api/graphql";
+import {
+  AddItemToCellarFromItemMutation,
+  AttachItemImageMutation,
+  ItemBottleHistoryQuery,
+  ItemImageFragment,
+} from "@/lib/api/items";
 import { unwrapResult } from "@/lib/api/result";
 import {
   defaultCellarId,
   readCapturePrefs,
   rememberCapturePrefs,
 } from "@/lib/capture/capture-prefs";
-import { addedMessage, MAX_BOTTLES_AT_ONCE } from "./add-to-cellar";
+import { AddPhotoModal, RebuyPhotoOffer } from "./AddPhoto";
+import { addedMessage, MAX_BOTTLES_AT_ONCE, rebuyOffer } from "./add-to-cellar";
+import { SetCellarItemDisplayImageMutation } from "./fragments";
 
 type CellarChoice = { id: string; name: string };
 
@@ -109,6 +118,17 @@ export const AddToCellarSheet = ({
   const [error, setError] = useState<string | null>(null);
   const [, addItemToCellar] = useMutation(AddItemToCellarFromItemMutation);
   const [, removeItemFromCellar] = useMutation(RemoveItemFromCellarMutation);
+  const client = useClient();
+  const [, attachImage] = useMutation(AttachItemImageMutation);
+  const [, setDisplayImage] = useMutation(SetCellarItemDisplayImageMutation);
+  // L02: the re-buy offer, which outlives the sheet that closed to show it.
+  const [rebuy, setRebuy] = useState<{
+    title: string;
+    body: string;
+    cellarId: string;
+    cellarItemId: string;
+  } | null>(null);
+  const [photoOpen, setPhotoOpen] = useState(false);
   const openId = useId();
   const quantityId = useId();
   // The ids one attempt minted, kept for a retry of the *same* ask (cellar,
@@ -125,6 +145,40 @@ export const AddToCellarSheet = ({
     setError(null);
     minted.current = null;
   }, [open, cellars]);
+
+  /**
+   * After an add: had you had this before? Then offer a photo of the new
+   * bottle's label or receipt. The check is a paused query, unpaused by the
+   * add and read once by the effect below; it lands after the sheet has
+   * closed (a round trip), so two modals never overlap. A failure offers
+   * nothing.
+   */
+  const [asking, setAsking] = useState<{
+    filed: readonly string[];
+    target: string;
+  } | null>(null);
+  const [history] = useQuery({
+    query: ItemBottleHistoryQuery,
+    variables: { itemId, type: itemType },
+    pause: asking === null,
+    requestPolicy: "network-only",
+  });
+  useEffect(() => {
+    if (asking === null || history.fetching || history.stale) return;
+    if (history.data === undefined && history.error === undefined) return;
+    setAsking(null);
+    const found = history.data?.item;
+    const first = asking.filed[0];
+    if (found?.__typename !== "QueryItemSuccess" || first === undefined) return;
+    const offer = rebuyOffer({
+      bottlesOfItem: found.data.myBottles.totalCount ?? 0,
+      added: asking.filed.length,
+      name: found.data.name,
+    });
+    if (offer !== null) {
+      setRebuy({ ...offer, cellarId: asking.target, cellarItemId: first });
+    }
+  }, [asking, history]);
 
   if (cellars === undefined || cellars.length === 0) {
     return (
@@ -172,6 +226,47 @@ export const AddToCellarSheet = ({
         : `${failed} of ${filed.length} couldn't be removed. Remove them from the cellar.`,
       { id: toast, tone: failed === 0 ? "success" : "error" },
     );
+  };
+
+  /** Upload, attach as a private image, and make it this bottle's picture. */
+  const saveRebuyPhoto = async (image: File) => {
+    if (rebuy === null) return;
+    let fileId: string;
+    try {
+      fileId = await uploadFile(client, image, "item-image");
+    } catch (cause) {
+      if (cause instanceof UploadRejectedError) {
+        throw new Error(cause.failure.message);
+      }
+      throw cause;
+    }
+    const attached = unwrapResult(
+      (
+        await attachImage({
+          itemId,
+          type: itemType,
+          // A receipt is yours: never on the item's public gallery.
+          input: { fileId, isPublic: false },
+        })
+      ).data?.attachItemImage,
+      "ItemImage",
+    );
+    if (!attached.ok) throw new Error(attached.error.message);
+    const updated = unwrapResult(
+      (
+        await setDisplayImage({
+          cellarId: rebuy.cellarId,
+          cellarItemId: rebuy.cellarItemId,
+          displayImageId: readFragment(ItemImageFragment, attached.data).id,
+        })
+      ).data?.updateCellarItem,
+      "CellarItem",
+    );
+    if (!updated.ok) throw new Error(updated.error.message);
+    setPhotoOpen(false);
+    setRebuy(null);
+    router.refresh();
+    notify("Photo saved to this bottle", { tone: "success" });
   };
 
   const submit = async () => {
@@ -237,120 +332,150 @@ export const AddToCellarSheet = ({
         void undo(filed, target);
       },
     });
+    setAsking({ filed, target });
   };
 
   return (
-    <ResponsiveDialog
-      open={open}
-      onOpenChange={(next) => {
-        if (!pending) setOpen(next);
-      }}
-      title="Add to cellar"
-      footer={
-        <div className="flex flex-col gap-2">
-          {error !== null && (
-            <p role="alert" className="type-footnote text-destructive">
-              {error}
+    <>
+      <ResponsiveDialog
+        open={open}
+        onOpenChange={(next) => {
+          if (!pending) setOpen(next);
+        }}
+        title="Add to cellar"
+        footer={
+          <div className="flex flex-col gap-2">
+            {error !== null && (
+              <p role="alert" className="type-footnote text-destructive">
+                {error}
+              </p>
+            )}
+            <Button
+              onClick={submit}
+              disabled={pending || cellarId === null}
+              aria-busy={pending || undefined}
+            >
+              {pending && <Spinner aria-hidden />}
+              {quantity === 1 ? "Add bottle" : `Add ${quantity} bottles`}
+            </Button>
+          </div>
+        }
+      >
+        <div className="flex flex-col gap-5 pb-2">
+          {cellars.length === 1 ? (
+            <p className="flex min-h-11 items-center gap-3 rounded-lg bg-surface-1 px-4 type-body">
+              <Cellar aria-hidden className="size-5 text-ink-2" />
+              Into <span className="text-ink-1">{cellarName}</span>
             </p>
+          ) : (
+            <fieldset className="flex flex-col gap-2">
+              <legend className="type-overline mb-2 px-4 text-ink-3">
+                Into
+              </legend>
+              <RadioGroup
+                value={cellarId ?? ""}
+                onValueChange={setCellarId}
+                className="gap-0 divide-y divide-line overflow-hidden rounded-lg bg-surface-1"
+              >
+                {cellars.map((cellar) => {
+                  const id = `${openId}-${cellar.id}`;
+                  return (
+                    <label
+                      key={cellar.id}
+                      htmlFor={id}
+                      className="flex min-h-11 items-center gap-3 px-4 py-2 type-body text-ink-1 active:bg-surface-3"
+                    >
+                      <RadioGroupItem id={id} value={cellar.id} />
+                      <span className="min-w-0 truncate">{cellar.name}</span>
+                    </label>
+                  );
+                })}
+              </RadioGroup>
+            </fieldset>
           )}
-          <Button
-            onClick={submit}
-            disabled={pending || cellarId === null}
-            aria-busy={pending || undefined}
-          >
-            {pending && <Spinner aria-hidden />}
-            {quantity === 1 ? "Add bottle" : `Add ${quantity} bottles`}
-          </Button>
-        </div>
-      }
-    >
-      <div className="flex flex-col gap-5 pb-2">
-        {cellars.length === 1 ? (
-          <p className="flex min-h-11 items-center gap-3 rounded-lg bg-surface-1 px-4 type-body">
-            <Cellar aria-hidden className="size-5 text-ink-2" />
-            Into <span className="text-ink-1">{cellarName}</span>
-          </p>
-        ) : (
-          <fieldset className="flex flex-col gap-2">
-            <legend className="type-overline mb-2 px-4 text-ink-3">Into</legend>
-            <RadioGroup
-              value={cellarId ?? ""}
-              onValueChange={setCellarId}
-              className="gap-0 divide-y divide-line overflow-hidden rounded-lg bg-surface-1"
+
+          <div className="flex min-h-11 items-center justify-between gap-3 rounded-lg bg-surface-1 px-4 py-1">
+            <span id={quantityId} className="type-body text-ink-1">
+              Bottles
+            </span>
+            <fieldset
+              aria-labelledby={quantityId}
+              className="m-0 flex items-center gap-1 border-0 p-0"
             >
-              {cellars.map((cellar) => {
-                const id = `${openId}-${cellar.id}`;
-                return (
-                  <label
-                    key={cellar.id}
-                    htmlFor={id}
-                    className="flex min-h-11 items-center gap-3 px-4 py-2 type-body text-ink-1 active:bg-surface-3"
-                  >
-                    <RadioGroupItem id={id} value={cellar.id} />
-                    <span className="min-w-0 truncate">{cellar.name}</span>
-                  </label>
-                );
-              })}
-            </RadioGroup>
-          </fieldset>
+              <IconButton
+                aria-label="One fewer"
+                variant="secondary"
+                size="sm"
+                disabled={quantity <= 1}
+                onClick={() => setQuantity((n) => Math.max(1, n - 1))}
+              >
+                <Decrease />
+              </IconButton>
+              <output
+                aria-live="polite"
+                className="tabular w-8 text-center type-headline"
+              >
+                {quantity}
+              </output>
+              <IconButton
+                aria-label="One more"
+                variant="secondary"
+                size="sm"
+                disabled={quantity >= MAX_BOTTLES_AT_ONCE}
+                onClick={() =>
+                  setQuantity((n) => Math.min(MAX_BOTTLES_AT_ONCE, n + 1))
+                }
+              >
+                <Add />
+              </IconButton>
+            </fieldset>
+          </div>
+
+          <label
+            htmlFor={openId}
+            className="flex min-h-11 items-center justify-between gap-3 rounded-lg bg-surface-1 px-4 py-2"
+          >
+            <span className="flex flex-col">
+              <span className="type-body text-ink-1">
+                {quantity === 1 ? "Already open?" : "One already open?"}
+              </span>
+              <span className="type-footnote">
+                It starts at today, full — set the level on its page.
+              </span>
+            </span>
+            <Switch
+              id={openId}
+              checked={alreadyOpen}
+              onCheckedChange={setAlreadyOpen}
+            />
+          </label>
+        </div>
+      </ResponsiveDialog>
+      <ResponsiveDialog
+        open={rebuy !== null && !photoOpen && !open}
+        onOpenChange={(next) => {
+          if (!next) setRebuy(null);
+        }}
+        title={rebuy?.title ?? "Another bottle added"}
+        hideTitle
+      >
+        {rebuy !== null && (
+          <div className="pb-2">
+            <RebuyPhotoOffer
+              title={rebuy.title}
+              body={rebuy.body}
+              onAddPhoto={() => setPhotoOpen(true)}
+              onDismiss={() => setRebuy(null)}
+            />
+          </div>
         )}
-
-        <div className="flex min-h-11 items-center justify-between gap-3 rounded-lg bg-surface-1 px-4 py-1">
-          <span id={quantityId} className="type-body text-ink-1">
-            Bottles
-          </span>
-          <fieldset
-            aria-labelledby={quantityId}
-            className="m-0 flex items-center gap-1 border-0 p-0"
-          >
-            <IconButton
-              aria-label="One fewer"
-              variant="secondary"
-              size="sm"
-              disabled={quantity <= 1}
-              onClick={() => setQuantity((n) => Math.max(1, n - 1))}
-            >
-              <Decrease />
-            </IconButton>
-            <output
-              aria-live="polite"
-              className="tabular w-8 text-center type-headline"
-            >
-              {quantity}
-            </output>
-            <IconButton
-              aria-label="One more"
-              variant="secondary"
-              size="sm"
-              disabled={quantity >= MAX_BOTTLES_AT_ONCE}
-              onClick={() =>
-                setQuantity((n) => Math.min(MAX_BOTTLES_AT_ONCE, n + 1))
-              }
-            >
-              <Add />
-            </IconButton>
-          </fieldset>
-        </div>
-
-        <label
-          htmlFor={openId}
-          className="flex min-h-11 items-center justify-between gap-3 rounded-lg bg-surface-1 px-4 py-2"
-        >
-          <span className="flex flex-col">
-            <span className="type-body text-ink-1">
-              {quantity === 1 ? "Already open?" : "One already open?"}
-            </span>
-            <span className="type-footnote">
-              It starts at today, full — set the level on its page.
-            </span>
-          </span>
-          <Switch
-            id={openId}
-            checked={alreadyOpen}
-            onCheckedChange={setAlreadyOpen}
-          />
-        </label>
-      </div>
-    </ResponsiveDialog>
+      </ResponsiveDialog>
+      <AddPhotoModal
+        open={photoOpen}
+        onClose={() => setPhotoOpen(false)}
+        onCapture={saveRebuyPhoto}
+        title="Photo of this bottle"
+      />
+    </>
   );
 };

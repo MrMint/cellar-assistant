@@ -194,6 +194,17 @@ const FIELDS: ReadonlyArray<
     "2026-09-01T00:00:00.000Z",
   ],
 
+  // L02: a bottle's own dates, price and place — every one cleared by null.
+  // The price pair is the actor's rule (set together; a null amount clears
+  // the currency): each half is forwarded here as sent, null included.
+  ["updateCellarItem", "packagedOn", "clearable", `"2026-01-10"`, "2026-01-10"],
+  ["updateCellarItem", "acquiredOn", "clearable", `"2026-01-10"`, "2026-01-10"],
+  ["updateCellarItem", "drinkFrom", "clearable", `"2026-01-10"`, "2026-01-10"],
+  ["updateCellarItem", "drinkUntil", "clearable", `"2026-01-10"`, "2026-01-10"],
+  ["updateCellarItem", "priceAmount", "clearable", "58", 58],
+  ["updateCellarItem", "priceCurrency", "clearable", `"EUR"`, "EUR"],
+  ["updateCellarItem", "location", "clearable", `"Rack B"`, "Rack B"],
+
   ["updateTierList", "name", "keep", `"N"`, "N"],
   ["updateTierList", "description", "clearable", `"D"`, "D"],
   ["updateTierList", "privacy", "keep", "PRIVATE", "PRIVATE"],

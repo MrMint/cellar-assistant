@@ -8,6 +8,7 @@ import type {
   ActivityEntryDto,
   AiJobDto,
   CellarItemDto,
+  DrinkSoonDto,
   Page,
   PageArgs,
 } from "@cellar-assistant/contracts";
@@ -45,6 +46,13 @@ const bottle: CellarItemDto = {
   distance: null,
   createdAt: "2026-10-01T12:00:00.000Z",
   updatedAt: "2026-10-05T12:00:00.000Z",
+  packagedOn: null,
+  acquiredOn: null,
+  drinkFrom: null,
+  drinkUntil: null,
+  priceAmount: null,
+  priceCurrency: null,
+  location: null,
 };
 
 const cellar = {
@@ -107,6 +115,100 @@ describe("Viewer.openBottles (X10 Continue)", () => {
         ],
       },
     });
+  });
+});
+
+describe("Viewer.drinkSoon (ux-c L02)", () => {
+  const OTHER_CELLAR = "c6666666-6666-4666-8666-666666666666";
+  const sealed = (id: string, until: string): DrinkSoonDto => ({
+    bottle: { ...bottle, id, openAt: null, cellarId: OTHER_CELLAR },
+    reason: "SEALED",
+    urgency: "SOON",
+    openDays: null,
+    openLifeDays: null,
+    window: {
+      from: null,
+      fromSource: null,
+      until,
+      untilSource: "typical",
+    },
+    typicalFor: "IPA",
+    ratio: null,
+  });
+  const opened: DrinkSoonDto = {
+    bottle,
+    reason: "OPENED",
+    urgency: "PAST",
+    openDays: 9,
+    openLifeDays: [3, 5],
+    window: null,
+    typicalFor: "red wine",
+    ratio: 1.8,
+  };
+
+  it("fans out over the viewer's own cellars and merges in one order", async () => {
+    const { invoke, calls } = stubSidecar({
+      "CellarsCollectionActor.list": () => page([CELLAR_ID, OTHER_CELLAR]),
+      "CellarActor.drinkSoon": (actorId) =>
+        actorId === CELLAR_ID
+          ? page([sealed("b-late", "2027-02-01"), opened])
+          : page([sealed("b-early", "2026-12-15")]),
+    });
+    const result = await run(
+      `{ me { drinkSoon(first: 5) {
+          edges { node {
+            reason urgency openDays openLifeFromDays openLifeUntilDays typicalFor
+            window { until untilSource }
+            bottle { id }
+          } }
+      } } }`,
+      testContext(invoke, viewer),
+    );
+    expect(result.errors).toBeUndefined();
+    expect(calls[0]).toMatchObject({
+      actorType: "CellarsCollectionActor",
+      actorId: viewer.id,
+      method: "list",
+    });
+    expect(calls[0]?.args[2]).toBe("MINE");
+    const me = result.data?.me as
+      | { drinkSoon: { edges: { node: Record<string, unknown> }[] } }
+      | undefined;
+    const nodes = me?.drinkSoon.edges.map((edge) => edge.node) ?? [];
+    expect(nodes.map((node) => (node.bottle as { id: string }).id)).toEqual([
+      bottle.id,
+      "b-early",
+      "b-late",
+    ]);
+    expect(nodes[0]).toMatchObject({
+      reason: "OPENED",
+      urgency: "PAST",
+      openDays: 9,
+      openLifeFromDays: 3,
+      openLifeUntilDays: 5,
+      typicalFor: "red wine",
+      window: null,
+    });
+    expect(nodes[1]).toMatchObject({
+      reason: "SEALED",
+      window: { until: "2026-12-15", untilSource: "TYPICAL" },
+    });
+  });
+
+  it("one cellar failing costs only its own bottles", async () => {
+    const { invoke } = stubSidecar({
+      "CellarsCollectionActor.list": () => page([CELLAR_ID, OTHER_CELLAR]),
+      "CellarActor.drinkSoon": (actorId) => {
+        if (actorId === CELLAR_ID) throw new Error("gone");
+        return page([sealed("b-early", "2026-12-15")]);
+      },
+    });
+    const result = await run(
+      "{ me { drinkSoon(first: 5) { edges { node { bottle { id } } } } } }",
+      testContext(invoke, viewer),
+    );
+    expect(result.errors).toBeUndefined();
+    expect(JSON.stringify(result.data)).toContain("b-early");
   });
 });
 

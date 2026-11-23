@@ -39,6 +39,8 @@ import type {
   CollectionStatsDto,
   CreateCellarInput as CreateCellarInputType,
   DeletedCellar,
+  DrinkSoonDto,
+  DrinkWindow,
   ItemRef,
   ItemType,
   ItemTypeCountsDto,
@@ -61,9 +63,11 @@ import {
   CellarActorDescriptor,
   CellarsCollectionActorDescriptor,
   CheckInActorDescriptor,
+  compareDrinkSoon,
   ForbiddenError,
   itemActorId,
   offsetPage,
+  pageArgs,
   viewerCollectionActorId,
 } from "@cellar-assistant/contracts";
 import type { ApiContext } from "../context.ts";
@@ -158,6 +162,55 @@ const CellarItemSourceEnum = builder.enumType("CellarItemSource", {
 });
 
 /* -------------------------------------------------------------------------- */
+/* ux-c L02 — drink windows and Drink soon                                     */
+/* -------------------------------------------------------------------------- */
+
+const DrinkWindowSourceEnum = builder.enumType("DrinkWindowSource", {
+  description:
+    "Where one end of a drink window came from: USER — the owner's own " +
+    "date; TYPICAL — the shelf-life table's rule of thumb for the style " +
+    "(D29: never a model estimate).",
+  values: ["USER", "TYPICAL"] as const,
+});
+
+const sourceOf = (source: "user" | "typical" | null) =>
+  source === null ? null : source === "user" ? "USER" : "TYPICAL";
+
+const DrinkWindowType = builder
+  .objectRef<DrinkWindow>("DrinkWindow")
+  .implement({
+    description:
+      "When a bottle is at its best. Each end is the owner's own date where " +
+      "they set one, otherwise the typical one for the style; either may be " +
+      "null.",
+    fields: (t) => ({
+      from: t.expose("from", { type: "Date", nullable: true }),
+      fromSource: t.field({
+        type: DrinkWindowSourceEnum,
+        nullable: true,
+        resolve: (window) => sourceOf(window.fromSource),
+      }),
+      until: t.expose("until", { type: "Date", nullable: true }),
+      untilSource: t.field({
+        type: DrinkWindowSourceEnum,
+        nullable: true,
+        resolve: (window) => sourceOf(window.untilSource),
+      }),
+    }),
+  });
+
+const DrinkSoonReasonEnum = builder.enumType("DrinkSoonReason", {
+  values: ["OPENED", "SEALED"] as const,
+});
+
+const DrinkSoonUrgencyEnum = builder.enumType("DrinkSoonUrgency", {
+  description:
+    "PAST: beyond its window. NOW: opened and inside its open life. SOON: " +
+    "sealed, its window closing within the horizon.",
+  values: ["PAST", "NOW", "SOON"] as const,
+});
+
+/* -------------------------------------------------------------------------- */
 /* Object types                                                                */
 /* -------------------------------------------------------------------------- */
 
@@ -216,8 +269,131 @@ export const CellarItemType = builder
       }),
       createdAt: t.expose("createdAt", { type: "DateTime" }),
       updatedAt: t.expose("updatedAt", { type: "DateTime" }),
+      // ux-c L02. All private to the cellar's owners: anyone else reads null.
+      packagedOn: t.expose("packagedOn", {
+        type: "Date",
+        nullable: true,
+        description:
+          "Bottled, canned, roasted or packed on. Owners only; null to anyone else.",
+      }),
+      acquiredOn: t.expose("acquiredOn", {
+        type: "Date",
+        nullable: true,
+        description: "Bought or received on. Owners only.",
+      }),
+      drinkFrom: t.expose("drinkFrom", {
+        type: "Date",
+        nullable: true,
+        description:
+          "The owner's own start of the drink window; overrides the typical one.",
+      }),
+      drinkUntil: t.expose("drinkUntil", {
+        type: "Date",
+        nullable: true,
+        description:
+          "The owner's own end of the drink window; overrides the typical one.",
+      }),
+      priceAmount: t.exposeFloat("priceAmount", {
+        nullable: true,
+        description: "What it cost, with `priceCurrency`. Owners only.",
+      }),
+      priceCurrency: t.exposeString("priceCurrency", {
+        nullable: true,
+        description: "ISO 4217, upper case. Set exactly when `priceAmount` is.",
+      }),
+      location: t.exposeString("location", {
+        nullable: true,
+        description: "Where it lives: 'Rack B, row 3'. Owners only.",
+      }),
     }),
   });
+
+const DrinkSoonBottleType = builder
+  .objectRef<DrinkSoonDto>("DrinkSoonBottle")
+  .implement({
+    description:
+      "One bottle under Drink soon (ux-c L02): opened and past its style's " +
+      "shortest open life, or sealed with a window closing within three " +
+      "months. Deterministic: the owner's dates, else the shelf-life table.",
+    fields: (t) => ({
+      bottle: t.field({
+        type: CellarItemType,
+        resolve: (soon) => soon.bottle,
+      }),
+      reason: t.field({
+        type: DrinkSoonReasonEnum,
+        resolve: (soon) => soon.reason,
+      }),
+      urgency: t.field({
+        type: DrinkSoonUrgencyEnum,
+        resolve: (soon) => soon.urgency,
+      }),
+      openDays: t.exposeInt("openDays", {
+        nullable: true,
+        description: "Opened: whole days since.",
+      }),
+      openLifeFromDays: t.int({
+        nullable: true,
+        description: "Opened: the style's typical shortest open life, in days.",
+        resolve: (soon) => soon.openLifeDays?.[0] ?? null,
+      }),
+      openLifeUntilDays: t.int({
+        nullable: true,
+        description: "Opened: the style's typical longest open life, in days.",
+        resolve: (soon) => soon.openLifeDays?.[1] ?? null,
+      }),
+      window: t.field({
+        type: DrinkWindowType,
+        nullable: true,
+        description: "Sealed: the window, each end with its source.",
+        resolve: (soon) => soon.window,
+      }),
+      typicalFor: t.exposeString("typicalFor", {
+        nullable: true,
+        description:
+          "The style the typical row is for ('IPA'): label it 'typical for " +
+          "…'. Null when only the owner's own dates made the window.",
+      }),
+    }),
+  });
+
+export const DrinkSoonConnection = builder.connectionObject(
+  { type: DrinkSoonBottleType, name: "DrinkSoonConnection" },
+  { name: "DrinkSoonEdge" },
+);
+
+/** How many of a viewer's own cellars Home's Drink soon reads. */
+const DRINK_SOON_CELLARS = 20;
+/** How many of each cellar's Drink soon bottles it reads. */
+const DRINK_SOON_PER_CELLAR = 50;
+
+/**
+ * Home's Drink soon: every cellar the viewer created or co-owns (their
+ * {@link DRINK_SOON_CELLARS} most recently active), each one's own list,
+ * merged in Drink soon's one order (`compareDrinkSoon`). A cellar that
+ * vanished between the list and the fan-out costs its own answer only.
+ */
+export const viewerDrinkSoon = async (
+  context: ApiContext,
+  viewerId: string,
+): Promise<DrinkSoonDto[]> => {
+  const mine = await context
+    .actor(CellarsCollectionActorDescriptor, viewerCollectionActorId(viewerId))
+    .list(pageArgs({ first: DRINK_SOON_CELLARS }), "MINE");
+  const answers = await Promise.all(
+    mine.entries.map(async ({ node: cellarId }) => {
+      try {
+        const page = await context
+          .actor(CellarActorDescriptor, cellarId)
+          .drinkSoon(pageArgs({ first: DRINK_SOON_PER_CELLAR }));
+        return page.entries.map((entry) => entry.node);
+      } catch {
+        return [];
+      }
+    }),
+  );
+  return answers.flat().sort(compareDrinkSoon);
+};
 
 export const CellarItemConnection = builder.connectionObject(
   { type: CellarItemType, name: "CellarItemConnection" },
@@ -512,6 +688,22 @@ export const CellarType = builder
             .dashboard({ timeZone: args.timeZone ?? null }),
       }),
 
+      drinkSoon: t.field({
+        type: DrinkSoonConnection,
+        description:
+          "ux-c L02: opened bottles past their style's open life (most " +
+          "overdue first), then sealed ones whose window closes within " +
+          "three months (soonest first). Owners only: anyone else who may " +
+          "see the cellar gets an empty list.",
+        args: t.arg.connectionArgs(),
+        resolve: async (cellar, args, context) =>
+          connectionFromPage(
+            await context
+              .actor(CellarActorDescriptor, cellar.id)
+              .drinkSoon(toPageArgs(args)),
+          ),
+      }),
+
       checkIns: t.field({
         type: CheckInConnection,
         description:
@@ -618,6 +810,22 @@ const AddCellarItemInput = builder.inputType("AddCellarItemInput", {
     sourceType: t.field({ type: CellarItemSourceEnum, required: false }),
     sourcePlaceId: t.id({ required: false }),
     sourceMenuItemId: t.id({ required: false }),
+    packagedOn: t.field({ type: "Date", required: false }),
+    acquiredOn: t.field({ type: "Date", required: false }),
+    drinkFrom: t.field({ type: "Date", required: false }),
+    drinkUntil: t.field({ type: "Date", required: false }),
+    priceAmount: t.float({
+      required: false,
+      description: "Set with `priceCurrency`; null clears both.",
+    }),
+    priceCurrency: t.string({
+      required: false,
+      description: "ISO 4217 ('EUR').",
+    }),
+    location: t.string({
+      required: false,
+      description: "At most 80 characters.",
+    }),
   }),
 });
 
@@ -627,6 +835,22 @@ const UpdateCellarItemInput = builder.inputType("UpdateCellarItemInput", {
     displayImageId: t.id({ required: false }),
     openAt: t.field({ type: "DateTime", required: false }),
     emptyAt: t.field({ type: "DateTime", required: false }),
+    packagedOn: t.field({ type: "Date", required: false }),
+    acquiredOn: t.field({ type: "Date", required: false }),
+    drinkFrom: t.field({ type: "Date", required: false }),
+    drinkUntil: t.field({ type: "Date", required: false }),
+    priceAmount: t.float({
+      required: false,
+      description: "Set with `priceCurrency`; null clears both.",
+    }),
+    priceCurrency: t.string({
+      required: false,
+      description: "ISO 4217 ('EUR').",
+    }),
+    location: t.string({
+      required: false,
+      description: "At most 80 characters.",
+    }),
   }),
 });
 
@@ -671,6 +895,13 @@ const toAddItemInput = (input: {
   sourceType?: CellarItemSource | null;
   sourcePlaceId?: string | null;
   sourceMenuItemId?: string | null;
+  packagedOn?: string | null;
+  acquiredOn?: string | null;
+  drinkFrom?: string | null;
+  drinkUntil?: string | null;
+  priceAmount?: number | null;
+  priceCurrency?: string | null;
+  location?: string | null;
 }): AddCellarItemInputType => ({
   item: toItemRef(input.item),
   ...(present(input.cellarItemId)
@@ -685,6 +916,13 @@ const toAddItemInput = (input: {
   sourceType: input.sourceType ?? null,
   sourcePlaceId: input.sourcePlaceId ?? null,
   sourceMenuItemId: input.sourceMenuItemId ?? null,
+  packagedOn: input.packagedOn ?? null,
+  acquiredOn: input.acquiredOn ?? null,
+  drinkFrom: input.drinkFrom ?? null,
+  drinkUntil: input.drinkUntil ?? null,
+  priceAmount: input.priceAmount ?? null,
+  priceCurrency: input.priceCurrency ?? null,
+  location: input.location ?? null,
 });
 
 const UPDATE_CELLAR_ITEM = {
@@ -692,6 +930,13 @@ const UPDATE_CELLAR_ITEM = {
   displayImageId: "clearable",
   openAt: "clearable",
   emptyAt: "clearable",
+  packagedOn: "clearable",
+  acquiredOn: "clearable",
+  drinkFrom: "clearable",
+  drinkUntil: "clearable",
+  priceAmount: "clearable",
+  priceCurrency: "clearable",
+  location: "clearable",
 } satisfies PatchPolicy<typeof UpdateCellarItemInput.$inferInput>;
 
 /* -------------------------------------------------------------------------- */

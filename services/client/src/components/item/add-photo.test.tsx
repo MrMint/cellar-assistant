@@ -89,3 +89,38 @@ describe("AddPhotoModal (restored, live camera)", () => {
     assert.equal(uploads.length, 0);
   });
 });
+
+describe("re-buy photo (L02)", () => {
+  test("another bottle of something you have had is offered a photo", async () => {
+    const { rebuyOffer } = await import("./add-to-cellar");
+    // Two bottles in all after adding one: you had one before.
+    assert.deepEqual(
+      rebuyOffer({ bottlesOfItem: 2, added: 1, name: "Barolo" }),
+      {
+        title: "Another Barolo added",
+        body: "Snap its label or receipt to keep this bottle's price and date.",
+      },
+    );
+    // A first bottle (or a first case): nothing to tell apart yet.
+    assert.equal(rebuyOffer({ bottlesOfItem: 1, added: 1, name: "x" }), null);
+    assert.equal(rebuyOffer({ bottlesOfItem: 3, added: 3, name: "x" }), null);
+  });
+
+  test("the card: its line, Add photo and Not now", async () => {
+    const { RebuyPhotoOffer } = await import("./AddPhoto");
+    const calls: string[] = [];
+    const html = renderToStaticMarkup(
+      <RebuyPhotoOffer
+        title="Another Barolo added"
+        body="Snap its label or receipt to keep this bottle's price and date."
+        onAddPhoto={() => calls.push("add")}
+        onDismiss={() => calls.push("dismiss")}
+      />,
+    );
+    assert.match(html, /data-slot="rebuy-photo"/);
+    assert.match(html, /Another Barolo added/);
+    assert.match(html, /label or receipt/);
+    assert.match(html, />Add photo</);
+    assert.match(html, />Not now</);
+  });
+});

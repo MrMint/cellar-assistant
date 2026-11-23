@@ -1240,6 +1240,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
             },
           },
           {
+            name: "drinkSoon",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "DrinkSoonConnection" },
+            },
+          },
+          {
             name: "finishedCount",
             type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
           },
@@ -1416,6 +1423,7 @@ export const graphcacheSchema: MinifiedIntrospection = {
         kind: "OBJECT",
         name: "CellarItem",
         fields: [
+          { name: "acquiredOn", type: { kind: "SCALAR", name: "Date" } },
           { name: "cellar", type: { kind: "OBJECT", name: "Cellar" } },
           {
             name: "cellarId",
@@ -1442,6 +1450,8 @@ export const graphcacheSchema: MinifiedIntrospection = {
           { name: "displayImage", type: { kind: "OBJECT", name: "ItemImage" } },
           { name: "displayImageId", type: { kind: "SCALAR", name: "ID" } },
           { name: "distance", type: { kind: "SCALAR", name: "Float" } },
+          { name: "drinkFrom", type: { kind: "SCALAR", name: "Date" } },
+          { name: "drinkUntil", type: { kind: "SCALAR", name: "Date" } },
           { name: "emptyAt", type: { kind: "SCALAR", name: "DateTime" } },
           {
             name: "id",
@@ -1454,8 +1464,10 @@ export const graphcacheSchema: MinifiedIntrospection = {
               ofType: { kind: "INTERFACE", name: "Item" },
             },
           },
+          { name: "location", type: { kind: "SCALAR", name: "String" } },
           { name: "myLog", type: { kind: "OBJECT", name: "BottleLogSummary" } },
           { name: "openAt", type: { kind: "SCALAR", name: "DateTime" } },
+          { name: "packagedOn", type: { kind: "SCALAR", name: "Date" } },
           {
             name: "percentageRemaining",
             type: {
@@ -1463,6 +1475,8 @@ export const graphcacheSchema: MinifiedIntrospection = {
               ofType: { kind: "SCALAR", name: "Float" },
             },
           },
+          { name: "priceAmount", type: { kind: "SCALAR", name: "Float" } },
+          { name: "priceCurrency", type: { kind: "SCALAR", name: "String" } },
           { name: "sourceMenuItemId", type: { kind: "SCALAR", name: "ID" } },
           { name: "sourcePlaceId", type: { kind: "SCALAR", name: "ID" } },
           {
@@ -2478,6 +2492,105 @@ export const graphcacheSchema: MinifiedIntrospection = {
           { kind: "OBJECT", name: "Place" },
           { kind: "OBJECT", name: "ValidationError" },
         ],
+      },
+      {
+        kind: "OBJECT",
+        name: "DrinkSoonBottle",
+        fields: [
+          {
+            name: "bottle",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "CellarItem" },
+            },
+          },
+          { name: "openDays", type: { kind: "SCALAR", name: "Int" } },
+          { name: "openLifeFromDays", type: { kind: "SCALAR", name: "Int" } },
+          { name: "openLifeUntilDays", type: { kind: "SCALAR", name: "Int" } },
+          {
+            name: "reason",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "ENUM", name: "DrinkSoonReason" },
+            },
+          },
+          { name: "typicalFor", type: { kind: "SCALAR", name: "String" } },
+          {
+            name: "urgency",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "ENUM", name: "DrinkSoonUrgency" },
+            },
+          },
+          { name: "window", type: { kind: "OBJECT", name: "DrinkWindow" } },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "DrinkSoonConnection",
+        fields: [
+          {
+            name: "edges",
+            type: {
+              kind: "NON_NULL",
+              ofType: {
+                kind: "LIST",
+                ofType: {
+                  kind: "NON_NULL",
+                  ofType: { kind: "OBJECT", name: "DrinkSoonEdge" },
+                },
+              },
+            },
+          },
+          {
+            name: "pageInfo",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "PageInfo" },
+            },
+          },
+          { name: "totalCount", type: { kind: "SCALAR", name: "Int" } },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "DrinkSoonEdge",
+        fields: [
+          {
+            name: "cursor",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "String" },
+            },
+          },
+          {
+            name: "node",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "DrinkSoonBottle" },
+            },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "DrinkWindow",
+        fields: [
+          { name: "from", type: { kind: "SCALAR", name: "Date" } },
+          {
+            name: "fromSource",
+            type: { kind: "ENUM", name: "DrinkWindowSource" },
+          },
+          { name: "until", type: { kind: "SCALAR", name: "Date" } },
+          {
+            name: "untilSource",
+            type: { kind: "ENUM", name: "DrinkWindowSource" },
+          },
+        ],
+        interfaces: [],
       },
       {
         kind: "OBJECT",
@@ -11244,6 +11357,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
             type: {
               kind: "NON_NULL",
               ofType: { kind: "OBJECT", name: "ViewerCounts" },
+            },
+          },
+          {
+            name: "drinkSoon",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "DrinkSoonConnection" },
             },
           },
           { name: "email", type: { kind: "SCALAR", name: "String" } },

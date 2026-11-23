@@ -145,3 +145,96 @@ describe("drinkSoonList", () => {
     );
   });
 });
+
+// H-1 and L02 live in continue.ts, whose own test file another stream owns;
+// they are proven here, beside the drink-soon rules they feed.
+import { openBottleFromNode, sealedSoonFromNodes } from "./continue";
+
+describe("continue.ts — the plate's vessel fields (H-1, B03)", () => {
+  const node = (item: Record<string, unknown>) =>
+    ({
+      __typename: "CellarItem",
+      id: "b1",
+      cellarId: "c1",
+      openAt: "2026-10-01T12:00:00.000Z",
+      emptyAt: null,
+      percentageRemaining: 60,
+      cellar: { __typename: "Cellar", id: "c1", name: "Garage" },
+      displayImage: null,
+      item: { id: "i1", name: "x", country: null, ...item },
+    }) as unknown as Parameters<typeof openBottleFromNode>[0];
+
+  test("wine style and variety, beer style, tea form reach the plate", () => {
+    assert.deepEqual(
+      openBottleFromNode(
+        node({
+          __typename: "Wine",
+          type: "WINE",
+          wineStyle: "RED",
+          variety: "PINOT_NOIR",
+        }),
+      )?.styleFields,
+      { style: "RED", variety: "PINOT_NOIR", form: null },
+    );
+    const beer = openBottleFromNode(
+      node({ __typename: "Beer", type: "BEER", beerStyle: "INDIA_PALE_ALE" }),
+    );
+    assert.deepEqual(beer?.styleFields, {
+      style: "INDIA_PALE_ALE",
+      variety: null,
+      form: null,
+    });
+    // The open-life table has one beer row, whatever the style.
+    assert.equal(beer && openLifeFor(beer)?.label, "beer");
+    assert.equal(
+      openBottleFromNode(
+        node({ __typename: "Tea", type: "TEA", form: "loose_leaf" }),
+      )?.styleFields.form,
+      "loose_leaf",
+    );
+  });
+});
+
+describe("sealedSoonFromNodes (L02)", () => {
+  type SoonNode = Parameters<typeof sealedSoonFromNodes>[0][number];
+  const soon = (over: Record<string, unknown>): SoonNode =>
+    ({
+      reason: "SEALED",
+      urgency: "SOON",
+      typicalFor: "IPA",
+      window: { until: "2027-01-01", untilSource: "TYPICAL" },
+      bottle: {
+        __typename: "CellarItem",
+        id: "s1",
+        cellarId: "c1",
+        item: { __typename: "Beer", id: "i1", type: "BEER", name: "hazy one" },
+      },
+      ...over,
+    }) as unknown as SoonNode;
+
+  test("the board's two lines: typical, and the owner's own date", () => {
+    const [typical, yours] = sealedSoonFromNodes([
+      soon({}),
+      soon({
+        typicalFor: null,
+        window: { until: "2027-02-14", untilSource: "USER" },
+      }),
+    ]);
+    assert.equal(
+      typical?.line,
+      "Sealed · window ends Jan 2027 · typical for IPA",
+    );
+    assert.equal(typical?.href, "/cellars/c1/beers/s1");
+    assert.equal(yours?.line, "Sealed · your date: drink by Feb 2027");
+  });
+
+  test("past says so; opened rows are Home's own, so dropped", () => {
+    const rows = sealedSoonFromNodes([
+      soon({ urgency: "PAST" }),
+      soon({ reason: "OPENED", window: null }),
+    ]);
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0]?.past, true);
+    assert.match(rows[0]?.line ?? "", /window ended Jan 2027/);
+  });
+});
