@@ -8,6 +8,7 @@ import type { ApiItemType } from "@/components/cellar-api/itemTypes";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { bottleHref } from "./adapter";
+import { BottleFreshnessFields } from "./BottleFreshnessFields";
 import { HeldBackNote } from "./HeldBackNote";
 import { useItemActions } from "./ItemActions";
 import { ItemRemainingSlider } from "./ItemRemainingSlider";
@@ -164,6 +165,10 @@ export function YourBottles({
                   opened={bottle.openAt}
                   emptied={bottle.emptyAt}
                   itemName={itemName}
+                />
+                <BottleFreshnessFields
+                  cellarId={bottle.cellarId}
+                  cellarItemId={bottle.id}
                 />
               </div>
             )}

@@ -420,3 +420,89 @@ function sourceLineOf(
     window.fromSource === "typical" || window.untilSource === "typical";
   return typical ? `${line} Set your own to override.` : line;
 }
+
+/** The edit sheet's fields, as typed: every one a string, empty for none. */
+export type FreshnessDraft = {
+  readonly packagedOn: string;
+  readonly acquiredOn: string;
+  readonly drinkFrom: string;
+  readonly drinkUntil: string;
+  readonly price: string;
+  readonly currency: string;
+  readonly location: string;
+};
+
+export const draftOf = (bottle: FreshnessBottle): FreshnessDraft => ({
+  packagedOn: bottle.packagedOn ?? "",
+  acquiredOn: bottle.acquiredOn ?? "",
+  drinkFrom: bottle.drinkFrom ?? "",
+  drinkUntil: bottle.drinkUntil ?? "",
+  price: bottle.priceAmount === null ? "" : String(bottle.priceAmount),
+  currency: bottle.priceCurrency ?? "",
+  location: bottle.location ?? "",
+});
+
+export type FreshnessPatch = {
+  packagedOn?: string | null;
+  acquiredOn?: string | null;
+  drinkFrom?: string | null;
+  drinkUntil?: string | null;
+  priceAmount?: number | null;
+  priceCurrency?: string | null;
+  location?: string | null;
+};
+
+/**
+ * Only what changed, empty as null (a clear). The price pair travels
+ * together, as the server takes it. The server re-checks all of it; this is
+ * the friendly first word.
+ */
+export const freshnessPatch = (
+  bottle: FreshnessBottle,
+  draft: FreshnessDraft,
+):
+  | { readonly ok: true; readonly patch: FreshnessPatch }
+  | { readonly ok: false; readonly error: string } => {
+  const patch: FreshnessPatch = {};
+  const date = (value: string): string | null =>
+    value.trim() === "" ? null : value.trim();
+  for (const field of [
+    "packagedOn",
+    "acquiredOn",
+    "drinkFrom",
+    "drinkUntil",
+  ] as const) {
+    const next = date(draft[field]);
+    if (next !== null && parts(next) === null) {
+      return { ok: false, error: "Use a full date." };
+    }
+    if (next !== bottle[field]) patch[field] = next;
+  }
+  const from = date(draft.drinkFrom);
+  const until = date(draft.drinkUntil);
+  if (from !== null && until !== null && from > until) {
+    return { ok: false, error: "Drink from comes before drink until." };
+  }
+
+  const priceText = draft.price.trim();
+  const amount = priceText === "" ? null : Number(priceText);
+  const currency =
+    amount === null ? null : draft.currency.trim().toUpperCase() || null;
+  if (amount !== null && (!Number.isFinite(amount) || amount < 0)) {
+    return { ok: false, error: "Price is a number, 0 or more." };
+  }
+  if (amount !== null && (currency === null || !/^[A-Z]{3}$/.test(currency))) {
+    return { ok: false, error: "Add a three-letter currency, like EUR." };
+  }
+  if (amount !== bottle.priceAmount || currency !== bottle.priceCurrency) {
+    patch.priceAmount = amount;
+    patch.priceCurrency = currency;
+  }
+
+  const location = draft.location.trim() === "" ? null : draft.location.trim();
+  if (location !== null && location.length > 80) {
+    return { ok: false, error: "Keep where it lives to 80 characters." };
+  }
+  if (location !== bottle.location) patch.location = location;
+  return { ok: true, patch };
+};

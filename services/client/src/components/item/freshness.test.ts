@@ -5,10 +5,12 @@
  */
 import { describe, expect, test } from "bun:test";
 import {
+  draftOf,
   type FreshnessBottle,
   type FreshnessItem,
   formatPrice,
   freshnessModel,
+  freshnessPatch,
 } from "./freshness";
 
 const TODAY = "2026-11-22";
@@ -201,5 +203,62 @@ describe("rows", () => {
 
   test("an unknown currency code still shows the amount", () => {
     expect(formatPrice(12.5, "ZZZ")).toMatch(/12\.50/);
+  });
+});
+
+describe("freshnessPatch", () => {
+  const saved = bottle({
+    acquiredOn: "2026-01-10",
+    priceAmount: 58,
+    priceCurrency: "EUR",
+    location: "Rack B",
+  });
+
+  test("an untouched draft sends nothing", () => {
+    expect(freshnessPatch(saved, draftOf(saved))).toEqual({
+      ok: true,
+      patch: {},
+    });
+  });
+
+  test("only what changed; empty clears", () => {
+    const result = freshnessPatch(saved, {
+      ...draftOf(saved),
+      acquiredOn: "",
+      drinkUntil: "2030-06-01",
+      location: "  Rack C  ",
+    });
+    expect(result).toEqual({
+      ok: true,
+      patch: { acquiredOn: null, drinkUntil: "2030-06-01", location: "Rack C" },
+    });
+  });
+
+  test("the price pair travels together; a cleared price clears its currency", () => {
+    expect(
+      freshnessPatch(saved, { ...draftOf(saved), currency: "usd" }),
+    ).toEqual({ ok: true, patch: { priceAmount: 58, priceCurrency: "USD" } });
+    expect(freshnessPatch(saved, { ...draftOf(saved), price: "" })).toEqual({
+      ok: true,
+      patch: { priceAmount: null, priceCurrency: null },
+    });
+  });
+
+  test("refuses what the server would", () => {
+    const d = draftOf(bottle());
+    expect(freshnessPatch(bottle(), { ...d, price: "12" }).ok).toBe(false);
+    expect(
+      freshnessPatch(bottle(), { ...d, price: "-1", currency: "EUR" }).ok,
+    ).toBe(false);
+    expect(
+      freshnessPatch(bottle(), {
+        ...d,
+        drinkFrom: "2030-01-01",
+        drinkUntil: "2029-01-01",
+      }).ok,
+    ).toBe(false);
+    expect(
+      freshnessPatch(bottle(), { ...d, location: "x".repeat(81) }).ok,
+    ).toBe(false);
   });
 });
