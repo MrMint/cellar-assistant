@@ -2602,6 +2602,30 @@ cmd_seed() {
   the generated $STACK_DIR/dapr.yaml."
 }
 
+# `seed:demo` — services/actors/scripts/demo-seed.ts, pointed at this stack the
+# same way `seed` is: Postgres, the actor host, the API, and the Origin this
+# stack's better-auth trusts. Run `seed` first; the demo seed needs its accounts.
+# Flags after `seed:demo` go to the script and win over these defaults, which is
+# how it loads another stack.
+cmd_seed_demo() {
+  resolve
+  probe_node || true
+  [ -n "$GOOD_NODE" ] || die "seed:demo runs \`node scripts/demo-seed.ts\` and needs Node $NVMRC_VERSION (fnm install $NVMRC_VERSION)"
+  if [ $# -eq 0 ]; then
+    local pg
+    pg="$(project_container "$COMPOSE_PROJECT_NAME" postgres)"
+    [ -n "$pg" ] || die "this stack's Postgres is not running — \`bun run dev:bootstrap\` first"
+    say "demo seed into $PG_DB on 127.0.0.1:$POSTGRES_PORT via $BETTER_AUTH_URL and :$API_PORT"
+  fi
+  ( cd "$REPO_ROOT/services/actors" \
+    && PATH="$(node_path_prefix)" \
+       DATABASE_URL="$DATABASE_URL" \
+       BETTER_AUTH_URL="$BETTER_AUTH_URL" \
+       GRAPHQL_API_URL="http://localhost:$API_PORT/graphql" \
+       AUTH_TRUSTED_ORIGIN="http://localhost:$WEB_PORT" \
+       node scripts/demo-seed.ts "$@" )
+}
+
 # Proof that the seeded accounts can actually sign in: a real better-auth
 # sign-in on this stack's actor host, with the Origin a browser would send.
 # Only the status code and the presence of a session cookie are ever printed.
@@ -2843,6 +2867,9 @@ Commands
                             --from PROJ (clone source), --skip-doctor, --no-fix, --reset
   doctor [--fix]            preflight only: every known silent failure mode, named
   seed                      `db:seed` pointed at THIS stack (ports, origin and Node)
+  seed:demo [flags]         the big synthetic demo dataset (services/actors/scripts/demo-seed.ts)
+                            on THIS stack; flags (--database-url, --auth-url, --api-url,
+                            --origin) retarget it at another stack
   migrate [-- --status]     `db:migrate` against THIS stack: the migration ledger
   up [--detach] [--reset]   infra + `dapr run -f` for this worktree
   wait                      block until the API and the actor sidecar answer
@@ -2874,6 +2901,7 @@ main() {
     bootstrap) cmd_bootstrap "$@" ;;
     doctor)    cmd_doctor "$@" ;;
     seed)      cmd_seed "$@" ;;
+    seed:demo) cmd_seed_demo "$@" ;;
     migrate)   cmd_migrate "$@" ;;
     up)        cmd_up "$@" ;;
     wait)      cmd_wait "$@" ;;

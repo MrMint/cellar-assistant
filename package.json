@@ -53,6 +53,7 @@
     "dev:bootstrap": "scripts/stack/stack.sh bootstrap",
     "dev:doctor": "scripts/stack/stack.sh doctor",
     "dev:seed": "scripts/stack/stack.sh seed",
+    "dev:seed:demo": "scripts/stack/stack.sh seed:demo",
     "dev:up": "scripts/stack/stack.sh up",
     "dev:down": "scripts/stack/stack.sh down",
     "dev:wait": "scripts/stack/stack.sh wait",
