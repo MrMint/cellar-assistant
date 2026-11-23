@@ -18,10 +18,17 @@ import { TOASTER_CLASS } from "./toastLayer";
  * Mounted once, in `AppClientProviders`; raise one with `notify()`. Its
  * toasts stay tappable over an open sheet (`toastLayer.ts`).
  */
-export const TOAST_TABBAR_OFFSET =
-  "calc(var(--ca-tabbar-h) + env(safe-area-inset-bottom) + 12px)";
+const TABBAR = "var(--ca-tabbar-h) + env(safe-area-inset-bottom)";
 
-export const TOAST_OFFSET = `min(max(${TOAST_TABBAR_OFFSET}, calc(var(--sheet-inset, 0px) + 12px)), calc(100dvh - 96px))`;
+/**
+ * `max(tab bar + 12, sheet top + 12)`, written as the tab bar's offset plus
+ * however far an open sheet rises above the bar (zero with no sheet), and
+ * that rise capped so the whole offset stays at most `100dvh - 96px`.
+ */
+export const TOAST_OFFSET =
+  `calc(${TABBAR} + 12px + min(` +
+  `max(0px, var(--sheet-inset, 0px) - (${TABBAR})), ` +
+  `100dvh - 108px - (${TABBAR})))`;
 
 export function Toaster() {
   return (
