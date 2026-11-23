@@ -206,6 +206,193 @@ describe("BottomSheet snaps", () => {
   });
 });
 
+/*
+ * The physics around vaul (B04), driven with pointer events on the sheet.
+ * happy-dom does no layout, so these prove the wiring — release decisions,
+ * M6 and the stretch — and `sheet-physics.test.ts` proves the numbers.
+ */
+describe("BottomSheet physics", () => {
+  const sheet = () =>
+    document.querySelector<HTMLElement>('[data-slot="bottom-sheet"]');
+  const pointer = (type: string, y: number) =>
+    new PointerEvent(type, {
+      bubbles: true,
+      cancelable: true,
+      isPrimary: true,
+      pointerId: 1,
+      button: 0,
+      clientY: y,
+    });
+  /** A quick drag: down, the moves (a frame apart), up. */
+  const drag = async (el: HTMLElement, ys: readonly number[]) => {
+    const [first, ...rest] = ys;
+    await act(async () => {
+      el.dispatchEvent(pointer("pointerdown", first ?? 0));
+    });
+    for (const y of rest.slice(0, -1)) {
+      await act(async () => {
+        el.dispatchEvent(pointer("pointermove", y));
+        await new Promise((r) => setTimeout(r, 20));
+      });
+    }
+    await act(async () => {
+      el.dispatchEvent(pointer("pointerup", rest.at(-1) ?? first ?? 0));
+    });
+  };
+  const Snapping = ({
+    onSnap,
+    onClose = () => {},
+    dismissible,
+  }: {
+    onSnap: (snap: string) => void;
+    onClose?: () => void;
+    dismissible?: boolean;
+  }) => {
+    const [open, setOpen] = useState(true);
+    return (
+      <BottomSheet
+        open={open}
+        onOpenChange={(next) => {
+          setOpen(next);
+          if (!next) onClose();
+        }}
+        title="Places"
+        snapPoints={["peek", "half", "full"]}
+        initialSnap="half"
+        onSnapChange={onSnap}
+        dismissible={dismissible}
+      >
+        <p>list</p>
+      </BottomSheet>
+    );
+  };
+
+  // vaul captures the pointer on press; happy-dom has no capture to give.
+  HTMLElement.prototype.setPointerCapture ??= () => {};
+  HTMLElement.prototype.releasePointerCapture ??= () => {};
+
+  test("M6: a flick up from half settles on full, reported once", async () => {
+    const snaps: string[] = [];
+    await render(<Snapping onSnap={(s) => snaps.push(s)} />);
+    await flush(30);
+    const el = sheet();
+    assert.ok(el);
+    // A browser computes `none`; happy-dom computes nothing, which vaul reads.
+    el.style.transform ||= "translate3d(0, 0px, 0)";
+    await drag(el, [500, 470, 430, 380]);
+    assert.deepEqual(snaps, [], "not before the snap has settled");
+    await flush(560);
+    assert.deepEqual(snaps, ["full"]);
+    await flush(560);
+    assert.deepEqual(snaps, ["full"], "once");
+  });
+
+  test("M6: the snap it opens at is not a change", async () => {
+    const snaps: string[] = [];
+    await render(<Snapping onSnap={(s) => snaps.push(s)} />);
+    await flush(600);
+    assert.deepEqual(snaps, []);
+  });
+
+  test("M6: never on close — a hard flick down dismisses without a snap", async () => {
+    const snaps: string[] = [];
+    let closed = 0;
+    await render(
+      <Snapping
+        onSnap={(s) => snaps.push(s)}
+        onClose={() => {
+          closed += 1;
+        }}
+      />,
+    );
+    await flush(30);
+    const el = sheet();
+    assert.ok(el);
+    // A browser computes `none`; happy-dom computes nothing, which vaul reads.
+    el.style.transform ||= "translate3d(0, 0px, 0)";
+    await drag(el, [300, 360, 460, 600]);
+    await flush(600);
+    assert.equal(closed, 1, "the sheet asked to close");
+    assert.deepEqual(snaps, []);
+  });
+
+  test("a sheet that cannot be dismissed lands on peek instead", async () => {
+    const snaps: string[] = [];
+    let closed = 0;
+    await render(
+      <Snapping
+        dismissible={false}
+        onSnap={(s) => snaps.push(s)}
+        onClose={() => {
+          closed += 1;
+        }}
+      />,
+    );
+    await flush(30);
+    const el = sheet();
+    assert.ok(el);
+    // A browser computes `none`; happy-dom computes nothing, which vaul reads.
+    el.style.transform ||= "translate3d(0, 0px, 0)";
+    await drag(el, [300, 360, 460, 600]);
+    await flush(600);
+    assert.equal(closed, 0);
+    assert.deepEqual(snaps, ["peek"]);
+  });
+
+  test("M6: never for a sheet without snapPoints", async () => {
+    const snaps: string[] = [];
+    await render(
+      <BottomSheet
+        open
+        onOpenChange={() => {}}
+        title="Add"
+        onSnapChange={(s) => snaps.push(s)}
+      >
+        <p>rows</p>
+      </BottomSheet>,
+    );
+    await flush(30);
+    const el = sheet();
+    assert.ok(el);
+    // A browser computes `none`; happy-dom computes nothing, which vaul reads.
+    el.style.transform ||= "translate3d(0, 0px, 0)";
+    await drag(el, [500, 470, 430, 380]);
+    await flush(600);
+    assert.deepEqual(snaps, []);
+  });
+
+  test("an upward drag on a content-sized sheet stretches it, and it springs back", async () => {
+    await render(
+      <BottomSheet open onOpenChange={() => {}} title="Add">
+        <p>rows</p>
+      </BottomSheet>,
+    );
+    await flush(30);
+    const el = sheet();
+    assert.ok(el);
+    // A browser computes `none`; happy-dom computes nothing, which vaul reads.
+    el.style.transform ||= "translate3d(0, 0px, 0)";
+    await act(async () => {
+      el.dispatchEvent(pointer("pointerdown", 500));
+    });
+    await act(async () => {
+      el.dispatchEvent(pointer("pointermove", 400));
+      await new Promise((r) => setTimeout(r, 40));
+    });
+    const stretched = /^0px (-[\d.]+)px$|^0 (-[\d.]+)px$/.exec(
+      el.style.translate,
+    );
+    assert.ok(stretched, `a negative translate, got "${el.style.translate}"`);
+    const px = Number(stretched[1] ?? stretched[2]);
+    assert.ok(px > -100 && px < 0, "less than the finger's 100 px");
+    await act(async () => {
+      el.dispatchEvent(pointer("pointerup", 400));
+    });
+    await flush(1500);
+    assert.equal(el.style.translate, "", "back at rest");
+  });
+});
+
 describe("ResponsiveDialog", () => {
   test("a bottom sheet on a phone", async () => {
     viewportWidth = 390;
