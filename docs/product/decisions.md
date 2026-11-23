@@ -848,8 +848,9 @@ reverse them. Each names the item it belongs to; none overrides an answer.
   page shows no "Phrased by AI" mark. Wiring it is the fix round's H-10.
 - **Clone** (`cloneTierList`, `TierListActor.clone`) copies a list you may
   see (`canSeeTierList`) into a new **private** list of yours, same list
-  type and name, entries in order, without notes, description or hidden
-  places. A list you may not see answers like a missing one. Undo deletes
+  type, entries in order, without notes, description or hidden places. Its
+  name says it is a copy and whose it was: "Sam's reds (from Sam)", or
+  "Reds (copy)" for your own list (`cloneName`, W-19). A list you may not see answers like a missing one. Undo deletes
   the copy. Want-to-try is not a tier list and is never offered (L42).
 - **Board differences:** each friend row's Compare goes to their profile's
   `#compare` section (`TasteCompareSection`, mounted in `FriendProfile`),
