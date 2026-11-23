@@ -953,6 +953,14 @@ enum BreadthStampKind {
   TYPES
 }
 
+"""The viewer's breadth stamps, one field per kind; null until earned."""
+type BreadthStamps {
+  recipes: BreadthStamp
+  regions: BreadthStamp
+  styles: BreadthStamp
+  types: BreadthStamp
+}
+
 """BudgetActor.reserve denied a paid external call."""
 type BudgetExceededError implements ActorError & Error {
   """
@@ -5785,11 +5793,7 @@ union QueryBrandSearchResult = BrandSearchConnection | BudgetExceededError | Con
 
 union QueryBrandsResult = BrandConnection | BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | ValidationError
 
-union QueryBreadthStampsResult = BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | QueryBreadthStampsSuccess | ValidationError
-
-type QueryBreadthStampsSuccess {
-  data: [BreadthStamp!]!
-}
+union QueryBreadthStampsResult = BreadthStamps | BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | ValidationError
 
 union QueryCellarItemSearchResult = BudgetExceededError | CellarItemSearchConnection | ConflictError | ForbiddenError | NotFoundError | ValidationError
 
@@ -5915,18 +5919,18 @@ type RankingsEdge {
 }
 
 type Recap {
-  cards: [RecapCard!]!
+  cards: RecapCards!
 
   """`YYYY-MM` or `YYYY`."""
   period: String!
 
   """Stamps held at the end of the period."""
-  stamps: [BreadthStamp!]!
+  stamps: BreadthStamps!
   timeZone: String!
 }
 
 """
-One card of the deck. Cards below their data threshold are skipped, never padded.
+One card of the deck. Cards below their data threshold are skipped (null), never padded.
 """
 type RecapCard {
   chips: [String!]!
@@ -5934,7 +5938,6 @@ type RecapCard {
   itemTypes: [ItemType!]!
   kind: RecapCardKind!
   newCount: Int
-  stamp: BreadthStamp
 }
 
 enum RecapCardKind {
@@ -5945,6 +5948,17 @@ enum RecapCardKind {
   STYLES
   TOP_RATED
   TYPES
+}
+
+type RecapCards {
+  """Stamps whose tier was crossed inside the period."""
+  earned: BreadthStamps!
+  newToYou: RecapCard
+  recipes: RecapCard
+  regions: RecapCard
+  styles: RecapCard
+  topRated: RecapCard
+  types: RecapCard
 }
 
 """

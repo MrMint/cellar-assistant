@@ -51,8 +51,13 @@ const RECAP_QUERY = `query ($period: String!, $tz: String) {
     __typename
     ... on Recap {
       period timeZone
-      cards { kind count newCount chips itemTypes stamp { kind count tier } }
-      stamps { kind count tier }
+      cards {
+        newToYou { kind }
+        regions { kind count newCount chips itemTypes }
+        styles { kind }
+        earned { regions { kind count tier } styles { kind } }
+      }
+      stamps { regions { kind count tier } types { kind } }
     }
     ... on Error { message }
   }
@@ -80,10 +85,22 @@ describe("Query.recap", () => {
     expect(result.data?.recap).toMatchObject({
       __typename: "Recap",
       period: "2026-10",
-      cards: [
-        { kind: "REGIONS", count: 6, newCount: 4, chips: ["Jura", "Etna"] },
-        { kind: "STAMP", stamp: { kind: "REGIONS", count: 6, tier: 5 } },
-      ],
+      cards: {
+        newToYou: null,
+        regions: {
+          kind: "REGIONS",
+          count: 6,
+          newCount: 4,
+          chips: ["Jura", "Etna"],
+          itemTypes: [],
+        },
+        styles: null,
+        earned: {
+          regions: { kind: "REGIONS", count: 6, tier: 5 },
+          styles: null,
+        },
+      },
+      stamps: { regions: { kind: "REGIONS", count: 6, tier: 5 }, types: null },
     });
     expect(calls).toHaveLength(1);
     expect(calls[0]).toMatchObject({
@@ -133,13 +150,14 @@ describe("Query.breadthStamps", () => {
       "RecapActor.stamps": () => [stamp],
     });
     const result = await run(
-      `{ breadthStamps { __typename ... on QueryBreadthStampsSuccess { data { kind count tier } } } }`,
+      `{ breadthStamps { __typename ... on BreadthStamps { regions { kind count tier } styles { kind } } } }`,
       testContext(invoke, viewer),
     );
     expect(result.errors).toBeUndefined();
     expect(result.data?.breadthStamps).toEqual({
-      __typename: "QueryBreadthStampsSuccess",
-      data: [{ kind: "REGIONS", count: 6, tier: 5 }],
+      __typename: "BreadthStamps",
+      regions: { kind: "REGIONS", count: 6, tier: 5 },
+      styles: null,
     });
     expect(calls[0]).toMatchObject({
       actorType: "RecapActor",

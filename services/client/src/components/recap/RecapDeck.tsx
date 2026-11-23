@@ -23,13 +23,14 @@ import { cn } from "@/lib/utils";
 import { RecapStamp } from "./RecapStamp";
 import {
   currentRecapPeriod,
+  type RecapCardView,
   type RecapTone,
   recapCardCopy,
   recapPeriodLabel,
   viewerTimeZone,
 } from "./recap-copy";
 import {
-  type RecapCardData,
+  deckOf,
   RecapQuery,
   recapFromResult,
   recapImagePath,
@@ -81,13 +82,14 @@ export function RecapDeck({
     variables: { period: periodKey, timeZone },
   });
   const recap = recapFromResult(result.data);
+  const deck = useMemo(() => (recap === null ? [] : deckOf(recap)), [recap]);
   const label = recapPeriodLabel(period);
 
   return (
     <RecapFrame
       label={label}
       loading={result.fetching && recap === null}
-      cards={recap?.cards ?? []}
+      cards={deck}
       period={period}
       ownerId={ownerId}
       periodKey={periodKey}
@@ -107,7 +109,7 @@ function RecapFrame({
 }: {
   label: string;
   loading: boolean;
-  cards: readonly RecapCardData[];
+  cards: readonly RecapCardView[];
   period: RecapPeriod;
   ownerId: string;
   periodKey: string;

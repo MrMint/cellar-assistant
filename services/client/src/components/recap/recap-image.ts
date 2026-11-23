@@ -14,7 +14,8 @@ import {
   parseRecapPeriod,
   type RecapPeriod,
 } from "@cellar-assistant/contracts/recap";
-import type { RecapCardData, RecapData } from "./recap-data";
+import type { RecapCardView } from "./recap-copy";
+import { deckOf, type RecapData } from "./recap-data";
 
 export type RecapImageRequest = {
   readonly owner: string;
@@ -32,7 +33,7 @@ export type RecapImageDeps = {
     timeZone: string,
   ) => Promise<RecapData | null>;
   readonly render: (
-    card: RecapCardData,
+    card: RecapCardView,
     period: RecapPeriod,
   ) => Response | Promise<Response>;
 };
@@ -77,7 +78,7 @@ export const handleRecapImage = async (
   } catch {
     return recapImageRefusal();
   }
-  const card = recap?.cards[index];
+  const card = recap === null ? undefined : deckOf(recap)[index];
   if (card === undefined) return recapImageRefusal();
   const response = await deps.render(card, period);
   response.headers.set("cache-control", PRIVATE_NO_STORE);

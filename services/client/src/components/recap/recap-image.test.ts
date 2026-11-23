@@ -17,21 +17,29 @@ import {
 const OWNER = "11111111-1111-4111-8111-111111111111";
 const OTHER = "22222222-2222-4222-8222-222222222222";
 
+const noStamps = {
+  __typename: "BreadthStamps",
+  styles: null,
+  regions: null,
+  types: null,
+  recipes: null,
+} as const;
+
 const recap: RecapData = {
   __typename: "Recap",
   period: "2026-10",
   timeZone: "UTC",
-  cards: [
-    {
-      kind: "REGIONS",
-      count: 6,
-      newCount: 4,
-      chips: ["Jura"],
-      stamp: null,
-    },
-  ],
-  stamps: [],
-} as RecapData;
+  cards: {
+    newToYou: null,
+    types: null,
+    styles: null,
+    regions: { kind: "REGIONS", count: 6, newCount: 4, chips: ["Jura"] },
+    recipes: null,
+    topRated: null,
+    earned: noStamps,
+  },
+  stamps: noStamps,
+};
 
 const deps = (
   viewer: string | null,
@@ -141,5 +149,27 @@ describe("recap share-image route", () => {
       },
     });
     assert.equal((await handleRecapImage(request(), value)).status, 404);
+  });
+});
+
+describe("deckOf", () => {
+  test("orders the fixed shape, stamps earned last", async () => {
+    const { deckOf } = await import("./recap-data");
+    const deck = deckOf({
+      ...recap,
+      cards: {
+        ...recap.cards,
+        newToYou: { kind: "NEW_TO_YOU", count: 3, newCount: null, chips: [] },
+        earned: {
+          ...noStamps,
+          types: { kind: "TYPES", count: 3, tier: 3 },
+        },
+      },
+    });
+    assert.deepEqual(
+      deck.map((card) => card.kind),
+      ["NEW_TO_YOU", "REGIONS", "STAMP"],
+    );
+    assert.deepEqual(deck[2]?.stamp, { kind: "TYPES", count: 3, tier: 3 });
   });
 });

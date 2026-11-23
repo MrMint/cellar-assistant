@@ -1144,6 +1144,17 @@ export const graphcacheSchema: MinifiedIntrospection = {
       },
       {
         kind: "OBJECT",
+        name: "BreadthStamps",
+        fields: [
+          { name: "recipes", type: { kind: "OBJECT", name: "BreadthStamp" } },
+          { name: "regions", type: { kind: "OBJECT", name: "BreadthStamp" } },
+          { name: "styles", type: { kind: "OBJECT", name: "BreadthStamp" } },
+          { name: "types", type: { kind: "OBJECT", name: "BreadthStamp" } },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
         name: "BudgetExceededError",
         fields: [
           {
@@ -7335,33 +7346,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
         kind: "UNION",
         name: "QueryBreadthStampsResult",
         possibleTypes: [
+          { kind: "OBJECT", name: "BreadthStamps" },
           { kind: "OBJECT", name: "BudgetExceededError" },
           { kind: "OBJECT", name: "ConflictError" },
           { kind: "OBJECT", name: "ForbiddenError" },
           { kind: "OBJECT", name: "NotFoundError" },
-          { kind: "OBJECT", name: "QueryBreadthStampsSuccess" },
           { kind: "OBJECT", name: "ValidationError" },
         ],
-      },
-      {
-        kind: "OBJECT",
-        name: "QueryBreadthStampsSuccess",
-        fields: [
-          {
-            name: "data",
-            type: {
-              kind: "NON_NULL",
-              ofType: {
-                kind: "LIST",
-                ofType: {
-                  kind: "NON_NULL",
-                  ofType: { kind: "OBJECT", name: "BreadthStamp" },
-                },
-              },
-            },
-          },
-        ],
-        interfaces: [],
       },
       {
         kind: "UNION",
@@ -7950,13 +7941,7 @@ export const graphcacheSchema: MinifiedIntrospection = {
             name: "cards",
             type: {
               kind: "NON_NULL",
-              ofType: {
-                kind: "LIST",
-                ofType: {
-                  kind: "NON_NULL",
-                  ofType: { kind: "OBJECT", name: "RecapCard" },
-                },
-              },
+              ofType: { kind: "OBJECT", name: "RecapCards" },
             },
           },
           {
@@ -7970,13 +7955,7 @@ export const graphcacheSchema: MinifiedIntrospection = {
             name: "stamps",
             type: {
               kind: "NON_NULL",
-              ofType: {
-                kind: "LIST",
-                ofType: {
-                  kind: "NON_NULL",
-                  ofType: { kind: "OBJECT", name: "BreadthStamp" },
-                },
-              },
+              ofType: { kind: "OBJECT", name: "BreadthStamps" },
             },
           },
           {
@@ -8031,7 +8010,26 @@ export const graphcacheSchema: MinifiedIntrospection = {
             },
           },
           { name: "newCount", type: { kind: "SCALAR", name: "Int" } },
-          { name: "stamp", type: { kind: "OBJECT", name: "BreadthStamp" } },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "RecapCards",
+        fields: [
+          {
+            name: "earned",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "BreadthStamps" },
+            },
+          },
+          { name: "newToYou", type: { kind: "OBJECT", name: "RecapCard" } },
+          { name: "recipes", type: { kind: "OBJECT", name: "RecapCard" } },
+          { name: "regions", type: { kind: "OBJECT", name: "RecapCard" } },
+          { name: "styles", type: { kind: "OBJECT", name: "RecapCard" } },
+          { name: "topRated", type: { kind: "OBJECT", name: "RecapCard" } },
+          { name: "types", type: { kind: "OBJECT", name: "RecapCard" } },
         ],
         interfaces: [],
       },

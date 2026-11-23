@@ -13,6 +13,7 @@
  */
 import type {
   BreadthStampDto,
+  BreadthStampKind,
   RecapCardDto,
   RecapDto,
 } from "@cellar-assistant/contracts";
@@ -59,10 +60,48 @@ const BreadthStampType = builder
     }),
   });
 
+/**
+ * The four stamp kinds as one object, a field each (null until earned) — not
+ * a list: §1.5 allows no unbounded list read, and this one has exactly four
+ * possible members.
+ */
+type StampSet = readonly BreadthStampDto[];
+const stampOf = (set: StampSet, kind: BreadthStampKind) =>
+  set.find((stamp) => stamp.kind === kind) ?? null;
+
+const BreadthStampsType = builder
+  .objectRef<StampSet>("BreadthStamps")
+  .implement({
+    description:
+      "The viewer's breadth stamps, one field per kind; null until earned.",
+    fields: (t) => ({
+      styles: t.field({
+        type: BreadthStampType,
+        nullable: true,
+        resolve: (set) => stampOf(set, "STYLES"),
+      }),
+      regions: t.field({
+        type: BreadthStampType,
+        nullable: true,
+        resolve: (set) => stampOf(set, "REGIONS"),
+      }),
+      types: t.field({
+        type: BreadthStampType,
+        nullable: true,
+        resolve: (set) => stampOf(set, "TYPES"),
+      }),
+      recipes: t.field({
+        type: BreadthStampType,
+        nullable: true,
+        resolve: (set) => stampOf(set, "RECIPES"),
+      }),
+    }),
+  });
+
 const RecapCardType = builder.objectRef<RecapCardDto>("RecapCard").implement({
   description:
-    "One card of the deck. Cards below their data threshold are skipped, " +
-    "never padded.",
+    "One card of the deck. Cards below their data threshold are skipped " +
+    "(null), never padded.",
   fields: (t) => ({
     kind: t.field({ type: RecapCardKindEnum, resolve: (c) => c.kind }),
     count: t.exposeInt("count"),
@@ -72,10 +111,61 @@ const RecapCardType = builder.objectRef<RecapCardDto>("RecapCard").implement({
       type: [ItemTypeEnum],
       resolve: (c) => [...c.itemTypes],
     }),
-    stamp: t.field({
-      type: BreadthStampType,
+  }),
+});
+
+type CardSet = readonly RecapCardDto[];
+const cardOf = (set: CardSet, kind: RecapCardDto["kind"]) =>
+  set.find((card) => card.kind === kind) ?? null;
+const cardField =
+  (kind: RecapCardDto["kind"]) =>
+  (set: CardSet): RecapCardDto | null =>
+    cardOf(set, kind);
+
+/**
+ * The deck as one object, a field per card kind (null when skipped), plus the
+ * stamps earned inside the period. A fixed shape rather than a list (§1.5);
+ * the client orders it (`deckOf`).
+ */
+const RecapCardsType = builder.objectRef<CardSet>("RecapCards").implement({
+  fields: (t) => ({
+    newToYou: t.field({
+      type: RecapCardType,
       nullable: true,
-      resolve: (c) => c.stamp,
+      resolve: cardField("NEW_TO_YOU"),
+    }),
+    types: t.field({
+      type: RecapCardType,
+      nullable: true,
+      resolve: cardField("TYPES"),
+    }),
+    styles: t.field({
+      type: RecapCardType,
+      nullable: true,
+      resolve: cardField("STYLES"),
+    }),
+    regions: t.field({
+      type: RecapCardType,
+      nullable: true,
+      resolve: cardField("REGIONS"),
+    }),
+    recipes: t.field({
+      type: RecapCardType,
+      nullable: true,
+      resolve: cardField("RECIPES"),
+    }),
+    topRated: t.field({
+      type: RecapCardType,
+      nullable: true,
+      resolve: cardField("TOP_RATED"),
+    }),
+    earned: t.field({
+      type: BreadthStampsType,
+      description: "Stamps whose tier was crossed inside the period.",
+      resolve: (set) =>
+        set.flatMap((card) =>
+          card.kind === "STAMP" && card.stamp !== null ? [card.stamp] : [],
+        ),
     }),
   }),
 });
@@ -86,11 +176,11 @@ const RecapType = builder.objectRef<RecapDto>("Recap").implement({
       description: "`YYYY-MM` or `YYYY`.",
     }),
     timeZone: t.exposeString("timeZone"),
-    cards: t.field({ type: [RecapCardType], resolve: (r) => [...r.cards] }),
+    cards: t.field({ type: RecapCardsType, resolve: (r) => r.cards }),
     stamps: t.field({
-      type: [BreadthStampType],
+      type: BreadthStampsType,
       description: "Stamps held at the end of the period.",
-      resolve: (r) => [...r.stamps],
+      resolve: (r) => r.stamps,
     }),
   }),
 });
@@ -120,16 +210,14 @@ builder.queryField("recap", (t) =>
 
 builder.queryField("breadthStamps", (t) =>
   t.field({
-    type: [BreadthStampType],
+    type: BreadthStampsType,
     description: "L04: the viewer's breadth stamps over their whole drink log.",
     errors: {},
-    resolve: async (_root, _args, context) => {
+    resolve: (_root, _args, context) => {
       const viewerId = requireViewer(context, "see your stamps");
-      return [
-        ...(await context
-          .actor(RecapActorDescriptor, recapActorId(viewerId))
-          .stamps()),
-      ];
+      return context
+        .actor(RecapActorDescriptor, recapActorId(viewerId))
+        .stamps();
     },
   }),
 );
