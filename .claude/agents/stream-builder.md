@@ -130,9 +130,9 @@ node tools/pre-pr-check.ts --brief <your brief>
 
 It checks that every changed file is in your `@owns`, and runs typecheck and Biome on what changed, then
 your brief's `@tests` and the tests of every package your branch reaches, and a secrets scan. Its base
-is `.review/changed-since`, which the lead writes: the integration branch's remote ref. If it prints
-`base origin/main` while the brief names an integration branch, the file is missing, so write that ref
-into it and run again. Fix what it reports, then paste the summary from `.review/pre-pr.md` into the PR
+is `.review/changed-since`, which the lead writes: the integration branch's remote ref. Its first line
+names the base (`N changed file(s) since <base>`). If that says `origin/main` while your brief's PR base
+is an integration branch, the file is missing: write that branch's remote ref into it and run again. Fix what it reports, then paste the summary from `.review/pre-pr.md` into the PR
 body. Never open the PR with a step failing. If the base moves while the check runs, let it finish,
 merge the base, and run it once more.
 

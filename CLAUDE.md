@@ -16,8 +16,8 @@ Most of the quota goes to subagents. An agent pays for its whole context on ever
 that runs hundreds of turns at half a million tokens costs many times what the same work costs in
 bounded pieces. For a build of parallel streams, use the `multi-agent-build` skill
 (`.claude/skills/multi-agent-build/SKILL.md`): it is the lead's process, phase by phase. The rules
-every agent needs are below; each is enforced by a hook in `.claude/hooks/`, and
-`bun run test:harness` tests them.
+every agent needs are below. The first four are enforced by hooks in `.claude/hooks/`, which
+`bun run test:harness` tests; the last three are yours to keep.
 
 - **Spawn each role as its agent type,** defined in `.claude/agents/`: `stream-builder` for build and
   fix streams, `reviewer` for review rounds, `verifier` for checking the running app, `scout` for a

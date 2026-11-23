@@ -34,7 +34,8 @@ const TIMEOUT_MS = 80_000;
 /** The worktree a call touched: from a Bash command and cwd, or an edited file's path. */
 export function worktreeOf(tool, args, cwd) {
     const where = tool === "Bash" ? `${args?.command ?? ""} ${cwd ?? ""}` : String(args?.file_path ?? "");
-    return /(\/[^\s'"]*?\/\.claude\/worktrees\/[^/\s'"]+)/.exec(where)?.[1] ?? null;
+    // Greedy, so a worktree nested inside another resolves to the innermost one.
+    return /(\/[^\s'"]*\/\.claude\/worktrees\/[^/\s'"]+)/.exec(where)?.[1] ?? null;
 }
 
 /** Worktree-relative .ts/.tsx paths from `git status --porcelain` output. */
@@ -73,7 +74,8 @@ export function report(errors, changed, previousErrors) {
                 ...(others > 0
                     ? [
                           `${others} more in files you did not change: another stream's merge, a caller of your change, or`,
-                          "generated types this worktree lacks (`bun run typegen` in services/client, `bun run codegen`).",
+                          "generated types this worktree lacks (`bun run typegen` and `bun run codegen` in services/client;",
+                          "typegen writes only gitignored files, measured 2026-11-22).",
                       ]
                     : []),
             ].join("\n"),

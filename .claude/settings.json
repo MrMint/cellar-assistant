@@ -49,18 +49,6 @@
           }
         ]
       }
-    ],
-    "WorktreeRemove": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/worktree-remove.sh",
-            "args": ["${worktree_path}"],
-            "timeout": 120
-          }
-        ]
-      }
     ]
   }
 }

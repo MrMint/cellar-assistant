@@ -5,7 +5,9 @@
 //
 // Streams run with the lead's checkout as their cwd and `cd` into their own worktree per command,
 // so the hook finds the worktrees from the stream's own transcript: the directory of every Bash
-// call that ran `git commit` (a leading `cd <dir> &&|;` or `git -C <dir>`), plus the input's `cwd`.
+// call that ran `git commit` (a leading `cd <dir> &&|;` or `git -C <dir>`, else the call's cwd). The
+// input's own `cwd` is not added: it is the lead's checkout, and the lead's commits are not the
+// stream's to push.
 // In each, a commit counts when no remote ref reaches it and its committer date is no earlier than
 // the stream's first transcript entry, so the lead's own unpushed commits on a base never count.
 //
@@ -66,7 +68,6 @@ export function scan(lines, cwd) {
             if (dir) dirs.add(dir);
         }
     }
-    if (cwd) dirs.add(cwd);
     return { start, dirs: [...dirs], calls };
 }
 

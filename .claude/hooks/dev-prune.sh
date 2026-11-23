@@ -12,6 +12,11 @@
 # cmd_prune). That is what makes it safe to run unattended, from every session,
 # alongside other sessions.
 #
+# It is the only automatic reclaim. Claude Code fires a WorktreeRemove hook only
+# for worktrees a WorktreeCreate hook made (code.claude.com/docs/en/hooks), and
+# none does here, so a removed worktree's stack waits for the next session start,
+# or for `node tools/teardown-worktrees.ts`, which takes it down before removing.
+#
 # Best effort by construction: every branch exits 0. A machine with no Docker or
 # a daemon that is not running is a machine with nothing to reclaim, not a
 # session that should fail to start.

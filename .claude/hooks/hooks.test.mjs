@@ -79,30 +79,92 @@ describe("agent-spawn-guard", () => {
 });
 
 describe("shell-guard", () => {
-    const primaryOf = (d) => ({ primary: "/repo", inPrimary: d === "/repo" });
+    const primaryOf = (d) => ({ primary: "/repo", inPrimary: d === "/repo" || d.startsWith("/repo/services") });
     const refused = (command, extra = {}) =>
         shellGuard.refusal({ tool_name: "Bash", tool_input: { command }, cwd: "/repo/.claude/worktrees/w", ...extra }, primaryOf) !== null;
+    const both = (deny, allow, extra) => {
+        for (const c of deny) assert.ok(refused(c, extra), `should refuse: ${c}`);
+        for (const c of allow) assert.ok(!refused(c, extra), `should allow: ${c}`);
+    };
 
-    it("refuses host dev servers and builds, not the container lane or quoted text", () => {
-        for (const c of ["bun run dev", "bun run build", "bun dev", "cd services/client && bunx next build", "npx next dev -p 3001", "turbo run build", "echo x | bun run build"]) {
-            assert.ok(refused(c), c);
-        }
-        for (const c of ["bun run dev:up", "bun run dev:bootstrap", "bun run stack:client:build", "turbo run typecheck", 'git commit -m "never bun run dev"', "bun run --filter @cellar-assistant/schema build"]) {
-            assert.ok(!refused(c), c);
-        }
+    it("refuses host dev servers and builds in every spelling", () => {
+        both(
+            [
+                "bun run dev",
+                "bun run build",
+                "bun dev",
+                "cd services/client && bunx next build",
+                "npx next dev -p 3001",
+                "turbo run build",
+                "bunx turbo build",
+                "echo x | bun run build",
+                "bun run --filter @cellar-assistant/client dev",
+                "bun run --filter=@cellar-assistant/client build",
+                "bun --cwd services/client run build",
+                "sh -c 'bun run dev'",
+                "(cd services/client && npm run dev)",
+                "FOO=1 bun run dev",
+                "env NODE_ENV=production bun run build",
+                "bun run --filter '...[origin/main]' build",
+            ],
+            [
+                "bun run dev:up",
+                "bun run dev:bootstrap",
+                "bun run stack:client:build",
+                "turbo run typecheck",
+                "bun run --filter @cellar-assistant/schema build",
+                "bun build ./src/x.ts --outdir out",
+                "docker compose exec client bun run build",
+                "npm run lint",
+            ],
+        );
     });
 
-    it("refuses bare stash, branch -D and name-based kills", () => {
-        for (const c of ["git stash", "git stash pop", "git stash -u", "git branch -D x", "git branch --force -D x", "pkill -f next", "killall node"]) assert.ok(refused(c), c);
-        for (const c of ["git stash push -u -m s1-wip", "git stash apply 1a2b3c", "git stash list", "git branch -d x", "kill 4242"]) assert.ok(!refused(c), c);
+    it("treats commit messages, echoes and heredoc bodies as data", () => {
+        both(
+            [],
+            [
+                'git commit -m "never bun run dev"',
+                'git commit -m "Use a WIP commit; git stash is shared"',
+                "git commit -F - <<'EOF'\nfix: guard\n\ngit stash pop took an entry\nEOF",
+                'git commit -m "$(cat <<\'EOF\'\nfix\n\ngit branch -D is refused\nEOF\n)"',
+                "cat > brief.md <<'EOF'\nDo not run bun run dev here\npkill -f next\nEOF\necho done",
+                "echo 'pkill node'",
+            ],
+        );
+        assert.ok(refused("cat > a <<'EOF'\nbody\nEOF\nbun run dev"), "a command after the heredoc still counts");
     });
 
-    it("refuses a subagent's git write in the primary checkout, and nothing else there", () => {
-        assert.ok(refused("git -C /repo commit -m x", { agent_id: "a1" }));
-        assert.ok(refused("cd /repo && git reset --hard HEAD~1", { agent_id: "a1" }));
-        assert.ok(!refused("git -C /repo status", { agent_id: "a1" }));
-        assert.ok(!refused("git commit -m x", { agent_id: "a1" }));
-        assert.ok(!refused("cd /repo && git commit -m x"));
+    it("refuses stashes that can touch another session's entry, and branch -D in every spelling", () => {
+        both(
+            ["git stash", "git stash pop", "git stash -u", "git stash drop", "git stash apply", "git stash push -u", "git branch -D x", "git branch -Df x", "git branch --delete --force x", "git branch -d -f x"],
+            ["git stash push -u -m s1-wip", "git stash apply 1a2b3c", "git stash drop stash@{2}", "git stash list", "git stash show -p stash@{0}", "git branch -d x", "git branch --delete x"],
+        );
+    });
+
+    it("refuses name-based kills, quoted patterns included", () => {
+        both(["pkill -f next", "pkill -f 'next dev'", 'pkill -f "bun run dev"', "killall node"], ["kill 4242", "pkill -f my-own-script.sh"]);
+    });
+
+    it("refuses a subagent's git write in the primary checkout, in every spelling, and nothing else there", () => {
+        const sub = { agent_id: "a1" };
+        both(
+            [
+                "git -C /repo commit -m x",
+                "cd /repo && git reset --hard HEAD~1",
+                "(cd /repo && git reset --hard)",
+                "git --no-pager -C /repo commit -m x",
+                "git --git-dir=/repo/.git --work-tree=/repo commit -m x",
+                "cd /repo/services && git checkout -- .",
+            ],
+            ["git -C /repo status", "git -C /repo log --oneline -3", "git -C /repo branch --show-current", "git -C /repo stash list", "git commit -m x", "git -C /repo/.claude/worktrees/w push"],
+            sub,
+        );
+        assert.ok(!refused("cd /repo && git commit -m x"), "the lead may commit in the primary checkout");
+    });
+
+    it("lets a call through when the parser meets something it cannot read", () => {
+        assert.equal(shellGuard.handle({ tool_name: "Bash", tool_input: { command: 'echo "unterminated' } }), "");
     });
 });
 
@@ -189,6 +251,11 @@ describe("stream-push-guard", () => {
         assert.equal(pushGuard.handle(input, io, dir), "");
     });
 
+    it("never blocks a stream for commits in a directory it did not commit in", () => {
+        const io = { read: () => "", unpushed: () => ({ dir: "/lead", branch: "claude/build", commits: ["def456 merge"] }) };
+        assert.equal(pushGuard.handle({ agent_transcript_path: "/t", cwd: "/lead", agent_id: "a2" }, io, scratch()), "");
+    });
+
     it("lets a stream with nothing unpushed stop", () => {
         const io = { read: () => "", unpushed: () => ({ dir: "/w", branch: "b", commits: [] }) };
         assert.equal(pushGuard.handle({ agent_transcript_path: "/t", cwd: "/w" }, io, scratch()), "");
@@ -243,6 +310,7 @@ describe("stream-typecheck", () => {
         assert.equal(typecheck.worktreeOf("Edit", { file_path: "/r/.claude/worktrees/s1/services/api/src/a.ts" }), "/r/.claude/worktrees/s1");
         assert.equal(typecheck.worktreeOf("Bash", { command: "bun run test" }, "/r/.claude/worktrees/s2"), "/r/.claude/worktrees/s2");
         assert.equal(typecheck.worktreeOf("Edit", { file_path: "/r/services/api/src/a.ts" }), null);
+        assert.equal(typecheck.worktreeOf("Edit", { file_path: "/r/.claude/worktrees/a/.claude/worktrees/s1/services/api/x.ts" }), "/r/.claude/worktrees/a/.claude/worktrees/s1");
     });
 
     it("keeps only package TypeScript from git status, and groups it by package", () => {
@@ -268,13 +336,6 @@ describe("stream-typecheck", () => {
 });
 
 describe("lifecycle hooks", () => {
-    it("worktree-remove is a no-op without a path or a .stack directory", () => {
-        for (const args of [[], [scratch()]]) {
-            const r = spawnSync("sh", [join(HERE, "worktree-remove.sh"), ...args], { encoding: "utf8" });
-            assert.equal(r.status, 0, r.stderr);
-        }
-    });
-
     it("dev-prune exits 0 at once in a tree with no stack script", () => {
         const dir = scratch();
         mkdirSync(join(dir, "scripts"), { recursive: true });
