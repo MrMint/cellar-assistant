@@ -160,7 +160,7 @@ describe.skipIf(skip)("RecapActor", () => {
     });
   });
 
-  it("counts recipe logs only toward recipes made, and hides a private recipe's name", async () => {
+  it("counts only recipe logs whose recipe the viewer may see (FR-8), toward recipes made", async () => {
     await withTestDb(async (db) => {
       const owner = await seedUser(db);
       const author = await seedUser(db);
@@ -170,12 +170,15 @@ describe.skipIf(skip)("RecapActor", () => {
         privacy: "PRIVATE",
       });
       const shared = await seedRecipe(db, { name: "House Sour" });
+      const another = await seedRecipe(db, { name: "Last Word" });
+      // A log of a recipe the owner may not see — say a companion row
+      // written before FR-8, or a recipe made private since — counts nowhere.
       const hidden = await seedRecipe(db, {
         name: "Secret Sling",
         createdById: author,
         privacy: "PRIVATE",
       });
-      for (const recipeId of [mine, shared, hidden]) {
+      for (const recipeId of [mine, shared, another, hidden]) {
         await seedRecipeLog(db, owner, recipeId, "2026-10-05T12:00:00Z");
       }
       const actor = await recapOf(owner, db);
@@ -188,6 +191,7 @@ describe.skipIf(skip)("RecapActor", () => {
       expect(recipes?.count).toBe(3);
       expect([...(recipes?.chips ?? [])].sort()).toEqual([
         "House Sour",
+        "Last Word",
         "My Negroni",
       ]);
       expect(await actor.stamps(userCtx(owner))).toEqual([

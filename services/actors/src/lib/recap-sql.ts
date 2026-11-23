@@ -60,7 +60,9 @@ const joinOn = (type: ItemType, alias: string): SQL =>
 
 /**
  * The viewer's logs up to the window's end (all of them with no window).
- * `scope` is the viewer's recipe scope (`recipeScope`), for recipe names.
+ * `scope` is the viewer's recipe scope (`recipeScope`): a recipe log whose
+ * recipe the viewer may not see is not read at all (FR-8), so neither the
+ * recap's cards nor its stamps count it.
  */
 export const readRecapLogs = async (
   db: DbOrTx,
@@ -99,6 +101,10 @@ export const readRecapLogs = async (
     left join public.teas t on ${joinOn("TEA", "t")}
     left join public.recipes r on r.id = ci.recipe_id
     where ci.user_id = ${viewerId}::uuid and ${upTo}
+      -- FR-8 (CB-1), canSeeRecipeLog for your own log: a recipe log counts
+      -- only while you may see its recipe (a deleted recipe's log names none).
+      and (ci.recipe_id is null
+           or (r.id is not null and ${recipeVisibleSql(scope, "r")}))
     order by ci.created_at, ci.id
   `);
   return result.rows.map((row) => ({
