@@ -5,71 +5,55 @@ import {
   plateSummary,
 } from "@/lib/items/label-plate";
 import { cn } from "@/lib/utils";
+import {
+  type PlateStyleFields,
+  VESSEL_PATHS,
+  vesselFor,
+} from "./label-plate/silhouettes";
 import { itemTypeTokens } from "./TypeChip";
 
 export type { LabelPlateData } from "@/lib/items/label-plate";
+export type { PlateStyleFields } from "./label-plate/silhouettes";
 
 /**
- * One vessel silhouette per type (N28's six; B03 grows this to ~15 chosen by
- * style). Drawn on a 64 × 160 grid, filled with `currentColor`, so the plate
- * tints them; the coffee bag's valve is a hole (`evenodd`).
+ * The plate's tint: the type hue at 18% over surface-2 (the Main board, B03).
+ * Literal class names, so Tailwind sees each one.
  */
-const VESSELS: Readonly<
-  Record<ApiItemType, { name: string; d: string; evenOdd?: boolean }>
-> = {
-  // A Bordeaux bottle: straight neck, high shoulders.
-  WINE: {
-    name: "bordeaux",
-    d: "M27 4H37V8H36V48C36 56 50 58 50 72V152Q50 156 46 156H18Q14 156 14 152V72C14 58 28 56 28 48V8H27Z",
-  },
-  // A tall-neck beer bottle: long neck, long sloping shoulder.
-  BEER: {
-    name: "tall-neck",
-    d: "M28 4H36V9H35V40C35 52 47 60 47 78V152Q47 156 43 156H21Q17 156 17 152V78C17 60 29 52 29 40V9H28Z",
-  },
-  // A decanter with its stopper — not a cocktail glass (visual-7).
-  SPIRIT: {
-    name: "decanter",
-    d: "M25 4H39Q41 4 41 6V14Q41 16 39 16H25Q23 16 23 14V6Q23 4 25 4ZM28 18H36V26C36 30 56 32 56 42V148Q56 156 48 156H16Q8 156 8 148V42C8 32 28 30 28 26Z",
-  },
-  // A tokkuri: flared lip, narrow neck, a full belly — not a tumbler.
-  SAKE: {
-    name: "tokkuri",
-    d: "M22 4H42Q42 8 37 12V30C37 44 56 62 56 104C56 140 46 156 32 156C18 156 8 140 8 104C8 62 27 44 27 30V12Q22 8 22 4Z",
-  },
-  // A coffee bag: the crimped seal, then the bag with its one-way valve.
-  COFFEE: {
-    name: "bag",
-    d: "M12 6H52V18H12ZM10 22H54L52 150Q52 156 46 156H18Q12 156 12 150ZM26 58A6 6 0 1 0 38 58A6 6 0 1 0 26 58Z",
-    evenOdd: true,
-  },
-  // A tea tin: knob, lid, can.
-  TEA: {
-    name: "tin",
-    d: "M27 6H37V14H27ZM12 14H52Q54 14 54 16V30H10V16Q10 14 12 14ZM13 33H51V150Q51 156 45 156H19Q13 156 13 150Z",
-  },
+const PLATE_TINT: Readonly<Record<ApiItemType, string>> = {
+  WINE: "bg-type-wine/18",
+  BEER: "bg-type-beer/18",
+  SPIRIT: "bg-type-spirit/18",
+  SAKE: "bg-type-sake/18",
+  COFFEE: "bg-type-coffee/18",
+  TEA: "bg-type-tea/18",
 };
 
 /**
- * One type's vessel outline, on the 64 × 160 grid — for drawing *inside* the
- * silhouette (the Pour sheet's liquid is clipped to it, X03).
+ * One vessel's outline, on the 64 × 160 grid — for drawing *inside* the
+ * silhouette (the Pour sheet's liquid is clipped to it, X03). With style
+ * fields it is the style's vessel (B03's table, `label-plate/silhouettes`);
+ * without, the type's.
  */
 export const vesselShape = (
   type: ApiItemType,
+  styleFields?: PlateStyleFields | null,
 ): { readonly name: string; readonly d: string; readonly evenOdd: boolean } => {
-  const vessel = VESSELS[type];
-  return { name: vessel.name, d: vessel.d, evenOdd: vessel.evenOdd === true };
+  const name = vesselFor(type, styleFields);
+  const vessel = VESSEL_PATHS[name];
+  return { name, d: vessel.d, evenOdd: vessel.evenOdd === true };
 };
 
 /** The silhouette alone — for a plate, or a future empty state. */
 export function VesselSilhouette({
   type,
+  styleFields,
   className,
 }: {
   type: ApiItemType;
+  styleFields?: PlateStyleFields | null;
   className?: string;
 }) {
-  const vessel = VESSELS[type];
+  const vessel = vesselShape(type, styleFields);
   return (
     <svg
       aria-hidden
@@ -95,14 +79,20 @@ export type LabelPlateProps = {
   labelled?: boolean;
   /** Dim it (a finished bottle). */
   muted?: boolean;
+  /**
+   * B03: the item's style fields, which pick its vessel (a Burgundy bottle
+   * for a pinot noir, a can for an IPA). Optional: without them the plate
+   * draws its type's vessel, as it always has.
+   */
+  styleFields?: PlateStyleFields | null;
   className?: string;
 };
 
 /**
  * LabelPlate v0 (design §3.5, N28): what an item looks like when nobody has
  * photographed it. A deterministic plate — zero AI, zero network — on the
- * type's tint, shaded top to bottom with a faint paper grain, the type's
- * vessel behind it at 12%, and an inner paper rect holding the producer in
+ * type's tint (18%, B03), shaded top to bottom with a faint paper grain, the type's
+ * vessel (its style's, B03) behind it at 16%, and an inner paper rect holding the producer in
  * Fraunces small caps, the name, a big Fraunces vintage and region · ABV.
  *
  * It fills its container, whatever its shape: the caller sets the aspect
@@ -118,6 +108,7 @@ export function LabelPlate({
   plate,
   labelled = false,
   muted = false,
+  styleFields,
   className,
 }: LabelPlateProps) {
   const token = itemTypeTokens[type];
@@ -135,13 +126,14 @@ export function LabelPlate({
         className,
       )}
     >
-      <div className={cn("absolute inset-0", token.tintClass)} />
+      <div className={cn("absolute inset-0", PLATE_TINT[type])} />
       <div className="absolute inset-0 bg-linear-to-b from-white/5 via-transparent to-black/30" />
       <div className="plate-grain absolute inset-0 opacity-60 mix-blend-overlay" />
       <VesselSilhouette
         type={type}
+        styleFields={styleFields}
         className={cn(
-          "absolute top-[4%] left-1/2 h-[92%] w-auto -translate-x-1/2 opacity-12",
+          "absolute top-[4%] left-1/2 h-[92%] w-auto -translate-x-1/2 opacity-16",
           token.textClass,
         )}
       />

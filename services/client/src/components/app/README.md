@@ -504,6 +504,14 @@ Every page, held by tests rather than by review:
 
 ## Not built here (roadmap, design §3.4 of the migration plan)
 
-LabelPlate beyond N28's six vessels (B03's ~15 by style), `ItemTile` density variants, pull-to-refresh,
+`ItemTile` density variants, pull-to-refresh,
 View Transitions (B05 — `app/Link` is where type inference will go), the
-collapsing large title (B02), custom beverage glyphs (B03).
+collapsing large title (B02), custom beverage glyphs.
+
+## Imagery (B03)
+
+`LabelPlate` takes an optional `styleFields` and draws one of fourteen vessels from
+`label-plate/silhouettes.ts` (`vesselFor`), falling back to the type's; `vesselShape` and
+`VesselSilhouette` take the same fields. A recipe with no photo is `recipe/RecipePlate` (a coupe
+coloured by `recipe/glass-colors.ts`, or a cloche) or, in a row, `RecipeThumb`. A place with no photo
+is `map/places/PlaceHero`, toned from its category. All three are deterministic and use tokens only.

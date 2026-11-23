@@ -1,12 +1,10 @@
 "use client";
 
 import { formatQuantity } from "@cellar-assistant/contracts/quantity";
-import Image from "next/image";
 import { Restaurant } from "@/components/app/icons";
 import { Link } from "@/components/app/Link";
+import { RecipeThumb } from "@/components/recipe/RecipePlate";
 import { Badge } from "@/components/ui/badge";
-import beer1 from "@/images/beer1.png";
-import wine1 from "@/images/wine1.png";
 import { HeldBackNote } from "./HeldBackNote";
 import { ItemSection } from "./ItemSection";
 
@@ -16,12 +14,6 @@ const getDifficultyText = (level: number) => {
   if (level === 3) return "Medium";
   if (level === 4) return "Hard";
   return "Very Hard";
-};
-
-const getFallback = (type: string) => {
-  return type === "food"
-    ? { image: beer1, alt: "A food dish" }
-    : { image: wine1, alt: "A cocktail" };
 };
 
 export type ItemRecipeIngredient = {
@@ -50,7 +42,8 @@ export type ItemRecipesProps = {
  * `82450ad1:src/components/item/ItemRecipes.tsx`, restored. Fed by
  * `Item.recipeIngredients` + `RecipeIngredient.recipe` (G11) through the
  * adapter; a recipe's own `imageUrl` goes into a plain `<img>` (no
- * `remotePatterns` entry), the fallback stays a static `next/image`.
+ * `remotePatterns` entry). With none, B03's drawn `RecipeThumb` — the old
+ * fallback was a wine-bottle photo for every cocktail.
  *
  * Amounts go through the one quantity formatter (X14, contracts
  * `formatQuantity`): "1½ oz", where this file used to carry its own table.
@@ -74,7 +67,6 @@ export const ItemRecipes = ({
       <ul className="flex flex-col gap-4">
         {recipeIngredients.map((ingredient) => {
           const recipe = ingredient.recipe;
-          const fallback = getFallback(recipe.type);
           const quantityText = formatQuantity(
             ingredient.quantity,
             ingredient.unit,
@@ -93,13 +85,8 @@ export const ItemRecipes = ({
                     className="size-full rounded-xs object-cover"
                   />
                 ) : (
-                  <Image
-                    src={fallback.image}
-                    alt={fallback.alt}
-                    width={48}
-                    height={48}
-                    className="size-full rounded-xs object-cover"
-                  />
+                  // B03: a drawn coupe or cloche, not a beer or wine photo.
+                  <RecipeThumb type={recipe.type} className="rounded-xs" />
                 )}
               </span>
 
