@@ -384,3 +384,47 @@ export const HomeFriendsFeedQuery = graphql(
 `,
   [ActorErrorFieldsFragment],
 );
+
+/** How many sealed Drink soon rows Home reads (L02). */
+export const DRINK_SOON_READ = 20;
+
+/**
+ * L02: the sealed half of Drink soon, which the server computes from each
+ * bottle's window (`me.drinkSoon`). The opened half stays client-side, from
+ * `me.openBottles` above, so its "Open N days" ticks with the page clock.
+ */
+export const HomeDrinkSoonQuery = graphql(`
+  query HomeDrinkSoon($first: Int!) {
+    me {
+      __typename
+      id
+      drinkSoon(first: $first) {
+        edges {
+          node {
+            reason
+            urgency
+            typicalFor
+            window {
+              until
+              untilSource
+            }
+            bottle {
+              __typename
+              id
+              cellarId
+              item {
+                __typename
+                id
+                type
+                name
+                ... on Wine {
+                  vintage
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+`);

@@ -14,7 +14,7 @@ import type { ResultOf } from "@/lib/api/graphql";
 import { type LabelPlateData, labelPlateFrom } from "@/lib/items/label-plate";
 import { formatItemVintage } from "@/utilities";
 import { displayItemName } from "@/utilities/smart-title-case";
-import type { HomeContinueQuery } from "./queries";
+import type { HomeContinueQuery, HomeDrinkSoonQuery } from "./queries";
 
 type BottleNode = NonNullable<
   ResultOf<typeof HomeContinueQuery>["me"]
@@ -136,4 +136,66 @@ export const openBottlesFromNodes = (
   nodes.flatMap((node) => {
     const bottle = openBottleFromNode(node);
     return bottle === null ? [] : [bottle];
+  });
+
+type DrinkSoonNode = NonNullable<
+  ResultOf<typeof HomeDrinkSoonQuery>["me"]
+>["drinkSoon"]["edges"][number]["node"];
+
+/** A sealed bottle whose window closes soon (L02; L18), as its row draws it. */
+export type SealedSoon = {
+  readonly id: string;
+  readonly href: string;
+  readonly type: ApiItemType;
+  readonly title: string;
+  readonly name: string;
+  readonly past: boolean;
+  /** "Sealed · window ends Jan 2027 · typical for IPA". */
+  readonly line: string;
+};
+
+const MONTHS = "Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec".split(" ");
+const monthYear = (date: string): string =>
+  `${MONTHS[Number(date.slice(5, 7)) - 1]} ${date.slice(0, 4)}`;
+
+/** The server's sealed rows; opened ones are Home's own (drink-soon.ts). */
+export const sealedSoonFromNodes = (
+  nodes: readonly DrinkSoonNode[],
+): SealedSoon[] =>
+  nodes.flatMap((node): SealedSoon[] => {
+    const item = node.bottle.item;
+    const until = node.window?.until as string | null | undefined;
+    if (
+      node.reason !== "SEALED" ||
+      item === null ||
+      item === undefined ||
+      !isApiItemType(item.type) ||
+      until === null ||
+      until === undefined
+    ) {
+      return [];
+    }
+    const name = displayItemName(item.name);
+    const vintage =
+      item.__typename === "Wine"
+        ? formatItemVintage("WINE", item.vintage)
+        : undefined;
+    const ends = node.urgency === "PAST" ? "window ended" : "window ends";
+    const line =
+      node.window?.untilSource === "USER"
+        ? `Sealed · your date: drink by ${monthYear(until)}`
+        : `Sealed · ${ends} ${monthYear(until)}${
+            node.typicalFor === null ? "" : ` · typical for ${node.typicalFor}`
+          }`;
+    return [
+      {
+        id: node.bottle.id,
+        href: cellarItemHref(node.bottle.cellarId, item.type, node.bottle.id),
+        type: item.type,
+        title: vintage === undefined ? name : `${vintage} ${name}`,
+        name,
+        past: node.urgency === "PAST",
+        line,
+      },
+    ];
   });
