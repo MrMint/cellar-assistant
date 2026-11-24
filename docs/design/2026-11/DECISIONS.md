@@ -17,6 +17,10 @@ owner; an owner's call can only be changed by the owner.
 | 10 | 2026-11-23 | owner | Reference screenshots may be downloaded from public App Store listings; demo label photos from Wikimedia Commons under free licences. | Asked and answered. |
 | 11 | 2026-11-23 | lead | The direction round's key screens change: the bar moment (several ways) replaces snap-to-add as the headline capture screen; snap-to-add stays as a mode of ＋. | Follows from 5 to 8. |
 | 12 | 2026-11-23 | owner | The reference wall is dropped, unrated: "It was just random listing/screenshot/marketing pages". There is no TASTE.md from a wall; taste is settled on the app's own screens in the direction round. | Store listing shots are staged and say little. Fettle's log said the same ("marketing images cost ratings"). |
+| 13 | 2026-11-23 | owner | Direction A · Label leads. B · Ledger and C · Tiers are dropped, and nothing is borrowed from either. | Played on the canvas: "I lean towards A. I really don't like B or C." |
+| 14 | 2026-11-23 | owner | A is not final. Not right yet: the look itself (warm near-black, brass, serif names) and Home and the tabs. Not flagged, so kept for now: the rating stroke over the picture and the drawn label for a drink with no photo. | "I would like to keep on iterating and trying to find the ideal design." |
+| 15 | 2026-11-23 | owner | The direction round gets a second round: three designers each redraw A, pushing a different part further, for the owner to play side by side and mix. | Chosen over one refined A and over A plus two new ideas. |
+| 16 | 2026-11-23 | owner | The bar moment: "the place knows" and "snap the board" felt right. "Type it" and "rate now, name later" were not picked. | Played four ways on the boards. So the place's list is the way in, and snapping the board is how a place gets one. |
 
 ## Open, for the owner
 
