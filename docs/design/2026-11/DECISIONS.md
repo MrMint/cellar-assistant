@@ -16,6 +16,7 @@ owner; an owner's call can only be changed by the owner.
 | 9 | 2026-11-23 | owner | Home is geared around what main's search screen had: search, shortcuts, the owner's own recent activity. | Pair SH03, rated worse. |
 | 10 | 2026-11-23 | owner | Reference screenshots may be downloaded from public App Store listings; demo label photos from Wikimedia Commons under free licences. | Asked and answered. |
 | 11 | 2026-11-23 | lead | The direction round's key screens change: the bar moment (several ways) replaces snap-to-add as the headline capture screen; snap-to-add stays as a mode of ＋. | Follows from 5 to 8. |
+| 12 | 2026-11-23 | owner | The reference wall is dropped, unrated: "It was just random listing/screenshot/marketing pages". There is no TASTE.md from a wall; taste is settled on the app's own screens in the direction round. | Store listing shots are staged and say little. Fettle's log said the same ("marketing images cost ratings"). |
 
 ## Open, for the owner
 
