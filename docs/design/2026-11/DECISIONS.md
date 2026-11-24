@@ -33,6 +33,7 @@ owner; an owner's call can only be changed by the owner.
 | 26 | 2026-11-23 | owner | Match model and effort to the task, for spend and speed: top-tier models only where taste or hard judgement is needed; cheaper, faster ones for loading data, shooting screens and mechanical checks. | "be somewhat smart here about what models and effort levels we're using". |
 | 27 | 2026-11-24 | owner | The cellar-list trial is the look to build on: "much better", "in general, I really do prefer this look". It is not finished: "a lot of room for polish". The next rounds are variations rooted in this board, not new directions. | "maybe now we do a couple of different … paths or iterations, but rooted in this" |
 | 28 | 2026-11-24 | owner | Tapping a bottle in the cellar list goes to the full item page; the peek sheet must not replace it. A quick view from the list is welcome as a second, optional way in, for looking at several bottles quickly. | "we do want to go to that full screen page … we don't want to lose all the other good stuff on there"; "not totally against the idea of like a quick view" |
+| 29 | 2026-11-24 | owner | The next round is three takes on the cellar list and the full item page drawn as one flow, in the trial's look: Faithful (least change), Quick view (adds a fast way to look through bottles from the list; each take may try its own mechanism), Bolder (the same look pushed further). The look is locked; each take moves one lever. | AskUserQuestion: "List + item page, 3 takes"; quick view: "Let the takes differ" |
 
 ## Open, for the owner
 
