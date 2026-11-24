@@ -744,7 +744,7 @@ services:
   # Production has neither this nor the client (Vercel serves the frontend):
   # both are profiled out in docker-compose.prod.yml.
   client-files-loopback:
-    image: node:24-bookworm-slim
+    image: node:26-bookworm-slim
     network_mode: "service:client"
     command:
       - node

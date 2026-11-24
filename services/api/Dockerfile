@@ -42,7 +42,7 @@
 # The image needs nothing else — no compiler, no native rebuild step — so the
 # ~79MB is the whole cost of keeping both runtimes present.
 
-FROM node:24-bookworm-slim AS base
+FROM node:26-bookworm-slim AS base
 WORKDIR /workspace
 # Bun is now the package manager AND the runtime, so the binary belongs in
 # `base` — both the `deps` stage and the runtime stage inherit it. (It used to
