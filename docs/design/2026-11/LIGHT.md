@@ -17,7 +17,7 @@ Contrast figures are for light, on bg `#f5f4f8` / card `#fff` / raised `#ebe9f0`
 | edge-2 | #71678a | #867f99 | 3.48 / 3.81 / 3.17; input boundaries (ruling 1) |
 | hair | #2c2936 | #e4e2ea | divider |
 | rule | #3c3847 | #e1dee7 | |
-| dash | #5d5870 | #8f89a1 | 3.06 / 3.35; board-note dash |
+| dash | #736d89 | #8f89a1 | 3.06 / 3.35; board-note dash |
 | ink | #ffffff | #17151c | 16.5 / 18.1 / 15.0 / 13.3 |
 | ink-2 | #b8b5c0 | #4a4656 | 8.3 / 9.1 / 7.6 / 6.7 |
 | ink-3 | #aea9bd | #5c576b | 6.3 / 6.9 / 5.8 / 5.1 |
@@ -53,7 +53,7 @@ over photos. The QR plate and switch knob are white in both themes.
 
 (a) CSS, replacing the board's token block(s):
 ```
-.app,.app .keep-dark{--bg:#111015;--card:#221f2a;--raised:#332f3e;--sel:#443f53;--edge:#433f4d;--edge-2:#71678a;--hair:#2c2936;--rule:#3c3847;--dash:#5d5870;
+.app,.app .keep-dark{--bg:#111015;--card:#221f2a;--raised:#332f3e;--sel:#443f53;--edge:#433f4d;--edge-2:#71678a;--hair:#2c2936;--rule:#3c3847;--dash:#736d89;
 --ink:#ffffff;--ink-2:#b8b5c0;--ink-3:#aea9bd;--glyph:#857e9f;--act:#70a2a9;--on-act:#111015;--act-ink:#8cc0c6;--gold:#d59d24;--heart:#fe0000;--dng:#f0c5c8;
 --k5:#4fb469;--k4:#9cc25a;--k3:#e5c84a;--k2:#ec8f3e;--k1:#e8615a;--on-k:#111015;--k-edge:transparent;--here:#3d7ef0;
 --scrim:rgba(8,7,12,.62);--scrim-pk:rgba(8,7,12,.78);--glass:rgba(17,16,21,.86);--on-glass:#ffffff;--sh-bar:0 10px 12px -10px rgba(4,3,8,.9);--sh-pop:0 12px 32px rgba(4,3,8,.6);
@@ -90,6 +90,6 @@ Delete any board-level theme switch (`FORCE_LIGHT`, `const LIGHT`, `matchMedia('
    use `--edge-2`. Tiles and cards stay decorative on `--edge`; their tonal fill is the boundary.
 2. The light gold `#a2700c` is accepted; gold stays the owner's own verdict in both themes.
 3. Dark-theme failures the kit flagged are fixed with the light round: glyph and heart on `--sel` use
-   ink-2 / a filled heart on a card chip; `--dash` on bg and card darkens to pass 3:1; the switch
+   ink-2 / a filled heart on a card chip; dark `--dash` lightens to #736d89 (3.86 on bg, 3.30 on card); the switch
    knob on act gets a 1 px `--on-act` ring.
 4. The kit's sign-in pilot loses "Forgot password?" (DECISIONS 45a).
