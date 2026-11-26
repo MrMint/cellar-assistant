@@ -102,3 +102,6 @@ Delete any board-level theme switch (`FORCE_LIGHT`, `const LIGHT`, `matchMedia('
   keep their layout.
 - Discs on a hero with no photo (back, menu) are `--card` with `--ink` glyphs; glass discs only over
   photos.
+- `--glass-hover`: rgba(17,16,21,.96) in both themes (desktop disc hover). Segmented controls are not
+  input boundaries and stay on `--edge`. Images that leave the app (the recap share card, link
+  previews) are generated from the dark values whatever the theme.
