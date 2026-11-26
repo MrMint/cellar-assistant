@@ -100,3 +100,5 @@ Delete any board-level theme switch (`FORCE_LIGHT`, `const LIGHT`, `matchMedia('
   (#8cc0c6 in both themes) for teal on glass.
 - Build note: hero titles must reach 4.5:1 in both themes (below the photo, or on a scrim); the boards
   keep their layout.
+- Discs on a hero with no photo (back, menu) are `--card` with `--ink` glyphs; glass discs only over
+  photos.
