@@ -225,3 +225,29 @@ asus-kbd-medium, toggle and success asus-kbd-space; volume 0.3, pitch ±0.05.
 5. **Word ceilings** stand as proposed; the critic checks them.
 6. **Profile picture:** yes, as new work (an initials avatar until one is set; still never a
    photo of another person on any board).
+
+## Kit amendments from the fix round (lead, 2026-11-26)
+
+Phone kit: segments 44 high in a 46 strip; view buttons 44×44; field inputs and the clear button 44;
+muted text on a selected surface is ink-2; tea and sake glyphs join the kind glyphs, in the order
+Beer, Wine, Spirit, Coffee, Tea, Sake (kinds with none hidden); keys live on the app element, never
+the document, and focus returns to the open sheet or the app; the People pilot has Test Two as a
+friend and a request with outlined Accept and quiet Decline; text buttons at least 44 wide, with a
+quiet ink-2 variant for "Finish later", "Not this" and unlink; every rank is a filled band chip and
+the owner's #1 alone wears the gold crown (trophies retired); a toast over a sheet sits 12 above it,
+or 12 from the top when the sheet is taller than 70 % of the screen; the band sheet's header names
+the rank, band and list; unrated tiles show empty stars only; a disabled control is the same control
+at 40 % opacity; board notes are a dashed "Board note · …" box.
+Desktop kit: text buttons 44×44 (toast Undo included); keys on the app element; tile foot always
+draws stars, the score only when rated; a crumbs row of 44-tall text buttons; dialogs centre on the
+content column; rating hit areas 44×44.
+Shared rulings are kept in `.builds/design-pass-2026-11/areas/CROSS-LOT.md`, which the hand-off
+folds into this file.
+No-photo plate (settles a contradiction above): at 75 px and up the plate carries the drink's name
+(r8); below 75 px it carries the kind glyph (r4); both sit on the raised well with no border.
+Recipe face: a label plate with a tumbler glyph and the recipe's name (same sizes and rule as the
+drink plate).
+Small plates (under 75 px): the kind glyph is 50 % of the plate.
+Board scaffold and small parts adopted from the area boards: the dashed "Board note · …" box (board
+mechanics only, never product UI); a "Sample" tag on sample people's rows; the Me badge (act dot with
+a count on the tab or rail avatar, aria "Me, n friend requests").
