@@ -93,3 +93,10 @@ Delete any board-level theme switch (`FORCE_LIGHT`, `const LIGHT`, `matchMedia('
    ink-2 / a filled heart on a card chip; dark `--dash` lightens to #736d89 (3.86 on bg, 3.30 on card); the switch
    knob on act gets a 1 px `--on-act` ring.
 4. The kit's sign-in pilot loses "Forgot password?" (DECISIONS 45a).
+
+## Added during the light round (lead, 2026-11-26)
+- Kit tokens adopted from Places: `--sh-pin`, `--sh-pin-on`, `--sh-you`, `--sh-dock`, `--sh-bar-up`
+  (dark values unchanged from the boards; light values rgba(40,36,52,…)), and `--act-on-glass`
+  (#8cc0c6 in both themes) for teal on glass.
+- Build note: hero titles must reach 4.5:1 in both themes (below the photo, or on a scrim); the boards
+  keep their layout.
