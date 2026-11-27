@@ -47,7 +47,29 @@ const POURED_AT = "2026-10-08T19:30:00.000Z";
 
 type Sent = { operationName: string; variables: Record<string, unknown> };
 const sent: Sent[] = [];
+/** Who `/api/auth/get-session` says is signed in (F-57). */
+let viewer: string | null = "me";
 globalThis.fetch = (async (url: unknown, init?: { body?: unknown }) => {
+  if (String(url).includes("/get-session")) {
+    const session =
+      viewer === null
+        ? null
+        : {
+            user: {
+              id: viewer,
+              email: `${viewer}@example.com`,
+              emailVerified: true,
+              name: viewer,
+              image: null,
+              role: "user",
+            },
+            session: { id: `s-${viewer}`, expiresAt: "2099-01-01T00:00:00Z" },
+          };
+    return new Response(JSON.stringify(session), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  }
   // urql sends a query as a GET (its parameters in the URL) and a mutation
   // as a POST body.
   const params = new URL(String(url), "http://localhost").searchParams;
@@ -313,6 +335,7 @@ beforeEach(() => {
   sent.length = 0;
   changes = 0;
   closes = 0;
+  viewer = "me";
   window.localStorage.clear();
   container = document.createElement("div");
   document.body.appendChild(container);
@@ -466,9 +489,9 @@ describe("PourSheet", () => {
     assert.match(document.body.textContent ?? "", /That’s the last of it/);
   });
 
-  test("me + Sam is the last table poured with on this device", async () => {
+  test("me + Sam is the last table this account poured with", async () => {
     window.localStorage.setItem(
-      "ca.pour.lastCompanions",
+      "ca.pour.lastCompanions:me",
       JSON.stringify([{ id: "sam", displayName: "Sam", avatarUrl: null }]),
     );
     await render(
@@ -484,6 +507,44 @@ describe("PourSheet", () => {
       | { companionIds?: string[] }
       | undefined;
     assert.deepEqual(input?.companionIds, ["sam"]);
+  });
+
+  test("a second account on the phone never reads the first one's companions (F-57)", async () => {
+    // The first account pours with Sam…
+    await render(
+      sheet({ percentageRemaining: 60, openAt: "2026-10-01T00:00:00Z" }),
+    );
+    await flush(20);
+    await click(button("With friends"));
+    await flush(10);
+    await click(
+      document.querySelector('ul[aria-label="Friends"] button') ?? undefined,
+    );
+    await flush(10);
+    await click(button("Pour 150 ml"));
+    await flush(50);
+    assert.deepEqual(
+      (ops("LogDrink")[0]?.variables.input as { companionIds?: string[] })
+        ?.companionIds,
+      ["sam"],
+    );
+    assert.ok(window.localStorage.getItem("ca.pour.lastCompanions:me"));
+
+    // …then someone else signs in on the same phone, without a sign-out.
+    viewer = "ana";
+    window.dispatchEvent(new Event("focus"));
+    await flush(20);
+    await act(async () => root.unmount());
+    document.body.innerHTML = "";
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+    await render(
+      sheet({ percentageRemaining: 60, openAt: "2026-10-01T00:00:00Z" }),
+    );
+    await flush(20);
+    assert.equal(button("me + Sam"), undefined);
+    assert.doesNotMatch(document.body.textContent ?? "", /me \+ Sam/);
   });
 
   test("Finished, then rate — the review — then the band sheet on your own lists", async () => {

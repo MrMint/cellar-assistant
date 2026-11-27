@@ -33,6 +33,7 @@ import {
 } from "@/components/tier-list/queries";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
+import { useSession } from "@/lib/api/auth-client";
 import { UpdateCellarItemMutation } from "@/lib/api/cellars";
 import { readFragment } from "@/lib/api/graphql";
 import {
@@ -61,7 +62,6 @@ import {
   movedEditSeq,
   notYetLevel,
   ownPlacements,
-  parseCompanions,
   pourAmount,
   pourBottleInput,
   pouredMessage,
@@ -78,24 +78,10 @@ import {
   PourTierListBandQuery,
   PourTierListHistoryQuery,
 } from "./queries";
-
-/** Per-viewer convenience: the last "who with" poured with, on this device. */
-const COMPANIONS_KEY = "ca.pour.lastCompanions";
-
-const readRemembered = (): Companion[] => {
-  try {
-    return parseCompanions(window.localStorage.getItem(COMPANIONS_KEY));
-  } catch {
-    return [];
-  }
-};
-const remember = (companions: readonly Companion[]): void => {
-  try {
-    window.localStorage.setItem(COMPANIONS_KEY, JSON.stringify(companions));
-  } catch {
-    // Private mode or blocked storage: the chip just isn't offered next time.
-  }
-};
+import {
+  readRememberedCompanions,
+  rememberCompanions,
+} from "./remembered-companions";
 
 export type PourBottle = {
   readonly cellarId: string;
@@ -180,6 +166,8 @@ export function PourSheet({
   const [error, setError] = useState<ApiFailure | null>(null);
   const [busy, setBusy] = useState(false);
   const [remembered, setRemembered] = useState<Companion[]>([]);
+  // Whose "who with" to offer: nobody's until the session says (F-57).
+  const viewerId = useSession().session?.user.id ?? null;
 
   // A fresh pour every time the sheet opens.
   const wasOpen = useRef(false);
@@ -198,10 +186,13 @@ export function PourSheet({
       setLogId(mintId());
       setPouredAt(null);
       setError(null);
-      setRemembered(readRemembered());
     }
     wasOpen.current = open;
   }, [open, bottle.percentageRemaining, bottle.openAt, type]);
+  // Re-read whenever the sheet opens or the account changes under it.
+  useEffect(() => {
+    if (open) setRemembered(readRememberedCompanions(viewerId));
+  }, [open, viewerId]);
 
   const { friends, known } = useDrinkLogFriends(preloadedFriends, !open);
   const recent = rememberedCompanions(remembered, known ? friends : null);
@@ -284,7 +275,8 @@ export function PourSheet({
       setError(logged.error);
       return;
     }
-    if (companionIds.length > 0) remember(companionsOf(companionIds));
+    if (companionIds.length > 0)
+      rememberCompanions(viewerId, companionsOf(companionIds));
     const at = readFragment(DrinkLogEntryFragment, logged.data.entry)
       .createdAt as string;
     setPouredAt(at);
@@ -649,8 +641,9 @@ function RowLabel({ id, children }: { id: string; children: string }) {
 
 /**
  * "Just me" / "me + Sam" / "With friends" — Bulk Check In, replaced.
- * "me + Sam" is the last table you poured with on this device
- * (`localStorage`, a per-viewer convenience), kept to people who are still
+ * "me + Sam" is the last table this account poured with on this device
+ * (`localStorage`, keyed per account and forgotten on sign-out — see
+ * `remembered-companions.ts`), kept to people who are still
  * your friends; "With friends" opens the picker.
  */
 function WhoWith({
