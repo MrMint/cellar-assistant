@@ -26,7 +26,7 @@ const full = {
 };
 
 describe("LabelPlate (kit no-photo plate)", () => {
-  test("75 px and up: the drink's name on an r8 card; under: the glyph", () => {
+  test("75 px and up: producer, name and year on an r8 card; under: the glyph", () => {
     const html = renderToStaticMarkup(<LabelPlate type="WINE" plate={full} />);
     assert.match(openTag(html, 'data-slot="label-plate"'), /bg-raised/);
     assert.match(openTag(html, 'data-slot="label-plate"'), /@container/);
@@ -34,7 +34,7 @@ describe("LabelPlate (kit no-photo plate)", () => {
     assert.match(html, /@min-\[75px\]:flex/);
     assert.match(openTag(html, 'data-slot="label-plate-paper"'), /rounded-md/);
     assert.match(openTag(html, 'data-slot="label-plate-paper"'), /bg-card/);
-    assert.equal(textOf(html), "Barolo Castiglione");
+    assert.equal(textOf(html), "Vietti Barolo Castiglione 2016");
   });
 
   test("no border on the well (SHARED round 2)", () => {

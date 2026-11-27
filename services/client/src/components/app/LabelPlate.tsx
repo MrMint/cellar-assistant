@@ -94,6 +94,7 @@ export function LabelPlate({
   labelled = false,
   muted = false,
   face = "drink",
+  styleFields,
   className,
 }: LabelPlateProps) {
   const Glyph = face === "recipe" ? TumblerGlyph : itemTypeTokens[type].glyph;
@@ -102,6 +103,7 @@ export function LabelPlate({
       data-slot="label-plate"
       data-type={type}
       data-face={face}
+      data-vessel={vesselFor(type, styleFields)}
       {...(labelled
         ? { role: "img", "aria-label": `Label: ${plateSummary(plate)}` }
         : { "aria-hidden": true })}
@@ -119,19 +121,35 @@ export function LabelPlate({
       <div className="absolute inset-0 hidden items-center justify-center @min-[75px]:flex">
         <div
           data-slot="label-plate-paper"
-          className="flex h-[58%] w-[52%] flex-col items-center justify-center gap-2.5 overflow-hidden rounded-md bg-card px-3 text-center"
+          className="flex h-[58%] w-[52%] flex-col items-center justify-center gap-1.5 overflow-hidden rounded-md bg-card px-3 text-center"
         >
           <Glyph
             aria-hidden
             strokeWidth={1.25}
             className="aspect-square h-auto w-[34%] shrink-0 text-glyph"
           />
+          {plate.producer !== undefined && plate.producer !== "" && (
+            <p
+              data-slot="label-plate-producer"
+              className="m-0 line-clamp-1 break-words text-[length:clamp(9px,4.5cqw,12px)] text-ink-2 leading-[1.2]"
+            >
+              {plate.producer}
+            </p>
+          )}
           <p
             data-slot="label-plate-name"
             className="m-0 line-clamp-3 break-words font-semibold text-[length:clamp(11px,6cqw,16px)] text-ink leading-[1.2]"
           >
             {plate.name}
           </p>
+          {plate.vintage !== undefined && plate.vintage !== "" && (
+            <p
+              data-slot="label-plate-vintage"
+              className="tabular m-0 text-[length:clamp(9px,4.5cqw,12px)] text-ink-2 leading-[1.2]"
+            >
+              {plate.vintage}
+            </p>
+          )}
         </div>
       </div>
     </div>
