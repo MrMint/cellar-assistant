@@ -1249,6 +1249,9 @@ export const user = pgTable("user", {
 	email: text().notNull(),
 	emailVerified: boolean("email_verified").default(false).notNull(),
 	image: text(),
+	// SV-D (L17): the profile picture, a verified `avatar` upload of this
+	// user's, presigned at read like an item image. Null falls back to `image`.
+	avatarFileId: uuid("avatar_file_id").references(() => files.id, { onDelete: "set null", onUpdate: "restrict" } ),
 	createdAt: timestamp("created_at", { withTimezone: true }).default(sql`now()`).notNull(),
 	updatedAt: timestamp("updated_at", { withTimezone: true }).default(sql`now()`).notNull(),
 	role: text().default("user").notNull(),
@@ -1256,6 +1259,7 @@ export const user = pgTable("user", {
 	disabled: boolean().default(false).notNull(),
 }, (table) => [
 	uniqueIndex("user_email_key").using("btree", table.email.asc().nullsLast()),
+	index("user_avatar_file_id_idx").using("btree", table.avatarFileId.asc().nullsLast()),
 ]);
 
 export const userPlaceInteractions = pgTable("user_place_interactions", {

@@ -537,4 +537,44 @@ describe.skipIf(skip)("PlaceSearchActor (§2.3)", () => {
       });
     });
   });
+
+  describe("section totals (MC-search, L3)", () => {
+    it("is the full count under the cap, and the cap as a lower bound past it", async () => {
+      await withTestDb(async (db) => {
+        const viewer = await seedUser(db);
+        for (const name of [
+          "Qzxvino Alpha",
+          "Qzxvino Bravo",
+          "Qzxvino Delta",
+        ]) {
+          await seedPlace(db, {
+            name,
+            lng: -83,
+            lat: 40,
+            primaryCategory: "wine_bar",
+          });
+        }
+
+        const under: PlaceSearchInput = { query: "Qzxvino", limit: 3 };
+        const all = await newActor(under, db, viewer).results(
+          userCtx(viewer),
+          under,
+          { first: 1, after: null },
+        );
+        expect(all.entries).toHaveLength(1);
+        expect(all.totalCount).toBe(3);
+        expect(all.totalIsLowerBound).toBe(false);
+
+        const capped: PlaceSearchInput = { query: "Qzxvino", limit: 2 };
+        const page = await newActor(capped, db, viewer).results(
+          userCtx(viewer),
+          capped,
+          { first: 10, after: null },
+        );
+        expect(page.entries).toHaveLength(2);
+        expect(page.totalCount).toBe(2);
+        expect(page.totalIsLowerBound).toBe(true);
+      });
+    });
+  });
 });

@@ -118,6 +118,34 @@ describe.skipIf(skip)("BrandSearchActor (§2.3)", () => {
     });
   });
 
+  it("MC-search: a lexical section's total is exact, under the cap and past it", async () => {
+    await withTestDb(async (db) => {
+      const viewer = await seedUser(db);
+      await seedBrands(db, ["Qzx One", "Qzx Two", "Qzx Three"]);
+      const ctx = userCtx(viewer);
+
+      const under: BrandSearchInput = { term: "qzx" };
+      const all = await newActor(under, db, viewer).results(ctx, under, {
+        first: 1,
+        after: null,
+      });
+      // One entry on the page, three matches: the total is not the page.
+      expect(all.entries).toHaveLength(1);
+      expect(all.totalCount).toBe(3);
+      expect(all.totalIsLowerBound).toBe(false);
+
+      // Capped at 2, still counted in full — exact, so never a lower bound.
+      const capped: BrandSearchInput = { term: "qzx", limit: 2 };
+      const page = await newActor(capped, db, viewer).results(ctx, capped, {
+        first: 10,
+        after: null,
+      });
+      expect(page.entries).toHaveLength(2);
+      expect(page.totalCount).toBe(3);
+      expect(page.totalIsLowerBound).toBe(false);
+    });
+  });
+
   it("shows the same catalog to owner, friend and stranger; refuses anonymous", async () => {
     await withTestDb(async (db) => {
       const owner = await seedUser(db);

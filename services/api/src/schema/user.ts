@@ -33,6 +33,7 @@ import type {
   UserProfileDto,
 } from "@cellar-assistant/contracts";
 import {
+  FileActorDescriptor,
   ForbiddenError,
   FRIEND_REQUEST_DIRECTIONS,
   FriendsCollectionActorDescriptor,
@@ -107,28 +108,85 @@ const loadProfiles = async (
     }),
   );
 
-export const UserProfileType = builder
-  .loadableObjectRef<UserProfileDto, string>("UserProfile", {
+/**
+ * MC-avatar (L17): **the** avatar URL, for every resolver that returns one.
+ *
+ * An uploaded picture (`avatarFileId`) is a file id, presigned per read like
+ * an item image, because a stored presigned URL expires in 30 minutes. With
+ * none, or when the picture cannot be read, it is `user.image` as stored.
+ * `FileActor` decides who may read the file (`canSeeProfile`), so a viewer
+ * who could not see it gets the fallback, never an error for the whole row.
+ */
+export const avatarUrlOf = async (
+  context: ApiContext,
+  profile: {
+    readonly avatarFileId: string | null;
+    readonly avatarUrl: string | null;
+  },
+): Promise<string | null> => {
+  if (profile.avatarFileId === null) return profile.avatarUrl;
+  try {
+    return (
+      await context
+        .actor(FileActorDescriptor, profile.avatarFileId)
+        .presignRead()
+    ).url;
+  } catch (error) {
+    console.warn(
+      `[api] avatar file ${profile.avatarFileId} could not be presigned; ` +
+        `falling back to user.image: ${String(error)}`,
+    );
+    return profile.avatarUrl;
+  }
+};
+
+/** The same URL for a user known only by id: one profile load, then the helper. */
+export const avatarUrlForUser = async (
+  context: ApiContext,
+  userId: string,
+  fallback: string | null,
+): Promise<string | null> => {
+  try {
+    return await avatarUrlOf(
+      context,
+      await UserProfileLoadable.getDataloader(context).load(userId),
+    );
+  } catch {
+    return fallback;
+  }
+};
+
+const UserProfileLoadable = builder.loadableObjectRef<UserProfileDto, string>(
+  "UserProfile",
+  {
     load: loadProfiles,
     toKey: (profile) => profile.id,
-  })
-  .implement({
-    description:
-      "A user, as any signed-in viewer may see them. Profile fields live in " +
-      "better-auth's `user` table; there is no `public.users` (plan §3).",
-    fields: (t) => ({
-      id: t.exposeID("id"),
-      displayName: t.exposeString("displayName"),
-      avatarUrl: t.exposeString("avatarUrl", { nullable: true }),
-      locale: t.exposeString("locale", { nullable: true }),
-      email: t.exposeString("email", {
-        nullable: true,
-        description:
-          "Only ever populated for the owner (or an admin); null for " +
-          "everybody else, including friends.",
-      }),
+  },
+);
+
+export const UserProfileType = UserProfileLoadable.implement({
+  description:
+    "A user, as any signed-in viewer may see them. Profile fields live in " +
+    "better-auth's `user` table; there is no `public.users` (plan §3).",
+  fields: (t) => ({
+    id: t.exposeID("id"),
+    displayName: t.exposeString("displayName"),
+    avatarUrl: t.string({
+      nullable: true,
+      description:
+        "The uploaded profile picture (a presigned URL, fresh per read) " +
+        "when there is one, else the stored image URL.",
+      resolve: (profile, _args, context) => avatarUrlOf(context, profile),
     }),
-  });
+    locale: t.exposeString("locale", { nullable: true }),
+    email: t.exposeString("email", {
+      nullable: true,
+      description:
+        "Only ever populated for the owner (or an admin); null for " +
+        "everybody else, including friends.",
+    }),
+  }),
+});
 
 export const FriendType = builder.objectRef<FriendEdgeDto>("Friend").implement({
   description: "Someone the user is friends with, and since when.",
@@ -512,6 +570,34 @@ builder.mutationField("updateProfile", (t) =>
       myActor(context, "update your profile").updateProfile(
         patch(args.input, UPDATE_PROFILE) satisfies UpdateProfileInput,
       ),
+  }),
+);
+
+builder.mutationField("setAvatar", (t) =>
+  t.field({
+    type: UserProfileType,
+    description:
+      "Make an uploaded file the viewer's profile picture (MC-avatar). The " +
+      "file must be the viewer's own verified upload of kind `avatar` " +
+      '(`createUploadTarget(kind: "avatar")`, then `verifyUpload`).',
+    args: { fileId: t.arg.id({ required: true }) },
+    errors: {},
+    resolve: (_root, args, context) =>
+      myActor(context, "set your profile picture").setAvatar({
+        fileId: String(args.fileId),
+      }),
+  }),
+);
+
+builder.mutationField("removeAvatar", (t) =>
+  t.field({
+    type: UserProfileType,
+    description:
+      "Clear the viewer's profile picture; `avatarUrl` falls back to the " +
+      "stored image URL.",
+    errors: {},
+    resolve: (_root, _args, context) =>
+      myActor(context, "remove your profile picture").removeAvatar(),
   }),
 );
 

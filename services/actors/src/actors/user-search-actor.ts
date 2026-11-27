@@ -39,9 +39,9 @@
 import type {
   ActorCategory,
   Ctx,
-  Page,
   PageArgs,
   PersonRelation,
+  SearchPage,
   UserSearchActorInterface,
   UserSearchHit,
   UserSearchInput,
@@ -61,7 +61,11 @@ import { actorDb } from "../lib/db.ts";
 import { requireSignedIn } from "../lib/guards.ts";
 import type { ProfileStore } from "../lib/profile-store.ts";
 import { betterAuthProfileStore } from "../lib/profile-store.ts";
-import { SearchActorBase } from "../lib/search-actor-base.ts";
+import {
+  type CountedHits,
+  exactTotal,
+  SearchActorBase,
+} from "../lib/search-actor-base.ts";
 
 /**
  * Leftovers 5 (L6): a person the viewer may not see is simply not a hit, the
@@ -102,7 +106,7 @@ export class UserSearchActor
     ctx: Ctx,
     input: UserSearchInput,
     page: PageArgs,
-  ): Promise<Page<UserSearchHit>> {
+  ): Promise<SearchPage<UserSearchHit>> {
     return this.pageOf(ctx, input, page);
   }
 
@@ -129,7 +133,7 @@ export class UserSearchActor
   protected async runSearch(
     ctx: Ctx,
     input: UserSearchInput,
-  ): Promise<readonly UserSearchHit[]> {
+  ): Promise<CountedHits<UserSearchHit>> {
     const viewer = ctx.viewerId;
     const term = input.term.trim();
     const limit = requireLimit(input.limit ?? USER_SEARCH_RESULT_CAP);
@@ -141,7 +145,8 @@ export class UserSearchActor
       // accepted on Friends still read "Wants to be friends". Two small
       // reads and one capped store search per turn.
       this.doNotCache();
-      return visibleTo(ctx, await this.#everyone(viewer, term, limit));
+      const everyone = await this.#everyone(viewer, term, limit);
+      return exactTotal(visibleTo(ctx, everyone.hits), everyone.total);
     }
 
     // An admin ctx has no viewer of its own to exclude around; it searches the
@@ -149,13 +154,19 @@ export class UserSearchActor
     const excludeIds = viewer === null ? [] : await this.#excludedFor(viewer);
 
     const rows = await this.#profiles.search({ term, excludeIds, limit });
-    return visibleTo(
-      ctx,
-      rows.map((row) => ({
-        userId: row.id,
-        displayName: row.displayName,
-        avatarUrl: row.avatarUrl,
-      })),
+    // Lexical, so exact (L3): the store counts the same match without a limit.
+    const total = await this.#profiles.count({ term, excludeIds });
+    return exactTotal(
+      visibleTo(
+        ctx,
+        rows.map((row) => ({
+          userId: row.id,
+          displayName: row.displayName,
+          avatarUrl: row.avatarUrl,
+          avatarFileId: row.avatarFileId,
+        })),
+      ),
+      total,
     );
   }
 
@@ -173,15 +184,17 @@ export class UserSearchActor
     viewer: string | null,
     term: string,
     limit: number,
-  ): Promise<readonly UserSearchHit[]> {
+  ): Promise<{ hits: readonly UserSearchHit[]; total: number }> {
     const relations =
       viewer === null
         ? new Map<string, PersonRelation>()
         : await this.#relationsOf(viewer);
     const connected = await this.#profiles.load([...relations.keys()]);
     const needle = term.toLowerCase();
-    const known = [...connected.values()]
-      .filter((row) => row.displayName.toLowerCase().includes(needle))
+    const knownMatches = [...connected.values()].filter((row) =>
+      row.displayName.toLowerCase().includes(needle),
+    );
+    const known = knownMatches
       .map((row) => ({
         row,
         relation: relations.get(row.id) ?? ("NONE" as const),
@@ -193,28 +206,36 @@ export class UserSearchActor
           compareText(a.row.id, b.row.id),
       )
       .slice(0, limit);
+    const excludeIds = viewer === null ? [] : [viewer, ...relations.keys()];
     const rest =
       known.length >= limit
         ? []
         : await this.#profiles.search({
             term,
-            excludeIds: viewer === null ? [] : [viewer, ...relations.keys()],
+            excludeIds,
             limit: limit - known.length,
           });
-    return [
+    // Connected matches are counted here, strangers by the store: together
+    // every match, before the cap.
+    const total =
+      knownMatches.length + (await this.#profiles.count({ term, excludeIds }));
+    const hits = [
       ...known.map(({ row, relation }) => ({
         userId: row.id,
         displayName: row.displayName,
         avatarUrl: row.avatarUrl,
+        avatarFileId: row.avatarFileId,
         relation,
       })),
       ...rest.map((row) => ({
         userId: row.id,
         displayName: row.displayName,
         avatarUrl: row.avatarUrl,
+        avatarFileId: row.avatarFileId,
         relation: "NONE" as const,
       })),
     ];
+    return { hits, total };
   }
 
   /**

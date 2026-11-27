@@ -1168,6 +1168,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
             },
           },
           { name: "totalCount", type: { kind: "SCALAR", name: "Int" } },
+          {
+            name: "totalIsLowerBound",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "Boolean" },
+            },
+          },
         ],
         interfaces: [],
       },
@@ -4650,6 +4657,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
             },
           },
           { name: "totalCount", type: { kind: "SCALAR", name: "Int" } },
+          {
+            name: "totalIsLowerBound",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "Boolean" },
+            },
+          },
         ],
         interfaces: [],
       },
@@ -5699,6 +5713,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
             },
           },
           {
+            name: "removeAvatar",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "UNION", name: "RemoveAvatarResult" },
+            },
+          },
+          {
             name: "removeFriend",
             type: {
               kind: "NON_NULL",
@@ -5794,6 +5815,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
             type: {
               kind: "NON_NULL",
               ofType: { kind: "UNION", name: "SendFriendRequestResult" },
+            },
+          },
+          {
+            name: "setAvatar",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "UNION", name: "SetAvatarResult" },
             },
           },
           {
@@ -7054,6 +7082,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
             },
           },
           { name: "totalCount", type: { kind: "SCALAR", name: "Int" } },
+          {
+            name: "totalIsLowerBound",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "Boolean" },
+            },
+          },
         ],
         interfaces: [],
       },
@@ -9254,6 +9289,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
             },
           },
           { name: "totalCount", type: { kind: "SCALAR", name: "Int" } },
+          {
+            name: "totalIsLowerBound",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "Boolean" },
+            },
+          },
         ],
         interfaces: [],
       },
@@ -9578,6 +9620,18 @@ export const graphcacheSchema: MinifiedIntrospection = {
           { kind: "OBJECT", name: "ForbiddenError" },
           { kind: "OBJECT", name: "NotFoundError" },
           { kind: "OBJECT", name: "RejectFriendRequestPayload" },
+          { kind: "OBJECT", name: "ValidationError" },
+        ],
+      },
+      {
+        kind: "UNION",
+        name: "RemoveAvatarResult",
+        possibleTypes: [
+          { kind: "OBJECT", name: "BudgetExceededError" },
+          { kind: "OBJECT", name: "ConflictError" },
+          { kind: "OBJECT", name: "ForbiddenError" },
+          { kind: "OBJECT", name: "NotFoundError" },
+          { kind: "OBJECT", name: "UserProfile" },
           { kind: "OBJECT", name: "ValidationError" },
         ],
       },
@@ -10127,6 +10181,18 @@ export const graphcacheSchema: MinifiedIntrospection = {
           { kind: "OBJECT", name: "ForbiddenError" },
           { kind: "OBJECT", name: "FriendRequest" },
           { kind: "OBJECT", name: "NotFoundError" },
+          { kind: "OBJECT", name: "ValidationError" },
+        ],
+      },
+      {
+        kind: "UNION",
+        name: "SetAvatarResult",
+        possibleTypes: [
+          { kind: "OBJECT", name: "BudgetExceededError" },
+          { kind: "OBJECT", name: "ConflictError" },
+          { kind: "OBJECT", name: "ForbiddenError" },
+          { kind: "OBJECT", name: "NotFoundError" },
+          { kind: "OBJECT", name: "UserProfile" },
           { kind: "OBJECT", name: "ValidationError" },
         ],
       },
@@ -12505,6 +12571,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
             },
           },
           { name: "totalCount", type: { kind: "SCALAR", name: "Int" } },
+          {
+            name: "totalIsLowerBound",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "Boolean" },
+            },
+          },
         ],
         interfaces: [],
       },

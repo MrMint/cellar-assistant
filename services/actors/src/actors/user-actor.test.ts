@@ -36,6 +36,7 @@ import {
   ValidationError,
 } from "@cellar-assistant/contracts";
 import {
+  files,
   friendInvites,
   friendRequests,
   friends,
@@ -101,6 +102,14 @@ const fakeProfiles = (): ProfileStore & {
         .sort((a, b) => a.displayName.localeCompare(b.displayName))
         .slice(0, limit);
     },
+    count: async ({ term, excludeIds }) => {
+      const excluded = new Set(excludeIds);
+      return [...rows.values()].filter(
+        (row) =>
+          !excluded.has(row.id) &&
+          row.displayName.toLowerCase().includes(term.toLowerCase()),
+      ).length;
+    },
     update: async (id, patch) => {
       const current = rows.get(id);
       if (current === undefined) return null;
@@ -113,6 +122,9 @@ const fakeProfiles = (): ProfileStore & {
           ? {}
           : { avatarUrl: patch.avatarUrl }),
         ...(patch.locale === undefined ? {} : { locale: patch.locale }),
+        ...(patch.avatarFileId === undefined
+          ? {}
+          : { avatarFileId: patch.avatarFileId }),
       };
       rows.set(id, next);
       return next;
@@ -179,6 +191,7 @@ const seedPerson = async (db: DbOrTx, name: string): Promise<string> => {
     id,
     displayName: name,
     avatarUrl: null,
+    avatarFileId: null,
     locale: "en",
     email: `${name.toLowerCase()}-${id.slice(0, 8)}@example.test`,
   });
@@ -1505,6 +1518,95 @@ describe.skipIf(skip)("UserActor (B4)", () => {
         expect(updated).toMatchObject({
           displayName: "Alice B",
           avatarUrl: "https://example.test/a.png",
+        });
+      });
+    });
+  });
+
+  describe("profile picture (SV-D, MC-avatar)", () => {
+    const seedFile = async (
+      db: DbOrTx,
+      uploadedBy: string,
+      kind: string,
+      verified = true,
+    ): Promise<string> => {
+      const [row] = await db
+        .insert(files)
+        .values({
+          key: `${kind}/${crypto.randomUUID()}`,
+          uploadedBy,
+          mimeType: "image/png",
+          metadata: { kind },
+          verifiedAt: verified ? new Date() : null,
+        })
+        .returning({ id: files.id });
+      if (row === undefined) throw new Error("seeding a file returned no row");
+      return row.id;
+    };
+
+    it("sets only a verified avatar upload of the viewer's own", async () => {
+      await withUserDb(async (db) => {
+        const alice = await seedPerson(db, "Alice");
+        const bob = await seedPerson(db, "Bob");
+        await befriend(db, alice, bob);
+        const actor = await userActor(alice, db);
+        const ctx = userCtx(alice, "r");
+
+        const bobs = await seedFile(db, bob, "avatar");
+        const wrongKind = await seedFile(db, alice, "item-image");
+        const unverified = await seedFile(db, alice, "avatar", false);
+        const own = await seedFile(db, alice, "avatar");
+
+        // Another person's file is not Alice's to name — answered as missing,
+        // so the call cannot be used to learn that the file exists.
+        await expect(actor.setAvatar(ctx, { fileId: bobs })).rejects.toThrow(
+          NotFoundError,
+        );
+        await expect(
+          actor.setAvatar(ctx, { fileId: crypto.randomUUID() }),
+        ).rejects.toThrow(NotFoundError);
+        await expect(
+          actor.setAvatar(ctx, { fileId: wrongKind }),
+        ).rejects.toThrow(ValidationError);
+        await expect(
+          actor.setAvatar(ctx, { fileId: unverified }),
+        ).rejects.toThrow(ConflictError);
+        await expect(
+          actor.setAvatar(ctx, { fileId: "not-a-uuid" }),
+        ).rejects.toThrow(ValidationError);
+        // Someone else may not set Alice's picture, even with her own file.
+        await expect(
+          actor.setAvatar(userCtx(bob, "r"), { fileId: own }),
+        ).rejects.toThrow(ForbiddenError);
+        await expect(actor.removeAvatar(userCtx(bob, "r"))).rejects.toThrow(
+          ForbiddenError,
+        );
+        expect((await actor.getProfile(ctx)).avatarFileId).toBeNull();
+
+        expect(await actor.setAvatar(ctx, { fileId: own })).toMatchObject({
+          avatarFileId: own,
+        });
+        expect((await actor.getProfile(userCtx(bob, "r"))).avatarFileId).toBe(
+          own,
+        );
+      });
+    });
+
+    it("removes the picture and falls back to user.image", async () => {
+      await withUserDb(async (db) => {
+        const alice = await seedPerson(db, "Alice");
+        const actor = await userActor(alice, db);
+        const ctx = userCtx(alice, "r");
+        await actor.updateProfile(ctx, {
+          avatarUrl: "https://example.test/oauth.png",
+        });
+        const own = await seedFile(db, alice, "avatar");
+        await actor.setAvatar(ctx, { fileId: own });
+
+        const removed = await actor.removeAvatar(ctx);
+        expect(removed).toMatchObject({
+          avatarFileId: null,
+          avatarUrl: "https://example.test/oauth.png",
         });
       });
     });

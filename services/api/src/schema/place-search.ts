@@ -68,6 +68,11 @@ import {
   PlaceReviewStatusEnum,
   reviewStatusOut,
 } from "./place.ts";
+import {
+  lowerBoundOf,
+  SEARCH_LOWER_BOUND_DESCRIPTION,
+  searchConnectionFromPage,
+} from "./search.ts";
 import { PlaceStubType } from "./tier-list.ts";
 
 /* -------------------------------------------------------------------------- */
@@ -149,7 +154,16 @@ const PlaceSearchResult = builder
   });
 
 const PlaceSearchConnection = builder.connectionObject(
-  { type: PlaceSearchResult, name: "PlaceSearchConnection" },
+  {
+    type: PlaceSearchResult,
+    name: "PlaceSearchConnection",
+    fields: (t) => ({
+      totalIsLowerBound: t.boolean({
+        description: SEARCH_LOWER_BOUND_DESCRIPTION,
+        resolve: lowerBoundOf,
+      }),
+    }),
+  },
   { name: "PlaceSearchEdge" },
 );
 
@@ -190,7 +204,7 @@ builder.queryField("placeSearch", (t) =>
         visitStatus: args.visitStatus ?? null,
         limit: args.limit ?? null,
       };
-      return connectionFromPage(
+      return searchConnectionFromPage(
         await context
           .actor(
             PlaceSearchActorDescriptor,

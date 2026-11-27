@@ -15,6 +15,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import type { Ctx, UploadTarget } from "@cellar-assistant/contracts";
 import {
+  anonymousCtx,
   ConflictError,
   ForbiddenError,
   NotFoundError,
@@ -748,6 +749,27 @@ describe.skipIf(skip)("FileActor (A8)", () => {
         expect(read.url).toBe("https://example.test/signed-get");
         // …and the metadata too, which is what `ItemImage.url` needs.
         expect((await actor.get(userCtx(strangerId, "r4"))).id).toBe(fileId);
+      });
+    });
+
+    it("SV-D: a profile picture is for anyone who may see the profile, and only once it is one", async () => {
+      await withTestDb(async (db) => {
+        const ownerId = await seedUser(db);
+        const strangerId = await seedUser(db);
+        const { fileId, actor } = await verifiedFile(db, ownerId);
+
+        // Not yet anyone's picture: private to its uploader.
+        await expect(
+          actor.presignRead(userCtx(strangerId, "r3")),
+        ).rejects.toThrow(NotFoundError);
+
+        await db.execute(
+          sql`update public."user" set avatar_file_id = ${fileId}::uuid where id = ${ownerId}::uuid`,
+        );
+        const read = await actor.presignRead(userCtx(strangerId, "r4"));
+        expect(read.url).toBe("https://example.test/signed-get");
+        // A profile is for signed-in viewers (`canSeeProfile`), so is its picture.
+        await expect(actor.presignRead(anonymousCtx("r5"))).rejects.toThrow();
       });
     });
 

@@ -450,4 +450,64 @@ describe.skipIf(skip)("RecipeSearchActor (§2.3)", () => {
       ).rejects.toThrow(ForbiddenError);
     });
   });
+
+  describe("section totals (MC-search, L3)", () => {
+    const seedSours = async (db: DbOrTx) => {
+      for (const name of ["Qzx Sour", "Qzx Sour Royale", "Qzx Sour Fizz"]) {
+        const recipe = await seedRecipe(db, { name });
+        await seedRecipeVector(db, recipe, unitVector(0));
+      }
+    };
+
+    it("a lexical search counts every match, past the cap too", async () => {
+      await withTestDb(async (db) => {
+        const viewer = await seedUser(db);
+        await seedSours(db);
+        const input: RecipeSearchInput = { term: "qzx", limit: 2 };
+        const page = await newActor(input, db, viewer).results(
+          userCtx(viewer),
+          input,
+          { first: 10, after: null },
+        );
+        expect(page.entries).toHaveLength(2);
+        expect(page.totalCount).toBe(3);
+        expect(page.totalIsLowerBound).toBe(false);
+      });
+    });
+
+    it("a semantic search is the full count under the cap, and a lower bound at it", async () => {
+      await withTestDb(async (db) => {
+        const viewer = await seedUser(db);
+        await seedSours(db);
+        const inputs: readonly [RecipeSearchInput, RecipeSearchInput][] = [
+          [
+            { semanticQuery: "tart", limit: 3 },
+            { semanticQuery: "tart", limit: 2 },
+          ],
+          [
+            { term: "qzx", hybrid: true, limit: 3 },
+            { term: "qzx", hybrid: true, limit: 2 },
+          ],
+        ];
+        for (const [under, capped] of inputs) {
+          const all = await newActor(under, db, viewer).results(
+            userCtx(viewer),
+            under,
+            { first: 1, after: null },
+          );
+          expect(all.totalCount).toBe(3);
+          expect(all.totalIsLowerBound).toBe(false);
+
+          const page = await newActor(capped, db, viewer).results(
+            userCtx(viewer),
+            capped,
+            { first: 10, after: null },
+          );
+          expect(page.entries).toHaveLength(2);
+          expect(page.totalCount).toBe(2);
+          expect(page.totalIsLowerBound).toBe(true);
+        }
+      });
+    });
+  });
 });
