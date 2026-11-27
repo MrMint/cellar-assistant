@@ -16,6 +16,7 @@ import {
   asksVintage,
   confirmedFieldsFrom,
   differsFrom,
+  finishLaterToast,
   isDuplicateOfDeclined,
   openFloorPaths,
   type SaveDraft,
@@ -186,5 +187,25 @@ describe("the floor and the duplicate warning", () => {
       differsFrom(before, { ...before, "attributes.style": "Red" }),
       true,
     );
+  });
+});
+
+describe("the Finish later toast (F-62, board add-bottle-later-02)", () => {
+  test("names the cellar the bottle landed in, with Undo back to the form", () => {
+    const toast = finishLaterToast({
+      cellarName: "Home Cellar",
+      resumeHref: "/add?draft=d1&type=WINE&cellar=c1",
+    });
+    assert.equal(toast.message, "1 bottle added to Home Cellar");
+    assert.equal(toast.undoHref, "/add?draft=d1&type=WINE&cellar=c1");
+  });
+
+  test("with no cellar it is kept in Needs details, still undoable", () => {
+    const toast = finishLaterToast({
+      cellarName: undefined,
+      resumeHref: "/add?draft=d1&type=WINE",
+    });
+    assert.equal(toast.message, "Saved to Needs details");
+    assert.equal(toast.undoHref, "/add?draft=d1&type=WINE");
   });
 });

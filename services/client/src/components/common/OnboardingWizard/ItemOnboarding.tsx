@@ -56,6 +56,7 @@ import { QuickAddCard } from "../QuickAddCard";
 import { emptyDefaults, finishedHref } from "./adapter";
 import { CatalogMatchPrompt } from "./CatalogMatchPrompt";
 import { catalogMatchSummary } from "./catalog-match";
+import { finishLaterToast } from "./draft-save";
 import { type OnboardingResult, OnboardingWizard } from "./index";
 import { MatchList } from "./MatchList";
 import { OnboardingMachine } from "./machines";
@@ -475,7 +476,18 @@ const ItemOnboardingRun = ({
     if (context.cellarId !== undefined) {
       rememberCapturePrefs({ cellarId: context.cellarId });
     }
-    notify("Saved · Needs details");
+    const toast = finishLaterToast({
+      cellarName,
+      resumeHref: resumeHref(
+        context.itemOnboardingId,
+        itemType,
+        context.cellarId,
+      ),
+    });
+    // The form already fired feedback("success") for the save.
+    notify(toast.message, {
+      undo: () => navigate.push(toast.undoHref),
+    });
     navigate.push(
       context.cellarId === undefined
         ? "/needs-details"
