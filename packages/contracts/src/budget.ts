@@ -143,7 +143,8 @@ export type ReserveResult = {
  * `ActorErrorReason` each one becomes, so a model seam can hand it straight
  * to `BudgetExceededError`:
  *
- * - `USER_CAP` — this account's rolling hourly or daily window.
+ * - `USER_CAP` — this account's rolling hourly or daily window, or its
+ *   calendar-period allowance (SV-A; `retryAt` is then the period's reset).
  * - `SERVICE_BUDGET` — anything service-wide: the month's request cap, the
  *   free tier with no paid budget, the month's money, or a disabled /
  *   unconfigured kind.

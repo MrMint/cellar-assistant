@@ -107,11 +107,6 @@ const NO_SURFACE: Readonly<Record<string, string>> = {
     "Reference data (§2.5). `seed` is admin-only and must be handed " +
     "pre-computed vectors, and the table is read through the " +
     "`search_category_vectors` SQL function rather than through the actor.",
-  BudgetActor:
-    "The gate every paid external call reserves through (§1.5). Called by " +
-    "`PlaceActor`, `GooglePlacesActor` and `PlaceRefreshJobActor`; a denial " +
-    "already reaches clients as `BudgetExceededError`. `setBudget` is " +
-    "admin-only and wants an operator console, not a public field.",
   EmbeddingActor:
     "Reached only by synchronous sidecar invokes from seven other actors " +
     "(§2.3). Exposing it would reopen target-stack §7's client-reachable " +

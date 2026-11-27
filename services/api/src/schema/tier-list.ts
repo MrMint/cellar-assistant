@@ -1093,3 +1093,24 @@ builder.mutationField("redoTierListEdit", (t) =>
         .redo(args.expectedSeq),
   }),
 );
+
+builder.mutationField("requestTierListInsights", (t) =>
+  t.field({
+    type: TierListType,
+    description:
+      "SV-A (L12): write this list's Insights now. The client sends it when " +
+      "it sees `insightsStatus: IDLE` on a list of 3+ entries the viewer " +
+      "owns; a read never writes. Idempotent: from any other status (too few " +
+      "entries, pending, failed, ready, no provider) it changes nothing and " +
+      "returns the list as it is. Creator only. The generation counts " +
+      "against the viewer's `ai_model/tier_list_insights` allowance " +
+      "(`myAiQuota`); a refusal shows as FAILED with reason USER_CAP and " +
+      "`insightsRetryAt` at the reset.",
+    errors: {},
+    args: { tierListId: t.arg.id({ required: true }) },
+    resolve: (_root, args, context) =>
+      context
+        .actor(TierListActorDescriptor, String(args.tierListId))
+        .requestInsights(),
+  }),
+);
