@@ -90,7 +90,7 @@ export const freshnessItemOf = (item: BottleItem): FreshnessItem | null => {
 
 const TONE: Record<FreshnessStatus["tone"], string> = {
   good: "bg-success/15 text-success",
-  soon: "bg-brass/15 text-brass",
+  soon: "bg-gold/15 text-gold",
   wait: "bg-sel text-ink-2",
   past: "bg-danger/10 text-danger",
 };
@@ -326,7 +326,7 @@ export function ThisBottleRows({
               <Button
                 size="sm"
                 variant="ghost"
-                className="min-h-11 text-brass"
+                className="min-h-11 text-gold"
                 onClick={onEdit}
                 aria-label={`Add ${row.label.toLowerCase()}`}
               >
