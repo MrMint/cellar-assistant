@@ -1,17 +1,20 @@
 "use client";
 
-import { usePathname } from "next/navigation";
-import type { ReactNode } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import { mainContentProps } from "./main-content";
 import { isCaptureRoute } from "./nav";
-import { useNavHistoryTracker } from "./nav-history";
+import { canGoBack, useNavHistoryTracker } from "./nav-history";
+import { useEdgeSwipeBack, usePullToRefresh } from "./overlays/gestures";
 import { KeysDialog, useShellKeys } from "./overlays/KeysDialog";
 import { OfflineStrip } from "./overlays/OfflineStrip";
+import { PullIndicator } from "./overlays/PullIndicator";
 import { usePointerDownPrefetch } from "./prefetch";
 import { RouteTransition } from "./RouteTransition";
 import { SideRail } from "./SideRail";
 import { TabBar } from "./TabBar";
+import { useNavigate } from "./useNavigate";
 
 const MAKE_MODE = /^\/recipes\/[^/]+\/make\/?$/;
 
@@ -78,13 +81,32 @@ export function AppShell({ children }: { children: ReactNode }) {
   const rail = !isFullScreenRoute(pathname);
   const { onKeyDown, keysOpen, setKeysOpen } = useShellKeys();
 
+  // The installed app's gestures (standalone only; each hook checks).
+  const scrollerRef = useRef<HTMLElement | null>(null);
+  const router = useRouter();
+  const navigate = useNavigate();
+  const [hasHistory, setHasHistory] = useState(false);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: re-read on every route change.
+  useEffect(() => setHasHistory(canGoBack()), [pathname]);
+  useEdgeSwipeBack(scrollerRef, {
+    enabled: hasHistory && rail,
+    onBack: () => navigate.back(),
+  });
+  const pull = usePullToRefresh(scrollerRef, {
+    enabled: scrolls && rail,
+    onRefresh: () => {
+      router.refresh();
+      return undefined;
+    },
+  });
+
   return (
     // biome-ignore lint/a11y/noStaticElementInteractions: the app element hears the keys bubbling from inside it (KIT § 3); it is not a control.
     <div
       data-slot="app-shell"
       onKeyDown={onKeyDown}
       className={cn(
-        "flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden md:flex-row",
+        "relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden md:flex-row",
         // Phones: reclaim the bottom safe area the root layout pads, so the
         // tab bar's glass runs under the home indicator. It has to be this
         // element: the shell clips (overflow-hidden), so a negative margin
@@ -99,17 +121,26 @@ export function AppShell({ children }: { children: ReactNode }) {
       <RouteTransition>
         <main
           {...mainContentProps}
+          ref={scrollerRef}
           data-app-scroller=""
           className={cn(
             "min-h-0 min-w-0 flex-1 overflow-x-hidden outline-none",
             padded && "p-4",
-            scrolls ? "overflow-y-auto" : "flex flex-col overflow-y-hidden",
+            scrolls
+              ? "overflow-y-auto overscroll-y-contain"
+              : "flex flex-col overflow-y-hidden",
           )}
+          style={
+            pull.pull > 0
+              ? { transform: `translateY(${pull.pull}px)` }
+              : undefined
+          }
         >
           <OfflineStrip />
           {children}
         </main>
       </RouteTransition>
+      <PullIndicator state={pull} />
       {tabBar && <TabBar className="md:hidden" />}
       <KeysDialog open={keysOpen} onOpenChange={setKeysOpen} />
     </div>
