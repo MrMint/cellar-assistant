@@ -3,18 +3,19 @@
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { useMutation } from "urql";
+import { formatKitScore, Stars } from "@/components/app/parts/Stars";
 import { RatingInput } from "@/components/app/RatingInput";
 import type { ApiItemType } from "@/components/cellar-api/itemTypes";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import {
   AddItemReviewMutation,
   DeleteItemReviewMutation,
   UpdateItemReviewMutation,
 } from "@/lib/api/items";
 import { unwrapResult } from "@/lib/api/result";
+import { feedback } from "@/lib/feedback";
 import { RichTextEditor } from "../common/RichTextEditor";
-import { ItemSection } from "../item/ItemSection";
+import { plainTextFromRichText } from "../common/rich-text";
 import { LoadingButton } from "../item/LoadingButton";
 
 export type AddReviewProps = {
@@ -140,24 +141,64 @@ export const AddReview = ({
     });
   };
 
+  const note =
+    myReview?.text === null || myReview?.text === undefined
+      ? ""
+      : plainTextFromRichText(myReview.text).trim();
+  const openEditor = () => {
+    feedback("tick");
+    setOpen(true);
+  };
+
   if (open === false) {
+    // Cellars-Bottles 01: the rating and note sit under the photo — the
+    // stars (gold: the owner's own verdict), the score beside them, the note,
+    // then "Add note" / "Edit note". Tapping the stars opens the editor.
     return (
-      <ItemSection id="your-review" title="Your review">
-        <Input
-          placeholder={editing ? "Edit your Review..." : "Add a Review..."}
-          onClick={() => setOpen(true)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter" || event.key === " ") setOpen(true);
-          }}
-          readOnly
-          className="h-11 cursor-pointer text-base"
-        />
-      </ItemSection>
+      <section
+        id="your-review"
+        data-testid="your-rating"
+        aria-label="Your rating"
+        className="flex flex-col gap-1"
+      >
+        <div className="flex items-center gap-4">
+          <button
+            type="button"
+            onClick={openEditor}
+            aria-label={editing ? "Change your rating" : "Rate it"}
+            className="-m-1 rounded-md p-1 outline-none focus-visible:outline-2 focus-visible:outline-act-ink"
+          >
+            <Stars value={myReview?.score ?? null} size="lg" />
+          </button>
+          {editing && (
+            <span className="t-score tabular text-ink">
+              {formatKitScore(myReview.score)}
+            </span>
+          )}
+        </div>
+        {note !== "" && (
+          <p className="t-body line-clamp-4 whitespace-pre-line text-ink">
+            {note}
+          </p>
+        )}
+        <Button
+          variant="quiet"
+          className="-ml-2.5 self-start"
+          onClick={openEditor}
+        >
+          {note === "" ? "Add note" : "Edit note"}
+        </Button>
+      </section>
     );
   }
 
   return (
-    <ItemSection id="your-review" title="Your review">
+    <section
+      id="your-review"
+      data-testid="your-rating"
+      aria-label="Your rating"
+      className="flex flex-col gap-3"
+    >
       <RatingInput
         value={score}
         onChange={handleRatingClick}
@@ -170,7 +211,7 @@ export const AddReview = ({
         onChange={setText}
       />
       {error !== null && (
-        <p role="alert" className="type-callout text-destructive">
+        <p role="alert" className="t-body text-destructive">
           {error}
         </p>
       )}
@@ -182,17 +223,24 @@ export const AddReview = ({
         >
           {editing ? "Save" : "Add"}
         </LoadingButton>
+        <Button
+          variant="outline"
+          disabled={isPending}
+          onClick={() => setOpen(false)}
+        >
+          Cancel
+        </Button>
         {editing && (
           <Button
-            variant="ghost"
-            className="text-destructive"
+            variant="quiet-muted"
+            className="ml-auto"
             disabled={isPending}
             onClick={handleDelete}
           >
-            Delete
+            Remove rating
           </Button>
         )}
       </div>
-    </ItemSection>
+    </section>
   );
 };

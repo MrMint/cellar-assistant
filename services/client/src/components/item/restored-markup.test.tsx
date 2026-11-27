@@ -27,7 +27,6 @@ mock.module("next/navigation", () => ({
 const { ItemPageView } = await import("./ItemPageView");
 const { ItemForm } = await import("./ItemForm");
 const { ItemImage } = await import("./ItemImage");
-const { itemOverflow } = await import("./header-actions");
 const { openTag } = await import("../../test-support/markup");
 
 const client = new Client({
@@ -201,47 +200,38 @@ describe("ItemPageView (X09: one item page)", () => {
     assert.match(html, /2 tbsp of Dragonwell/);
     assert.match(html, />Located in</);
     assert.match(html, /Not in any cellar you can see\./);
-    assert.match(html, />On tier lists</);
+    assert.match(html, />Your rank</);
     assert.match(html, />Best teas</);
     assert.match(html, />Outstanding</);
     assert.match(html, /id="reviews"/);
     assert.match(html, /No reviews yet! Want to add one\?/);
     assert.match(html, /id="your-review"/);
-    assert.match(html, /placeholder="Add a Review\.\.\."/);
+    assert.match(html, /aria-label="Rate it"/);
+    assert.match(html, />Add note</);
     assert.match(html, /id="your-log"/);
     // The creator's one-tap brand change (D8).
     assert.match(html, />Wrong brand\? Change it</);
   });
 
-  test("ActionBar: Log a drink · Add to cellar · Want to try · ⋯", () => {
-    const bar = openTag(html, 'data-testid="item-action-bar"');
-    assert.match(bar, /role="toolbar"/);
-    const after = html.slice(html.indexOf('data-testid="item-action-bar"'));
-    assert.match(after, />Log a drink</);
-    assert.match(after, />Add to cellar</);
-    assert.match(after, /aria-label="Want to try Dragonwell"/);
-    assert.match(after, /aria-label="More actions"/);
-    // Share stays the AppBar's trailing action too.
-    assert.match(html, /<button[^>]*aria-label="Share"/);
-    // No Your bottles section when you have none.
-    assert.doesNotMatch(html, />Your tins</);
+  test("the menu disc, and no bottom ActionBar (Cellars-Bottles)", () => {
+    assert.match(html, /<button[^>]*aria-label="More actions"/);
+    assert.doesNotMatch(html, /data-testid="item-action-bar"/);
+    // No bottles yet: the card says so, with Add to cellar as its action.
+    assert.match(html, />None in your cellar</);
+    assert.match(html, />Add to cellar</);
   });
 
-  test("`⋯`: tier list and Share for everyone, Edit for the creator, Delete bottle last", () => {
-    assert.deepEqual(
-      itemOverflow({ editHref: null }).map((entry) => entry.label),
-      ["Add to tier list", "Share"],
-    );
-    assert.deepEqual(itemOverflow({ editHref: "/x/edit", canDelete: true }), [
-      { action: "tierList", label: "Add to tier list" },
-      { action: "share", label: "Share" },
-      { action: "edit", label: "Edit item" },
-      { action: "delete", label: "Delete bottle", destructive: true },
-    ]);
+  test("Your rank: Not ranked with Add to a list", () => {
+    const unranked = page();
+    const rank = unranked.slice(unranked.indexOf('data-testid="your-rank"'));
+    assert.match(rank, />Not ranked</);
+    assert.match(rank, />Add to a list</);
   });
 
   test("no Add to cellar for a viewer with no cellar to add to", () => {
-    assert.doesNotMatch(page(), />Add to cellar</);
+    const none = page();
+    assert.doesNotMatch(none, />Add to cellar</);
+    assert.match(none, />Make a cellar</);
   });
 
   test("no image: the item's LabelPlate stands in, named by its text (N28)", () => {
@@ -280,7 +270,9 @@ describe("Your bottles (X09)", () => {
     assert.match(html, />Sealed</);
     assert.match(html, /href="\/cellars\/c\/teas\/b1"/);
     assert.match(html, /aria-label="Steep from Home"/);
-    assert.match(html, /aria-label="Log a drink from Garage"/);
+    // The next bottle is open in place: Check in, Pour… and Log….
+    assert.match(html, />Check in</);
+    assert.match(html, /aria-label="Log a drink from Home"/);
     // Nothing is selected on the item's own URL (the breadcrumbs' own
     // aria-current is the page's, not a bottle's).
     assert.doesNotMatch(html, /aria-current="page"[^>]*>Home</);
@@ -303,14 +295,14 @@ describe("the bottle route: the item page with that bottle selected (X09)", () =
       bottles: [bottle()],
       parent: "/cellars/c/items",
     });
-    assert.match(html, /aria-current="page"[^>]*>Home</);
+    assert.match(html, /aria-current="page"[^>]*>Sealed</);
     // X03: a sealed bottle is poured (the first pour opens it); opening
     // without pouring is the quiet "Mark as opened".
     assert.match(html, /aria-label="Steep from Home"/);
     assert.match(html, />Mark as opened</);
     assert.doesNotMatch(html, />Open it!</);
     assert.match(html, /<button[^>]*aria-label="Add a photo"/);
-    assert.match(html, /This bottle · Home · Sealed/);
+    assert.match(html, /This tin · Home · Sealed/);
   });
 
   test("the selected bottle leads Your bottles, the rest keep their order", () => {
@@ -360,7 +352,7 @@ describe("the bottle route: the item page with that bottle selected (X09)", () =
     const html = page({
       selected: selected({ isOwner: false, cellarName: "Sam's" }),
     });
-    assert.match(html, />This bottle</);
+    assert.match(html, />This tin</);
     assert.match(html, />Sam&#x27;s</);
     assert.doesNotMatch(html, />Mark as opened</);
     assert.doesNotMatch(html, /aria-label="Add a photo"/);

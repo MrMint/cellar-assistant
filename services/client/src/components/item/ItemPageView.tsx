@@ -1,15 +1,14 @@
+import type { ReactNode } from "react";
 import { LabelPlate } from "@/components/app/LabelPlate";
-import { Link } from "@/components/app/Link";
-import { InsetSection, ListRow, Page } from "@/components/app/Page";
+import { Page } from "@/components/app/Page";
 import { ItemCocktails } from "@/components/bar/ItemCocktails";
+import { thisContainerLabel } from "@/components/drink-log/type-words";
 import { YourLog } from "@/components/drink-log/YourLog";
 import { AddReview } from "@/components/review/AddReview";
 import type { ItemView } from "./adapter";
 import { BrewGuideSection } from "./BrewGuideSection";
 import { ChangeBrand } from "./ChangeBrand";
-import { ItemActionBar } from "./ItemActionBar";
 import { ItemActionsProvider } from "./ItemActions";
-import { ItemAppBar } from "./ItemAppBar";
 import { ItemBrands, shownItemBrand } from "./ItemBrands";
 import { type ItemCellar, ItemCellars } from "./ItemCellars";
 import { ItemFacts } from "./ItemFacts";
@@ -27,6 +26,9 @@ import {
   tasteCells,
   type YourBottle,
 } from "./item-page-model";
+import { AddToListButton } from "./parts/AddToListButton";
+import { ItemTop } from "./parts/ItemTop";
+import { VisitorBottle } from "./parts/VisitorBottle";
 import { SeenAtSection } from "./SeenAtSection";
 import { TasteHeader } from "./TasteHeader";
 import { YourBottles } from "./YourBottles";
@@ -58,7 +60,22 @@ export type ItemPageViewProps = {
   addableCellars: { id: string; name: string }[];
   /** The creator's edit page (D7), or null. */
   editHref: string | null;
+  /** Inside the desktop pane (MC-panes): no bar, no bleed; `⋯` alone. */
+  pane?: boolean;
 };
+
+function PageBody({ children }: { children: ReactNode }) {
+  return <Page className="gap-6">{children}</Page>;
+}
+
+/** The pane's column: its own padding, the pane's width. */
+function PaneBody({ children }: { children: ReactNode }) {
+  return (
+    <div data-testid="item-pane-body" className="flex flex-col gap-6 p-4">
+      {children}
+    </div>
+  );
+}
 
 /**
  * X09 — **one item page**. The item route and the bottle route both render
@@ -90,6 +107,7 @@ export function ItemPageView({
   recipes,
   addableCellars,
   editHref,
+  pane = false,
 }: ItemPageViewProps) {
   const producer = shownItemBrand(item.brands);
   const owned = selected?.isOwner;
@@ -110,7 +128,9 @@ export function ItemPageView({
       muted={selected !== null && selected.emptyAt !== null}
     />
   );
-  const heroShape = "aspect-[4/3] sm:aspect-square";
+  const heroShape = pane
+    ? "aspect-square"
+    : "h-[300px] md:aspect-square md:h-auto";
   const picture = selected?.isOwner ? (
     <ItemImageWithCaptureClient
       url={selected.displayImage?.url ?? item.image?.url}
@@ -135,6 +155,8 @@ export function ItemPageView({
     />
   );
 
+  const Body = pane ? PaneBody : PageBody;
+
   return (
     <ItemActionsProvider
       subject={{
@@ -148,12 +170,30 @@ export function ItemPageView({
           : { cellarId: logBottle.cellarId, cellarItemId: logBottle.id }
       }
     >
-      <Page className="gap-5">
-        <ItemAppBar
+      <Body>
+        <ItemTop
+          pane={pane}
           parent={parent}
           cellarName={selected?.cellarName ?? undefined}
+          itemId={item.itemId}
+          itemType={item.type}
           itemName={item.name}
-          share={{ itemId: item.itemId, itemType: item.type }}
+          editHref={editHref}
+          addableCellars={addableCellars}
+          held={bottles.length}
+          selected={
+            selected === null
+              ? null
+              : {
+                  id: selected.id,
+                  cellarId: selected.cellarId,
+                  isOwner: selected.isOwner,
+                  openAt: selected.openAt,
+                  emptyAt: selected.emptyAt,
+                  percentageRemaining: selected.percentageRemaining,
+                }
+          }
+          myReview={item.myReview}
         />
         <ItemHero
           itemId={item.itemId}
@@ -163,15 +203,19 @@ export function ItemPageView({
           producer={producer}
           subtitle={item.subTitlePhrases}
           picture={picture}
+          bleed={!pane}
           stateLine={
-            selected === null ? undefined : (
-              <p data-testid="selected-bottle" className="type-footnote">
-                This bottle · {selected.cellarName ?? "a cellar"} ·{" "}
+            selected === null || !selected.isOwner ? undefined : (
+              <p data-testid="selected-bottle" className="t-cap text-ink-2">
+                {thisContainerLabel(item.type)} ·{" "}
+                {selected.cellarName ?? "a cellar"} ·{" "}
                 {bottleStateLine(selected)}
               </p>
             )
           }
         />
+        {/* The rating line (C3's taste header: yours, friends, everyone),
+            then your stars and note under the photo. */}
         <TasteHeader
           cells={tasteCells({
             mine: item.myReview?.score ?? null,
@@ -179,40 +223,44 @@ export function ItemPageView({
             everyone: item.everyone,
           })}
         />
+        <AddReview
+          itemId={item.itemId}
+          type={item.type}
+          myReview={item.myReview}
+        />
 
         {selected !== null && !selected.isOwner && (
-          // A bottle in someone else's cellar you may see: what it is and
-          // where, read-only — pouring and logging from it are its owner's.
-          <InsetSection label="This bottle">
-            <ListRow
-              title={
-                <Link
-                  href={`/cellars/${selected.cellarId}/items`}
-                  overlay
-                  underline="none"
-                >
-                  {selected.cellarName ?? "Their cellar"}
-                </Link>
-              }
-              description={bottleStateLine(selected)}
-            />
-          </InsetSection>
+          <VisitorBottle itemType={item.type} bottle={selected} />
         )}
-        <YourBottles
-          itemType={item.type}
-          itemName={item.name}
-          bottles={shownBottles}
-          total={
-            bottlesTotal === null || bottlesTotal === undefined
-              ? null
-              : // `myBottles` counts bottles still in the cellar, so only a
-                // finished selected bottle is one it did not count. (Comparing
-                // list lengths would also count an active selected bottle
-                // that sits past the first page as an extra one.)
-                bottlesTotal + (owned && selected.emptyAt !== null ? 1 : 0)
+        {(shownBottles.length > 0 || selected === null || selected.isOwner) && (
+          <YourBottles
+            itemId={item.itemId}
+            itemType={item.type}
+            itemName={item.name}
+            bottles={shownBottles}
+            addableCellars={addableCellars}
+            total={
+              bottlesTotal === null || bottlesTotal === undefined
+                ? null
+                : // `myBottles` counts bottles still in the cellar, so only a
+                  // finished selected bottle is one it did not count.
+                  bottlesTotal + (owned && selected.emptyAt !== null ? 1 : 0)
+            }
+            selectedId={owned ? selected.id : null}
+          />
+        )}
+        <ItemTierLists
+          entries={tierLists}
+          total={tierListsTotal}
+          add={
+            <AddToListButton
+              itemId={item.itemId}
+              itemType={item.type}
+              itemName={item.name}
+            />
           }
-          selectedId={owned ? selected.id : null}
         />
+        {/* L38: C3's "Your log", where the board draws the dated history. */}
         <YourLog
           subject={{
             itemType: item.type,
@@ -220,8 +268,6 @@ export function ItemPageView({
             itemName: item.name,
           }}
         />
-        {/* ux-c M4 slots: each fetches its own data and renders nothing
-            until it has some. */}
         {(item.type === "TEA" || item.type === "COFFEE") && (
           <BrewGuideSection item={item} />
         )}
@@ -231,22 +277,15 @@ export function ItemPageView({
           flavorProfile={item.flavorProfile}
           ingredients={item.ingredients}
         />
-        {/* X14: "Cocktails with this" / "Use it up" — every type, spirits
-            first among them; renders nothing when no cocktail uses it. */}
+        {/* X14: "Cocktails with this" — every type; nothing when none. */}
         <ItemCocktails itemId={item.itemId} type={item.type} />
         <ItemRecipes
           recipeIngredients={cookingRecipes(recipes)}
           title="Cook with this"
           itemName={item.name}
           // Only the food recipes are drawn, so `recipeIngredients`'
-          // totalCount (every recipe) is not this list's total; a held-back
-          // page is past 100 recipes using this one item.
+          // totalCount (every recipe) is not this list's total.
           total={null}
-        />
-        <AddReview
-          itemId={item.itemId}
-          type={item.type}
-          myReview={item.myReview}
         />
         <ItemReviews
           reviews={item.reviews}
@@ -259,8 +298,7 @@ export function ItemPageView({
           brands={item.brands}
           title={producerTitle(item.type, item.brands.length)}
           change={
-            // D8: the creator — the one person `editHref` is set for — can
-            // correct the brand from here in one tap.
+            // D8: the creator can correct the brand from here in one tap.
             editHref === null ? undefined : (
               <ChangeBrand
                 type={item.type}
@@ -274,38 +312,7 @@ export function ItemPageView({
         />
         <SeenAtSection item={item} />
         <ItemCellars cellars={cellars} total={cellarsTotal} />
-        <ItemTierLists entries={tierLists} total={tierListsTotal} />
-
-        <ItemActionBar
-          itemId={item.itemId}
-          itemType={item.type}
-          itemName={item.name}
-          isWantToTry={item.isWantToTry}
-          addableCellars={addableCellars}
-          editHref={editHref}
-          pourable={
-            owned && selected.emptyAt === null
-              ? {
-                  cellarId: selected.cellarId,
-                  cellarItemId: selected.id,
-                  openAt: selected.openAt,
-                  percentageRemaining: selected.percentageRemaining,
-                }
-              : null
-          }
-          deletable={
-            owned
-              ? {
-                  cellarId: selected.cellarId,
-                  bottleId: selected.id,
-                  openAt: selected.openAt,
-                  emptyAt: selected.emptyAt,
-                  percentageRemaining: selected.percentageRemaining,
-                }
-              : null
-          }
-        />
-      </Page>
+      </Body>
     </ItemActionsProvider>
   );
 }

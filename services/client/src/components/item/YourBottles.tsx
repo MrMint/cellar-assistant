@@ -1,25 +1,33 @@
 "use client";
 
+import { useState, useTransition } from "react";
+import { useMutation } from "urql";
+import { Add, Pour } from "@/components/app/icons";
 import { Link } from "@/components/app/Link";
-import { InsetSection } from "@/components/app/Page";
+import { notify } from "@/components/app/notify";
 import { LEVEL_FILL } from "@/components/cellar/BottleCard";
 import { bottleState } from "@/components/cellar/bottle-state";
 import type { ApiItemType } from "@/components/cellar-api/itemTypes";
+import { DeleteDrinkLogMutation } from "@/components/drink-log/queries";
 import {
   containerCountLabel,
   typeWords,
   yourContainersLabel,
 } from "@/components/drink-log/type-words";
 import { Button } from "@/components/ui/button";
+import { CheckInMutation } from "@/lib/api/cellars";
 import { cn } from "@/lib/utils";
+import { AddToCellarSheet } from "./AddToCellarActions";
 import { bottleHref } from "./adapter";
 import { BottleFreshnessFields } from "./BottleFreshnessFields";
 import { HeldBackNote } from "./HeldBackNote";
 import { useItemActions } from "./ItemActions";
 import { ItemRemainingSlider } from "./ItemRemainingSlider";
 import { bottleStateLine, type YourBottle } from "./item-page-model";
+import { checkInBottle } from "./parts/item-writes";
 
 export type YourBottlesProps = {
+  itemId: string;
   itemType: ApiItemType;
   itemName: string;
   bottles: readonly YourBottle[];
@@ -27,9 +35,11 @@ export type YourBottlesProps = {
   total?: number | null;
   /** The bottle the URL names (the bottle route), when it is yours. */
   selectedId?: string | null;
+  /** Your cellars "Add" files into; none hides Add. */
+  addableCellars?: readonly { id: string; name: string }[];
 };
 
-/** A bottle's level as a small upright gauge — the BottleCard's bar, stood up. */
+/** A bottle's level as a small upright bottle — dashed once it is finished. */
 function LevelGauge({
   type,
   bottle,
@@ -38,152 +48,281 @@ function LevelGauge({
   bottle: YourBottle;
 }) {
   const state = bottleState(bottle, null);
+  const finished = bottle.emptyAt !== null;
   return (
     <span
       aria-hidden
       data-slot="bottle-gauge"
-      className="relative flex h-9 w-3 overflow-hidden rounded-full bg-surface-3"
+      className={cn(
+        "relative flex h-10 w-5 shrink-0 overflow-hidden rounded-md",
+        finished ? "border border-dash border-dashed" : "bg-raised",
+      )}
     >
-      <span
-        className={cn(
-          "absolute inset-0 origin-bottom rounded-full transition-transform duration-(--ca-dur-medium) ease-standard motion-reduce:transition-none",
-          state.kind === "open" ? LEVEL_FILL[type] : "bg-ink-3/40",
-        )}
-        style={{ transform: `scaleY(${state.level / 100})` }}
-      />
+      {!finished && (
+        <span
+          className={cn(
+            "absolute inset-0 origin-bottom transition-transform duration-(--ca-dur-medium) ease-standard motion-reduce:transition-none",
+            state.kind === "open" ? LEVEL_FILL[type] : "bg-ink-3",
+          )}
+          style={{ transform: `scaleY(${state.level / 100})` }}
+        />
+      )}
     </span>
   );
 }
 
+/** "Added Apr 25, 2024", "Opened today": the row's date door. */
+const dateLine = (bottle: YourBottle): string | null => {
+  const at = bottle.emptyAt ?? bottle.openAt;
+  if (at === null) return null;
+  const day = new Date(at).toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+  return bottle.emptyAt !== null ? `Finished ${day}` : `Opened ${day}`;
+};
+
+/** "3 in Home" when every bottle is in one cellar; "3 bottles" otherwise. */
+const countLine = (
+  type: ApiItemType,
+  bottles: readonly YourBottle[],
+  count: number,
+): string | null => {
+  if (count === 0) return null;
+  const names = bottles.map((bottle) => bottle.cellarName);
+  const only = names[0];
+  return names.every((name) => name === only) &&
+    only !== null &&
+    only !== undefined
+    ? `${count} in ${only}`
+    : containerCountLabel(type, count);
+};
+
 /**
- * X09 — "Your bottles": every bottle of this item in your own cellars, open
- * first, each with **Pour** and **Log** under the thumb.
+ * "Your bottles" (Cellars-Bottles 01–02): every bottle of this item in your
+ * cellars, open first, as a card of rows with a drawn gauge. The next bottle
+ * — the one the URL names, else the first still in the cellar — is open in
+ * place with **Check in** (the page's one primary: a standard serve, then a
+ * toast with Undo) and **Pour…** (X03's Pour sheet, for an exact amount). The
+ * URL's bottle also carries its level and freshness inline (C3's controls).
  *
- * - **Pour** is X03's Pour sheet: open + log + level in one action, with
- *   glass presets; the first pour opens a sealed bottle, and the last asks
- *   "Finished?" (N13a's Undo), then the rating and your tier-list bands.
- * - **Log** opens the page's one "Log a drink" sheet with this bottle.
- * - The cellar name links to the bottle's own URL — the item page with that
- *   bottle selected (D-gating answer 1: a bottle id keeps meaning a bottle).
- *   The selected bottle is marked and carries its level control inline.
- *
- * Renders nothing when you have none: the ActionBar's "Add to cellar" is the
- * way to get one, and an empty section would only repeat it.
+ * Header: the count ("3 in Home") and **Add** (the add sheet). With none:
+ * "None in your cellar" and Add to cellar as the card's one action.
  */
 export function YourBottles({
+  itemId,
   itemType,
   itemName,
   bottles,
   total,
   selectedId = null,
+  addableCellars = [],
 }: YourBottlesProps) {
   const actions = useItemActions();
+  const [adding, setAdding] = useState(false);
+  const [checking, startCheckIn] = useTransition();
+  const [, checkIn] = useMutation(CheckInMutation);
+  const [, deleteLog] = useMutation(DeleteDrinkLogMutation);
 
-  // Nothing to list. (A bottle that leaves the list while it is being
-  // poured keeps its sheet: that lives in `ItemActionsProvider`.)
-  if (bottles.length === 0) return null;
-
-  // W-20: a tin of tea is steeped, a bag of coffee brewed.
   const words = typeWords(itemType);
-  const logFrom = (bottle: YourBottle) =>
-    actions?.logDrink({ cellarId: bottle.cellarId, cellarItemId: bottle.id });
+  const canAdd = addableCellars.length > 0;
+  const openId =
+    selectedId ?? bottles.find((bottle) => bottle.emptyAt === null)?.id ?? null;
+
+  const onCheckIn = (bottle: YourBottle) =>
+    startCheckIn(async () => {
+      const result = await checkInBottle(
+        { checkIn, deleteLog },
+        { ...bottle, isOwner: true },
+      );
+      if (!result.ok) {
+        notify("Couldn’t check in", {
+          tone: "error",
+          description: result.message,
+        });
+        return;
+      }
+      actions?.changed();
+      notify("Checked in", {
+        undo: () => {
+          void result.undo().then((undone) => {
+            if (!undone.ok) {
+              notify("Couldn’t undo that", {
+                tone: "error",
+                description: undone.message,
+              });
+            }
+            actions?.changed();
+          });
+        },
+      });
+    });
+
+  const addSheet = (
+    <AddToCellarSheet
+      open={adding}
+      onOpenChange={setAdding}
+      itemId={itemId}
+      itemType={itemType}
+      cellars={addableCellars}
+    />
+  );
 
   return (
-    <InsetSection
+    <section
       id="your-bottles"
-      label={yourContainersLabel(itemType)}
-      action={
-        <span className="type-footnote tabular">
-          {containerCountLabel(itemType, total ?? bottles.length)}
-        </span>
-      }
+      data-slot="your-bottles"
+      className="flex flex-col gap-2"
     >
-      {bottles.map((bottle) => {
-        const selected = bottle.id === selectedId;
-        const finished = bottle.emptyAt !== null;
-        const cellar = bottle.cellarName ?? "Your cellar";
-        return (
-          <div
-            key={bottle.id}
-            data-slot="your-bottle"
-            data-selected={selected || undefined}
-            className={cn(selected && "bg-surface-2")}
-          >
-            <div className="relative flex min-h-14 items-center gap-3 px-4 py-2.5">
-              <LevelGauge type={itemType} bottle={bottle} />
-              <div className="flex min-w-0 flex-1 flex-col">
-                <Link
-                  href={bottleHref(bottle.cellarId, itemType, bottle.id)}
-                  overlay
-                  underline="none"
-                  aria-current={selected ? "page" : undefined}
-                  className="type-body truncate text-ink-1"
-                >
-                  {cellar}
-                </Link>
-                <span className="type-footnote truncate">
-                  {bottleStateLine(bottle)}
-                </span>
-              </div>
-              {!finished && (
-                <div className="relative z-10 flex shrink-0 items-center gap-1">
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    aria-haspopup="dialog"
-                    onClick={() =>
-                      actions?.pour({
-                        cellarId: bottle.cellarId,
-                        cellarItemId: bottle.id,
-                        openAt: bottle.openAt,
-                        percentageRemaining: bottle.percentageRemaining,
-                      })
-                    }
-                    aria-label={`${words.pour} from ${cellar}`}
-                    className="relative after:absolute after:-inset-y-1 after:inset-x-0 after:content-['']"
-                  >
-                    {words.pour}
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => logFrom(bottle)}
-                    aria-label={`Log a drink from ${cellar}`}
-                    className="relative after:absolute after:-inset-y-1 after:inset-x-0 after:content-['']"
-                  >
-                    Log
-                  </Button>
+      <div className="flex min-h-11 items-center gap-2">
+        <h2 className="t-head text-ink">{yourContainersLabel(itemType)}</h2>
+        <span className="t-body tabular min-w-0 flex-1 truncate text-ink-2">
+          {countLine(itemType, bottles, total ?? bottles.length)}
+        </span>
+        {canAdd && bottles.length > 0 && (
+          <Button variant="quiet" onClick={() => setAdding(true)}>
+            <Add aria-hidden />
+            Add
+          </Button>
+        )}
+      </div>
+
+      {bottles.length === 0 ? (
+        <div
+          data-slot="your-bottles-empty"
+          className="flex flex-col items-center gap-3 rounded-lg border border-edge bg-card px-4 py-6 text-center"
+        >
+          <span className="t-body text-ink">None in your cellar</span>
+          {canAdd && (
+            <Button onClick={() => setAdding(true)}>Add to cellar</Button>
+          )}
+          {!canAdd && (
+            <Button variant="outline" asChild>
+              <Link href="/cellars" underline="none">
+                Make a cellar
+              </Link>
+            </Button>
+          )}
+        </div>
+      ) : (
+        <div className="overflow-hidden rounded-lg border border-edge bg-card">
+          {bottles.map((bottle, i) => {
+            const selected = bottle.id === selectedId;
+            const expanded = bottle.id === openId;
+            const finished = bottle.emptyAt !== null;
+            const cellar = bottle.cellarName ?? "Your cellar";
+            const date = dateLine(bottle);
+            return (
+              <div
+                key={bottle.id}
+                data-slot="your-bottle"
+                data-selected={selected || undefined}
+                data-open={expanded || undefined}
+                className={cn(
+                  i > 0 && "border-hair border-t",
+                  expanded && "bg-sel",
+                )}
+              >
+                <div className="relative flex min-h-16 items-center gap-3 px-4 py-3">
+                  <LevelGauge type={itemType} bottle={bottle} />
+                  <div className="flex min-w-0 flex-1 flex-col">
+                    <Link
+                      href={bottleHref(bottle.cellarId, itemType, bottle.id)}
+                      overlay
+                      underline="none"
+                      aria-current={selected ? "page" : undefined}
+                      aria-label={`${bottleStateLine(bottle)}, ${cellar}`}
+                      className={cn(
+                        "truncate text-ink",
+                        expanded ? "t-title" : "t-head",
+                      )}
+                    >
+                      {bottleStateLine(bottle)}
+                    </Link>
+                    <span
+                      suppressHydrationWarning
+                      className="t-cap truncate text-ink-2"
+                    >
+                      {[cellar, date].filter(Boolean).join(" · ")}
+                    </span>
+                  </div>
+                  {expanded && !finished && (
+                    <Button
+                      className="relative z-10 shrink-0"
+                      disabled={checking}
+                      onClick={() => onCheckIn(bottle)}
+                    >
+                      <Pour aria-hidden />
+                      Check in
+                    </Button>
+                  )}
                 </div>
-              )}
-            </div>
-            {selected && (
-              // The bottle the URL names: its level, Mark as opened,
-              // Finished, Restore — inline, as the old bottle page had them.
-              <div className="px-4 pb-4">
-                <ItemRemainingSlider
-                  itemId={bottle.id}
-                  cellarId={bottle.cellarId}
-                  isCellarOwner
-                  percentageRemaining={bottle.percentageRemaining}
-                  opened={bottle.openAt}
-                  emptied={bottle.emptyAt}
-                  itemName={itemName}
-                />
-                <BottleFreshnessFields
-                  cellarId={bottle.cellarId}
-                  cellarItemId={bottle.id}
-                />
+                {expanded && !finished && (
+                  <div className="flex items-center justify-end gap-1 px-2 pb-2">
+                    <Button
+                      variant="quiet"
+                      aria-haspopup="dialog"
+                      aria-label={`${words.pour} from ${cellar}`}
+                      onClick={() =>
+                        actions?.pour({
+                          cellarId: bottle.cellarId,
+                          cellarItemId: bottle.id,
+                          openAt: bottle.openAt,
+                          percentageRemaining: bottle.percentageRemaining,
+                        })
+                      }
+                    >
+                      {words.pour}…
+                    </Button>
+                    <Button
+                      variant="quiet"
+                      onClick={() =>
+                        actions?.logDrink({
+                          cellarId: bottle.cellarId,
+                          cellarItemId: bottle.id,
+                        })
+                      }
+                      aria-label={`Log a drink from ${cellar}`}
+                    >
+                      Log…
+                    </Button>
+                  </div>
+                )}
+                {selected && (
+                  // The bottle the URL names: its level, Mark as opened,
+                  // Finished, Restore and freshness, inline (C3's controls).
+                  <div className="px-4 pb-4">
+                    <ItemRemainingSlider
+                      itemId={bottle.id}
+                      cellarId={bottle.cellarId}
+                      isCellarOwner
+                      percentageRemaining={bottle.percentageRemaining}
+                      opened={bottle.openAt}
+                      emptied={bottle.emptyAt}
+                      itemName={itemName}
+                    />
+                    <BottleFreshnessFields
+                      cellarId={bottle.cellarId}
+                      cellarItemId={bottle.id}
+                    />
+                  </div>
+                )}
               </div>
-            )}
-          </div>
-        );
-      })}
-      <HeldBackNote
-        shown={bottles.length}
-        total={total}
-        noun={words.containers}
-        order="first"
-      />
-    </InsetSection>
+            );
+          })}
+          <HeldBackNote
+            shown={bottles.length}
+            total={total}
+            noun={words.containers}
+            order="first"
+          />
+        </div>
+      )}
+      {canAdd && addSheet}
+    </section>
   );
 }
+
+/** Kept for callers that only need the gauge (the visitor's bottle card). */
+export { LevelGauge };

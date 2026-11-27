@@ -1,11 +1,13 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { AppBar } from "@/components/app/AppBar";
-import { Share } from "@/components/app/icons";
+import { useState } from "react";
+import { AppBar, type AppBarAction } from "@/components/app/AppBar";
+import { More, ShareOut } from "@/components/app/icons";
 import type { ApiItemType } from "@/components/cellar-api/itemTypes";
 import { generateBreadcrumbs } from "@/components/common/breadcrumbs";
-import { useItemShare } from "./ItemShare";
+import { breakpointUp, useMediaQuery } from "@/hooks/useMediaQuery";
+import { ItemShareSheet } from "./ItemShare";
 
 export type ItemAppBarProps = {
   /** Where Back goes on a cold deep link (no in-app page behind this one). */
@@ -15,19 +17,22 @@ export type ItemAppBarProps = {
   /** For the desktop breadcrumbs, as `ServerBreadcrumbs` took them. */
   cellarName?: string;
   itemName?: string;
-  /** Share this item: the bar's trailing action. */
+  /** Share this item (the edit page): opens the share sheet with its QR. */
   share?: { itemId: string; itemType: ApiItemType };
+  /**
+   * The item page's menu disc: when set, the bar's one action is `⋯`, and
+   * below `md` the bar floats over the hero photo as glass discs.
+   */
+  onMore?: () => void;
 };
 
 /**
  * The item and edit pages' header (N26): a real Back, the old crumbs from
- * `md` up (`generateBreadcrumbs`, unchanged) and Share. Client-only because
- * Share is a callback.
+ * `md` up (`generateBreadcrumbs`, unchanged) and one trailing action.
  *
- * X09 moved the page's `⋯` (Add to tier list, Share, Edit item, Delete
- * bottle) down into the ActionBar, in the thumb zone, so this bar keeps no
- * overflow of its own — two `⋯` on one screen would be two menus to learn.
- * Share stays here too, as the conventional top-right affordance.
+ * On the item page that action is the menu disc (Cellars-Pour's menu, with
+ * Share in it), and on a phone the bar is the hero's glass discs (KIT § 2
+ * "Top bar and discs"). From `md` it is the plain bar with the crumbs.
  *
  * No title on the item page: the hero under it carries the name as the
  * page's heading, and a second heading with the same name would only be
@@ -39,30 +44,37 @@ export function ItemAppBar({
   cellarName,
   itemName,
   share,
+  onMore,
 }: ItemAppBarProps) {
   const pathname = usePathname();
-  const shareItem = useItemShare({
-    itemId: share?.itemId ?? "",
-    itemType: share?.itemType ?? "WINE",
-    itemName,
-  });
+  const desktop = useMediaQuery(breakpointUp("md"));
+  const [sharing, setSharing] = useState(false);
+
+  const action: AppBarAction | undefined =
+    onMore !== undefined
+      ? { label: "More actions", icon: More, onSelect: onMore }
+      : share !== undefined
+        ? { label: "Share", icon: ShareOut, onSelect: () => setSharing(true) }
+        : undefined;
 
   return (
-    <AppBar
-      title={title}
-      parent={parent}
-      breadcrumbs={generateBreadcrumbs(pathname ?? "", cellarName, itemName)}
-      actions={
-        share === undefined
-          ? []
-          : [
-              {
-                label: "Share",
-                icon: Share,
-                onSelect: () => void shareItem(),
-              },
-            ]
-      }
-    />
+    <>
+      <AppBar
+        title={title}
+        parent={parent}
+        tone={onMore !== undefined && !desktop ? "photo" : "page"}
+        breadcrumbs={generateBreadcrumbs(pathname ?? "", cellarName, itemName)}
+        actions={[action]}
+      />
+      {share !== undefined && onMore === undefined && (
+        <ItemShareSheet
+          open={sharing}
+          onOpenChange={setSharing}
+          itemId={share.itemId}
+          itemType={share.itemType}
+          itemName={itemName ?? title ?? "This drink"}
+        />
+      )}
+    </>
   );
 }

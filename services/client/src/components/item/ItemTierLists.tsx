@@ -1,9 +1,8 @@
-import { Ranked } from "@/components/app/icons";
+import type { ReactNode } from "react";
 import { Link } from "@/components/app/Link";
 import { BAND_LABELS } from "@/components/tier-list/constants";
 import { cn } from "@/lib/utils";
 import { HeldBackNote } from "./HeldBackNote";
-import { ItemSection } from "./ItemSection";
 
 export type ItemTierListEntry = {
   id: string;
@@ -33,7 +32,7 @@ export const BAND_CLASS: Record<number, string> = {
   3: "bg-band-3 text-on-band",
   2: "bg-band-2 text-on-band",
   1: "bg-band-1 text-on-band",
-  0: "bg-surface-3 text-ink-2",
+  0: "bg-raised text-ink-2",
 };
 
 /**
@@ -49,50 +48,62 @@ export const BAND_CLASS: Record<number, string> = {
 export function ItemTierLists({
   entries,
   total,
+  add,
 }: {
   entries: ItemTierListEntry[];
   /** `tierListEntries.totalCount`, when the API held rows back. */
   total?: number | null;
+  /** "Add to a list", shown beside "Not ranked" (the item page's). */
+  add?: ReactNode;
 }) {
-  if (entries.length === 0) {
-    return null;
-  }
-
+  // CROSS-LOT "On your lists": the Social-Lists "Your rank" block, which
+  // matches the place page — "Not ranked" with Add to a list, else each list
+  // with its band (the filled band colour and its name, never gold).
   return (
-    <ItemSection
-      title="On tier lists"
-      icon={<Ranked aria-hidden className="size-3.5 text-ink-3" />}
+    <section
+      data-testid="your-rank"
+      aria-labelledby="your-rank-label"
+      className="flex flex-col gap-2"
     >
-      <ul className="flex flex-col gap-2">
-        {entries.map((item) => (
-          <li
-            key={item.id}
-            className="flex min-h-11 items-center justify-between gap-2"
-          >
-            {item.tier_list ? (
-              <Link
-                href={`/tier-lists/${item.tier_list.id}`}
-                className="type-callout block min-w-0 truncate py-3 font-semibold text-ink-1"
-              >
-                {item.tier_list.name}
-              </Link>
-            ) : (
-              <span className="type-callout font-semibold text-ink-1">
-                Unknown list
-              </span>
-            )}
-            <span
-              className={cn(
-                "inline-flex h-6 shrink-0 items-center rounded-full px-2.5 font-medium text-xs",
-                BAND_CLASS[item.band] ?? BAND_CLASS[0],
-              )}
+      <h2 id="your-rank-label" className="t-cap text-ink-2">
+        Your rank
+      </h2>
+      {entries.length === 0 ? (
+        <div className="flex min-h-11 items-center justify-between gap-3">
+          <span className="t-head text-ink">Not ranked</span>
+          {add}
+        </div>
+      ) : (
+        <ul className="flex flex-col">
+          {entries.map((item) => (
+            <li
+              key={item.id}
+              className="flex min-h-11 items-center justify-between gap-3"
             >
-              {BAND_LABELS[item.band] ?? `Band ${item.band}`}
-            </span>
-          </li>
-        ))}
-      </ul>
+              {item.tier_list ? (
+                <Link
+                  href={`/tier-lists/${item.tier_list.id}`}
+                  underline="none"
+                  className="t-head block min-w-0 truncate py-3 text-ink"
+                >
+                  {item.tier_list.name}
+                </Link>
+              ) : (
+                <span className="t-head text-ink">Unknown list</span>
+              )}
+              <span
+                className={cn(
+                  "t-cap inline-flex h-6 shrink-0 items-center rounded-sm px-2 ring-1 ring-band-edge ring-inset",
+                  BAND_CLASS[item.band] ?? BAND_CLASS[0],
+                )}
+              >
+                {BAND_LABELS[item.band] ?? `Band ${item.band}`}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
       <HeldBackNote shown={entries.length} total={total} noun="lists" />
-    </ItemSection>
+    </section>
   );
 }

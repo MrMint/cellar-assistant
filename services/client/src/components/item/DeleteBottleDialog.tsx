@@ -2,15 +2,17 @@
 
 import { useEffect, useState, useTransition } from "react";
 import { useMutation } from "urql";
+import { Delete } from "@/components/app/icons";
 import { ResponsiveDialog } from "@/components/app/ResponsiveDialog";
 import { useNavigate } from "@/components/app/useNavigate";
 import type { ApiItemType } from "@/components/cellar-api/itemTypes";
+import { typeWords } from "@/components/drink-log/type-words";
 import { Button } from "@/components/ui/button";
 import { RemoveItemFromCellarMutation } from "@/lib/api/cellars";
 import { unwrapResult } from "@/lib/api/result";
-import { formatItemType } from "@/utilities";
 import { FinishBottleDialogs } from "./FinishBottleDialogs";
 import { deleteBottleWarning } from "./finish-bottle";
+import { bottleStateLine } from "./item-page-model";
 import { LoadingButton } from "./LoadingButton";
 import { useFinishBottle } from "./useFinishBottle";
 
@@ -105,56 +107,48 @@ export function DeleteBottleDialog({
           if (!isDisabled) onOpenChange(next);
         }}
         dismissible={!isDisabled}
-        title="Delete this bottle?"
-        description={warning.body}
+        title={`Delete this ${itemName === undefined || itemName === "" ? typeWords(itemType).container : itemName}?`}
+        description={bottleStateLine(bottle)}
         footer={
-          // Three buttons do not fit side by side at 390px: they stack. When
-          // finishing is offered it is the emphasised, first action and Delete
-          // the outlined one, so the visual weight points away from data loss.
-          <div className="flex w-full flex-col gap-2 md:flex-row-reverse md:justify-start">
+          // Cellars-Bottles 22: the gentler way out first (ruling 4), then
+          // Keep it beside the outlined danger Delete with its trash glyph
+          // (CROSS-LOT "Delete confirm"). Destructive is never primary.
+          <div className="flex w-full flex-col gap-2">
             {warning.suggestFinish && (
               <LoadingButton
+                variant="outline"
                 disabled={isDisabled}
                 loading={isFinishing}
                 onClick={handleFinishInstead}
               >
-                Mark finished instead
+                Mark finished
               </LoadingButton>
             )}
-            {warning.suggestFinish ? (
+            <div className="grid grid-cols-2 gap-2">
+              <Button
+                variant="outline"
+                disabled={isDisabled}
+                onClick={() => onOpenChange(false)}
+              >
+                Keep it
+              </Button>
               <LoadingButton
                 variant="destructive"
-                disabled={isDisabled}
-                loading={isPending}
-                onClick={handleDelete}
-              >
-                Delete {formatItemType(itemType)}
-              </LoadingButton>
-            ) : (
-              // Nothing safer to offer: the solid danger confirm (design §3.1
-              // allows it only in a confirm sheet, which this is).
-              <LoadingButton
                 data-tone="danger"
                 disabled={isDisabled}
                 loading={isPending}
                 onClick={handleDelete}
-                className="bg-destructive text-background hover:bg-destructive/90 focus-visible:ring-destructive/40"
               >
-                Delete {formatItemType(itemType)}
+                <Delete aria-hidden />
+                Delete
               </LoadingButton>
-            )}
-            <Button
-              variant="ghost"
-              disabled={isDisabled}
-              onClick={() => onOpenChange(false)}
-            >
-              Cancel
-            </Button>
+            </div>
           </div>
         }
       >
+        <p className="t-body text-ink-2">Your logs stay.</p>
         {shownError !== null && (
-          <p role="alert" className="type-callout text-destructive">
+          <p role="alert" className="t-body text-destructive">
             {shownError}
           </p>
         )}
