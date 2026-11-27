@@ -50,9 +50,9 @@ export const ONBOARDING_STATUSES = [
   "CONFIRMED",
   "FAILED",
   "MATCHED",
-  // SV-B (L6): a draft the person saved with a floor field still missing — a
-  // bottle that is not a cellar item yet, counted on the cellar it is aimed
-  // at. `confirm` from here follows the normal path.
+  // SV-B (L6, FR-1): a draft the person set aside with "Finish later", floor
+  // met or not — a bottle that is not a cellar item yet, counted on the cellar
+  // it is aimed at. `confirm` from here follows the normal path.
   "NEEDS_DETAILS",
 ] as const;
 export type OnboardingStatus = (typeof ONBOARDING_STATUSES)[number];
@@ -238,10 +238,9 @@ export type SaveDraftFields = {
 };
 
 /**
- * SV-B · MC-drafts: `saveDraft`'s argument. A guess outside the floor never
- * blocks saving: a draft whose floor (`requireItemAttributes`, plus a name)
- * is met is stored and left for `confirm`; one missing a floor field becomes
- * `NEEDS_DETAILS`.
+ * SV-B · MC-drafts: `saveDraft`'s argument. Nothing outside the shape checks
+ * blocks saving, and every saved draft becomes `NEEDS_DETAILS` (FR-1), listed
+ * until `confirm` — floor met or not, since a beer's floor is just a name.
  */
 export type SaveDraftInput = {
   /** The cellar it is aimed at; the owner must be able to write it. */

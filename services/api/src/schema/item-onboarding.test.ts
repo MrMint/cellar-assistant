@@ -4,7 +4,11 @@
  * `ItemOnboarding` fields. The actors are stubbed; what is pinned here is
  * the wiring — which actor, which key, which arguments.
  */
-import { ConflictError, NotFoundError } from "@cellar-assistant/contracts";
+import {
+  ConflictError,
+  NotFoundError,
+  ValidationError,
+} from "@cellar-assistant/contracts";
 import { execute, parse } from "graphql";
 import { describe, expect, it } from "vitest";
 import { stubSidecar, testContext } from "../testing.ts";
@@ -154,6 +158,29 @@ describe("needsDetails / needsDetailsCount (SV-B)", () => {
       [viewer.id, "needsDetails", { cellarId: CELLAR_ID }],
       [viewer.id, "needsDetailsCount", {}],
     ]);
+  });
+
+  it("a malformed cellarId is the list's ValidationError, not a blank response (F-74)", async () => {
+    const { invoke } = stubSidecar({
+      "DraftsCollectionActor.needsDetails": () => {
+        throw new ValidationError('cellarId must be a UUID, got "x"');
+      },
+      "DraftsCollectionActor.needsDetailsCount": () => {
+        throw new ValidationError('cellarId must be a UUID, got "x"');
+      },
+    });
+    const result = await run(
+      `{
+         needsDetails(cellarId: "x") { __typename }
+         needsDetailsCount(cellarId: "x")
+       }`,
+      testContext(invoke, viewer),
+    );
+    expect(result.errors).toBeUndefined();
+    expect(result.data).toEqual({
+      needsDetails: { __typename: "ValidationError" },
+      needsDetailsCount: 0,
+    });
   });
 
   it("is empty for an anonymous viewer, with no actor call", async () => {

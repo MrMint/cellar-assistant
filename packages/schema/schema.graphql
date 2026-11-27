@@ -5777,7 +5777,7 @@ type Query {
   ): QueryMyTierListsResult!
 
   """
-  SV-B: your saved “Needs details” drafts, newest first — one cellar's, or all of yours without `cellarId`. Empty when signed out. Pages over the newest 200.
+  SV-B: your saved “Needs details” drafts, newest first — one cellar's, or all of yours without `cellarId`. Empty when signed out. Pages over every draft `needsDetailsCount` counts.
   """
   needsDetails(
     """
@@ -5801,7 +5801,7 @@ type Query {
   ): QueryNeedsDetailsResult!
 
   """
-  SV-B: how many of your drafts need details — on one cellar, or in all of yours without `cellarId`. A draft is not a cellar item, so this is not in the cellar's item counts. 0 when signed out.
+  SV-B: how many of your drafts need details — on one cellar, or in all of yours without `cellarId`. A draft is not a cellar item, so this is not in the cellar's item counts. 0 when signed out, and for a `cellarId` that is not a UUID (`needsDetails` reports that one).
   """
   needsDetailsCount(cellarId: ID): Int!
 
@@ -7462,7 +7462,7 @@ enum SakeServingTemperature {
 }
 
 """
-SV-B: an unfinished bottle, kept on the account. A draft missing a floor field (its name, or an attribute the item type requires) is saved as `NEEDS_DETAILS`; one whose floor is met keeps its status, for `confirmItemOnboarding`.
+SV-B: an unfinished bottle, kept on the account. Every saved draft is `NEEDS_DETAILS`, floor met or not, and listed in `needsDetails` until `confirmItemOnboarding`.
 """
 input SaveDraftInput {
   """The cellar it is aimed at; yours to write."""

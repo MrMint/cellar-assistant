@@ -136,6 +136,26 @@ describe.skipIf(skip)("DraftsCollectionActor (SV-B)", () => {
     });
   });
 
+  it("lists every draft it counts, past 200 (F-73)", async () => {
+    await withTestDb(async (db) => {
+      const viewer = await seedUser(db);
+      await db.execute(sql`
+        insert into public.item_onboardings
+          (id, user_id, item_type, status, display_name)
+        select gen_random_uuid(), ${viewer}::uuid, 'WINE', 'NEEDS_DETAILS',
+               'Demo draft ' || n
+        from generate_series(1, 205) as n
+      `);
+      const actor = await activate(
+        createActor(DraftsCollectionActor, viewer, db),
+      );
+      const ctx = userCtx(viewer, "r");
+      const count = await actor.needsDetailsCount(ctx, {});
+      expect(count).toBe(205);
+      expect((await actor.needsDetails(ctx, {})).length).toBe(count);
+    });
+  });
+
   it("refuses a caller who is not the viewer it is keyed by, before reading", async () => {
     await withTestDb(async (db) => {
       const viewer = await seedUser(db);

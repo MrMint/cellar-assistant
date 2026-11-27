@@ -1659,7 +1659,7 @@ describe.skipIf(skip)("ItemOnboardingActor.saveDraft (SV-B, MC-drafts)", () => {
     });
   });
 
-  it("a draft whose floor is met when first saved keeps its status", async () => {
+  it("a draft set aside with its floor met is still NEEDS_DETAILS (FR-1)", async () => {
     await withOnboardingDb(async (db) => {
       const { owner, actor } = await openWineDraft(db);
       const saved = await actor.saveDraft(userCtx(owner, "r"), {
@@ -1667,7 +1667,30 @@ describe.skipIf(skip)("ItemOnboardingActor.saveDraft (SV-B, MC-drafts)", () => {
         confirmedFields: [],
         vintageAnswer: "NON_VINTAGE",
       });
-      expect(saved.status).toBe("START");
+      expect(saved.status).toBe("NEEDS_DETAILS");
+    });
+  });
+
+  it("a named beer set aside with Finish later is NEEDS_DETAILS, though its floor is just a name (F-41)", async () => {
+    await withOnboardingDb(async (db) => {
+      const owner = await seedUser(db);
+      await seedReferenceValues(db);
+      const actor = await activate(
+        newOnboardingActor(
+          randomUUID(),
+          db,
+          provider(),
+          undefined,
+          brandRegistry(db),
+        ),
+      );
+      await actor.openDraft(userCtx(owner, "r"), { itemType: "BEER" });
+      const saved = await actor.saveDraft(userCtx(owner, "r"), {
+        fields: { name: "Demo Pale Ale" },
+        confirmedFields: [],
+        vintageAnswer: "UNANSWERED",
+      });
+      expect(saved.status).toBe("NEEDS_DETAILS");
     });
   });
 

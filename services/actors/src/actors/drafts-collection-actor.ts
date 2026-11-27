@@ -32,9 +32,6 @@ import { requireUuidValue } from "../lib/collection-sql.ts";
 import { ITEM_TABLES } from "../lib/item-bindings.ts";
 import { onboardingRowToDto } from "./item-onboarding-actor.ts";
 
-/** A "Needs details" list is a handful of bottles; this only bounds it. */
-const NEEDS_DETAILS_LIMIT = 200;
-
 /**
  * The fields a label read guessed: those it gave a confidence for
  * (`defaults.fieldConfidence`, "for each field you filled in"), sorted —
@@ -65,8 +62,10 @@ export class DraftsCollectionActor
         .select()
         .from(itemOnboardings)
         .where(this.#needsDetailsWhere(ctx, args))
-        .orderBy(desc(itemOnboardings.updatedAt), desc(itemOnboardings.id))
-        .limit(NEEDS_DETAILS_LIMIT);
+        // No limit (F-73): the API pages over this list and the count counts
+        // every row, so a bound here left the oldest drafts unreachable. A
+        // draft is written one Finish later at a time, by its owner alone.
+        .orderBy(desc(itemOnboardings.updatedAt), desc(itemOnboardings.id));
       return rows.map(onboardingRowToDto);
     });
   }
