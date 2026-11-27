@@ -561,6 +561,11 @@ const ItemOnboardingRun = ({
       cellars={cellars ?? []}
       value={context.cellarId ?? null}
       onValueChange={(cellarId) => send({ type: "SET_CELLAR", cellarId })}
+      leaveWarning={
+        state.matches("form")
+          ? "What you've typed isn't saved. Finish later keeps it in Needs details."
+          : undefined
+      }
     />
   ) : cellarName !== undefined ? (
     `Add to ${cellarName}`

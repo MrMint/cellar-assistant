@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { BottomSheet } from "@/components/app/BottomSheet";
+import { ConfirmSheet } from "@/components/app/ConfirmSheet";
 import {
   Add,
   Cellar,
@@ -10,6 +11,7 @@ import {
   Recipe,
 } from "@/components/app/icons";
 import { Link } from "@/components/app/Link";
+import { useNavigate } from "@/components/app/useNavigate";
 import { feedback } from "@/lib/feedback";
 import { cn } from "@/lib/utils";
 
@@ -29,15 +31,23 @@ export function CellarPicker({
   value,
   onValueChange,
   allowNone = true,
+  leaveWarning,
   className,
 }: {
   cellars: readonly AddableCellar[];
   value: string | null;
   onValueChange: (cellarId: string | null) => void;
   allowNone?: boolean;
+  /**
+   * F-61 (CC-5): set while a bottle is half typed. New cellar then asks
+   * before it leaves the page, saying this, instead of linking straight out.
+   */
+  leaveWarning?: string;
   className?: string;
 }) {
   const [open, setOpen] = useState(false);
+  const [leaving, setLeaving] = useState(false);
+  const navigate = useNavigate();
   const current = cellars.find((cellar) => cellar.id === value);
   const title =
     current === undefined ? "Add to the catalog" : `Add to ${current.name}`;
@@ -103,17 +113,42 @@ export function CellarPicker({
             </button>
           )}
           <div className="my-2 border-hair border-t" />
-          <Link
-            href="/cellars/add"
-            underline="none"
-            className={rowClass}
-            onClick={() => feedback("press")}
-          >
-            <Add aria-hidden className="size-5 shrink-0 text-act-ink" />
-            <span className="t-head text-ink">New cellar</span>
-          </Link>
+          {leaveWarning === undefined ? (
+            <Link
+              href="/cellars/add"
+              underline="none"
+              className={rowClass}
+              onClick={() => feedback("press")}
+            >
+              <Add aria-hidden className="size-5 shrink-0 text-act-ink" />
+              <span className="t-head text-ink">New cellar</span>
+            </Link>
+          ) : (
+            <button
+              type="button"
+              className={rowClass}
+              onClick={() => {
+                feedback("press");
+                setLeaving(true);
+              }}
+            >
+              <Add aria-hidden className="size-5 shrink-0 text-act-ink" />
+              <span className="t-head text-ink">New cellar</span>
+            </button>
+          )}
         </div>
       </BottomSheet>
+      {/* On top of "Add to", not in its place: both go with the page, so
+          neither sheet's history entry undoes the navigation (F-36). */}
+      <ConfirmSheet
+        open={leaving}
+        onOpenChange={setLeaving}
+        title="Leave this bottle?"
+        description={leaveWarning}
+        cancelLabel="Keep editing"
+        confirmLabel="Leave"
+        onConfirm={() => navigate.push("/cellars/add")}
+      />
     </>
   );
 }
