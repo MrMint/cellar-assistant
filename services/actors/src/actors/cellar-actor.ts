@@ -121,6 +121,7 @@ import type {
   PageArgs,
   PermissionType,
   RemovedCellarItem,
+  RestoreCellarItemInput,
   StarterCellarInput,
   UpdateCellarInput,
   UpdateCellarItemInput,
@@ -312,7 +313,7 @@ export class CellarActor
     const query = args.semanticQuery?.trim();
     const dtos =
       query === undefined || query === ""
-        ? await this.#sorted(rows, args.sort)
+        ? await this.#sorted(rows, args.sort, ctx.viewerId)
         : await this.#semanticallySorted(ctx, rows, query);
 
     return offsetPage(dtos.map(this.#shown(ctx, aggregate)), args.page);
@@ -454,10 +455,12 @@ export class CellarActor
     let ordered: readonly Matched[];
     let meaning: CellarSearchMeaning = "NOT_ASKED";
     if (query === "") {
-      ordered = (await this.#sorted(rows, args.sort)).map((dto) => ({
-        dto,
-        match: null,
-      }));
+      ordered = (await this.#sorted(rows, args.sort, ctx.viewerId)).map(
+        (dto) => ({
+          dto,
+          match: null,
+        }),
+      );
     } else {
       const searched = await this.#narrowed(ctx, rows, query);
       meaning = searched.meaning;
@@ -928,6 +931,36 @@ export class CellarActor
    * and writes nothing.
    */
   async addItem(ctx: Ctx, input: AddCellarItemInput): Promise<CellarItemDto> {
+    return await this.#insertItem(ctx, input, null);
+  }
+
+  /**
+   * F-79: Undo for `removeItem`. `addItem`'s write with the removed row's own
+   * id and `createdAt`, so the bottle comes back where it was in the list.
+   */
+  async restoreItem(
+    ctx: Ctx,
+    input: RestoreCellarItemInput,
+  ): Promise<CellarItemDto> {
+    const createdAt = parseInstant(input.createdAt, "createdAt");
+    if (createdAt === null || createdAt.getTime() > Date.now()) {
+      throw new ValidationError("createdAt must be a past instant");
+    }
+    return await this.#insertItem(
+      ctx,
+      {
+        ...input,
+        cellarItemId: requireUuid(input.cellarItemId, "cellarItemId"),
+      },
+      createdAt,
+    );
+  }
+
+  async #insertItem(
+    ctx: Ctx,
+    input: AddCellarItemInput,
+    createdAt: Date | null,
+  ): Promise<CellarItemDto> {
     const aggregate = this.requireAggregate();
     await this.#requireOwner(ctx, aggregate);
 
@@ -983,13 +1016,23 @@ export class CellarActor
           sourcePlaceId,
           sourceMenuItemId: input.sourceMenuItemId ?? null,
           ...freshness,
+          ...(createdAt === null ? {} : { createdAt, updatedAt: new Date() }),
         })
         // Belt and braces for a redelivery racing itself: the pre-check above
         // reads the activation's cache, this reads Postgres.
         .onConflictDoNothing({ target: cellarItems.id });
     });
     await this.reload();
-    return toItemDto(this.#requireItem(cellarItemId), null);
+    const row = this.requireAggregate().items.find(
+      (item) => item.id === cellarItemId,
+    );
+    if (row === undefined) {
+      // The id is taken by a bottle in another cellar.
+      throw new ConflictError(
+        `cellar item ${cellarItemId} is not in cellar ${this.key}`,
+      );
+    }
+    return toItemDto(row, null);
   }
 
   async updateItem(
@@ -1314,11 +1357,19 @@ export class CellarActor
   async #sorted(
     rows: readonly CellarItemRow[],
     sort: CellarItemSort | null | undefined,
+    viewerId: string | null,
   ): Promise<CellarItemDto[]> {
     const dtos = rows.map((row) => toItemDto(row, null));
-    if (sort !== "NAME_ASC") return sorted(dtos, sort);
-    const names = await itemNames(this.db, rows.map(itemRefOf));
-    return dtos.sort(byName(names));
+    if (sort !== "NAME_ASC" && (sort == null || !(sort in KEYED_SORTS))) {
+      return sorted(dtos, sort);
+    }
+    const refs = rows.map(itemRefOf);
+    const names = await itemNames(this.db, refs);
+    if (sort === "NAME_ASC") return dtos.sort(byName(names));
+    // F-79: maker, style, rating — read fresh, as names are (§1.3).
+    const keyed = KEYED_SORTS[sort as KeyedSort];
+    const keys = await itemSortKeys(this.db, refs, keyed, viewerId);
+    return dtos.sort(byKey(keys, keyed.descending, byName(names)));
   }
 
   /**
@@ -1598,6 +1649,102 @@ const byName =
     return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
   };
 
+/** F-79: the sorts keyed on item data this actor does not hold. */
+type KeyedSort = "MAKER_ASC" | "STYLE_ASC" | "RATING_DESC";
+type SortKeySpec = {
+  readonly key: "maker" | "style" | "rating";
+  readonly descending: boolean;
+};
+const KEYED_SORTS: Record<KeyedSort, SortKeySpec> = {
+  MAKER_ASC: { key: "maker", descending: false },
+  STYLE_ASC: { key: "style", descending: false },
+  RATING_DESC: { key: "rating", descending: true },
+};
+
+/** The item table and its card-descriptor column, per type (`STYLE_ASC`). */
+const STYLE_SOURCE: Record<ItemType, { table: string; column: string }> = {
+  WINE: { table: "wines", column: "variety" },
+  BEER: { table: "beers", column: "style" },
+  SPIRIT: { table: "spirits", column: "style" },
+  COFFEE: { table: "coffees", column: "roast_level" },
+  SAKE: { table: "sakes", column: "category" },
+  TEA: { table: "teas", column: "category" },
+};
+
+/**
+ * Item id -> sort key: the primary brand's name (else the earliest linked),
+ * the descriptor column, or the viewer's latest score. Items with none are
+ * absent from the map. One query per item type present.
+ */
+const itemSortKeys = async (
+  db: DbOrTx,
+  refs: readonly ItemRef[],
+  spec: SortKeySpec,
+  viewerId: string | null,
+): Promise<Map<string, string | number>> => {
+  const keys = new Map<string, string | number>();
+  if (spec.key === "rating" && viewerId === null) return keys;
+  const byType = new Map<ItemType, Set<string>>();
+  for (const ref of refs) {
+    byType.set(ref.type, (byType.get(ref.type) ?? new Set()).add(ref.id));
+  }
+  await Promise.all(
+    [...byType.entries()].map(async ([type, idSet]) => {
+      const ids = sql.join(
+        [...idSet].map((id) => sql`${id}::uuid`),
+        sql`, `,
+      );
+      const link = sql.identifier(`${type.toLowerCase()}_id`);
+      const source = STYLE_SOURCE[type];
+      const query =
+        spec.key === "maker"
+          ? sql`
+              select distinct on (ib.${link}) ib.${link}::text as id, b.name as key
+              from public.item_brands ib join public.brands b on b.id = ib.brand_id
+              where ib.${link} in (${ids})
+              order by ib.${link}, ib.is_primary desc nulls last, ib.created_at, b.name`
+          : spec.key === "style"
+            ? sql`
+              select t.id::text as id, t.${sql.identifier(source.column)}::text as key
+              from public.${sql.identifier(source.table)} t
+              where t.id in (${ids}) and t.${sql.identifier(source.column)} is not null`
+            : sql`
+              select distinct on (r.${link}) r.${link}::text as id, r.score as key
+              from public.item_reviews r
+              where r.user_id = ${viewerId}::uuid and r.${link} in (${ids})
+              order by r.${link}, r.updated_at desc`;
+      const { rows } = await db.execute<{ id: string; key: string | number }>(
+        query,
+      );
+      for (const row of rows) keys.set(row.id, row.key);
+    }),
+  );
+  return keys;
+};
+
+/** By key (missing last), then `tie` — `byName`, which ends on the row id. */
+const byKey =
+  (
+    keys: ReadonlyMap<string, string | number>,
+    descending: boolean,
+    tie: (a: CellarItemDto, b: CellarItemDto) => number,
+  ) =>
+  (a: CellarItemDto, b: CellarItemDto): number => {
+    const left = keys.get(a.item.id);
+    const right = keys.get(b.item.id);
+    if (left === undefined || right === undefined) {
+      if (left !== right) return left === undefined ? 1 : -1;
+      return tie(a, b);
+    }
+    const order =
+      typeof left === "number" && typeof right === "number"
+        ? left - right
+        : String(left).localeCompare(String(right), "en", {
+            sensitivity: "base",
+          });
+    return (descending ? -order : order) || tie(a, b);
+  };
+
 /** `loadAggregate` already returns newest-first, which is `ADDED_DESC`. */
 const sorted = (
   items: readonly CellarItemDto[],
@@ -1631,9 +1778,12 @@ const sorted = (
       // first — the diary's order.
       return copy.sort(finishedDesc);
     case "NAME_ASC":
-      // Needs names, which `#sorted` reads before it gets here; reaching this
-      // arm means a caller skipped that, so say so rather than guess.
-      throw new Error("NAME_ASC is sorted by CellarActor#sorted, not here");
+    case "MAKER_ASC":
+    case "STYLE_ASC":
+    case "RATING_DESC":
+      // Need item data, which `#sorted` reads before it gets here; reaching
+      // this arm means a caller skipped that, so say so rather than guess.
+      throw new Error(`${sort} is sorted by CellarActor#sorted, not here`);
   }
 };
 

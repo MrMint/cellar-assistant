@@ -1491,11 +1491,14 @@ enum CellarItemSort {
   ADDED_ASC
   ADDED_DESC
   FINISHED_DESC
+  MAKER_ASC
   NAME_ASC
   OPENED_DESC
   OPEN_FIRST
   PERCENTAGE_ASC
   PERCENTAGE_DESC
+  RATING_DESC
+  STYLE_ASC
 }
 
 """`cellar_items.source_type` — how the bottle got here."""
@@ -4425,6 +4428,11 @@ type Mutation {
   resolveBrand(name: String!): ResolveBrandResult!
 
   """
+  F-79: Undo for `removeItemFromCellar` — the bottle back under its own id and `createdAt`, so it returns to its place in the list. Creator or co-owner; again is a no-op. The check-ins the removal detached stay detached.
+  """
+  restoreCellarItem(cellarId: ID!, cellarItemId: ID!, createdAt: DateTime!, input: AddCellarItemInput!): RestoreCellarItemResult!
+
+  """
   Undo `deleteDrinkLog`: the entries it removed come back with their own ids and dates. Only for whoever removed them, within an hour. A bottle, place or photo that has gone since comes back as none; a companion who is no longer your friend does not come back.
   """
   restoreDrinkLog(
@@ -7111,6 +7119,8 @@ union RereadItemLabelResult = BudgetExceededError | ConflictError | ForbiddenErr
 union ResetFriendInviteResult = BudgetExceededError | ConflictError | ForbiddenError | FriendInvite | NotFoundError | ValidationError
 
 union ResolveBrandResult = Brand | BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | ValidationError
+
+union RestoreCellarItemResult = BudgetExceededError | CellarItem | ConflictError | ForbiddenError | NotFoundError | ValidationError
 
 union RestoreDrinkLogResult = BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | RestoredDrinkLogPayload | ValidationError
 

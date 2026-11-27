@@ -5790,6 +5790,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
             },
           },
           {
+            name: "restoreCellarItem",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "UNION", name: "RestoreCellarItemResult" },
+            },
+          },
+          {
             name: "restoreDrinkLog",
             type: {
               kind: "NON_NULL",
@@ -9829,6 +9836,18 @@ export const graphcacheSchema: MinifiedIntrospection = {
         possibleTypes: [
           { kind: "OBJECT", name: "Brand" },
           { kind: "OBJECT", name: "BudgetExceededError" },
+          { kind: "OBJECT", name: "ConflictError" },
+          { kind: "OBJECT", name: "ForbiddenError" },
+          { kind: "OBJECT", name: "NotFoundError" },
+          { kind: "OBJECT", name: "ValidationError" },
+        ],
+      },
+      {
+        kind: "UNION",
+        name: "RestoreCellarItemResult",
+        possibleTypes: [
+          { kind: "OBJECT", name: "BudgetExceededError" },
+          { kind: "OBJECT", name: "CellarItem" },
           { kind: "OBJECT", name: "ConflictError" },
           { kind: "OBJECT", name: "ForbiddenError" },
           { kind: "OBJECT", name: "NotFoundError" },
