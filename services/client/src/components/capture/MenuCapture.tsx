@@ -235,7 +235,7 @@ export function MenuCapture({
     <div data-slot="menu-capture" className="flex flex-col gap-3">
       {photo === null ? (
         // Capture-Camera: the camera stays dark in both themes.
-        <div className="keep-dark -mx-4 flex flex-col gap-2 bg-bg px-4 pb-3 text-ink">
+        <div className="keep-dark -mx-4 flex flex-col gap-2 bg-background px-4 pb-3 text-ink">
           <CaptureHeader leading={leading} title="Scan a menu" />
           <CaptureCamera
             onCapture={onShutter}

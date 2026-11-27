@@ -180,7 +180,10 @@ export function CaptureCamera({
     // `.keep-dark` puts the dark tokens on everything inside it.
     <div
       data-slot="capture-camera"
-      className={cn("keep-dark flex flex-col bg-bg text-ink", className)}
+      className={cn(
+        "keep-dark flex flex-col bg-background text-ink",
+        className,
+      )}
     >
       <input
         ref={libraryRef}

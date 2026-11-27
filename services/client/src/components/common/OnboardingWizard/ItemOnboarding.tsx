@@ -549,7 +549,11 @@ const ItemOnboardingRun = ({
   return (
     <div className="flex flex-col gap-4">
       {/* The camera is one dark place, header included (LIGHT-capture 1). */}
-      <div className={framing ? "keep-dark -mx-4 bg-bg text-ink" : undefined}>
+      <div
+        className={
+          framing ? "keep-dark -mx-4 bg-background text-ink" : undefined
+        }
+      >
         <CaptureHeader leading={leading} title={title} />
 
         {framing && (

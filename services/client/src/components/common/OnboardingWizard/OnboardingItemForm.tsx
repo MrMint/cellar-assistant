@@ -454,7 +454,7 @@ export const OnboardingItemForm = ({
             primary right with its verb and an "n to check" chip. */}
         <div
           data-slot="draft-footer"
-          className="sticky bottom-0 z-10 -mx-4 flex items-center gap-2 border-hair border-t bg-bg px-4 py-3"
+          className="sticky bottom-0 z-10 -mx-4 flex items-center gap-2 border-hair border-t bg-background px-4 py-3"
         >
           {duplicate && differing === null ? (
             <>
@@ -519,7 +519,7 @@ export const OnboardingItemForm = ({
                 {isSubmitting && <Spinner aria-hidden />}
                 {verb}
                 {toCheck.length > 0 && (
-                  <span className="t-cap rounded-sm bg-bg/20 px-1.5 py-0.5">
+                  <span className="t-cap rounded-sm bg-background/20 px-1.5 py-0.5">
                     {toCheckLabel(toCheck.length)}
                   </span>
                 )}

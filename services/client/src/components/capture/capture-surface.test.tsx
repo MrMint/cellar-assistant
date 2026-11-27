@@ -267,6 +267,28 @@ describe("CaptureSurface (X06): the mode row", () => {
     assert.equal(readCapturePrefs().mode, "menu");
   });
 
+  test("the surface is dark in both themes: its root scopes the dark tokens and paints them", async () => {
+    document.documentElement.setAttribute("data-theme", "light");
+    try {
+      for (const mode of ["bottle", "menu", "recipe"] as const) {
+        window.localStorage.setItem(
+          CAPTURE_PREFS_KEY,
+          JSON.stringify({ mode }),
+        );
+        await render(<CaptureSurface type="WINE" />);
+        await settle();
+        const root = document.querySelector('[data-slot="capture-surface"]');
+        const classes = root?.classList;
+        assert.ok(classes?.contains("keep-dark"), `${mode}: no keep-dark`);
+        // A real token: `--color-background` (globals.css), not `bg-bg`.
+        assert.ok(classes?.contains("bg-background"), `${mode}: unpainted`);
+        assert.ok(classes?.contains("text-ink"), `${mode}: ink not dark's`);
+      }
+    } finally {
+      document.documentElement.removeAttribute("data-theme");
+    }
+  });
+
   test("an explicit ?mode= wins over the last used", async () => {
     window.localStorage.setItem(
       CAPTURE_PREFS_KEY,
