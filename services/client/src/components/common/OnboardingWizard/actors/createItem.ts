@@ -31,6 +31,8 @@ export type CreateOnboardedItemInput = {
   barcode: string;
   /** The code the session was opened with (scanned), if any. */
   sessionBarcode?: string;
+  /** DECISIONS 34: the guessed fields the person touched (server names). */
+  confirmedFields?: readonly string[];
 };
 
 /**
@@ -58,6 +60,7 @@ export const createOnboardedItem = async ({
   brandName,
   barcode,
   sessionBarcode,
+  confirmedFields,
 }: CreateOnboardedItemInput): Promise<string> => {
   const typed = normalizeBarcode(barcode);
   const problem = typed === "" ? null : barcodeProblem(typed);
@@ -70,7 +73,12 @@ export const createOnboardedItem = async ({
       await urqlClient
         .mutation(ConfirmItemOnboardingMutation, {
           onboardingId,
-          input: confirmInputFrom(type, values, brandName),
+          input: {
+            ...confirmInputFrom(type, values, brandName),
+            ...(confirmedFields === undefined
+              ? {}
+              : { confirmedFields: [...confirmedFields] }),
+          },
         })
         .toPromise()
     ).data?.confirmItemOnboarding,

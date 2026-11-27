@@ -307,6 +307,22 @@ const ItemOnboardingRun = ({
     send({ type: "EDIT" });
   }, [send]);
 
+  // "Finish later" (MC-drafts, L41): the draft is the account's now; the
+  // in-memory tracker lets go of it, and the person goes back to where the
+  // bottle is aimed.
+  const finishedLater = () => {
+    captureDrafts.release(context.itemOnboardingId);
+    if (context.cellarId !== undefined) {
+      rememberCapturePrefs({ cellarId: context.cellarId });
+    }
+    notify("Saved · Needs details");
+    navigate.push(
+      context.cellarId === undefined
+        ? "/needs-details"
+        : `/cellars/${context.cellarId}/items`,
+    );
+  };
+
   const [backOpen, setBackOpen] = useState(false);
   const inCellar = isNotNil(context.cellarId);
   const cellarName =
@@ -648,6 +664,18 @@ const ItemOnboardingRun = ({
             onCreated={(itemId, name) =>
               send({ type: "CREATED", itemId, name })
             }
+            cellarId={context.cellarId ?? null}
+            onSavedForLater={finishedLater}
+            declinedMatch={
+              context.declinedMatch === undefined
+                ? undefined
+                : {
+                    name: context.declinedMatch.item.name,
+                    brandName: context.declinedMatch.brandName,
+                    summary: catalogMatchSummary(context.declinedMatch),
+                  }
+            }
+            onUseDeclined={() => send({ type: "USE_DECLINED_MATCH" })}
           />
           <BottomSheet
             open={backOpen}
