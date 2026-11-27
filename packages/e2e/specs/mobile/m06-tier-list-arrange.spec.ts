@@ -3,9 +3,10 @@ import { bottomNav, edgesOf, expect, test } from "../../fixtures/mobile.ts";
 import { Gql } from "../../fixtures/test.ts";
 
 /**
- * X23 / D4 at 390x844: a tier list is read-only until **Arrange**; Arrange
- * puts the handles, the remove buttons and a thumb-zone bar (Undo · Redo ·
- * Add entry · Done) on screen; a removal lands at once and its toast's Undo
+ * X23 / D4 / DECISIONS 41 at 390x844: a tier list is read-only until **Edit
+ * order**, which puts the handles and a thumb-zone dock (Undo · Redo · Add
+ * entry, then Move up · Move down · Move to band… · Done) on screen; a
+ * removal (pick a row, Move to band…, Remove from list) lands at once and its toast's Undo
  * puts it back; Redo takes it out again; and the history survives a reload —
  * Undo on a fresh page still names the removal and still works.
  *
@@ -116,7 +117,7 @@ test.afterAll(async () => {
   }
 });
 
-test("read-only until Arrange; the bar sits in the thumb zone above the tabs", async ({
+test("read-only until Edit order; the dock sits in the thumb zone above the tabs", async ({
   page,
 }) => {
   const id = tierListId ?? "";
@@ -126,25 +127,32 @@ test("read-only until Arrange; the bar sits in the thumb zone above the tabs", a
   test.skip(before.length < 2, "the account has fewer than two wines to rank");
 
   await page.goto(`/tier-lists/${id}`);
-  const arrange = page.getByRole("button", { name: "Arrange", exact: true });
-  await expect(arrange, "no Arrange for the owner").toBeVisible({
+  const arrange = page.getByRole("button", { name: "Edit order", exact: true });
+  await expect(arrange, "no Edit order for the owner").toBeVisible({
     timeout: 20_000,
   });
-  // Read-only: no handles, no remove buttons — and no padlock any more.
+  // Read-only: no handles, no dock — and no padlock any more.
   await expect(page.locator('[aria-roledescription="sortable"]')).toHaveCount(
     0,
   );
-  await expect(page.getByRole("button", { name: /^Remove / })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /^Reorder / })).toHaveCount(0);
   await expect(page.getByRole("button", { name: /editing$/ })).toHaveCount(0);
 
   await arrange.tap();
   const bar = page.getByRole("toolbar", { name: "Arrange" });
   await expect(bar).toBeVisible();
-  await expect(page.getByRole("button", { name: /^Remove / })).toHaveCount(2);
   await expect(page.locator('[aria-roledescription="sortable"]')).toHaveCount(
     2,
   );
-  for (const name of [/^Undo/, /^Redo/, /^Add entry$/, /^Done$/]) {
+  for (const name of [
+    /^Undo/,
+    /^Redo/,
+    /^Add entry$/,
+    /^Move up$/,
+    /^Move down$/,
+    /^Move to band…$/,
+    /^Done$/,
+  ]) {
     await expect(bar.getByRole("button", { name })).toBeVisible();
   }
   const nav = await bottomNav(page);
@@ -158,7 +166,7 @@ test("read-only until Arrange; the bar sits in the thumb zone above the tabs", a
 
   await bar.getByRole("button", { name: "Done" }).tap();
   await expect(bar).toBeHidden();
-  await expect(page.getByRole("button", { name: /^Remove / })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /^Reorder / })).toHaveCount(0);
 });
 
 test("remove lands at once; the toast's Undo and the bar's Redo step the history", async ({
@@ -174,11 +182,20 @@ test("remove lands at once; the toast's Undo and the bar's Redo step the history
     );
 
     await page.goto(`/tier-lists/${id}`);
-    await page.getByRole("button", { name: "Arrange", exact: true }).tap();
-    const remove = page.getByRole("button", { name: /^Remove / }).first();
-    const label = (await remove.getAttribute("aria-label")) ?? "";
-    const name = label.replace(/^Remove /, "");
-    await remove.tap();
+    await page.getByRole("button", { name: "Edit order", exact: true }).tap();
+    const handle = page.getByRole("button", { name: /^Reorder / }).first();
+    const label = (await handle.getAttribute("aria-label")) ?? "";
+    const name = label.replace(/^Reorder /, "");
+    // Pick the row, then remove it from the band sheet.
+    await page.getByRole("button", { name, exact: true }).tap();
+    await page
+      .getByRole("toolbar", { name: "Arrange" })
+      .getByRole("button", { name: "Move to band…" })
+      .tap();
+    await page
+      .getByRole("dialog", { name })
+      .getByRole("button", { name: "Remove from list" })
+      .tap();
 
     const toast = page.locator("[data-sonner-toast]").filter({
       hasText: `Removed ${name}`,
@@ -227,7 +244,7 @@ test("the history survives a reload: Undo still names the removal and works", as
     );
 
     await page.goto(`/tier-lists/${id}`);
-    await page.getByRole("button", { name: "Arrange", exact: true }).tap();
+    await page.getByRole("button", { name: "Edit order", exact: true }).tap();
     const undo = page
       .getByRole("toolbar", { name: "Arrange" })
       .getByRole("button", { name: /^Undo: removed / });

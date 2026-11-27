@@ -14,7 +14,7 @@ import { Gql } from "../../fixtures/test.ts";
  *     with as many entries as `tierListTemplates` said it would.
  *  3. Insights' grounded Try this next: either cards, each with a reason in
  *     words, or the owner's hint — never a percentage.
- *  4. The Arrange bar at a 320 pt phone: all four controls inside the
+ *  4. The Edit order dock at a 320 pt phone: every control inside the
  *     gutters, nothing overflowing.
  *
  * Every claim about a list's contents is read back through the API. Lists
@@ -222,7 +222,7 @@ test("a list started from your ratings lands pre-banded", async ({ page }) => {
     // A rating always has a band: nothing a template adds is Unrated.
     expect(landed.every((row) => row.band >= 1)).toBe(true);
     await expect(
-      page.getByRole("button", { name: "Arrange", exact: true }),
+      page.getByRole("button", { name: "Edit order", exact: true }),
     ).toBeVisible({ timeout: 20_000 });
   } finally {
     await api.dispose();
@@ -260,7 +260,7 @@ test("Try this next explains every card in words", async ({ page }) => {
 test.describe("at 320 pt", () => {
   test.use({ viewport: { width: 320, height: 568 } });
 
-  test("the Arrange bar keeps its four controls inside the gutters", async ({
+  test("the Edit order dock keeps every control inside the gutters", async ({
     page,
   }) => {
     // The list the Undo test emptied, given one entry if it has none, so
@@ -294,10 +294,18 @@ test.describe("at 320 pt", () => {
     }
 
     await page.goto(`/tier-lists/${id}`);
-    await page.getByRole("button", { name: "Arrange", exact: true }).tap();
+    await page.getByRole("button", { name: "Edit order", exact: true }).tap();
     const bar = page.getByRole("toolbar", { name: "Arrange" });
     await expect(bar).toBeVisible();
-    for (const name of [/^Undo/, /^Redo/, /^Add entry$/, /^Done$/]) {
+    for (const name of [
+      /^Undo/,
+      /^Redo/,
+      /^Add entry$/,
+      /^Move up$/,
+      /^Move down$/,
+      /^Move to band…$/,
+      /^Done$/,
+    ]) {
       await expect(bar.getByRole("button", { name })).toBeVisible();
     }
     const edges = await edgesOf(bar);
