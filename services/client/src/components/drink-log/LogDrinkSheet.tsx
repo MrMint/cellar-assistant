@@ -1,10 +1,18 @@
 "use client";
 
-import { useEffect, useId, useRef, useState } from "react";
+import { type ReactNode, useEffect, useId, useRef, useState } from "react";
 import { useClient, useMutation, useQuery } from "urql";
 import { AIDraftField } from "@/components/app/AIDraftField";
 import { IconButton } from "@/components/app/IconButton";
-import { Add, Camera, Check, Close, Place } from "@/components/app/icons";
+import {
+  Add,
+  Camera,
+  Close,
+  ICON_STROKE,
+  People,
+  Place,
+  Schedule,
+} from "@/components/app/icons";
 import { RatingInput } from "@/components/app/RatingInput";
 import { ResponsiveDialog } from "@/components/app/ResponsiveDialog";
 import { ApiError } from "@/components/cellar-api/ApiError";
@@ -33,6 +41,7 @@ import {
   shouldSuggest,
   toggleId,
   updateInput,
+  whenLabel,
 } from "./log-draft";
 import { announceDrinkLogChanged } from "./log-events";
 import {
@@ -236,20 +245,22 @@ export function LogDrinkSheet({
       title={isNew ? "Log a drink" : "Edit log"}
       description={subject.itemName}
       footer={
-        <div className="flex w-full flex-col-reverse gap-2 md:flex-row md:justify-end">
+        // CROSS-LOT form-sheet footer: the quiet way out left, primary right.
+        <div className="flex w-full items-center gap-3">
           <Button
-            variant="ghost"
+            variant="quiet"
             disabled={saving}
             onClick={() => onOpenChange(false)}
           >
             Cancel
           </Button>
           <Button
+            className="min-w-0 flex-1"
             disabled={saving || whenProblem !== null}
             aria-busy={saving || undefined}
             onClick={() => void save()}
           >
-            {saving ? <Spinner aria-hidden /> : <Check aria-hidden />}
+            {saving && <Spinner aria-hidden />}
             {isNew ? "Log it" : "Save"}
           </Button>
         </div>
@@ -305,25 +316,23 @@ export function LogDrinkForm({
   initialPhotoUrl,
   error,
 }: FormProps) {
-  const ids = useId();
   const patch = (next: Partial<LogDraft>) => onChange({ ...draft, ...next });
+  // Who / When / Where / Photo: four picker buttons, one open at a time
+  // (Cellars-Pour 25). A time to fix opens When by itself.
+  const [shown, setShown] = useState<Picker | null>(isNew ? null : "when");
+  const toggle = (picker: Picker) =>
+    setShown((open) => (open === picker ? null : picker));
+  const [now] = useState(() => new Date());
+  const companions = draft.companionIds.length;
 
   return (
-    <div className="flex flex-col gap-6 pb-2">
-      <section className="flex flex-col gap-2" aria-labelledby={`${ids}-score`}>
-        <h3 id={`${ids}-score`} className="t-cap font-semibold">
-          This glass
-        </h3>
-        <RatingInput
-          label="Score this glass"
-          value={draft.score}
-          onChange={(score) => patch({ score })}
-          onClear={() => patch({ score: null })}
-        />
-        <p className="t-cap text-ink-3">
-          Optional. Your review of the {subject.itemName} stays as it is.
-        </p>
-      </section>
+    <div className="flex flex-col gap-5 pb-2">
+      <RatingInput
+        label="Score this glass"
+        value={draft.score}
+        onChange={(score) => patch({ score })}
+        onClear={() => patch({ score: null })}
+      />
 
       <NoteAndTags
         draft={draft}
@@ -332,17 +341,54 @@ export function LogDrinkForm({
         logId={logId}
       />
 
-      <WhenPicker
-        value={draft.drankAt}
-        onChange={(drankAt) => patch({ drankAt })}
-        allowNow={isNew}
-        onProblem={onWhenProblem}
-      />
+      <div className="grid grid-cols-2 gap-3" data-slot="log-pickers">
+        {allowCompanions && (
+          <PickerButton
+            picker="who"
+            shown={shown}
+            onToggle={toggle}
+            icon={<People aria-hidden strokeWidth={ICON_STROKE} />}
+            set={companions > 0}
+            label="Who"
+          >
+            {companions === 0 ? "Just me" : `With ${companions}`}
+          </PickerButton>
+        )}
+        <PickerButton
+          picker="when"
+          shown={shown}
+          onToggle={toggle}
+          icon={<Schedule aria-hidden strokeWidth={ICON_STROKE} />}
+          set={draft.drankAt !== null}
+          label="When"
+        >
+          {whenLabel(draft.drankAt, now)}
+        </PickerButton>
+        <PickerButton
+          picker="where"
+          shown={shown}
+          onToggle={toggle}
+          icon={<Place aria-hidden strokeWidth={ICON_STROKE} />}
+          set={draft.place !== null}
+          label="Where"
+        >
+          {draft.place?.name ?? "Where"}
+        </PickerButton>
+        <PickerButton
+          picker="photo"
+          shown={shown}
+          onToggle={toggle}
+          icon={<Camera aria-hidden strokeWidth={ICON_STROKE} />}
+          set={draft.photoFileId !== null}
+          label="Photo"
+        >
+          {draft.photoFileId === null ? "Photo" : "1 photo"}
+        </PickerButton>
+      </div>
 
-      <PlacePicker place={draft.place} onChange={(place) => patch({ place })} />
-
-      {allowCompanions && (
+      {shown === "who" && allowCompanions && (
         <CompanionPicker
+          heading={null}
           preloaded={friends}
           selected={draft.companionIds}
           onToggle={(id) =>
@@ -350,15 +396,69 @@ export function LogDrinkForm({
           }
         />
       )}
-
-      <PhotoPicker
-        fileId={draft.photoFileId}
-        initialUrl={initialPhotoUrl}
-        onChange={(photoFileId) => patch({ photoFileId })}
-      />
+      {/* Mounted while closed too, so a time it cannot save still holds
+          the button; it shows only when open. */}
+      <div hidden={shown !== "when"}>
+        <WhenPicker
+          value={draft.drankAt}
+          onChange={(drankAt) => patch({ drankAt })}
+          allowNow={isNew}
+          onProblem={onWhenProblem}
+        />
+      </div>
+      {shown === "where" && (
+        <PlacePicker
+          place={draft.place}
+          onChange={(place) => patch({ place })}
+        />
+      )}
+      {(shown === "photo" || draft.photoFileId !== null) && (
+        <PhotoPicker
+          fileId={draft.photoFileId}
+          initialUrl={initialPhotoUrl}
+          onChange={(photoFileId) => patch({ photoFileId })}
+        />
+      )}
 
       {error !== null && <ApiError error={error} />}
     </div>
+  );
+}
+
+type Picker = "who" | "when" | "where" | "photo";
+
+/** One of the four: glyph and what it holds now; on (sel) once it is set. */
+function PickerButton({
+  picker,
+  shown,
+  onToggle,
+  icon,
+  set,
+  label,
+  children,
+}: {
+  picker: Picker;
+  shown: Picker | null;
+  onToggle: (picker: Picker) => void;
+  icon: ReactNode;
+  set: boolean;
+  label: string;
+  children: string;
+}) {
+  return (
+    <Button
+      variant="outline"
+      aria-expanded={shown === picker}
+      aria-label={`${label}: ${children}`}
+      onClick={() => onToggle(picker)}
+      className={cn(
+        "min-w-0 justify-start",
+        (set || shown === picker) && "border-edge-2 bg-sel text-ink",
+      )}
+    >
+      {icon}
+      <span className="min-w-0 truncate">{children}</span>
+    </Button>
   );
 }
 
@@ -557,7 +657,7 @@ function NoteAndTags({
           </Button>
         </form>
         {tagError !== null && (
-          <p role="alert" className="t-cap text-destructive">
+          <p role="alert" className="t-cap text-danger">
             {tagError}
           </p>
         )}
@@ -777,7 +877,7 @@ function PhotoPicker({
         }}
       />
       {error !== null && (
-        <p role="alert" className="t-cap text-destructive">
+        <p role="alert" className="t-cap text-danger">
           {error}
         </p>
       )}

@@ -309,7 +309,7 @@ const FieldShell = ({
       </FieldLabel>
       {children}
       {text !== undefined && (
-        <FieldError id={errorId(id)} className="t-cap text-destructive">
+        <FieldError id={errorId(id)} className="t-cap text-danger">
           {text}
         </FieldError>
       )}

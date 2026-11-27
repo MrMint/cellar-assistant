@@ -137,13 +137,14 @@ const yourTags = () =>
   );
 
 describe("LogDrinkForm", () => {
-  test("says the score is this glass's and the review stays", async () => {
+  test("opens on the glass's score, with the pickers closed", async () => {
     await mount(answering([]));
-    assert.match(
-      container.textContent ?? "",
-      /Your review of the Barolo stays/,
-    );
     assert.ok(container.querySelector('[role="radiogroup"]'));
+    const who = button(/^Who: Just me$/);
+    assert.ok(who, "Who holds 'Just me' until a friend is added");
+    assert.equal(who.getAttribute("aria-expanded"), "false");
+    assert.equal(button(/Sam$/), undefined, "Who's picker opens on a tap");
+    assert.ok(button(/^When: Now$/));
   });
 
   test("a still note brings suggested chips; a tap makes one a tag", async () => {
@@ -206,12 +207,14 @@ describe("LogDrinkForm", () => {
 
   test("Who with toggles a friend and says what it does", async () => {
     await mount(answering([]));
+    await act(async () => button(/^Who:/)?.click());
     const sam = button(/Sam$/);
     assert.ok(sam);
     assert.equal(sam.getAttribute("aria-pressed"), "false");
     await act(async () => sam.click());
     assert.equal(button(/Sam$/)?.getAttribute("aria-pressed"), "true");
     assert.match(container.textContent ?? "", /their own log/);
+    assert.ok(button(/^Who: With 1$/), "the button says who came");
   });
 });
 

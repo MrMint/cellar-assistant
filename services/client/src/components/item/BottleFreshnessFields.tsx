@@ -92,7 +92,7 @@ const TONE: Record<FreshnessStatus["tone"], string> = {
   good: "bg-success/15 text-success",
   soon: "bg-brass/15 text-brass",
   wait: "bg-surface-3 text-ink-2",
-  past: "bg-destructive/10 text-destructive",
+  past: "bg-danger/10 text-danger",
 };
 
 /** The board's "Drinking window" card. Renders nothing without a window. */
@@ -270,7 +270,7 @@ function EditSheet({
           />
         </div>
         {error !== null && (
-          <p role="alert" className="t-cap text-destructive">
+          <p role="alert" className="t-cap text-danger">
             {error}
           </p>
         )}

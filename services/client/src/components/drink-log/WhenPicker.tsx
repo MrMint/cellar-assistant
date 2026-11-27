@@ -110,7 +110,7 @@ export function WhenPicker({
         />
       )}
       {problem !== null && (
-        <p role="alert" className="t-cap text-destructive">
+        <p role="alert" className="t-cap text-danger">
           {problem}
         </p>
       )}

@@ -200,7 +200,7 @@ export const ItemRemainingSlider = ({
         </div>
       )}
       {shownError !== null && (
-        <p role="alert" className="t-cap text-destructive">
+        <p role="alert" className="t-cap text-danger">
           {shownError}
         </p>
       )}
