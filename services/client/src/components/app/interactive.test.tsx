@@ -1021,6 +1021,45 @@ describe("AppBar", () => {
     assert.equal(container.querySelector('button[aria-label="Back"]'), null);
   });
 
+  test("over a photo: Back and ⋯ are glass discs, the title is for screen readers", async () => {
+    await render(
+      <AppBar
+        title="Demo Cabernet"
+        parent="/cellars"
+        tone="photo"
+        overflow={[{ label: "Edit", onSelect: () => {} }]}
+      />,
+    );
+    const bar = container.querySelector('[data-slot="app-bar"]');
+    assert.equal(bar?.getAttribute("data-tone"), "photo");
+    const discs = [
+      ...container.querySelectorAll('[data-slot="glass-disc"]'),
+    ].map((d) => d.getAttribute("aria-label"));
+    assert.deepEqual(discs, ["Back", "More actions"]);
+    assert.match(
+      container.querySelector("h1")?.parentElement?.className ?? "",
+      /sr-only/,
+    );
+  });
+
+  test("sticky: the bar shadow comes once the scroller has moved", async () => {
+    await render(
+      <main data-app-scroller="">
+        <AppBar title="Cellars" root sticky />
+      </main>,
+    );
+    const bar = container.querySelector('[data-slot="app-bar"]');
+    const scroller = container.querySelector("main");
+    assert.ok(bar && scroller);
+    assert.match(bar.className, /data-\[stuck\]:shadow-bar/);
+    assert.equal(bar.hasAttribute("data-stuck"), false);
+    await act(async () => {
+      scroller.scrollTop = 40;
+      scroller.dispatchEvent(new Event("scroll"));
+    });
+    assert.equal(bar.hasAttribute("data-stuck"), true);
+  });
+
   test("overflow on a phone is an action sheet, Delete in danger text", async () => {
     let deleted = 0;
     await render(
@@ -1045,7 +1084,7 @@ describe("AppBar", () => {
     const del = [...document.querySelectorAll('[role="dialog"] button')].find(
       (b) => b.textContent === "Delete",
     );
-    assert.match(del?.className ?? "", /text-destructive/);
+    assert.match(del?.className ?? "", /text-danger/);
     await click(del);
     // The action waits for the sheet to finish closing, so a ConfirmSheet it
     // opens never overlaps the closing sheet (stuck pointer-events on body).

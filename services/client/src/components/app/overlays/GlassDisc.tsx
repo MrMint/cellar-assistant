@@ -2,7 +2,7 @@ import type { ComponentProps } from "react";
 import { HapticOverlay } from "@/lib/feedback";
 import { cn } from "@/lib/utils";
 import { IconButton, type IconButtonProps } from "../IconButton";
-import { PRESS_CLASS } from "./press";
+import { PRESS_CLASS, pressFeedback } from "./press";
 
 /**
  * A 44 glass disc over a photo (KIT § 2 "Top bar and discs": back, menu; the
@@ -16,6 +16,7 @@ export function GlassDisc({
 }: Omit<IconButtonProps, "variant" | "size"> & ComponentProps<"button">) {
   return (
     <IconButton
+      {...pressFeedback()}
       {...props}
       data-slot="glass-disc"
       className={cn(
@@ -24,8 +25,14 @@ export function GlassDisc({
         className,
       )}
     >
-      {children}
-      <HapticOverlay />
+      {props.asChild ? (
+        children
+      ) : (
+        <>
+          {children}
+          <HapticOverlay />
+        </>
+      )}
     </IconButton>
   );
 }
