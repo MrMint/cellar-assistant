@@ -3,8 +3,10 @@ import { describe, test } from "node:test";
 import {
   badgeText,
   countTiles,
+  EMPTY_ME_EXTRAS,
   EMPTY_ME_HUB,
   meCountsFromResult,
+  meExtrasFromResult,
   meHubFromResult,
 } from "./me-hub-data";
 
@@ -82,5 +84,91 @@ describe("badgeText", () => {
     assert.equal(badgeText(1), "1");
     assert.equal(badgeText(42), "42");
     assert.equal(badgeText(100), "99+");
+  });
+});
+
+describe("meExtrasFromResult", () => {
+  const result = (requests: unknown[]) =>
+    ({
+      me: {
+        id: "me",
+        favorites: { totalCount: 27 },
+        wantToTry: { totalCount: 9 },
+      },
+      myFriends: { __typename: "FriendConnection", totalCount: 3 },
+      myTierLists: {
+        __typename: "TierListConnection",
+        edges: [
+          {
+            node: {
+              id: "t1",
+              items: {
+                edges: [
+                  { node: { band: 5 } },
+                  { node: { band: 5 } },
+                  { node: { band: 3 } },
+                ],
+              },
+            },
+          },
+        ],
+      },
+      myFriendRequests: {
+        __typename: "FriendRequestConnection",
+        edges: requests,
+      },
+    }) as unknown as Parameters<typeof meExtrasFromResult>[0];
+
+  test("counts, and each pinned list's bands in order, best first", () => {
+    const extras = meExtrasFromResult(result([]));
+    assert.equal(extras.loved, 27);
+    assert.equal(extras.wantToTry, 9);
+    assert.equal(extras.friends, 3);
+    assert.deepEqual(extras.bands.t1, [
+      { band: 5, count: 2 },
+      { band: 3, count: 1 },
+    ]);
+  });
+
+  test("Accept is offered only on a pending request someone sent the viewer", () => {
+    // An outgoing request is the viewer's own: accepting it would make a
+    // friendship the other person never agreed to (the wrong write).
+    const extras = meExtrasFromResult(
+      result([
+        {
+          node: {
+            id: "in",
+            status: "PENDING",
+            direction: "INCOMING",
+            user: { id: "u1", displayName: "Test Two", avatarUrl: null },
+          },
+        },
+        {
+          node: {
+            id: "out",
+            status: "PENDING",
+            direction: "OUTGOING",
+            user: { id: "u2", displayName: "Someone", avatarUrl: null },
+          },
+        },
+        {
+          node: {
+            id: "done",
+            status: "ACCEPTED",
+            direction: "INCOMING",
+            user: { id: "u3", displayName: "Other", avatarUrl: null },
+          },
+        },
+      ]),
+    );
+    assert.deepEqual(
+      extras.requests.map((request) => request.id),
+      ["in"],
+    );
+  });
+
+  test("a failed read is no counts and no requests, never an error", () => {
+    const extras = meExtrasFromResult(null);
+    assert.deepEqual(extras, EMPTY_ME_EXTRAS);
   });
 });
