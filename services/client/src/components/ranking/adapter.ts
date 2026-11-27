@@ -69,50 +69,39 @@ export const rankingRowFromEntry = (
 };
 
 /**
- * The board's empty state, by scope — one line, one action (design §3.6).
- * `null` while there is nothing to say yet (the first page is loading).
+ * The board's empty state (Social-Recap boards 26 and rankings-empty): kit
+ * wording, a title and one action. A kind with nothing in it comes first, and
+ * its action shows every kind again.
  */
 export const rankingsEmptyState = (
   segment: RankingSegment,
   hasFriends: boolean,
-  filtered: boolean,
+  kind: string | null,
 ): {
   title: string;
-  description: string;
-  action: { label: string; href: string } | null;
+  action: { label: string; href: string } | "all-kinds" | null;
 } => {
-  if (filtered) {
+  if (kind !== null) {
     return {
-      title: "Nothing here for those types.",
-      description: "Clear a filter to see the rest of the board.",
-      action: null,
+      title: `No ${kind.toLowerCase()} ${segment === "friends" ? "rated by friends yet" : "rated yet"}`,
+      action: "all-kinds",
     };
   }
   if (segment === "me") {
     return {
-      title: "Nothing rated yet.",
-      description: "Rate what you drink and your favourites rise to the top.",
-      action: { label: "Find something to rate", href: "/search" },
+      title: "Nothing rated yet",
+      action: { label: "Find drinks", href: "/search" },
     };
   }
   if (segment === "friends") {
     return hasFriends
-      ? {
-          title: "Your friends haven't rated anything yet.",
-          description: "Their scores show up here as they rate.",
-          action: null,
-        }
+      ? { title: "Nothing rated by friends yet", action: null }
       : {
-          title: "Taste is better compared.",
-          description: "Add friends and their scores rank here.",
-          action: { label: "Find friends", href: "/friends" },
+          title: "No friends yet",
+          action: { label: "Add friend", href: "/friends" },
         };
   }
-  return {
-    title: "No rankings yet.",
-    description: "Nobody has rated anything that matches.",
-    action: null,
-  };
+  return { title: "Nothing rated yet", action: null };
 };
 
 /** The grid's cache key, so scroll restore stays per filter. */
@@ -124,3 +113,48 @@ export const rankingsCacheKey = (
 /** Rank numerals: the board's own order, 1-based (a global rank, not per page). */
 export const withRanks = <T>(rows: readonly T[]): (T & { rank: number })[] =>
   rows.map((row, index) => ({ ...row, rank: index + 1 }));
+
+/** The kinds in the owner's order (KIT amendments): Beer, Wine, Spirit, Coffee, Tea, Sake. */
+export const RANKING_KINDS: readonly ApiItemType[] = [
+  "BEER",
+  "WINE",
+  "SPIRIT",
+  "COFFEE",
+  "TEA",
+  "SAKE",
+];
+
+/** A count the board's cap may have cut: never a limit shown as a total. */
+export const rankingCount = (n: number, cap: number): string =>
+  n >= cap ? `${cap}+` : String(n);
+
+/**
+ * The line over the rows: "190 rated", "12 rated by friends", "Top 200 by
+ * everyone" (SR-1). `null` while the count is unknown.
+ */
+export const rankingCountLine = (
+  segment: RankingSegment,
+  total: number | null,
+  filtered: boolean,
+  cap: number,
+): string | null => {
+  if (segment === "everyone") {
+    return filtered || total === null
+      ? "Highest rated by everyone"
+      : `Top ${Math.min(total, cap)} by everyone`;
+  }
+  if (total === null) return null;
+  const n = rankingCount(total, cap);
+  return segment === "me" ? `${n} rated` : `${n} rated by friends`;
+};
+
+/**
+ * The crown sits beside the owner's own #1 only (CROSS-LOT ruling 1): their
+ * own board, unfiltered, first row. Every other rank is a plain numeral: no
+ * band exists on a board ranked by stars.
+ */
+export const wearsCrown = (
+  segment: RankingSegment,
+  filtered: boolean,
+  rank: number,
+): boolean => segment === "me" && !filtered && rank === 1;

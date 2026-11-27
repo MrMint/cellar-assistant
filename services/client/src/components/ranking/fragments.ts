@@ -108,3 +108,50 @@ export const GetRankingFriendsQuery = graphql(
 `,
   [ActorErrorFieldsFragment],
 );
+
+/** One count: the connection's `totalCount`, or nothing on a refusal. */
+export const RankingCountFragment = graphql(`
+  fragment RankingCount on QueryRankingsResult @_unmask {
+    __typename
+    ... on RankingsConnection {
+      totalCount
+    }
+  }
+`);
+
+/**
+ * The kind chips' counts (Social-Recap board 22): how many items each kind
+ * has on this scope's board, from `totalCount` alone (one row each, never the
+ * rows). The board holds at most 200, so a count at the cap reads "200+".
+ */
+export const GetRankingCountsQuery = graphql(
+  `
+  query GetRankingCounts($scope: RankingScope!) {
+    all: rankings(scope: $scope, first: 1) {
+      ...RankingCount
+    }
+    beer: rankings(scope: $scope, types: [BEER], first: 1) {
+      ...RankingCount
+    }
+    wine: rankings(scope: $scope, types: [WINE], first: 1) {
+      ...RankingCount
+    }
+    spirit: rankings(scope: $scope, types: [SPIRIT], first: 1) {
+      ...RankingCount
+    }
+    coffee: rankings(scope: $scope, types: [COFFEE], first: 1) {
+      ...RankingCount
+    }
+    tea: rankings(scope: $scope, types: [TEA], first: 1) {
+      ...RankingCount
+    }
+    sake: rankings(scope: $scope, types: [SAKE], first: 1) {
+      ...RankingCount
+    }
+  }
+`,
+  [RankingCountFragment],
+);
+
+/** The board's cap: `rankings` holds at most this many (see above). */
+export const RANKINGS_CAP = 200;

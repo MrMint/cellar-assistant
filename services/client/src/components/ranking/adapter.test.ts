@@ -7,11 +7,14 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import {
   RANKING_SEGMENTS,
+  rankingCount,
+  rankingCountLine,
   rankingRowFromEntry,
   rankingsCacheKey,
   rankingsEmptyState,
   scopeOfSegment,
   segmentFromParam,
+  wearsCrown,
   withRanks,
 } from "./adapter";
 
@@ -93,22 +96,55 @@ describe("rankingRowFromEntry", () => {
 
 describe("rankingsEmptyState (one line, one action)", () => {
   test("Me with nothing rated points at something to rate", () => {
-    const me = rankingsEmptyState("me", true, false);
-    assert.equal(me.title, "Nothing rated yet.");
-    assert.deepEqual(me.action, {
-      label: "Find something to rate",
-      href: "/search",
-    });
+    const me = rankingsEmptyState("me", true, null);
+    assert.equal(me.title, "Nothing rated yet");
+    assert.deepEqual(me.action, { label: "Find drinks", href: "/search" });
   });
   test("no friends and friends-without-reviews read differently", () => {
-    const none = rankingsEmptyState("friends", false, false);
-    const quiet = rankingsEmptyState("friends", true, false);
+    const none = rankingsEmptyState("friends", false, null);
+    const quiet = rankingsEmptyState("friends", true, null);
     assert.notEqual(none.title, quiet.title);
-    assert.equal(none.action?.href, "/friends");
+    assert.deepEqual(none.action, { label: "Add friend", href: "/friends" });
     assert.equal(quiet.action, null);
   });
-  test("a type filter explains an empty board before the scope does", () => {
-    assert.match(rankingsEmptyState("me", true, true).title, /those types/);
+  test("a kind with nothing in it says the kind, and offers all kinds", () => {
+    const sake = rankingsEmptyState("me", true, "Sake");
+    assert.equal(sake.title, "No sake rated yet");
+    assert.equal(sake.action, "all-kinds");
+    assert.match(
+      rankingsEmptyState("friends", true, "Tea").title,
+      /by friends/,
+    );
+  });
+});
+
+describe("the count line and the crown (SR-1, CROSS-LOT ruling 1)", () => {
+  test("a count at the cap is never shown as a total", () => {
+    assert.equal(rankingCount(12, 200), "12");
+    assert.equal(rankingCount(200, 200), "200+");
+  });
+  test("each scope words its count", () => {
+    assert.equal(rankingCountLine("me", 190, false, 200), "190 rated");
+    assert.equal(
+      rankingCountLine("friends", 12, false, 200),
+      "12 rated by friends",
+    );
+    assert.equal(
+      rankingCountLine("everyone", 900, false, 200),
+      "Top 200 by everyone",
+    );
+    assert.equal(
+      rankingCountLine("everyone", 900, true, 200),
+      "Highest rated by everyone",
+    );
+    assert.equal(rankingCountLine("me", null, false, 200), null);
+  });
+  test("only the owner's own unfiltered #1 wears the crown", () => {
+    assert.equal(wearsCrown("me", false, 1), true);
+    assert.equal(wearsCrown("me", false, 2), false);
+    assert.equal(wearsCrown("me", true, 1), false);
+    assert.equal(wearsCrown("friends", false, 1), false);
+    assert.equal(wearsCrown("everyone", false, 1), false);
   });
 });
 
