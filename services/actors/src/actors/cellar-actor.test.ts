@@ -2227,3 +2227,155 @@ describe.skipIf(skip)("CellarActor freshness (ux-c L02)", () => {
     });
   });
 });
+
+/* -------------------------------------------------------------------------- */
+/* SV-B · MC-move — `updateItem({ cellarId })` moves a bottle (L13)            */
+/* -------------------------------------------------------------------------- */
+
+describe.skipIf(skip)("CellarActor move (SV-B, MC-move)", () => {
+  afterAll(closeTestDb);
+
+  const bottleRow = async (db: DbOrTx, id: string) => {
+    const result = await db.execute(sql`
+      select cellar_id::text as "cellarId", location
+      from public.cellar_items where id = ${id}::uuid
+    `);
+    return result.rows[0] as { cellarId: string; location: string | null };
+  };
+
+  it("moves the owner's bottle to another of their cellars, clears its shelf, keeps its logs", async () => {
+    await withTestDb(async (db) => {
+      const { owner, actor, itemId, cellarId } = await seedScenario(
+        db,
+        "PRIVATE",
+      );
+      const ctx = userCtx(owner, "r");
+      await actor.updateItem(ctx, itemId, { location: "Rack A" });
+      const destId = await seedCellar(db, { createdById: owner });
+      // Activated before the move: its cached list must not stay stale.
+      const dest = await activate(newCellarActor(destId, db));
+      expect((await dest.items(ctx, { page })).totalCount).toBe(0);
+
+      const moved = await actor.updateItem(ctx, itemId, { cellarId: destId });
+      expect(moved).toMatchObject({ id: itemId, cellarId: destId });
+      expect(moved.location).toBeNull();
+      expect(await bottleRow(db, itemId)).toEqual({
+        cellarId: destId,
+        location: null,
+      });
+
+      expect((await actor.items(ctx, { page })).totalCount).toBe(0);
+      await dest.onActorMethodPre();
+      const there = await dest.items(ctx, { page });
+      expect(there.entries.map((e) => e.node.id)).toEqual([itemId]);
+      // The log points at the bottle, not the cellar, so it follows it.
+      const logs = await db.execute(
+        sql`select count(*)::int as n from public.check_ins where cellar_item_id = ${itemId}::uuid`,
+      );
+      expect(logs.rows[0]).toEqual({ n: 1 });
+      expect(cellarId).not.toBe(destId);
+    });
+  });
+
+  it("a co-owner of both cellars may move between them", async () => {
+    await withTestDb(async (db) => {
+      const owner = await seedUser(db);
+      const coOwner = await seedUser(db);
+      const sourceId = await seedCellar(db, {
+        createdById: owner,
+        coOwnerIds: [coOwner],
+      });
+      const destId = await seedCellar(db, {
+        createdById: owner,
+        coOwnerIds: [coOwner],
+      });
+      const actor = await activate(newCellarActor(sourceId, db));
+      const wine = await seedWine(db, owner);
+      const { id: itemId } = await actor.addItem(userCtx(owner, "add"), {
+        item: wine,
+      });
+      const moved = await actor.updateItem(userCtx(coOwner, "r"), itemId, {
+        cellarId: destId,
+      });
+      expect(moved.cellarId).toBe(destId);
+    });
+  });
+
+  it("refuses a destination the viewer cannot write, as absent, and moves nothing", async () => {
+    await withTestDb(async (db) => {
+      const { owner, actor, itemId, cellarId } = await seedScenario(
+        db,
+        "PRIVATE",
+      );
+      const ctx = userCtx(owner, "r");
+      const other = await seedUser(db);
+      // Visible to the owner (PUBLIC), but not theirs to write.
+      const theirs = await seedCellar(db, {
+        createdById: other,
+        privacy: "PUBLIC",
+      });
+      await expect(
+        actor.updateItem(ctx, itemId, { cellarId: theirs }),
+      ).rejects.toBeInstanceOf(NotFoundError);
+      await expect(
+        actor.updateItem(ctx, itemId, { cellarId: randomUUID() }),
+      ).rejects.toBeInstanceOf(NotFoundError);
+      await expect(
+        actor.updateItem(ctx, itemId, { cellarId: "not-a-uuid" }),
+      ).rejects.toBeInstanceOf(ValidationError);
+      expect((await bottleRow(db, itemId)).cellarId).toBe(cellarId);
+    });
+  });
+
+  it("refuses the wrong user: a stranger cannot move someone else's bottle into their own cellar", async () => {
+    await withTestDb(async (db) => {
+      const { stranger, actor, itemId, cellarId } = await seedScenario(
+        db,
+        "PUBLIC",
+      );
+      const mine = await seedCellar(db, { createdById: stranger });
+      await expect(
+        actor.updateItem(userCtx(stranger, "r"), itemId, { cellarId: mine }),
+      ).rejects.toBeInstanceOf(ForbiddenError);
+      expect((await bottleRow(db, itemId)).cellarId).toBe(cellarId);
+    });
+  });
+
+  it("the same cellar is a no-op for the move: the shelf stays", async () => {
+    await withTestDb(async (db) => {
+      const { owner, actor, itemId, cellarId } = await seedScenario(
+        db,
+        "PRIVATE",
+      );
+      const ctx = userCtx(owner, "r");
+      await actor.updateItem(ctx, itemId, { location: "Rack A" });
+      const same = await actor.updateItem(ctx, itemId, {
+        cellarId: cellarId.toUpperCase(),
+        percentageRemaining: 40,
+      });
+      expect(same).toMatchObject({
+        cellarId,
+        location: "Rack A",
+        percentageRemaining: 40,
+      });
+    });
+  });
+
+  it("applies the rest of the patch with the move", async () => {
+    await withTestDb(async (db) => {
+      const { owner, actor, itemId } = await seedScenario(db, "PRIVATE");
+      const ctx = userCtx(owner, "r");
+      const destId = await seedCellar(db, { createdById: owner });
+      const moved = await actor.updateItem(ctx, itemId, {
+        cellarId: destId,
+        percentageRemaining: 25,
+        location: "ignored on a move",
+      });
+      expect(moved).toMatchObject({
+        cellarId: destId,
+        percentageRemaining: 25,
+        location: null,
+      });
+    });
+  });
+});

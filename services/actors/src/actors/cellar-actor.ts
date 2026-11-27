@@ -165,7 +165,7 @@ import {
   isOwner,
 } from "@cellar-assistant/policy";
 import type { ActorId, DaprClient } from "@dapr/dapr";
-import { EntityActorBase } from "../lib/actor-base.ts";
+import { absentRow, EntityActorBase } from "../lib/actor-base.ts";
 import {
   CELLAR_NAME_THRESHOLD,
   countByMonth,
@@ -193,6 +193,7 @@ import {
   type CellarAccess,
   cellarVisibility,
   isCellarOwner,
+  loadCellarAccess,
 } from "../lib/visibility.ts";
 
 type CellarRow = typeof cellars.$inferSelect;
@@ -1017,7 +1018,35 @@ export class CellarActor
     if (input.emptyAt !== undefined) {
       patch.emptyAt = parseInstant(input.emptyAt, "emptyAt");
     }
-    return this.#patchItem(id, patch);
+    const destination = await this.#moveDestination(ctx, input.cellarId);
+    if (destination === null) return this.#patchItem(id, patch);
+
+    // SV-B · MC-move (L13). The row keeps its id, so `check_ins.cellar_item_id`
+    // still points at it: the logs, rating and history follow the bottle. The
+    // shelf is a place inside the old cellar, so it goes, whatever the patch
+    // said about it.
+    await this.tx(async (tx) => {
+      await tx
+        .update(cellarItems)
+        .set({
+          ...patch,
+          cellarId: destination,
+          location: null,
+          updatedAt: new Date(),
+        })
+        .where(and(eq(cellarItems.id, id), eq(cellarItems.cellarId, this.key)));
+    });
+    await this.reload();
+    // The destination's activation, if it has one, notices on its next turn
+    // (`onActorMethodPre` below): its row count and newest `updated_at` moved.
+    const [row] = await this.db
+      .select()
+      .from(cellarItems)
+      .where(eq(cellarItems.id, id));
+    if (row === undefined) {
+      throw new NotFoundError(`cellar_item ${cellarItemId} not found`);
+    }
+    return toItemDto(row, null);
   }
 
   async setItemPercentage(
@@ -1110,6 +1139,61 @@ export class CellarActor
     return (
       bypassesPolicy(ctx) || isCellarOwner(access(aggregate), ctx.viewerId)
     );
+  }
+
+  /**
+   * SV-B · MC-move: the cellar `updateItem` moves a bottle to, or `null` for
+   * no move (absent, `null`, or this cellar under any spelling). The viewer
+   * must be able to write the destination — creator or co-owner — and one
+   * they cannot write answers as absent, the bytes an id naming nothing gets,
+   * so the move cannot be used to learn which cellars exist.
+   */
+  async #moveDestination(
+    ctx: Ctx,
+    cellarId: string | null | undefined,
+  ): Promise<string | null> {
+    if (cellarId === undefined || cellarId === null) return null;
+    const destination = requireUuid(cellarId, "cellarId");
+    if (destination === this.key.toLowerCase()) return null;
+    const target = await loadCellarAccess(this.db, destination);
+    if (
+      target === null ||
+      !(bypassesPolicy(ctx) || isCellarOwner(target, ctx.viewerId))
+    ) {
+      throw absentRow("CellarActor", destination);
+    }
+    return destination;
+  }
+
+  /**
+   * SV-B: `cellar_items` rows can now arrive from another activation — a
+   * bottle moved in from another cellar — and leave by the same route. The
+   * aggregate is loaded on activate (§2.1), so before each turn this compares
+   * the cached rows' count and newest `updated_at` with Postgres' and reloads
+   * on a difference. One indexed aggregate query per turn
+   * (`idx_cellar_items_cellar_id`); every write path here stamps `updated_at`.
+   */
+  override async onActorMethodPre(): Promise<void> {
+    await super.onActorMethodPre();
+    const aggregate = this.aggregate;
+    if (aggregate === null) return;
+    const result = await this.db.execute(sql`
+      select count(*)::int as n,
+             coalesce(floor(extract(epoch from max(updated_at)) * 1000), 0)::float8 as at
+      from public.cellar_items where cellar_id = ${this.key}::uuid
+    `);
+    const fresh = result.rows[0] as { n: number; at: number } | undefined;
+    const cachedAt = aggregate.items.reduce(
+      (latest, row) => Math.max(latest, row.updatedAt.getTime()),
+      0,
+    );
+    if (
+      fresh !== undefined &&
+      (Number(fresh.n) !== aggregate.items.length ||
+        Number(fresh.at) !== cachedAt)
+    ) {
+      await this.reload();
+    }
   }
 
   /** Creator or co-owner. */
