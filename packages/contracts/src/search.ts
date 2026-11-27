@@ -636,7 +636,9 @@ export type PersonRelation = (typeof PERSON_RELATIONS)[number];
 export type UserSearchHit = {
   readonly userId: string;
   readonly displayName: string;
+  /** `user.image`; see `UserProfileDto.avatarUrl` — the same pair, the same helper. */
   readonly avatarUrl: string | null;
+  readonly avatarFileId: string | null;
   /**
    * X12: set on an `includeConnected` search only; a default search returns
    * no one but `NONE`s and leaves it absent.

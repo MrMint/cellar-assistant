@@ -157,6 +157,7 @@ import type {
   PageArgs,
   PlaceInteractionDto,
   RecordPlaceInteractionInput,
+  SetAvatarInput,
   SetBarPantryItemInput,
   SetBrewPrefsInput,
   SetFavoriteResult,
@@ -171,6 +172,7 @@ import type {
   WantToTryTarget,
 } from "@cellar-assistant/contracts";
 import {
+  AVATAR_FILE_KIND,
   BREW_PREF_ITEM_TYPES,
   ConflictError,
   ForbiddenError,
@@ -191,6 +193,7 @@ import {
 } from "@cellar-assistant/contracts";
 import {
   barPantryItems,
+  files,
   friendInvites,
   friendRequests,
   friends,
@@ -222,7 +225,11 @@ import { ARCS } from "../lib/item-arcs.ts";
 import { ITEM_TABLES } from "../lib/item-bindings.ts";
 import { enqueueOutbox } from "../lib/outbox.ts";
 import { OUTBOX_TARGETS } from "../lib/outbox-targets.ts";
-import type { ProfileFields, ProfileStore } from "../lib/profile-store.ts";
+import type {
+  ProfileFields,
+  ProfilePatch,
+  ProfileStore,
+} from "../lib/profile-store.ts";
 import { betterAuthProfileStore } from "../lib/profile-store.ts";
 import { visibleRecipeIds } from "../lib/recipe-visibility.ts";
 import { placeIsVisible, placeRefVisibleSql } from "../lib/unshared-places.ts";
@@ -640,6 +647,56 @@ export class UserActor
       throw new ValidationError("updateProfile was given nothing to change");
     }
 
+    const updated = await this.#profiles.update(this.key, patch);
+    if (updated === null) {
+      throw new NotFoundError(`user ${this.key} has no profile row`);
+    }
+    return this.#toProfile(ctx, updated);
+  }
+
+  /**
+   * SV-D (MC-avatar, L17): the profile picture is a file id, presigned at
+   * read. Only a verified `avatar` upload of this user's own may be named.
+   */
+  async setAvatar(ctx: Ctx, input: SetAvatarInput): Promise<UserProfileDto> {
+    this.requireAggregate();
+    this.#requireSelf(ctx, "set this profile picture");
+    const id = requireUuid(input.fileId, "fileId");
+    const [file] = await this.db
+      .select({
+        uploadedBy: files.uploadedBy,
+        verifiedAt: files.verifiedAt,
+        kind: sql<string | null>`${files.metadata} ->> 'kind'`,
+      })
+      .from(files)
+      .where(eq(files.id, id));
+    // Someone else's file is answered exactly like a missing one: `files`
+    // rows are private to their uploader (`FileActor.canSee`), so naming one
+    // must not tell the caller it exists.
+    if (file === undefined || file.uploadedBy !== this.key) {
+      throw new NotFoundError(`file ${id} not found`);
+    }
+    if (file.kind !== AVATAR_FILE_KIND) {
+      throw new ValidationError(
+        `file ${id} is not a profile picture upload (kind "${AVATAR_FILE_KIND}")`,
+      );
+    }
+    if (file.verifiedAt === null) {
+      throw new ConflictError(
+        `file ${id} is not verified yet — finish the upload first`,
+      );
+    }
+    return this.#writeProfile(ctx, { avatarFileId: id });
+  }
+
+  /** SV-D: clear the picture; `avatarUrl` falls back to `user.image`. */
+  async removeAvatar(ctx: Ctx): Promise<UserProfileDto> {
+    this.requireAggregate();
+    this.#requireSelf(ctx, "remove this profile picture");
+    return this.#writeProfile(ctx, { avatarFileId: null });
+  }
+
+  async #writeProfile(ctx: Ctx, patch: ProfilePatch): Promise<UserProfileDto> {
     const updated = await this.#profiles.update(this.key, patch);
     if (updated === null) {
       throw new NotFoundError(`user ${this.key} has no profile row`);
@@ -2339,6 +2396,7 @@ export class UserActor
       id: fields.id,
       displayName: fields.displayName,
       avatarUrl: fields.avatarUrl,
+      avatarFileId: fields.avatarFileId,
       locale: fields.locale,
       email: isOwner(ctx, fields.id) ? fields.email : null,
     };
@@ -2405,6 +2463,7 @@ const missingProfile = (userId: string): ProfileFields => ({
   id: userId,
   displayName: userId,
   avatarUrl: null,
+  avatarFileId: null,
   locale: null,
   email: null,
 });

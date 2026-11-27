@@ -4374,6 +4374,11 @@ type Mutation {
   rejectFriendRequest(requestId: ID!): RejectFriendRequestResult!
 
   """
+  Clear the viewer's profile picture; `avatarUrl` falls back to the stored image URL.
+  """
+  removeAvatar: RemoveAvatarResult!
+
+  """
   Unfriend someone. **Both** `friends` rows are gone before this answers, so the viewer's next read already shows the removal (E2d: `myFriends` used to keep listing them for ~2s after this succeeded). The outbox row that follows only reloads the other person's actor.
   """
   removeFriend(userId: ID!): RemoveFriendResult!
@@ -4441,6 +4446,11 @@ type Mutation {
   Ask another user to be friends. Rejected for yourself (Validation), an existing friend, or a request already open either way (Conflict). All four carry an `ActorError.reason` — CANNOT_FRIEND_SELF, ALREADY_FRIENDS, FRIEND_REQUEST_ALREADY_SENT or FRIEND_REQUEST_ALREADY_RECEIVED — because the three Conflicts share one `code`. Switch on `reason`; never match on `message`.
   """
   sendFriendRequest(userId: ID!): SendFriendRequestResult!
+
+  """
+  Make an uploaded file the viewer's profile picture (MC-avatar). The file must be the viewer's own verified upload of kind `avatar` (`createUploadTarget(kind: "avatar")`, then `verifyUpload`).
+  """
+  setAvatar(fileId: ID!): SetAvatarResult!
 
   """
   D23: turn one Bar pantry toggle on or off. Only the pantry kinds; a spirit is a cellar bottle, not a toggle.
@@ -7021,6 +7031,8 @@ type RejectFriendRequestPayload {
 
 union RejectFriendRequestResult = BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | RejectFriendRequestPayload | ValidationError
 
+union RemoveAvatarResult = BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | UserProfile | ValidationError
+
 """
 The friendship is gone — both `friends` rows, in the transaction that answered this. `removed` is false when there was nothing left to remove, which a retry makes the normal answer.
 """
@@ -7507,6 +7519,8 @@ type SeenAtPlace {
 }
 
 union SendFriendRequestResult = BudgetExceededError | ConflictError | ForbiddenError | FriendRequest | NotFoundError | ValidationError
+
+union SetAvatarResult = BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | UserProfile | ValidationError
 
 union SetBarPantryItemResult = BarPantryEntry | BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | ValidationError
 
@@ -9282,6 +9296,9 @@ type UploadTarget {
 A user, as any signed-in viewer may see them. Profile fields live in better-auth's `user` table; there is no `public.users` (plan §3).
 """
 type UserProfile {
+  """
+  The uploaded profile picture (a presigned URL, fresh per read) when there is one, else the stored image URL.
+  """
   avatarUrl: String
   displayName: String!
 

@@ -163,6 +163,7 @@ export class UserSearchActor
           userId: row.id,
           displayName: row.displayName,
           avatarUrl: row.avatarUrl,
+          avatarFileId: row.avatarFileId,
         })),
       ),
       total,
@@ -223,12 +224,14 @@ export class UserSearchActor
         userId: row.id,
         displayName: row.displayName,
         avatarUrl: row.avatarUrl,
+        avatarFileId: row.avatarFileId,
         relation,
       })),
       ...rest.map((row) => ({
         userId: row.id,
         displayName: row.displayName,
         avatarUrl: row.avatarUrl,
+        avatarFileId: row.avatarFileId,
         relation: "NONE" as const,
       })),
     ];

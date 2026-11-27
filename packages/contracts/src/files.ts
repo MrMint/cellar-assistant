@@ -42,6 +42,12 @@ export type FileDto = {
   readonly updatedAt: string;
 };
 
+/**
+ * SV-D: the upload kind of a profile picture. `UserActor.setAvatar` accepts
+ * only a verified file of this kind that the viewer uploaded themselves.
+ */
+export const AVATAR_FILE_KIND = "avatar";
+
 export type CreateUploadTargetInput = {
   /**
    * A free-form namespace for the object key (`"item-image"`, `"label-front"`,

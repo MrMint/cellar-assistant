@@ -73,6 +73,7 @@ import { builder } from "./builder.ts";
 import { ItemInterface, ItemTypeEnum } from "./item.ts";
 import { connectionFromPage, toPageArgs } from "./pagination.ts";
 import { RecipeType_ } from "./recipe.ts";
+import { avatarUrlOf } from "./user.ts";
 
 /* -------------------------------------------------------------------------- */
 /* Section totals (MC-search, L3)                                              */
@@ -513,7 +514,10 @@ const UserSearchResult = builder
     fields: (t) => ({
       userId: t.exposeID("userId"),
       displayName: t.exposeString("displayName"),
-      avatarUrl: t.exposeString("avatarUrl", { nullable: true }),
+      avatarUrl: t.string({
+        nullable: true,
+        resolve: (hit, _args, context) => avatarUrlOf(context, hit),
+      }),
       relation: t.field({
         type: PersonRelationEnum,
         nullable: true,

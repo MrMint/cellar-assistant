@@ -115,6 +115,7 @@ const scenario = async (db: DbOrTx) => {
       id,
       displayName,
       avatarUrl: null,
+      avatarFileId: null,
       locale: "en",
       email: `${displayName.toLowerCase()}@example.test`,
     });

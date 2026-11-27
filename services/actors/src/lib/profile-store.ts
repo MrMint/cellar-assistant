@@ -60,6 +60,8 @@ export type ProfileFields = {
   readonly id: string;
   readonly displayName: string;
   readonly avatarUrl: string | null;
+  /** SV-D: `user.avatar_file_id`, the uploaded picture; wins over `avatarUrl`. */
+  readonly avatarFileId: string | null;
   readonly locale: string | null;
   readonly email: string | null;
 };
@@ -68,6 +70,8 @@ export type ProfileFields = {
 export type ProfilePatch = {
   readonly displayName?: string;
   readonly avatarUrl?: string | null;
+  /** Checked by `UserActor.setAvatar` before it gets here: own, verified, `avatar`. */
+  readonly avatarFileId?: string | null;
   readonly locale?: string | null;
 };
 
@@ -123,6 +127,7 @@ const toFields = (row: {
   id: string;
   name: string;
   image: string | null;
+  avatarFileId: string | null;
   locale: string | null;
   email: string;
 }): ProfileFields => ({
@@ -133,6 +138,7 @@ const toFields = (row: {
   // `""` is Nhost's default for `avatar_url`, and it survived the migration.
   // An empty string is not a URL, so it reaches GraphQL as null.
   avatarUrl: row.image === null || row.image === "" ? null : row.image,
+  avatarFileId: row.avatarFileId,
   locale: row.locale,
   email: row.email,
 });
@@ -141,6 +147,7 @@ const SELECTION = {
   id: user.id,
   name: user.name,
   image: user.image,
+  avatarFileId: user.avatarFileId,
   locale: user.locale,
   email: user.email,
 } as const;
@@ -186,6 +193,7 @@ export const betterAuthProfileStore = (): ProfileStore => ({
     const set: Record<string, unknown> = { updatedAt: new Date() };
     if (patch.displayName !== undefined) set.name = patch.displayName;
     if (patch.avatarUrl !== undefined) set.image = patch.avatarUrl;
+    if (patch.avatarFileId !== undefined) set.avatarFileId = patch.avatarFileId;
     if (patch.locale !== undefined) set.locale = patch.locale;
 
     const rows = await actorDb()

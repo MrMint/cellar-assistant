@@ -157,9 +157,14 @@ import {
   type UploadTarget,
   ValidationError,
 } from "@cellar-assistant/contracts";
-import { files, itemImage, placeGooglePhotos } from "@cellar-assistant/db";
+import {
+  files,
+  itemImage,
+  placeGooglePhotos,
+  user,
+} from "@cellar-assistant/db";
 import { and, eq, sql } from "@cellar-assistant/db/orm";
-import { isOwner } from "@cellar-assistant/policy";
+import { canSeeProfile, isOwner } from "@cellar-assistant/policy";
 import type { ActorId, DaprClient } from "@dapr/dapr";
 import { EntityActorBase } from "../lib/actor-base.ts";
 import { detectImageMime, type ImageMime } from "../lib/ai/image-mime.ts";
@@ -736,6 +741,11 @@ export class FileActor
    * of the drinker. Seeing the bottle's cellar is not enough: a cellar viewer
    * sees that a bottle was drunk, not the photo. A file attached to no log
    * they may see that of stays as private as before.
+   *
+   * **A profile picture (SV-D)** is readable by whoever may see the profile
+   * that names it (`user.avatar_file_id`, `canSeeProfile`): every surface
+   * that shows a person shows their picture. `UserActor.setAvatar` only ever
+   * names the user's own upload, so this widens nothing they did not choose.
    */
   protected override async canSee(
     ctx: Ctx,
@@ -743,7 +753,17 @@ export class FileActor
   ): Promise<boolean> {
     if (isOwner(ctx, aggregate.file.uploadedBy)) return true;
     if (await this.#hasPublicReferent()) return true;
+    if (await this.#isVisibleAvatar(ctx)) return true;
     return await this.#hasVisibleCheckInReferent(ctx);
+  }
+
+  async #isVisibleAvatar(ctx: Ctx): Promise<boolean> {
+    const [owner] = await this.db
+      .select({ id: user.id })
+      .from(user)
+      .where(eq(user.avatarFileId, this.key))
+      .limit(1);
+    return owner !== undefined && canSeeProfile(ctx, { userId: owner.id });
   }
 
   async #hasVisibleCheckInReferent(ctx: Ctx): Promise<boolean> {
