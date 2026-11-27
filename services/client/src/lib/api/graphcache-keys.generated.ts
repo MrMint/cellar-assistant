@@ -109,6 +109,8 @@ export const KEYLESS_TYPES = [
   "ItemImageConnection",
   "ItemImageEdge",
   "ItemLabelReading",
+  "ItemOnboardingConnection",
+  "ItemOnboardingEdge",
   "ItemReviewConnection",
   "ItemReviewEdge",
   "ItemScore",

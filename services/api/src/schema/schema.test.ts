@@ -136,8 +136,9 @@ describe("every paging root field degrades per field (A7e)", () => {
    * twenty, deliberately: `lovedRecipes` (D9), a union like the rest. X04
    * made it twenty-one: `cellarSearchElsewhere`, the cross-cellar fan-out.
    * X15 made it twenty-two: `myRecipes`, the viewer's own recipes and drafts.
+   * SV-B made it twenty-three: `needsDetails`, the viewer's unfinished drafts.
    */
-  it("has twenty-two of them", () => {
+  it("has twenty-three of them", () => {
     const queryType = schema.getQueryType();
     const paging = Object.values(queryType?.getFields() ?? {}).filter(
       (field) => {
@@ -145,7 +146,7 @@ describe("every paging root field degrades per field (A7e)", () => {
         return CONNECTION_ARGS.every((argument) => args.has(argument));
       },
     );
-    expect(paging).toHaveLength(22);
+    expect(paging).toHaveLength(23);
   });
 });
 

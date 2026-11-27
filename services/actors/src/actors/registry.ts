@@ -56,6 +56,7 @@ import {
   CellarsCollectionActorDescriptor,
   CheckInActorDescriptor,
   CheckInsCollectionActorDescriptor,
+  DraftsCollectionActorDescriptor,
   DuplicatePlaceSearchActorDescriptor,
   EmbeddingActorDescriptor,
   FavoritesCollectionActorDescriptor,
@@ -112,6 +113,7 @@ import { CellarItemSearchActor } from "./cellar-item-search-actor.ts";
 import { CellarsCollectionActor } from "./cellars-collection-actor.ts";
 import { CheckInActor } from "./check-in-actor.ts";
 import { CheckInsCollectionActor } from "./check-ins-collection-actor.ts";
+import { DraftsCollectionActor } from "./drafts-collection-actor.ts";
 import { DuplicatePlaceSearchActor } from "./duplicate-place-search-actor.ts";
 import { EmbeddingActor } from "./embedding-actor.ts";
 import { FavoritesCollectionActor } from "./favorites-collection-actor.ts";
@@ -374,4 +376,8 @@ export const ACTOR_REGISTRY: readonly RegistryEntry[] = [
   // L04. The recap deck and breadth stamps: the viewer's own drink log, read
   // through its own query and DTO (L32, L45). Keyed by the viewer, read-only.
   entry(RecapActor, RecapActorDescriptor),
+  // SV-B (L6, L30). The viewer's saved "Needs details" drafts, listed and
+  // counted per cellar, and `Item.unconfirmedFields`. Keyed by the viewer,
+  // read-only, checked every turn.
+  entry(DraftsCollectionActor, DraftsCollectionActorDescriptor),
 ];

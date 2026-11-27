@@ -479,7 +479,17 @@ export const itemOnboardings = pgTable("item_onboardings", {
 	aiModel: text("ai_model"),
 	confidence: doublePrecision(),
 	lastReprocessResult: jsonb("last_reprocess_result"),
-});
+	cellarId: uuid("cellar_id").references(() => cellars.id, { onDelete: "set null", onUpdate: "restrict" } ),
+	confirmedFields: text("confirmed_fields").array().default(sql`'{}'::text[]`).notNull(),
+	vintageAnswer: text("vintage_answer").default("UNANSWERED").notNull(),
+	displayName: text("display_name"),
+	displayMaker: text("display_maker"),
+	imageId: uuid("image_id").references(() => files.id, { onDelete: "set null", onUpdate: "restrict" } ),
+	draftFields: jsonb("draft_fields"),
+}, (table) => [
+	index("idx_item_onboardings_needs_details").using("btree", table.userId.asc().nullsLast(), table.cellarId.asc().nullsLast()).where(sql`(status = 'NEEDS_DETAILS'::text)`),
+	check("item_onboardings_vintage_answer_check", sql`(vintage_answer = ANY (ARRAY['VINTAGE'::text, 'NON_VINTAGE'::text, 'UNANSWERED'::text]))`),
+]);
 
 export const itemReviews = pgTable("item_reviews", {
 	id: uuid().defaultRandom().primaryKey(),
