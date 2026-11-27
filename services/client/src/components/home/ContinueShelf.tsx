@@ -3,24 +3,35 @@
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { ICON_STROKE, Pour } from "@/components/app/icons";
+import { useMutation } from "urql";
+import { ICON_STROKE, Star } from "@/components/app/icons";
 import { LabelPlate } from "@/components/app/LabelPlate";
 import { Link } from "@/components/app/Link";
-import { InsetSection, ListRow } from "@/components/app/Page";
-import { itemTypeTokens, TypeGlyph } from "@/components/app/TypeChip";
-import { bottleState } from "@/components/cellar/bottle-state";
-import { LogDrinkSheet } from "@/components/drink-log/LogDrinkSheet";
-import { useDrinkLogFeedback } from "@/components/drink-log/useDrinkLogFeedback";
+import { notify } from "@/components/app/notify";
+import { CellarTile } from "@/components/app/parts/CellarTile";
+import { itemTypeTokens } from "@/components/app/TypeChip";
 import { Button } from "@/components/ui/button";
+import {
+  OpenCellarItemMutation,
+  UpdateCellarItemMutation,
+} from "@/lib/api/cellars";
+import { unwrapResult } from "@/lib/api/result";
+import { feedback } from "@/lib/feedback";
 import { cn } from "@/lib/utils";
-import { getNextPlaceholder } from "@/utilities";
-import type { OpenBottle, SealedSoon } from "./continue";
-import { drinkSoonList, typicalLine } from "./drink-soon";
-import { CONTINUE_LIMIT } from "./queries";
+import { type OpenBottle, openVariables, type SealedSoon } from "./continue";
+import { openRail } from "./drink-soon";
+import { SectionHead } from "./HomeLayout";
+import { rateLabel } from "./landing";
+import { PressLink } from "./PressLink";
+
+/** How many open bottles the rail carries. */
+export const RAIL_LIMIT = 20;
+/** Drink soon's rows before "Show more" (Shell-Home: four). */
+export const SOON_ROWS = 4;
 
 /**
- * `now` for ages and windows: the server's request instant first, so the
- * hydration pass prints what the server did, then the browser's own.
+ * `now` for windows: the server's request instant first, so the hydration
+ * pass prints what the server did, then the browser's own.
  */
 const useNow = (serverNow: number): number => {
   const [now, setNow] = useState(serverNow);
@@ -32,289 +43,228 @@ const useNow = (serverNow: number): number => {
   return now;
 };
 
-/** Which bottle the Pour sheet is open for. */
-const usePour = () => {
-  const router = useRouter();
-  const [bottle, setBottle] = useState<OpenBottle | null>(null);
-  const [open, setOpen] = useState(false);
-  const onSaved = useDrinkLogFeedback({
-    itemName: bottle?.name ?? "",
-    onChanged: () => router.refresh(),
-  });
-  const pour = (next: OpenBottle) => {
-    setBottle(next);
-    setOpen(true);
-  };
-  const sheet =
-    bottle === null ? null : (
-      <LogDrinkSheet
-        // A fresh sheet (and log id) per bottle.
-        key={bottle.id}
-        open={open}
-        onOpenChange={setOpen}
-        subject={{
-          itemType: bottle.type,
-          itemId: bottle.itemId,
-          itemName: bottle.name,
-          bottle: { cellarId: bottle.cellarId, cellarItemId: bottle.id },
-        }}
-        onSaved={onSaved}
-      />
-    );
-  return { pour, sheet };
-};
-
 /**
- * Continue and Drink soon (X10): the bottles you have open, across every
- * cellar you own, each one Pour away from a log — and, under them, the ones
- * whose style says not to wait (D29: a labelled table, never a model).
- *
- * Pour opens the drink-log sheet with the bottle (X02): a score for this
- * glass, a note, where, who with. (X03's Pour sheet — level, Finish, rate —
- * replaces it when it lands; the button and its place stay.)
+ * Open and Drink soon (Shell-Home, ruling 1). **Open** is the rail of open
+ * bottles as cellar tiles, the furthest past its best first with a "Past its
+ * best" badge, the rest with their level; under it "Rate the n" goes to the
+ * first one not rated yet. No action in a tile's foot (CROSS-LOT): Pour
+ * lives on the item's bottle card. **Drink soon** is the sealed bottles
+ * whose window is ending, each with Open, which opens the bottle at once
+ * with Undo (KIT § 4 "Toast or confirm").
  */
 export function ContinueSection({
   bottles,
   total = bottles.length,
   sealed = [],
+  sealedTotal = sealed.length,
   serverNow,
 }: {
-  /**
-   * Every open bottle Home read, newest opened first. The shelf shows the
-   * first {@link CONTINUE_LIMIT}; Drink soon ranks all of them, since the
-   * bottles open longest — the ones it exists for — are the shelf's last.
-   */
+  /** Every open bottle Home read, newest opened first. */
   bottles: readonly OpenBottle[];
-  /** How many are open in all (the connection's count), for "N open". */
+  /** How many are open in all (the connection's count). */
   total?: number;
-  /** L02: sealed bottles whose window closes soon, after the opened ones. */
+  /** L02: sealed bottles whose window closes soon. */
   sealed?: readonly SealedSoon[];
+  /** All of them, beyond the page read (`drinkSoon.totalCount`). */
+  sealedTotal?: number;
   serverNow: number;
 }) {
   const now = useNow(serverNow);
-  const { pour, sheet } = usePour();
-  const soon = drinkSoonList(bottles, now);
-  if (bottles.length === 0 && sealed.length === 0) return null;
-  const shelf = bottles.slice(0, CONTINUE_LIMIT);
+  const rail = openRail(bottles, now).slice(0, RAIL_LIMIT);
+  const unrated = bottles.filter((bottle) => bottle.rating === null);
+  const rate = rateLabel(unrated.length);
+  const firstUnrated = unrated[0];
 
   return (
     <>
-      {shelf.length > 0 && (
-        <section
-          aria-labelledby="continue-heading"
-          className="flex flex-col gap-2"
-        >
-          <div className="flex min-h-6 items-end justify-between px-4">
-            <h2 id="continue-heading" className="type-overline text-ink-3">
-              Continue
-            </h2>
-            <span className="type-footnote">
-              {Math.max(total, bottles.length)} open
-            </span>
-          </div>
-          <ul className="-mx-4 flex snap-x snap-mandatory scroll-px-4 gap-3 overflow-x-auto px-4 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            {shelf.map((bottle) => (
-              <li key={bottle.id} className="w-36 shrink-0 snap-start">
-                <OpenBottleCard
-                  bottle={bottle}
-                  now={now}
-                  onPour={() => pour(bottle)}
+      {rail.length > 0 && (
+        <section aria-labelledby="open-heading" className="flex flex-col gap-2">
+          <SectionHead
+            id="open-heading"
+            title="Open"
+            count={Math.max(total, bottles.length)}
+          />
+          <ul className="-mx-4 m-0 flex list-none snap-x snap-mandatory scroll-px-4 gap-3 overflow-x-auto px-4 pb-1 [scrollbar-width:none] md:mx-0 md:scroll-px-0 md:px-0 [&::-webkit-scrollbar]:hidden">
+            {rail.map(({ bottle, badge }) => (
+              <li
+                key={bottle.id}
+                data-slot="open-bottle"
+                data-past={badge.past || undefined}
+                className="w-[150px] shrink-0 snap-start md:w-[calc((100%-36px)/4)]"
+              >
+                <CellarTile
+                  className="h-full"
+                  name={
+                    <PressLink href={bottle.href} overlay>
+                      {bottle.title}
+                    </PressLink>
+                  }
+                  maker={bottle.maker}
+                  style={bottle.style}
+                  glyph={itemTypeTokens[bottle.type].glyph}
+                  photoUrl={bottle.photoUrl}
+                  plate={
+                    <LabelPlate
+                      type={bottle.type}
+                      plate={bottle.plate}
+                      styleFields={bottle.styleFields}
+                    />
+                  }
+                  rating={bottle.rating}
+                  badge={badge.text}
                 />
               </li>
             ))}
           </ul>
+          {rate !== null && firstUnrated !== undefined && (
+            <Button
+              variant="secondary"
+              asChild
+              className="w-full md:w-auto md:self-start"
+            >
+              <Link href={firstUnrated.href} underline="none">
+                <Star aria-hidden strokeWidth={ICON_STROKE} />
+                {rate}
+              </Link>
+            </Button>
+          )}
         </section>
       )}
-
-      {(soon.length > 0 || sealed.length > 0) && (
-        <InsetSection label="Drink soon" aria-label="Drink soon">
-          {soon.map(({ bottle, state }) => (
-            <ListRow
-              key={bottle.id}
-              leading={
-                <span
-                  className={cn(
-                    "flex size-9 items-center justify-center rounded-md",
-                    itemTypeTokens[bottle.type].tintClass,
-                  )}
-                >
-                  {/* A plate's text cannot be read at 36 px, and it spilled
-                      past the row's edge (clipped, but measured): the type's
-                      glyph, as universal search's rows draw it. */}
-                  <TypeGlyph type={bottle.type} className="size-5" />
-                </span>
-              }
-              title={
-                <Link
-                  href={bottle.href}
-                  overlay
-                  underline="none"
-                  className="text-ink-1"
-                >
-                  {bottle.title}
-                </Link>
-              }
-              description={
-                <>
-                  <span
-                    className={cn(state.urgency === "past" && "text-ink-1")}
-                  >
-                    Open {state.openDays}{" "}
-                    {state.openDays === 1 ? "day" : "days"}
-                  </span>
-                  {" · "}
-                  {typicalLine(state.life)}
-                </>
-              }
-              trailing={
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  aria-haspopup="dialog"
-                  aria-label={`Pour ${bottle.name}`}
-                  onClick={() => pour(bottle)}
-                  className="min-h-11 min-w-11"
-                >
-                  <Pour aria-hidden strokeWidth={ICON_STROKE} />
-                  Pour
-                </Button>
-              }
-            />
-          ))}
-          {sealed.map((bottle) => (
-            <ListRow
-              key={bottle.id}
-              data-kind="drink-soon-sealed"
-              leading={
-                <span
-                  className={cn(
-                    "flex size-9 items-center justify-center rounded-md",
-                    itemTypeTokens[bottle.type].tintClass,
-                  )}
-                >
-                  <TypeGlyph type={bottle.type} className="size-5" />
-                </span>
-              }
-              title={
-                <Link
-                  href={bottle.href}
-                  overlay
-                  underline="none"
-                  className="text-ink-1"
-                >
-                  {bottle.title}
-                </Link>
-              }
-              description={
-                <span className={cn(bottle.past && "text-ink-1")}>
-                  {bottle.line}
-                </span>
-              }
-              trailing={
-                <Button
-                  asChild
-                  variant="secondary"
-                  size="sm"
-                  className="min-h-11 min-w-11"
-                >
-                  <Link
-                    href={bottle.href}
-                    underline="none"
-                    aria-label={`Open ${bottle.name}`}
-                  >
-                    Open
-                  </Link>
-                </Button>
-              }
-            />
-          ))}
-        </InsetSection>
+      {sealed.length > 0 && (
+        <DrinkSoon rows={sealed} total={Math.max(sealedTotal, sealed.length)} />
       )}
-      {sheet}
     </>
   );
 }
 
-function OpenBottleCard({
-  bottle,
-  now,
-  onPour,
+/**
+ * The sealed bottles whose window is ending: four rows, "Show more · n" for
+ * the rest Home read. Open opens the bottle (`openCellarItem`) and takes the
+ * row away, with Undo, which puts the bottle back to sealed.
+ */
+function DrinkSoon({
+  rows,
+  total,
 }: {
-  bottle: OpenBottle;
-  now: number;
-  onPour: () => void;
+  rows: readonly SealedSoon[];
+  total: number;
 }) {
-  const state = bottleState(bottle, now);
+  const router = useRouter();
+  const [opened, setOpened] = useState<ReadonlySet<string>>(new Set());
+  const [more, setMore] = useState(false);
+  const [, openItem] = useMutation(OpenCellarItemMutation);
+  const [, updateItem] = useMutation(UpdateCellarItemMutation);
+
+  const left = rows.filter((row) => !opened.has(row.id));
+  const shown = more ? left : left.slice(0, SOON_ROWS);
+  const hidden = left.length - shown.length;
+  if (left.length === 0) return null;
+
+  const restore = (id: string) =>
+    setOpened((current) => {
+      const next = new Set(current);
+      next.delete(id);
+      return next;
+    });
+
+  const open = async (row: SealedSoon) => {
+    const variables = openVariables(row.id, rows);
+    if (variables === null) return;
+    setOpened((current) => new Set(current).add(row.id));
+    const response = await openItem(variables);
+    const result = unwrapResult(response.data?.openCellarItem, "CellarItem");
+    if (response.error !== undefined || !result.ok) {
+      restore(row.id);
+      feedback("refuse");
+      notify(`${row.name} wasn't opened`, { tone: "error" });
+      return;
+    }
+    notify(`${row.name} opened`, {
+      undo: async () => {
+        feedback("undo");
+        restore(row.id);
+        await updateItem({ ...variables, input: { openAt: null } });
+        router.refresh();
+      },
+      onAutoClose: () => router.refresh(),
+    });
+  };
+
   return (
-    <div
-      data-slot="open-bottle"
-      className="relative flex h-full flex-col overflow-hidden rounded-md bg-surface-2"
-    >
-      <div
-        className={cn(
-          "relative aspect-4/5 overflow-hidden",
-          itemTypeTokens[bottle.type].tintClass,
+    <section aria-labelledby="soon-heading" className="flex flex-col gap-2">
+      <SectionHead id="soon-heading" title="Drink soon" count={total} />
+      <ul className="m-0 flex list-none flex-col divide-y divide-rule overflow-hidden rounded-md border border-edge bg-card p-0">
+        {shown.map((row) => (
+          <li
+            key={row.id}
+            data-kind="drink-soon-sealed"
+            className="relative flex min-h-16 items-center gap-3 py-2 pr-2 pl-3 has-[a[data-slot=link]:active]:bg-raised"
+          >
+            <Thumb row={row} />
+            <div className="flex min-w-0 flex-1 flex-col">
+              <PressLink
+                href={row.href}
+                overlay
+                className="t-head truncate text-ink"
+              >
+                {row.title}
+              </PressLink>
+              <span className={cn("t-cap truncate text-ink-2")}>
+                {row.line}
+              </span>
+              {row.typical !== null && (
+                <span className="t-cap truncate text-ink-2">{row.typical}</span>
+              )}
+            </div>
+            <Button
+              variant="secondary"
+              aria-label={`Open ${row.name}`}
+              onClick={() => void open(row)}
+              className="relative z-10"
+            >
+              Open
+            </Button>
+          </li>
+        ))}
+        {hidden > 0 && (
+          <li>
+            <button
+              type="button"
+              onClick={() => {
+                feedback("tick");
+                setMore(true);
+              }}
+              className="t-head tabular flex min-h-12 w-full items-center justify-center text-act-ink outline-none focus-visible:outline-2 focus-visible:outline-act-ink focus-visible:-outline-offset-2 active:bg-raised"
+            >
+              Show more · {hidden}
+            </button>
+          </li>
         )}
-      >
-        {bottle.photoUrl !== null ? (
-          <Image
-            src={bottle.photoUrl}
-            alt=""
-            fill
-            sizes="144px"
-            placeholder={bottle.placeholder ? "blur" : undefined}
-            blurDataURL={getNextPlaceholder(bottle.placeholder)}
-            className="object-cover"
-          />
-        ) : (
-          <LabelPlate
-            type={bottle.type}
-            plate={bottle.plate}
-            styleFields={bottle.styleFields}
-          />
-        )}
-        <div
+      </ul>
+    </section>
+  );
+}
+
+/** A 54 thumb: the bottle's photo, or its kind glyph flat on raised. */
+function Thumb({ row }: { row: SealedSoon }) {
+  const Glyph = itemTypeTokens[row.type].glyph;
+  return (
+    <span className="relative flex size-[54px] shrink-0 items-center justify-center overflow-hidden rounded-sm bg-raised">
+      {row.photoUrl !== null ? (
+        <Image
+          src={row.photoUrl}
+          alt=""
+          fill
+          sizes="54px"
+          className="object-cover"
+        />
+      ) : (
+        <Glyph
           aria-hidden
-          className="absolute inset-x-2 bottom-2 h-1 overflow-hidden rounded-full bg-surface-3/80"
-        >
-          <div
-            className="h-full origin-left rounded-full bg-ink-1"
-            style={{ transform: `scaleX(${state.level / 100})` }}
-          />
-        </div>
-      </div>
-      <div className="flex flex-1 flex-col gap-1 px-2.5 pt-2 pb-2.5">
-        <Link
-          href={bottle.href}
-          overlay
-          underline="none"
-          className="type-callout line-clamp-2 min-h-10 font-semibold text-ink-1"
-        >
-          {bottle.title}
-        </Link>
-        <p className="type-footnote truncate">
-          <span aria-hidden>
-            {state.label} · {Math.round(state.level)}%
-          </span>
-          <span className="sr-only">{state.spoken}</span>
-        </p>
-        {bottle.cellarName !== null && (
-          <p className="type-footnote truncate text-ink-3">
-            {bottle.cellarName}
-          </p>
-        )}
-        <Button
-          variant="secondary"
-          size="sm"
-          aria-haspopup="dialog"
-          aria-label={`Pour ${bottle.name}`}
-          onClick={onPour}
-          className="relative z-10 mt-1 min-h-11 w-full"
-        >
-          <Pour aria-hidden strokeWidth={ICON_STROKE} />
-          Pour
-        </Button>
-      </div>
-    </div>
+          strokeWidth={ICON_STROKE}
+          className="size-6 text-glyph"
+        />
+      )}
+    </span>
   );
 }
