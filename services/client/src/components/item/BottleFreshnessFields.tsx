@@ -91,7 +91,7 @@ export const freshnessItemOf = (item: BottleItem): FreshnessItem | null => {
 const TONE: Record<FreshnessStatus["tone"], string> = {
   good: "bg-success/15 text-success",
   soon: "bg-brass/15 text-brass",
-  wait: "bg-surface-3 text-ink-2",
+  wait: "bg-sel text-ink-2",
   past: "bg-danger/10 text-danger",
 };
 
@@ -103,7 +103,7 @@ export function DrinkingWindowCard({ model }: { model: FreshnessModel }) {
     <InsetSection label="Drinking window" data-slot="drinking-window">
       <div className="flex flex-col gap-3 px-4 py-4">
         <div className="flex items-baseline justify-between gap-3">
-          <span className="t-title tabular text-ink-1">{model.heading}</span>
+          <span className="t-title tabular text-ink">{model.heading}</span>
           {status !== null && (
             <span
               data-tone={status.tone}
@@ -118,14 +118,14 @@ export function DrinkingWindowCard({ model }: { model: FreshnessModel }) {
         </div>
         {bar !== null && (
           <div aria-hidden className="flex flex-col gap-1">
-            <div className="relative h-2 rounded-full bg-surface-3">
+            <div className="relative h-2 rounded-full bg-sel">
               <div
                 className="absolute inset-y-0 rounded-full bg-success/60"
                 style={{ left: `${bar.start}%`, width: `${bar.width}%` }}
               />
               <div
                 data-slot="today-marker"
-                className="absolute -top-1 h-4 w-0.5 rounded-full bg-ink-1"
+                className="absolute -top-1 h-4 w-0.5 rounded-full bg-ink"
                 style={{ left: `${bar.today}%` }}
               />
             </div>
@@ -336,7 +336,7 @@ export function ThisBottleRows({
               <span
                 className={cn(
                   "t-body tabular",
-                  row.source === "typical" ? "text-ink-3" : "text-ink-1",
+                  row.source === "typical" ? "text-ink-3" : "text-ink",
                 )}
               >
                 {row.value}

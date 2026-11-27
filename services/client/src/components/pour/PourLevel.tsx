@@ -131,7 +131,7 @@ function BottleLevel({
       <path
         d={vessel.d}
         fillRule={vessel.evenOdd ? "evenodd" : undefined}
-        className="fill-surface-3"
+        className="fill-sel"
       />
       <g clipPath={`url(#${clipId})`}>
         {/* Where it was: the pour is the gap. */}
@@ -216,7 +216,7 @@ function PlainLevel({ type, from, value, onChange }: PourLevelProps) {
         className="relative flex h-11 w-full touch-none select-none items-center"
         data-vaul-no-drag=""
       >
-        <SliderPrimitive.Track className="relative h-3 grow overflow-hidden rounded-full bg-surface-3">
+        <SliderPrimitive.Track className="relative h-3 grow overflow-hidden rounded-full bg-sel">
           <SliderPrimitive.Range
             className={cn("absolute h-full", RANGE_FILL[type])}
           />
@@ -224,7 +224,7 @@ function PlainLevel({ type, from, value, onChange }: PourLevelProps) {
         <SliderPrimitive.Thumb
           aria-label="Level"
           aria-valuetext={levelValueText(from, value)}
-          className="block size-7 rounded-full bg-ink-1 shadow-sm outline-none ring-ring/50 focus-visible:ring-4"
+          className="block size-7 rounded-full bg-ink shadow-sm outline-none ring-ring/50 focus-visible:ring-4"
         />
       </SliderPrimitive.Root>
     </div>

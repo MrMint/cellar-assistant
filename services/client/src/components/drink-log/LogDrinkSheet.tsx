@@ -580,7 +580,7 @@ function NoteAndTags({
                     data-slot="suggested-tag"
                     onClick={() => add(suggestion.tag)}
                     aria-label={`Add ${suggestion.tag} (from “${suggestion.evidence}”)`}
-                    className="relative inline-flex h-9 items-center gap-1 rounded-full border border-line border-dashed bg-surface-2 px-3 font-medium text-ink-1 text-sm transition-transform duration-(--ca-dur-micro) ease-standard after:absolute after:-inset-y-1 after:inset-x-0 after:content-[''] active:scale-97 motion-reduce:active:scale-100"
+                    className="relative inline-flex h-9 items-center gap-1 rounded-full border border-edge border-dashed bg-raised px-3 font-medium text-ink text-sm transition-transform duration-(--ca-dur-micro) ease-standard after:absolute after:-inset-y-1 after:inset-x-0 after:content-[''] active:scale-97 motion-reduce:active:scale-100"
                   >
                     <Add aria-hidden className="size-3.5" />
                     {suggestion.tag}
@@ -615,7 +615,7 @@ function NoteAndTags({
           <ul aria-label="Your tags" className="flex flex-wrap gap-2">
             {draft.tags.map((tag) => (
               <li key={tag}>
-                <span className="inline-flex h-9 items-center gap-1 rounded-full bg-ink-1 pr-1 pl-3 font-medium text-background text-sm">
+                <span className="inline-flex h-9 items-center gap-1 rounded-full bg-ink pr-1 pl-3 font-medium text-background text-sm">
                   {tag}
                   <button
                     type="button"
@@ -712,7 +712,7 @@ function PlacePicker({
         Where
       </label>
       {place !== null ? (
-        <div className="flex min-h-11 items-center gap-3 rounded-md bg-surface-2 pr-1 pl-3">
+        <div className="flex min-h-11 items-center gap-3 rounded-md bg-raised pr-1 pl-3">
           <Place aria-hidden className="size-4 text-ink-2" />
           <span className="t-body min-w-0 flex-1 truncate">{place.name}</span>
           <IconButton
@@ -753,7 +753,7 @@ function PlacePicker({
           {hits.length > 0 && (
             <ul
               aria-label="Places"
-              className="flex flex-col divide-y divide-line overflow-hidden rounded-md bg-surface-2"
+              className="flex flex-col divide-y divide-edge overflow-hidden rounded-md bg-raised"
             >
               {hits.map((hit) => (
                 <li key={hit.id}>
@@ -763,7 +763,7 @@ function PlacePicker({
                       onChange({ id: hit.id, name: hit.name });
                       setText("");
                     }}
-                    className="flex min-h-11 w-full items-center gap-3 px-3 py-2 text-left active:bg-surface-3"
+                    className="flex min-h-11 w-full items-center gap-3 px-3 py-2 text-left active:bg-sel"
                   >
                     <Place aria-hidden className="size-4 shrink-0 text-ink-3" />
                     <span className="flex min-w-0 flex-col">
@@ -833,7 +833,7 @@ function PhotoPicker({
     <section className="flex flex-col gap-2">
       <h3 className="t-cap font-semibold">Photo</h3>
       {shown !== null ? (
-        <div className="relative w-28 overflow-hidden rounded-md bg-surface-2">
+        <div className="relative w-28 overflow-hidden rounded-md bg-raised">
           {/* biome-ignore lint/performance/noImgElement: a local blob preview, not a remote image next/image could optimise */}
           <img
             src={shown}

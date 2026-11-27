@@ -92,7 +92,7 @@ export async function ItemEditPage({
   if (!result.ok) {
     if (isNotFound(result.error)) notFound();
     return (
-      <p role="alert" className="t-body text-destructive">
+      <p role="alert" className="t-body text-danger">
         {result.error.message}
       </p>
     );
@@ -126,7 +126,9 @@ export async function ItemEditPage({
     <div className="flex flex-col gap-4">
       <ItemAppBar
         parent={backHref}
-        title={`Edit ${itemName}`}
+        // Cellars-Pour 31: the bar says what the page is; the crumbs carry
+        // which item.
+        title="Edit details"
         cellarName={cellarName}
         itemName={itemName}
       />
@@ -154,7 +156,7 @@ export async function ItemEditPage({
         />
       ) : (
         <div className="flex flex-col gap-2">
-          <h2 className="t-title text-ink-1">Not yours to edit</h2>
+          <h2 className="t-title text-ink">Not yours to edit</h2>
           <p className="t-cap text-ink-2">
             Only whoever added this {formatItemType(type).toLowerCase()} can
             change it.
