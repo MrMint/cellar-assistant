@@ -100,7 +100,7 @@ export function TryThisNext({
   if (error !== undefined || result?.ok === false) {
     return (
       <div className="mt-3 flex flex-wrap items-center gap-3">
-        <p className="type-footnote">Couldn't search the catalog just now.</p>
+        <p className="t-cap">Couldn't search the catalog just now.</p>
         <Button
           variant="ghost"
           size="sm"
@@ -114,9 +114,7 @@ export function TryThisNext({
 
   if (rows.length === 0) {
     return (
-      <p className="type-footnote mt-3">
-        Nothing in the catalog matches this yet.
-      </p>
+      <p className="t-cap mt-3">Nothing in the catalog matches this yet.</p>
     );
   }
 
@@ -125,7 +123,7 @@ export function TryThisNext({
       {rows.map((row) => (
         <ListRow
           key={row.key}
-          className="bg-surface-2"
+          className="bg-raised"
           leading={
             <span
               className={cn(
@@ -137,12 +135,7 @@ export function TryThisNext({
             </span>
           }
           title={
-            <Link
-              href={row.href}
-              overlay
-              underline="none"
-              className="text-ink-1"
-            >
+            <Link href={row.href} overlay underline="none" className="text-ink">
               {row.title}
             </Link>
           }

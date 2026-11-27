@@ -187,7 +187,7 @@ export function CountryHeatmap({ entries }: CountryHeatmapProps) {
 
   return (
     <section className="flex flex-col gap-2">
-      <h4 className="text-ink-1 type-headline">Where Your Favorites Are</h4>
+      <h4 className="t-head text-ink">Where your favorites are</h4>
       <div
         ref={mapContainer}
         className="h-[200px] w-full overflow-hidden rounded-md sm:h-[280px]"
@@ -203,9 +203,7 @@ export function CountryHeatmap({ entries }: CountryHeatmapProps) {
                 BAND_TONES[band].swatch,
               )}
             />
-            <span className="text-ink-2 type-footnote">
-              {BAND_LABELS[band]}
-            </span>
+            <span className="t-cap text-ink-2">{BAND_LABELS[band]}</span>
           </li>
         ))}
       </ul>

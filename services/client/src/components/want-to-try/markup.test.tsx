@@ -54,7 +54,7 @@ describe("WantToTryButton", () => {
       /aria-pressed="true"/,
     );
     // On is a filled bookmark in ink — not brass, not Love's claret.
-    assert.match(on, /fill-current text-ink-1/);
+    assert.match(on, /fill-current text-ink/);
     assert.doesNotMatch(on, /fill-brand/);
   });
 

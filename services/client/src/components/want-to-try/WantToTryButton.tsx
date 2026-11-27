@@ -73,7 +73,7 @@ export function WantToTryButton({
     <WantToTry
       aria-hidden
       strokeWidth={ICON_STROKE}
-      className={cn(saved ? "fill-current text-ink-1" : "text-ink-2")}
+      className={cn(saved ? "fill-current text-ink" : "text-ink-2")}
     />
   );
 

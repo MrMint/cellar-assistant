@@ -64,35 +64,40 @@ const data = {
   history: null,
 };
 
-describe("TierListView (restored board)", () => {
-  test("arranging: six band labels, crown for #1, trophies to #10, plain ranks after", () => {
+describe("TierListView (rows and scrubber)", () => {
+  test("arranging: every band drawn, Unrated when used, the owner's #1 crowned, handles named", () => {
     const html = render(
       <TierListView tierListId="tl-1" items={items} isOwner arranging />,
     );
+    // Bands never collapse: the empty ones say so.
     for (const label of [
       "Outstanding",
       "Very Good",
       "Good",
       "Mediocre",
       "Bad",
-      "Unrated",
     ]) {
-      assert.match(html, new RegExp(`>${label}<`));
+      assert.match(html, new RegExp(`<h3[^>]*>${label}</h3>`));
     }
-    // Ranks 2..10 sit on trophies; 11 and 12 are plain numbers, each ahead
-    // of its name, and each row ends in its remove button.
-    assert.match(html, />11<[\s\S]*?>Entry 11<[\s\S]*?"Remove Entry 11"/);
-    assert.match(html, />12<[\s\S]*?>Entry 12<[\s\S]*?"Remove Entry 12"/);
-    // The owner's score and the public rating with its count.
-    assert.match(html, />4</);
-    assert.match(html, />4.6/);
-    assert.match(html, />\(1\.2k\)</);
-    assert.match(html, /aria-label="Remove Entry 1"/);
-    // #1's crown says its rank in words, and each drag handle is named.
-    assert.match(html, />Rank 1</);
+    assert.match(html, />Nothing in Very Good yet</);
+    // Unrated: drawn because something sits in it.
+    assert.match(html, /<h3[^>]*>Unrated<\/h3>/);
+    assert.match(html, />11 · #1–11</);
+    // One crown, on the owner's #1; every row's chip says its rank.
+    assert.equal(html.match(/data-slot="crown"/g)?.length, 1);
+    assert.match(html, />#11<[\s\S]*?, Outstanding/);
+    assert.match(html, />4\.6/);
     assert.match(html, /<button[^>]*aria-label="Reorder Entry 1"/);
+    // Removal lives in the band sheet, not on the row.
+    assert.doesNotMatch(html, /aria-label="Remove /);
     // Arranging, a row is not a link: a stray tap must not navigate away.
     assert.doesNotMatch(html, /href="\/places\/p-0"/);
+    // The dock: pick, move, Done.
+    assert.match(html, />Tap a row to move it</);
+    assert.match(html, /aria-label="Move up"/);
+    assert.match(html, />Move to band…</);
+    // The scrubber, left of the rows.
+    assert.match(html, /data-slot="scrubber"[\s\S]*data-slot="band-bar"/);
   });
 
   test("read-only by default — the owner's too — and every row opens its entry", () => {
@@ -109,25 +114,55 @@ describe("TierListView (restored board)", () => {
         />,
       ),
     ]) {
-      assert.doesNotMatch(html, /aria-label="Remove /);
-      assert.doesNotMatch(html, /cursor:grab|aria-roledescription="sortable"/);
+      assert.doesNotMatch(html, /aria-label="(Remove|Reorder) /);
+      assert.doesNotMatch(html, /aria-label="Move up"/);
+      assert.doesNotMatch(html, /aria-roledescription="sortable"/);
       assert.match(html, /href="\/places\/p-0"[^>]*>Entry 1</);
     }
   });
 
-  test("X23: on someone else's list, a You chip beside the owner's score", () => {
+  test("CROSS-LOT 1: on someone else's list no crown, and the viewer's own score rides in the where line", () => {
     const friend = render(
       <TierListView tierListId="tl-1" items={items} isOwner={false} />,
     );
-    assert.match(
-      friend,
-      /Your rating: <\/span><span aria-hidden="true">You <\/span>2\.5/,
-    );
-    // On your own list your score is the owner's: no chip.
+    assert.doesNotMatch(friend, /data-slot="crown"/);
+    assert.match(friend, />You 2\.5</);
+    // On your own list your score is the owner's: no You.
     const own = render(
       <TierListView tierListId="tl-1" items={items} isOwner />,
     );
-    assert.doesNotMatch(own, /data-slot="viewer-score"/);
+    assert.doesNotMatch(own, />You \d/);
+  });
+
+  test("search and Show only narrow the rows; no match says so and offers Clear", () => {
+    const one = render(
+      <TierListView tierListId="tl-1" items={items} isOwner query="entry 12" />,
+    );
+    assert.match(one, />Entry 12</);
+    assert.doesNotMatch(one, />Entry 1</);
+    // Ranks survive the filter.
+    assert.match(one, /<h3[^>]*>Unrated<\/h3>/);
+    const none = render(
+      <TierListView
+        tierListId="tl-1"
+        items={items}
+        isOwner
+        query="zzz"
+        onClearSearch={() => {}}
+      />,
+    );
+    assert.match(none, /No place matches “zzz”/);
+    assert.match(none, />Clear search</);
+    const onlyBad = render(
+      <TierListView
+        tierListId="tl-1"
+        items={items}
+        isOwner
+        only={new Set([1])}
+        onClearSearch={() => {}}
+      />,
+    );
+    assert.match(onlyBad, /No places in these bands/);
   });
 });
 
@@ -139,21 +174,28 @@ describe("TierListViewPage (restored header and tabs)", () => {
     showPlaceStats: true,
   };
 
-  test("owner of a place list: Arrange, map, share, edit; tabs; no padlock", () => {
+  test("owner of a place list: Edit order and Add in the dock, Map to /map?list=, share, details; tabs", () => {
     const html = render(
       <TierListViewPage data={data} insightsData={insights} />,
     );
     assert.match(html, /<h1[^>]*>Best Bars</);
     assert.match(html, />Friends</);
-    assert.match(html, /<button[^>]*>.*Arrange<\/button>/);
-    assert.match(html, /href="\/map\?tierLists=tl-1"/);
+    assert.match(html, />12 places</);
+    assert.match(html, /<button[^>]*>.*Edit order<\/button>/);
+    assert.match(html, /<button[^>]*>.*Add a place<\/button>/);
+    // L40: the place list's Map opens the map filtered to it.
+    assert.match(
+      html,
+      /aria-label="Map"[^>]*href="\/map\?list=tl-1"|href="\/map\?list=tl-1"[^>]*aria-label="Map"/,
+    );
+    assert.doesNotMatch(html, /tierLists=/);
     assert.match(html, /href="\/tier-lists\/tl-1\/edit"/);
     assert.match(html, />Rankings</);
     assert.match(html, />Insights</);
-    // Add entry, Undo and the remove buttons live in Arrange (X23/D4).
-    assert.doesNotMatch(html, /Add entry/);
+    assert.match(html, /placeholder="Search this list"/);
+    // Moving and removing live in Edit order (DECISIONS 41).
     assert.doesNotMatch(html, /aria-label="(Lock|Unlock) editing"/);
-    assert.doesNotMatch(html, /aria-label="Remove /);
+    assert.doesNotMatch(html, /aria-label="(Remove|Reorder) /);
   });
 
   test("an owner's empty list asks for its first entry", () => {
@@ -165,7 +207,7 @@ describe("TierListViewPage (restored header and tabs)", () => {
     );
     assert.match(html, />Nothing ranked yet\.</);
     assert.match(html, />Add from what you&#x27;ve tasted</);
-    assert.doesNotMatch(html, />Arrange</);
+    assert.doesNotMatch(html, /Edit order/);
   });
 
   test("not the owner, private, item list: none of the owner controls", () => {
@@ -175,7 +217,7 @@ describe("TierListViewPage (restored header and tabs)", () => {
         insightsData={insights}
       />,
     );
-    assert.doesNotMatch(html, /Add entry|>Arrange</);
+    assert.doesNotMatch(html, /Add a wine|Edit order/);
     assert.doesNotMatch(html, /tierLists=/);
     assert.doesNotMatch(html, /\/edit"/);
     assert.match(html, />Private</);
