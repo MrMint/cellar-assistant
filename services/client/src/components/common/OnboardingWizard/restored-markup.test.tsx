@@ -24,6 +24,7 @@ mock.module("next/navigation", () => ({
 
 const { ItemOnboarding } = await import("./ItemOnboarding");
 const { OnboardingItemForm } = await import("./OnboardingItemForm");
+const { emptyDefaults } = await import("./adapter");
 const { QuickAddCard } = await import("../QuickAddCard");
 const { formDefaultsFromOnboarding, quickAddDefaultsFrom } = await import(
   "./adapter"
@@ -174,6 +175,22 @@ describe("OnboardingItemForm (the old {T}Form in create mode)", () => {
     assert.match(html, /value="Château Margaux"/);
     assert.match(html, /value="2015"/);
     assert.match(text(html), /\bAdd\b/);
+  });
+
+  test("F-60: typed, the open floor fields say Check this and Add counts them", () => {
+    const html = render(
+      <OnboardingItemForm
+        type="WINE"
+        itemOnboardingId="o"
+        defaultValues={emptyDefaults()}
+        onCreated={noop}
+        cellarId="c1"
+      />,
+    );
+    const marks = html.match(/data-slot="floor-mark"/g) ?? [];
+    assert.ok(marks.length >= 2, `open floor fields marked (${marks.length})`);
+    assert.match(text(html), new RegExp(`${marks.length} left to check`));
+    assert.doesNotMatch(text(html), /Read from label/);
   });
 
   test("a scanned code pre-fills the Barcode field as printed", () => {
