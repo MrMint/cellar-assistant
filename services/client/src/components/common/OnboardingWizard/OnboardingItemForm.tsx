@@ -15,7 +15,7 @@ import {
   useForm,
   useWatch,
 } from "react-hook-form";
-import { useClient } from "urql";
+import { useClient, useMutation } from "urql";
 import {
   AIDraftField,
   type DraftConfidence,
@@ -54,6 +54,7 @@ import {
   openFloorPaths,
   saveOnboardingDraft,
 } from "./draft-save";
+import { SaveDraftMutation } from "./queries";
 
 type OnboardingItemFormProps = {
   type: ApiItemType;
@@ -126,6 +127,7 @@ export const OnboardingItemForm = ({
   onUseDeclined,
 }: OnboardingItemFormProps) => {
   const client = useClient();
+  const [, executeSaveDraft] = useMutation(SaveDraftMutation);
   // DECISIONS 34 (3): a beer is never asked for a vintage.
   const layout = formLayout(type, "create").filter(
     (entry) => entry.kind !== "attribute" || asksVintage(type, entry.field.key),
@@ -245,7 +247,7 @@ export const OnboardingItemForm = ({
     setSavingLater(true);
     try {
       const { status } = await saveOnboardingDraft({
-        urqlClient: client,
+        save: (variables) => executeSaveDraft(variables),
         type,
         onboardingId: itemOnboardingId,
         cellarId,

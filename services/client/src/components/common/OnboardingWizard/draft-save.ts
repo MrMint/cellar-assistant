@@ -1,4 +1,4 @@
-import type { Client } from "urql";
+import type { ResultOf, VariablesOf } from "gql.tada";
 import type { ApiItemType } from "@/components/cellar-api/itemTypes";
 import type { ItemFormValues } from "@/components/item/ItemForm";
 import { entryPath, type FormEntry } from "@/components/item/itemFormLayout";
@@ -8,7 +8,7 @@ import {
 } from "@/components/item-api/itemFormRules";
 import { unwrapResult } from "@/lib/api/result";
 import { confirmInputFrom } from "./adapter";
-import { SaveDraftMutation } from "./queries";
+import type { SaveDraftMutation } from "./queries";
 
 /** `enum VintageAnswer` (MC-drafts). */
 export type VintageAnswer = "VINTAGE" | "NON_VINTAGE" | "UNANSWERED";
@@ -78,8 +78,13 @@ export const draftFieldsFrom = (
   return fields;
 };
 
+/** urql's `useMutation(SaveDraftMutation)` executor, or a test's stub. */
+export type SaveDraft = (
+  variables: VariablesOf<typeof SaveDraftMutation>,
+) => Promise<{ data?: ResultOf<typeof SaveDraftMutation> | null }>;
+
 export type SaveDraftArgs = {
-  urqlClient: Client;
+  save: SaveDraft;
   type: ApiItemType;
   /** This session's own onboarding; the server refuses anyone else's. */
   onboardingId: string;
@@ -98,7 +103,7 @@ export type SaveDraftArgs = {
  * caller never reports a save that did not happen.
  */
 export const saveOnboardingDraft = async ({
-  urqlClient,
+  save,
   type,
   onboardingId,
   cellarId,
@@ -109,17 +114,15 @@ export const saveOnboardingDraft = async ({
 }: SaveDraftArgs): Promise<{ status: string }> => {
   const result = unwrapResult(
     (
-      await urqlClient
-        .mutation(SaveDraftMutation, {
-          input: {
-            onboardingId,
-            cellarId,
-            fields: draftFieldsFrom(type, values, brandName),
-            confirmedFields: confirmedFieldsFrom(guessed, touched),
-            vintageAnswer: vintageAnswerFor(type, values),
-          },
-        })
-        .toPromise()
+      await save({
+        input: {
+          onboardingId,
+          cellarId,
+          fields: draftFieldsFrom(type, values, brandName),
+          confirmedFields: confirmedFieldsFrom(guessed, touched),
+          vintageAnswer: vintageAnswerFor(type, values),
+        },
+      })
     ).data?.saveDraft,
     "ItemOnboarding",
   );

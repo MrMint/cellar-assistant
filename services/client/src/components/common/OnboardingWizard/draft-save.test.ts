@@ -10,7 +10,6 @@
  */
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import type { Client } from "urql";
 import type { ItemFormValues } from "@/components/item/ItemForm";
 import { formLayout } from "@/components/item/itemFormLayout";
 import {
@@ -19,9 +18,11 @@ import {
   differsFrom,
   isDuplicateOfDeclined,
   openFloorPaths,
+  type SaveDraft,
   saveOnboardingDraft,
   vintageAnswerFor,
 } from "./draft-save";
+import { SaveDraftMutation } from "./queries";
 
 const nameOf = (document: unknown): string =>
   (document as { definitions: { name?: { value: string } }[] }).definitions[0]
@@ -31,15 +32,15 @@ type Sent = { name: string; variables: Record<string, unknown> };
 
 const stub = (answer: Record<string, unknown>) => {
   const sent: Sent[] = [];
-  const client = {
-    mutation: (document: unknown, variables: Record<string, unknown>) => {
-      sent.push({ name: nameOf(document), variables });
-      return { toPromise: async () => ({ data: { saveDraft: answer } }) };
-    },
-    query: () => {
-      throw new Error("Finish later reads nothing");
-    },
-  } as unknown as Client;
+  // The executor of `useMutation(SaveDraftMutation)`: the only write the
+  // helper can reach, so anything else it tried would not compile.
+  const client: SaveDraft = async (variables) => {
+    sent.push({
+      name: nameOf(SaveDraftMutation),
+      variables: variables as unknown as Record<string, unknown>,
+    });
+    return { data: { saveDraft: answer } as never };
+  };
   return { client, sent };
 };
 
@@ -63,7 +64,7 @@ describe("saveOnboardingDraft", () => {
   test("sends only saveDraft, for this onboarding and the chosen cellar", async () => {
     const { client, sent } = stub(saved);
     await saveOnboardingDraft({
-      urqlClient: client,
+      save: client,
       type: "WINE",
       onboardingId: "onb-1",
       cellarId: "cellar-mine",
@@ -98,7 +99,7 @@ describe("saveOnboardingDraft", () => {
     });
     await assert.rejects(
       saveOnboardingDraft({
-        urqlClient: client,
+        save: client,
         type: "WINE",
         onboardingId: "someone-elses",
         cellarId: "not-my-cellar",
@@ -112,12 +113,10 @@ describe("saveOnboardingDraft", () => {
   });
 
   test("no answer at all is not a save either", async () => {
-    const client = {
-      mutation: () => ({ toPromise: async () => ({ data: undefined }) }),
-    } as unknown as Client;
+    const client: SaveDraft = async () => ({ data: undefined });
     await assert.rejects(
       saveOnboardingDraft({
-        urqlClient: client,
+        save: client,
         type: "BEER",
         onboardingId: "onb-1",
         cellarId: null,
