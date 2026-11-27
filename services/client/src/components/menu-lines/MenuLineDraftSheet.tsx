@@ -23,6 +23,8 @@ import type { ApiItemType } from "@/components/cellar-api/itemTypes";
 import { AiStatus } from "@/components/common/AiStatus";
 import { createOnboardedItem } from "@/components/common/OnboardingWizard/actors/createItem";
 import { saveBlocker } from "@/components/common/OnboardingWizard/adapter";
+import { saveOnboardingDraft } from "@/components/common/OnboardingWizard/draft-save";
+import { SaveDraftMutation } from "@/components/common/OnboardingWizard/queries";
 import {
   correctionOutcome,
   correctionSummary,
@@ -134,6 +136,8 @@ export function MenuLineDraftSheet({
   const [, suggestDetails] = useMutation(SuggestNewItemDetailsMutation);
   const [, openDraft] = useMutation(OpenItemDraftMutation);
   const [, verify] = useMutation(VerifyMenuLineMatchMutation);
+  const [, saveDraft] = useMutation(SaveDraftMutation);
+  const [savingLater, setSavingLater] = useState(false);
 
   const last = useRef<MenuItemView | null>(line);
   if (line !== null) last.current = line;
@@ -395,6 +399,63 @@ export function MenuLineDraftSheet({
     });
   };
 
+  /**
+   * H-41 "Finish later" (MC-drafts, DECISIONS 34): the card is set aside as a
+   * draft on the account — `openItemDraft`, then `saveDraft` with the card's
+   * values, aimed at no cellar — whatever the floor says. It creates no item
+   * and never matches the line; Needs details lists it until it's finished.
+   */
+  const finishLater = async () => {
+    if (type === null) {
+      setError("root", {
+        type: "custom",
+        message: "Pick what kind of drink this is.",
+      });
+      return;
+    }
+    setSavingLater(true);
+    try {
+      const draftId = draftIdFor(type);
+      const opened = unwrapResult(
+        (await openDraft({ draftId, type })).data?.openItemDraft,
+        "ItemOnboarding",
+      );
+      if (!opened.ok) throw new Error(opened.error.message);
+      // A chip the person tapped is a guess they chose: confirmed.
+      const chosen = Object.keys(drafts);
+      await saveOnboardingDraft({
+        save: saveDraft,
+        type,
+        onboardingId: draftId,
+        cellarId: null,
+        values: getValues(),
+        brandName: "",
+        guessed: chosen,
+        touched: new Set(chosen),
+      });
+    } catch (cause) {
+      feedback("refuse");
+      setError("root", {
+        type: "custom",
+        message:
+          cause instanceof Error
+            ? cause.message
+            : "Something went wrong please try again...",
+      });
+      return;
+    } finally {
+      setSavingLater(false);
+    }
+    onOpenChange(false);
+    notify("Saved · Needs details", {
+      description: "Finish it from Needs details.",
+      actionLabel: "Open",
+      undo: () => navigate.push("/needs-details"),
+    });
+  };
+
+  const busy = isSubmitting || savingLater;
+
   const toCheck = draftToCheck(layout, valueAt);
   /** "n to check": to the first open field, with the refuse haptic. */
   const goToCheck = () => {
@@ -436,9 +497,9 @@ export function MenuLineDraftSheet({
     <ResponsiveDialog
       open={open}
       onOpenChange={(next) => {
-        if (!isSubmitting) onOpenChange(next);
+        if (!busy) onOpenChange(next);
       }}
-      dismissible={!isSubmitting}
+      dismissible={!busy}
       title="Add to catalog"
       description="From the menu line. Nothing is added until you tap Add."
       footer={
@@ -448,8 +509,20 @@ export function MenuLineDraftSheet({
               {errors.root.message}
             </p>
           )}
-          {/* CROSS-LOT: the primary says its verb; "n to check" beside it. */}
+          {/* CROSS-LOT form-sheet footer: quiet "Finish later" left, the
+              primary with its verb, "n to check" beside it. */}
           <div className="flex items-center gap-3" data-slot="draft-footer">
+            <Button
+              type="button"
+              variant="quiet-muted"
+              className="shrink-0"
+              disabled={busy || type === null}
+              aria-busy={savingLater || undefined}
+              onClick={() => void finishLater()}
+            >
+              {savingLater && <Spinner aria-hidden />}
+              Finish later
+            </Button>
             {type !== null && toCheck.length > 0 && (
               <Button
                 type="button"
@@ -466,7 +539,7 @@ export function MenuLineDraftSheet({
               type="submit"
               form={`menu-line-draft-${current.id}`}
               className="min-w-0 flex-1"
-              disabled={isSubmitting || type === null}
+              disabled={busy || type === null}
               aria-busy={isSubmitting || undefined}
             >
               {isSubmitting && <Spinner aria-hidden />}

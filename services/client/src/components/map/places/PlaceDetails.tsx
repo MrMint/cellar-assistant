@@ -12,7 +12,8 @@
  * the left, the rank, address and lists in a 400 column on the right.
  *
  * Data: one `PlaceDetailsQuery` through `usePlaceDetails` (P1's hook).
- * - On your lists is `Place.tierListEntries` (G8): visible lists only. Their
+ * - On your lists is `Place.tierListEntries` (G8), kept to the lists the
+ *   viewer made (`useOwnListEntries`, CC-3): a friend's is not "yours". Their
  *   ranks are read from each list (`ListRanksQuery`), as Add to a list does.
  * - Changing a band from here waits on `tierListEntries` saying whose list
  *   an entry is on: until then the rank opens its list rather than offering
@@ -40,6 +41,7 @@ import { usePlaceDetails } from "../hooks/usePlaceDetails";
 import { usePlaceToggles } from "../hooks/usePlaceToggles";
 import { MenuScanner } from "../scanning/MenuScanner";
 import { GoogleAttribution } from "./GoogleAttribution";
+import { useOwnListEntries } from "./own-list-entries";
 import {
   PlaceDetailsShell,
   type PlaceHero as PlaceHeroData,
@@ -100,7 +102,7 @@ export function PlaceDetails({
     loadMoreMenuItems,
     enrichment,
     googlePhotos,
-    tierListEntries,
+    tierListEntries: visibleListEntries,
     fetching,
     failure,
     isEnriching,
@@ -108,6 +110,9 @@ export function PlaceDetails({
     refetch,
     setInteraction,
   } = usePlaceDetails(placeId);
+  // CC-3: the visible lists include friends' and public ones; Your rank and
+  // On your lists are the viewer's own.
+  const tierListEntries = useOwnListEntries(placeId, visibleListEntries);
   const { love, visit } = usePlaceToggles({
     placeId: placeData?.id,
     loved: !!userInteraction?.is_favorite,
