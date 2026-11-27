@@ -220,6 +220,9 @@ export const RecipeGroupPageQuery = graphql(
 export const RecipeVersionsPageQuery = graphql(
   `
   query RecipeVersionsPage($groupId: ID!) {
+    me {
+      id
+    }
     recipeGroup(id: $groupId) {
       __typename
       ... on RecipeGroup {
@@ -227,6 +230,7 @@ export const RecipeVersionsPageQuery = graphql(
         name
         description
         canonicalRecipeId
+        communityPickId
         recipeCount
         recipes(first: 20) {
           totalCount
@@ -271,6 +275,26 @@ export const RecipeGroupVoteStateQuery = graphql(
   }
 `,
   [RecipeVoteStateFragment, ActorErrorFieldsFragment],
+);
+
+/**
+ * The versions page's pick label after a vote (MC-pick): only the pick, so
+ * the label follows the votes without re-reading every version.
+ */
+export const RecipeGroupPickQuery = graphql(
+  `
+  query RecipeGroupPick($groupId: ID!) {
+    recipeGroup(id: $groupId) {
+      __typename
+      ... on RecipeGroup {
+        id
+        communityPickId
+      }
+      ...ActorErrorFields
+    }
+  }
+`,
+  [ActorErrorFieldsFragment],
 );
 
 // ---------------------------------------------------------------------------

@@ -21,7 +21,8 @@ export type RecipeIngredientListProps = {
   showAvailability?: boolean;
 };
 
-const getIngredientDisplay = (ingredient: RecipeIngredient) => {
+/** An ingredient's name and link: the specific bottle, else the generic. */
+export const getIngredientDisplay = (ingredient: RecipeIngredient) => {
   if (isNotNil(ingredient.item)) {
     const vintage = ingredient.item.vintage
       ? `${ingredient.item.vintage} `

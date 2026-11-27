@@ -300,75 +300,83 @@ describe("RecipeGroupSearch (Recipes-Browse)", () => {
   });
 });
 
-describe("RecipeVersionsTab (restored)", () => {
-  const version = {
+describe("RecipeVersionsTab (Recipes-Browse 16–20)", () => {
+  const original = {
     ...recipe,
     created_at: "2026-01-02T03:04:05.000Z",
     created_by_user: { id: "u1", displayName: "Ada" },
+    upvotes: 0,
+    downvotes: 0,
+    netScore: 0,
+    userVote: null,
   };
-  const html = render(
-    <RecipeVersionsTab
-      groupId="g1"
-      canonicalRecipeId="r1"
-      recipes={[
-        {
-          ...version,
-          id: "r2",
-          name: "Sbagliato",
-          version: 3,
-          upvotes: 0,
-          downvotes: 1,
-          netScore: -1,
-          userVote: null,
-        },
-        {
-          ...version,
-          upvotes: 3,
-          downvotes: 1,
-          netScore: 2,
-          userVote: "upvote",
-        },
-      ]}
-    />,
-  );
+  const variation = {
+    ...original,
+    id: "r2",
+    name: "Sbagliato",
+    version: 3,
+    created_at: "2026-03-02T03:04:05.000Z",
+    created_by_user: { id: "u2", displayName: "Bo" },
+    // Drops the orange peel and doubles the vermouth.
+    ingredients: [{ ...recipe.ingredients[0], id: "i9", quantity: 3 }],
+    upvotes: 3,
+    downvotes: 1,
+    netScore: 2,
+    userVote: "upvote" as const,
+  };
+  const html = (viewerId: string | null) =>
+    render(
+      <RecipeVersionsTab
+        groupId="g1"
+        communityPickId="r2"
+        viewerId={viewerId}
+        recipes={[variation, original]}
+      />,
+    );
 
-  test("tabs best-first, with score and the 'Preferred' badge", () => {
-    const first = html.indexOf("Negroni");
-    const second = html.indexOf("Sbagliato");
-    assert.ok(first >= 0 && first < second, "net score orders the tabs");
-    assert.match(html, /Score: \+2/);
-    assert.match(html, /Score: -1/);
-    assert.match(html, />Preferred</);
+  test("the original first, each card linking to its version", () => {
+    const page = html("u3");
+    const first = page.indexOf(">Negroni<");
+    const second = page.indexOf(">Sbagliato<");
+    assert.ok(first >= 0 && first < second, "the original leads");
+    assert.match(page, /href="\/recipes\/r1"/);
+    assert.match(page, /href="\/recipes\/r2"/);
+    assert.match(page, /By Ada · /);
   });
 
-  test("the selected panel: vote card, counts, net score, recipe info", () => {
-    assert.match(html, />Community Preferred</);
-    assert.match(html, />Community Vote</);
-    assert.match(html, /aria-label="Upvote Negroni"/);
-    assert.match(html, /aria-label="Downvote Negroni"/);
-    assert.match(html, /Net Score: \+2/);
-    assert.match(html, />Recipe Info</);
-    assert.match(html, /Difficulty:/);
-    assert.match(html, /By Ada/);
-    assert.match(html, /Created/);
-    assert.match(html, />No Image</);
-    assert.match(html, />Description</);
-    assert.match(html, /Step 1/);
+  test("MC-pick: the community pick label sits on the pick", () => {
+    const page = html("u3");
+    assert.match(
+      page,
+      /data-pick="true"[\s\S]*>Sbagliato<[\s\S]*>Community pick</,
+    );
+    assert.equal(page.match(/>Community pick</g)?.length, 1);
   });
 
-  test("a cast vote is pressed, and keeps its tint in the dark theme", () => {
+  test("what a version changes is marked, and a dropped one says No", () => {
+    const page = html("u3");
+    assert.match(page, />No orange peel</);
+    const changed = page.match(/data-changed="true"/g)?.length ?? 0;
+    assert.equal(changed, 2, "the new amount and the dropped peel");
+  });
+
+  test("Up and Down for someone else's version; your vote is pressed", () => {
+    const page = html("u1");
     const tag = (name: string) =>
-      html.match(new RegExp(`<button[^>]*aria-label="${name}"[^>]*>`))?.[0] ??
+      page.match(new RegExp(`<button[^>]*aria-label="${name}"[^>]*>`))?.[0] ??
       "";
-    const up = tag("Upvote Negroni");
-    const down = tag("Downvote Negroni");
-    assert.match(up, /aria-pressed="true"/);
-    assert.match(down, /aria-pressed="false"/);
-    // `outline`'s `dark:bg-input/30` sorts after a plain `bg-success/10`, so
-    // the tint has to be restated under `dark:` (the default theme).
-    assert.match(up, /dark:bg-success\/10/);
-    assert.doesNotMatch(up, /dark:bg-input\/30/);
-    assert.doesNotMatch(up, /dark:border-input/);
+    assert.match(tag("Upvote Sbagliato"), /aria-pressed="true"/);
+    assert.match(tag("Downvote Sbagliato"), /aria-pressed="false"/);
+    assert.match(page, />\+2</);
+  });
+
+  test("authors see no vote buttons on their own version", () => {
+    const page = html("u1");
+    assert.doesNotMatch(page, /aria-label="Upvote Negroni"/);
+    assert.match(page, />No votes yet</);
+    const other = html("u2");
+    assert.doesNotMatch(other, /aria-label="Upvote Sbagliato"/);
+    assert.match(other, />3 up · 1 down</);
   });
 });
 

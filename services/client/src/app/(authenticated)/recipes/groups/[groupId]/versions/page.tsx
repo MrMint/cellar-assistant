@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { cache } from "react";
-import { Link } from "@/components/app/Link";
+import { AppBar } from "@/components/app/AppBar";
+import { ErrorState } from "@/components/app/EmptyState";
+import { Page } from "@/components/app/Page";
 import { versionFromNodes } from "@/components/recipe/adapter";
 import {
   RecipeDetailsFragment,
@@ -14,15 +16,11 @@ import { isNotFound, unwrapResult } from "@/lib/api/result";
 import { apiServerQuery } from "@/lib/api/urql-server";
 
 /**
- * `/recipes/groups/[groupId]/versions` — `82450ad1:src/app/(authenticated)/recipes/groups/[groupId]/versions/page.tsx`,
- * restored: the text breadcrumbs, "{name} - All Versions", the blurb and
- * `RecipeVersionsTab`. In production it threw on load (`recipe_votes` had no
- * Hasura permission).
- *
- * The middle breadcrumb goes to `/recipes/groups/{id}`; the old one was
- * `/recipes/{groupId}`, which put a group id on the recipe route (a 404).
- * Versions beyond the first 20 (`RECIPE_VERSIONS_PAGE_SIZE`) are counted, not
- * shown.
+ * `/recipes/groups/[groupId]/versions` — Versions (Recipes-Browse 16–20,
+ * desktop 03): the bar says "Versions" over "Negroni · 3", Back goes to the
+ * group, and every version is a card with its vote row
+ * (`RecipeVersionsTab`). Versions beyond the first 20
+ * (`RECIPE_VERSIONS_PAGE_SIZE`) are counted, never shown as a total.
  */
 export const dynamic = "force-dynamic";
 
@@ -56,7 +54,15 @@ export default async function RecipeVersionsPage({
   const result = unwrapResult(data.recipeGroup, "RecipeGroup");
   if (!result.ok) {
     if (isNotFound(result.error)) notFound();
-    return <p className="t-body text-destructive">{result.error.message}</p>;
+    return (
+      <Page>
+        <AppBar title="Versions" parent="/recipes" />
+        <ErrorState
+          title="Couldn't open the versions"
+          reason={result.error.message}
+        />
+      </Page>
+    );
   }
 
   const recipeGroup = result.data;
@@ -66,48 +72,33 @@ export default async function RecipeVersionsPage({
       readFragment(RecipeVoteStateFragment, edge.node),
     ),
   );
-  const canonicalRecipeId = recipeGroup.canonicalRecipeId ?? null;
   const hidden = recipeGroup.recipeCount - recipes.length;
 
   return (
-    <div className="mx-auto w-full max-w-[1400px]">
-      {/* Page Header */}
-      <div className="mb-8">
-        <p className="mb-2 t-cap">
-          <Link href="/recipes" underline="always">
-            Recipe Groups
-          </Link>
-          {" > "}
-          <Link href={`/recipes/groups/${recipeGroup.id}`} underline="always">
-            {recipeGroup.name}
-          </Link>
-          {" > Versions"}
-        </p>
-
-        <h1 className="mb-2 t-title">{recipeGroup.name} - All Versions</h1>
-
-        {recipeGroup.description && (
-          <p className="mb-4 t-body text-ink-2">{recipeGroup.description}</p>
-        )}
-
-        <p className="t-body text-ink-2">
-          Compare all {recipeGroup.recipeCount} versions of this recipe and vote
-          for your favorite. The community's preferred version is shown as the
-          canonical recipe.
-        </p>
-        {hidden > 0 && (
-          <p className="mt-2 t-cap text-ink-3">
-            Showing the top {recipes.length}; {hidden} more are not listed.
-          </p>
-        )}
-      </div>
-
-      {/* Recipe Versions Comparison */}
+    <Page wide>
+      <AppBar
+        parent={`/recipes/groups/${recipeGroup.id}`}
+        title={
+          <div className="flex min-w-0 flex-col">
+            <h1 className="t-head m-0 truncate text-ink">Versions</h1>
+            <p className="t-cap m-0 truncate text-ink-2">
+              {recipeGroup.name} · {recipeGroup.recipeCount}
+            </p>
+          </div>
+        }
+      />
       <RecipeVersionsTab
         recipes={recipes}
-        canonicalRecipeId={canonicalRecipeId}
+        canonicalRecipeId={recipeGroup.canonicalRecipeId ?? null}
+        communityPickId={recipeGroup.communityPickId ?? null}
         groupId={recipeGroup.id}
+        viewerId={data.me?.id ?? null}
       />
-    </div>
+      {hidden > 0 && (
+        <p className="t-cap m-0 text-ink-3">
+          {recipes.length} of {recipeGroup.recipeCount} shown
+        </p>
+      )}
+    </Page>
   );
 }
