@@ -7,8 +7,10 @@ import { Link } from "@/components/app/Link";
 import { InsetSection, ListRow } from "@/components/app/Page";
 import { Button } from "@/components/ui/button";
 import { unwrapResult } from "@/lib/api/result";
+import { RecipeThumb } from "../RecipePlate";
+import { ingredientsLine } from "../recipe-meta";
 import { MY_RECIPES_ALL, MyRecipesQuery } from "./documents";
-import { PRIVACY_COPY, type RecipePrivacy } from "./recipe-draft";
+import { PRIVACY_WHO, type RecipePrivacy } from "./recipe-draft";
 
 export type MyRecipeRow = {
   readonly id: string;
@@ -30,11 +32,8 @@ const PRIVACY_ICON = {
 const privacyOf = (value: string): RecipePrivacy =>
   value === "PUBLIC" || value === "FRIENDS" ? value : "PRIVATE";
 
-const ingredientsLine = (count: number): string =>
-  count === 1 ? "1 ingredient" : `${count} ingredients`;
-
 /**
- * Your drafts, then your recipes (X15) — the top of the Bar page.
+ * Your drafts, then your recipes (X15, Recipes-Browse 01: "Yours 10").
  *
  * A draft is what the AI read and nobody has checked yet: it opens in the
  * editor, wears the AI mark, and is yours alone until saved. Your recipes
@@ -76,7 +75,10 @@ export function MyRecipes({
   return (
     <>
       {drafts.length > 0 && (
-        <InsetSection label="Your drafts" aria-label="Your drafts">
+        <InsetSection
+          label={`Drafts ${drafts.length}`}
+          aria-label="Your drafts"
+        >
           {drafts.map((row) => (
             <ListRow
               key={row.id}
@@ -90,7 +92,7 @@ export function MyRecipes({
                   href={`/recipes/${row.id}/edit`}
                   overlay
                   underline="none"
-                  className="text-ink-1"
+                  className="text-ink"
                 >
                   {row.name}
                 </Link>
@@ -102,13 +104,14 @@ export function MyRecipes({
       )}
       {mine.length > 0 && (
         <InsetSection
-          label="Your recipes"
+          label={`Yours ${total}`}
           aria-label="Your recipes"
           action={
             total > FIRST ? (
               <Button
                 variant="ghost"
                 size="sm"
+                className="t-head text-act-ink"
                 aria-busy={(all && rest.fetching) || undefined}
                 onClick={() => setAll(!all)}
               >
@@ -123,12 +126,17 @@ export function MyRecipes({
             return (
               <ListRow
                 key={row.id}
+                leading={
+                  <span className="relative block size-10 overflow-hidden rounded-md bg-raised">
+                    <RecipeThumb type="cocktail" name={row.name} />
+                  </span>
+                }
                 title={
                   <Link
                     href={`/recipes/${row.id}`}
                     overlay
                     underline="none"
-                    className="text-ink-1"
+                    className="text-ink"
                   >
                     {row.name}
                   </Link>
@@ -136,7 +144,7 @@ export function MyRecipes({
                 description={
                   <span className="flex items-center gap-1">
                     <Icon aria-hidden className="size-3.5" />
-                    {PRIVACY_COPY[privacy].label} ·{" "}
+                    {PRIVACY_WHO[privacy]} ·{" "}
                     {ingredientsLine(row.ingredientCount)}
                   </span>
                 }

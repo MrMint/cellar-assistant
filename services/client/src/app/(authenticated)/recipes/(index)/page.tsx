@@ -1,11 +1,11 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
+import { ErrorState } from "@/components/app/EmptyState";
 import { Page } from "@/components/app/Page";
 import {
   BarEntryCard,
   BarEntryCardFallback,
 } from "@/components/bar/BarEntryCard";
-import { CellarSegments } from "@/components/cellar/CellarSegments";
 import {
   MY_RECIPES_PAGE_SIZE,
   MyRecipesQuery,
@@ -23,13 +23,10 @@ import { apiServerQuery } from "@/lib/api/urql-server";
 export const metadata: Metadata = { title: "Recipes" };
 
 /**
- * `/recipes` — the Cellar tab's **Bar** (D1): your drafts and your recipes
- * (X15), what you can make (X14), then every recipe you may see, searchable.
- *
- * The header mirrors `/cellars`: the title and a full-width "New recipe"
- * (Photo · Paste · Type), then the Cellars · Bar switch. The old "Recipe
- * Groups" heading and its paragraph about voting are gone — a group is how
- * versions of one drink are filed, not something to explain on arrival.
+ * `/recipes` — Recipes (Recipes-Browse 01, desktop 01): the title with an
+ * outlined "New recipe" (Photo · Paste · Type; CROSS-LOT "Header create
+ * buttons"), the search field, then — while nothing is searched — Your bar
+ * (X14) and your drafts and recipes (X15), then every recipe you may see.
  *
  * The first page of the list is server-rendered (`recipeGroups`, with `?q=` —
  * or the old `?semantic=` alias — as its term) and the search pages on from
@@ -71,17 +68,12 @@ export default async function RecipesPage({
   const drafts = unwrapResult(draftsRead.myRecipes, "RecipeConnection");
   const published = unwrapResult(publishedRead.myRecipes, "RecipeConnection");
 
-  return (
-    <Page wide>
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <div className="flex min-h-11 items-center">
-          <h1 className="t-head truncate">Bar</h1>
-        </div>
-        <NewRecipeButton className="sm:ml-auto" />
-      </div>
-      {/* The Cellar tab's Bar (D1): recipes live beside your cellars. */}
-      <CellarSegments current="bar" />
-
+  const mine = (
+    <>
+      {/* X14 / G29: the bar's verdict. */}
+      <Suspense fallback={<BarEntryCardFallback />}>
+        <BarEntryCard />
+      </Suspense>
       <MyRecipes
         rows={[
           ...(drafts.ok ? drafts.data.edges.map((edge) => edge.node) : []),
@@ -93,30 +85,34 @@ export default async function RecipesPage({
           published.ok ? (published.data.totalCount ?? undefined) : undefined
         }
       />
+    </>
+  );
 
-      {/* X14 / G29: the bar's verdict. */}
-      <Suspense fallback={<BarEntryCardFallback />}>
-        <BarEntryCard />
-      </Suspense>
+  return (
+    <Page wide>
+      <div className="flex min-h-11 items-center justify-between gap-3">
+        <h1 className="t-title m-0 truncate text-ink">Recipes</h1>
+        <NewRecipeButton className="shrink-0" />
+      </div>
 
-      <section aria-labelledby="all-recipes" className="flex flex-col gap-3">
-        <h2 id="all-recipes" className="px-1 t-micro text-ink-3">
-          All recipes
-        </h2>
-        {result.ok ? (
-          <RecipeGroupSearch
-            initialQuery={initialQuery}
-            initialEdges={[...result.data.edges]}
-            initialEndCursor={result.data.pageInfo.endCursor ?? null}
-            initialHasNextPage={result.data.pageInfo.hasNextPage}
-            initialTotalCount={result.data.totalCount ?? null}
+      {result.ok ? (
+        <RecipeGroupSearch
+          initialQuery={initialQuery}
+          initialEdges={[...result.data.edges]}
+          initialEndCursor={result.data.pageInfo.endCursor ?? null}
+          initialHasNextPage={result.data.pageInfo.hasNextPage}
+          initialTotalCount={result.data.totalCount ?? null}
+          between={mine}
+        />
+      ) : (
+        <>
+          {mine}
+          <ErrorState
+            title="Couldn't load recipes"
+            reason={result.error.message}
           />
-        ) : (
-          <p className="t-body text-destructive">
-            Couldn't load recipes: {result.error.message}
-          </p>
-        )}
-      </section>
+        </>
+      )}
     </Page>
   );
 }
