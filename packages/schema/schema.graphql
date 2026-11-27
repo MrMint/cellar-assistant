@@ -4587,7 +4587,15 @@ type Mutation {
   updateGenericItem(genericItemId: ID!, input: UpdateGenericItemInput!): UpdateGenericItemResult!
 
   """Creator only. Enrichment updates arrive as `system` instead."""
-  updateItem(input: UpdateItemInput!, itemId: ID!, type: ItemType!): UpdateItemResult!
+  updateItem(
+    """
+    F-75: the label-read guesses you accepted as they are, by field name, so `unconfirmedFields` stops pointing at them. Recorded in the onboarding that created the item, after the update; ignored for an item made without one.
+    """
+    confirmedFields: [String!]
+    input: UpdateItemInput!
+    itemId: ID!
+    type: ItemType!
+  ): UpdateItemResult!
 
   """The author's alone."""
   updateItemReview(input: UpdateItemReviewInput!, itemId: ID!, reviewId: ID!, type: ItemType!): UpdateItemReviewResult!

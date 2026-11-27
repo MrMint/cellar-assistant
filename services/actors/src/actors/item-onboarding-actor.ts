@@ -76,6 +76,7 @@
 import { randomUUID } from "node:crypto";
 import type {
   ActorCategory,
+  ConfirmItemFieldsInput,
   ConfirmOnboardingInput,
   ConfirmOnboardingResult,
   CreateItemInput,
@@ -1065,6 +1066,34 @@ export class ItemOnboardingActor
       confidence: result.confidence,
       model: result.model,
     };
+  }
+
+  /**
+   * F-75: the fields the creator confirmed on the item's edit page, added to
+   * the session's `confirmed_fields` so `Item.unconfirmedFields` (and Home's
+   * "n to check") stop pointing at them. `#requireCorrectable`'s gate: the
+   * session is the caller's and the item is the one it created. A set union,
+   * so a repeat is a no-op and nothing is ever un-confirmed.
+   */
+  async confirmItemFields(
+    ctx: Ctx,
+    input: ConfirmItemFieldsInput,
+  ): Promise<ItemOnboardingDto> {
+    const { row } = await this.#requireCorrectable(ctx, input.item);
+    const confirmedFields = confirmedFieldsOf([
+      ...row.confirmedFields,
+      ...confirmedFieldsOf(input.fields),
+    ]);
+    if (confirmedFields.length !== row.confirmedFields.length) {
+      await this.tx(async (tx) => {
+        await tx
+          .update(itemOnboardings)
+          .set({ confirmedFields, updatedAt: new Date() })
+          .where(eq(itemOnboardings.id, this.key));
+      });
+      await this.reload();
+    }
+    return onboardingRowToDto(this.requireAggregate().row);
   }
 
   /**

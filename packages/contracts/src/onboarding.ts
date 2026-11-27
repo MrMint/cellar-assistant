@@ -280,6 +280,17 @@ export type RereadLabelInput = {
 };
 
 /**
+ * F-75 — the fields the item's creator accepted on its edit page, which
+ * `Item.unconfirmedFields` then stops pointing at. Added to the session's
+ * `confirmedFields`; nothing is ever un-confirmed.
+ */
+export type ConfirmItemFieldsInput = {
+  /** The item edited; its onboarding must be this actor's key. */
+  readonly item: ItemRef;
+  readonly fields: readonly string[];
+};
+
+/**
  * X19 — the text-only pass's question: the item as the edit form holds it
  * now (the name may have just been corrected), and which details are empty.
  */
@@ -380,6 +391,14 @@ export type ItemOnboardingActorInterface = {
    */
   rereadLabel(ctx: Ctx, input: RereadLabelInput): Promise<ItemLabelReading>;
   /**
+   * F-75: record fields the creator confirmed after the item was made, from
+   * `updateItem`. Same gate as `rereadLabel`; idempotent (a set union).
+   */
+  confirmItemFields(
+    ctx: Ctx,
+    input: ConfirmItemFieldsInput,
+  ): Promise<ItemOnboardingDto>;
+  /**
    * X19: suggest the item's empty details from its name and brand — a text
    * model call, no photograph. Same gate as `rereadLabel`. Abstains rather
    * than guesses (`ItemDetailSuggestions.abstained`); never writes anything.
@@ -434,6 +453,8 @@ export const ItemOnboardingActorDescriptor: ActorDescriptor<
     // `start`'s vision call again, with the person waiting on it (§8.5's
     // exception, for the same reason and in the same actor).
     rereadLabel: { timeoutMs: 120_000, modelBacked: true },
+    // One update, no model (F-75).
+    confirmItemFields: {},
     // A short text-only answer; nothing like a label read, but a local model
     // on a busy laptop still takes tens of seconds.
     suggestDetails: { timeoutMs: 60_000, modelBacked: true },
