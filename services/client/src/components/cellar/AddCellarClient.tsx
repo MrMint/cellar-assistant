@@ -42,6 +42,7 @@ export function AddCellarClient() {
     <CellarForm
       friends={friends.rows.map(userFromProfile)}
       onSubmitted={handleSubmitted}
+      onCancel={() => navigate.back()}
     />
   );
   if (friends.failure === null) return form;

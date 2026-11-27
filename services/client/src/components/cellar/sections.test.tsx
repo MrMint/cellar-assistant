@@ -208,3 +208,83 @@ describe("/tier-lists sections", () => {
     assert.match(textOf(discover), /apiwave public/);
   });
 });
+
+describe("/cellars cards (lot-cellars-shelves-01)", () => {
+  const withExtras = (
+    edge: ReturnType<typeof cellarEdge>,
+    open: number,
+    names: string[],
+  ) => ({
+    ...edge,
+    node: {
+      ...edge.node,
+      open: { bottleCount: open },
+      recent: {
+        edges: names.map((name, i) => ({
+          node: {
+            __typename: "CellarItemGroup",
+            count: 1,
+            openCount: 0,
+            match: null,
+            lead: {
+              __typename: "CellarItem",
+              id: `${edge.node.id}-b${i}`,
+              type: "WINE",
+              openAt: null,
+              emptyAt: null,
+              percentageRemaining: 100,
+              createdAt: null,
+              item: { __typename: "Item", id: `w${i}`, type: "WINE", name },
+            },
+          },
+        })),
+      },
+    },
+  });
+
+  test("yours: the count line, kinds in order, Edit; a friend's: whose it is, no Edit", () => {
+    const html = render(
+      <Cellars
+        userId="me"
+        sections={{
+          MINE: seed([withExtras(cellarEdge("c1", "Home", "me"), 1, [])]),
+          FRIENDS: seed([
+            withExtras(cellarEdge("c2", "Lake House", "Test Two"), 0, []),
+          ]),
+          DISCOVER: seed([]),
+        }}
+      />,
+    );
+    const text = textOf(html);
+    assert.match(text, /Cellars/);
+    assert.match(html, /href="\/cellars\/add"/);
+    assert.match(text, /Home\s*Edit\s*2 bottles · 1 open\s*2 Wine/);
+    assert.match(
+      html,
+      /aria-label="Edit Home"[^>]*|href="\/cellars\/c1\/edit"/,
+    );
+    assert.doesNotMatch(html, /href="\/cellars\/c2\/edit"/);
+    assert.match(text, /Lake House\s*.*Test Two ·\s*2 bottles\s*2 Wine/);
+    // Four wells on every card, filled or bare.
+    assert.equal(html.match(/data-slot="cellar-card-mosaic"/g)?.length, 2);
+  });
+
+  test("the mosaic: a label plate for a bottle with no photo", () => {
+    const html = render(
+      <Cellars
+        userId="me"
+        sections={{
+          MINE: seed([
+            withExtras(cellarEdge("c1", "Home", "me"), 0, [
+              "Hillside Garnacha",
+            ]),
+          ]),
+          FRIENDS: seed([]),
+          DISCOVER: seed([]),
+        }}
+      />,
+    );
+    assert.equal(html.match(/data-slot="label-plate"/g)?.length, 1);
+    assert.match(textOf(html), /Hillside Garnacha/);
+  });
+});

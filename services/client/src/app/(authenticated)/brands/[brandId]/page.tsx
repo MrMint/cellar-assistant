@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { cache } from "react";
+import { ErrorState } from "@/components/app/EmptyState";
 import { Page } from "@/components/app/Page";
 import { itemLinkFromFragment } from "@/components/brand/adapter";
 import { BrandDetailsClient } from "@/components/brand/BrandDetailsClient";
@@ -72,7 +73,9 @@ export default async function BrandDetailPage({
   const result = unwrapResult(data.brand, "Brand");
   if (!result.ok) {
     if (isNotFound(result.error)) notFound();
-    return <p className="type-body text-destructive">{result.error.message}</p>;
+    return (
+      <ErrorState title="Can't open this maker" reason={result.error.message} />
+    );
   }
 
   const brand = result.data;

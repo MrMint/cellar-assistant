@@ -48,7 +48,6 @@ const ROUTES = [
   // segment. Asserting the singular 404s guards the route contract itself.
   "/add/wines",
   "/search",
-  "/brands",
   "/favorites",
   "/want-to-try",
   "/map",
@@ -136,6 +135,15 @@ async function devOverlayIssues(page: Page): Promise<number> {
       : 0;
   });
 }
+
+/**
+ * L37 (40f): there is no brand index. `/brands` opens search with the Brands
+ * section, keeping an old link's `?q=`.
+ */
+test("/brands redirects to search with Brands", async ({ primary }) => {
+  await primary.goto("/brands?q=ale", { waitUntil: "domcontentloaded" });
+  await expect(primary).toHaveURL(/\/search\?in=brands&q=ale$/);
+});
 
 for (const route of ROUTES) {
   test(`renders ${route}`, async ({ primary }) => {

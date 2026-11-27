@@ -112,22 +112,27 @@ describe("CellarCard (restored)", () => {
   });
 });
 
-describe("CellarForm (restored)", () => {
+describe("CellarForm (lot-cellars-shelves-03)", () => {
   const labels = (html: string) =>
     [...html.matchAll(/<label[^>]*>([^<]+)/g)].map((m) => m[1]);
 
-  test("Name, Privacy, Co-Owners; helper text; 'Add' when creating", () => {
-    const html = render(<CellarForm friends={[]} onSubmitted={() => {}} />);
-    assert.deepEqual(labels(html), ["Name", "Privacy", "Co-Owners"]);
-    assert.match(html, /These users will be treated as owners of the cellar\./);
-    assert.match(html, /Choose friends\.\.\./);
-    assert.match(html, /<button[^>]*type="submit"[^>]*>Add<\/button>/);
-    // The privacy default (FRIENDS) is not asserted here: Joy's Select learns
-    // its options' labels in an effect, so a server render shows the
-    // placeholder. e2e 02 reads the stored value back instead.
+  test("Name, Who sees it (Friends by default), Co-owners; Cancel and Make cellar", () => {
+    const html = render(
+      <CellarForm friends={[]} onSubmitted={() => {}} onCancel={() => {}} />,
+    );
+    assert.deepEqual(labels(html), ["Name", "Co-owners"]);
+    assert.match(html, /role="radiogroup"[^>]*aria-label="Who sees it"/);
+    assert.match(
+      html,
+      /aria-checked="true"[^>]*>(?:<[^>]+>)*Friends|Friends(?:<[^>]+>)*[^<]*aria-checked="true"/,
+    );
+    assert.match(html, /Your friends can look/);
+    assert.match(html, />None</);
+    assert.match(html, /<button[^>]*type="button"[^>]*>Cancel<\/button>/);
+    assert.match(html, /<button[^>]*type="submit"[^>]*>Make cellar<\/button>/);
   });
 
-  test("'Save' when editing (the old 'Add' here was a bug)", () => {
+  test("'Save' when editing, with the stored privacy's line", () => {
     const html = render(
       <CellarForm
         id="c1"
@@ -138,6 +143,17 @@ describe("CellarForm (restored)", () => {
     );
     assert.match(html, /<button[^>]*type="submit"[^>]*>Save<\/button>/);
     assert.match(html, /value="Basement"/);
+    assert.match(html, /Only you and co-owners/);
+    assert.doesNotMatch(html, />Cancel</);
+  });
+});
+
+describe("Delete cellar: refused while it holds bottles", async () => {
+  const { deleteRefusal } = await import("../cellar-api/DeleteCellarButton");
+  test("the refusal's words; none for an empty cellar", () => {
+    assert.equal(deleteRefusal(240), "Holds 240 bottles. Empty it first.");
+    assert.equal(deleteRefusal(1), "Holds 1 bottle. Empty it first.");
+    assert.equal(deleteRefusal(0), null);
   });
 });
 

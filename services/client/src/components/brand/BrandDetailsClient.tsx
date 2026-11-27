@@ -21,6 +21,7 @@ import {
   itemLinkFromFragment,
 } from "./adapter";
 import { BrandDetails } from "./BrandDetails";
+import { BrandShelf } from "./BrandShelf";
 import {
   BRAND_CHILDREN_PAGE_SIZE,
   BRAND_ITEMS_REST_PAGE_SIZE,
@@ -49,7 +50,7 @@ function ShowMore<TRow>({
       {list.hasNextPage && (
         <div className="mt-4">
           <Button
-            variant="outline"
+            variant="quiet"
             aria-busy={loading}
             disabled={loading || !list.canLoadMore}
             onClick={loadMore}
@@ -150,32 +151,43 @@ export function BrandDetailsClient({
     [brand, children.rows, places.rows, items.rows],
   );
 
+  const tiles = useMemo(
+    () =>
+      items.rows.flatMap((row) => (row.tile === undefined ? [] : [row.tile])),
+    [items.rows],
+  );
+
   return (
-    <BrandDetails
-      brand={details}
-      itemTotal={items.totalCount}
-      placeTotal={places.totalCount}
-      itemsFooter={
+    <BrandShelf
+      name={brand.name}
+      tiles={tiles}
+      total={items.totalCount}
+      footer={
         <ShowMore
           list={items}
-          title="Items"
+          title="Drinks"
           loadMore={() => void items.loadMore()}
         />
       }
-      childrenFooter={
-        <ShowMore
-          list={children}
-          title="Brands"
-          loadMore={() => void children.loadMore()}
-        />
-      }
-      placesFooter={
-        <ShowMore
-          list={places}
-          title="Places"
-          loadMore={() => void places.loadMore()}
-        />
-      }
-    />
+    >
+      <BrandDetails
+        brand={details}
+        placeTotal={places.totalCount}
+        childrenFooter={
+          <ShowMore
+            list={children}
+            title="Brands"
+            loadMore={() => void children.loadMore()}
+          />
+        }
+        placesFooter={
+          <ShowMore
+            list={places}
+            title="Places"
+            loadMore={() => void places.loadMore()}
+          />
+        }
+      />
+    </BrandShelf>
   );
 }

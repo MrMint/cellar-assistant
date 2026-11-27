@@ -179,18 +179,14 @@ function DiaryRow({
           overlay
           underline="none"
           href={cellarBottleHref(cellarId, cell)}
-          className="type-body line-clamp-2 font-semibold text-ink-1"
+          className="t-body line-clamp-2 font-semibold text-ink-1"
         >
           {title}
         </Link>
-        <p className="type-footnote">{finishedLine(entry, timeZone)}</p>
-        {yourLog !== null && (
-          <p className="type-footnote text-ink-2">{yourLog}</p>
-        )}
+        <p className="t-cap">{finishedLine(entry, timeZone)}</p>
+        {yourLog !== null && <p className="t-cap text-ink-2">{yourLog}</p>}
         {note !== null && (
-          <p className="type-callout line-clamp-2 text-ink-2 italic">
-            “{note}”
-          </p>
+          <p className="t-body line-clamp-2 text-ink-2 italic">“{note}”</p>
         )}
       </div>
       {item.myScore !== null && item.myScore !== undefined && (

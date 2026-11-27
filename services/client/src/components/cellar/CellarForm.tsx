@@ -4,7 +4,7 @@ import { isNil } from "ramda";
 import { useId } from "react";
 import { Controller, type SubmitHandler, useForm } from "react-hook-form";
 import { useMutation } from "urql";
-import { EnumSelect } from "@/components/forms/EnumSelect";
+import { SegmentedControl } from "@/components/app/SegmentedControl";
 import { Button } from "@/components/ui/button";
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -36,7 +36,20 @@ export type CellarFormProps = {
     co_owners?: string[];
   };
   friends: { id: string; displayName: string; avatarUrl: string }[];
+  /** Cancel, beside the submit (lot-cellars-shelves-03): back where you were. */
+  onCancel?: () => void;
 };
+
+/** Who sees it (lot-cellars-shelves-03): the three, each with its one line. */
+export const PRIVACY_OPTIONS = [
+  { value: "PRIVATE", label: "Private", note: "Only you and co-owners" },
+  { value: "FRIENDS", label: "Friends", note: "Your friends can look" },
+  { value: "PUBLIC", label: "Public", note: "Anyone can look" },
+] as const satisfies readonly {
+  value: Permission_Type_Enum;
+  label: string;
+  note: string;
+}[];
 
 /**
  * `82450ad1:src/components/cellar/CellarForm.tsx`, restored.
@@ -65,6 +78,7 @@ export const CellarForm = ({
   id,
   onSubmitted,
   friends,
+  onCancel,
   defaults = {
     name: "",
     privacy: "FRIENDS" as Permission_Type_Enum,
@@ -116,77 +130,108 @@ export const CellarForm = ({
   };
 
   return (
-    <div className="max-w-150">
-      <form
-        onSubmit={(event) => {
-          handleSubmit(onSubmit)(event).catch(() => {
-            // Already shown as the root error.
-          });
-        }}
-      >
-        <div className="flex flex-col gap-4">
-          <Field>
-            <FieldLabel htmlFor={nameId}>
-              Name
-              <span aria-hidden className="text-ink-3">
-                *
-              </span>
-            </FieldLabel>
-            <Controller
-              name="name"
-              control={control}
-              rules={{ required: true }}
-              render={({ field }) => (
-                <Input
-                  {...field}
-                  id={nameId}
-                  type="text"
-                  required
-                  disabled={isSubmitting}
-                />
+    <form
+      className="flex max-w-150 flex-col gap-5"
+      onSubmit={(event) => {
+        handleSubmit(onSubmit)(event).catch(() => {
+          // Already shown as the root error.
+        });
+      }}
+    >
+      <Field>
+        <FieldLabel htmlFor={nameId} className="t-head">
+          Name
+        </FieldLabel>
+        <Controller
+          name="name"
+          control={control}
+          rules={{
+            validate: (value) => value.trim() !== "" || "Give it a name",
+          }}
+          render={({ field, fieldState }) => (
+            <>
+              <Input
+                {...field}
+                id={nameId}
+                type="text"
+                aria-required
+                autoComplete="off"
+                aria-invalid={fieldState.error !== undefined || undefined}
+                disabled={isSubmitting}
+              />
+              {fieldState.error?.message && (
+                <p role="alert" className="t-cap m-0 text-danger">
+                  {fieldState.error.message}
+                </p>
               )}
-            />
-          </Field>
-          <EnumSelect
-            name="privacy"
-            control={control}
-            enumKey="permission"
-            label="Privacy"
-            required
-            rules={{ required: true }}
-          />
-          <Field>
-            <FieldLabel htmlFor={coOwnersId}>Co-Owners</FieldLabel>
-            <Controller
-              name="co_owners"
-              control={control}
-              render={({ field }) => (
-                <CoOwnerPicker
-                  id={coOwnersId}
-                  friends={friends}
-                  value={field.value}
-                  onChange={field.onChange}
-                  onBlur={field.onBlur}
-                  disabled={isSubmitting}
-                  placeholder="Choose friends..."
-                />
-              )}
-            />
-            <FieldDescription>
-              These users will be treated as owners of the cellar.
-            </FieldDescription>
-          </Field>
-          {errors.root !== undefined && (
-            <p role="alert" className="type-body text-destructive">
-              {errors.root.message}
-            </p>
+            </>
           )}
-          <Button type="submit" disabled={busy} aria-busy={busy || undefined}>
-            {busy && <Spinner aria-hidden />}
-            {isNil(id) ? "Add" : "Save"}
+        />
+      </Field>
+      <Controller
+        name="privacy"
+        control={control}
+        render={({ field }) => (
+          <div className="flex flex-col gap-2">
+            <p aria-hidden className="t-head m-0 text-ink">
+              Who sees it
+            </p>
+            <SegmentedControl
+              aria-label="Who sees it"
+              value={field.value}
+              onValueChange={field.onChange}
+              options={PRIVACY_OPTIONS}
+            />
+            <p className="t-cap m-0 text-ink-2">
+              {PRIVACY_OPTIONS.find((o) => o.value === field.value)?.note}
+            </p>
+          </div>
+        )}
+      />
+      <Field>
+        <FieldLabel htmlFor={coOwnersId} className="t-head">
+          Co-owners
+        </FieldLabel>
+        <Controller
+          name="co_owners"
+          control={control}
+          render={({ field }) => (
+            <CoOwnerPicker
+              id={coOwnersId}
+              friends={friends}
+              value={field.value}
+              onChange={field.onChange}
+              onBlur={field.onBlur}
+              disabled={isSubmitting}
+              placeholder="None"
+            />
+          )}
+        />
+        <FieldDescription className="t-cap">
+          Co-owners add, finish and edit bottles here, as you do.
+        </FieldDescription>
+      </Field>
+      {errors.root !== undefined && (
+        <p role="alert" className="t-body m-0 text-danger">
+          {errors.root.message}
+        </p>
+      )}
+      <div className="flex items-center gap-3">
+        {onCancel !== undefined && (
+          <Button type="button" variant="quiet" onClick={onCancel}>
+            Cancel
           </Button>
-        </div>
-      </form>
-    </div>
+        )}
+        <Button
+          type="submit"
+          className="flex-1"
+          disabled={busy}
+          aria-busy={busy || undefined}
+        >
+          {busy && <Spinner aria-hidden />}
+          {isNil(id) ? "Make cellar" : "Save"}
+        </Button>
+      </div>
+    </form>
   );
 };

@@ -35,6 +35,7 @@
  * which `queries.test.ts` asserts against these constants.
  */
 
+import { ItemCardFragment } from "@/components/item/ItemCard/fragments";
 import { ActorErrorFieldsFragment } from "@/lib/api/errors";
 import { graphql } from "@/lib/api/graphql";
 
@@ -108,7 +109,8 @@ export const BrandListCardFragment = graphql(`
  * `is_primary` and the item's name (and a wine's vintage) — for whichever of
  * six tables it pointed at, now one `Item` with its `type`.
  */
-export const BrandItemLinkFragment = graphql(`
+export const BrandItemLinkFragment = graphql(
+  `
   fragment BrandItemLink on ItemBrand {
     __typename
     id
@@ -122,9 +124,26 @@ export const BrandItemLinkFragment = graphql(`
         __typename
         vintage
       }
+      ...ItemCard
+      myBottles(first: 5) {
+        totalCount
+        edges {
+          node {
+            __typename
+            id
+            cellar {
+              __typename
+              id
+              name
+            }
+          }
+        }
+      }
     }
   }
-`);
+`,
+  [ItemCardFragment],
+);
 
 /** One `place_brands` link: the place and how it relates to the brand. */
 export const BrandPlaceLinkFragment = graphql(`

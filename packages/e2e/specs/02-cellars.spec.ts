@@ -4,10 +4,11 @@ import { bodyText, expect, test } from "../fixtures/test.ts";
 /**
  * Create a cellar through the form, then find it on the index.
  *
- * Asserts the restored production UI (`82450ad1`, UI parity wave 2): the old
- * `CellarForm` has no heading, labels privacy "Privacy" (default FRIENDS),
- * submits with "Add", and lands on the new cellar's items page; `/cellars` is
- * the old card grid under a "Home / Cellars" breadcrumb.
+ * Asserts C1's form (lot-cellars-shelves-03): Name, "Who sees it" (Private ·
+ * Friends · Public, Friends by default), Co-owners, and "Make cellar", which
+ * lands on the new cellar's items page; `/cellars` is
+ * C1's index (lot-cellars-shelves-01): "Cellars" with New cellar, then
+ * Yours with a card per cellar, its name the card's link.
  *
  * Two halves on purpose. The form proves `createCellar` and the redirect; the
  * index proves `CellarsCollectionActor` sees the row a *different* actor wrote,
@@ -27,16 +28,17 @@ test("creates a cellar and shows it on the index", async ({ api, primary }) => {
 
   await primary.goto("/cellars/add");
   await expect(primary.getByLabel("Name")).toBeVisible();
-  await expect(primary.getByText("Privacy")).toBeVisible();
+  const whoSees = primary.getByRole("radiogroup", { name: "Who sees it" });
+  await expect(whoSees).toBeVisible();
   await expect(
-    primary.getByText("These users will be treated as owners of the cellar."),
-  ).toBeVisible();
+    whoSees.getByRole("radio", { name: "Friends" }),
+    "the default privacy is Friends",
+  ).toHaveAttribute("aria-checked", "true");
 
   await primary.getByLabel("Name").fill(name);
-  // Inside <main>: the shell's ＋ (TabBar / SideRail) is a button named "Add" too.
   await primary
     .getByRole("main")
-    .getByRole("button", { name: "Add", exact: true })
+    .getByRole("button", { name: "Make cellar", exact: true })
     .click();
 
   // The old destination: the new cellar's items page.
@@ -49,9 +51,10 @@ test("creates a cellar and shows it on the index", async ({ api, primary }) => {
   // The breadcrumb carries the cellar's name; an empty cellar is the
   // first-run state with its one action (N15), not an empty grid.
   await expect(primary.getByText(name).first()).toBeVisible();
-  await expect(primary.getByText("Your cellar is waiting.")).toBeVisible();
+  // C1's empty shelf (lot-cellars-shelves-07): one dashed "Add a bottle".
+  await expect(primary.getByText(`Nothing in ${name} yet`)).toBeVisible();
   await expect(
-    primary.getByRole("main").getByRole("link", { name: "Snap a bottle" }),
+    primary.getByRole("main").getByRole("link", { name: /Add a bottle/ }),
   ).toHaveAttribute("href", `/cellars/${cellarId}/items/add`);
 
   // The old form's default privacy is FRIENDS; read back what the server
@@ -77,10 +80,11 @@ test("creates a cellar and shows it on the index", async ({ api, primary }) => {
   expect(index?.status(), "/cellars did not render").toBeLessThan(400);
   // The breadcrumb's Home, not the SideRail's (both are links named "Home").
   await expect(
-    primary
-      .getByRole("navigation", { name: "breadcrumb" })
-      .getByRole("link", { name: "Home" }),
+    primary.getByRole("heading", { name: "Cellars", level: 1 }),
   ).toBeVisible();
+  await expect(
+    primary.getByRole("main").getByRole("link", { name: "New cellar" }),
+  ).toHaveAttribute("href", "/cellars/add");
   // `myCellars` puts your own cellars first, by most recent activity (D13); a
   // cellar created a moment ago is the newest, so it is in the first rows.
   const card = primary.getByRole("link", { name, exact: true });
@@ -98,13 +102,15 @@ test("a cellar's privacy can be changed to PRIVATE", async ({
   await primary.goto("/cellars/add");
   await primary.getByLabel("Name").fill(name);
 
-  // The Privacy select is a listbox (Radix Select), not a native <select>.
-  await primary.getByRole("combobox", { name: "Privacy" }).click();
-  await primary.getByRole("option", { name: /^private$/i }).click();
+  // Who sees it is a segmented radiogroup.
+  await primary
+    .getByRole("radiogroup", { name: "Who sees it" })
+    .getByRole("radio", { name: "Private" })
+    .click();
 
   await primary
     .getByRole("main")
-    .getByRole("button", { name: "Add", exact: true })
+    .getByRole("button", { name: "Make cellar", exact: true })
     .click();
   await expect(primary).toHaveURL(/\/cellars\/[0-9a-f-]{36}\/items/, {
     timeout: 30_000,
