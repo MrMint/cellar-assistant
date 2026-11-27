@@ -788,9 +788,7 @@ export function CreatePlaceForm({
         <Separator />
 
         {/* Contact info */}
-        <h2 className="t-body font-semibold text-ink">
-          Contact (optional)
-        </h2>
+        <h2 className="t-body font-semibold text-ink">Contact (optional)</h2>
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Controller

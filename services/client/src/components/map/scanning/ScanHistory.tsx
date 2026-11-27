@@ -143,9 +143,7 @@ export function ScanHistory() {
               )}
             </div>
             {scan.processing_error && (
-              <p className="t-cap mt-1 text-danger">
-                {scan.processing_error}
-              </p>
+              <p className="t-cap mt-1 text-danger">{scan.processing_error}</p>
             )}
           </li>
         ))}

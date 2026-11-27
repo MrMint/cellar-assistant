@@ -28,9 +28,7 @@ export function GooglePlaceSuggestions({
     return (
       <div className="mb-4 flex items-center gap-2">
         <Spinner className="text-ink-2" />
-        <p className="t-body text-ink-2">
-          Checking for known places nearby...
-        </p>
+        <p className="t-body text-ink-2">Checking for known places nearby...</p>
       </div>
     );
   }

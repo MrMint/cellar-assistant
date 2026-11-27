@@ -336,12 +336,7 @@ export function PlaceDetailsContent({
         />
 
         <div className="min-w-0 flex-1">
-          <h2
-            className={cn(
-              "mb-1 text-ink",
-              isDesktop ? "t-title" : "t-head",
-            )}
-          >
+          <h2 className={cn("mb-1 text-ink", isDesktop ? "t-title" : "t-head")}>
             <Link href={`/places/${place.id}`} underline="hover">
               {place.name}
             </Link>
