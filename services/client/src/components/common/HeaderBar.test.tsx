@@ -43,7 +43,6 @@ describe("HeaderBar", () => {
     );
     assert.match(html, /<nav[^>]*aria-label="breadcrumb"[^>]*>\s*<ol\b/);
     assert.deepEqual(crumbs(html), [
-      "Home -> /",
       "Cellars -> /cellars",
       "Home bar -> /cellars/0b9a1c52-6a0e-4d33-9a43-7f1e2c3d4e5f/items",
       "Items",

@@ -138,12 +138,13 @@ describe("NearbyPlaces (restored, G31)", () => {
       />,
     );
     const words = text(html);
-    assert.match(words, /Nearby Places/);
+    assert.match(words, /Nearby/);
     assert.match(words, /Corner Bar/);
     assert.match(words, /Wine Bar/);
     assert.match(words, /4\.6/);
     assert.match(words, /\$\$/);
-    assert.match(words, /\d+m/);
+    // Short form, narrow no-break space, the origin named (CROSS-LOT).
+    assert.match(words, /\d+(?:\.\d)?\u202f(?:m|km) from you/);
     assert.match(words, /Open/);
     assert.match(words, /View all on map/);
     assert.match(html, /href="\/map\?placeId=p1"/);
@@ -200,7 +201,7 @@ describe("NearbyPlaces (restored, G31)", () => {
         </Provider>,
       ),
     );
-    assert.match(words, /Nearby Places/);
+    assert.match(words, /Nearby/);
     assert.match(words, /No nearby places found/);
     assert.doesNotMatch(words, /for the selected types/);
   });

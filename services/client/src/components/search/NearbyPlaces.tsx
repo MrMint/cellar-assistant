@@ -9,7 +9,11 @@ import { PlaceRow } from "@/components/app/parts/PlaceRow";
 import { itemTypeTokens } from "@/components/app/TypeChip";
 import type { ApiItemType } from "@/components/cellar-api/itemTypes";
 import { SEE_ALL_CLASS, SectionHead } from "@/components/home/HomeLayout";
-import { placeYouAreAt } from "@/components/home/landing";
+import {
+  formatMetres,
+  metresBetween,
+  placeYouAreAt,
+} from "@/components/home/landing";
 import { PressLink } from "@/components/home/PressLink";
 import { mapItemTypesToCategories } from "@/components/map/config/scoring";
 import { useGeolocation } from "@/components/map/hooks/useGeolocation";
@@ -63,26 +67,6 @@ const PLACE_TYPE_FILTERS: {
 /** A type toggled in or out, keeping the order the types were picked in. */
 const toggleType = (types: readonly ItemType[], type: ItemType): ItemType[] =>
   types.includes(type) ? types.filter((t) => t !== type) : [...types, type];
-
-function formatDistance(
-  placeLat: number,
-  placeLng: number,
-  userLat: number,
-  userLng: number,
-): string {
-  const R = 6371e3;
-  const dLat = ((placeLat - userLat) * Math.PI) / 180;
-  const dLng = ((placeLng - userLng) * Math.PI) / 180;
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos((userLat * Math.PI) / 180) *
-      Math.cos((placeLat * Math.PI) / 180) *
-      Math.sin(dLng / 2) ** 2;
-  const meters = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-
-  if (meters < 1000) return `${Math.round(meters)}m`;
-  return `${(meters / 1000).toFixed(1)}km`;
-}
 
 // ─── Open status from cached enrichment hours ────────────────────────────────
 
@@ -192,6 +176,7 @@ export function NearbyPlaces({
 
   const here = { lat: userLat, lng: userLng };
   const at = placeYouAreAt(places, here);
+  const origin = at === null ? "you" : at.place.name;
   // The place you are at leads: Home is place-aware (DECISIONS 23).
   const ordered =
     at === null
@@ -199,11 +184,15 @@ export function NearbyPlaces({
       : [at.place, ...places.filter((place) => place.id !== at.place.id)];
 
   return (
-    <section aria-label="Nearby Places" className="flex flex-col gap-2">
+    <section aria-labelledby="nearby-heading" className="flex flex-col gap-2">
       <SectionHead
         id="nearby-heading"
-        title="Nearby Places"
-        count={places.length > 0 ? places.length : null}
+        title={at === null ? "Nearby" : `Near ${at.place.name}`}
+        count={
+          places.length === 0
+            ? null
+            : `${places.length} ${places.length === 1 ? "place" : "places"}`
+        }
       />
       <fieldset
         aria-label="Place type filters"
@@ -261,9 +250,10 @@ export function NearbyPlaces({
                 formatCategoryName(place.primaryCategory),
                 getPriceLevelText(place.priceLevel) || null,
                 openStatus?.text ?? null,
+                // CROSS-LOT: always name the origin; "At X" within 25 m.
                 isHere
-                  ? "You're here"
-                  : formatDistance(lat, lng, userLat, userLng),
+                  ? `At ${place.name}`
+                  : `${formatMetres(metresBetween(here, { lat, lng }))} from ${origin}`,
               ]
                 .filter((part): part is string => Boolean(part))
                 .join(" · ");

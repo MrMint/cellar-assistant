@@ -510,17 +510,16 @@ test("Home's Nearby Places renders from the geolocation cookie, nearest first (X
       ]);
     const noise = watch(primary);
     await primary.goto("/");
-    await expect(
-      primary.getByText("Nearby Places", { exact: true }),
-    ).toBeVisible();
-    const cards = primary
-      .getByRole("region", { name: "Nearby Places" })
-      .locator('a[href^="/map?placeId="]');
+    // The board's head: "Nearby", or "Near <place>" when you're at one.
+    const nearby = primary.getByRole("region", { name: /^Near(?:by)?\b/ });
+    await expect(nearby).toBeVisible();
+    const cards = nearby.locator('[data-slot="place-row"]');
     await expect(cards).toHaveCount(2);
     await expect(cards.nth(0)).toContainText(near.name);
     await expect(cards.nth(0)).toContainText("Wine Bar");
-    await expect(cards.nth(0)).toContainText(/\d+m/);
-    await expect(cards.nth(0)).toHaveAttribute(
+    // Short form, narrow no-break space, the origin named (CROSS-LOT).
+    await expect(cards.nth(0)).toContainText(/\d+\u202fm from you/);
+    await expect(cards.nth(0).getByRole("link")).toHaveAttribute(
       "href",
       `/map?placeId=${near.id}`,
     );
