@@ -213,4 +213,13 @@ describe("MenuLineDraftSheet", () => {
       false,
     );
   });
+
+  test("the verb keeps its word, with '1 to check' beside it while the spirit's type is open (CROSS-LOT)", async () => {
+    const { client } = recording(() => ({ me: null }));
+    await mount(client);
+    const chip = document.querySelector('[data-slot="to-check"]');
+    assert.equal(chip?.textContent, "1 to check");
+    const footer = document.querySelector('[data-slot="draft-footer"]');
+    assert.match(footer?.textContent ?? "", /Add to catalog$/);
+  });
 });

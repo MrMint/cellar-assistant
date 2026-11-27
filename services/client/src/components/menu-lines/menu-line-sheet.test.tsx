@@ -2,7 +2,7 @@
  * X07 — a menu line's sheet in a DOM (happy-dom).
  *
  * What a person can do from a line: on a matched one, I'm having this /
- * Want to try / Add to cellar / Add to tier list, and — only if they scanned
+ * Want to try / Add to cellar / Add to a list, and — only if they scanned
  * the menu — Not this, which clears the match and offers Undo. On an
  * unmatched one, the catalog's nearest rows as a question and Add to
  * catalog. Every request the sheet sends goes through a recording exchange,
@@ -171,13 +171,13 @@ describe("MenuLineSheet — a matched line", () => {
     assert.match(text, /Barolo — Vietti/);
     assert.match(text, /Matched to/);
     assert.match(text, /Vietti Barolo Castiglione/);
-    assert.match(text, /You ★4\.5/);
+    assert.match(text, /You rated 4\.5/);
     assert.doesNotMatch(text, /%/);
     for (const label of [
       /I'm having this/,
       /Want to try/,
       /Add to cellar/,
-      /Add to tier list/,
+      /Add to a list/,
     ]) {
       assert.ok(button(label), `no ${label} button`);
     }
@@ -186,7 +186,7 @@ describe("MenuLineSheet — a matched line", () => {
 
     await act(async () => button(/I'm having this/)?.click());
     await act(async () => button(/Add to cellar/)?.click());
-    await act(async () => button(/Add to tier list/)?.click());
+    await act(async () => button(/Add to a list/)?.click());
     assert.deepEqual(actions, ["log", "cellar", "tierList"]);
   });
 

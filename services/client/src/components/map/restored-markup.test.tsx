@@ -74,7 +74,7 @@ describe("PlaceMenuItems (X07)", () => {
     assert.match(html, />Wine</);
     assert.match(html, />Sake</);
     assert.doesNotMatch(html, />Other</);
-    assert.match(html, /Matched to <span[^>]*>Kubota Senju<\/span>/);
+    assert.match(html, /Matched to <\/span>Kubota Senju/);
     // The menu's own number, with no currency the read never recorded.
     assert.match(html, />14</);
     assert.doesNotMatch(html, /\$14/);
