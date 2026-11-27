@@ -322,7 +322,7 @@ function Tile({
           "size-5",
           tone === "glyph" && "text-glyph",
           tone === "warn" && "text-ink-2",
-          tone === "danger" && "text-destructive",
+          tone === "danger" && "text-danger",
           breathe && "motion-safe:animate-pulse",
         )}
       />

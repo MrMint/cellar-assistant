@@ -38,7 +38,7 @@ export function Greeting({ displayName }: GreetingProps) {
       {mounted && (
         <h2
           className={cn(
-            "type-title-1 text-center text-ink-1",
+            "t-title text-center text-ink",
             "animate-in fade-in-0 duration-(--ca-dur-medium) ease-enter",
           )}
         >

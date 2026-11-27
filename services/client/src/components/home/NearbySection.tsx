@@ -7,6 +7,7 @@ import type { NearbyPlace } from "@/components/search/adapter";
 import { NearbyPlaces } from "@/components/search/NearbyPlaces";
 import { Button } from "@/components/ui/button";
 import type { CachedLocation } from "@/lib/geo-cookie/parse";
+import { SectionHead } from "./HomeLayout";
 
 /** D14's one line, Home's version: why we are about to ask. */
 export const HOME_LOCATION_COPY =
@@ -33,23 +34,23 @@ export function NearbySection({
   if (!hasInitial && cachedLocation == null && locationPrePromptVisible(geo)) {
     return (
       <section aria-labelledby="nearby-heading" className="flex flex-col gap-2">
-        <h2 id="nearby-heading" className="type-overline px-4 text-ink-3">
-          Nearby
-        </h2>
-        <div className="flex flex-col gap-3 rounded-lg bg-surface-1 px-4 py-3">
-          <p className="type-callout flex items-start gap-2 text-ink-1">
+        <SectionHead id="nearby-heading" title="Nearby" />
+        <div className="flex flex-col gap-3 rounded-md border border-edge bg-card px-3.5 py-3">
+          <p className="t-body m-0 flex items-start gap-2 text-ink">
             <MyLocation
               aria-hidden
               strokeWidth={ICON_STROKE}
-              className="mt-0.5 size-4 shrink-0 text-ink-2"
+              className="mt-0.5 size-4 shrink-0 text-glyph"
             />
             {HOME_LOCATION_COPY}
           </p>
           <div className="flex justify-end gap-2">
-            <Button variant="ghost" onClick={geo.dismiss}>
+            <Button variant="quiet" onClick={geo.dismiss}>
               Not now
             </Button>
-            <Button onClick={geo.request}>Use my location</Button>
+            <Button variant="secondary" onClick={geo.request}>
+              Use my location
+            </Button>
           </div>
         </div>
       </section>
