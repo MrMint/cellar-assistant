@@ -23,6 +23,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { aiOutcome } from "@/lib/ai/outcome";
 import { uploadFile } from "@/lib/api/files";
 import { type ApiFailure, unwrapResult } from "@/lib/api/result";
+import { feedback } from "@/lib/feedback";
 import { cn } from "@/lib/utils";
 import { CompanionPicker, type DrinkLogFriend } from "./CompanionPicker";
 import {
@@ -578,7 +579,10 @@ function NoteAndTags({
                   <button
                     type="button"
                     data-slot="suggested-tag"
-                    onClick={() => add(suggestion.tag)}
+                    onClick={() => {
+                      feedback("tick");
+                      add(suggestion.tag);
+                    }}
                     aria-label={`Add ${suggestion.tag} (from “${suggestion.evidence}”)`}
                     className="relative inline-flex h-9 items-center gap-1 rounded-full border border-edge border-dashed bg-raised px-3 font-medium text-ink text-sm transition-transform duration-(--ca-dur-micro) ease-standard after:absolute after:-inset-y-1 after:inset-x-0 after:content-[''] active:scale-97 motion-reduce:active:scale-100"
                   >
@@ -590,12 +594,13 @@ function NoteAndTags({
               <li>
                 <button
                   type="button"
-                  onClick={() =>
+                  onClick={() => {
+                    feedback("press");
                     setDismissed((current) => [
                       ...current,
                       ...shown.map((suggestion) => suggestion.tag),
-                    ])
-                  }
+                    ]);
+                  }}
                   className="relative inline-flex h-9 items-center px-2 text-ink-3 text-sm underline-offset-2 after:absolute after:-inset-y-1 after:inset-x-0 after:content-[''] hover:underline"
                 >
                   Not these
@@ -620,9 +625,10 @@ function NoteAndTags({
                   <button
                     type="button"
                     aria-label={`Remove ${tag}`}
-                    onClick={() =>
-                      onChange({ ...draft, tags: removeTag(draft.tags, tag) })
-                    }
+                    onClick={() => {
+                      feedback("press");
+                      onChange({ ...draft, tags: removeTag(draft.tags, tag) });
+                    }}
                     className="relative inline-flex size-7 items-center justify-center rounded-full after:absolute after:-inset-2 after:content-['']"
                   >
                     <Close aria-hidden className="size-3.5" />
@@ -760,6 +766,7 @@ function PlacePicker({
                   <button
                     type="button"
                     onClick={() => {
+                      feedback("tick");
                       onChange({ id: hit.id, name: hit.name });
                       setText("");
                     }}
