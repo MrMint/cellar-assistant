@@ -455,6 +455,15 @@ export class TasteActor extends ActorBase implements TasteActorInterface {
       throw new NotFoundError(PROFILE_NOT_SHARED);
     }
     const scope = await visibilityScope(this.db, ctx);
+    // F-55 (FR-7): the same gate as `compare` (L11). Agreement is between
+    // friends, so a stranger or a pending request gets the refusal a missing
+    // person gets, not counts drawn from their public reviews.
+    if (
+      scope.kind === "nothing" ||
+      (scope.kind !== "everything" && !scope.friendIds.includes(other.id))
+    ) {
+      throw new NotFoundError(PROFILE_NOT_SHARED);
+    }
     const ratings = await ratingsOfMany(this.db, scope, [viewer, other.id]);
     return agreementRow(
       ratings.get(viewer) ?? [],
