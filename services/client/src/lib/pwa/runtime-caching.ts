@@ -43,6 +43,16 @@ import { MAP_TILES_CACHE, WASM_CACHE } from "./cache-names";
 
 export { MAP_TILES_CACHE, WASM_CACHE };
 
+/**
+ * The UI sounds (`lib/feedback/sound.ts`, `public/sounds/`). The production
+ * worker precaches them already (`@serwist/turbopack` globs `public/**`);
+ * this rule keeps them offline wherever the precache is off (development) or
+ * a revision changed under a running worker. Not private data, so the
+ * sign-out purge leaves it alone.
+ */
+export const SOUNDS_CACHE = "ui-sounds";
+export const SOUNDS_MATCHER = /\/sounds\/[\w-]+\.mp3$/i;
+
 /** Every `*.basemaps.cartocdn.com` URL, anchored so serwist accepts it cross-origin. */
 export const MAP_TILES_MATCHER =
   /^https:\/\/(?:[a-z0-9-]+\.)*basemaps\.cartocdn\.com\//i;
@@ -65,6 +75,14 @@ export const runtimeCaching: RuntimeCaching[] = [
           maxAgeSeconds: 60 * 60 * 24 * 365,
         }),
       ],
+    }),
+  },
+  {
+    matcher: ({ url, sameOrigin }) =>
+      sameOrigin && SOUNDS_MATCHER.test(url.pathname),
+    handler: new CacheFirst({
+      cacheName: SOUNDS_CACHE,
+      plugins: [new ExpirationPlugin({ maxEntries: 8 })],
     }),
   },
   {
