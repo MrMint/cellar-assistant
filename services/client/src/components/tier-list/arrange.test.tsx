@@ -367,6 +367,46 @@ describe("Arrange (X23 / D4)", () => {
     assert.equal(calls.length, 6);
   });
 
+  test("F-176: an Unrated row's Move to band… opens the bands and moves it", async () => {
+    const unrated = {
+      ...data,
+      items: [
+        ...data.items,
+        { ...items[1], id: "row-u", name: "Gamay", band: 0, position: 0 },
+      ],
+    };
+    await render(unrated);
+    await click(button("Edit order"));
+    await click(button("Gamay"));
+    await click(button("Move to band…"));
+    const bands = document.querySelector(
+      '[role="radiogroup"][aria-label="Band"]',
+    );
+    assert.ok(bands, "Move to band… opened nothing for an Unrated row");
+    assert.match(document.body.textContent ?? "", /#4 · Unrated · Reds/);
+    const good = [...(bands?.querySelectorAll('[role="radio"]') ?? [])].find(
+      (el) =>
+        el.textContent?.includes("Good") && !el.textContent.includes("Very"),
+    ) as HTMLElement | undefined;
+    assert.ok(good);
+    assert.equal(good?.getAttribute("aria-checked"), "false");
+    await click(good as HTMLElement);
+    assert.deepEqual(calls, ["reorder tl-1 3 row-1,row-2,row-u", "refresh"]);
+  });
+
+  test("F-176: an Unrated row can be removed from the band sheet", async () => {
+    await render({
+      ...data,
+      items: [
+        ...data.items,
+        { ...items[1], id: "row-u", name: "Gamay", band: 0, position: 0 },
+      ],
+    });
+    await click(button("Edit order"));
+    await remove("Gamay");
+    assert.deepEqual(calls, ["remove row-u", "refresh"]);
+  });
+
   test("a stranger's list is never written: no pick, no move, no removal", async () => {
     await render({ ...data, isOwner: false, history: null });
     for (const name of [
@@ -419,7 +459,12 @@ describe("Share and Details open L2's sheets (F-22 / H-33)", () => {
   });
 
   test("a friend's list has Share but never Details", async () => {
-    await render({ ...data, privacy: "FRIENDS", isOwner: false, history: null });
+    await render({
+      ...data,
+      privacy: "FRIENDS",
+      isOwner: false,
+      history: null,
+    });
     assert.ok(button("Share"));
     assert.throws(() => button("Details"));
   });

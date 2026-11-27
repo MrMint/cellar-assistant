@@ -52,6 +52,7 @@ import { Link } from "@/components/app/Link";
 import { notify } from "@/components/app/notify";
 import { MorphTitle } from "@/components/app/RouteTransition";
 import { SegmentedControl } from "@/components/app/SegmentedControl";
+import { ListShareSheet } from "@/components/share/ListShareSheet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -61,7 +62,6 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { feedback } from "@/lib/feedback";
-import { ListShareSheet } from "@/components/share/ListShareSheet";
 import { type AddEntryCandidate, AddEntryModal } from "./AddEntryModal";
 import { useTierListActions } from "./actions";
 import { itemTypeOfList, onListHrefs } from "./adapter";

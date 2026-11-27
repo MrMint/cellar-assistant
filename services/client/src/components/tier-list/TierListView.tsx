@@ -107,6 +107,7 @@ import {
 } from "./adapter";
 import { BAND_LABELS, BANDS, entryNoun } from "./constants";
 import type { TierListItemDisplay } from "./types";
+import { UnratedBandSheet } from "./UnratedBandSheet";
 
 // =============================================================================
 // Types
@@ -1058,6 +1059,29 @@ export function TierListView({
             subject={picked.name}
             rank={pickedRank}
             band={pickedBand}
+            listName={listName}
+            counts={Object.fromEntries(
+              RANKED.map((band) => [band, bandMap[band]?.length ?? 0]),
+            )}
+            onChoose={(band) => {
+              setBandSheetOpen(false);
+              void applyMove(picked.id, { kind: "band", band });
+            }}
+            onRemove={() => {
+              setBandSheetOpen(false);
+              void handleRemove(picked.id);
+            }}
+          />
+        )}
+      {picked !== null &&
+        pickedRank !== null &&
+        pickedBand !== null &&
+        !isRanked(pickedBand) && (
+          <UnratedBandSheet
+            open={bandSheetOpen}
+            onOpenChange={setBandSheetOpen}
+            subject={picked.name}
+            rank={pickedRank}
             listName={listName}
             counts={Object.fromEntries(
               RANKED.map((band) => [band, bandMap[band]?.length ?? 0]),
