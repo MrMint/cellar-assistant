@@ -5,7 +5,7 @@
  */
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import { cn, TYPE_RAMP } from "./utils";
+import { cn, T_RAMP, TYPE_RAMP } from "./utils";
 
 describe("cn", () => {
   test("joins and drops falsy values", () => {
@@ -38,6 +38,24 @@ describe("cn", () => {
 
   test("a colour is not mistaken for a font size", () => {
     assert.equal(cn("text-sm", "text-ink-2"), "text-sm text-ink-2");
+  });
+
+  test("a later t-* replaces an earlier one (F1 hand-off)", () => {
+    assert.equal(cn("t-body", "t-cap"), "t-cap");
+    assert.equal(cn("t-head", "type-body"), "type-body");
+    assert.equal(cn("text-sm font-bold", "t-head"), "t-head");
+    assert.equal(cn("t-cap", "text-ink-2"), "t-cap text-ink-2");
+  });
+
+  test("kit colour and radius names merge", () => {
+    assert.equal(cn("text-ink-2", "text-act-ink"), "text-act-ink");
+    assert.equal(cn("border-edge", "border-edge-2"), "border-edge-2");
+    assert.equal(cn("bg-raised", "bg-sel"), "bg-sel");
+    assert.equal(cn("rounded-md", "rounded-segment"), "rounded-segment");
+  });
+
+  test("the kit ramp lists its eight styles", () => {
+    assert.equal(T_RAMP.length, 8);
   });
 
   test("the ramp lists the nine design styles", () => {

@@ -1,7 +1,7 @@
 /**
- * LabelPlate v0 (N28): what it prints, in what order, how it is named, and
- * that each of the six types draws its own vessel — the point of the plate
- * is that two items no longer look the same.
+ * LabelPlate (KIT amendments, "No-photo plate"): the name at 75 px and up,
+ * the kind glyph below, on the raised well with no border; and B03's
+ * style → vessel table, which the Pour sheet still draws.
  */
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
@@ -25,45 +25,47 @@ const full = {
   abv: "14%",
 };
 
-describe("LabelPlate", () => {
-  test("producer, name, vintage, region · ABV — in label order", () => {
+describe("LabelPlate (kit no-photo plate)", () => {
+  test("75 px and up: the drink's name on an r8 card; under: the glyph", () => {
     const html = renderToStaticMarkup(<LabelPlate type="WINE" plate={full} />);
-    const slots = [
-      ...html.matchAll(/data-slot="label-plate-(producer|name|vintage|foot)"/g),
-    ].map((match) => match[1]);
-    assert.deepEqual(slots, ["producer", "name", "vintage", "foot"]);
-    assert.equal(textOf(html), "Vietti Barolo Castiglione 2016 Piedmont · 14%");
+    assert.match(openTag(html, 'data-slot="label-plate"'), /bg-raised/);
+    assert.match(openTag(html, 'data-slot="label-plate"'), /@container/);
+    assert.match(html, /@min-\[75px\]:hidden/);
+    assert.match(html, /@min-\[75px\]:flex/);
+    assert.match(openTag(html, 'data-slot="label-plate-paper"'), /rounded-md/);
+    assert.match(openTag(html, 'data-slot="label-plate-paper"'), /bg-card/);
+    assert.equal(textOf(html), "Barolo Castiglione");
+  });
+
+  test("no border on the well (SHARED round 2)", () => {
+    const html = renderToStaticMarkup(<LabelPlate type="BEER" plate={full} />);
+    assert.doesNotMatch(openTag(html, 'data-slot="label-plate"'), /\bborder\b/);
+    assert.doesNotMatch(
+      openTag(html, 'data-slot="label-plate-paper"'),
+      /\bborder\b/,
+    );
   });
 
   test("decorative by default: hidden from assistive tech", () => {
-    const html = renderToStaticMarkup(<LabelPlate type="WINE" plate={full} />);
-    const root = openTag(html, 'data-slot="label-plate"');
+    const root = openTag(
+      renderToStaticMarkup(<LabelPlate type="WINE" plate={full} />),
+      'data-slot="label-plate"',
+    );
     assert.match(root, /aria-hidden="true"/);
     assert.doesNotMatch(root, /role="img"/);
   });
 
   test("labelled: an image named by its own text", () => {
-    const html = renderToStaticMarkup(
-      <LabelPlate type="WINE" plate={{ ...full, vintage: "NV" }} labelled />,
+    const root = openTag(
+      renderToStaticMarkup(<LabelPlate type="WINE" plate={full} labelled />),
+      'data-slot="label-plate"',
     );
-    const root = openTag(html, 'data-slot="label-plate"');
     assert.match(root, /role="img"/);
-    assert.match(
-      root,
-      /aria-label="Label: Vietti Barolo Castiglione, non-vintage, Piedmont · 14%"/,
-    );
+    assert.match(root, /aria-label="Label: /);
   });
 
-  test("absent lines are left off, not printed empty", () => {
-    const html = renderToStaticMarkup(
-      <LabelPlate type="TEA" plate={{ name: "Sencha" }} />,
-    );
-    assert.equal(textOf(html), "Sencha");
-    assert.doesNotMatch(html, /label-plate-(producer|vintage|foot)/);
-  });
-
-  test("six types, six different vessels", () => {
-    const vessels = ITEM_TYPE_ORDER.map((type) => {
+  test("each kind draws its own glyph; the recipe face its tumbler", () => {
+    const glyphs = ITEM_TYPE_ORDER.map((type) => {
       const html = renderToStaticMarkup(
         <LabelPlate type={type} plate={{ name: "X" }} />,
       );
@@ -71,12 +73,14 @@ describe("LabelPlate", () => {
         openTag(html, 'data-slot="label-plate"'),
         new RegExp(`data-type="${type}"`),
       );
-      const vessel = /data-vessel="([a-z-]+)"/.exec(html)?.[1];
-      const path = /<path d="([^"]+)"/.exec(html)?.[1];
-      assert.ok(vessel && path, `${type} drew no vessel`);
-      return `${vessel}:${path}`;
+      return /lucide-kit-([a-z]+)/.exec(html)?.[1];
     });
-    assert.equal(new Set(vessels).size, ITEM_TYPE_ORDER.length);
+    assert.equal(new Set(glyphs).size, ITEM_TYPE_ORDER.length);
+    const recipe = renderToStaticMarkup(
+      <LabelPlate type="SPIRIT" face="recipe" plate={{ name: "Negroni" }} />,
+    );
+    assert.match(recipe, /lucide-kit-tumbler/);
+    assert.match(recipe, /data-face="recipe"/);
   });
 
   test("the same plate renders the same markup (deterministic)", () => {
@@ -171,16 +175,11 @@ describe("style → vessel table", () => {
     assert.equal(paths.size, VESSEL_NAMES.length);
   });
 
-  test("the plate draws the style's vessel; vesselShape agrees", () => {
-    const html = renderToStaticMarkup(
-      <LabelPlate
-        type="BEER"
-        plate={{ name: "X" }}
-        styleFields={{ style: "AMERICAN_IPA" }}
-      />,
+  test("vesselShape follows the style (the Pour sheet's vessel)", () => {
+    assert.equal(
+      vesselShape("BEER", { style: "AMERICAN_IPA" }).d,
+      VESSEL_PATHS.can.d,
     );
-    assert.match(html, /data-vessel="can"/);
-    assert.match(html, new RegExp(`d="${VESSEL_PATHS.can.d}"`));
     assert.equal(vesselShape("BEER", { style: "AMERICAN_IPA" }).name, "can");
     assert.equal(vesselShape("BEER").name, "tall-neck");
   });

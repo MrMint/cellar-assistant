@@ -2,6 +2,7 @@
 
 import { ToggleGroup as ToggleGroupPrimitive } from "radix-ui";
 import type { ReactNode } from "react";
+import { feedback } from "@/lib/feedback";
 import { cn } from "@/lib/utils";
 
 export type SegmentedOption<V extends string> = {
@@ -24,12 +25,15 @@ export type SegmentedControlProps<V extends string> = {
   /** The group's accessible name ("Sort by", "Show"). */
   "aria-label": string;
   size?: "default" | "sm";
+  /** The cue on a change: `tick` (default) or `detent` (Appearance, sort). */
+  cue?: "tick" | "detent";
   className?: string;
 };
 
 /**
- * One choice out of a few, always visible (replaces Joy's
- * `ToggleButtonGroup`). Radix's single toggle group: the segments are
+ * One choice out of a few, always visible (KIT § 2-3: 44 segments, r7, in a
+ * 46 strip, r8, card, edge; the current one sel and ink, the rest ink-3; a
+ * tick on change). Radix's single toggle group: the segments are
  * `role="radio"` with `aria-checked` inside a `radiogroup`, arrows move between
  * them, and — unlike a raw toggle group — the current segment cannot be
  * tapped off into "nothing selected".
@@ -40,6 +44,7 @@ export function SegmentedControl<V extends string>({
   onValueChange,
   "aria-label": ariaLabel,
   size = "default",
+  cue = "tick",
   className,
 }: SegmentedControlProps<V>) {
   return (
@@ -47,12 +52,15 @@ export function SegmentedControl<V extends string>({
       type="single"
       value={value}
       onValueChange={(next) => {
-        if (next !== "") onValueChange(next as V);
+        if (next === "") return;
+        feedback(cue);
+        onValueChange(next as V);
       }}
       aria-label={ariaLabel}
       data-slot="segmented-control"
       className={cn(
-        "inline-flex w-full items-stretch gap-0.5 rounded-md bg-surface-2 p-0.5",
+        "inline-flex w-full items-stretch rounded-md border border-edge bg-card",
+        size === "default" ? "h-[46px]" : "h-9",
         className,
       )}
     >
@@ -63,12 +71,9 @@ export function SegmentedControl<V extends string>({
           disabled={option.disabled}
           data-slot="segment"
           className={cn(
-            "flex min-w-0 flex-1 items-center justify-center gap-1.5 rounded-[10px] px-3 font-medium text-ink-2 outline-none transition-colors duration-(--ca-dur-micro) ease-standard focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-50 data-[state=on]:bg-surface-3 data-[state=on]:text-ink-1 data-[state=on]:shadow-sm [&_svg:not([class*='size-'])]:size-4 [&_svg]:shrink-0",
-            // Default: a 40 px segment whose hit area reaches the group's
-            // padding, 44 px in all (design §3.3). `sm` is for dense desktop rows.
-            size === "default"
-              ? "relative min-h-10 text-sm after:absolute after:inset-x-0 after:-inset-y-0.5 after:content-['']"
-              : "min-h-8 text-xs",
+            "flex min-w-0 flex-1 items-center justify-center gap-1.5 rounded-segment px-3 text-ink-3 outline-none transition-colors duration-(--ca-dur-micro) ease-standard focus-visible:outline-2 focus-visible:outline-act-ink focus-visible:-outline-offset-2 disabled:opacity-40 data-[state=on]:bg-sel data-[state=on]:text-ink [&_svg:not([class*='size-'])]:size-5 [&_svg]:shrink-0",
+            // Default: 44 segments in the 46 strip. `sm` for dense desktop rows.
+            size === "default" ? "t-head h-11" : "t-cap h-[34px] font-semibold",
           )}
         >
           {option.icon}
@@ -77,7 +82,7 @@ export function SegmentedControl<V extends string>({
             <>
               {/* A space for the accessible name ("Finished 12", not
                   "Finished12"); between flex items it draws nothing. */}{" "}
-              <span data-slot="segment-count" className="tabular text-ink-3">
+              <span data-slot="segment-count" className="tabular font-normal">
                 {option.count}
               </span>
             </>

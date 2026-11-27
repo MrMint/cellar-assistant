@@ -1,9 +1,16 @@
-import { Amphora, Beer, Coffee, Leaf, Milk, Wine } from "lucide-react";
 import type { ComponentProps } from "react";
 import type { ApiItemType } from "@/components/cellar-api/itemTypes";
 import { ITEM_TYPE_ORDER } from "@/lib/tokens";
 import { cn } from "@/lib/utils";
 import { type AppIcon, ICON_STROKE } from "./icons";
+import {
+  BeerGlyph,
+  CoffeeGlyph,
+  SakeGlyph,
+  SpiritGlyph,
+  TeaGlyph,
+  WineGlyph,
+} from "./parts/glyphs";
 
 export type ItemTypeToken = {
   label: string;
@@ -25,49 +32,48 @@ export type ItemTypeToken = {
  * sake, coffee, tea — and one colour set, everywhere. Class names are written
  * out in full so Tailwind can see them.
  *
- * The glyphs are Lucide stand-ins until B03's custom set (Bordeaux bottle,
- * tall-neck, decanter, tokkuri, bag with valve, gaiwan); the spirit and sake
- * ones are deliberately not a cocktail glass and a whisky tumbler.
+ * The glyphs are the kit's (KIT § 1 "Kind glyphs": mug, stemmed glass,
+ * spirit glass, cup, cup with a tag, tokkuri drop), in `parts/glyphs.ts`.
  */
 export const itemTypeTokens: Readonly<Record<ApiItemType, ItemTypeToken>> = {
   WINE: {
     label: "Wine",
-    glyph: Wine,
+    glyph: WineGlyph,
     textClass: "text-type-wine-text",
     tintClass: "bg-type-wine/15",
     deepClass: "bg-type-wine",
   },
   BEER: {
     label: "Beer",
-    glyph: Beer,
+    glyph: BeerGlyph,
     textClass: "text-type-beer-text",
     tintClass: "bg-type-beer/15",
     deepClass: "bg-type-beer",
   },
   SPIRIT: {
     label: "Spirit",
-    glyph: Amphora,
+    glyph: SpiritGlyph,
     textClass: "text-type-spirit-text",
     tintClass: "bg-type-spirit/15",
     deepClass: "bg-type-spirit",
   },
   SAKE: {
     label: "Sake",
-    glyph: Milk,
+    glyph: SakeGlyph,
     textClass: "text-type-sake-text",
     tintClass: "bg-type-sake/15",
     deepClass: "bg-type-sake",
   },
   COFFEE: {
     label: "Coffee",
-    glyph: Coffee,
+    glyph: CoffeeGlyph,
     textClass: "text-type-coffee-text",
     tintClass: "bg-type-coffee/15",
     deepClass: "bg-type-coffee",
   },
   TEA: {
     label: "Tea",
-    glyph: Leaf,
+    glyph: TeaGlyph,
     textClass: "text-type-tea-text",
     tintClass: "bg-type-tea/15",
     deepClass: "bg-type-tea",
@@ -112,7 +118,7 @@ export function TypeChip({
       data-slot="type-chip"
       data-type={type}
       className={cn(
-        "inline-flex h-6 w-fit shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-2 font-medium text-xs",
+        "inline-flex h-6 w-fit shrink-0 items-center gap-1 whitespace-nowrap rounded-sm px-2 t-micro",
         tintClass,
         textClass,
         className,

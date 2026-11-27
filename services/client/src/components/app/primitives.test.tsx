@@ -318,8 +318,8 @@ describe("Score", () => {
     assert.equal(html(<Score value={null} />), "");
     assert.equal(html(<Score value={undefined} variant="hero" />), "");
   });
-  test("hero is the Fraunces numeral", () => {
-    assert.match(html(<Score value={4} variant="hero" />), /type-numeral-xl/);
+  test("hero is the t-score numeral", () => {
+    assert.match(html(<Score value={4} variant="hero" />), /t-score/);
   });
 });
 
@@ -413,9 +413,9 @@ describe("ActionBar", () => {
 });
 
 describe("UserAvatar", () => {
-  test("the initial without a photo", () => {
+  test("two initials without a photo", () => {
     const m = html(<UserAvatar displayName="test two" size="sm" />);
-    assert.match(m, />T</);
+    assert.match(m, />TT</);
     assert.match(classOf(m, "user-avatar"), /size-8/);
   });
   test("the photo, named, when there is one", () => {

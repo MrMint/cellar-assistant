@@ -946,7 +946,7 @@ describe("RatingInput", () => {
     assert.equal(out(), "4.5");
   });
 
-  test("ten named radios; the filled stars are brass (it is the control)", async () => {
+  test("ten named radios; the filled stars are gold (it is the control)", async () => {
     await render(<Harness initial={3} />);
     const radios = [...container.querySelectorAll('input[type="radio"]')];
     assert.equal(radios.length, 10);
@@ -955,7 +955,7 @@ describe("RatingInput", () => {
     assert.match(
       container.querySelector("[data-fraction] svg")?.getAttribute("class") ??
         "",
-      /text-primary/,
+      /text-gold/,
     );
   });
 

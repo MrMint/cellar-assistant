@@ -10,11 +10,20 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { breakpointUp, useMediaQuery } from "@/hooks/useMediaQuery";
+import { feedback } from "@/lib/feedback";
 import { cn } from "@/lib/utils";
 import { BottomSheet } from "./BottomSheet";
-import { Check, ChevronDown, ICON_STROKE, SortDescending } from "./icons";
+import { Arrange, Check, ICON_STROKE } from "./icons";
 
-export type SortOption<V extends string> = { value: V; label: string };
+export type SortOption<V extends string> = {
+  value: V;
+  /** The row's words in the sheet ("My rating, best first"). */
+  label: string;
+  /** The button's short word ("Best"); defaults to `label`. */
+  short?: string;
+  /** Draw a rule above this row: the sheet's second group starts here. */
+  groupStart?: boolean;
+};
 
 export type SortChipProps<V extends string> = {
   options: readonly SortOption<V>[];
@@ -31,7 +40,9 @@ export type SortChipProps<V extends string> = {
 };
 
 /**
- * "Sort: Open first ▾" — one chip that names the current order and opens
+ * KIT § 2 "Sort button and sheet": a 44 button, r8, card, edge-2, the
+ * arrange glyph and the current order's short word ("A–Z"), named
+ * "<label>: <order>". One chip that names the current order and opens
  * the choices: a bottom sheet of radio rows on a phone, a radio menu from
  * `md` (the AppBar overflow's split). Shaped like a `FilterChip` so it sits
  * in a chip row, but it is a menu button, not a toggle: the order is never
@@ -48,7 +59,8 @@ export function SortChip<V extends string>({
   const desktop = useMediaQuery(breakpointUp("md"));
   const [sheetOpen, setSheetOpen] = useState(false);
   const current = options.find((option) => option.value === value);
-  const shown = overriddenBy ?? current?.label ?? "";
+  const shown = overriddenBy ?? current?.short ?? current?.label ?? "";
+  const named = overriddenBy ?? current?.label ?? "";
   const disabled = overriddenBy !== undefined;
 
   const chip = (
@@ -56,23 +68,16 @@ export function SortChip<V extends string>({
       type="button"
       data-slot="sort-chip"
       disabled={disabled}
-      aria-label={`${label}: ${shown}`}
+      aria-label={`${label}: ${named}`}
       aria-haspopup={desktop ? "menu" : "dialog"}
       onClick={desktop ? undefined : () => setSheetOpen(true)}
       className={cn(
-        "relative inline-flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full bg-surface-2 px-3.5 font-medium text-ink-1 text-sm outline-none transition-[color,background-color,transform] duration-(--ca-dur-micro) ease-standard after:absolute after:-inset-y-1 after:inset-x-0 after:content-[''] hover:bg-surface-3 focus-visible:ring-[3px] focus-visible:ring-ring/50 active:scale-97 disabled:text-ink-3 disabled:active:scale-100 motion-reduce:active:scale-100 [&_svg]:size-4",
+        "t-head relative inline-flex h-11 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md border border-edge-2 bg-card pr-3 pl-2.5 text-ink outline-none transition-[color,background-color,transform] duration-(--ca-dur-micro) ease-standard focus-visible:outline-2 focus-visible:outline-act-ink focus-visible:outline-offset-2 active:scale-97 disabled:text-ink-3 disabled:active:scale-100 motion-reduce:active:scale-100 [&_svg]:size-5 [@media(hover:hover)]:hover:bg-raised",
         className,
       )}
     >
-      <SortDescending aria-hidden strokeWidth={ICON_STROKE} />
+      <Arrange aria-hidden strokeWidth={ICON_STROKE} className="text-ink-3" />
       {shown}
-      {!disabled && (
-        <ChevronDown
-          aria-hidden
-          strokeWidth={ICON_STROKE}
-          className="text-ink-3"
-        />
-      )}
     </button>
   );
 
@@ -110,10 +115,19 @@ export function SortChip<V extends string>({
           <DropdownMenuLabel>{label}</DropdownMenuLabel>
           <DropdownMenuRadioGroup
             value={value}
-            onValueChange={(next) => onValueChange(next as V)}
+            onValueChange={(next) => {
+              feedback("detent");
+              onValueChange(next as V);
+            }}
           >
             {options.map((option) => (
-              <DropdownMenuRadioItem key={option.value} value={option.value}>
+              <DropdownMenuRadioItem
+                key={option.value}
+                value={option.value}
+                className={cn(
+                  option.groupStart && "mt-1.5 border-rule border-t",
+                )}
+              >
                 {option.label}
               </DropdownMenuRadioItem>
             ))}
@@ -147,17 +161,22 @@ export function SortChip<V extends string>({
                 // slides away — and nothing else opens from here, so there
                 // is no second modal to wait for.
                 onClick={() => {
+                  feedback("detent");
                   setSheetOpen(false);
                   if (option.value !== value) onValueChange(option.value);
                 }}
-                className="type-body flex min-h-12 w-full items-center justify-between gap-3 rounded-md px-3 text-left text-ink-1 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 active:bg-surface-3"
+                className={cn(
+                  "t-body -mx-4 flex h-12 w-[calc(100%+2rem)] items-center justify-between gap-3 px-4 text-left outline-none focus-visible:bg-raised active:bg-raised",
+                  checked ? "text-ink" : "text-ink-2",
+                  option.groupStart && "mt-1.5 border-rule border-t",
+                )}
               >
                 {option.label}
                 {checked && (
                   <Check
                     aria-hidden
                     strokeWidth={ICON_STROKE}
-                    className="size-5 text-ink-1"
+                    className="size-5 text-act-ink"
                   />
                 )}
               </button>
