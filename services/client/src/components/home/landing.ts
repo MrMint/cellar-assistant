@@ -18,6 +18,9 @@ type Stats = {
 const totalOf = ({ itemCounts: c }: Stats): number =>
   c.wine + c.beer + c.spirit + c.coffee + c.sake + c.tea;
 
+/** Grouped counts, fixed to en-US so server and browser print the same. */
+const COUNT = new Intl.NumberFormat("en-US");
+
 /** No bottles of any kind yet: the new-person Home. */
 export const isNewPerson = (stats: Stats): boolean => totalOf(stats) === 0;
 
@@ -28,7 +31,7 @@ export const isNewPerson = (stats: Stats): boolean => totalOf(stats) === 0;
 export const bottleCountLine = (stats: Stats): string | null => {
   const total = totalOf(stats);
   if (total === 0) return null;
-  return `${total.toLocaleString("en-US")} ${total === 1 ? "bottle" : "bottles"}`;
+  return `${COUNT.format(total)} ${total === 1 ? "bottle" : "bottles"}`;
 };
 
 /** "Rate the 15", or null when every open bottle has the owner's rating. */
