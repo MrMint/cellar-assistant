@@ -344,6 +344,80 @@ export function reorderCallFor(
   return { band: destBand, orderedIds: [...orderedIds] };
 }
 
+/** An entry's rank on the board: 1-based, best band first; null if absent. */
+export function rankOf(map: BandMap, id: string): number | null {
+  let seen = 0;
+  for (const band of BANDS) {
+    const ids = map[band] ?? [];
+    const at = ids.indexOf(id);
+    if (at >= 0) return seen + at + 1;
+    seen += ids.length;
+  }
+  return null;
+}
+
+/** The five ranked bands, best first: where a move may land (no Unrated). */
+const MOVE_BANDS = [5, 4, 3, 2, 1] as const;
+
+export type EntryMove =
+  | { kind: "up" }
+  | { kind: "down" }
+  | { kind: "band"; band: number };
+
+/**
+ * One Arrange move (SPEC 16) as the board it leaves and the one call it
+ * needs. Up and down step one place, crossing into the neighbouring band at
+ * a band's edge (to its end going up, its top going down, an empty band
+ * included); "Move to band" lands last in that band. `rank` is computed once,
+ * here, from `after` — the toast and the row read this one number
+ * (CROSS-LOT "One placement, one rank"). Null when nothing would move.
+ */
+export function moveEntry(
+  before: BandMap,
+  id: string,
+  move: EntryMove,
+): {
+  after: BandMap;
+  call: { band: number; orderedIds: string[] };
+  band: number;
+  rank: number;
+} | null {
+  const from = BANDS.find((band) => (before[band] ?? []).includes(id));
+  if (from === undefined) return null;
+  const after: BandMap = {};
+  for (const band of BANDS) after[band] = [...(before[band] ?? [])];
+  const source = after[from] ?? [];
+  const index = source.indexOf(id);
+  let to: number = from;
+
+  if (move.kind === "band") {
+    if (move.band === from) return null;
+    to = move.band;
+    source.splice(index, 1);
+    after[to] = [...(after[to] ?? []), id];
+  } else {
+    const step = move.kind === "up" ? -1 : 1;
+    const next = index + step;
+    if (next >= 0 && next < source.length) {
+      source.splice(index, 1);
+      source.splice(next, 0, id);
+    } else {
+      const at = MOVE_BANDS.indexOf(from as (typeof MOVE_BANDS)[number]);
+      const neighbour = at < 0 ? undefined : MOVE_BANDS[at + step];
+      if (neighbour === undefined) return null;
+      to = neighbour;
+      source.splice(index, 1);
+      const dest = after[to] ?? [];
+      after[to] = move.kind === "up" ? [...dest, id] : [id, ...dest];
+    }
+  }
+
+  const call = reorderCallFor(before, after, from, to);
+  const rank = rankOf(after, id);
+  if (call === null || rank === null) return null;
+  return { after, call, band: to, rank };
+}
+
 export function bandMapOf(
   items: readonly { id: string; band: number }[],
 ): BandMap {

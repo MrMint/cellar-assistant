@@ -12,6 +12,7 @@ import {
   type PlacementEntry,
   type PlacementState,
   placedBetween,
+  placedOutcome,
   placedRank,
   placementResult,
   remainingQuestions,
@@ -259,6 +260,44 @@ describe("the words", () => {
         "Mediocre",
       ),
       "First in Mediocre.",
+    );
+  });
+
+  test("CROSS-LOT: one outcome — the rank, and the whole board's neighbours either side", () => {
+    const board = [...bandOf(5, 2), ...bandOf(4, 2), ...bandOf(2, 1)];
+    // Mid-band: neighbours from its own band, ranks around its own.
+    const mid = placedOutcome(board, { band: 4, position: 1, how: "ANSWERED" });
+    assert.deepEqual(mid, {
+      rank: 4,
+      above: { name: "b4-0", band: 4, rank: 3 },
+      below: { name: "b4-1", band: 4, rank: 5 },
+    });
+    // The top of its band: the entry above is the band above's last.
+    const top = placedOutcome(board, { band: 4, position: 0, how: "ANSWERED" });
+    assert.equal(top.rank, 3);
+    assert.deepEqual(top.above, { name: "b5-1", band: 5, rank: 2 });
+    // An empty band in between: the neighbours are across both lines.
+    const alone = placedOutcome(board, {
+      band: 3,
+      position: 0,
+      how: "ANSWERED",
+    });
+    assert.deepEqual(alone, {
+      rank: 5,
+      above: { name: "b4-1", band: 4, rank: 4 },
+      below: { name: "b2-0", band: 2, rank: 6 },
+    });
+    // #1 has nothing above; the rank agrees with placedRank, always.
+    const first = placedOutcome(board, {
+      band: 5,
+      position: 0,
+      how: "ANSWERED",
+    });
+    assert.equal(first.above, null);
+    for (const r of [mid, top, alone, first]) assert.ok(r.rank >= 1);
+    assert.equal(
+      mid.rank,
+      placedRank(board, { band: 4, position: 1, how: "ANSWERED" }),
     );
   });
 

@@ -20,9 +20,9 @@ import {
  * The assertion that matters is the one at the end: the new band survives a
  * **reload**. A board that only reorders in React state looks identical.
  *
- * X23 / D4: the board is read-only until **Arrange**, so the add and the drag
- * both start there (an empty list's own "Add from what you've tasted" opens
- * Arrange and the picker at once), and a picker row is one control — the
+ * X23 / D4: the board is read-only until **Edit order**, so the add and the drag
+ * both start from the page (an empty list's own "Add from what you've tasted"
+ * opens the picker, the dock's "Add a wine" after it), and a picker row is one control — the
  * whole row.
  *
  * X16: the picker opens on suggestion sections and picks several — a row is
@@ -111,10 +111,10 @@ test("adds entries to it", async ({ api, primary }) => {
   await primary.goto(`/tier-lists/${tierListId}`);
   for (const [index, item] of items.slice(0, 2).entries()) {
     // The empty list's own button first (N15's "Add from what you've
-    // tasted"), then the Arrange bar's "Add entry": one at a time either way.
+    // tasted"), then the dock's "Add a wine": one at a time either way.
     await primary
       .getByRole("button", {
-        name: index === 0 ? "Add from what you've tasted" : "Add entry",
+        name: index === 0 ? "Add from what you've tasted" : "Add a wine",
         exact: true,
       })
       .click();
@@ -158,10 +158,13 @@ test("adds entries to it", async ({ api, primary }) => {
     await expect(dialog).toBeHidden({ timeout: 20_000 });
   }
 
-  await expect(
-    primary.getByRole("button", { name: /^Remove / }).nth(1),
-    "two entries did not land on the board",
-  ).toBeVisible({ timeout: 20_000 });
+  // Read-only, each row is a link to its entry.
+  for (const item of items.slice(0, 2)) {
+    await expect(
+      primary.getByRole("link", { name: item.name, exact: true }),
+      `"${item.name}" did not land on the board`,
+    ).toBeVisible({ timeout: 20_000 });
+  }
 });
 
 test("a drag between bands survives a reload", async ({ api, primary }) => {
@@ -181,11 +184,13 @@ test("a drag between bands survives a reload", async ({ api, primary }) => {
   );
 
   await primary.goto(`/tier-lists/${tierListId}`);
-  // Read-only until Arrange (X23/D4): no handles before it.
+  // Read-only until Edit order (DECISIONS 41): no handles before it.
   await expect(
     primary.locator('[aria-roledescription="sortable"]'),
   ).toHaveCount(0);
-  await primary.getByRole("button", { name: "Arrange", exact: true }).click();
+  await primary
+    .getByRole("button", { name: "Edit order", exact: true })
+    .click();
   const handle = primary.locator('[aria-roledescription="sortable"]').first();
   await expect(handle, "no drag handle on the board").toBeVisible({
     timeout: 20_000,

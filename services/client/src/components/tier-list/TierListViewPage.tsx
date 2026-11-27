@@ -1,26 +1,18 @@
 "use client";
 
 /**
- * `82450ad1:src/components/tier-list/TierListViewPage.tsx`, restored: header
- * (name, description, privacy chip, count), the map / share / edit icon
- * buttons, and the URL-backed Rankings / Insights tabs (`?tab=`, with
- * `?item=` scrolling to an entry).
+ * The tier list page (screens/Tier-list, DECISIONS 37–41): the name, its
+ * privacy and count, the Rankings / Insights segments (`?tab=`, with
+ * `?item=` scrolling to an entry) beside Map (a place list: `/map?list=`,
+ * L40), Share and Details, and under Rankings the search, the Arrange sheet
+ * (Ranking or the crowd's rating, and Show only), the board, and the
+ * thumb-zone dock: Edit order and the one primary, Add.
  *
- * X23 / D4 — **Arrange** replaces the padlock. The board is read-only by
- * default, the owner's included: the whole row opens the entry. The owner's
- * Arrange button turns the page into its editing mode — drag handles and
- * remove buttons on the rows, the tabs put away, and a bar in the thumb zone
- * with Undo, Redo, Add entry and Done. Undo and Redo step the list's
- * server-side edit history (`TierList.editHistory`), so a mistake from
- * yesterday is still one tap away, and every edit's toast offers the same
- * Undo. The old `isEditingLocked` padlock is retired, in the API too (X16).
- *
- * Kept from the rewrite (decision 2): the in-page **Add entry**, now inside
- * Arrange (and on an empty list's own empty state). A new entry lands in the
- * band your own rating puts it in (`bandForScore`), Unrated without one.
- *
- * On the app's primitives (D20): `IconButton`s named by their tooltips,
- * Radix tabs, `notify` toasts, `EmptyState`.
+ * Edit order is the lock (DECISIONS 41): the board is read-only until the
+ * owner opens it, and then the board's own dock moves the picked row and
+ * carries this page's Undo and Redo, which step the list's server-side
+ * history (`TierList.editHistory`); every edit's toast offers the same Undo.
+ * A new entry lands in the band your own rating puts it in (`bandForScore`).
  */
 
 import { useRouter } from "next/navigation";
@@ -35,13 +27,14 @@ import {
 } from "react";
 import { ActionBar } from "@/components/app/ActionBar";
 import { AppBar } from "@/components/app/AppBar";
+import { BottomSheet } from "@/components/app/BottomSheet";
 import { EmptyState } from "@/components/app/EmptyState";
+import { FilterChip } from "@/components/app/FilterChip";
 import { IconButton } from "@/components/app/IconButton";
 import {
   Add,
   type AppIcon,
   Arrange,
-  Check,
   Edit,
   ICON_STROKE,
   Lock,
@@ -50,20 +43,24 @@ import {
   Public,
   Ranked,
   Redo,
+  Search,
   Share,
+  SortDescending,
   Undo,
 } from "@/components/app/icons";
 import { Link } from "@/components/app/Link";
 import { notify } from "@/components/app/notify";
 import { MorphTitle } from "@/components/app/RouteTransition";
-import { Badge } from "@/components/ui/badge";
+import { SegmentedControl } from "@/components/app/SegmentedControl";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { feedback } from "@/lib/feedback";
 import { absoluteUrl, canonicalPath } from "@/lib/share/routes";
 import { tierListShareBlock } from "@/lib/share/share-rules";
 import { useShareLink } from "@/lib/share/use-share-link";
@@ -71,6 +68,7 @@ import { type AddEntryCandidate, AddEntryModal } from "./AddEntryModal";
 import { useTierListActions } from "./actions";
 import { itemTypeOfList, onListHrefs } from "./adapter";
 import { addedMessage } from "./add-entry";
+import { BAND_LABELS, entryNoun } from "./constants";
 import {
   bandForScore,
   historyActionLabel,
@@ -79,7 +77,11 @@ import {
   type TierListHistoryView,
 } from "./history";
 import { TierListInsightsPanel } from "./insights/TierListInsightsPanel";
-import { TIER_LIST_EDIT_TOAST, TierListView } from "./TierListView";
+import {
+  type BoardOrder,
+  TIER_LIST_EDIT_TOAST,
+  TierListView,
+} from "./TierListView";
 import type { TierListData, TierListInsightsData } from "./types";
 
 interface TierListViewPageProps {
@@ -104,7 +106,10 @@ function Hint({ label, children }: { label: string; children: ReactElement }) {
 }
 
 const TRIGGER =
-  "h-full rounded-sm font-medium text-ink-2 data-[state=active]:bg-surface-3 data-[state=active]:text-ink-1 dark:data-[state=active]:border-transparent dark:data-[state=active]:bg-surface-3";
+  "t-head h-full rounded-sm text-ink-2 data-[state=active]:bg-card data-[state=active]:text-ink";
+
+/** Show only offers the ranked bands, best first. */
+const RANKED_BANDS = [5, 4, 3, 2, 1] as const;
 
 /**
  * How long an Undo tapped right after an edit on this page waits for the
@@ -114,14 +119,6 @@ const TRIGGER =
  */
 const STEP_SEQ_WAIT_MS = 4000;
 const STEP_SEQ_POLL_MS = 100;
-
-/**
- * The Arrange bar's two labelled buttons: glyphs off below 400 px, tighter
- * padding below 360, so Undo · Redo · Add entry · Done fit a 320 pt phone
- * without the bar overflowing its 16 pt gutters.
- */
-const ARRANGE_BUTTON =
-  "min-w-0 flex-1 max-[399px]:[&>svg]:hidden max-[359px]:px-3 max-[359px]:has-[>svg]:px-3";
 
 const NO_HISTORY: TierListHistoryView = {
   canUndo: false,
@@ -175,6 +172,10 @@ export function TierListViewPage({
     useTierListActions();
   const [arranging, setArranging] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const [only, setOnly] = useState<ReadonlySet<number>>(() => new Set());
+  const [order, setOrder] = useState<BoardOrder>("rank");
+  const [sortOpen, setSortOpen] = useState(false);
   /**
    * Bumped on every open and used as the picker's `key`, so each open starts
    * from an empty search: a reopened picker showing the last query's rows
@@ -371,6 +372,21 @@ export function TierListViewPage({
   const handleUndo = useCallback(() => void step("undo"), [step]);
 
   const isEmpty = data.items.length === 0;
+  const noun = (count: number) => entryNoun(data.listType, count);
+  const bandCounts = useMemo(() => {
+    const counts: Record<number, number> = {};
+    for (const item of data.items)
+      counts[item.band] = (counts[item.band] ?? 0) + 1;
+    return counts;
+  }, [data.items]);
+  const toggleOnly = (band: number) =>
+    setOnly((current) => {
+      const next = new Set(current);
+      if (next.has(band)) next.delete(band);
+      else next.add(band);
+      return next;
+    });
+  const narrowed = only.size > 0 || order === "crowd";
 
   const board = isEmpty ? (
     <EmptyState
@@ -382,14 +398,8 @@ export function TierListViewPage({
           : "When this list ranks something, it shows here."
       }
       action={
-        // Arranging, the bar below already holds Add entry.
-        data.isOwner && !isArranging ? (
-          <Button
-            onClick={() => {
-              setArranging(true);
-              openAdd();
-            }}
-          >
+        data.isOwner ? (
+          <Button onClick={openAdd}>
             <Add aria-hidden strokeWidth={ICON_STROKE} />
             Add from what you&apos;ve tasted
           </Button>
@@ -401,10 +411,41 @@ export function TierListViewPage({
       tierListId={data.id}
       items={data.items}
       isOwner={data.isOwner}
+      listName={data.name}
+      listType={data.listType}
       arranging={isArranging}
       selectedItemId={selectedItemId ?? undefined}
+      query={query}
+      only={only}
+      order={order}
+      onClearSearch={() => {
+        setQuery("");
+        setOnly(new Set());
+      }}
       onEdited={handleEdited}
       onUndo={handleUndo}
+      onDone={() => setArranging(false)}
+      arrangeTools={
+        <>
+          <IconButton
+            aria-label={historyActionLabel("undo", history.undo)}
+            disabled={!history.canUndo || stepping}
+            onClick={() => void step("undo")}
+          >
+            <Undo />
+          </IconButton>
+          <IconButton
+            aria-label={historyActionLabel("redo", history.redo)}
+            disabled={!history.canRedo || stepping}
+            onClick={() => void step("redo")}
+          >
+            <Redo />
+          </IconButton>
+          <IconButton aria-label="Add entry" onClick={openAdd}>
+            <Add />
+          </IconButton>
+        </>
+      }
     />
   );
 
@@ -413,31 +454,65 @@ export function TierListViewPage({
       {/* W-10: Back, like every other pushed page; the large title below
           stays the page's h1 (and the morph target), so the bar has none. */}
       <AppBar parent="/tier-lists" />
-      {/* Header. Only the title shares its row with the actions: at 390 an
-          owner of a place list has four of them, and a description in the
-          title's column wrapped every two or three words. */}
-      <div className="flex flex-col gap-1">
-        <div className="flex items-start justify-between gap-4">
-          {/* B05: the target of TierListCard's title morph (H-7). */}
-          <MorphTitle>
-            <h1 className="type-title-1 min-w-0 flex-1 break-words text-ink-1">
-              {data.name}
-            </h1>
-          </MorphTitle>
-          {!isArranging && (
+      <header className="flex flex-col gap-1">
+        {/* B05: the target of TierListCard's title morph (H-7). */}
+        <MorphTitle>
+          <h1 className="t-title m-0 min-w-0 break-words text-ink">
+            {data.name}
+          </h1>
+        </MorphTitle>
+        <p className="t-cap tabular m-0 flex items-center gap-1 text-ink-2">
+          <PrivacyIcon
+            aria-hidden
+            strokeWidth={ICON_STROKE}
+            className="size-4"
+          />
+          <span>{privacyInfo.label}</span>
+          <span aria-hidden>·</span>
+          <span>
+            {data.itemCount} {noun(data.itemCount)}
+          </span>
+        </p>
+        {data.description && (
+          <p className="t-body m-0 text-ink-2">{data.description}</p>
+        )}
+      </header>
+
+      {isArranging ? (
+        <section aria-label="Arrange" className="flex flex-col gap-3 pb-2">
+          <p className="t-cap m-0 text-ink-2">
+            Tap a row, then move it; or hold its handle and drag. Undo reaches
+            back through every change.
+          </p>
+          {board}
+        </section>
+      ) : (
+        <Tabs
+          value={tab}
+          onValueChange={(v) => {
+            feedback("tick");
+            void setTab(v as typeof tab);
+          }}
+          className="gap-3"
+        >
+          <div className="flex flex-wrap items-center gap-2">
+            <TabsList className="h-11 min-w-0 flex-1 rounded-md bg-raised p-1">
+              <TabsTrigger value="rankings" className={TRIGGER}>
+                Rankings
+              </TabsTrigger>
+              <TabsTrigger value="insights" className={TRIGGER}>
+                Insights
+              </TabsTrigger>
+            </TabsList>
             <div className="flex shrink-0 gap-1">
+              {/* L40: a place list opens on the map, filtered to it. */}
               {data.listType === "place" && (
-                <Hint label="View on map">
-                  <IconButton
-                    asChild
-                    variant="outline"
-                    size="sm"
-                    aria-label="View on map"
-                  >
+                <Hint label="Map">
+                  <IconButton asChild variant="outline" aria-label="Map">
                     <Link
-                      href={`/map?tierLists=${data.id}`}
+                      href={`/map?list=${encodeURIComponent(data.id)}`}
                       underline="none"
-                      className="rounded-full"
+                      onClick={() => feedback("press")}
                     >
                       <MapIcon />
                     </Link>
@@ -451,7 +526,6 @@ export function TierListViewPage({
                 <Hint label="Share">
                   <IconButton
                     variant="outline"
-                    size="sm"
                     aria-label="Share"
                     onClick={handleShare}
                   >
@@ -460,17 +534,12 @@ export function TierListViewPage({
                 </Hint>
               )}
               {data.isOwner && (
-                <Hint label="Edit list">
-                  <IconButton
-                    asChild
-                    variant="outline"
-                    size="sm"
-                    aria-label="Edit list"
-                  >
+                <Hint label="Details">
+                  <IconButton asChild variant="outline" aria-label="Details">
                     <Link
                       href={`/tier-lists/${data.id}/edit`}
                       underline="none"
-                      className="rounded-full"
+                      onClick={() => feedback("press")}
                     >
                       <Edit />
                     </Link>
@@ -478,100 +547,61 @@ export function TierListViewPage({
                 </Hint>
               )}
             </div>
-          )}
-        </div>
-        {data.description && (
-          <p className="type-callout text-ink-2">{data.description}</p>
-        )}
-        <div className="mt-1 flex min-h-11 items-center gap-2">
-          <Badge variant="secondary" className="text-ink-2">
-            <PrivacyIcon aria-hidden strokeWidth={ICON_STROKE} />
-            {privacyInfo.label}
-          </Badge>
-          <span className="type-footnote tabular">
-            {data.itemCount} {data.itemCount === 1 ? "item" : "items"}
-          </span>
-          {canArrange && !isArranging && !isEmpty && (
-            <Button
-              variant="secondary"
-              className="ml-auto"
-              onClick={() => {
-                void setTab("rankings");
-                setArranging(true);
-              }}
-            >
-              <Arrange aria-hidden strokeWidth={ICON_STROKE} />
-              Arrange
-            </Button>
-          )}
-        </div>
-      </div>
-
-      {isArranging ? (
-        <section aria-label="Arrange" className="flex flex-col gap-3 pb-2">
-          <p className="type-footnote text-ink-2">
-            Hold and drag a handle to move an entry; tap the minus to take it
-            off the list. Undo reaches back through every change.
-          </p>
-          {board}
-          {/* The app's ActionBar: sticky 12 pt above the tab bar on glass,
-              in the thumb zone. In flow after the board, so the last row
-              scrolls clear of it. Four controls share a phone's width: below
-              400 px the two buttons drop their glyphs, and below 360 (a
-              320 pt SE) "Add entry" reads "Add" and both tighten their
-              padding — the accessible names never change. */}
-          <ActionBar role="toolbar" aria-label="Arrange">
-            <IconButton
-              variant="ghost"
-              aria-label={historyActionLabel("undo", history.undo)}
-              disabled={!history.canUndo || stepping}
-              onClick={() => void step("undo")}
-            >
-              <Undo />
-            </IconButton>
-            <IconButton
-              variant="ghost"
-              aria-label={historyActionLabel("redo", history.redo)}
-              disabled={!history.canRedo || stepping}
-              onClick={() => void step("redo")}
-            >
-              <Redo />
-            </IconButton>
-            <Button
-              variant="secondary"
-              aria-label="Add entry"
-              className={ARRANGE_BUTTON}
-              onClick={openAdd}
-            >
-              <Add aria-hidden strokeWidth={ICON_STROKE} />
-              <span>
-                Add<span className="max-[359px]:hidden"> entry</span>
-              </span>
-            </Button>
-            <Button
-              className={ARRANGE_BUTTON}
-              onClick={() => setArranging(false)}
-            >
-              <Check aria-hidden strokeWidth={ICON_STROKE} />
-              Done
-            </Button>
-          </ActionBar>
-        </section>
-      ) : (
-        <Tabs
-          value={tab}
-          onValueChange={(v) => void setTab(v as typeof tab)}
-          className="gap-3"
-        >
-          <TabsList className="h-11 w-full rounded-md bg-surface-2 p-1">
-            <TabsTrigger value="rankings" className={TRIGGER}>
-              Rankings
-            </TabsTrigger>
-            <TabsTrigger value="insights" className={TRIGGER}>
-              Insights
-            </TabsTrigger>
-          </TabsList>
-          <TabsContent value="rankings">{board}</TabsContent>
+          </div>
+          <TabsContent value="rankings" className="flex flex-col gap-3">
+            {!isEmpty && (
+              <div className="flex items-center gap-2">
+                <div className="relative min-w-0 flex-1">
+                  <Search
+                    aria-hidden
+                    strokeWidth={ICON_STROKE}
+                    className="pointer-events-none absolute top-1/2 left-3 size-5 -translate-y-1/2 text-glyph"
+                  />
+                  <Input
+                    type="search"
+                    aria-label="Search this list"
+                    value={query}
+                    placeholder="Search this list"
+                    onChange={(event) => setQuery(event.target.value)}
+                    className="pl-10"
+                  />
+                </div>
+                <Button
+                  variant="outline"
+                  aria-label={`Arrange: ${order === "crowd" ? "Crowd's rating" : "Ranking"}${only.size > 0 ? `, ${only.size} bands` : ""}`}
+                  aria-pressed={narrowed}
+                  onClick={() => setSortOpen(true)}
+                >
+                  <SortDescending aria-hidden strokeWidth={ICON_STROKE} />
+                  {order === "crowd" ? "Crowd" : "Rank"}
+                </Button>
+              </div>
+            )}
+            {board}
+            {/* The thumb-zone dock: Edit order (the lock, DECISIONS 41) and
+                the one primary, Add. */}
+            {canArrange && (
+              <ActionBar>
+                {!isEmpty && (
+                  <Button
+                    variant="outline"
+                    className="min-w-0 flex-1"
+                    onClick={() => {
+                      void setTab("rankings");
+                      setArranging(true);
+                    }}
+                  >
+                    <Arrange aria-hidden strokeWidth={ICON_STROKE} />
+                    Edit order
+                  </Button>
+                )}
+                <Button className="min-w-0 flex-1" onClick={openAdd}>
+                  <Add aria-hidden strokeWidth={ICON_STROKE} />
+                  Add a {noun(1)}
+                </Button>
+              </ActionBar>
+            )}
+          </TabsContent>
           <TabsContent value="insights">
             <TierListInsightsPanel
               insights={insightsData}
@@ -579,10 +609,40 @@ export function TierListViewPage({
                 tryNextType === null ? null : { itemType: tryNextType, onList }
               }
               grounded={{ tierListId: data.id, isOwner: data.isOwner }}
+              noun={noun(2)}
             />
           </TabsContent>
         </Tabs>
       )}
+
+      <BottomSheet open={sortOpen} onOpenChange={setSortOpen} title="Arrange">
+        <div className="flex flex-col gap-4 pb-2">
+          <SegmentedControl
+            aria-label="Order"
+            options={[
+              { value: "rank", label: "Ranking" },
+              { value: "crowd", label: "Crowd's rating" },
+            ]}
+            value={order}
+            onValueChange={setOrder}
+          />
+          <div className="flex flex-col gap-2">
+            <h3 className="t-head m-0 text-ink">Show only</h3>
+            <div className="flex flex-wrap gap-2">
+              {RANKED_BANDS.map((band) => (
+                <FilterChip
+                  key={band}
+                  selected={only.has(band)}
+                  count={bandCounts[band] ?? 0}
+                  onClick={() => toggleOnly(band)}
+                >
+                  {BAND_LABELS[band]}
+                </FilterChip>
+              ))}
+            </div>
+          </div>
+        </div>
+      </BottomSheet>
 
       <AddEntryModal
         key={addSession}
@@ -592,6 +652,7 @@ export function TierListViewPage({
         busy={adding}
         error={addError}
         listType={data.listType}
+        listName={data.name}
         onList={onList}
         tierListId={data.id}
       />

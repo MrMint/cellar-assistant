@@ -23,6 +23,7 @@ import {
   ThumbsDown,
   Trending,
 } from "@/components/app/icons";
+import { StatGrid, StatTile } from "@/components/app/parts/StatTile";
 import { Badge } from "@/components/ui/badge";
 import {
   Tooltip,
@@ -117,43 +118,25 @@ export function PalatePassport({ stats }: PalatePassportProps) {
 
   return (
     <div className="flex flex-col gap-4">
-      <h4 className="text-ink-1 type-headline">Palate Passport</h4>
+      <h4 className="t-head text-ink">Palate Passport</h4>
 
-      {/* Stat tiles */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-        {statCards.map((stat) => {
-          const StatIcon = stat.icon;
-          return (
-            <div
-              key={stat.label}
-              className="rounded-md bg-surface-2 p-3 shadow-[inset_0_1px_0_var(--ca-highlight)]"
-            >
-              <div className="flex items-center gap-2">
-                <StatIcon
-                  aria-hidden
-                  strokeWidth={ICON_STROKE}
-                  className="size-5 shrink-0 text-ink-3"
-                />
-                <div>
-                  <p className="tabular text-ink-1 type-title-2">
-                    <AnimatedNumber value={stat.value} />
-                  </p>
-                  <p className="text-ink-2 type-footnote">{stat.label}</p>
-                </div>
-              </div>
-              {stat.detail && (
-                <p className="mt-1 type-footnote">{stat.detail}</p>
-              )}
-            </div>
-          );
-        })}
-      </div>
+      {/* Stat tiles (F2b's StatTile, two a row) */}
+      <StatGrid className="sm:grid-cols-3">
+        {statCards.map((stat) => (
+          <StatTile
+            key={stat.label}
+            value={<AnimatedNumber value={stat.value} />}
+            label={stat.label}
+            {...(stat.detail === undefined ? {} : { delta: stat.detail })}
+          />
+        ))}
+      </StatGrid>
 
       {/* Badges — earned + locked */}
       <div className="flex flex-col gap-2">
         <div className="flex items-center gap-1 text-ink-2">
           <Trending aria-hidden strokeWidth={ICON_STROKE} className="size-4" />
-          <h5 className="font-medium type-callout">Badges</h5>
+          <h5 className="t-body">Badges</h5>
         </div>
         <ul className="flex flex-wrap gap-2">
           {[...earnedBadges, ...unearnedBadges].map((badge) => {
@@ -168,7 +151,7 @@ export function PalatePassport({ stats }: PalatePassportProps) {
                       data-earned={badge.earned ? "true" : "false"}
                       variant={badge.earned ? "secondary" : "outline"}
                       className={cn(
-                        "h-7 px-2.5 text-[13px] [&>svg]:size-3.5",
+                        "t-cap h-7 px-2.5 [&>svg]:size-3.5",
                         badge.earned
                           ? "bg-success/15 text-success"
                           : "text-ink-2 opacity-45",
@@ -191,12 +174,9 @@ export function PalatePassport({ stats }: PalatePassportProps) {
           })}
         </ul>
         {closestUnearned?.progress && (
-          <p className="type-footnote">
+          <p className="t-cap text-ink-2">
             {closestUnearned.progress.target - closestUnearned.progress.current}{" "}
-            away from{" "}
-            <span className="font-medium text-ink-2">
-              {closestUnearned.label}
-            </span>
+            away from <span className="text-ink">{closestUnearned.label}</span>
           </p>
         )}
       </div>

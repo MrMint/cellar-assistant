@@ -32,6 +32,14 @@ type Toast = {
 const toasts: Toast[] = [];
 const calls: string[] = [];
 
+/** What the next `requestInsightsAction` answers (the panel tests set it). */
+let insightsAnswer:
+  | { success: true; status: string }
+  | {
+      success: false;
+      failure: { code: string; reason: string | null; retryAt: string | null };
+    } = { success: true, status: "PENDING" };
+
 const edit = {
   seq: 7,
   kind: "MOVE" as const,
@@ -68,7 +76,17 @@ mock.module("@/components/tier-list/actions", () => ({
       calls.push(`remove ${id}`);
       return { success: true };
     },
-    reorderBandAction: async () => ({ success: true }),
+    reorderBandAction: async (
+      call: { band: number; orderedIds: string[] },
+      id: string,
+    ) => {
+      calls.push(`reorder ${id} ${call.band} ${call.orderedIds.join(",")}`);
+      return { success: true };
+    },
+    requestInsightsAction: async (id: string) => {
+      calls.push(`insights ${id}`);
+      return insightsAnswer;
+    },
     addItemToTierListAction: async () => ({ success: true }),
     undoAction: async (id: string, expectedSeq: number) => {
       calls.push(`undo ${id} #${expectedSeq}`);
@@ -94,6 +112,9 @@ const { createRoot } = await import("react-dom/client");
 const { Client, Provider } = await import("urql");
 const { TooltipProvider } = await import("@/components/ui/tooltip");
 const { TierListViewPage } = await import("./TierListViewPage");
+const { TierListInsightsPanel } = await import(
+  "./insights/TierListInsightsPanel"
+);
 
 const client = new Client({
   url: "http://test.invalid/graphql",
@@ -175,26 +196,33 @@ const click = async (el: HTMLElement) => {
   });
 };
 
+/** Arrange's removal: pick the row, Move to band…, Remove from list. */
+const remove = async (name: string) => {
+  await click(button(name));
+  await click(button("Move to band…"));
+  await click(button("Remove from list"));
+};
+
 describe("Arrange (X23 / D4)", () => {
   test("read-only until Arrange — even with the old lock set — and Done ends it", async () => {
     await render();
     assert.equal(document.querySelector('[aria-label^="Remove "]'), null);
     assert.equal(document.querySelector('[role="toolbar"]'), null);
 
-    await click(button("Arrange"));
+    await click(button("Edit order"));
     assert.ok(document.querySelector('[role="toolbar"]'));
-    assert.ok(button("Remove Rioja"));
     assert.ok(button("Reorder Rioja"));
     assert.ok(button("Add entry"));
+    assert.equal(button("Move up").disabled, true, "nothing picked yet");
 
     await click(button("Done"));
     assert.equal(document.querySelector('[role="toolbar"]'), null);
-    assert.equal(document.querySelector('[aria-label^="Remove "]'), null);
+    assert.equal(document.querySelector('[aria-label^="Reorder "]'), null);
   });
 
   test("Undo names the edit, steps the history, and offers Redo back", async () => {
     await render();
-    await click(button("Arrange"));
+    await click(button("Edit order"));
     const undo = button("Undo: moved Barolo to Outstanding");
     assert.equal(undo.disabled, false);
     assert.equal(button(/^Redo/).disabled, true);
@@ -221,10 +249,10 @@ describe("Arrange (X23 / D4)", () => {
       ...data,
       history: { canUndo: false, canRedo: false, undo: null, redo: null },
     });
-    await click(button("Arrange"));
+    await click(button("Edit order"));
     assert.equal(button(/^Undo/).disabled, true);
 
-    await click(button("Remove Rioja"));
+    await remove("Rioja");
     assert.deepEqual(calls, ["remove row-1", "refresh"]);
     assert.equal(document.body.textContent?.includes("Rioja"), false);
     assert.equal(toasts.at(-1)?.message, "Removed Rioja");
@@ -263,8 +291,8 @@ describe("Arrange (X23 / D4)", () => {
       ...data,
       history: { canUndo: false, canRedo: false, undo: null, redo: null },
     });
-    await click(button("Arrange"));
-    await click(button("Remove Rioja"));
+    await click(button("Edit order"));
+    await remove("Rioja");
     let tapped: Promise<void> | undefined;
     await act(async () => {
       tapped = Promise.resolve(toasts.at(-1)?.options?.undo?.());
@@ -298,27 +326,164 @@ describe("Arrange (X23 / D4)", () => {
       });
     await press();
     assert.deepEqual(calls, []);
-    await click(button("Arrange"));
+    await click(button("Edit order"));
     await press();
     assert.deepEqual(calls, ["undo tl-1 #7", "refresh"]);
   });
 
-  test("an empty list's Add from what you've tasted opens Arrange and the picker, once", async () => {
+  test("an empty list's Add from what you've tasted opens the picker", async () => {
     await render({ ...data, items: [], itemCount: 0 });
+    // Nothing to put in order: no Edit order, one Add in the dock.
+    assert.throws(() => button("Edit order"));
+    assert.ok(button("Add a wine"));
     await click(button("Add from what you've tasted"));
-    assert.ok(document.querySelector('[role="toolbar"]'));
-    const adds = [...document.querySelectorAll("button")].filter(
-      (el) => el.textContent?.trim() === "Add entry",
-    );
-    assert.equal(adds.length, 1, "two Add entry buttons while arranging");
     assert.ok(
       document.querySelector('[role="dialog"]'),
       "the picker did not open",
     );
   });
 
+  test("SPEC 16/17: a dock move is one band order, its rank said once, and #1 is New #1", async () => {
+    await render();
+    await click(button("Edit order"));
+    await click(button("Rioja"));
+    assert.match(document.body.textContent ?? "", /#2 · Rioja · Good/);
+    // Rioja tops Good: up crosses into the band above, even an empty one.
+    await click(button("Move up"));
+    assert.deepEqual(calls, ["reorder tl-1 4 row-1", "refresh"]);
+    assert.equal(toasts.at(-1)?.message, "Moved to Very Good · #2 · Rioja");
+    assert.ok(toasts.at(-1)?.options?.undo, "the move's toast offers Undo");
+    // …then the end of Outstanding, after Barolo…
+    await click(button("Move up"));
+    assert.deepEqual(calls.slice(2), ["reorder tl-1 5 row-0,row-1", "refresh"]);
+    assert.equal(toasts.at(-1)?.message, "Moved to Outstanding · #2 · Rioja");
+    // …then past it: the owner's new #1.
+    await click(button("Move up"));
+    assert.deepEqual(calls.slice(4), ["reorder tl-1 5 row-1,row-0", "refresh"]);
+    assert.equal(toasts.at(-1)?.message, "New #1 · Rioja");
+    // Already #1: nothing above it, nothing sent.
+    await click(button("Move up"));
+    assert.equal(calls.length, 6);
+  });
+
+  test("a stranger's list is never written: no pick, no move, no removal", async () => {
+    await render({ ...data, isOwner: false, history: null });
+    for (const name of [
+      "Move up",
+      "Move to band…",
+      "Reorder Rioja",
+      "Edit order",
+    ]) {
+      assert.throws(() => button(name), `${name} on a list you don't own`);
+    }
+    // A row is a link to the entry, never a pick.
+    const row = [...document.querySelectorAll("a")].find(
+      (a) => a.textContent === "Rioja",
+    );
+    assert.equal(row?.getAttribute("href"), "/wines/w-1");
+    assert.deepEqual(calls, []);
+  });
+
   test("a friend's list: no Arrange at all", async () => {
     await render({ ...data, isOwner: false, history: null });
-    assert.throws(() => button("Arrange"));
+    assert.throws(() => button("Edit order"));
+    assert.throws(() => button("Add a wine"));
+  });
+});
+
+describe("Insights writes itself on first open (L12, MC-quota)", () => {
+  const entries = ["Barolo", "Rioja", "Chianti"].map((name, i) => ({
+    id: `row-${i}`,
+    band: 4,
+    name,
+    countryCode: null,
+    region: null,
+    primaryCategory: null,
+  }));
+  const idle = {
+    items: entries,
+    aiInsights: null,
+    contentUpdatedAt: null,
+    status: "IDLE" as const,
+    failureReason: null,
+    retryAt: null,
+    showPlaceStats: false,
+  };
+  const renderPanel = async (
+    over: Partial<typeof idle> = {},
+    isOwner = true,
+  ) => {
+    await act(async () =>
+      root.render(
+        <Provider value={client}>
+          <TooltipProvider>
+            <TierListInsightsPanel
+              insights={{ ...idle, ...over }}
+              grounded={{ tierListId: "tl-1", isOwner }}
+              noun="wines"
+            />
+          </TooltipProvider>
+        </Provider>,
+      ),
+    );
+    await act(async () => new Promise((r) => setTimeout(r, 0)));
+  };
+
+  test("the owner's IDLE list of 3 asks once, and shows the working card", async () => {
+    insightsAnswer = { success: true, status: "PENDING" };
+    await renderPanel();
+    assert.deepEqual(
+      calls.filter((c) => c.startsWith("insights")),
+      ["insights tl-1"],
+    );
+    assert.ok(document.querySelector('[aria-label="Writing insights"]'));
+    assert.match(document.body.textContent ?? "", /Reading 3 wines/);
+    // A re-render (the refresh landing still IDLE) never asks twice.
+    await renderPanel();
+    assert.equal(calls.filter((c) => c.startsWith("insights")).length, 1);
+  });
+
+  test("a stranger's list is never written: a read never writes", async () => {
+    await renderPanel({}, false);
+    assert.deepEqual(
+      calls.filter((c) => c.startsWith("insights")),
+      [],
+    );
+    assert.equal(
+      document.querySelector('[aria-label="Writing insights"]'),
+      null,
+    );
+  });
+
+  test("under 3 entries, or already written, sends nothing", async () => {
+    await renderPanel({
+      items: entries.slice(0, 2),
+      status: "NOT_ENOUGH_ENTRIES" as never,
+    });
+    await renderPanel({ status: "READY" as never });
+    assert.deepEqual(
+      calls.filter((c) => c.startsWith("insights")),
+      [],
+    );
+  });
+
+  test("a quota refusal shows Limit reached with the reset", async () => {
+    insightsAnswer = {
+      success: false,
+      failure: {
+        code: "BUDGET_EXCEEDED",
+        reason: "USER_CAP",
+        retryAt: "2099-01-01T15:40:00.000Z",
+      },
+    };
+    await renderPanel();
+    const text = document.body.textContent ?? "";
+    assert.match(text, /Limit reached/);
+    assert.match(text, /try again/i);
+    assert.equal(
+      document.querySelector('[aria-label="Writing insights"]'),
+      null,
+    );
+    insightsAnswer = { success: true, status: "PENDING" };
   });
 });

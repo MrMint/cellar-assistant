@@ -278,3 +278,37 @@ export function placedBetween(
   if (below === null) return `Bottom of ${bandLabel}, below ${above.name}.`;
   return `Above ${below.name}, below ${above.name}.`;
 }
+
+/** One entry beside the placed one, with its rank once the new one is in. */
+export type PlacedNeighbour = { name: string; band: number; rank: number };
+
+/**
+ * CROSS-LOT: where it landed, computed once — its rank on the whole board and
+ * the entries directly above and below it there (across a band line at an
+ * edge). The heading, the announcement and the landed rows all read this, so
+ * they can never disagree.
+ */
+export function placedOutcome(
+  board: readonly PlacementEntry[],
+  result: PlacementResult,
+): {
+  rank: number;
+  above: PlacedNeighbour | null;
+  below: PlacedNeighbour | null;
+} {
+  const rank = placedRank(board, result);
+  const ordered = [...board].sort(
+    (a, b) => b.band - a.band || a.position - b.position,
+  );
+  const at = (index: number, rankAfter: number): PlacedNeighbour | null => {
+    const entry = ordered[index];
+    return entry === undefined
+      ? null
+      : { name: entry.name, band: entry.band, rank: rankAfter };
+  };
+  return {
+    rank,
+    above: at(rank - 2, rank - 1),
+    below: at(rank - 1, rank + 1),
+  };
+}

@@ -43,6 +43,11 @@ export type InsightsViewInput = {
   readonly retryAt: string | null;
   readonly hasInsights: boolean;
   readonly itemCount: number;
+  /**
+   * L12: whether the viewer owns the list — the one person whose first open
+   * writes it (`shouldRequestInsights`). Absent reads as a visitor.
+   */
+  readonly isOwner?: boolean;
 };
 
 export type InsightsView = {
@@ -115,33 +120,92 @@ export const insightsView = (
       return {
         ...quiet(),
         notice:
-          outcome.kind === "retryable" || outcome.kind === "rejected"
-            ? {
-                ...outcome,
-                title: "Couldn't generate insights",
-                message:
-                  "That attempt didn't finish. Insights are asked for again whenever the list changes.",
-                canRetry: false,
-              }
-            : outcome.kind === "nothing-read"
+          outcome.kind === "user-cap"
+            ? limitReached(outcome)
+            : outcome.kind === "retryable" || outcome.kind === "rejected"
               ? {
                   ...outcome,
-                  title: "Not enough to go on yet",
+                  title: "Couldn't generate insights",
                   message:
-                    "Insights need entries with names or notes; they're generated once there are a few more.",
+                    "That attempt didn't finish. Insights are asked for again whenever the list changes.",
+                  canRetry: false,
                 }
-              : outcome,
+              : outcome.kind === "nothing-read"
+                ? {
+                    ...outcome,
+                    title: "Not enough to go on yet",
+                    message:
+                      "Insights need entries with names or notes; they're generated once there are a few more.",
+                  }
+                : outcome,
       };
     }
     case "IDLE":
-      return quiet(
-        input.hasInsights
-          ? null
-          : "Insights are generated after the next change to this list.",
-      );
+      // L12: the owner's first open of a 3+ list writes it — the panel sends
+      // the request, and the working card shows meanwhile.
+      if (
+        shouldRequestInsights({
+          status,
+          itemCount: input.itemCount,
+          isOwner: input.isOwner ?? false,
+        })
+      ) {
+        return { generating: true, poll: false, notice: null, hint: null };
+      }
+      return quiet(input.hasInsights ? null : "No insights written yet.");
     default:
       return quiet();
   }
+};
+
+/**
+ * L12: whether this open should write the list's Insights — the owner's list,
+ * IDLE (nothing generated or asked for yet), with 3 or more entries. A read
+ * never writes; this is the one explicit, idempotent request.
+ */
+export const shouldRequestInsights = (input: {
+  readonly status: InsightsStatus | null;
+  readonly itemCount: number;
+  readonly isOwner: boolean;
+}): boolean =>
+  input.isOwner &&
+  input.status === "IDLE" &&
+  input.itemCount >= MIN_INSIGHT_ENTRIES;
+
+/** MC-quota: the kit's "Limit reached", with when it resets. */
+const limitReached = (outcome: AiOutcome): AiOutcome => ({
+  ...outcome,
+  title: "Limit reached",
+  message: outcome.message,
+});
+
+/**
+ * What the panel says when its own request was refused: a quota refusal
+ * (`BudgetExceededError`, reason USER_CAP) is "Limit reached" with the reset
+ * (`retryAt`); anything else is the plain couldn't-write notice.
+ */
+export const insightsLimitNotice = (
+  failure: {
+    readonly code: string | null;
+    readonly reason: ActorErrorReason | null;
+    readonly retryAt: string | null;
+  },
+  options: { now?: Date; locale?: string; timeZone?: string } = {},
+): AiOutcome => {
+  const outcome = aiOutcome(
+    { code: null, reason: failure.reason, retryAt: failure.retryAt },
+    options,
+  );
+  if (outcome.kind === "user-cap") return limitReached(outcome);
+  if (outcome.kind === "unavailable" || outcome.kind === "service-budget") {
+    return outcome;
+  }
+  return {
+    ...outcome,
+    title: "Couldn't write insights",
+    message: "Try again later.",
+    canRetry: false,
+  };
 };
 
 /**

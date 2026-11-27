@@ -146,7 +146,7 @@ export function TryNextCards({
   if (error !== undefined && (cards === null || cards.length === 0)) {
     return isOwner
       ? frame(
-          <p className="text-ink-3 type-callout">
+          <p className="t-body text-ink-3">
             Couldn&apos;t load suggestions just now.
           </p>,
         )
@@ -156,7 +156,7 @@ export function TryNextCards({
   if (cards === null || cards.length === 0) {
     return isOwner
       ? frame(
-          <p className="text-ink-3 type-callout">
+          <p className="t-body text-ink-3">
             Nothing to suggest yet. Rank a few in your top two bands, love a
             bottle, or see what friends rank highest.
           </p>,
@@ -196,7 +196,7 @@ export function TryNextTile({ card }: { card: TryNextCard }) {
             }
           />
         ) : (
-          <div className="flex aspect-square w-full items-center justify-center rounded-lg bg-surface-2 text-ink-2">
+          <div className="flex aspect-square w-full items-center justify-center rounded-lg bg-raised text-ink-2">
             <Place aria-hidden strokeWidth={ICON_STROKE} className="size-8" />
           </div>
         )}
@@ -214,14 +214,14 @@ export function TryNextTile({ card }: { card: TryNextCard }) {
           href={card.href}
           overlay
           underline="none"
-          className="line-clamp-2 font-semibold text-ink-1 type-callout"
+          className="t-head line-clamp-2 text-ink"
         >
           {card.name}
         </Link>
         {card.subtitle !== null && (
-          <p className="truncate type-footnote">{card.subtitle}</p>
+          <p className="t-cap truncate">{card.subtitle}</p>
         )}
-        <p className="line-clamp-3 text-ink-2 type-footnote">{card.reason}</p>
+        <p className="line-clamp-3 t-cap text-ink-2">{card.reason}</p>
       </div>
     </article>
   );
