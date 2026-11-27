@@ -1,6 +1,5 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { useMutation, useQuery } from "urql";
 import { AppBar } from "@/components/app/AppBar";
@@ -10,6 +9,7 @@ import { Link } from "@/components/app/Link";
 import { notify } from "@/components/app/notify";
 import { useAppKey } from "@/components/app/overlays/app-keys";
 import { PersonRow } from "@/components/app/parts/PersonRow";
+import { useNavigate } from "@/components/app/useNavigate";
 import { friendsSinceLine } from "@/components/profile/adapter";
 import { SearchField } from "@/components/shell/SearchField";
 import { Button } from "@/components/ui/button";
@@ -17,6 +17,7 @@ import { breakpointUp, useMediaQuery } from "@/hooks/useMediaQuery";
 import type { ActorErrorReason } from "@/lib/api/errors";
 import type { ResultOf } from "@/lib/api/graphql";
 import type { ApiFailure } from "@/lib/api/result";
+import { feedback } from "@/lib/feedback";
 import { cn } from "@/lib/utils";
 import { FriendPane } from "./FriendPane";
 import {
@@ -131,7 +132,7 @@ function ListFailure({
  * friends, Enter opens the full page.
  */
 export const FriendsClient = () => {
-  const router = useRouter();
+  const navigate = useNavigate();
   const desktop = useMediaQuery(breakpointUp("md"));
   const [pendingIds, setPendingIds] = useState<Set<string>>(new Set());
   const [searchTerm, setSearchTerm] = useState("");
@@ -249,14 +250,17 @@ export const FriendsClient = () => {
     const at = friendRows.findIndex((row) => row.user.id === selectedId);
     const next =
       friendRows[Math.min(friendRows.length - 1, Math.max(0, at + step))];
-    if (next !== undefined) setChosen(next.user.id);
+    if (next !== undefined && next.user.id !== selectedId) {
+      feedback("tick");
+      setChosen(next.user.id);
+    }
   };
   useAppKey("ArrowDown", () => move(1));
   useAppKey("j", () => move(1));
   useAppKey("ArrowUp", () => move(-1));
   useAppKey("k", () => move(-1));
   useAppKey("Enter", () => {
-    if (desktop && selectedId !== null) router.push(`/users/${selectedId}`);
+    if (desktop && selectedId !== null) navigate.push(`/users/${selectedId}`);
   });
 
   const searchData: SearchResult | undefined = searchResult.data;

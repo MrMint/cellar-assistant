@@ -1,12 +1,12 @@
 "use client";
 
 import { UserMinus } from "lucide-react";
-import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useMutation } from "urql";
 import { ConfirmSheet } from "@/components/app/ConfirmSheet";
 import { ICON_STROKE } from "@/components/app/icons";
 import { notify } from "@/components/app/notify";
+import { useNavigate } from "@/components/app/useNavigate";
 import { RemoveFriendMutation } from "@/components/friend/fragments";
 import { Button } from "@/components/ui/button";
 
@@ -27,7 +27,7 @@ export function RemoveFriend({
   name: string;
   onRemoved?: () => void;
 }) {
-  const router = useRouter();
+  const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [state, removeFriend] = useMutation(RemoveFriendMutation);
 
@@ -40,7 +40,7 @@ export function RemoveFriend({
       return;
     }
     notify(`You and ${name} are no longer friends`);
-    if (onRemoved === undefined) router.push("/friends");
+    if (onRemoved === undefined) navigate.push("/friends");
     else onRemoved();
   };
 
