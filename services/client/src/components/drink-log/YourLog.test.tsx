@@ -153,7 +153,10 @@ describe("YourLog", () => {
     const row = container.querySelector('[data-slot="drink-log-entry"]');
     assert.ok(row);
     const text = row.textContent ?? "";
-    assert.match(text, /4\.5/);
+    // F2b's history row carries the event: the owner's rating, in gold.
+    const event = row.previousElementSibling;
+    assert.equal(event?.getAttribute("data-slot"), "history-row");
+    assert.match(event?.textContent ?? "", /Rated 4\.5/);
     assert.match(text, /Dark cherry, a little smoke/);
     assert.match(text, /cherry/);
     assert.match(text, /smoky/);

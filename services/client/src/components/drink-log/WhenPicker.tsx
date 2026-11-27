@@ -28,12 +28,15 @@ export function WhenPicker({
   onChange,
   allowNow = true,
   onProblem,
+  inline = false,
 }: {
   value: string | null;
   onChange: (next: string | null) => void;
   allowNow?: boolean;
   /** Told whether the chosen time can be saved, so the caller can hold its button. */
   onProblem?: (problem: string | null) => void;
+  /** The label at the row's left, chips beside it (the Pour sheet's rows). */
+  inline?: boolean;
 }) {
   const ids = useId();
   // The browser's clock, read after mount (the sheet's body only renders
@@ -51,38 +54,47 @@ export function WhenPicker({
 
   return (
     <section className="flex flex-col gap-2" aria-labelledby={`${ids}-when`}>
-      <h3 id={`${ids}-when`} className="type-callout font-semibold">
-        When
-      </h3>
-      {allowNow && (
-        <div className="flex flex-wrap gap-2">
-          <FilterChip
-            selected={value === null}
-            onClick={() => {
-              setPicking(false);
-              onChange(null);
-            }}
-          >
-            Now
-          </FilterChip>
-          <FilterChip
-            selected={value !== null}
-            icon={<Schedule aria-hidden />}
-            aria-expanded={showInput}
-            aria-controls={`${ids}-input`}
-            onClick={() => {
-              setPicking(true);
-              if (value === null && now !== null) {
-                onChange(now.toISOString());
-              }
-            }}
-          >
-            {value === null || now === null
-              ? "Earlier…"
-              : whenLabel(value, now)}
-          </FilterChip>
-        </div>
-      )}
+      <div className={inline ? "flex items-center gap-3" : "contents"}>
+        <h3
+          id={`${ids}-when`}
+          className={
+            inline
+              ? "t-cap m-0 w-14 shrink-0 font-normal text-ink-2"
+              : "t-cap font-semibold"
+          }
+        >
+          When
+        </h3>
+        {allowNow && (
+          <div className="flex flex-wrap gap-2">
+            <FilterChip
+              selected={value === null}
+              onClick={() => {
+                setPicking(false);
+                onChange(null);
+              }}
+            >
+              Now
+            </FilterChip>
+            <FilterChip
+              selected={value !== null}
+              icon={<Schedule aria-hidden />}
+              aria-expanded={showInput}
+              aria-controls={`${ids}-input`}
+              onClick={() => {
+                setPicking(true);
+                if (value === null && now !== null) {
+                  onChange(now.toISOString());
+                }
+              }}
+            >
+              {value === null || now === null
+                ? "Earlier…"
+                : whenLabel(value, now)}
+            </FilterChip>
+          </div>
+        )}
+      </div>
       {showInput && (
         <Input
           id={`${ids}-input`}
@@ -98,7 +110,7 @@ export function WhenPicker({
         />
       )}
       {problem !== null && (
-        <p role="alert" className="type-footnote text-destructive">
+        <p role="alert" className="t-cap text-danger">
           {problem}
         </p>
       )}

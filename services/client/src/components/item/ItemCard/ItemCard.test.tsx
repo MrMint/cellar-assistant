@@ -126,16 +126,18 @@ describe("ItemCard", () => {
     // The type is a chip: its glyph and its word.
     assert.match(openTag(html, 'data-slot="type-chip"'), /data-type="WINE"/);
     assert.match(html, /data-slot="type-chip"[^>]*>.*?Wine<\/span>/);
-    // Footer values, each named for assistive tech; the score is `Score`
-    // (one decimal) and marked as reviewed by the viewer.
+    // Footer values, each named for assistive tech; the score is the kit's
+    // `Stars` with the one-decimal score, and marked as reviewed by the viewer.
     assert.match(html, />4<\/span><span[^>]*> loves</);
     assert.match(html, />7<\/span><span[^>]*> reviews</);
     assert.match(html, /aria-label="Rated 4\.26 out of 5"/);
     assert.match(html, /data-reviewed="true"/);
-    // Favourited: pressed, and the heart is filled claret.
+    // Favourited: pressed, and the heart is filled in the heart token.
     const toggle = openTag(html, 'aria-pressed="true"');
     assert.match(toggle, /^<button\b/);
-    assert.match(html, /fill-brand/);
+    assert.match(html, /fill-current text-heart/);
+    // Your own verdict: gold stars (CROSS-LOT ruling 1).
+    assert.match(html, /data-tone="owner"/);
   });
 
   test("no image: the item's own LabelPlate, not the type's clip art (N28)", () => {
@@ -227,7 +229,7 @@ describe("ItemCard", () => {
       "favorite",
       "2",
       "separator",
-      "4",
+      "4.0",
     ]);
   });
 
@@ -239,9 +241,10 @@ describe("ItemCard", () => {
         item={{ ...base, score: 3, reviewed: false }}
       />,
     );
-    // The star still follows the score (one decimal only when not zero);
-    // only the reviewed mark goes.
-    assert.match(html, />3<svg/);
+    // The stars and the score still show, in the others' tone; only the
+    // reviewed mark goes.
+    assert.match(html, />3\.0</);
+    assert.match(html, /data-tone="other"/);
     assert.match(html, /aria-label="Rated 3 out of 5"/);
     assert.doesNotMatch(html, /data-reviewed/);
   });
@@ -302,7 +305,7 @@ describe("ItemCard", () => {
       />,
     );
     assert.match(html, /aria-pressed="false"/);
-    assert.doesNotMatch(html, /fill-brand/);
+    assert.doesNotMatch(html, /text-heart/);
   });
 
   test("B05: the linked title is the morph source, named for its href", () => {

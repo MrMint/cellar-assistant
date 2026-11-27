@@ -9,8 +9,8 @@ import { Comment, ICON_STROKE, Love } from "@/components/app/icons";
 import { LabelPlate, type PlateStyleFields } from "@/components/app/LabelPlate";
 import { Link } from "@/components/app/Link";
 import { notify } from "@/components/app/notify";
+import { formatKitScore, Stars } from "@/components/app/parts/Stars";
 import { MorphTitle } from "@/components/app/RouteTransition";
-import { Score } from "@/components/app/Score";
 import { TogglePop } from "@/components/app/TogglePop";
 import { TypeChip } from "@/components/app/TypeChip";
 import type { ApiItemType as ItemTypeValue } from "@/components/cellar-api/itemTypes";
@@ -53,7 +53,7 @@ export type ItemCardProps = {
  * against the card's edge.
  */
 const FOOTER_CELL =
-  "flex h-11 min-w-0 flex-1 items-center justify-center gap-1.5 px-0 text-ink-1";
+  "flex h-11 min-w-0 flex-1 items-center justify-center gap-1.5 px-0 text-ink";
 
 /**
  * A hairline between two footer sections — only *between* two that are shown.
@@ -183,7 +183,7 @@ export const ItemCard = ({ item, href, onClick, type }: ItemCardProps) => {
   const hasScore = isNotNil(item.score);
 
   const subtitle = (
-    <div className="type-footnote flex items-center justify-between gap-1">
+    <div className="t-cap flex items-center justify-between gap-1 text-ink-2">
       <span className="min-w-0 truncate">{item.subtitle ?? " "}</span>
       <TypeChip type={type} />
     </div>
@@ -193,9 +193,9 @@ export const ItemCard = ({ item, href, onClick, type }: ItemCardProps) => {
     <div
       data-slot="item-card"
       className={cn(
-        "relative flex flex-col overflow-hidden rounded-md bg-surface-2 text-ink-1",
+        "relative flex flex-col overflow-hidden rounded-lg border border-edge bg-card text-ink",
         interactive &&
-          "transition-colors duration-(--ca-dur-short) ease-standard hover:bg-surface-3",
+          "transition-colors duration-(--ca-dur-short) ease-standard hover:bg-raised",
       )}
     >
       <div className="relative aspect-6/5 overflow-hidden sm:aspect-square">
@@ -226,7 +226,7 @@ export const ItemCard = ({ item, href, onClick, type }: ItemCardProps) => {
             underline="none"
             href={href}
             onClick={handleClick}
-            className="type-headline min-w-0 text-ink-1 focus-visible:after:rounded-md focus-visible:after:ring-inset"
+            className="t-head min-w-0 text-ink focus-visible:after:rounded-lg focus-visible:after:ring-inset"
           >
             {/* B05: the title flies into the item page's heading. */}
             <MorphTitle href={href}>
@@ -240,20 +240,20 @@ export const ItemCard = ({ item, href, onClick, type }: ItemCardProps) => {
       )}
       {isNil(href) && isNotNil(onClick) && (
         <div className="flex flex-col gap-1 p-3">
-          <p className="type-headline truncate">{title}</p>
+          <p className="t-head truncate">{title}</p>
           {subtitle}
           <button
             type="button"
             aria-label={title}
             onClick={handleClick}
             className={cn(
-              "absolute inset-0 rounded-md outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50",
+              "absolute inset-0 rounded-lg outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50",
               RING_INSIDE,
             )}
           />
         </div>
       )}
-      <div className="flex items-center border-line border-t">
+      <div className="flex items-center border-hair border-t">
         {hasFavorites && (
           <Button
             variant="ghost"
@@ -269,7 +269,7 @@ export const ItemCard = ({ item, href, onClick, type }: ItemCardProps) => {
             aria-busy={favorite.pending || undefined}
             aria-pressed={favorite.on}
           >
-            <span className="type-headline tabular">
+            <span className="t-head tabular">
               {shownFavoriteCount(
                 item.favoriteCount ?? 0,
                 wasFavorite,
@@ -283,7 +283,7 @@ export const ItemCard = ({ item, href, onClick, type }: ItemCardProps) => {
                 strokeWidth={ICON_STROKE}
                 className={cn(
                   "size-6 transition-colors duration-(--ca-dur-micro) ease-standard",
-                  favorite.on ? "fill-brand text-brand" : "text-ink-2",
+                  favorite.on ? "fill-current text-heart" : "text-glyph",
                 )}
               />
             </TogglePop>
@@ -292,12 +292,12 @@ export const ItemCard = ({ item, href, onClick, type }: ItemCardProps) => {
         {hasFavorites && hasReviews && <FooterSeparator />}
         {hasReviews && (
           <div className={FOOTER_CELL}>
-            <span className="type-headline tabular">{item.reviewCount}</span>
+            <span className="t-head tabular">{item.reviewCount}</span>
             <span className="sr-only"> reviews</span>
             <Comment
               aria-hidden
               strokeWidth={ICON_STROKE}
-              className="size-5 text-ink-2"
+              className="size-5 text-glyph"
             />
           </div>
         )}
@@ -307,15 +307,16 @@ export const ItemCard = ({ item, href, onClick, type }: ItemCardProps) => {
             className={FOOTER_CELL}
             data-reviewed={item.reviewed === true || undefined}
           >
-            <Score
+            {/* KIT tile foot: the stars, gold only for your own verdict
+                (CROSS-LOT ruling 1), and the score beside them. */}
+            <Stars
               value={item.score}
-              className={cn(
-                "type-headline text-ink-1 [&_svg]:size-5",
-                item.reviewed === true
-                  ? "[&_svg]:text-primary"
-                  : "[&_svg]:text-ink-3",
-              )}
+              size="sm"
+              tone={item.reviewed === true ? "owner" : "other"}
             />
+            <span className="t-cap tabular text-ink-2">
+              {formatKitScore(item.score ?? 0)}
+            </span>
           </div>
         )}
       </div>

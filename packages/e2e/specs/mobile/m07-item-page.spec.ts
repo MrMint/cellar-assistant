@@ -6,15 +6,16 @@ import { Gql } from "../../fixtures/test.ts";
 /**
  * X09 · one item page, at 390×844 with a thumb.
  *
- * 1. The taste header's three cells (You · Friends · Everyone) and the
- *    ActionBar (Log a drink · Add to cellar · Want to try · ⋯) fit the
- *    phone: nothing clips, the bar rides above the tab bar inside the
- *    viewport, and every control is a 44 pt target.
+ * 1. The taste header's three cells (You · Friends · Everyone) fit the
+ *    phone, and the page's controls — the bar's ⋯ disc over the photo, Want
+ *    to try and the heart by the name, and the open row's Check in — are 44
+ *    pt targets with nothing clipped. There is no bottom bar any more
+ *    (Cellars-Bottles 01).
  * 2. "Your bottles": Pour is X03's Pour sheet (a cup moves the level and
  *    logs the drink in one tap), and the row's Log opens "Log a drink" for
  *    that bottle.
- * 3. The bottle URL is the same page with that bottle selected, and Pour
- *    (from it) is the ActionBar's primary there.
+ * 3. The bottle URL is the same page with that bottle selected, its row open
+ *    with Check in, and ⋯ ends with Delete this bottle.
  *
  * Creates one cellar (deleted after) and one tea; no places.
  */
@@ -103,7 +104,7 @@ test.afterAll(async () => {
   await api.dispose();
 });
 
-test("the taste header and the ActionBar fit the phone, above the tab bar", async ({
+test("the taste header and the page's controls fit the phone, with no bottom bar", async ({
   page,
   noise,
 }) => {
@@ -130,24 +131,26 @@ test("the taste header and the ActionBar fit the phone, above the tab bar", asyn
   }
   expect(rows.size, "the three cells share one row").toBe(1);
 
-  // The ActionBar sits inside the viewport, above the tab bar.
-  const bar = page.getByRole("toolbar", { name: "Item actions" });
-  await expect(bar).toBeVisible();
-  const barEdges = await edgesOf(bar);
+  // No bottom bar; the ⋯ disc rides at the top, over the photo.
+  await expect(page.getByRole("toolbar", { name: "Item actions" })).toHaveCount(
+    0,
+  );
+  const more = await edgesOf(
+    page.getByRole("button", { name: "More actions", exact: true }),
+  );
+  expect(more.top).toBeLessThan(height / 4);
   const tabs = await edgesOf(await bottomNav(page));
-  expect(barEdges.bottom).toBeLessThanOrEqual(tabs.top + 1);
-  expect(barEdges.top).toBeGreaterThan(height / 2);
-  expect(barEdges.left).toBeGreaterThanOrEqual(0);
-  expect(barEdges.right).toBeLessThanOrEqual(width);
+  expect(tabs.bottom).toBeLessThanOrEqual(height + 1);
 
   // Each control: a 44 pt target whose words are not clipped.
   for (const name of [
-    "Log a drink",
-    "Add to cellar",
-    `Want to try ${teaName}`,
     "More actions",
+    `Want to try ${teaName}`,
+    `Love ${teaName}`,
+    "Check in",
   ]) {
-    const control = bar.getByRole("button", { name, exact: true });
+    const control = page.getByRole("button", { name, exact: true });
+    await control.scrollIntoViewIfNeeded();
     await expect(control, name).toBeVisible();
     const edges = await edgesOf(control);
     expect(edges.bottom - edges.top, name).toBeGreaterThanOrEqual(44);
@@ -229,26 +232,29 @@ test("the bottle URL is this page with that bottle selected", async ({
   const bottles = page.locator("section", {
     has: page.getByRole("heading", { name: "Your tins" }),
   });
-  await expect(bottles.locator('[aria-current="page"]')).toHaveText(cellarName);
+  await expect(bottles.locator('[aria-current="page"]')).toHaveAccessibleName(
+    new RegExp(`, ${cellarName}$`),
+  );
   // Its level is inline on its own URL.
   await expect(
     bottles.getByRole("slider", { name: "Remaining" }),
   ).toBeVisible();
-  // On a bottle of yours the ActionBar's primary is X03's Pour, from it.
-  const bar = page.getByRole("toolbar", { name: "Item actions" });
+  // On a bottle of yours its row is open: Check in, then Pour and Log.
   await expect(
-    bar.getByRole("button", { name: "Steep", exact: true }),
+    bottles.getByRole("button", { name: "Check in", exact: true }),
   ).toBeVisible();
-  await expect(bar.getByRole("button", { name: "Log a drink" })).toHaveCount(0);
-  // Delete bottle is in ⋯, last.
-  await bar.getByRole("button", { name: "More actions" }).click();
-  const sheet = page.getByRole("dialog");
   await expect(
-    sheet.getByRole("button", { name: "Delete bottle" }),
+    bottles.getByRole("button", { name: `Steep from ${cellarName}` }),
   ).toBeVisible();
-  const labels = (await sheet.getByRole("button").allTextContents())
+  // Delete this bottle is in ⋯, last.
+  await page.getByRole("button", { name: "More actions", exact: true }).click();
+  const menu = page.getByTestId("item-menu");
+  await expect(
+    menu.getByRole("button", { name: "Delete this bottle" }),
+  ).toBeVisible();
+  const labels = (await menu.getByRole("button").allTextContents())
     .map((label) => label.trim())
     .filter((label) => label !== "");
-  expect(labels.at(-1)).toBe("Delete bottle");
+  expect(labels.at(-1)).toBe("Delete this bottle");
   expect(noise.pageErrors).toEqual([]);
 });

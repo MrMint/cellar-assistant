@@ -107,6 +107,21 @@ test.afterAll(async () => {
   }
 });
 
+/** The tea's band on the test's list. */
+const bandOnList = async (): Promise<number | undefined> => {
+  const data = await api.query(
+    `query L($id: ID!) { item(type: TEA, id: $id) { __typename
+       ... on QueryItemSuccess { data {
+         tierListEntries(first: 10) { edges { node { band tierList { id } } } } } } } }`,
+    { id: teaId },
+  );
+  return (
+    data.item.data.tierListEntries.edges as {
+      node: { band: number; tierList: { id: string } | null };
+    }[]
+  ).find((edge) => edge.node.tierList?.id === tierListId)?.node.band;
+};
+
 const bottleState = async () => {
   const data = await api.query(
     `query B($cellarId: ID!, $id: ID!) {
@@ -143,7 +158,7 @@ test("a sealed bottle pours: the first pour opens it, and Undo seals it again", 
   ).toBeVisible();
 
   await pour.click();
-  const sheet = page.getByRole("dialog", { name: "Pour" });
+  const sheet = page.getByRole("dialog", { name: "Steep" });
   await expect(sheet).toBeVisible();
   const level = sheet.getByRole("slider", { name: "Level" });
   // A pot of tea is 8 g of a 100 g tin.
@@ -180,16 +195,16 @@ test("a sealed bottle pours: the first pour opens it, and Undo seals it again", 
     .poll(async () => Number(await level.getAttribute("aria-valuenow")))
     .toBeLessThan(80);
 
-  // A preset puts it exactly: a cup is 3 g.
-  await sheet.getByRole("button", { name: /^Cup/ }).click();
+  // A preset puts it exactly: a cup is 3 g (an option row, a radio).
+  await sheet.getByRole("radio", { name: /^Cup/ }).click();
   await expect(level).toHaveAttribute("aria-valuenow", "97");
-  const submit = sheet.getByRole("button", { name: "Pour 3 g" });
+  const submit = sheet.getByRole("button", { name: "Steep 3 g" });
   await expect
     .poll(async () => (await edgesOf(submit)).bottom, { timeout: 5_000 })
     .toBeLessThanOrEqual(viewport?.height ?? 844);
   await submit.click();
 
-  await expect(page.getByText("Poured 3 g · 97% left")).toBeVisible({
+  await expect(page.getByText("Steeped 3 g · 97% left")).toBeVisible({
     timeout: 20_000,
   });
   await expect
@@ -245,11 +260,11 @@ test("the last pour: Finished, then the rating, then the band it reads as", asyn
     .getByRole("toolbar", { name: "Item actions" })
     .getByRole("button", { name: "Steep", exact: true })
     .click();
-  const sheet = page.getByRole("dialog", { name: "Pour" });
-  await sheet.getByRole("button", { name: "The rest" }).click();
-  await sheet.getByRole("button", { name: "Pour the last of it" }).click();
+  const sheet = page.getByRole("dialog", { name: "Steep" });
+  await sheet.getByRole("radio", { name: /^The rest/ }).click();
+  await sheet.getByRole("button", { name: "Steep the last of it" }).click();
 
-  const last = page.getByRole("dialog", { name: "That's the last of it" });
+  const last = page.getByRole("dialog", { name: "That’s the last of it" });
   await expect(last).toBeVisible({ timeout: 20_000 });
   await last.getByRole("button", { name: "Finished" }).click();
   await expect(
@@ -273,7 +288,7 @@ test("the last pour: Finished, then the rating, then the band it reads as", asyn
   const finished = page
     .locator("[data-sonner-toast]")
     .filter({ hasText: "Finished. Moved out of the cellar." });
-  const save = rate.getByRole("button", { name: "Save rating" });
+  const save = rate.getByRole("button", { name: "Save 4.5" });
   await expect(page.locator("html[data-sheet-open]")).toHaveCount(1);
   await expect(finished).toBeVisible();
   await save.click({ trial: true });
@@ -291,27 +306,28 @@ test("the last pour: Finished, then the rating, then the band it reads as", asyn
       saveBox.y < toastBox.y + toastBox.height;
     expect(overlaps, "the toast covers the rating sheet's Save").toBe(false);
   }
-  await rate.getByRole("button", { name: "Save rating" }).click();
+  await save.click();
 
-  const lists = page.getByRole("dialog", { name: "On your lists" });
-  await expect(lists).toBeVisible({ timeout: 20_000 });
-  await expect(lists.getByText(listName)).toBeVisible();
-  const moveTo = lists.getByRole("button", { name: "Move to Outstanding" });
-  await moveTo.click();
+  // F2b's band sheet for the list it is on, showing where it really sits
+  // (ruling 3): its title is the drink, its header the rank, band and list.
+  const bands = page.getByRole("dialog", { name: teaName });
+  await expect(bands).toBeVisible({ timeout: 20_000 });
+  await expect(bands.getByText(`#1 · Good · ${listName}`)).toBeVisible();
+  await expect(bands.getByRole("radio", { name: /^Good/ })).toHaveAttribute(
+    "aria-checked",
+    "true",
+  );
+  await bands.getByRole("radio", { name: /^Outstanding/ }).click();
   const moved = page
     .locator("[data-sonner-toast]")
-    .filter({ hasText: `Moved ${teaName} to Outstanding on ${listName}` });
+    .filter({ hasText: `Moved to Outstanding · #1 · ${teaName}` });
   await expect(moved).toBeVisible({ timeout: 20_000 });
-  await expect(moveTo).toBeHidden();
+  await expect(bands).toBeHidden();
+  await expect.poll(bandOnList, { timeout: 20_000 }).toBe(5);
 
-  // The toast's Undo is tappable over the open sheet (a modal holds body at
-  // pointer-events: none) and takes back this move; the sheet stays open.
+  // The toast's Undo takes back this move, through the list's history.
   await moved.getByRole("button", { name: "Undo" }).click();
-  await expect(lists).toBeVisible();
-  await expect(moveTo).toBeVisible({ timeout: 20_000 });
-  await moveTo.click();
-  await expect(moveTo).toBeHidden({ timeout: 20_000 });
-  await lists.getByRole("button", { name: "Done" }).click();
+  await expect.poll(bandOnList, { timeout: 20_000 }).toBe(3);
 
   const state = await bottleState();
   expect(state.emptyAt, "the bottle is finished").not.toBeNull();
@@ -322,12 +338,6 @@ test("the last pour: Finished, then the rating, then the band it reads as", asyn
     { id: teaId },
   );
   expect(review.item.data.myReview?.score).toBe(4.5);
-  const onList = (
-    review.item.data.tierListEntries.edges as {
-      node: { band: number; tierList: { id: string } | null };
-    }[]
-  ).find((edge) => edge.node.tierList?.id === tierListId);
-  expect(onList?.node.band, "moved to Outstanding").toBe(5);
 
   expect(noise.pageErrors).toEqual([]);
 });

@@ -42,6 +42,7 @@ mock.module("urql", () => ({
       return {
         data: {
           updateCellarItem: { __typename: "CellarItem", id: "b-1" },
+          checkIn: { __typename: "CheckIn", id: "k-1" },
           setCellarItemPercentage: undefined,
         },
       };
@@ -60,8 +61,12 @@ mock.module("next/navigation", () => ({
   usePathname: () => "/teas/t-1",
   useSearchParams: () => new URLSearchParams(),
 }));
+const toasts: string[] = [];
 mock.module("@/components/app/notify", () => ({
-  notify: (message: string) => message,
+  notify: (message: string) => {
+    toasts.push(message);
+    return message;
+  },
   dismissNotification: () => {},
   UNDO_TOAST_MS: 5000,
 }));
@@ -83,6 +88,7 @@ beforeEach(() => {
 afterEach(async () => {
   queryData = undefined;
   updates.length = 0;
+  toasts.length = 0;
   await act(async () => root.unmount());
   document.body.innerHTML = "";
 });
@@ -119,7 +125,7 @@ const render = async (bottles: (typeof open)[], selectedId?: string) => {
 
 const pourSheet = () =>
   [...document.querySelectorAll('[role="dialog"]')].find((el) =>
-    el.textContent?.includes("Pour"),
+    /Pour|Steep/.test(el.textContent ?? ""),
   );
 
 describe("Your bottles' Pour (X09 + X03)", () => {
@@ -147,11 +153,45 @@ describe("Your bottles' Pour (X09 + X03)", () => {
     assert.equal(document.querySelector('[data-slot="your-bottle"]'), null);
   });
 
-  test("nothing is drawn with no bottles and no sheet open", async () => {
+  test("no bottles: no rows, the empty card, and no sheet open", async () => {
     await render([]);
     assert.equal(document.querySelector('[data-slot="your-bottle"]'), null);
-    assert.equal(document.querySelector("#your-bottles"), null);
+    assert.match(
+      document.querySelector('[data-slot="your-bottles-empty"]')?.textContent ??
+        "",
+      /None in your cellar/,
+    );
     assert.equal(pourSheet(), undefined);
+  });
+});
+
+describe("Check in (Cellars-Bottles 03)", () => {
+  test("the next bottle's Check in writes one check-in for it, then a toast with Undo", async () => {
+    await render([open, { ...open, id: "b-2", openAt: null }]);
+    const buttons = [...document.querySelectorAll("button")].filter(
+      (b) => b.textContent === "Check in",
+    );
+    // One primary on the card: on the next bottle only.
+    assert.equal(buttons.length, 1);
+    await act(async () => {
+      buttons[0]?.click();
+      await settle();
+    });
+    assert.equal(updates.length, 1);
+    const sent = updates[0] as { cellarId: string; cellarItemId: string };
+    assert.equal(sent.cellarId, "c-1");
+    assert.equal(sent.cellarItemId, "b-1");
+    assert.deepEqual(toasts, ["Checked in"]);
+  });
+
+  test("a finished bottle offers no Check in", async () => {
+    await render([{ ...open, emptyAt: "2026-10-02T00:00:00Z" }]);
+    assert.equal(
+      [...document.querySelectorAll("button")].some(
+        (b) => b.textContent === "Check in",
+      ),
+      false,
+    );
   });
 });
 

@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback } from "react";
+import { useCallback, useSyncExternalStore } from "react";
+import { ShareSheet } from "@/components/app/overlays/ShareSheet";
 import type { ApiItemType } from "@/components/cellar-api/itemTypes";
 import { useShareLink } from "@/lib/share/use-share-link";
 import { itemShareUrl } from "./adapter";
@@ -12,15 +13,23 @@ export type ItemShareProps = {
   itemName?: string;
 };
 
+const noop = () => () => {};
+
+/** The page's origin, after hydration (none on the server). */
+function useOrigin(): string {
+  return useSyncExternalStore(
+    noop,
+    () => window.location.origin,
+    () => "",
+  );
+}
+
 /**
- * The item and bottle pages' Share (N26: the bar's trailing action). X17 made
- * it the app's one share behaviour (`lib/share/share-link.ts`): the system
- * share sheet, else the link copied with a toast. The URL is the item's own
- * page — from a bottle too, so a share never carries the cellar — and it is
- * the public page for someone signed out (`src/proxy.ts`).
- *
- * The QR code this used to fall back to went with that change; the share
- * sheet and the clipboard are what a phone and a desktop each reach for.
+ * The item and bottle pages' share link, without a sheet (X17's one share
+ * behaviour, `lib/share/share-link.ts`: the system share sheet, else the link
+ * copied with a toast). The URL is the item's own page, from a bottle too, so
+ * a share never carries the cellar, and it is the public page for someone
+ * signed out (`src/proxy.ts`).
  */
 export function useItemShare({ itemId, itemType, itemName }: ItemShareProps) {
   const share = useShareLink();
@@ -33,5 +42,33 @@ export function useItemShare({ itemId, itemType, itemName }: ItemShareProps) {
           : { title: itemName, text: `${itemName} on Cellar Assistant` }),
       }),
     [share, itemId, itemType, itemName],
+  );
+}
+
+/**
+ * The item's Share (L14, L34): F2a's ShareSheet with a real QR code for the
+ * item's own page, then Copy link and More ways (the system share sheet,
+ * where there is one). "Anyone with the link": the item page is public.
+ */
+export function ItemShareSheet({
+  open,
+  onOpenChange,
+  itemId,
+  itemType,
+  itemName,
+}: ItemShareProps & {
+  itemName: string;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const origin = useOrigin();
+  return (
+    <ShareSheet
+      open={open}
+      onOpenChange={onOpenChange}
+      title={itemName}
+      subtitle="Share · anyone with the link"
+      url={itemShareUrl(origin, itemType, itemId)}
+    />
   );
 }

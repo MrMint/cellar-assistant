@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { Fragment, useState } from "react";
+import { Fragment, type ReactNode, useEffect, useState } from "react";
 import {
   type FieldPath,
   type SubmitHandler,
@@ -10,6 +10,7 @@ import {
 } from "react-hook-form";
 import { useMutation } from "urql";
 import { AIDraftField } from "@/components/app/AIDraftField";
+import { CheckTag } from "@/components/app/parts/Field";
 import { useNavigate } from "@/components/app/useNavigate";
 import { BrandPicker } from "@/components/brand/BrandPicker";
 import type { ApiItemType } from "@/components/cellar-api/itemTypes";
@@ -22,8 +23,10 @@ import {
   NON_VINTAGE,
   staticOptionValues,
 } from "@/components/item-api/itemFormRules";
+import { Button } from "@/components/ui/button";
 import { UpdateItemMutation } from "@/lib/api/items";
 import { unwrapResult } from "@/lib/api/result";
+import { feedback } from "@/lib/feedback";
 import { isDrafted } from "@/lib/forms/ai-draft";
 import {
   type CorrectionProposal,
@@ -42,9 +45,11 @@ import {
 } from "./ItemCorrectionPanel";
 import { ItemFormField } from "./ItemFormField";
 import {
+  checkPaths,
   dateFromYear,
   entryPath,
   formLayout,
+  toCheckLabel,
   yearFromDate,
 } from "./itemFormLayout";
 import { LoadingButton } from "./LoadingButton";
@@ -71,6 +76,12 @@ type ItemFormProps = {
   brand?: ShownBrand | null;
   /** X19: the AI helpers this item supports for its creator. */
   correction?: CorrectionTools | null;
+  /**
+   * C3: `Item.unconfirmedFields`, the label read's guesses nobody confirmed.
+   * Each shown field among them wears "Check this" until it is edited or
+   * confirmed ("Looks right"); "n to check" sits beside Save.
+   */
+  unconfirmed?: readonly string[];
 };
 
 /** A value a tap put in a field, and which helper proposed it. */
@@ -129,6 +140,7 @@ export const ItemForm = ({
   onSavedHref,
   brand,
   correction,
+  unconfirmed,
 }: ItemFormProps) => {
   const router = useRouter();
   const navigate = useNavigate();
@@ -176,6 +188,61 @@ export const ItemForm = ({
     const top = watched[path as "name" | "description" | "country"];
     return typeof top === "string" ? top : "";
   };
+
+  /* ------------------------------------------------------------------ */
+  /* C3 — "Check this"                                                   */
+  /* ------------------------------------------------------------------ */
+
+  const checks = checkPaths(unconfirmed ?? [], layout, withBrand);
+  /** What a path held when the form opened. */
+  const initialAt = (path: string): string => {
+    if (path === "brandName") return shownBrand?.name ?? "";
+    if (path.startsWith("attributes.")) {
+      const key = path.slice("attributes.".length);
+      return yearDefaults[key] ?? defaultValues.attributes[key] ?? "";
+    }
+    return defaultValues[path as "name" | "description" | "country"] ?? "";
+  };
+  // Confirmed with "Looks right", or edited: either clears the mark for good
+  // (editing it back does not bring the mark back).
+  const [settled, setSettled] = useState<ReadonlySet<string>>(new Set());
+  const edited = checks.filter(
+    (path) => !settled.has(path) && valueAt(path) !== initialAt(path),
+  );
+  const editedKey = edited.join("|");
+  useEffect(() => {
+    if (editedKey === "") return;
+    setSettled((all) => new Set([...Array.from(all), ...editedKey.split("|")]));
+  }, [editedKey]);
+  const toCheck = checks.filter(
+    (path) => !settled.has(path) && !edited.includes(path),
+  );
+  const confirmField = (path: string) => {
+    feedback("tick");
+    setSettled((all) => new Set([...Array.from(all), path]));
+  };
+  /** "n to check": to the first open field, as the floor's refusal does. */
+  const goToCheck = () => {
+    const first = toCheck[0];
+    if (first === undefined) return;
+    const field = document.querySelector<HTMLElement>(
+      `[data-check-path="${first}"]`,
+    );
+    field?.scrollIntoView({ block: "center", behavior: "smooth" });
+    field
+      ?.querySelector<HTMLElement>("input, textarea, button, [tabindex]")
+      ?.focus({ preventScroll: true });
+  };
+  const checkMark = (path: string, label: string, field: ReactNode) => (
+    <CheckField
+      path={path}
+      label={label}
+      open={toCheck.includes(path)}
+      onConfirm={() => confirmField(path)}
+    >
+      {field}
+    </CheckField>
+  );
 
   /** The form's attributes in the API's terms (years back to dates, NV → null). */
   const wireAttributes = (
@@ -419,36 +486,107 @@ export const ItemForm = ({
               <Fragment
                 key={entry.kind === "attribute" ? entry.field.key : entry.kind}
               >
-                <AIDraftField {...draftProps(entryPath(entry), entry.label)}>
-                  <ItemFormField
-                    entry={entry}
-                    control={control}
-                    disabled={isSubmitting}
-                  />
-                </AIDraftField>
-                {withBrand && entry.kind === "description" && (
-                  <AIDraftField {...draftProps("brandName", "Brand")}>
-                    <BrandPicker
-                      key={brandKey}
-                      value={brandName}
-                      onChange={setBrandName}
+                {checkMark(
+                  entryPath(entry),
+                  entry.label,
+                  <AIDraftField {...draftProps(entryPath(entry), entry.label)}>
+                    <ItemFormField
+                      entry={entry}
+                      control={control}
                       disabled={isSubmitting}
                     />
-                  </AIDraftField>
+                  </AIDraftField>,
                 )}
+                {withBrand &&
+                  entry.kind === "description" &&
+                  checkMark(
+                    "brandName",
+                    "Brand",
+                    <AIDraftField {...draftProps("brandName", "Brand")}>
+                      <BrandPicker
+                        key={brandKey}
+                        value={brandName}
+                        onChange={setBrandName}
+                        disabled={isSubmitting}
+                      />
+                    </AIDraftField>,
+                  )}
               </Fragment>
             ))}
           </div>
           {errors.root !== undefined && (
-            <p role="alert" className="type-body text-destructive">
+            <p role="alert" className="t-body text-danger">
               {errors.root.message}
             </p>
           )}
-          <LoadingButton loading={isSubmitting} type="submit">
-            Save
-          </LoadingButton>
+          {/* CROSS-LOT: the primary says its verb; "n to check" beside it. */}
+          <div className="flex gap-3" data-slot="item-form-footer">
+            {toCheck.length > 0 && (
+              <Button
+                type="button"
+                variant="outline"
+                className="shrink-0"
+                data-slot="to-check"
+                onClick={goToCheck}
+              >
+                {toCheckLabel(toCheck.length)}
+              </Button>
+            )}
+            <LoadingButton
+              loading={isSubmitting}
+              type="submit"
+              className="min-w-0 flex-1"
+            >
+              Save
+            </LoadingButton>
+          </div>
         </div>
       </form>
     </div>
   );
 };
+
+/**
+ * A field the label read guessed (CROSS-LOT "Check this"): the tag at the
+ * label row's end, and under the field one reason line with "Looks right".
+ * Closed, it is just the field.
+ */
+function CheckField({
+  path,
+  label,
+  open,
+  onConfirm,
+  children,
+}: {
+  path: string;
+  label: string;
+  open: boolean;
+  onConfirm: () => void;
+  children: ReactNode;
+}) {
+  if (!open) return children;
+  return (
+    <div
+      data-slot="check-field"
+      data-check-path={path}
+      className="relative flex flex-col gap-1"
+    >
+      <CheckTag className="pointer-events-none absolute top-0 right-0" />
+      {children}
+      <div className="flex min-h-11 items-center gap-2">
+        <span className="t-cap min-w-0 flex-1 text-ink-2">
+          The label read this. Is it right?
+        </span>
+        <Button
+          type="button"
+          variant="quiet"
+          className="shrink-0"
+          aria-label={`${label} looks right`}
+          onClick={onConfirm}
+        >
+          Looks right
+        </Button>
+      </div>
+    </div>
+  );
+}

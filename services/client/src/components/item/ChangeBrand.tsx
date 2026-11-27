@@ -129,7 +129,7 @@ export function ChangeBrand({
         <div className="flex flex-col gap-3 pb-2">
           <BrandPicker value={name} onChange={setName} disabled={pending} />
           {error !== null && (
-            <p role="alert" className="type-callout text-destructive">
+            <p role="alert" className="t-cap text-destructive">
               {error}
             </p>
           )}

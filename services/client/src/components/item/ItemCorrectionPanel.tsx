@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useMutation } from "urql";
-import { AI, Scan } from "@/components/app/icons";
+import { AI } from "@/components/app/icons";
 import { AiStatus } from "@/components/common/AiStatus";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
@@ -204,46 +204,41 @@ export function ItemCorrectionPanel({
   };
 
   return (
-    <section
-      aria-label="Correct this item"
-      className="flex flex-col gap-3 rounded-lg bg-surface-1 p-4"
-    >
-      <p className="type-callout text-ink-2">
-        Something off? Nothing changes until you tap a suggestion and save.
-      </p>
-      {/* Stacked on a phone: side by side, two icon-and-label buttons need
-          ~330 px and the card has ~326 at 390 — they would overflow. */}
+    <section aria-label="Correct this item" className="flex flex-col gap-2">
+      {/* Cellars-Pour 31: the two helpers side by side above the form, at
+          the page's full width (~358 px at 390). Nothing changes until a
+          suggestion is tapped and saved. */}
       <div
-        className={
-          canReread && canSuggest ? "grid gap-2 sm:grid-cols-2" : "grid gap-2"
-        }
+        className={canReread && canSuggest ? "grid grid-cols-2 gap-3" : "grid"}
       >
         {canReread && (
           <Button
             type="button"
-            variant="secondary"
+            variant="outline"
+            className="min-w-0"
             disabled={working}
             onClick={() => void reread()}
           >
-            <Scan aria-hidden />
-            Re-read label
+            <AI aria-hidden />
+            <span className="truncate">Re-read label</span>
           </Button>
         )}
         {canSuggest && (
           <Button
             type="button"
-            variant="secondary"
+            variant="outline"
+            className="min-w-0"
             disabled={working}
             onClick={() => void suggest()}
           >
             <AI aria-hidden />
-            Suggest details
+            <span className="truncate">Suggest details</span>
           </Button>
         )}
       </div>
       <div aria-live="polite" className="empty:hidden">
         {status.state === "working" && (
-          <p className="type-callout flex items-center gap-2 text-ai">
+          <p className="t-cap flex items-center gap-2 text-ai">
             <Spinner aria-hidden />
             {status.kind === "label"
               ? "Reading the label again…"
@@ -251,7 +246,7 @@ export function ItemCorrectionPanel({
           </p>
         )}
         {status.state === "done" && (
-          <p className="type-callout text-ink-2">{status.message}</p>
+          <p className="t-cap text-ink-2">{status.message}</p>
         )}
         {status.state === "failed" && (
           <AiStatus

@@ -236,3 +236,28 @@ export const DrinkLogPlacePickerQuery = graphql(
 `,
   [ActorErrorFieldsFragment],
 );
+
+/**
+ * C3 "Check this": the label read's guesses the creator never confirmed
+ * (`Item.unconfirmedFields`, empty for anyone else and for an item not
+ * created from a read). Here rather than beside the edit page because this
+ * module is one documents.test.ts validates; it belongs in an item module.
+ */
+export const ItemUncheckedFieldsQuery = graphql(
+  `
+  query ItemUncheckedFields($itemId: ID!, $type: ItemType!) {
+    item(id: $itemId, type: $type) {
+      __typename
+      ... on QueryItemSuccess {
+        data {
+          __typename
+          id
+          unconfirmedFields
+        }
+      }
+      ...ActorErrorFields
+    }
+  }
+`,
+  [ActorErrorFieldsFragment],
+);

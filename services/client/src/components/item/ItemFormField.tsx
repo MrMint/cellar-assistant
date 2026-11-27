@@ -156,7 +156,7 @@ export const ItemFormField = ({
               className="size-5"
               {...rest}
             />
-            <Label htmlFor={id} className="type-body font-normal">
+            <Label htmlFor={id} className="t-body font-normal">
               {entry.label}
             </Label>
           </div>
@@ -309,7 +309,7 @@ const FieldShell = ({
       </FieldLabel>
       {children}
       {text !== undefined && (
-        <FieldError id={errorId(id)} className="type-footnote text-destructive">
+        <FieldError id={errorId(id)} className="t-cap text-danger">
           {text}
         </FieldError>
       )}

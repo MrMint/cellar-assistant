@@ -78,7 +78,7 @@ function SeenAtList({ item, now }: { item: ItemView; now: number }) {
               <SeenAtItem key={row.place.id} row={row} now={now} />
             ))}
           </ul>
-          <p className="type-footnote text-ink-3">
+          <p className="t-cap text-ink-3">
             From menus scanned on shared places, your own logs, and friends'
             logs they share with you.{near === null ? "" : " Nearest first."}
           </p>
@@ -101,13 +101,13 @@ function ScanPrompt({ question }: { question: string }) {
       aria-label={question}
       className="flex flex-col gap-1 rounded-lg bg-surface-1 p-4"
     >
-      <span className="type-callout text-ink-1">{question}</span>
-      <span className="type-footnote text-ink-3">
+      <span className="t-cap text-ink-1">{question}</span>
+      <span className="t-cap text-ink-3">
         Scan the menu and it shows up here for you and your friends.
       </span>
       <Link
         href={SCAN_A_MENU_HREF}
-        className="type-callout mt-1 inline-flex min-h-11 items-center self-start font-medium text-brand"
+        className="t-cap mt-1 inline-flex min-h-11 items-center self-start font-medium text-brand"
       >
         Scan a menu
       </Link>
@@ -138,13 +138,13 @@ function SeenAtItem({ row, now }: { row: SeenAtRow; now: number }) {
           )}
         </span>
         <span className="flex min-w-0 flex-1 flex-col">
-          <span className="type-body truncate">{row.placeName}</span>
-          <span className="type-footnote truncate text-ink-3">
+          <span className="t-body truncate">{row.placeName}</span>
+          <span className="t-cap truncate text-ink-3">
             {seenAtWhy(row, now)}
           </span>
         </span>
         {distance === null ? null : (
-          <span className="type-footnote shrink-0 text-ink-3 tabular-nums">
+          <span className="t-cap shrink-0 text-ink-3 tabular-nums">
             {distance}
           </span>
         )}
