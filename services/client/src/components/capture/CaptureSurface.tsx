@@ -91,10 +91,15 @@ export function CaptureSurface({
 
   if (resolved === null) {
     return (
-      <div data-slot="capture-surface" className="flex flex-col gap-3">
-        <div className="flex min-h-11 items-center gap-1">{leading}</div>
-        <Skeleton className="aspect-[3/4] max-h-[64dvh] w-full rounded-lg" />
-        <Skeleton className="h-11 w-full rounded-md" />
+      <div
+        data-slot="capture-surface"
+        className="keep-dark -m-4 min-h-[calc(100%+2rem)] bg-background p-4 text-ink"
+      >
+        <div className="mx-auto flex w-full max-w-[600px] flex-col gap-3">
+          <div className="flex min-h-11 items-center gap-1">{leading}</div>
+          <Skeleton className="aspect-[3/4] max-h-[64dvh] w-full rounded-lg" />
+          <Skeleton className="h-11 w-full rounded-md" />
+        </div>
       </div>
     );
   }
@@ -107,36 +112,41 @@ export function CaptureSurface({
     <div
       data-slot="capture-surface"
       data-mode={resolved.mode}
-      className="mx-auto w-full max-w-[600px]"
+      // Capture-Camera: the camera has the screen and stays dark in both
+      // themes, so the surface root scopes the dark tokens and paints them,
+      // bleeding over the shell's padding.
+      className="keep-dark -m-4 min-h-[calc(100%+2rem)] bg-background p-4 text-ink"
     >
-      {resolved.mode === "bottle" ? (
-        <ItemOnboarding
-          key={run}
-          type={type}
-          typeExplicit={typeExplicit}
-          chooseType
-          cellars={cellars}
-          resumeId={run === 0 ? resumeId : undefined}
-          leading={leading}
-          modeRow={modeRow}
-          initialPhoto={resolved.photo}
-          onScanAsMenu={(photo) => switchTo("menu", photo)}
-        />
-      ) : resolved.mode === "menu" ? (
-        <MenuCapture
-          key={run}
-          leading={leading}
-          modeRow={modeRow}
-          initialPhoto={resolved.photo}
-        />
-      ) : (
-        <RecipeCapture
-          key={run}
-          leading={leading}
-          modeRow={modeRow}
-          initialPhoto={resolved.photo}
-        />
-      )}
+      <div className="mx-auto w-full max-w-[600px]">
+        {resolved.mode === "bottle" ? (
+          <ItemOnboarding
+            key={run}
+            type={type}
+            typeExplicit={typeExplicit}
+            chooseType
+            cellars={cellars}
+            resumeId={run === 0 ? resumeId : undefined}
+            leading={leading}
+            modeRow={modeRow}
+            initialPhoto={resolved.photo}
+            onScanAsMenu={(photo) => switchTo("menu", photo)}
+          />
+        ) : resolved.mode === "menu" ? (
+          <MenuCapture
+            key={run}
+            leading={leading}
+            modeRow={modeRow}
+            initialPhoto={resolved.photo}
+          />
+        ) : (
+          <RecipeCapture
+            key={run}
+            leading={leading}
+            modeRow={modeRow}
+            initialPhoto={resolved.photo}
+          />
+        )}
+      </div>
     </div>
   );
 }
