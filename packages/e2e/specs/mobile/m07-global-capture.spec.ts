@@ -98,7 +98,7 @@ test("＋ opens the camera, not a chooser; the mode row remembers; Close goes ba
     "Recipe",
   ]);
   await expect(
-    page.getByRole("button", { name: /library/i }).first(),
+    page.getByRole("button", { name: /choose a photo|library/i }).first(),
   ).toBeVisible({ timeout: 10_000 });
 
   await modes.getByRole("radio", { name: "Recipe" }).tap();
@@ -210,10 +210,12 @@ test("a per-type cellar add names the cellar; Open it now shows the bottle, unop
   test.setTimeout(150_000);
   await stubCamera(context, "denied");
   await page.goto(`/cellars/${cellarId}/teas/add`);
-  await expect(page.getByRole("heading", { name: "Add Tea" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: `Add to ${cellarName}` }),
+  ).toBeVisible();
   await expect(page.getByRole("navigation", { name: "Main" })).toBeHidden();
 
-  await page.getByRole("button", { name: "Type it in instead" }).tap();
+  await page.getByRole("button", { name: "Type it" }).tap();
   await expect(page.locator('[data-slot="draft-card"]')).toBeVisible({
     timeout: 45_000,
   });
@@ -223,7 +225,7 @@ test("a per-type cellar add names the cellar; Open it now shows the bottle, unop
   await page.getByRole("option").first().tap();
   await page
     .getByRole("main")
-    .getByRole("button", { name: "Add", exact: true })
+    .getByRole("button", { name: "Add bottle", exact: true })
     .tap();
 
   const sheet = page.getByRole("dialog", { name: "+1 bottle" });

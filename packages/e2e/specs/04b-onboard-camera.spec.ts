@@ -58,7 +58,9 @@ test("a photographed label is uploaded and read honestly", async ({
   ).toMatch(/^[0-9a-f-]{36}$/);
 
   await expect(
-    primary.getByRole("main").getByRole("button", { name: "Add", exact: true }),
+    primary
+      .getByRole("main")
+      .getByRole("button", { name: /^Add (bottle|to catalog)$/ }),
   ).toBeVisible({ timeout: 120_000 });
   await expect(
     primary.getByRole("alert").filter({ hasText: "Nothing to read" }),

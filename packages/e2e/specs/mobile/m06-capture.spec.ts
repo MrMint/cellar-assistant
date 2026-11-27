@@ -11,7 +11,7 @@ import { Gql } from "../../fixtures/test.ts";
  * X05 · N21 — adding a bottle at 390x844, thumb-first.
  *
  * 1. The cellar's add page opens straight on the one camera (no type cards,
- *    no steps): a type picker that remembers, "Type it in instead", and —
+ *    no steps): a type picker that remembers, "Type it", and —
  *    after the draft is saved — the success sheet's "+1 bottle", whose
  *    "Snap another" puts the camera back with the same type chosen.
  * 2. `/add` (no cellar pinned) defaults the draft card's "Into" row to the
@@ -92,7 +92,7 @@ test("the cellar's add page: one camera, a remembered type, a draft, +1 bottle",
   await page.goto(`/cellars/${cellarId}/items/add`);
 
   await expect(
-    page.getByRole("heading", { name: "Add a bottle" }),
+    page.getByRole("heading", { name: `Add to ${cellarName}` }),
   ).toBeVisible();
   const types = page.getByRole("radiogroup", { name: "What are you adding?" });
   await expect(types.getByRole("radio")).toHaveCount(6);
@@ -103,10 +103,10 @@ test("the cellar's add page: one camera, a remembered type, a draft, +1 bottle",
   );
   // N04 holds: a refused camera still offers the library.
   await expect(
-    page.getByRole("button", { name: /library/i }).first(),
+    page.getByRole("button", { name: /choose a photo|library/i }).first(),
   ).toBeVisible({ timeout: 10_000 });
 
-  await page.getByRole("button", { name: "Type it in instead" }).tap();
+  await page.getByRole("button", { name: "Type it" }).tap();
   const draft = page.locator('[data-slot="draft-card"]');
   await expect(draft).toBeVisible({ timeout: 45_000 });
   await expect(draft.getByText("Tea", { exact: true })).toBeVisible();
@@ -117,7 +117,7 @@ test("the cellar's add page: one camera, a remembered type, a draft, +1 bottle",
   await page.getByRole("option").first().tap();
   await page
     .getByRole("main")
-    .getByRole("button", { name: "Add", exact: true })
+    .getByRole("button", { name: "Add bottle", exact: true })
     .tap();
 
   const sheet = page.getByRole("dialog", { name: "+1 bottle" });
@@ -130,9 +130,7 @@ test("the cellar's add page: one camera, a remembered type, a draft, +1 bottle",
   await sheet.getByRole("button", { name: "Add another" }).tap();
 
   // Back on the camera, the type still Tea — the last used.
-  await expect(
-    page.getByRole("button", { name: "Type it in instead" }),
-  ).toBeVisible();
+  await expect(page.getByRole("button", { name: "Type it" })).toBeVisible();
   await expect(
     page
       .getByRole("radiogroup", { name: "What are you adding?" })
@@ -164,11 +162,11 @@ test("/add defaults the draft's cellar to the last one filed into", async ({
     );
   }, cellarId);
   await page.goto("/add?mode=bottle");
-  await page.getByRole("button", { name: "Type it in instead" }).tap();
+  await page.getByRole("button", { name: "Type it" }).tap();
   const draft = page.locator('[data-slot="draft-card"]');
   await expect(draft).toBeVisible({ timeout: 45_000 });
   await expect(
-    draft.getByRole("combobox", { name: "Into" }),
+    page.locator('[data-slot="cellar-picker"]'),
     "the draft card did not default to the last cellar used",
   ).toContainText(cellarName);
 });

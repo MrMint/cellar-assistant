@@ -35,7 +35,7 @@ import {
 async function openLabelCamera(page: Page): Promise<void> {
   await page.goto("/add/wines");
   await expect(
-    page.getByRole("button", { name: "Type it in instead" }),
+    page.getByRole("button", { name: "Type it" }),
     "the add flow did not open on its camera",
   ).toBeVisible();
   await expect
@@ -46,7 +46,7 @@ async function openLabelCamera(page: Page): Promise<void> {
 }
 
 const library = (page: Page) =>
-  page.getByRole("button", { name: /library/i }).first();
+  page.getByRole("button", { name: /choose a photo|library/i }).first();
 
 async function expectLibraryFallback(page: Page, timeout: number) {
   await expect(
