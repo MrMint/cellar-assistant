@@ -56,6 +56,8 @@ export type TierListItemNode = {
       googleRating: number | null;
       googleUserRatingsTotal: number | null;
     } | null;
+    /** F-15: the row's thumb (optional: the pairwise board reads no photo). */
+    photos?: FirstPhoto;
   } | null;
   item: {
     __typename?: string;
@@ -64,6 +66,9 @@ export type TierListItemNode = {
     name: string;
     country: string | null;
     myReview: { score: number } | null;
+    /** F-15: the crowd's rating, "4.2 (37)" at the row's right. */
+    score?: { average: number | null; count: number } | null;
+    images?: FirstPhoto;
     wineVariety?: string | null;
     wineVintage?: string | null;
     wineRegion?: string | null;
@@ -75,6 +80,15 @@ export type TierListItemNode = {
     teaRegion?: string | null;
   } | null;
 };
+
+/** `photos(first: 1)` / `images(first: 1)`: only the file's URL is read. */
+type FirstPhoto =
+  | { edges: { node: { file: { url: string | null } | null } }[] }
+  | null
+  | undefined;
+
+const firstPhotoUrl = (photos: FirstPhoto): string | null =>
+  photos?.edges[0]?.node.file?.url ?? null;
 
 export type TierListCoreNode = {
   id: string;
@@ -188,6 +202,7 @@ export function itemDisplayFromNode(
   let viewerScore: number | null = null;
   let publicRating: number | null = null;
   let publicRatingCount: number | null = null;
+  let photoUrl: string | null = null;
 
   const { place, item } = node;
   if (place !== null) {
@@ -197,12 +212,19 @@ export function itemDisplayFromNode(
     ownerScore = viewerIsOwner ? viewerScore : null;
     publicRating = place.enrichment?.googleRating ?? null;
     publicRatingCount = place.enrichment?.googleUserRatingsTotal ?? null;
+    photoUrl = firstPhotoUrl(place.photos);
   } else if (item !== null) {
     name = displayItemName(item.name);
     viewerScore = item.myReview?.score ?? null;
     ownerScore =
       node.ownerReview?.score ?? (viewerIsOwner ? viewerScore : null);
     subtitle = itemEntrySubtitle(item);
+    // F-15: the crowd's average, with its count; nobody yet is no rating.
+    if (item.score?.average != null && item.score.count > 0) {
+      publicRating = item.score.average;
+      publicRatingCount = item.score.count;
+    }
+    photoUrl = firstPhotoUrl(item.images);
   }
 
   return {
@@ -216,6 +238,7 @@ export function itemDisplayFromNode(
     viewerScore,
     publicRating,
     publicRatingCount,
+    photoUrl,
   };
 }
 

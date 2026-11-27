@@ -302,6 +302,7 @@ const EntryRow = memo(function EntryRow({
             selected && !picked && "ring-2 ring-ring-select",
           )}
           glyph={glyph}
+          photoUrl={item.photoUrl ?? null}
           where={where}
           rating={item.publicRating}
           ratingCount={item.publicRatingCount}
@@ -463,7 +464,12 @@ function DragOverlayRow({
 }) {
   return (
     <div className="scale-[1.03] cursor-grabbing shadow-pop">
-      <PlaceRow name={item.name} glyph={glyph} where={item.subtitle} />
+      <PlaceRow
+        name={item.name}
+        glyph={glyph}
+        photoUrl={item.photoUrl ?? null}
+        where={item.subtitle}
+      />
     </div>
   );
 }

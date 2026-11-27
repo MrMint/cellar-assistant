@@ -28,6 +28,8 @@ export interface TierListItemDisplay {
   viewerScore: number | null;
   publicRating: number | null;
   publicRatingCount: number | null;
+  /** F-15: the row's thumb, the item's or place's first photo. */
+  photoUrl?: string | null;
 }
 
 export interface TierListData {
