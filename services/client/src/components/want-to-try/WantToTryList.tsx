@@ -6,7 +6,6 @@ import { useEffect, useState } from "react";
 import { AppBar } from "@/components/app/AppBar";
 import { EmptyState } from "@/components/app/EmptyState";
 import { ICON_STROKE, Place, Recipe, WantToTry } from "@/components/app/icons";
-import { Link } from "@/components/app/Link";
 import { InsetSection, ListRow, Page } from "@/components/app/Page";
 import { SegmentedControl } from "@/components/app/SegmentedControl";
 import { itemTypeTokens, TypeGlyph } from "@/components/app/TypeChip";
@@ -14,6 +13,7 @@ import { useNavigate } from "@/components/app/useNavigate";
 import { ApiError } from "@/components/cellar-api/ApiError";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { PressLink } from "@/components/user/PressLink";
 import { failureFromTransport } from "@/lib/api/result";
 import type { Page as ListPage } from "@/lib/paging/paged-connection";
 import { usePagedConnection } from "@/lib/paging/use-paged-connection";
@@ -39,7 +39,7 @@ type WantToTryListProps = {
 function Thumbnail({ row }: { row: WantToTryRow }) {
   if (row.imageUrl !== null) {
     return (
-      <span className="relative block size-11 overflow-hidden rounded-sm bg-surface-2">
+      <span className="relative block size-11 overflow-hidden rounded-sm bg-raised">
         <Image
           src={row.imageUrl}
           alt=""
@@ -64,15 +64,26 @@ function Thumbnail({ row }: { row: WantToTryRow }) {
   }
   const Icon = row.target.kind === "RECIPE" ? Recipe : Place;
   return (
-    <span className="flex size-11 items-center justify-center rounded-sm bg-surface-2 text-ink-2">
+    <span className="flex size-11 items-center justify-center rounded-sm bg-raised text-glyph">
       <Icon aria-hidden strokeWidth={ICON_STROKE} className="size-5" />
     </span>
   );
 }
 
+/** The list's sections, in the board's order (Shell-Me, Want to try). */
+const SECTIONS = [
+  { kind: "ITEM", label: "Drinks" },
+  { kind: "PLACE", label: "Places" },
+  { kind: "RECIPE", label: "Recipes" },
+] as const satisfies readonly {
+  kind: WantToTryRow["target"]["kind"];
+  label: string;
+}[];
+
 /**
  * Me › Lists › "Want to try" (X08, D1): drinks, places and recipes the viewer
- * saved, newest first, with a segmented filter. Taking something off leaves
+ * saved, newest first within Drinks, Places and Recipes, with a segmented
+ * filter and how many are saved under the title. Taking something off leaves
  * its row in place — outlined, with Undo in the toast — until the next visit,
  * so a mis-tap never makes a row jump out from under the thumb.
  */
@@ -124,6 +135,9 @@ export function WantToTryList({
   return (
     <Page>
       <AppBar title="Want to try" parent="/me" />
+      {typeof list.totalCount === "number" && list.totalCount > 0 && (
+        <p className="t-cap m-0 text-ink-2">{list.totalCount} saved</p>
+      )}
       <SegmentedControl
         aria-label="Show"
         value={filter}
@@ -149,48 +163,63 @@ export function WantToTryList({
           title={empty.title}
           description={empty.description}
           action={
-            <Button asChild variant="secondary">
-              <Link href={filter === "places" ? "/map" : "/search"}>
+            <Button asChild variant="outline">
+              <PressLink href={filter === "places" ? "/map" : "/search"}>
                 {filter === "places" ? "Open the map" : "Find something"}
-              </Link>
+              </PressLink>
             </Button>
           }
         />
       ) : (
-        <InsetSection
-          label={
-            typeof list.totalCount === "number"
-              ? `${list.totalCount} saved`
-              : undefined
-          }
-          aria-busy={loading || undefined}
-        >
-          {rows.map((row) => (
-            <ListRow
-              key={row.key}
-              data-want-to-try-row={row.key}
-              leading={<Thumbnail row={row} />}
-              title={
-                <Link
-                  href={row.href}
-                  overlay
-                  underline="none"
-                  className="text-ink-1"
-                >
-                  {row.title}
-                </Link>
-              }
-              description={row.description}
-              trailing={
-                <WantToTryButton target={row.target} saved name={row.title} />
-              }
-            />
-          ))}
-        </InsetSection>
+        <div aria-busy={loading || undefined} className="flex flex-col gap-6">
+          {SECTIONS.map((section) => {
+            const shown = rows.filter(
+              (row) => row.target.kind === section.kind,
+            );
+            if (shown.length === 0) return null;
+            return (
+              <InsetSection
+                key={section.kind}
+                label={section.label}
+                action={
+                  <span className="t-cap tabular text-ink-3">
+                    {shown.length}
+                  </span>
+                }
+              >
+                {shown.map((row) => (
+                  <ListRow
+                    key={row.key}
+                    data-want-to-try-row={row.key}
+                    leading={<Thumbnail row={row} />}
+                    title={
+                      <PressLink
+                        href={row.href}
+                        overlay
+                        underline="none"
+                        className="text-ink"
+                      >
+                        {row.title}
+                      </PressLink>
+                    }
+                    description={row.description}
+                    trailing={
+                      <WantToTryButton
+                        target={row.target}
+                        saved
+                        name={row.title}
+                      />
+                    }
+                  />
+                ))}
+              </InsetSection>
+            );
+          })}
+        </div>
       )}
       {list.canLoadMore && (
         <Button
-          variant="secondary"
+          variant="outline"
           onClick={() => void list.loadMore()}
           disabled={list.status === "loadingMore"}
           aria-busy={list.status === "loadingMore" || undefined}

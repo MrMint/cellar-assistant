@@ -63,7 +63,7 @@ export default async function FavoritesPage({
 
   if (data.me === null || data.me === undefined) {
     return (
-      <p className="type-body text-ink-2">
+      <p className="t-body text-ink-2">
         Your session has expired for this part of the app. Sign in again to see
         what you love.
       </p>
