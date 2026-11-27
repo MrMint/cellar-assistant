@@ -233,7 +233,7 @@ const render = async ({
   myScore = 4,
   entityType = "spirit",
 }: {
-  myScore?: number;
+  myScore?: number | null;
   entityType?: "spirit" | "tea";
 } = {}) => {
   await act(async () => {
@@ -337,7 +337,7 @@ describe("pairwise placement (L09)", () => {
     assert.equal(refreshes, 1);
   });
 
-  test("Undo takes it back in one history step and asks again", async () => {
+  test("Undo takes it back in one history step; Place it again puts it straight back, Choose again asks the band", async () => {
     await render();
     await click(buttonNamed(/^About the same$/));
     assert.equal(sentPosition(), 3);
@@ -347,11 +347,55 @@ describe("pairwise placement (L09)", () => {
       undos.map((s) => s.variables),
       [{ tierListId: "tl-1", expectedSeq: 7 }],
     );
-    assert.ok(document.querySelector('[data-slot="pairwise-question"]'));
+    assert.ok(document.querySelector('[data-slot="pairwise-pending"]'));
     assert.match(
       document.querySelector('[role="status"]')?.textContent ?? "",
       /Took back Blanton's/,
     );
+    // Straight back where it was: no questions, the same position.
+    await click(buttonNamed(/^Place it again$/));
+    assert.equal(adds().length, 2);
+    assert.equal(sentPosition(1), 3);
+    assert.ok(document.querySelector('[data-slot="pairwise-result"]'));
+    // Or from the band again.
+    await click(buttonNamed(/^Undo$/));
+    await click(buttonNamed(/^Choose again$/));
+    assert.ok(document.querySelector('[data-slot="pairwise-band"]'));
+    assert.equal(adds().length, 2);
+  });
+
+  test("CROSS-LOT: the rank is one number — heading, announcement and landed row agree", async () => {
+    await render();
+    await click(buttonNamed(/the new one$/));
+    await click(buttonNamed(/^Weller/));
+    const result = document.querySelector('[data-slot="pairwise-result"]');
+    const current = result?.querySelector('[aria-current="true"]');
+    assert.match(current?.textContent ?? "", /^#3, Very GoodBlanton's$/);
+    // The neighbours either side, with their ranks after the add.
+    const rows = [...(result?.querySelectorAll("li") ?? [])].map(
+      (li) => li.textContent,
+    );
+    assert.deepEqual(rows, [
+      "#2, Very GoodWeller",
+      "#3, Very GoodBlanton's",
+      "#4, Very GoodBuffalo Trace",
+    ]);
+    assert.match(
+      document.querySelector('[role="status"]')?.textContent ?? "",
+      /number 3\./,
+    );
+    assert.equal(result?.querySelector(".t-score")?.textContent, "#3");
+  });
+
+  test("no rating of your own: the band first, then the questions in it; Back to bands", async () => {
+    await render({ myScore: null });
+    assert.ok(document.querySelector('[data-slot="pairwise-band"]'));
+    assert.equal(adds().length, 0);
+    await click(buttonNamed(/^Very Good/));
+    assert.ok(document.querySelector('[data-slot="pairwise-question"]'));
+    assert.ok(buttonNamed(/^Buffalo Trace, Very Good number 3$/));
+    await click(buttonNamed(/Back to bands$/));
+    assert.ok(document.querySelector('[data-slot="pairwise-band"]'));
   });
 
   test("Skip puts it at the end of its band, and Done closes", async () => {
