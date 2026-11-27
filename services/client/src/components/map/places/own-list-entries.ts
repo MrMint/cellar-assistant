@@ -11,11 +11,13 @@
 
 import { useMemo } from "react";
 import { useQuery } from "urql";
+import { ActorErrorFieldsFragment } from "@/lib/api/errors";
 import { graphql } from "@/lib/api/graphql";
 import { PLACE_TIER_LIST_ENTRIES_PAGE_SIZE } from "../queries";
 import type { PlaceListEntry } from "./PlaceSections";
 
-export const PlaceListOwnersQuery = graphql(`
+export const PlaceListOwnersQuery = graphql(
+  `
   query PlaceListOwners($id: ID!, $tierListEntries: Int!) {
     me {
       id
@@ -38,9 +40,12 @@ export const PlaceListOwnersQuery = graphql(`
           }
         }
       }
+      ...ActorErrorFields
     }
   }
-`);
+`,
+  [ActorErrorFieldsFragment],
+);
 
 /**
  * The entries on lists `viewerId` made, in their order. Unknown (the viewer
