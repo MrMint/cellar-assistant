@@ -10,8 +10,11 @@ import {
   boundsAround,
   brandRows,
   buildSections,
+  distanceLabel,
   hasMore,
   itemRows,
+  mapSearchHref,
+  metresBetween,
   PLACE_NAME_MATCH,
   peopleRows,
   placeRows,
@@ -23,6 +26,7 @@ import {
   sectionFromParam,
   seeAllHref,
   semanticSearchFrom,
+  totalLabel,
 } from "./universal-search";
 
 const item = (over: Record<string, unknown> = {}) =>
@@ -95,27 +99,28 @@ describe("sections and their links", () => {
     assert.equal(sectionFromParam(undefined), null);
   });
 
-  test("See all: in place, on the map for places, on /brands for brands", () => {
+  test("See all: always in place, its chip lit; places keep a way to the map", () => {
     assert.equal(
       seeAllHref("items", "red wine"),
       "/search?q=red%20wine&in=items",
     );
     assert.equal(
       seeAllHref("places", "Copper & Co"),
-      "/map?search=Copper%20%26%20Co",
+      "/search?q=Copper%20%26%20Co&in=places",
     );
-    assert.equal(seeAllHref("brands", "krug"), "/brands?q=krug");
+    assert.equal(seeAllHref("brands", "krug"), "/search?q=krug&in=brands");
+    assert.equal(mapSearchHref("Copper & Co"), "/map?search=Copper%20%26%20Co");
     assert.equal(allResultsHref("red wine"), "/search?q=red%20wine");
   });
 });
 
 describe("rows", () => {
   test("an item: name and vintage, type and variety, its score, its page", () => {
-    const [row] = itemRows(items(item()));
+    const [row] = itemRows(items(item())).rows;
     assert.deepEqual(row, {
       key: "WINE:w1",
       title: "Barolo 2016",
-      description: "Wine · Nebbiolo",
+      description: "Nebbiolo",
       href: "/wines/w1",
       thumb: { kind: "item", itemType: "WINE" },
       score: 4.5,
@@ -141,7 +146,7 @@ describe("rows", () => {
           },
         }),
       ),
-    );
+    ).rows;
     assert.deepEqual(row?.thumb, { kind: "image", url: "https://x/y.jpg" });
   });
 
@@ -149,10 +154,10 @@ describe("rows", () => {
     assert.deepEqual(
       itemRows({
         itemSearch: { __typename: "ConflictError", code: "CONFLICT" },
-      } as never),
+      } as never).rows,
       [],
     );
-    assert.deepEqual(itemRows(undefined), []);
+    assert.deepEqual(itemRows(undefined).rows, []);
   });
 
   test("a bottle: where it is and how many, opening the bottle in its cellar", () => {
@@ -218,11 +223,11 @@ describe("rows", () => {
       { name: "Near Miss", trigram: PLACE_NAME_MATCH - 0.01 },
     );
     assert.deepEqual(
-      placeRows(data, { bounded: false }).map((row) => row.title),
+      placeRows(data, { bounded: false }).rows.map((row) => row.title),
       ["Copper Lantern", "Lantern Room"],
     );
-    assert.equal(placeRows(data, { bounded: true }).length, 4);
-    const [row] = placeRows(data, { bounded: true });
+    assert.equal(placeRows(data, { bounded: true }).rows.length, 4);
+    const [row] = placeRows(data, { bounded: true }).rows;
     assert.equal(row?.description, "Wine Bar · Columbus");
     assert.equal(row?.href, "/places/p0");
   });
@@ -233,7 +238,7 @@ describe("rows", () => {
     };
     const edge = data.placeSearch.edges[0];
     if (edge) edge.node.reviewStatus = "PENDING";
-    const [row] = placeRows(data as never, { bounded: false });
+    const [row] = placeRows(data as never, { bounded: false }).rows;
     assert.equal(row?.description, "Wine Bar · Columbus · Under review");
   });
 
@@ -271,11 +276,16 @@ describe("rows", () => {
           hit("r3", null, { status: "ONE_AWAY", missing: ["Campari"] }),
         ],
       },
-    } as never);
+    } as never).rows;
     assert.deepEqual(
       rows.map((row) => [row.title, row.description, row.href]),
       [
-        ["Negroni", "Cocktail · You can make this", "/recipes/groups/g1"],
+        // Ruling 4: a group is one row, with how many of its versions matched.
+        [
+          "Negroni",
+          "Cocktail · 2 versions · You can make this",
+          "/recipes/groups/g1",
+        ],
         ["r3 v1", "Cocktail · Missing Campari", "/recipes/r3"],
       ],
     );
@@ -305,7 +315,7 @@ describe("rows", () => {
           },
         ],
       },
-    } as never);
+    } as never).rows;
     assert.deepEqual(row?.thumb, {
       kind: "external",
       url: "https://example.com/plane.jpg",
@@ -313,7 +323,7 @@ describe("rows", () => {
     assert.equal(row?.description, "Cocktail");
   });
 
-  test("people: a friend opens their profile, a request opens Friends; anyone else ends in Add", () => {
+  test("people: a friend opens their profile; anyone else ends in their action", () => {
     const rows = peopleRows({
       userSearch: {
         __typename: "UserSearchConnection",
@@ -344,13 +354,23 @@ describe("rows", () => {
           },
         ],
       },
-    } as never);
+    } as never).rows;
     assert.deepEqual(
-      rows.map((row) => [row.title, row.description, row.href, row.addFriend]),
+      rows.map((row) => [row.title, row.description, row.href, row.person]),
       [
         ["Alfred", "Friend", "/users/u1", undefined],
-        ["Alonzo", "Wants to be friends", "/friends", undefined],
-        ["Alberta", undefined, undefined, { userId: "u3", name: "Alberta" }],
+        [
+          "Alonzo",
+          "Wants to be friends",
+          undefined,
+          { userId: "u2", name: "Alonzo", relation: "REQUEST_RECEIVED" },
+        ],
+        [
+          "Alberta",
+          undefined,
+          undefined,
+          { userId: "u3", name: "Alberta", relation: "NONE" },
+        ],
       ],
     );
   });
@@ -379,11 +399,11 @@ describe("rows", () => {
           },
         ],
       },
-    } as never);
+    } as never).rows;
     assert.deepEqual(
       rows.map((row) => [row.title, row.description, row.href]),
       [
-        ["Ridge", "Winery · 3 items", "/brands/b1"],
+        ["Ridge", "Winery · 3 drinks", "/brands/b1"],
         ["New", undefined, "/brands/b2"],
       ],
     );
@@ -445,7 +465,7 @@ describe("buildSections", () => {
     assert.deepEqual(
       sections.map((s) => [s.section, s.label, s.rows.length, hasMore(s)]),
       [
-        ["items", "Items", 4, true],
+        ["items", "Drinks", 4, true],
         ["places", "Places", 1, false],
       ],
     );
@@ -506,5 +526,120 @@ describe("the AI line and the place box", () => {
     const pole = boundsAround({ latitude: 89.9, longitude: 179.9 });
     assert.equal(pole.north, 90);
     assert.equal(pole.east, 180);
+  });
+});
+
+describe("totals (MC-search, CROSS-LOT: never a limit as a total)", () => {
+  const counted = (total: number | null, lowerBound: boolean) =>
+    ({
+      itemSearch: {
+        __typename: "ItemSearchConnection",
+        totalCount: total,
+        totalIsLowerBound: lowerBound,
+        edges: [item({ id: "a" }), item({ id: "b" })].map((node, i) => ({
+          node: { __typename: "ItemSearchResult", id: `h${i}`, item: node },
+        })),
+      },
+    }) as never;
+
+  test("the API's count, and '200+' when it is only a lower bound", () => {
+    const exact = itemRows(counted(42, false));
+    assert.equal(totalLabel(exact), "42");
+    const capped = itemRows(counted(200, true));
+    assert.equal(capped.total, 200);
+    assert.equal(totalLabel(capped), "200+");
+  });
+
+  test("no count from the API is the rows in hand, never the limit", () => {
+    const rows = itemRows(counted(null, true));
+    assert.equal(totalLabel(rows), "2");
+  });
+
+  test("Drinks leaves out what Your bottles shows (ruling 1), and counts so", () => {
+    const sections = buildSections(
+      {
+        bottles: {
+          me: {
+            __typename: "Viewer",
+            id: "me",
+            aiCapabilities: { semanticSearch: true },
+            bottleSearch: {
+              totalCount: 1,
+              edges: [
+                {
+                  node: {
+                    cellarItemId: "ci1",
+                    cellarId: "c1",
+                    cellarName: "Garage",
+                    bottleCount: 1,
+                    item: item({ id: "a" }),
+                  },
+                },
+              ],
+            },
+          },
+        } as never,
+        items: counted(10, false),
+      },
+      { bounded: false },
+    );
+    const [bottles, drinks] = sections;
+    assert.equal(bottles?.context, "in Garage");
+    assert.deepEqual(
+      drinks?.rows.map((row) => row.key),
+      ["WINE:b"],
+    );
+    assert.equal(drinks?.total, 9);
+  });
+});
+
+describe("distance from you", () => {
+  test("Here within 25 m; metres, then kilometres, with a narrow space", () => {
+    assert.equal(distanceLabel(10), "Here");
+    assert.equal(distanceLabel(142.4), "142\u202fm");
+    assert.equal(distanceLabel(1400), "1.4\u202fkm");
+    assert.equal(distanceLabel(23_000), "23\u202fkm");
+  });
+
+  test("a place row reads its distance from the origin, and names it", () => {
+    const data = {
+      placeSearch: {
+        __typename: "PlaceSearchConnection",
+        totalCount: 79,
+        totalIsLowerBound: false,
+        edges: [
+          {
+            node: {
+              id: "p0",
+              name: "Corner Cafe",
+              primaryCategory: "cafe",
+              locality: "Columbus",
+              region: "OH",
+              rating: 4.7,
+              location: { lat: 40.001, lng: -83 },
+              textRank: 1,
+              trigramSimilarity: 1,
+              reviewStatus: "APPROVED",
+            },
+          },
+        ],
+      },
+    } as never;
+    const placesSection = placeRows(data, {
+      bounded: true,
+      origin: { latitude: 40, longitude: -83 },
+    });
+    assert.equal(placesSection.context, "from you");
+    assert.equal(placesSection.total, 79);
+    assert.equal(placesSection.rows[0]?.description, "Cafe · 111\u202fm");
+    assert.equal(placesSection.rows[0]?.rating, 4.7);
+    assert.ok(
+      Math.abs(
+        metresBetween(
+          { latitude: 40, longitude: -83 },
+          { lat: 40.001, lng: -83 },
+        ) - 111,
+      ) < 1,
+    );
   });
 });

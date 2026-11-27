@@ -47,11 +47,33 @@ export const useSearchNavigation = (): SearchNavigationValue | null =>
  * while a search navigation is pending — in universal search's shape (X12),
  * since typing is what most navigations are.
  */
-export function SearchResultsRegion({ children }: { children: ReactNode }) {
+export function SearchResultsRegion({
+  children,
+  showingResults = false,
+}: {
+  children: ReactNode;
+  /**
+   * Results are on screen now. Then a pending search keeps them, dimmed to
+   * 60 %, until the next ones arrive (Recipes-Search ruling 3); only a first
+   * search shows the skeleton.
+   */
+  showingResults?: boolean;
+}) {
   const isPending = useSearchNavigation()?.isPending ?? false;
+  if (isPending && !showingResults) {
+    return (
+      <div aria-busy>
+        <SearchSectionsSkeleton />
+      </div>
+    );
+  }
   return (
-    <div aria-busy={isPending}>
-      {isPending ? <SearchSectionsSkeleton /> : children}
+    <div
+      aria-busy={isPending}
+      data-search-refining={isPending || undefined}
+      className="transition-opacity duration-(--ca-dur-short) ease-standard data-[search-refining]:opacity-60"
+    >
+      {children}
     </div>
   );
 }

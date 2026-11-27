@@ -65,11 +65,11 @@ describe("ServerImageResults (restored, G32)", () => {
     assert.deepEqual(asked, [{ imageFileId: FILE, first: 10 }]);
   });
 
-  test("no match is the old empty state, with Add an item", async () => {
+  test("no match says so, with a way to read the label", async () => {
     answer = { __typename: "ItemSearchConnection", edges: [] };
     const html = text(await render());
-    assert.match(html, /No items found matching the image/);
-    assert.match(html, /Add an item/);
+    assert.match(html, /No drink matches this photo/);
+    assert.match(html, /(Read|Snap) the label/);
   });
 
   // `SearchResultGrid` is the virtualised grid, which server-renders no cards
@@ -92,7 +92,7 @@ describe("ServerImageResults (restored, G32)", () => {
       ],
     };
     const html = text(await render());
-    assert.doesNotMatch(html, /No items found|isn|failed/);
+    assert.doesNotMatch(html, /No drink matches|isn|failed|expired/);
   });
 
   test("a deployment that cannot embed a photo says so, not 'no items'", async () => {
@@ -104,13 +104,13 @@ describe("ServerImageResults (restored, G32)", () => {
     };
     const html = text(await render());
     assert.match(html, /Photo search isn(&#x27;|')t available here/);
-    assert.doesNotMatch(html, /No items found/);
+    assert.doesNotMatch(html, /No drink matches/);
   });
 
   // A search photo is discarded once its search has used it (G32), so a
   // reload after the cached result has gone finds no file: an expired link,
   // said the way the old `?image_results=` links are — not an error page.
-  test("a photo that is no longer there is an expired link, with Add an item", async () => {
+  test("a photo that is no longer there is an expired search, with New search", async () => {
     answer = {
       __typename: "NotFoundError",
       code: "NOT_FOUND",
@@ -118,12 +118,9 @@ describe("ServerImageResults (restored, G32)", () => {
       message: "file 0b5f8c2e-9d61-4c7a-8f0e-3a1b2c4d5e6f not found",
     };
     const html = text(await render());
-    assert.match(
-      html,
-      /This image search link has expired\. Tap Photo to search with a new picture\./,
-    );
-    assert.match(html, /Add an item/);
-    assert.doesNotMatch(html, /Image search failed|No items found/);
+    assert.match(html, /This photo search has expired/);
+    assert.match(html, /New search/);
+    assert.doesNotMatch(html, /Image search failed|No drink matches/);
   });
 
   test("any other refusal is an error, not an empty result", async () => {
@@ -136,7 +133,7 @@ describe("ServerImageResults (restored, G32)", () => {
     };
     const html = text(await render());
     assert.match(html, /Taking a break/);
-    assert.doesNotMatch(html, /No items found/);
+    assert.doesNotMatch(html, /No drink matches/);
   });
 
   // N07: the words come from the reason, never from the server's message.

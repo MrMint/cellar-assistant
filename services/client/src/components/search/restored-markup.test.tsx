@@ -73,13 +73,12 @@ describe("ClientSearchInterface (restored)", () => {
     );
   });
 
-  test("a query swaps both buttons for the round scan and camera icons and adds clear", () => {
+  test("a query keeps the Scan and Photo segments and adds clear", () => {
     const html = render(<ClientSearchInterface urlQuery="barolo" />);
     assert.match(html, /value="barolo"/);
-    assert.match(html, /aria-label="Scan barcode"/);
-    assert.match(html, /aria-label="Search by photo"/);
-    assert.doesNotMatch(text(html), /Scan\b(?! barcode)/);
-    assert.doesNotMatch(text(html), /\bPhoto\b/);
+    assert.match(html, /aria-label="Clear search"/);
+    assert.match(html, /aria-label="Scan a barcode"/);
+    assert.match(text(html), /Scan\s+Photo/);
   });
 });
 

@@ -10,6 +10,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 mock.module("urql", () => ({
   useMutation: () => [{ fetching: false }, async () => ({})],
+  useQuery: () => [{ fetching: false }],
 }));
 mock.module("next/navigation", () => ({
   useRouter: () => ({ push: () => {}, refresh: () => {} }),
@@ -34,19 +35,21 @@ const rows = (prefix: string, n: number) =>
 
 const items: Model = {
   section: "items",
-  label: "Items",
-  rows: rows("Item", 5),
-  total: 5,
+  label: "Drinks",
+  rows: rows("Item", 8),
+  total: 200,
+  totalIsLowerBound: true,
 };
 const brands: Model = {
   section: "brands",
   label: "Brands",
   rows: rows("Brand", 2),
   total: 2,
+  totalIsLowerBound: false,
 };
 
 describe("SearchSections", () => {
-  test("each section shows three rows, and See all only when it holds more", () => {
+  test("three rows on a phone, six from md, See all, and real totals", () => {
     const html = renderToStaticMarkup(
       <SearchSections
         query="red"
@@ -56,17 +59,42 @@ describe("SearchSections", () => {
       />,
     );
     const text = textOf(html);
-    assert.match(text, /Items/);
+    assert.match(text, /Drinks\s*200\+/);
+    assert.match(text, /Brands\s*2/);
     assert.match(text, /Item 2/);
-    assert.doesNotMatch(text, /Item 3/);
+    // The fourth to sixth rows are there from md only; the seventh never.
+    assert.match(
+      html,
+      /<li class="[^"]*max-md:hidden[^"]*"><div data-search-row="Item3"/,
+    );
+    assert.doesNotMatch(text, /Item 6/);
     assert.match(html, /href="\/search\?q=red&amp;in=items"/);
     // Two brands: nothing more to see.
-    assert.doesNotMatch(html, /href="\/brands\?q=red"/);
+    assert.doesNotMatch(html, /in=brands"[^>]*>See all/);
     assert.ok(
       html.indexOf('data-search-section="items"') <
         html.indexOf('data-search-section="brands"'),
     );
     assert.doesNotMatch(text, /names only/);
+  });
+
+  test("the scope chips: All lit, and each section that found something", () => {
+    const html = renderToStaticMarkup(
+      <SearchSections
+        query="red"
+        sections={[items, brands]}
+        focus={null}
+        semanticSearch={true}
+      />,
+    );
+    const rail = html.slice(
+      html.indexOf("data-search-scopes"),
+      html.indexOf("</nav>"),
+    );
+    assert.match(rail, /aria-current="page"[^>]*>All</);
+    assert.match(rail, /href="\/search\?q=red&amp;in=items"/);
+    assert.match(rail, /href="\/search\?q=red&amp;in=brands"/);
+    assert.doesNotMatch(rail, /in=places/);
   });
 
   test("says so when the deployment matches names only (D25)", () => {
@@ -78,13 +106,10 @@ describe("SearchSections", () => {
         semanticSearch={false}
       />,
     );
-    assert.match(
-      textOf(html),
-      /Matching names only: search by meaning is off\./,
-    );
+    assert.match(textOf(html), /Matching names only/);
   });
 
-  test("an opened section shows every row, and the way back to all", () => {
+  test("an opened section shows every row, its chip lit", () => {
     const html = renderToStaticMarkup(
       <SearchSections
         query="red"
@@ -94,14 +119,33 @@ describe("SearchSections", () => {
       />,
     );
     const text = textOf(html);
-    assert.match(text, /Items for “red”/);
-    assert.match(text, /Item 4/);
+    assert.match(text, /Item 7/);
     assert.doesNotMatch(text, /Brand 0/);
+    assert.match(html, /aria-current="page"[^>]*>Drinks</);
     assert.match(html, /href="\/search\?q=red"/);
-    assert.match(text, /Add an item/);
   });
 
-  test("an opened section that found nothing says so", () => {
+  test("opened Places offers the map", () => {
+    const html = renderToStaticMarkup(
+      <SearchSections
+        query="gin"
+        sections={[
+          {
+            section: "places",
+            label: "Places",
+            rows: rows("Place", 1),
+            total: 1,
+            totalIsLowerBound: false,
+          },
+        ]}
+        focus="places"
+        semanticSearch={true}
+      />,
+    );
+    assert.match(html, /href="\/map\?search=gin"[^>]*>Map</);
+  });
+
+  test("an opened section that found nothing says so, with Search all", () => {
     const html = renderToStaticMarkup(
       <SearchSections
         query="zzz"
@@ -110,25 +154,27 @@ describe("SearchSections", () => {
         semanticSearch={null}
       />,
     );
-    assert.match(textOf(html), /No people for “zzz”\./);
+    assert.match(textOf(html), /No people match “zzz”/);
+    assert.match(html, /href="\/search\?q=zzz"[^>]*>Search all</);
   });
 
-  test("nothing anywhere is one empty state with one action", () => {
+  test("nothing anywhere is one empty state with one action (KIT wording)", () => {
     const html = renderToStaticMarkup(
       <SearchSections
-        query="Copper Lantern"
+        query="sotol"
         sections={[]}
         focus={null}
         semanticSearch={true}
       />,
     );
     const text = textOf(html);
-    assert.match(text, /Nothing called “Copper Lantern” yet\./);
-    assert.match(html, /href="\/add"/);
+    assert.match(text, /Nothing matches “sotol”/);
+    assert.match(text, /Add “sotol”/);
+    assert.match(html, /href="\/add\?name=sotol"/);
     assert.equal(html.match(/<a /g)?.length, 1);
   });
 
-  test("when no search answered, it says so instead of 'Nothing called'", () => {
+  test("when no search answered, it says so instead of 'Nothing matches'", () => {
     const html = renderToStaticMarkup(
       <SearchSections
         query="Copper Lantern"
@@ -139,10 +185,10 @@ describe("SearchSections", () => {
       />,
     );
     const text = textOf(html);
-    assert.match(text, /Search isn(?:'|&#x27;)t answering right now/);
-    assert.doesNotMatch(text, /Nothing called/);
+    assert.match(text, /Search isn(?:'|&#x27;)t answering/);
+    assert.doesNotMatch(text, /Nothing matches/);
     assert.match(text, /Try again/);
-    assert.doesNotMatch(html, /href="\/add"/);
+    assert.doesNotMatch(html, /href="\/add/);
 
     const opened = textOf(
       renderToStaticMarkup(
@@ -155,11 +201,27 @@ describe("SearchSections", () => {
         />,
       ),
     );
-    assert.match(opened, /Couldn(?:'|&#x27;)t search people just now/);
-    assert.doesNotMatch(opened, /No people for/);
+    assert.match(opened, /Couldn(?:'|&#x27;)t search people/);
+    assert.doesNotMatch(opened, /No people match/);
   });
 
-  test("a person you could ask ends in Add; a row with a score shows it", () => {
+  test("a section that failed while others answered gets one row", () => {
+    const text = textOf(
+      renderToStaticMarkup(
+        <SearchSections
+          query="red"
+          sections={[brands]}
+          focus={null}
+          semanticSearch={true}
+          failed={["places"]}
+        />,
+      ),
+    );
+    assert.match(text, /Couldn(?:'|&#x27;)t search places/);
+    assert.match(text, /Try again/);
+  });
+
+  test("people end in their action; a scored row shows its stars", () => {
     const html = renderToStaticMarkup(
       <SearchSections
         query="al"
@@ -167,20 +229,42 @@ describe("SearchSections", () => {
           {
             section: "people",
             label: "People",
-            total: 1,
+            total: 3,
+            totalIsLowerBound: false,
             rows: [
               {
                 key: "u1",
                 title: "Alberta",
                 thumb: { kind: "avatar", url: null, name: "Alberta" },
-                addFriend: { userId: "u1", name: "Alberta" },
+                person: { userId: "u1", name: "Alberta", relation: "NONE" },
+              },
+              {
+                key: "u2",
+                title: "Alonzo",
+                thumb: { kind: "avatar", url: null, name: "Alonzo" },
+                person: {
+                  userId: "u2",
+                  name: "Alonzo",
+                  relation: "REQUEST_SENT",
+                },
+              },
+              {
+                key: "u3",
+                title: "Alma",
+                thumb: { kind: "avatar", url: null, name: "Alma" },
+                person: {
+                  userId: "u3",
+                  name: "Alma",
+                  relation: "REQUEST_RECEIVED",
+                },
               },
             ],
           },
           {
             section: "items",
-            label: "Items",
+            label: "Drinks",
             total: 1,
+            totalIsLowerBound: false,
             rows: [
               {
                 key: "w1",
@@ -196,8 +280,14 @@ describe("SearchSections", () => {
         semanticSearch={true}
       />,
     );
+    const text = textOf(html);
     assert.match(html, /aria-label="Add Alberta as a friend"/);
-    assert.match(html, /data-slot="score"/);
+    assert.match(text, /Add friend/);
+    assert.match(text, /Request sent/);
+    assert.match(text, /Cancel request/);
+    assert.match(text, /Wants to be friends/);
+    assert.match(text, /Accept/);
+    assert.match(text, /4\.5/);
   });
 });
 

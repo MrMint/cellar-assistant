@@ -1,177 +1,133 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Spinner } from "@/components/ui/spinner";
+import { useEffect, useRef } from "react";
+import { IconButton } from "@/components/app/IconButton";
+import { Close } from "@/components/app/icons";
+import { CaptureCamera } from "@/components/capture/CaptureCamera";
+import { CaptureHeader } from "@/components/capture/CaptureChrome";
 import type { Barcode } from "@/constants";
-import { useBarcodeScanner } from "@/hooks/useBarcodeScanner";
-import { useCameraStatus } from "@/hooks/useCameraStatus";
-import { BARCODE_SCAN_CONSTRAINTS } from "@/lib/camera/camera-status";
+import { feedback } from "@/lib/feedback";
 import { cn } from "@/lib/utils";
 
-type BarcodeScannerProps = {
-  onChange: (result: Barcode) => void;
-  /**
-   * What to do instead when the camera can't be used, after the reason (N04).
-   * Search says its own; the default is generic.
-   */
-  cameraFallbackHint?: string;
+export type ScanMode = "barcode" | "photo";
+
+const TITLES: Readonly<Record<ScanMode, string>> = {
+  barcode: "Scan a barcode",
+  photo: "Search by photo",
 };
 
-// The add flow reads barcodes off its one camera now (X05), so search is the
-// one host left, and it passes its own words.
-const FALLBACK_HINT = "Type the code in instead.";
-
-// N04: `ideal`-only constraints (`BARCODE_SCAN_CONSTRAINTS`); the old
-// `min: 640 × 480` could make getUserMedia refuse outright.
-const videoConstraints: MediaStreamConstraints = BARCODE_SCAN_CONSTRAINTS;
-
+/**
+ * Search's scan and camera sheets (Recipes-Search 29, 40), drawn with the
+ * Capture-Camera chrome that won CROSS-LOT: a title bar with Close, the
+ * one live camera, a Barcode · Photo mode row, Light when the camera has a
+ * torch, the shutter, and "Type it" at the left — which closes the sheet
+ * back to the field. The camera has the screen and stays dark in both
+ * themes (`keep-dark`). Esc closes it, on this element, not the document.
+ *
+ * Barcode mode reads codes off the live picture; Photo mode searches with
+ * the shutter's photo. `photoOffered` false hides Photo (N07, D25).
+ */
 export const BarcodeScanner = ({
-  onChange,
-  cameraFallbackHint = FALLBACK_HINT,
-}: BarcodeScannerProps) => {
-  const [isVideoLoaded, setIsVideoLoaded] = useState(false);
-  const camera = useCameraStatus();
-  const [detectionSuccess, setDetectionSuccess] = useState(false);
-
-  // Handle detection with visual feedback
-  const handleDetection = useCallback(
-    (barcode: Barcode) => {
-      setDetectionSuccess(true);
-      onChange(barcode);
-
-      // Reset success state after animation
-      setTimeout(() => setDetectionSuccess(false), 1000);
-    },
-    [onChange],
-  );
-
-  // Use unified barcode scanner hook
-  const {
-    videoRef,
-    isSupported,
-    error,
-    failure,
-    startScanning,
-    stopScanning,
-    toggleTorch,
-    torchSupported,
-    torchEnabled,
-  } = useBarcodeScanner({
-    onDetect: handleDetection,
-    constraints: videoConstraints,
-  });
-
-  // Start scanning when component mounts and hook is ready
+  mode,
+  onModeChange,
+  photoOffered,
+  onBarcode,
+  onPhoto,
+  onClose,
+}: {
+  mode: ScanMode;
+  onModeChange: (mode: ScanMode) => void;
+  photoOffered: boolean;
+  onBarcode: (barcode: Barcode) => void;
+  onPhoto: (image: string) => void;
+  onClose: () => void;
+}) => {
+  const root = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    if (isSupported) {
-      startScanning();
-      return () => stopScanning();
-    }
-  }, [isSupported, startScanning, stopScanning]); // Only depend on isSupported
+    root.current?.focus();
+  }, []);
 
-  // N04: a camera that refuses, or never answers, says so — the step's Skip
-  // button is the way on, and "Try again" asks for the stream afresh.
-  const { onError, onStream, retry } = camera;
-  useEffect(() => {
-    if (failure !== null) onError(failure);
-  }, [failure, onError]);
-
-  const handleVideoLoad = () => {
-    setIsVideoLoaded(true);
-    onStream();
-  };
-
-  const handleRetry = () => {
-    retry();
-    stopScanning();
-    void startScanning();
-  };
-
-  const failed = camera.status.kind === "failed" ? camera.status : null;
+  const modes: ScanMode[] = photoOffered ? ["barcode", "photo"] : ["barcode"];
 
   return (
     <div
-      data-slot="barcode-scanner"
-      className="relative aspect-[16/10] w-full overflow-hidden rounded-lg bg-surface-2"
+      ref={root}
+      role="dialog"
+      aria-modal="true"
+      aria-label={TITLES[mode]}
+      tabIndex={-1}
+      data-search-scan={mode}
+      onKeyDown={(event) => {
+        if (event.key !== "Escape") return;
+        event.stopPropagation();
+        onClose();
+      }}
+      className="keep-dark fixed inset-0 z-50 flex flex-col overflow-y-auto bg-background text-ink outline-none"
     >
-      {!isVideoLoaded && failed === null && (
-        <div className="absolute inset-0 flex items-center justify-center">
-          {/* `progressbar`, as Joy's CircularProgress was (see CameraCapture). */}
-          <Spinner
-            role="progressbar"
-            aria-label="Starting the camera"
-            className="size-8 text-ink-2"
-          />
-        </div>
-      )}
-      {failed !== null && !isVideoLoaded && (
-        <div
-          role="alert"
-          className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-surface-2 p-6 text-center"
-        >
-          <p className="type-body">
-            {failed.reason === "timeout"
-              ? "The camera is taking too long to start."
-              : "The barcode scanner can't use the camera."}{" "}
-            {cameraFallbackHint}
-          </p>
-          <Button variant="outline" onClick={handleRetry}>
-            Try again
-          </Button>
-        </div>
-      )}
-      <video
-        ref={videoRef}
-        onLoadedData={handleVideoLoad}
-        autoPlay
-        playsInline
-        muted
-        className="absolute inset-0 size-full object-cover object-center"
-      />
-
-      {/* Detection overlay to show scanning area */}
-      {isVideoLoaded && (
-        <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-          <div
-            className={cn(
-              "relative flex h-[30%] w-[70%] items-center justify-center rounded-sm transition-colors duration-(--ca-dur-medium) ease-standard",
-              detectionSuccess
-                ? "border-3 border-success bg-success/20"
-                : "border-2 border-white/80 bg-white/10",
-            )}
-          >
-            {/* The frame's outer ring: a slow pulse while it looks, a flash
-                on a read (replayed by its key). */}
-            <span
-              key={detectionSuccess ? "hit" : "looking"}
-              aria-hidden
-              className={cn(
-                "absolute -inset-[3px] rounded-sm",
-                detectionSuccess
-                  ? "fade-in-0 zoom-in-95 animate-in border-3 border-success duration-(--ca-dur-long)"
-                  : "animate-pulse border-2 border-success/60 motion-reduce:animate-none motion-reduce:opacity-0",
-              )}
-            />
-            <p className="text-center font-medium text-sm text-white/90 text-shadow-black/80 text-shadow-sm">
-              {detectionSuccess
-                ? "Barcode detected!"
-                : "Position barcode within this frame"}
-            </p>
-          </div>
-        </div>
-      )}
-
-      {isVideoLoaded && (
-        <div className="relative z-10 flex flex-col items-start gap-2 p-4">
-          {torchSupported && (
-            <Button onClick={toggleTorch}>
-              {torchEnabled ? "Turn off light" : "Turn on light"}
-            </Button>
-          )}
-          {error && <p className="type-callout text-destructive">{error}</p>}
-        </div>
-      )}
+      <div className="mx-auto flex w-full max-w-[600px] flex-1 flex-col pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
+        <CaptureHeader
+          leading={
+            <IconButton aria-label="Close" onClick={onClose}>
+              <Close />
+            </IconButton>
+          }
+          title={TITLES[mode]}
+        />
+        <CaptureCamera
+          key={mode}
+          className="px-0"
+          shutterLabel={
+            mode === "barcode" ? "Read the barcode" : "Search by this photo"
+          }
+          onBarcode={mode === "barcode" ? onBarcode : undefined}
+          onCapture={onPhoto}
+          modeRow={
+            modes.length > 1 ? (
+              <div
+                role="radiogroup"
+                aria-label="Scan for"
+                className="flex items-center justify-center gap-2"
+              >
+                {modes.map((value) => (
+                  // biome-ignore lint/a11y/useSemanticElements: a segmented mode row, as Capture-Camera's.
+                  <button
+                    key={value}
+                    type="button"
+                    role="radio"
+                    aria-checked={mode === value}
+                    onClick={() => {
+                      if (value === mode) return;
+                      feedback("tick");
+                      onModeChange(value);
+                    }}
+                    className={cn(
+                      "t-head min-h-11 min-w-11 px-3",
+                      mode === value ? "text-ink" : "text-ink-2",
+                    )}
+                  >
+                    {value === "barcode" ? "Barcode" : "Photo"}
+                  </button>
+                ))}
+              </div>
+            ) : undefined
+          }
+          leftAction={
+            <button
+              type="button"
+              onClick={() => {
+                feedback("tick");
+                onClose();
+              }}
+              className="t-cap flex min-h-11 min-w-11 flex-col items-center justify-center text-ink"
+            >
+              <span aria-hidden className="t-title leading-none">
+                T
+              </span>
+              Type it
+            </button>
+          }
+        />
+      </div>
     </div>
   );
 };
