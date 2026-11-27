@@ -94,6 +94,7 @@ import type {
 } from "@cellar-assistant/contracts";
 import {
   baseSpiritOf,
+  COMMUNITY_PICK_MIN_NET,
   ConflictError,
   isRecipeVoteType,
   NotFoundError,
@@ -180,6 +181,41 @@ type RecipeGroupSnapshot = {
   readonly recipes: readonly MemberRecipe[];
   /** Every vote on every recipe in this group. */
   readonly votes: readonly RecipeVoteRow[];
+  /**
+   * MC-pick, over the *whole* group (`communityPickOf`), carried unchanged
+   * through `#viewFor`; `#toDto` names it only when the viewer sees it.
+   */
+  readonly communityPickId: string | null;
+};
+
+/**
+ * MC-pick / L15: the version with the highest net votes from people other
+ * than its author, at least `COMMUNITY_PICK_MIN_NET`, the oldest winning a
+ * tie (`recipes` arrive `created_at asc, id asc`). A draft is never the pick.
+ * A label only: `#recomputeCanonical`, which renames and re-embeds, is not
+ * touched by it.
+ */
+export const communityPickOf = (
+  recipes: readonly Pick<MemberRecipe, "id" | "createdById" | "isDraft">[],
+  votes: readonly Pick<RecipeVoteRow, "recipeId" | "userId" | "voteType">[],
+): string | null => {
+  let pick: string | null = null;
+  let best = COMMUNITY_PICK_MIN_NET - 1;
+  for (const recipe of recipes) {
+    if (recipe.isDraft) continue;
+    let net = 0;
+    for (const vote of votes) {
+      if (vote.recipeId !== recipe.id || vote.userId === recipe.createdById) {
+        continue;
+      }
+      net += vote.voteType === "upvote" ? 1 : -1;
+    }
+    if (net > best) {
+      best = net;
+      pick = recipe.id;
+    }
+  }
+  return pick;
 };
 
 /** `recipe_groups_name_check`: `length(name) > 0`. */
@@ -296,7 +332,12 @@ export class RecipeGroupActor
             )
             .orderBy(sql`${recipeVotes.createdAt} asc, ${recipeVotes.id} asc`);
 
-    return { group, recipes: members, votes };
+    return {
+      group,
+      recipes: members,
+      votes,
+      communityPickId: communityPickOf(members, votes),
+    };
   }
 
   /* ---------------------------------------------------------------------- */
@@ -335,6 +376,7 @@ export class RecipeGroupActor
       group: snapshot.group,
       recipes: visible,
       votes: snapshot.votes.filter((vote) => ids.has(vote.recipeId)),
+      communityPickId: snapshot.communityPickId,
     };
   }
 
@@ -935,6 +977,12 @@ export class RecipeGroupActor
         (recipe) => recipe.id === row.canonicalRecipeId,
       )
         ? row.canonicalRecipeId
+        : null,
+      // MC-pick: likewise named only when the viewer may see that version.
+      communityPickId: snapshot.recipes.some(
+        (recipe) => recipe.id === snapshot.communityPickId,
+      )
+        ? snapshot.communityPickId
         : null,
       recipeCount: snapshot.recipes.length,
       createdAt: iso(row.createdAt),

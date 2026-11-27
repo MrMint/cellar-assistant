@@ -11,8 +11,11 @@ import { sql } from "@cellar-assistant/db/orm";
 import { afterAll, describe, expect, it } from "vitest";
 import type { DbOrTx } from "../lib/db.ts";
 import {
+  seedCellar,
+  seedCellarItem,
   seedCheckIn,
   seedItemOfType,
+  seedItemReview,
   seedRecipe,
 } from "../lib/search-testing.ts";
 import {
@@ -220,6 +223,234 @@ describe.skipIf(skip)("RecapActor", () => {
       }
       const stamps = await (await recapOf(owner, db)).stamps(userCtx(owner));
       expect(stamps).toContainEqual({ kind: "REGIONS", count: 5, tier: 5 });
+    });
+  });
+
+  /**
+   * Backdate the rows `where` picks in `table` to `at`, with the
+   * `updated_at` trigger off for the statement so the stamp holds.
+   */
+  const stamp = async (
+    db: DbOrTx,
+    table: "item_reviews" | "cellar_items",
+    where: ReturnType<typeof sql>,
+    at: { created: string; updated?: string },
+  ) => {
+    await db.execute(sql`set local session_replication_role = replica`);
+    await db.execute(sql`
+      update public.${sql.identifier(table)}
+      set created_at = ${at.created}::timestamptz,
+          updated_at = ${at.updated ?? at.created}::timestamptz
+      where ${where}
+    `);
+    await db.execute(sql`set local session_replication_role = origin`);
+  };
+
+  it("totals the viewer's check-ins, ratings and bottles added, never a co-owner's (L4)", async () => {
+    await withTestDb(async (db) => {
+      const owner = await seedUser(db);
+      const coOwner = await seedUser(db);
+      const [wine, beer, sake] = await Promise.all([
+        seedItem(db, "WINE", owner, { name: "Totals wine" }),
+        seedItem(db, "BEER", owner, { name: "Totals beer" }),
+        seedItem(db, "SAKE", owner, { name: "Totals sake" }),
+      ]);
+      // Two logs in October (one in LA's October only), one in September.
+      await seedCheckIn(db, {
+        userId: owner,
+        item: wine,
+        createdAt: "2026-10-03T12:00:00Z",
+      });
+      await seedCheckIn(db, {
+        userId: owner,
+        item: wine,
+        createdAt: "2026-10-20T12:00:00Z",
+      });
+      await seedCheckIn(db, {
+        userId: owner,
+        item: beer,
+        createdAt: "2026-09-20T12:00:00Z",
+      });
+      // Another person's log of the same item is not the owner's.
+      await seedCheckIn(db, {
+        userId: coOwner,
+        item: wine,
+        createdAt: "2026-10-04T12:00:00Z",
+      });
+
+      // Ratings: one made in October, one made in August and changed in
+      // October (both count), one made and left in August (does not), and a
+      // co-owner's October rating (does not).
+      for (const [ref, score] of [
+        [wine, 4],
+        [beer, 3],
+        [sake, 5],
+      ] as const) {
+        await seedItemReview(db, owner, ref, score);
+      }
+      await seedItemReview(db, coOwner, wine, 2);
+      await stamp(
+        db,
+        "item_reviews",
+        sql`user_id = ${owner}::uuid and wine_id = ${wine.id}::uuid`,
+        { created: "2026-10-05T12:00:00Z" },
+      );
+      await stamp(
+        db,
+        "item_reviews",
+        sql`user_id = ${owner}::uuid and beer_id = ${beer.id}::uuid`,
+        { created: "2026-08-05T12:00:00Z", updated: "2026-10-06T12:00:00Z" },
+      );
+      await stamp(
+        db,
+        "item_reviews",
+        sql`user_id = ${owner}::uuid and sake_id = ${sake.id}::uuid`,
+        { created: "2026-08-07T12:00:00Z" },
+      );
+      await stamp(db, "item_reviews", sql`user_id = ${coOwner}::uuid`, {
+        created: "2026-10-05T12:00:00Z",
+      });
+
+      // Bottles: the owner adds two to a cellar they co-own and one to their
+      // own; the co-owner adds three to the shared cellar in the same month.
+      const theirs = await seedCellar(db, {
+        createdById: coOwner,
+        coOwnerIds: [owner],
+      });
+      const own = await seedCellar(db, { createdById: owner });
+      const mine = [
+        await seedCellarItem(db, theirs, owner, wine),
+        await seedCellarItem(db, theirs, owner, beer),
+        await seedCellarItem(db, own, owner, sake),
+      ];
+      for (let i = 0; i < 3; i++)
+        await seedCellarItem(db, theirs, coOwner, wine);
+      await stamp(
+        db,
+        "cellar_items",
+        sql`cellar_id in (${theirs}::uuid, ${own}::uuid)`,
+        { created: "2026-10-10T12:00:00Z" },
+      );
+      await stamp(db, "cellar_items", sql`id = ${mine[2] ?? ""}::uuid`, {
+        created: "2026-11-02T12:00:00Z",
+      });
+
+      const actor = await recapOf(owner, db);
+      const october = await actor.recap(userCtx(owner), { period: "2026-10" });
+      expect(october.totals).toEqual({
+        checkIns: 2,
+        ratings: 2,
+        bottlesAdded: 2,
+      });
+      const august = await actor.recap(userCtx(owner), { period: "2026-08" });
+      expect(august.totals).toEqual({
+        checkIns: 0,
+        ratings: 2,
+        bottlesAdded: 0,
+      });
+      const year = await actor.recap(userCtx(owner), { period: "2026" });
+      expect(year.totals).toEqual({ checkIns: 3, ratings: 3, bottlesAdded: 3 });
+      // The co-owner's own recap counts their own additions and nothing of the owner's.
+      const theirsRecap = await (await recapOf(coOwner, db)).recap(
+        userCtx(coOwner),
+        { period: "2026-10" },
+      );
+      expect(theirsRecap.totals).toEqual({
+        checkIns: 1,
+        ratings: 1,
+        bottlesAdded: 3,
+      });
+    });
+  });
+
+  it("lists the periods with any activity, newest first, in the viewer's zone", async () => {
+    await withTestDb(async (db) => {
+      const owner = await seedUser(db);
+      const other = await seedUser(db);
+      const wine = await seedItem(db, "WINE", owner, { name: "Periods wine" });
+      const beer = await seedItem(db, "BEER", owner, { name: "Periods beer" });
+      // 23:30 on 31 December 2025 in Los Angeles is 2026 in UTC.
+      await seedCheckIn(db, {
+        userId: owner,
+        item: wine,
+        createdAt: "2026-01-01T07:30:00Z",
+      });
+      await seedItemReview(db, owner, beer, 4);
+      await stamp(db, "item_reviews", sql`user_id = ${owner}::uuid`, {
+        created: "2026-03-05T12:00:00Z",
+        updated: "2026-07-05T12:00:00Z",
+      });
+      const cellar = await seedCellar(db, { createdById: owner });
+      await seedCellarItem(db, cellar, owner, wine);
+      await stamp(db, "cellar_items", sql`cellar_id = ${cellar}::uuid`, {
+        created: "2024-05-05T12:00:00Z",
+      });
+      // A recipe log the owner may no longer see does not open a period.
+      const hidden = await seedRecipe(db, {
+        name: "Hidden sling",
+        createdById: other,
+        privacy: "PRIVATE",
+      });
+      await seedRecipeLog(db, owner, hidden, "2023-02-02T12:00:00Z");
+      // Another person's activity is not the owner's.
+      await seedCheckIn(db, {
+        userId: other,
+        item: wine,
+        createdAt: "2022-02-02T12:00:00Z",
+      });
+      const otherCellar = await seedCellar(db, {
+        createdById: other,
+        coOwnerIds: [owner],
+      });
+      await seedCellarItem(db, otherCellar, other, beer);
+      await stamp(db, "cellar_items", sql`cellar_id = ${otherCellar}::uuid`, {
+        created: "2021-05-05T12:00:00Z",
+      });
+
+      const actor = await recapOf(owner, db);
+      expect(await actor.periods(userCtx(owner), { kind: "MONTH" })).toEqual([
+        "2026-07",
+        "2026-03",
+        "2026-01",
+        "2024-05",
+      ]);
+      expect(
+        await actor.periods(userCtx(owner), {
+          kind: "MONTH",
+          timeZone: "America/Los_Angeles",
+        }),
+      ).toEqual(["2026-07", "2026-03", "2025-12", "2024-05"]);
+      expect(await actor.periods(userCtx(owner), { kind: "YEAR" })).toEqual([
+        "2026",
+        "2024",
+      ]);
+      expect(
+        await actor.periods(userCtx(owner), {
+          kind: "YEAR",
+          timeZone: "America/Los_Angeles",
+        }),
+      ).toEqual(["2026", "2025", "2024"]);
+    });
+  });
+
+  it("refuses another viewer, a bad kind and a bad zone for periods", async () => {
+    await withTestDb(async (db) => {
+      const owner = await seedUser(db);
+      const other = await seedUser(db);
+      const actor = await recapOf(owner, db);
+      await expect(
+        actor.periods(userCtx(other), { kind: "MONTH" }),
+      ).rejects.toBeInstanceOf(ForbiddenError);
+      await expect(
+        actor.periods(userCtx(null), { kind: "MONTH" }),
+      ).rejects.toBeInstanceOf(ForbiddenError);
+      await expect(
+        actor.periods(userCtx(owner), { kind: "WEEK" as "MONTH" }),
+      ).rejects.toBeInstanceOf(ValidationError);
+      await expect(
+        actor.periods(userCtx(owner), { kind: "YEAR", timeZone: "Not/AZone" }),
+      ).rejects.toBeInstanceOf(ValidationError);
+      expect(await actor.periods(userCtx(owner), { kind: "YEAR" })).toEqual([]);
     });
   });
 });

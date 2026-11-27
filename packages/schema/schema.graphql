@@ -5879,6 +5879,16 @@ type Query {
   ): QueryRecapResult!
 
   """
+  MC-recap: the viewer's periods with any activity, newest first, in `recap(period)`'s format (`YYYY-MM` or `YYYY`). Signed-in only.
+  """
+  recapPeriods(
+    kind: RecapPeriodKind!
+
+    """IANA zone the periods are read in."""
+    timeZone: String!
+  ): QueryRecapPeriodsResult!
+
+  """
   One recipe by id. `NotFoundError` covers both 'no such recipe' and 'not yours to see' (§1.6).
   """
   recipe(id: ID!): QueryRecipeResult!
@@ -6005,6 +6015,15 @@ type Query {
   L03: agreement with one user. A malformed id, a missing user and one you may not see answer alike (NotFound).
   """
   tasteAgreement(userId: ID!): QueryTasteAgreementResult!
+
+  """
+  MC-compare / L11: the items you and this friend both rated. A non-friend, a missing user and a malformed id answer alike (no rows).
+  """
+  tasteCompare(
+    """A kind chip: only this type's rows."""
+    itemType: ItemType
+    userId: ID!
+  ): QueryTasteCompareResult!
 
   """L03: the viewer's own taste profile."""
   tasteProfile: QueryTasteProfileResult!
@@ -6134,6 +6153,12 @@ union QueryPlaceSearchResult = BudgetExceededError | ConflictError | ForbiddenEr
 
 union QueryRankingsResult = BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | RankingsConnection | ValidationError
 
+union QueryRecapPeriodsResult = BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | QueryRecapPeriodsSuccess | ValidationError
+
+type QueryRecapPeriodsSuccess {
+  data: [String!]!
+}
+
 union QueryRecapResult = BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | Recap | ValidationError
 
 union QueryRecipeGroupResult = BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | RecipeGroup | ValidationError
@@ -6155,6 +6180,8 @@ union QuerySharedRecipeResult = BudgetExceededError | ConflictError | ForbiddenE
 union QuerySharedTierListResult = BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | SharedTierList | ValidationError
 
 union QueryTasteAgreementResult = BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | TasteAgreement | ValidationError
+
+union QueryTasteCompareResult = BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | TasteCompare | ValidationError
 
 union QueryTasteProfileResult = BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | TasteProfile | ValidationError
 
@@ -6214,6 +6241,7 @@ type Recap {
   """Stamps held at the end of the period."""
   stamps: BreadthStamps!
   timeZone: String!
+  totals: RecapTotals!
 }
 
 """
@@ -6246,6 +6274,24 @@ type RecapCards {
   styles: RecapCard
   topRated: RecapCard
   types: RecapCard
+}
+
+"""The granularity of a recap period: `YYYY-MM` or `YYYY`."""
+enum RecapPeriodKind {
+  MONTH
+  YEAR
+}
+
+"""MC-recap / L4: what the viewer did in the period. Their own rows only."""
+type RecapTotals {
+  """Bottles the viewer added, in any cellar; never a co-owner's."""
+  bottlesAdded: Int!
+
+  """Drink-log entries about the viewer, dated in the period."""
+  checkIns: Int!
+
+  """The viewer's item ratings (stars) created or changed in the period."""
+  ratings: Int!
 }
 
 """
@@ -6429,6 +6475,11 @@ type RecipeGroup {
   canonicalRecipe: Recipe
   canonicalRecipeId: ID
   category: RecipeCategory!
+
+  """
+  MC-pick: the version with the most net votes from people other than its author, at least 3, oldest winning ties; null otherwise, or when you may not see it. A label: it never moves `canonicalRecipeId`.
+  """
+  communityPickId: ID
   createdAt: DateTime
   createdById: ID
   description: String
@@ -8166,6 +8217,55 @@ enum TasteArchetypeKey {
   EXPLORER
   FOCUSED
   GENEROUS
+}
+
+"""
+MC-compare: you and one friend, item by item. Empty for anyone who is not your friend, and below 5 shared items.
+"""
+type TasteCompare {
+  """Biggest difference between the two scores first, then by name."""
+  rows(
+    """
+    An `edge.cursor` from a previous page. Opaque and owned by the actor that minted it: cursors are not interchangeable between fields.
+    """
+    after: String
+
+    """**Not supported.** See `last`. Paging is forward-only."""
+    before: String
+
+    """
+    How many edges to return, 1 to 100 inclusive; defaults to 20. Over the cap is a `VALIDATION` error, not a silent clamp.
+    """
+    first: Int
+
+    """
+    **Not supported.** Present because the Relay spec puts it here; passing it is a `VALIDATION` error rather than a silently forward page. Paging is forward-only — use `first`/`after`.
+    """
+    last: Int
+  ): TasteCompareRowConnection!
+}
+
+"""
+MC-compare: one item you and a friend both rated, on the half-star scale, as you may see the ratings.
+"""
+type TasteCompareRow {
+  """Through the item DataLoader (§1.5)."""
+  item: Item!
+  myScore: Float!
+  theirScore: Float!
+}
+
+type TasteCompareRowConnection {
+  edges: [TasteCompareRowEdge!]!
+  pageInfo: PageInfo!
+
+  """Total rows matching the query, or null when counting is not cheap."""
+  totalCount: Int
+}
+
+type TasteCompareRowEdge {
+  cursor: String!
+  node: TasteCompareRow!
 }
 
 """

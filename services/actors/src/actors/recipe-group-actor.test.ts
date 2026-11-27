@@ -48,7 +48,7 @@ import {
   withTestDb,
 } from "../lib/testing.ts";
 import { RecipeActor } from "./recipe-actor.ts";
-import { RecipeGroupActor } from "./recipe-group-actor.ts";
+import { communityPickOf, RecipeGroupActor } from "./recipe-group-actor.ts";
 
 const daprClient = (): DaprClient =>
   new DaprClient({ daprHost: "127.0.0.1", daprPort: "3502" });
@@ -1117,6 +1117,149 @@ describe.skipIf(skip)("RecipeGroupActor", () => {
           code: "NOT_FOUND",
           reason: "RECIPE_NOT_IN_GROUP",
         });
+      });
+    });
+  });
+
+  describe("community pick (MC-pick, L15)", () => {
+    const vote = (
+      actor: RecipeGroupActor,
+      userId: string,
+      recipeId: string,
+      voteType: "upvote" | "downvote" = "upvote",
+    ) => actor.vote(userCtx(userId, "r"), { recipeId, voteType });
+
+    it("needs 3 net votes from people other than the author; the author's own never count", async () => {
+      await withTestDb(async (db) => {
+        const author = await seedUser(db);
+        const [a, b, c, d] = [
+          await seedUser(db),
+          await seedUser(db),
+          await seedUser(db),
+          await seedUser(db),
+        ];
+        const groupId = await seedGroup(db, { createdById: author });
+        const theirs = await seedRecipe(db, {
+          createdById: author,
+          recipeGroupId: groupId,
+          name: "Author's Negroni",
+          createdAt: "2026-01-01T00:00:00Z",
+        });
+        const actor = await activate(newGroupActor(groupId, db));
+        // The author's upvote plus two from others: 3 net in all, 2 from
+        // others, so no pick.
+        await vote(actor, author, theirs);
+        await vote(actor, a, theirs);
+        const two = await vote(actor, b, theirs);
+        expect(two.netScore).toBe(3);
+        expect(two.group.communityPickId).toBeNull();
+        expect((await actor.get(userCtx(a, "r"))).communityPickId).toBeNull();
+        // A downvote from another person takes one away.
+        await vote(actor, c, theirs, "downvote");
+        await vote(actor, d, theirs);
+        expect((await actor.get(userCtx(a, "r"))).communityPickId).toBeNull();
+        // Changing that downvote to an upvote makes it 4 net from others.
+        await vote(actor, c, theirs);
+        const picked = await actor.get(userCtx(a, "r"));
+        expect(picked.communityPickId).toBe(theirs);
+        // A label, not the canonical: the canonical was already this recipe
+        // and nothing about the pick moved or renamed it.
+        expect(picked.canonicalRecipeId).toBe(theirs);
+        expect(picked.name).toBe("Author's Negroni");
+      });
+    });
+
+    it("the oldest wins a tie, and the pick never moves the canonical", async () => {
+      await withTestDb(async (db) => {
+        const owner = await seedUser(db);
+        const author = await seedUser(db);
+        const voters = [
+          await seedUser(db),
+          await seedUser(db),
+          await seedUser(db),
+          await seedUser(db),
+        ];
+        const groupId = await seedGroup(db, { createdById: owner });
+        const older = await seedRecipe(db, {
+          createdById: owner,
+          recipeGroupId: groupId,
+          name: "Older Sour",
+          createdAt: "2026-01-01T00:00:00Z",
+        });
+        const newer = await seedRecipe(db, {
+          createdById: author,
+          recipeGroupId: groupId,
+          name: "Newer Sour",
+          createdAt: "2026-02-01T00:00:00Z",
+        });
+        const actor = await activate(newGroupActor(groupId, db));
+        for (const voter of voters.slice(0, 3)) {
+          await vote(actor, voter, newer);
+          await vote(actor, voter, older);
+        }
+        // The newer version's author piles on: the canonical (all votes)
+        // goes to it, the pick (others' votes) is a tie the older one wins.
+        const last = await vote(actor, author, newer);
+        expect(last.group.canonicalRecipeId).toBe(newer);
+        expect(last.group.communityPickId).toBe(older);
+        // One more vote from someone else breaks the tie.
+        const broke = await vote(actor, voters[3] ?? owner, newer);
+        expect(broke.group.communityPickId).toBe(newer);
+      });
+    });
+
+    it("is never a draft, and is null to a viewer who may not see it", async () => {
+      await withTestDb(async (db) => {
+        const author = await seedUser(db);
+        const stranger = await seedUser(db);
+        const friend = await seedUser(db);
+        await seedFriendship(db, author, friend);
+        await seedFriendship(db, friend, author);
+        const groupId = await seedGroup(db, { createdById: author });
+        const shared = await seedRecipe(db, {
+          createdById: author,
+          recipeGroupId: groupId,
+          name: "Public Sour",
+          createdAt: "2026-01-01T00:00:00Z",
+        });
+        const friendsOnly = await seedRecipe(db, {
+          createdById: author,
+          recipeGroupId: groupId,
+          name: "Friends Sour",
+          createdAt: "2026-02-01T00:00:00Z",
+          privacy: "FRIENDS",
+        });
+        const voters = [
+          await seedUser(db),
+          await seedUser(db),
+          await seedUser(db),
+        ];
+        for (const voter of voters) {
+          await db.execute(sql`
+            insert into public.recipe_votes (recipe_id, user_id, vote_type)
+            values (${friendsOnly}::uuid, ${voter}::uuid, 'upvote')
+          `);
+        }
+        const actor = await activate(newGroupActor(groupId, db));
+        expect((await actor.get(userCtx(friend, "r"))).communityPickId).toBe(
+          friendsOnly,
+        );
+        // The stranger sees the group (the public version) but not the pick.
+        const seen = await actor.get(userCtx(stranger, "r"));
+        expect(seen.recipeCount).toBe(1);
+        expect(seen.communityPickId).toBeNull();
+        expect(shared).not.toBe(friendsOnly);
+
+        expect(
+          communityPickOf(
+            [{ id: "draft", createdById: author, isDraft: true }],
+            voters.map((userId) => ({
+              recipeId: "draft",
+              userId,
+              voteType: "upvote",
+            })),
+          ),
+        ).toBeNull();
       });
     });
   });
