@@ -1,42 +1,57 @@
 import { Analytics } from "@vercel/analytics/react";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import type { Metadata, Viewport } from "next";
-import { Fraunces, Inter } from "next/font/google";
+import { Inter } from "next/font/google";
+import { cookies } from "next/headers";
 import { NuqsAdapter } from "nuqs/adapters/next/app";
 import { SkipLink } from "@/components/app/SkipLink";
 import AppClientProviders from "@/components/providers/AppClientProviders";
 import SerwistClientProvider from "@/components/providers/SerwistClientProvider";
 import { AppleSplashScreens } from "@/components/pwa/AppleSplashScreens";
-import { color } from "@/lib/tokens";
+import {
+  readThemeChoice,
+  THEME_COLOR,
+  THEME_SCRIPT,
+  themeAttribute,
+} from "@/lib/theme";
 import "./globals.css";
 // B05 route motion; after globals.css, and its own file (L26).
 import "./view-transitions.css";
 
 /**
- * The two families (design §3.2), each loaded once and exposed as a CSS
- * variable that Tailwind's `font-sans`/`font-display` read. Both are variable
- * fonts, so no weight list.
+ * Inter only (KIT § 1 Type), loaded once and exposed as a CSS variable that
+ * Tailwind's `font-sans` (and the `font-display` alias, L26) read. A variable
+ * font, so no weight list.
  */
 const inter = Inter({
   subsets: ["latin"],
   variable: "--font-inter",
   display: "swap",
 });
-const fraunces = Fraunces({
-  subsets: ["latin"],
-  variable: "--font-fraunces",
-  axes: ["opsz", "SOFT"],
-  display: "swap",
-});
-
-export const viewport: Viewport = {
-  themeColor: color.bg,
-  width: "device-width",
-  initialScale: 1,
-  maximumScale: 5,
-  userScalable: true,
-  viewportFit: "cover",
-};
+/**
+ * The browser chrome follows the theme: one colour for Dark or Light, the
+ * OS's for Phone. The pre-paint script rewrites them when the choice changes.
+ */
+export async function generateViewport(): Promise<Viewport> {
+  const choice = readThemeChoice(await cookies());
+  return {
+    themeColor:
+      choice === "phone"
+        ? [
+            {
+              media: "(prefers-color-scheme: light)",
+              color: THEME_COLOR.light,
+            },
+            { media: "(prefers-color-scheme: dark)", color: THEME_COLOR.dark },
+          ]
+        : THEME_COLOR[choice],
+    width: "device-width",
+    initialScale: 1,
+    maximumScale: 5,
+    userScalable: true,
+    viewportFit: "cover",
+  };
+}
 
 export const metadata: Metadata = {
   // X21: every route names itself ("Cellars · Cellar Assistant"), through its
@@ -61,21 +76,29 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const choice = readThemeChoice(await cookies());
   return (
-    // Dark is static on <html> (D21): the tokens apply at first paint, not
-    // after a client effect.
+    // The theme is rendered from the `theme` cookie (L9), and THEME_SCRIPT
+    // re-reads it before first paint (Phone resolves the OS's scheme; the
+    // precached offline page follows the cookie, L45). It runs before
+    // hydration and may change the attribute, hence suppressHydrationWarning.
     <html
       lang="en"
-      data-theme="dark"
-      className={`${inter.variable} ${fraunces.variable}`}
+      data-theme={themeAttribute(choice)}
+      data-theme-choice={choice}
+      className={inter.variable}
       suppressHydrationWarning
     >
       <head>
+        <script
+          // biome-ignore lint/security/noDangerouslySetInnerHtml: a constant built from our own tokens, no input.
+          dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }}
+        />
         <AppleSplashScreens />
       </head>
       <body className="bg-background font-sans text-foreground">

@@ -1,20 +1,30 @@
 /**
- * WCAG contrast for the palette (design-direction.md §3.1, D21), measured on
- * the values the app actually ships: `lib/tokens.ts` (which `globals.css`
- * mirrors — `tokens-parity.test.ts`) and the tint `TypeChip` puts behind a
+ * WCAG contrast for the kit's palette (LIGHT § 1, its rulings and additions),
+ * measured on the values the app ships: `lib/tokens.ts` (which `globals.css`
+ * mirrors: `tokens-parity.test.ts`) and the tint `TypeChip` puts behind a
  * type's text.
  *
- * Text needs 4.5:1 (AA, normal size): every chip, footnote and tab label in
- * this app is small. The surfaces text sits on are bg, surface-1 (sections)
- * and surface-2 (tiles, sheets); surface-3 is the pressed state and inputs,
- * so only the ink tiers are held to it.
+ * Text needs 4.5:1 (AA, normal size). The surfaces text sits on are bg, card
+ * (surface-1) and raised (surface-2); sel (surface-3) is the pressed and
+ * selected state. Non-text marks (glyphs, act fills, input boundaries, gold
+ * stars, hearts) need 3:1. The light figures LIGHT § 1 quotes are asserted to
+ * the hundredth, so a value change that moves one shows up here.
  */
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import { itemTypeTokens } from "@/components/app/TypeChip";
-import { color, daylight, ITEM_TYPE_ORDER, itemTypeColor } from "../tokens";
+import {
+  bandColor,
+  color,
+  ITEM_TYPE_ORDER,
+  itemTypeColor,
+  itemTypeColorLight,
+  light,
+  type Palette,
+} from "../tokens";
 
 const AA = 4.5;
+const NON_TEXT = 3;
 
 function channels(hex: string): [number, number, number] {
   const m = /^#([0-9a-f]{6})$/i.exec(hex);
@@ -57,20 +67,17 @@ function over(fg: string, alpha: number, bg: string): string {
     .join("")}`;
 }
 
-const TEXT_SURFACES = {
-  bg: color.bg,
-  surface1: color.surface1,
-  surface2: color.surface2,
-} as const;
-const ALL_SURFACES = { ...TEXT_SURFACES, surface3: color.surface3 } as const;
+function surfaces(p: Palette) {
+  return { bg: p.bg, card: p.surface1, raised: p.surface2 } as const;
+}
 
-function assertAA(
+function assertMin(
   fgName: string,
   fg: string,
-  surfaces: Readonly<Record<string, string>>,
+  on: Readonly<Record<string, string>>,
   min = AA,
 ) {
-  for (const [name, bg] of Object.entries(surfaces)) {
+  for (const [name, bg] of Object.entries(on)) {
     const ratio = contrast(fg, bg);
     assert.ok(
       ratio >= min,
@@ -79,77 +86,163 @@ function assertAA(
   }
 }
 
-describe("palette contrast: dark (the default)", () => {
-  test("the three ink tiers read on every surface, surface-3 included", () => {
-    assertAA("ink-1", color.ink1, ALL_SURFACES);
-    assertAA("ink-2", color.ink2, ALL_SURFACES);
-    assertAA("ink-3", color.ink3, ALL_SURFACES);
-  });
-
-  test("the design's quoted ratios still hold", () => {
-    assert.ok(contrast(color.ink1, color.bg) >= 16.7);
-    assert.ok(contrast(color.ink3, color.surface2) >= 5.5);
-    assert.ok(contrast(color.accent, color.bg) >= 8.05);
-  });
-
-  test("brass is an action fill with dark ink, never white", () => {
-    assert.ok(contrast(color.onAccent, color.accent) >= 7.6);
-    assert.ok(
-      contrast("#FFFFFF", color.accent) < AA,
-      "white on brass fails — which is why the ink is --ca-on-accent",
-    );
-  });
-
-  test("role colours used as text: brass, claret ink, teal, success, danger", () => {
-    assertAA("accent", color.accent, TEXT_SURFACES);
-    assertAA("brand-ink", color.brandInk, TEXT_SURFACES);
-    assertAA("ai", color.ai, TEXT_SURFACES);
-    assertAA("success", color.success, TEXT_SURFACES);
-    assertAA("danger", color.danger, TEXT_SURFACES);
-  });
-
-  test("fills that carry text: parchment on claret, bg on solid danger (ConfirmSheet)", () => {
-    assert.ok(contrast(color.ink1, color.brand) >= AA);
-    assert.ok(contrast(color.bg, color.danger) >= AA);
-    assert.ok(
-      contrast(color.bg, color.ai) >= AA,
-      "the solid 'From label' mark",
-    );
-  });
-
-  test("each type's text-safe hue, plain and on its own TypeChip tint", () => {
-    for (const type of ITEM_TYPE_ORDER) {
-      const { text, deep } = itemTypeColor[type];
-      assertAA(`${type} text`, text, TEXT_SURFACES);
-      const alpha = /\/(\d+)$/.exec(itemTypeTokens[type].tintClass);
-      assert.ok(alpha, `${type}: tintClass carries an alpha`);
-      const a = Number(alpha[1]) / 100;
-      for (const [name, bg] of Object.entries(TEXT_SURFACES)) {
-        const chip = over(deep, a, bg);
-        const ratio = contrast(text, chip);
-        assert.ok(
-          ratio >= AA,
-          `${type} chip on ${name}: ${ratio.toFixed(2)}:1 (tint ${a})`,
-        );
-      }
+function typeChips(
+  p: Palette,
+  hues: typeof itemTypeColor,
+  theme: string,
+): void {
+  for (const type of ITEM_TYPE_ORDER) {
+    const { text, deep } = hues[type];
+    assertMin(`${theme} ${type} text`, text, surfaces(p));
+    const alpha = /\/(\d+)$/.exec(itemTypeTokens[type].tintClass);
+    assert.ok(alpha, `${type}: tintClass carries an alpha`);
+    const a = Number(alpha[1]) / 100;
+    for (const [name, bg] of Object.entries(surfaces(p))) {
+      const ratio = contrast(text, over(deep, a, bg));
+      assert.ok(
+        ratio >= AA,
+        `${theme} ${type} chip on ${name}: ${ratio.toFixed(2)}:1 (tint ${a})`,
+      );
     }
+  }
+}
+
+describe("palette contrast: light (LIGHT § 1)", () => {
+  const on = [light.bg, light.surface1, light.surface2, light.surface3];
+  // [token, value, ratio on bg, card, raised, sel] — LIGHT § 1's column.
+  const quoted: [keyof Palette, number[]][] = [
+    ["ink1", [16.5, 18.1, 15.0, 13.3]],
+    ["ink2", [8.3, 9.1, 7.6, 6.7]],
+    ["ink3", [6.3, 6.9, 5.8, 5.1]],
+    ["glyph", [3.9, 4.3, 3.6, 3.1]],
+    ["actInk", [5.6, 6.2, 5.1, 4.5]],
+    ["gold", [4.0, 4.3, 3.6, 3.2]],
+    ["heart", [4.6, 5.0, 4.2, 3.7]],
+    ["danger", [6.0, 6.5, 5.4, 4.8]],
+    ["edge2", [3.48, 3.81, 3.17]],
+    ["dash", [3.06, 3.35]],
+    ["accent", [3.1, 3.39]],
+  ];
+
+  test("every figure LIGHT § 1 quotes, on bg / card / raised / sel", () => {
+    for (const [key, figures] of quoted) {
+      figures.forEach((figure, i) => {
+        const ratio = contrast(light[key], on[i] ?? "");
+        // Quoted to one or two decimals (the kit rounds loosely: glyph on raised is 3.546, quoted 3.6).
+        const places = String(figure).split(".")[1]?.length ?? 0;
+        const tolerance = places >= 2 ? 0.006 : 0.06;
+        assert.ok(
+          Math.abs(ratio - figure) <= tolerance,
+          `light ${key} on surface ${i}: ${ratio.toFixed(3)}, LIGHT says ${figure}`,
+        );
+      });
+    }
+  });
+
+  test("text tiers read at AA on bg, card and raised; ink-3 and act-ink on sel too", () => {
+    for (const key of ["ink1", "ink2", "ink3", "actInk", "danger"] as const)
+      assertMin(`light ${key}`, light[key], surfaces(light));
+    assertMin("light ink3", light.ink3, { sel: light.surface3 });
+    assertMin("light actInk", light.actInk, { sel: light.surface3 });
+  });
+
+  test("non-text marks reach 3:1 where they are used", () => {
+    assertMin(
+      "light glyph",
+      light.glyph,
+      { bg: light.bg, card: light.surface1, raised: light.surface2 },
+      NON_TEXT,
+    );
+    // Input boundaries (ruling 1) on the three surfaces fields sit on.
+    assertMin("light edge-2", light.edge2, surfaces(light), NON_TEXT);
+    // Gold is accepted at 3:1 on raised and below on sel (ruling 2).
+    assertMin("light gold", light.gold, surfaces(light), NON_TEXT);
+    assertMin(
+      "light act fill",
+      light.accent,
+      { bg: light.bg, card: light.surface1 },
+      NON_TEXT,
+    );
+    assertMin(
+      "light dash",
+      light.dash,
+      { bg: light.bg, card: light.surface1 },
+      NON_TEXT,
+    );
+  });
+
+  test("on-act on act, and the action ink on its fill", () => {
+    const ratio = contrast(light.onAccent, light.accent);
+    assert.ok(Math.abs(ratio - 5.71) <= 0.006, `on-act on act ${ratio}`);
+  });
+
+  test("the toast stays dark: its ink and action read on its fill", () => {
+    assertMin("toast ink", light.toastInk, { toast: light.toast });
+    assertMin("toast act", light.toastAct, { toast: light.toast });
+  });
+
+  test("ink on every band reads (5.7 to 11.5:1), both themes", () => {
+    for (const band of [5, 4, 3, 2, 1] as const) {
+      assertMin(`on-band on k${band}`, light.onBand, { band: bandColor[band] });
+      assertMin(`on-band on k${band}`, color.onBand, { band: bandColor[band] });
+    }
+  });
+
+  test("legacy roles kept for existing screens: brand ink, success, types", () => {
+    assertMin("light brand-ink", light.brandInk, surfaces(light));
+    assertMin("light success", light.success, surfaces(light));
+    assertMin("light ink on brand", light.onGlass, { brand: light.brand });
+    typeChips(light, itemTypeColorLight, "light");
   });
 });
 
-describe("palette contrast: Daylight (defined, not built — D21)", () => {
-  const surfaces = {
-    bg: daylight.bg,
-    surface1: daylight.surface1,
-    surface2: daylight.surface2,
-  };
+describe("palette contrast: dark", () => {
+  test("the text tiers read on bg, card and raised; ink-1 and ink-2 on sel", () => {
+    for (const key of [
+      "ink1",
+      "ink2",
+      "ink3",
+      "actInk",
+      "danger",
+      "gold",
+    ] as const)
+      assertMin(`dark ${key}`, color[key], surfaces(color));
+    assertMin("dark ink1", color.ink1, { sel: color.surface3 });
+    assertMin("dark ink2", color.ink2, { sel: color.surface3 });
+  });
 
-  test("inks, accent text and the accent fill", () => {
-    assertAA("ink-1", daylight.ink1, surfaces);
-    assertAA("ink-2", daylight.ink2, surfaces);
-    assertAA("ink-3", daylight.ink3, surfaces);
-    assertAA("accent text", daylight.accentText, { bg: daylight.bg });
-    assert.ok(contrast(daylight.onAccent, daylight.accent) >= AA);
-    assertAA("ai", daylight.ai, { bg: daylight.bg });
-    assertAA("brand", daylight.brand, { bg: daylight.bg });
+  test("the ruling-3 fixes: dash lightened, glyph at 3:1 off sel", () => {
+    assert.ok(Math.abs(contrast(color.dash, color.bg) - 3.86) <= 0.006);
+    assert.ok(Math.abs(contrast(color.dash, color.surface1) - 3.3) <= 0.006);
+    assertMin("dark glyph", color.glyph, surfaces(color), NON_TEXT);
+    assertMin(
+      "dark edge-2",
+      color.edge2,
+      { bg: color.bg, card: color.surface1 },
+      NON_TEXT,
+    );
+  });
+
+  test("act is a fill with dark ink, never white", () => {
+    assertMin("on-act on act", color.onAccent, { act: color.accent });
+    assert.ok(
+      contrast("#ffffff", color.accent) < AA,
+      "white on act fails, which is why the ink is --ca-on-accent",
+    );
+    assertMin("dark act fill", color.accent, surfaces(color), NON_TEXT);
+  });
+
+  test("teal on glass reads", () => {
+    // Glass is 86 % of #111015 over a photo; on its own colour it is the floor.
+    assertMin("act-on-glass", color.actOnGlass, { glass: color.bg });
+    assertMin("on-glass", color.onGlass, { glass: color.bg });
+  });
+
+  test("legacy roles kept for existing screens: brand ink, success, types", () => {
+    assertMin("dark brand-ink", color.brandInk, surfaces(color));
+    assertMin("dark success", color.success, surfaces(color));
+    assertMin("dark ink on brand", color.ink1, { brand: color.brand });
+    assertMin("bg on solid danger", color.bg, { danger: color.danger });
+    typeChips(color, itemTypeColor, "dark");
   });
 });

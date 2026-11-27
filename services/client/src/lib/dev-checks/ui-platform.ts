@@ -21,6 +21,7 @@
  * | `palette-colour` | a Tailwind default-palette class, `text-red-500` / `bg-zinc-900/50` (bypasses the tokens) |
  * | `motion-literal`| a `stiffness`/`damping`/`bounce`/`mass`/`visualDuration` number, a numeric `duration`/`delay` or a numeric `ease` curve in a `transition`, or a `duration-[…]`/`ease-[…]` class |
  * | `reduced-motion-query` | a hand-rolled `prefers-reduced-motion` media query (use `useReducedMotion`) |
+ * | `second-font`   | a `next/font` family other than Inter (the kit is Inter only), or any `next/font/local` |
  *
  * ## Absolute
  *
@@ -52,7 +53,8 @@ export type Rule =
   | "arbitrary-colour"
   | "palette-colour"
   | "motion-literal"
-  | "reduced-motion-query";
+  | "reduced-motion-query"
+  | "second-font";
 
 export type Finding = {
   /** Relative to `services/client`, forward-slashed: `src/components/…`. */
@@ -161,6 +163,19 @@ export function scanSource(file: string, source: string): Finding[] {
     else if (LEGACY_DEP.test(spec)) add(node, "legacy-dep", spec);
   };
 
+  /** The kit is Inter only (KIT § 1 Type); `font-display` is an Inter alias. */
+  const fontRule = (node: ts.ImportDeclaration) => {
+    const spec = (node.moduleSpecifier as ts.StringLiteral).text;
+    if (spec === "next/font/local") add(node, "second-font", spec);
+    if (spec !== "next/font/google") return;
+    const named = node.importClause?.namedBindings;
+    if (named && ts.isNamedImports(named))
+      for (const el of named.elements) {
+        const family = (el.propertyName ?? el.name).text;
+        if (family !== "Inter") add(el, "second-font", family);
+      }
+  };
+
   const visit = (node: ts.Node, inTransition: boolean) => {
     // Imports, static and dynamic, and re-exports.
     if (
@@ -169,6 +184,7 @@ export function scanSource(file: string, source: string): Finding[] {
       ts.isStringLiteral(node.moduleSpecifier)
     ) {
       importRule(node, node.moduleSpecifier.text);
+      if (ts.isImportDeclaration(node)) fontRule(node);
       return;
     }
     if (

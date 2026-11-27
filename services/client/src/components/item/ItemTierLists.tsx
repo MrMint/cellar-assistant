@@ -20,19 +20,19 @@ export type ItemTierListEntry = {
  * in full so Tailwind sees every class.
  */
 export const BAND_INK = {
-  5: "ink1",
-  4: "ink1",
-  3: "bg",
-  2: "bg",
-  1: "ink1",
-} as const satisfies Record<1 | 2 | 3 | 4 | 5, "ink1" | "bg">;
+  5: "onBand",
+  4: "onBand",
+  3: "onBand",
+  2: "onBand",
+  1: "onBand",
+} as const satisfies Record<1 | 2 | 3 | 4 | 5, "onBand">;
 
 export const BAND_CLASS: Record<number, string> = {
-  5: "bg-band-5 text-ink-1",
-  4: "bg-band-4 text-ink-1",
-  3: "bg-band-3 text-background",
-  2: "bg-band-2 text-background",
-  1: "bg-band-1 text-ink-1",
+  5: "bg-band-5 text-on-band",
+  4: "bg-band-4 text-on-band",
+  3: "bg-band-3 text-on-band",
+  2: "bg-band-2 text-on-band",
+  1: "bg-band-1 text-on-band",
   0: "bg-surface-3 text-ink-2",
 };
 
