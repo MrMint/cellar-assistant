@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Suspense } from "react";
+import { type ComponentProps, Suspense } from "react";
 import { ErrorState } from "@/components/app/EmptyState";
 import { Page } from "@/components/app/Page";
 import {
@@ -68,24 +68,15 @@ export default async function RecipesPage({
   const drafts = unwrapResult(draftsRead.myRecipes, "RecipeConnection");
   const published = unwrapResult(publishedRead.myRecipes, "RecipeConnection");
 
+  const rows = [
+    ...(drafts.ok ? drafts.data.edges.map((edge) => edge.node) : []),
+    ...(published.ok ? published.data.edges.map((edge) => edge.node) : []),
+  ];
+  const publishedTotal = published.ok
+    ? (published.data.totalCount ?? undefined)
+    : undefined;
   const mine = (
-    <>
-      {/* X14 / G29: the bar's verdict. */}
-      <Suspense fallback={<BarEntryCardFallback />}>
-        <BarEntryCard />
-      </Suspense>
-      <MyRecipes
-        rows={[
-          ...(drafts.ok ? drafts.data.edges.map((edge) => edge.node) : []),
-          ...(published.ok
-            ? published.data.edges.map((edge) => edge.node)
-            : []),
-        ]}
-        publishedTotal={
-          published.ok ? (published.data.totalCount ?? undefined) : undefined
-        }
-      />
-    </>
+    <YourBarAndRecipes rows={rows} publishedTotal={publishedTotal} />
   );
 
   return (
@@ -114,5 +105,23 @@ export default async function RecipesPage({
         </>
       )}
     </Page>
+  );
+}
+
+/** Your bar (X14 / G29), then your drafts and recipes (X15). */
+function YourBarAndRecipes({
+  rows,
+  publishedTotal,
+}: {
+  rows: ComponentProps<typeof MyRecipes>["rows"];
+  publishedTotal?: number;
+}) {
+  return (
+    <>
+      <Suspense fallback={<BarEntryCardFallback />}>
+        <BarEntryCard />
+      </Suspense>
+      <MyRecipes rows={rows} publishedTotal={publishedTotal} />
+    </>
   );
 }

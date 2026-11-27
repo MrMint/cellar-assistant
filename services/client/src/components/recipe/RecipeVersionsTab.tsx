@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useClient } from "urql";
+import { useClient, useQuery } from "urql";
 import { ChevronRight } from "@/components/app/icons";
 import { Link } from "@/components/app/Link";
 import { PRESS_CLASS, pressFeedback } from "@/components/app/overlays/press";
@@ -60,21 +60,29 @@ export const RecipeVersionsTab = ({
 }: RecipeVersionsTabProps) => {
   const client = useClient();
   const [versions, setVersions] = useState(() => sortVersions(recipes));
-  const [pickId, setPickId] = useState(initialPickId);
+  // The pick label follows the votes: re-read with the tallies.
+  const [pickRead, reexecutePick] = useQuery({
+    query: RecipeGroupPickQuery,
+    variables: { groupId },
+    pause: true,
+  });
+  const pickGroup =
+    pickRead.data === undefined
+      ? null
+      : unwrapResult(pickRead.data.recipeGroup, "RecipeGroup");
+  const pickId =
+    pickGroup?.ok === true
+      ? (pickGroup.data.communityPickId ?? null)
+      : initialPickId;
   const [error, setError] = useState<string | null>(null);
   const [gate] = useState(createLatestOnly);
 
   const refresh = useCallback(async () => {
+    reexecutePick({ requestPolicy: "network-only" });
     await runLatest(
       gate,
-      async () => {
-        const [votes, pick] = await Promise.all([
-          readRecipeGroupVoteSnapshot(client, groupId),
-          client.query(RecipeGroupPickQuery, { groupId }).toPromise(),
-        ]);
-        return { votes, pick };
-      },
-      ({ votes, pick }) => {
+      () => readRecipeGroupVoteSnapshot(client, groupId),
+      (votes) => {
         if (!votes.ok) {
           setError(votes.error.message);
           return;
@@ -82,11 +90,9 @@ export const RecipeVersionsTab = ({
         setVersions((current) =>
           sortVersions(applyVoteSnapshot(current, votes.data.votes)),
         );
-        const group = unwrapResult(pick.data?.recipeGroup, "RecipeGroup");
-        if (group.ok) setPickId(group.data.communityPickId ?? null);
       },
     );
-  }, [client, gate, groupId]);
+  }, [client, gate, groupId, reexecutePick]);
 
   useEffect(() => {
     const timer = setInterval(() => {
