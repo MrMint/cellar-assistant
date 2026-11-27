@@ -1,35 +1,37 @@
 "use client";
 
-import { Share } from "@/components/app/icons";
-import { notify } from "@/components/app/notify";
+import { useState } from "react";
+import { ICON_STROKE, PersonAdd } from "@/components/app/icons";
+import { InviteSheet } from "@/components/share/InviteFriendsCard";
 import { Button } from "@/components/ui/button";
-import { inviteShareData, shareInvite } from "./invite";
 
 /**
- * The no-friends state's one action (design §3.6: "Invite a friend"): the
- * system share sheet with a link to sign up, or the link copied where the
- * browser has no sheet. A toast says which happened; a dismissed sheet says
- * nothing.
+ * "Invite" (Social-Friends 01, empty, 11): opens the invite sheet — your
+ * link's QR code, Copy link, More ways, Reset link. Solid where it is the
+ * screen's one job (no friends yet, and Home's empty friends card); outlined
+ * in the Friends header, where the list is the content.
  */
-export function InviteFriendButton() {
-  const invite = async () => {
-    const outcome = await shareInvite(inviteShareData(window.location.origin), {
-      share:
-        typeof navigator.share === "function"
-          ? (data) => navigator.share(data)
-          : undefined,
-      clipboard: navigator.clipboard,
-    });
-    if (outcome === "copied") {
-      notify("Invite link copied", { tone: "success" });
-    } else if (outcome === "failed") {
-      notify("Couldn't share the invite link", { tone: "error" });
-    }
-  };
+export function InviteFriendButton({
+  variant = "default",
+  label = "Invite",
+  className,
+}: {
+  variant?: "default" | "outline";
+  label?: string;
+  className?: string;
+} = {}) {
+  const [open, setOpen] = useState(false);
   return (
-    <Button onClick={() => void invite()}>
-      <Share aria-hidden />
-      Invite a friend
-    </Button>
+    <>
+      <Button
+        variant={variant}
+        className={className}
+        onClick={() => setOpen(true)}
+      >
+        <PersonAdd aria-hidden strokeWidth={ICON_STROKE} />
+        {label}
+      </Button>
+      <InviteSheet open={open} onOpenChange={setOpen} />
+    </>
   );
 }

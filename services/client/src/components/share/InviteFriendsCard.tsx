@@ -3,13 +3,18 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useMutation, useQuery } from "urql";
 import { ConfirmSheet } from "@/components/app/ConfirmSheet";
-import { ICON_STROKE, Share } from "@/components/app/icons";
+import { ErrorState } from "@/components/app/EmptyState";
+import { ICON_STROKE, Undo } from "@/components/app/icons";
 import { notify } from "@/components/app/notify";
+import { PRESS_CLASS, pressFeedback } from "@/components/app/overlays/press";
+import { ShareSheetBody } from "@/components/app/overlays/ShareSheet";
+import { ResponsiveDialog } from "@/components/app/ResponsiveDialog";
 import { Button } from "@/components/ui/button";
-import { Spinner } from "@/components/ui/spinner";
+import { Skeleton } from "@/components/ui/skeleton";
 import { unwrapResult } from "@/lib/api/result";
+import { feedback, HapticOverlay } from "@/lib/feedback";
 import { absoluteUrl, invitePath } from "@/lib/share/routes";
-import { useShareLink } from "@/lib/share/use-share-link";
+import { cn } from "@/lib/utils";
 import {
   EnsureFriendInviteMutation,
   MyFriendInviteQuery,
@@ -24,116 +29,165 @@ export const inviteShareRequest = (origin: string, token: string) => ({
 });
 
 /**
- * "Invite friends" on `/friends` (X17): one link that makes whoever opens it
- * your friend — the way in for someone not on the app yet, who search cannot
- * find. The link is made the first time this card shows and is kept; Reset
- * replaces it, behind a confirm, because every link already sent stops
- * working.
+ * Your invite link (X17): one link that makes whoever opens it your friend.
+ * It is made the first time it is asked for and kept; `reset` replaces it.
+ * Minting is idempotent and inert: the secret reaches nobody until the
+ * viewer shares it.
  */
-export function InviteFriendsCard() {
-  const [{ data }, refetch] = useQuery({ query: MyFriendInviteQuery });
+function useInviteLink(active: boolean) {
+  const [{ data, error }, refetch] = useQuery({
+    query: MyFriendInviteQuery,
+    pause: !active,
+  });
   const [ensuring, ensure] = useMutation(EnsureFriendInviteMutation);
-  const [resetting, reset] = useMutation(ResetFriendInviteMutation);
-  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [resetting, resetInvite] = useMutation(ResetFriendInviteMutation);
   const [minted, setMinted] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
   const mintRequested = useRef(false);
-  const share = useShareLink();
   const token = minted ?? data?.me?.friendInvite?.token ?? null;
 
-  const mint = useCallback(async (): Promise<string | null> => {
+  const mint = useCallback(async () => {
+    setFailed(false);
     const result = unwrapResult(
       (await ensure({})).data?.ensureFriendInvite,
       "FriendInvite",
     );
-    if (!result.ok) return null;
+    if (!result.ok) {
+      setFailed(true);
+      return;
+    }
     setMinted(result.data.token);
-    return result.data.token;
   }, [ensure]);
 
-  // The link is made before the tap, not inside it: a share sheet needs the
-  // tap's user activation, and a network round trip spends it — iOS Safari
-  // then refuses the sheet and the first invite would land on the fallback.
-  // Minting is idempotent and inert: the secret reaches nobody until the
-  // viewer shares it.
   useEffect(() => {
-    if (data?.me?.friendInvite !== null || mintRequested.current) return;
+    if (!active || data === undefined) return;
+    if (data.me?.friendInvite !== null || mintRequested.current) return;
     mintRequested.current = true;
     void mint();
-  }, [data, mint]);
+  }, [active, data, mint]);
 
-  const onShare = async () => {
-    const link = token ?? (await mint());
-    if (link === null) {
-      notify("Couldn't make your invite link", {
-        tone: "error",
-        description: "Try again in a moment.",
-      });
-      return;
-    }
-    await share(inviteShareRequest(window.location.origin, link));
-  };
-
-  const onReset = async () => {
+  const reset = async (): Promise<boolean> => {
     const result = unwrapResult(
-      (await reset({})).data?.resetFriendInvite,
+      (await resetInvite({})).data?.resetFriendInvite,
       "FriendInvite",
     );
-    setConfirmOpen(false);
-    if (!result.ok) {
-      notify("Couldn't reset your invite link", {
-        tone: "error",
-        description: "Your current link still works. Try again in a moment.",
-      });
-      return;
-    }
+    if (!result.ok) return false;
     setMinted(result.data.token);
     refetch({ requestPolicy: "network-only" });
-    notify("New invite link ready. Old links no longer work.", {
-      tone: "success",
-    });
+    return true;
+  };
+
+  return {
+    token,
+    failed: failed || (error !== undefined && token === null),
+    pending: ensuring.fetching,
+    resetting: resetting.fetching,
+    retry: () => {
+      if (error !== undefined) refetch({ requestPolicy: "network-only" });
+      void mint();
+    },
+    reset,
+  };
+}
+
+/**
+ * "Invite a friend" (Social-Friends 11 to 14; L14, L34): the sheet on a
+ * phone, a dialog from `md` up. F2a's share body — the link's real QR code,
+ * Copy link ("Link copied"), More ways — then Reset link, which confirms
+ * first because every link already sent stops working. While the link is
+ * being made the code is a skeleton; if it can't be made, one way out.
+ */
+export function InviteSheet({
+  open,
+  onOpenChange,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const invite = useInviteLink(open);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const url =
+    invite.token === null || typeof window === "undefined"
+      ? null
+      : inviteShareRequest(window.location.origin, invite.token).url;
+
+  const onReset = async () => {
+    const ok = await invite.reset();
+    setConfirmOpen(false);
+    if (!ok) {
+      notify("Couldn't reset your link", { tone: "error" });
+      return;
+    }
+    feedback("success");
+    notify("New link ready", { tone: "success" });
   };
 
   return (
-    <section
-      aria-labelledby="invite-friends"
-      className="flex flex-col gap-3 rounded-lg bg-surface-1 p-4"
-    >
-      <h2 id="invite-friends" className="type-headline">
-        Invite friends
-      </h2>
-      <p className="type-callout text-ink-2">
-        Send a link. Whoever opens it can add you as a friend, even if they're
-        new to Cellar Assistant.
-      </p>
-      <div className="flex flex-col gap-2 sm:flex-row">
-        <Button
-          disabled={ensuring.fetching}
-          aria-busy={ensuring.fetching || undefined}
-          onClick={() => void onShare()}
-          className="sm:flex-1"
-        >
-          {ensuring.fetching ? (
-            <Spinner aria-hidden />
+    <>
+      <ResponsiveDialog
+        open={open}
+        onOpenChange={onOpenChange}
+        title="Invite a friend"
+        description="Anyone with this link can add you"
+      >
+        <div data-slot="invite-sheet" className="flex flex-col gap-2">
+          {url !== null ? (
+            <ShareSheetBody
+              title="Invite a friend"
+              url={url}
+              onDone={() => onOpenChange(false)}
+            />
+          ) : invite.failed ? (
+            <ErrorState
+              title="Couldn't make your link"
+              action={
+                <Button variant="ghost" onClick={invite.retry}>
+                  Try again
+                </Button>
+              }
+            />
           ) : (
-            <Share aria-hidden strokeWidth={ICON_STROKE} />
+            <Skeleton
+              data-slot="invite-qr-pending"
+              className="mx-auto aspect-square w-54 max-w-full rounded-md"
+            />
           )}
-          Share invite link
-        </Button>
-        {token !== null && (
-          <Button variant="ghost" onClick={() => setConfirmOpen(true)}>
-            Reset link
-          </Button>
-        )}
-      </div>
+          {url !== null && (
+            <div className="border-hair border-t pt-2">
+              <button
+                type="button"
+                {...pressFeedback()}
+                onClick={() => {
+                  feedback("tick");
+                  setConfirmOpen(true);
+                }}
+                className={cn(
+                  "t-body relative flex min-h-13 w-full items-center gap-4 rounded-md px-1 text-left text-danger outline-none hover:bg-raised focus-visible:ring-2 focus-visible:ring-ring",
+                  PRESS_CLASS,
+                )}
+              >
+                <Undo
+                  aria-hidden
+                  strokeWidth={ICON_STROKE}
+                  className="size-5 shrink-0"
+                />
+                <span>Reset link</span>
+                <HapticOverlay />
+              </button>
+            </div>
+          )}
+        </div>
+      </ResponsiveDialog>
       <ConfirmSheet
         open={confirmOpen}
         onOpenChange={setConfirmOpen}
         title="Reset your invite link?"
-        description="Links you've already sent will stop working. You'll get a new one to share."
-        confirmLabel="Reset link"
-        pending={resetting.fetching}
+        description="Links you already sent stop working."
+        cancelLabel="Keep it"
+        confirmLabel="Reset"
+        pending={invite.resetting}
         onConfirm={() => void onReset()}
       />
-    </section>
+    </>
   );
 }

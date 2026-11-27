@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import {
   Cellar,
   ChevronRight,
@@ -7,8 +8,8 @@ import {
   Ranked,
 } from "@/components/app/icons";
 import { Link } from "@/components/app/Link";
-import { InsetSection, ListRow } from "@/components/app/Page";
 import { ApiError } from "@/components/cellar-api/ApiError";
+import { CloneTierListButton } from "@/components/taste/CloneTierListButton";
 import { Button } from "@/components/ui/button";
 import type { Page } from "@/lib/paging/paged-connection";
 import {
@@ -27,83 +28,104 @@ import {
   PROFILE_SECTION_SIZE,
 } from "./queries";
 
-const Chevron = () => (
-  <ChevronRight aria-hidden className="size-5" strokeWidth={ICON_STROKE} />
-);
-
-/** One row into a tier list or a cellar of theirs. */
-function LinkRow({
-  row,
-  icon: Icon,
-}: {
-  row: ProfileListRow | ProfileCellarRow;
-  icon: typeof Ranked;
-}) {
-  return (
-    <ListRow
-      leading={
-        <Icon aria-hidden className="size-5" strokeWidth={ICON_STROKE} />
-      }
-      title={
-        <Link href={row.href} overlay underline="none" className="text-ink-1">
-          {row.name}
-        </Link>
-      }
-      description={row.description || undefined}
-      trailing={<Chevron />}
-    />
-  );
-}
-
 /**
- * A section of rows that pages on (leftovers 6): the first page is the
- * server's, "Show more" walks the connection — `FriendLog`'s pattern, so the
- * three sections of a profile page alike.
+ * A profile section (Social-Friends 03): the heading at left, its count at
+ * right, then its cards. The count is the server's total, or the rows read
+ * so far when the server did not count.
  */
-function PagedSection<TRow extends ProfileListRow | ProfileCellarRow>({
+export function ProfileSection({
   label,
   section,
-  icon,
-  paged,
+  count,
+  busy,
+  children,
 }: {
   label: string;
   section: string;
-  icon: typeof Ranked;
-  paged: UsePagedConnection<TRow, string>;
+  count: number;
+  busy?: boolean;
+  children: ReactNode;
 }) {
-  const loading = paged.status === "loadingMore";
+  const id = `profile-${section}`;
   return (
-    <InsetSection
-      label={label}
+    <section
+      aria-labelledby={id}
       data-section={section}
-      aria-busy={loading || undefined}
+      aria-busy={busy || undefined}
+      className="flex flex-col gap-2"
     >
-      {paged.rows.map((row) => (
-        <LinkRow key={row.id} row={row} icon={icon} />
-      ))}
-      {paged.failure !== null && (
-        <div className="p-4">
-          <ApiError error={paged.failure} />
-        </div>
-      )}
-      {paged.canLoadMore && (
-        <div className="p-3">
-          <Button
-            variant="secondary"
-            className="w-full"
-            onClick={() => void paged.loadMore()}
-            disabled={loading}
-            aria-busy={loading || undefined}
-          >
-            {loading ? "Loading…" : "Show more"}
-          </Button>
-        </div>
-      )}
-    </InsetSection>
+      <div className="flex items-baseline justify-between gap-3">
+        <h2 id={id} className="t-head text-ink">
+          {label}
+        </h2>
+        <span className="t-cap tabular-nums text-ink-2">{count}</span>
+      </div>
+      {children}
+    </section>
   );
 }
 
-/** Their tier lists you may open, 20 at a time. */
+/** "Show more", quiet, with how far through the section you are. */
+export function ShowMore({
+  shown,
+  total,
+  loading,
+  onMore,
+}: {
+  shown: number;
+  total: number | null;
+  loading: boolean;
+  onMore: () => void;
+}) {
+  return (
+    <div className="flex items-center gap-4">
+      <Button
+        variant="quiet"
+        className="px-0"
+        onClick={onMore}
+        disabled={loading}
+        aria-busy={loading || undefined}
+      >
+        Show more
+      </Button>
+      {total !== null && (
+        <span className="t-cap tabular-nums text-ink-2">
+          {shown} of {total}
+        </span>
+      )}
+    </div>
+  );
+}
+
+/** The paged section's foot: its error, then Show more while there is more. */
+function PagedFoot<TRow>({
+  paged,
+}: {
+  paged: UsePagedConnection<TRow, string>;
+}) {
+  return (
+    <>
+      {paged.failure !== null && <ApiError error={paged.failure} />}
+      {paged.canLoadMore && (
+        <ShowMore
+          shown={paged.rows.length}
+          total={paged.totalCount}
+          loading={paged.status === "loadingMore"}
+          onMore={() => void paged.loadMore()}
+        />
+      )}
+    </>
+  );
+}
+
+const CARD =
+  "relative flex min-h-14 items-center gap-3 rounded-lg border border-edge bg-surface-1 px-4 py-3";
+
+/**
+ * Their tier lists you may open, 20 at a time, each with Copy (L03): a
+ * private copy of yours. The name opens the list; Copy sits beside it,
+ * outside the link.
+ */
 export function FriendTierLists({
   userId,
   initialPage,
@@ -123,12 +145,43 @@ export function FriendTierLists({
     initialArgs: userId,
   });
   return (
-    <PagedSection
-      label="Tier lists"
+    <ProfileSection
+      label="Lists"
       section="tier-lists"
-      icon={Ranked}
-      paged={paged}
-    />
+      count={paged.totalCount ?? paged.rows.length}
+      busy={paged.status === "loadingMore"}
+    >
+      <ul className="flex flex-col gap-2">
+        {paged.rows.map((row) => (
+          <li key={row.id} className={CARD}>
+            <Ranked
+              aria-hidden
+              strokeWidth={ICON_STROKE}
+              className="size-5 shrink-0 text-glyph"
+            />
+            <span className="flex min-w-0 flex-1 flex-col">
+              <Link
+                href={row.href}
+                overlay
+                underline="none"
+                className="t-head truncate text-ink"
+              >
+                {row.name}
+              </Link>
+              {row.description !== "" && (
+                <span className="t-cap truncate text-ink-2">
+                  {row.description}
+                </span>
+              )}
+            </span>
+            <span className="relative z-10 shrink-0">
+              <CloneTierListButton tierListId={row.id} name={row.name} />
+            </span>
+          </li>
+        ))}
+      </ul>
+      <PagedFoot paged={paged} />
+    </ProfileSection>
   );
 }
 
@@ -152,11 +205,42 @@ export function FriendCellars({
     initialArgs: userId,
   });
   return (
-    <PagedSection
+    <ProfileSection
       label="Cellars"
       section="cellars"
-      icon={Cellar}
-      paged={paged}
-    />
+      count={paged.totalCount ?? paged.rows.length}
+      busy={paged.status === "loadingMore"}
+    >
+      <ul className="flex flex-col gap-2">
+        {paged.rows.map((row) => (
+          <li key={row.id} className={CARD}>
+            <Cellar
+              aria-hidden
+              strokeWidth={ICON_STROKE}
+              className="size-5 shrink-0 text-glyph"
+            />
+            <span className="flex min-w-0 flex-1 flex-col">
+              <Link
+                href={row.href}
+                overlay
+                underline="none"
+                className="t-head truncate text-ink"
+              >
+                {row.name}
+              </Link>
+              {row.description !== undefined && (
+                <span className="t-cap text-ink-2">{row.description}</span>
+              )}
+            </span>
+            <ChevronRight
+              aria-hidden
+              strokeWidth={ICON_STROKE}
+              className="size-5 shrink-0 text-ink-3"
+            />
+          </li>
+        ))}
+      </ul>
+      <PagedFoot paged={paged} />
+    </ProfileSection>
   );
 }

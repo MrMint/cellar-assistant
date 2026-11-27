@@ -5,8 +5,10 @@ import { Page } from "@/components/app/Page";
 import { ApiError } from "@/components/cellar-api/ApiError";
 import { friendProfileView } from "@/components/profile/adapter";
 import { FriendProfile } from "@/components/profile/FriendProfile";
+import { LockedProfile } from "@/components/profile/LockedProfile";
 import {
   FriendProfileQuery,
+  PersonQuery,
   PROFILE_LOG_PAGE_SIZE,
   PROFILE_SECTION_SIZE,
 } from "@/components/profile/queries";
@@ -26,11 +28,11 @@ export const metadata: Metadata = { title: "Friend" };
  * `/users/[userId]` — a friend's read-only profile (X18).
  *
  * Your own id goes to `/me`, which is where you are. Anyone else is the
- * API's call: `friendProfile` answers a friend, and one `NOT_FOUND` for a
- * stranger, an id that names nobody and a malformed one alike — which is
- * `notFound()` here, the group's one "doesn't exist or isn't shared with
- * you" (D24). The page never reads the profile any other way, so it cannot
- * say more than the gate did.
+ * API's call: `friendProfile` answers a friend, and one `NOT_FOUND` for
+ * anyone else. Then `user(id:)` — the name and picture any signed-in viewer
+ * may see — decides between a locked profile with Add friend (Social-Friends
+ * 17) and `notFound()` for an id that names nobody (D24). Nothing a friend
+ * shares is read on the locked path.
  */
 export default async function FriendProfilePage({
   params,
@@ -47,13 +49,28 @@ export default async function FriendProfilePage({
   });
   const result = unwrapResult(data.friendProfile, "FriendProfile");
   if (!result.ok) {
-    if (isNotFound(result.error)) notFound();
+    if (isNotFound(result.error)) {
+      const person = unwrapResult(
+        (await apiServerQuery(PersonQuery, { userId })).user,
+        "UserProfile",
+      );
+      if (!person.ok) notFound();
+      return (
+        <LockedProfile
+          person={{
+            userId: person.data.id,
+            name: person.data.displayName,
+            avatarUrl: person.data.avatarUrl ?? null,
+          }}
+        />
+      );
+    }
     // Anything else (a session that ended, a budget, a fault) is said in the
     // page's own frame, with Back, rather than as a bare line.
     return (
       <Page>
         <AppBar parent="/friends" />
-        <ApiError error={result.error} title="Couldn't open this profile" />
+        <ApiError error={result.error} title="Can’t open this profile" />
       </Page>
     );
   }
