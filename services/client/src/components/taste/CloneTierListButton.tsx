@@ -1,7 +1,9 @@
 "use client";
 
+import { Copy } from "lucide-react";
 import { useState } from "react";
 import { useMutation } from "urql";
+import { ICON_STROKE } from "@/components/app/icons";
 import { notify } from "@/components/app/notify";
 import { DeleteTierListMutation } from "@/components/tier-list/queries";
 import { Button } from "@/components/ui/button";
@@ -41,8 +43,7 @@ export function CloneTierListButton({
       return;
     }
     const copyId = result.data.id;
-    notify(`Copied "${result.data.name}" to your lists`, {
-      description: "Private to you.",
+    notify("Copied to your lists", {
       undo: () => {
         void remove({ id: copyId }).then((undo) => {
           const undone =
@@ -56,13 +57,14 @@ export function CloneTierListButton({
 
   return (
     <Button
-      variant="secondary"
-      size="sm"
-      className="min-h-11 min-w-11 rounded-full"
+      variant="outline"
+      className="min-h-11 min-w-11"
       disabled={busy}
+      aria-busy={busy || undefined}
       aria-label={`Copy ${name} to your lists`}
       onClick={() => void onCopy()}
     >
+      <Copy aria-hidden strokeWidth={ICON_STROKE} />
       Copy
     </Button>
   );

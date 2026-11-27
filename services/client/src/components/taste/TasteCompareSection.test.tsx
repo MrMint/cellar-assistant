@@ -1,8 +1,8 @@
 /**
- * FriendProfile's Compare section as first paint meets it: the `#compare`
- * anchor there before the agreement query lands (CR-15), every list a friend
- * shares offered for copying — including those past the first page (CR-16) —
- * and a Copy button that is a 44px target (CR-9, L8).
+ * FriendProfile's agreement card as first paint meets it: the `#compare`
+ * anchor there before the agreement query lands (CR-15), and a link into the
+ * compare screen. Copying lists moved to the profile's Lists section
+ * (profile-markup.test.tsx keeps CR-16 and CR-9).
  */
 import { mock } from "bun:test";
 import assert from "node:assert/strict";
@@ -28,7 +28,7 @@ mock.module("next/image", () => ({
 }));
 
 const { TasteCompareSection } = await import("./TasteCompareSection");
-const { openTag, textOf } = await import("@/test-support/markup");
+const { openTag } = await import("@/test-support/markup");
 
 /** A client whose every query never answers: the loading paint. */
 const pending = new Client({
@@ -39,49 +39,15 @@ const pending = new Client({
 const render = (client: Client, node: ReactNode) =>
   renderToStaticMarkup(<Provider value={client}>{node}</Provider>);
 
-const list = (n: number) => ({
-  id: `l${n}`,
-  name: `List ${n}`,
-  href: `/tier-lists/l${n}`,
-  description: "",
-});
-
 describe("TasteCompareSection", () => {
-  const firstPage = {
-    rows: Array.from({ length: 20 }, (_, i) => list(i + 1)),
-    endCursor: "c20",
-    hasNextPage: true,
-    totalCount: 25,
-  };
-
   test("the #compare anchor is there before the agreement answers", () => {
-    const html = render(
-      pending,
-      <TasteCompareSection userId="f1" lists={firstPage} />,
-    );
+    const html = render(pending, <TasteCompareSection userId="f1" />);
     assert.notEqual(openTag(html, 'id="compare"'), "");
     assert.match(html, /data-slot="taste-compare-pending"/);
   });
 
-  test("a friend's lists past the first page can be reached to copy", () => {
-    const html = render(
-      pending,
-      <TasteCompareSection userId="f1" lists={firstPage} />,
-    );
-    assert.equal(
-      (html.match(/aria-label="Copy List \d+ to your lists"/g) ?? []).length,
-      20,
-    );
-    assert.ok(textOf(html).includes("Show more lists"));
-  });
-
-  test("Copy is a 44px target", () => {
-    const html = render(
-      pending,
-      <TasteCompareSection userId="f1" lists={firstPage} />,
-    );
-    const copy = openTag(html, 'aria-label="Copy List 1 to your lists"');
-    assert.match(copy, /\bmin-h-11\b/);
-    assert.match(copy, /\bmin-w-11\b/);
+  test("the card opens the compare screen for this person", () => {
+    const html = render(pending, <TasteCompareSection userId="f1" />);
+    assert.match(html, /href="\/users\/f1\/compare"/);
   });
 });
