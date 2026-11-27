@@ -47,7 +47,7 @@ test("New recipe › Type: private first, and saving opens it", async ({
 }) => {
   await page.goto("/recipes");
   await expect(
-    page.getByRole("heading", { name: "Bar", level: 1 }),
+    page.getByRole("heading", { name: "Recipes", level: 1 }),
   ).toBeVisible();
   // No nested scroll box: the page's own scroller holds the list (X15).
   await page.getByRole("button", { name: "New recipe" }).click();
@@ -82,7 +82,8 @@ test("New recipe › Type: private first, and saving opens it", async ({
   });
   recipeId = page.url().split("/").at(-1) ?? "";
 
-  await expect(page.getByText("Only you can see this recipe.")).toBeVisible();
+  // The recipe page's privacy line (Recipes-Page 01).
+  await expect(page.getByText("Only you can see it")).toBeVisible();
   // Exact: the bar's "Missing 2 · Gin, Lemon juice" line (X14) names it too.
   await expect(page.getByText("Lemon juice", { exact: true })).toBeVisible();
   // A cocktail with no photo is drawn as a cocktail, never a wine bottle.
@@ -169,9 +170,7 @@ test("made Public in the editor, it has a share page that names the drink", asyn
   await expect(page).toHaveURL(new RegExp(`/recipes/${recipeId}$`), {
     timeout: 30_000,
   });
-  await expect(
-    page.getByText("Anyone can see it, and you can share a link to it."),
-  ).toBeVisible();
+  await expect(page.getByText("Everyone can see it")).toBeVisible();
 
   const context = await browser.newContext({
     storageState: { cookies: [], origins: [] },

@@ -1,23 +1,27 @@
 "use client";
 
-import { isNotNil } from "ramda";
 import { useCallback, useEffect, useState } from "react";
-import { useClient } from "urql";
-import { People, Person, Time } from "@/components/app/icons";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useClient, useQuery } from "urql";
+import { ChevronRight } from "@/components/app/icons";
+import { Link } from "@/components/app/Link";
+import { PRESS_CLASS, pressFeedback } from "@/components/app/overlays/press";
+import { unwrapResult } from "@/lib/api/result";
 import { createLatestOnly, runLatest } from "@/lib/latest-only";
 import { readRecipeGroupVoteSnapshot } from "@/lib/recipes/group-snapshot";
-import { Timestamp } from "../common/Timestamp";
+import { cn } from "@/lib/utils";
 import {
   applyVoteSnapshot,
-  formatNetScore,
   type RecipeVersionData,
   sortVersions,
 } from "./adapter";
-import { CanonicalRecipeBadge } from "./CanonicalRecipeBadge";
-import { RecipeIngredientList } from "./RecipeIngredientList";
+import { shownVersion } from "./group-pick";
+import { RecipeGroupPickQuery } from "./queries";
+import { getIngredientDisplay } from "./RecipeIngredientList";
+import { RecipeThumb } from "./RecipePlate";
 import { RecipeVoteButtons } from "./RecipeVoteButtons";
+import { recipeRowLine } from "./recipe-meta";
+import { versionLines } from "./version-diff";
+import { canVote } from "./vote-plan";
 
 export type { RecipeVersionData };
 
@@ -27,68 +31,68 @@ const POLL_INTERVAL_MS = 15_000;
 export type RecipeVersionsTabProps = {
   recipes: RecipeVersionData[];
   canonicalRecipeId?: string | null;
+  /** MC-pick: the label, which never moves the canonical. */
+  communityPickId?: string | null;
   groupId: string;
+  /** Who is looking: authors get no vote buttons on their own version. */
+  viewerId?: string | null;
 };
 
-// Format difficulty display
-const getDifficultyDisplay = (level?: number | null) => {
-  if (!level) return "Not specified";
-  const labels = ["", "Very Easy", "Easy", "Medium", "Hard", "Very Hard"];
-  return labels[level] || "Unknown";
-};
+const nameOf = (ingredient: RecipeVersionData["ingredients"][number]) =>
+  getIngredientDisplay(ingredient).name;
 
 /**
- * `82450ad1:src/components/recipe/RecipeVersionsTab.tsx`, restored — one
- * tab per version, best-scoring first, each with its picture, the vote card,
- * "Recipe Info", description, ingredients and steps. In production the page
- * threw before rendering it (`recipe_votes` had no Hasura permission).
+ * Every version of one drink (Recipes-Browse 16–20, desktop 03): a card
+ * each, the original first, then by votes. A card is the version's face,
+ * name and "By you · Very easy · 3 min" (the whole head links to it), its
+ * ingredients with what it changes from the original in ink and bold ("No
+ * gin" for a dropped one), then the vote row — or, on your own version,
+ * only its score: authors never vote on their own (lead's ruling).
  *
- * Data:
- *
- * - Scores are G27's `upvotes`/`downvotes`/`netScore`/`myVote`, not the old
- *   three unaliased `votes_aggregate` blocks (whose "downvotes" were always 0).
- * - Kept from the rewrite: the 15 s poll and the post-vote re-read, through one
- *   `createLatestOnly` gate so an older answer never lands over a newer one
- *   (`lib/recipes/group-snapshot.ts`). The selected tab follows its recipe,
- *   not its index, when a vote re-orders the tabs.
- * - "By …" is `Recipe.createdBy` (G4); "Created …" is `common/Timestamp`
- *   rather than `toLocaleDateString()` (the hydration rule).
- * - A version with no picture keeps the old "No Image" box.
+ * Kept from the restore: the 15 s poll and the post-vote re-read, through one
+ * `createLatestOnly` gate so an older answer never lands over a newer one.
  */
 export const RecipeVersionsTab = ({
   recipes,
-  canonicalRecipeId: initialCanonicalRecipeId = null,
+  communityPickId: initialPickId = null,
   groupId,
+  viewerId = null,
 }: RecipeVersionsTabProps) => {
   const client = useClient();
   const [versions, setVersions] = useState(() => sortVersions(recipes));
-  const [canonicalRecipeId, setCanonicalRecipeId] = useState(
-    initialCanonicalRecipeId,
-  );
-  const [selectedId, setSelectedId] = useState<string | null>(
-    versions[0]?.id ?? null,
-  );
+  // The pick label follows the votes: re-read with the tallies.
+  const [pickRead, reexecutePick] = useQuery({
+    query: RecipeGroupPickQuery,
+    variables: { groupId },
+    pause: true,
+  });
+  const pickGroup =
+    pickRead.data === undefined
+      ? null
+      : unwrapResult(pickRead.data.recipeGroup, "RecipeGroup");
+  const pickId =
+    pickGroup?.ok === true
+      ? (pickGroup.data.communityPickId ?? null)
+      : initialPickId;
   const [error, setError] = useState<string | null>(null);
-  const [canonicalMoved, setCanonicalMoved] = useState(false);
-  /** Newest-answer-wins for the poll and the post-vote re-read. */
   const [gate] = useState(createLatestOnly);
 
   const refresh = useCallback(async () => {
+    reexecutePick({ requestPolicy: "network-only" });
     await runLatest(
       gate,
       () => readRecipeGroupVoteSnapshot(client, groupId),
-      (result) => {
-        if (!result.ok) {
-          setError(result.error.message);
+      (votes) => {
+        if (!votes.ok) {
+          setError(votes.error.message);
           return;
         }
         setVersions((current) =>
-          sortVersions(applyVoteSnapshot(current, result.data.votes)),
+          sortVersions(applyVoteSnapshot(current, votes.data.votes)),
         );
-        setCanonicalRecipeId(result.data.canonicalRecipeId);
       },
     );
-  }, [client, gate, groupId]);
+  }, [client, gate, groupId, reexecutePick]);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -97,202 +101,136 @@ export const RecipeVersionsTab = ({
     return () => clearInterval(timer);
   }, [refresh]);
 
-  const recipesWithScores = versions.map((recipe) => ({
-    ...recipe,
-    isCanonical: recipe.id === canonicalRecipeId,
-  }));
-  const selected =
-    recipesWithScores.find((recipe) => recipe.id === selectedId) ??
-    recipesWithScores[0];
+  // The original: the oldest version (what the group shows with no pick).
+  const originalId =
+    shownVersion(
+      null,
+      versions.map((v) => ({ id: v.id, createdAt: v.created_at })),
+    )?.id ?? null;
+  const original = versions.find((v) => v.id === originalId) ?? null;
+  const ordered =
+    original === null
+      ? versions
+      : [original, ...versions.filter((v) => v.id !== originalId)];
 
   return (
-    <div>
+    <div className="flex flex-col gap-4">
       {error !== null && (
-        <Alert variant="destructive" className="mb-4">
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
-      )}
-      {canonicalMoved && (
-        <p className="mb-4 type-callout text-success">
-          That changed which version the community prefers.
+        <p role="alert" className="t-cap m-0 text-danger">
+          {error}
         </p>
       )}
-      <Tabs
-        value={selected?.id ?? ""}
-        onValueChange={(value) => setSelectedId(value)}
-        className="gap-6"
-      >
-        {/* Tab List - Recipe Versions */}
-        <TabsList className="w-full justify-start overflow-x-auto rounded-md p-1 group-data-[orientation=horizontal]/tabs:h-auto">
-          {recipesWithScores.map((recipe) => (
-            <TabsTrigger
+      <ul className="m-0 grid list-none grid-cols-1 gap-4 p-0 md:grid-cols-2">
+        {ordered.map((recipe) => {
+          const mine =
+            viewerId !== null && recipe.created_by_user?.id === viewerId;
+          const by = mine
+            ? "By you"
+            : recipe.created_by_user?.displayName
+              ? `By ${recipe.created_by_user.displayName}`
+              : null;
+          const lines = versionLines(
+            recipe.ingredients,
+            recipe.id === originalId || original === null
+              ? null
+              : original.ingredients,
+            nameOf,
+          );
+          const noVotes = recipe.upvotes === 0 && recipe.downvotes === 0;
+          return (
+            <li
               key={recipe.id}
-              value={recipe.id}
-              className="h-auto min-h-11 flex-none justify-start px-3 py-2 text-left"
+              data-slot="recipe-version"
+              data-pick={recipe.id === pickId || undefined}
+              className="flex flex-col gap-4 rounded-lg border border-edge bg-card p-4"
             >
-              <span className="flex flex-col items-start gap-0.5">
-                <span className="type-callout font-semibold">
-                  {recipe.name}
-                  {recipe.version && ` v${recipe.version}`}
-                </span>
-                <span className="flex items-center gap-2">
-                  <span className="tabular type-footnote text-ink-2">
-                    Score: {formatNetScore(recipe.netScore)}
-                  </span>
-                  {recipe.isCanonical && <CanonicalRecipeBadge size="sm" />}
-                </span>
-              </span>
-            </TabsTrigger>
-          ))}
-        </TabsList>
-
-        {/* Tab Panels - Recipe Details */}
-        {recipesWithScores.map((recipe) => (
-          <TabsContent key={recipe.id} value={recipe.id}>
-            <div className="grid gap-6 md:grid-cols-3">
-              {/* Recipe Image and Voting */}
-              <div className="flex flex-col gap-4">
-                {/* Recipe Image */}
-                <div className="relative aspect-square overflow-hidden rounded-lg bg-surface-1">
-                  {isNotNil(recipe.image_url) ? (
+              <div
+                {...pressFeedback()}
+                className={cn("relative flex items-center gap-3", PRESS_CLASS)}
+              >
+                <span className="relative block size-11 shrink-0 overflow-hidden rounded-md bg-raised">
+                  {recipe.image_url ? (
                     // biome-ignore lint/performance/noImgElement: a free-form URL; next/image would need its host allowlisted.
                     <img
                       src={recipe.image_url}
-                      alt={recipe.name}
+                      alt=""
                       className="absolute inset-0 size-full object-cover"
                     />
                   ) : (
-                    <div className="flex size-full items-center justify-center bg-surface-2 text-ink-3">
-                      <p className="type-body">No Image</p>
-                    </div>
+                    <RecipeThumb type={recipe.type} name={recipe.name} />
+                  )}
+                </span>
+                <div className="flex min-w-0 flex-1 flex-col">
+                  <h2 className="t-head m-0 truncate text-ink">
+                    <Link
+                      href={`/recipes/${recipe.id}`}
+                      overlay
+                      underline="none"
+                    >
+                      {recipe.name}
+                    </Link>
+                  </h2>
+                  <p className="t-cap m-0 truncate text-ink-2">
+                    {recipeRowLine(
+                      by,
+                      recipe.difficulty_level,
+                      recipe.prep_time_minutes,
+                    )}
+                  </p>
+                  {recipe.id === pickId && (
+                    <p className="t-cap m-0 text-act-ink">Community pick</p>
                   )}
                 </div>
-
-                {/* Voting Section */}
-                <section className="flex flex-col gap-4 rounded-lg bg-surface-1 p-4">
-                  {recipe.isCanonical && <CanonicalRecipeBadge size="lg" />}
-
-                  <p className="text-center type-callout font-semibold">
-                    Community Vote
-                  </p>
-
-                  <RecipeVoteButtons
-                    recipeId={recipe.id}
-                    recipeGroupId={groupId}
-                    recipeName={recipe.name}
-                    currentVote={recipe.userVote}
-                    upvotes={recipe.upvotes}
-                    downvotes={recipe.downvotes}
-                    onVoted={({ canonicalChanged }) => {
-                      setError(null);
-                      setCanonicalMoved(canonicalChanged);
-                      void refresh();
-                    }}
-                    onError={setError}
-                  />
-
-                  <p className="tabular text-center type-footnote text-ink-2">
-                    Net Score: {formatNetScore(recipe.netScore)}
-                  </p>
-                </section>
-
-                {/* Recipe Metadata */}
-                <section className="flex flex-col gap-2 rounded-lg bg-surface-1 p-4">
-                  <p className="type-callout font-semibold">Recipe Info</p>
-
-                  {recipe.difficulty_level && (
-                    <div className="flex items-center gap-2 type-callout">
-                      <span className="font-bold">Difficulty:</span>
-                      <span>
-                        {getDifficultyDisplay(recipe.difficulty_level)}
-                      </span>
-                    </div>
-                  )}
-
-                  {recipe.prep_time_minutes && (
-                    <div className="flex items-center gap-2 type-callout">
-                      <Time aria-hidden className="size-4" />
-                      <span>{recipe.prep_time_minutes} minutes</span>
-                    </div>
-                  )}
-
-                  {recipe.serving_size && (
-                    <div className="flex items-center gap-2 type-callout">
-                      <People aria-hidden className="size-4" />
-                      <span>Serves {recipe.serving_size}</span>
-                    </div>
-                  )}
-
-                  <div className="flex items-center gap-2 type-callout">
-                    <Person aria-hidden className="size-4" />
-                    <span>
-                      By {recipe.created_by_user?.displayName || "Unknown"}
-                    </span>
-                  </div>
-
-                  {recipe.created_at !== null && (
-                    <p className="type-footnote text-ink-2">
-                      Created{" "}
-                      <Timestamp iso={recipe.created_at} precision="date" />
-                    </p>
-                  )}
-                </section>
+                <ChevronRight
+                  aria-hidden
+                  className="size-5 shrink-0 text-ink-3"
+                />
               </div>
 
-              {/* Recipe Content */}
-              <div className="flex flex-col gap-6 md:col-span-2">
-                {/* Recipe Description */}
-                {recipe.description && (
-                  <section className="rounded-lg bg-surface-1 p-4">
-                    <p className="mb-2 type-callout font-semibold">
-                      Description
-                    </p>
-                    <p className="type-body">{recipe.description}</p>
-                  </section>
-                )}
+              <ul
+                aria-label={`${recipe.name} ingredients`}
+                className="m-0 flex list-none flex-col gap-1 p-0"
+              >
+                {lines.map((line) => (
+                  <li
+                    key={line.key}
+                    data-changed={line.changed || undefined}
+                    className={cn(
+                      "t-body flex gap-3",
+                      line.changed ? "font-semibold text-ink" : "text-ink-2",
+                    )}
+                  >
+                    <span className="tabular w-20 shrink-0">{line.amount}</span>
+                    <span className="min-w-0">{line.name}</span>
+                  </li>
+                ))}
+              </ul>
 
-                {/* Ingredients */}
-                <section className="rounded-lg bg-surface-1 p-4">
-                  <p className="mb-4 type-callout font-semibold">Ingredients</p>
-                  <RecipeIngredientList
-                    ingredients={recipe.ingredients}
-                    showAvailability={false}
-                  />
-                </section>
-
-                {/* Instructions */}
-                <section className="rounded-lg bg-surface-1 p-4">
-                  <p className="mb-4 type-callout font-semibold">
-                    Instructions
-                  </p>
-                  <div className="flex flex-col gap-4">
-                    {recipe.instructions.map((instruction) => (
-                      <div key={instruction.id}>
-                        <p className="mb-1 type-callout font-semibold">
-                          Step {instruction.step_number}
-                          {instruction.time_minutes && (
-                            <span className="ml-2 font-normal type-footnote text-ink-2">
-                              ({instruction.time_minutes}min)
-                            </span>
-                          )}
-                        </p>
-                        <p className="type-body">
-                          {instruction.instruction_text}
-                        </p>
-                        {instruction.equipment_needed && (
-                          <p className="mt-1 type-footnote text-ink-2">
-                            Equipment: {instruction.equipment_needed}
-                          </p>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </section>
-              </div>
-            </div>
-          </TabsContent>
-        ))}
-      </Tabs>
+              {canVote(viewerId, recipe.created_by_user?.id) ? (
+                <RecipeVoteButtons
+                  recipeId={recipe.id}
+                  recipeGroupId={groupId}
+                  recipeName={recipe.name}
+                  currentVote={recipe.userVote}
+                  upvotes={recipe.upvotes}
+                  downvotes={recipe.downvotes}
+                  onVoted={() => {
+                    setError(null);
+                    void refresh();
+                  }}
+                  onError={setError}
+                />
+              ) : (
+                <p className="t-cap m-0 text-ink-2">
+                  {noVotes
+                    ? "No votes yet"
+                    : `${recipe.upvotes} up · ${recipe.downvotes} down`}
+                </p>
+              )}
+            </li>
+          );
+        })}
+      </ul>
     </div>
   );
 };

@@ -184,7 +184,7 @@ describe("glassColors", () => {
 });
 
 describe("RecipePlate", () => {
-  test("a cocktail is a coupe poured in its ingredients' hues", () => {
+  test("the kit's recipe face: a label plate with the tumbler and the name", () => {
     const html = renderToStaticMarkup(
       createElement(RecipePlate, {
         name: "Negroni",
@@ -192,31 +192,35 @@ describe("RecipePlate", () => {
         ingredients: [line("Campari", 1, "oz"), line("Gin", 1, "oz")],
       }),
     );
-    assert.match(html, /data-glass="coupe"/);
-    assert.match(html, /data-base="red"/);
-    assert.match(html, /data-top="clear"/);
-    assert.ok(html.includes(HUE_COLOR.red), "the body is filled red");
-    assert.match(html, />Negroni<\/p>/);
+    assert.match(html, /data-slot="label-plate"/);
+    assert.match(html, /data-face="recipe"/);
+    assert.match(html, /lucide-kit-tumbler/);
+    assert.match(html, />Negroni</);
+    assert.doesNotMatch(html, /data-glass=/, "no coupe any more");
   });
 
-  test("no ingredients: a neutral coupe; food: the cloche, no glass", () => {
-    const bare = renderToStaticMarkup(
-      createElement(RecipePlate, { name: "X", type: "cocktail" }),
+  test("labelled, the plate is an image named by the recipe; food keeps its type", () => {
+    const labelled = renderToStaticMarkup(
+      createElement(RecipePlate, {
+        name: "X",
+        type: "cocktail",
+        labelled: true,
+      }),
     );
-    assert.match(bare, /data-base="neutral"/);
+    assert.match(labelled, /role="img" aria-label="X"/);
     const food = renderToStaticMarkup(
       createElement(RecipePlate, { name: "Stew", type: "food" }),
     );
-    assert.doesNotMatch(food, /recipe-glass/);
     assert.match(food, /data-recipe-type="food"/);
+    assert.match(food, /aria-hidden="true"/);
   });
 
-  test("the thumb draws the same glass, hidden from assistive tech", () => {
+  test("the thumb is the same plate, hidden from assistive tech", () => {
     const html = renderToStaticMarkup(
       createElement(RecipeThumb, { type: "cocktail" }),
     );
     assert.match(html, /aria-hidden="true"/);
-    assert.match(html, /data-glass="coupe"/);
+    assert.match(html, /data-face="recipe"/);
     assert.match(
       renderToStaticMarkup(createElement(RecipeThumb, { type: "food" })),
       /data-recipe-type="food"/,

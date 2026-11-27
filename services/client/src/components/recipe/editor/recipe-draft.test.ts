@@ -127,13 +127,20 @@ describe("match chips", () => {
     assert.equal(rejectMatch(line).name, "Casa Noble Tequila");
   });
 
-  test("saving waits until every suggestion is kept or dropped", () => {
+  test("unchecked suggestions never block Save (lead's ruling)", () => {
     const form = formFromRecipe(negroni(true));
-    assert.deepEqual(
-      formProblems(form).map((problem) => problem.field),
-      ["matches"],
+    assert.equal(pendingMatches(form), 1);
+    assert.deepEqual(formProblems(form), []);
+  });
+
+  test("an unchecked suggestion saves as the words, never the model's item", () => {
+    const form = formFromRecipe(negroni(true));
+    const refs = ingredientInputs(form).map((input) => input.ref?.id);
+    assert.ok(!refs.includes(GIN), "the suggested item is not written");
+    const kept = ingredientInputs(confirmAllMatches(form)).map(
+      (input) => input.ref?.id,
     );
-    assert.deepEqual(formProblems(confirmAllMatches(form)), []);
+    assert.ok(kept.includes(GIN), "a kept match is written");
   });
 });
 

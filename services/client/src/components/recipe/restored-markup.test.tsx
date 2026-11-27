@@ -100,80 +100,53 @@ describe("RecipeDetails: the name's heading level (X21)", () => {
   });
 });
 
-describe("RecipeDetails (restored)", () => {
+describe("RecipeDetails (Recipes-Page)", () => {
   const html = render(<RecipeDetails recipe={recipe} viewerId="me" />);
 
-  test("the details card: title, subtitle phrases joined with ' • ', chips", () => {
-    // X21: an h2 under another page's h1 by default …
+  test("the name, then one meta line in the app's difficulty words", () => {
     assert.match(html, /<h2[^>]*>Negroni</);
-    assert.match(
-      stripTags(html),
-      /cocktail • Easy • 5 minutes • Serves 1 • Version 2/,
-    );
-    // each phrase is an unbreakable run, so "Serves" never wraps away from "1"
-    assert.match(html, /<span class="whitespace-nowrap">Serves 1<\/span>/);
-    assert.match(html, />Easy</);
-    assert.match(html, />5 min</);
-    assert.match(html, />Serves 1</);
-    assert.doesNotMatch(
-      html,
-      /Add to favorites/,
-      "the no-op heart is a deliberate drop",
-    );
+    assert.match(stripTags(html), /Cocktail · Easy · 5\u202Fmin/);
+    assert.doesNotMatch(html, /Very Easy|Very Hard|minutes/);
+    assert.match(html, />Bitter and sweet\.</);
   });
 
-  test("breadcrumbs carry the recipe name; the header shows the type", () => {
-    assert.match(html, />Recipes</);
-    assert.match(html, />Negroni</);
-  });
-
-  test("the fallback picture is a drawn cocktail plate, never a wine bottle; Share lives in the bar's ⋯ (X17)", () => {
-    // X15: review #44 — the hero of a cocktail was the wine-bottle PNG.
+  test("the hero is the kit's recipe face, with Back and More on discs", () => {
     assert.match(
       html,
-      /data-slot="recipe-plate"[^>]*data-recipe-type="cocktail"/,
+      /data-slot="recipe-plate"[^>]*data-recipe-type="cocktail"[^>]*role="img" aria-label="Negroni"/,
     );
+    assert.match(html, /data-face="recipe"/);
     assert.doesNotMatch(html, /data-next-image/);
-    // The old "Share Recipe" card under the photo is gone: Share is a row in
-    // the AppBar's overflow, whose rows a static render never mounts.
-    assert.doesNotMatch(html, />Share Recipe</);
     assert.match(html, /<button[^>]*aria-label="More actions"/);
   });
 
-  test("variations card: 'Variation of' and linked chips", () => {
-    assert.match(html, /Variation of:/);
+  test("other versions are rows that link to each one", () => {
+    assert.match(html, />Other versions</);
     assert.match(html, /href="\/recipes\/r0"[^>]*>Classic Negroni/);
-    assert.match(html, /Other variations:/);
-    assert.match(html, /href="\/recipes\/r2"/);
-    assert.match(html, /Sbagliato v3/);
+    assert.match(html, /href="\/recipes\/r2"[^>]*>Sbagliato/);
+    assert.match(html, />v3</);
   });
 
   test("ingredients: fractions, item link, optional chip, note", () => {
     assert.match(html, />Ingredients</);
-    // X14: the one quantity formatter's Unicode fractions.
     assert.match(html, />1½ oz</);
     assert.match(html, /href="\/wines\/w1"/);
     assert.match(html, />2019 Vermouth</);
     assert.match(html, />½ oz</);
     assert.match(html, />Optional</);
-    // The generic category chip went with X14: the availability tag says
-    // what matters about the line.
     assert.doesNotMatch(html, />garnish</);
-    assert.match(html, /Note: Any orange/);
-    // The old random icons stay gone; with no availability in the fixture
-    // (a signed-out read) there are no tags at all.
-    assert.doesNotMatch(
-      html,
-      /In your cellar|Not in cellar|View substitutions|data-availability/,
-    );
+    assert.match(html, />Any orange</);
+    // With no availability in the fixture (a signed-out read): no lines.
+    assert.doesNotMatch(html, /data-availability/);
   });
 
-  test("Love and the bar's verdict, when the viewer has them (D9, G29)", () => {
+  test("Love, Want to try, and the bar's verdict with Make it · n missing", () => {
     const signedIn = render(
       <RecipeDetails
         recipe={{
           ...recipe,
           is_loved: true,
+          is_want_to_try: false,
           makeability: {
             status: "ONE_AWAY",
             missing: ["Campari"],
@@ -183,47 +156,47 @@ describe("RecipeDetails (restored)", () => {
         viewerId="me"
       />,
     );
-    assert.match(signedIn, /aria-label="Loved — tap to remove"/);
-    assert.match(signedIn, /aria-pressed="true"/);
+    assert.match(signedIn, /aria-label="Negroni: loved — tap to remove"/);
+    assert.match(signedIn, /data-slot="heart"[^>]*data-state="on"/);
+    assert.match(stripTags(signedIn), /Want to try/);
     assert.match(signedIn, /data-makeability="one_away"/);
-    assert.match(stripTags(signedIn), /One bottle away · Campari/);
+    assert.match(stripTags(signedIn), /One bottle away/);
+    assert.match(signedIn, /href="\/recipes\/bar"[^>]*>Your bar</);
+    assert.match(stripTags(signedIn), /Make it· 1 missing/);
   });
 
-  test("instructions: numbered chip, type chip, equipment, time", () => {
-    assert.match(html, />Instructions</);
+  test("method: numbered steps, type chip, equipment, time", () => {
+    assert.match(html, />Method</);
     assert.match(html, />Stir with ice\.</);
     assert.match(html, />mix</);
-    assert.match(html, /Equipment: Mixing glass/);
-    assert.match(html, /Time: 1m/);
+    assert.match(html, />Mixing glass</);
+    assert.match(html, />1\u202Fmin</);
   });
 
-  test("reviews: the add box and the accordion with its author", () => {
-    assert.match(html, /placeholder="Add a review for this recipe\.\.\."/);
-    assert.match(html, />Reviews:</);
+  test("reviews: Write a review, and others' reviews with grey stars", () => {
+    assert.match(html, />Reviews</);
+    assert.match(html, />Write a review</);
     assert.match(html, />Bo</);
+    assert.match(html, /data-slot="stars" data-tone="other"/);
+    assert.doesNotMatch(html, /No reviews yet/);
   });
 
-  test("the viewer's own review turns the add box into an edit", () => {
+  test("the viewer's own review is theirs to edit or delete, and only theirs", () => {
     const own = render(<RecipeDetails recipe={recipe} viewerId="u2" />);
-    assert.match(own, /placeholder="Edit your review of this recipe\.\.\."/);
+    assert.match(own, /data-slot="my-review"/);
+    assert.match(own, />Edit</);
+    assert.match(own, /aria-label="Delete your review"/);
+    assert.doesNotMatch(own, />Write a review</);
+    // Someone else's review never offers Edit or Delete to this viewer.
+    assert.doesNotMatch(html, /Delete your review/);
   });
 
-  test("the canonical wears the old badge", () => {
-    const canonical = render(
-      <RecipeDetails
-        recipe={{ ...recipe, canonical_recipe: null }}
-        viewerId="me"
-        isCanonical
-      />,
-    );
-    assert.match(canonical, />Preferred</);
-  });
-
-  test("no reviews: the old empty line", () => {
+  test("no reviews: one line and the one action", () => {
     const empty = render(
       <RecipeDetails recipe={{ ...recipe, recipe_reviews: [] }} />,
     );
-    assert.match(empty, /No reviews yet! Want to add one\?/);
+    assert.match(empty, />No reviews yet</);
+    assert.match(empty, />Write a review</);
   });
 });
 
@@ -256,120 +229,154 @@ describe("RecipeGroupCard (restored)", () => {
     assert.match(html, /href="\/recipes\/groups\/g1"/);
   });
 
-  test("the canonical summary renders", () => {
-    assert.match(html, /Featured: Classic Negroni/);
-    assert.match(html, /Equal parts\./);
-    assert.match(html, /★★☆☆☆/);
-    assert.match(html, />3m</);
-    assert.match(html, /Serves 1/);
+  test("a row: the photo, the name, one line in the app's words, one line of description", () => {
     assert.match(html, /src="https:\/\/example.test\/n.jpg"/);
+    assert.match(html, /<h3[^>]*>.*Negroni/);
+    assert.match(stripTags(html), /Gin · Easy · 3\u202Fmin/);
+    assert.match(html, />Equal parts\.</);
+    assert.match(html, />3 versions</);
+    assert.doesNotMatch(html, /★|Featured:|\+1 more/);
   });
 
-  test("category, spirit, versions, three tags and '+1 more'", () => {
-    assert.match(html, />cocktail</);
-    assert.match(html, />Gin</);
-    assert.match(html, />3 versions</);
-    assert.match(html, />classic</);
-    assert.doesNotMatch(html, />italian</);
-    assert.match(html, /\+1 more/);
+  test("no photo: the kit's recipe face", () => {
+    const plain = render(
+      <RecipeGroupCard
+        recipeGroup={{
+          id: "g2",
+          name: "Daiquiri",
+          category: "cocktail",
+          base_spirit: null,
+          tags: [],
+          canonical_recipe: null,
+          recipes_aggregate: { aggregate: { count: 1 } },
+        }}
+      />,
+    );
+    assert.match(plain, /data-face="recipe"/);
+    assert.doesNotMatch(plain, /versions?</);
   });
 });
 
-describe("RecipeGroupSearch (restored)", () => {
+describe("RecipeGroupSearch (Recipes-Browse)", () => {
   const html = render(
     <RecipeGroupSearch
       initialEdges={[]}
       initialEndCursor={null}
       initialHasNextPage={false}
       initialTotalCount={0}
+      between={<p>Between</p>}
     />,
   );
 
-  test("the search card and its filters", () => {
-    // X15: plain words — "recipes", not "recipe groups".
-    assert.match(html, />Search recipes</);
+  test("the search field, All recipes, the kind chip and spirit chips", () => {
     assert.match(html, /placeholder="Search recipes"/);
     assert.doesNotMatch(html, /[Rr]ecipe [Gg]roups/);
-    assert.match(html, /aria-label="Category"/);
-    assert.match(html, /aria-label="Base Spirit"/);
+    assert.match(html, />All recipes</);
+    assert.match(html, /data-slot="filter-chip"[^>]*aria-haspopup="dialog"/);
+    assert.match(stripTags(html), /All kinds/);
+    assert.match(html, />Gin</);
+    // With no term, the index's own sections sit under the field.
+    assert.match(html, /<p>Between<\/p>/);
   });
 
-  test("the empty state", () => {
-    assert.match(html, />No recipes found</);
-    assert.match(html, /Try another word, or clear the filters\./);
-    assert.match(html, />Clear filters</);
+  test("nothing at all: the empty state, with no action to clear", () => {
+    assert.match(html, />No recipes yet</);
+    assert.doesNotMatch(html, />Clear filters</);
+  });
+
+  test("a term: its results, no index sections, the kit's no-match wording", () => {
+    const searched = render(
+      <RecipeGroupSearch
+        initialQuery="zzz"
+        initialEdges={[]}
+        initialTotalCount={0}
+        between={<p>Between</p>}
+      />,
+    );
+    assert.doesNotMatch(searched, /Between/);
+    assert.match(searched, />Results</);
+    assert.match(searched, /No recipe matches “zzz”/);
+    assert.match(searched, />Clear search</);
   });
 });
 
-describe("RecipeVersionsTab (restored)", () => {
-  const version = {
+describe("RecipeVersionsTab (Recipes-Browse 16–20)", () => {
+  const original = {
     ...recipe,
     created_at: "2026-01-02T03:04:05.000Z",
     created_by_user: { id: "u1", displayName: "Ada" },
+    upvotes: 0,
+    downvotes: 0,
+    netScore: 0,
+    userVote: null,
   };
-  const html = render(
-    <RecipeVersionsTab
-      groupId="g1"
-      canonicalRecipeId="r1"
-      recipes={[
-        {
-          ...version,
-          id: "r2",
-          name: "Sbagliato",
-          version: 3,
-          upvotes: 0,
-          downvotes: 1,
-          netScore: -1,
-          userVote: null,
-        },
-        {
-          ...version,
-          upvotes: 3,
-          downvotes: 1,
-          netScore: 2,
-          userVote: "upvote",
-        },
-      ]}
-    />,
-  );
+  const variation = {
+    ...original,
+    id: "r2",
+    name: "Sbagliato",
+    version: 3,
+    created_at: "2026-03-02T03:04:05.000Z",
+    created_by_user: { id: "u2", displayName: "Bo" },
+    // Drops the orange peel and doubles the vermouth.
+    ingredients: [{ ...recipe.ingredients[0], id: "i9", quantity: 3 }],
+    upvotes: 3,
+    downvotes: 1,
+    netScore: 2,
+    userVote: "upvote" as const,
+  };
+  const html = (viewerId: string | null) =>
+    render(
+      <RecipeVersionsTab
+        groupId="g1"
+        communityPickId="r2"
+        viewerId={viewerId}
+        recipes={[variation, original]}
+      />,
+    );
 
-  test("tabs best-first, with score and the 'Preferred' badge", () => {
-    const first = html.indexOf("Negroni");
-    const second = html.indexOf("Sbagliato");
-    assert.ok(first >= 0 && first < second, "net score orders the tabs");
-    assert.match(html, /Score: \+2/);
-    assert.match(html, /Score: -1/);
-    assert.match(html, />Preferred</);
+  test("the original first, each card linking to its version", () => {
+    const page = html("u3");
+    const first = page.indexOf(">Negroni<");
+    const second = page.indexOf(">Sbagliato<");
+    assert.ok(first >= 0 && first < second, "the original leads");
+    assert.match(page, /href="\/recipes\/r1"/);
+    assert.match(page, /href="\/recipes\/r2"/);
+    assert.match(page, /By Ada · /);
   });
 
-  test("the selected panel: vote card, counts, net score, recipe info", () => {
-    assert.match(html, />Community Preferred</);
-    assert.match(html, />Community Vote</);
-    assert.match(html, /aria-label="Upvote Negroni"/);
-    assert.match(html, /aria-label="Downvote Negroni"/);
-    assert.match(html, /Net Score: \+2/);
-    assert.match(html, />Recipe Info</);
-    assert.match(html, /Difficulty:/);
-    assert.match(html, /By Ada/);
-    assert.match(html, /Created/);
-    assert.match(html, />No Image</);
-    assert.match(html, />Description</);
-    assert.match(html, /Step 1/);
+  test("MC-pick: the community pick label sits on the pick", () => {
+    const page = html("u3");
+    assert.match(
+      page,
+      /data-pick="true"[\s\S]*>Sbagliato<[\s\S]*>Community pick</,
+    );
+    assert.equal(page.match(/>Community pick</g)?.length, 1);
   });
 
-  test("a cast vote is pressed, and keeps its tint in the dark theme", () => {
+  test("what a version changes is marked, and a dropped one says No", () => {
+    const page = html("u3");
+    assert.match(page, />No orange peel</);
+    const changed = page.match(/data-changed="true"/g)?.length ?? 0;
+    assert.equal(changed, 2, "the new amount and the dropped peel");
+  });
+
+  test("Up and Down for someone else's version; your vote is pressed", () => {
+    const page = html("u1");
     const tag = (name: string) =>
-      html.match(new RegExp(`<button[^>]*aria-label="${name}"[^>]*>`))?.[0] ??
+      page.match(new RegExp(`<button[^>]*aria-label="${name}"[^>]*>`))?.[0] ??
       "";
-    const up = tag("Upvote Negroni");
-    const down = tag("Downvote Negroni");
-    assert.match(up, /aria-pressed="true"/);
-    assert.match(down, /aria-pressed="false"/);
-    // `outline`'s `dark:bg-input/30` sorts after a plain `bg-success/10`, so
-    // the tint has to be restated under `dark:` (the default theme).
-    assert.match(up, /dark:bg-success\/10/);
-    assert.doesNotMatch(up, /dark:bg-input\/30/);
-    assert.doesNotMatch(up, /dark:border-input/);
+    assert.match(tag("Upvote Sbagliato"), /aria-pressed="true"/);
+    assert.match(tag("Downvote Sbagliato"), /aria-pressed="false"/);
+    assert.match(page, />\+2</);
+  });
+
+  test("authors see no vote buttons on their own version", () => {
+    const page = html("u1");
+    assert.doesNotMatch(page, /aria-label="Upvote Negroni"/);
+    assert.match(page, />No votes yet</);
+    const other = html("u2");
+    assert.doesNotMatch(other, /aria-label="Upvote Sbagliato"/);
+    assert.match(other, />3 up · 1 down</);
   });
 });
 
@@ -385,14 +392,17 @@ describe("RecipeDetails for its author (X15)", () => {
   test("a draft says the AI read it, that only you see it, and leads to the review", () => {
     const page = html({ is_draft: true, privacy: "PRIVATE" });
     assert.match(page, /data-ai-draft="suggested"/);
-    assert.match(page, /Only you can see it until you check it/);
+    assert.match(page, /Only you see it until you save it/);
     assert.match(page, /href="\/recipes\/r1\/edit"[^>]*>Review draft</);
+    // A draft is not made or reviewed yet.
+    assert.doesNotMatch(page, /data-testid="make-it"|Write a review/);
   });
 
   test("a saved recipe says who can see it, with the way to change it", () => {
     const page = html({ is_draft: false, privacy: "PRIVATE" });
-    assert.match(page, /Only you can see this recipe\./);
+    assert.match(stripTags(page), /Only you can see it/);
     assert.match(page, /href="\/recipes\/r1\/edit"[^>]*>Change</);
+    assert.match(stripTags(html({ privacy: "PUBLIC" })), /Everyone can see it/);
     assert.doesNotMatch(page, /data-ai-draft=/);
   });
 
@@ -403,6 +413,6 @@ describe("RecipeDetails for its author (X15)", () => {
         viewerId="me"
       />,
     );
-    assert.doesNotMatch(page, /Review draft|Who can see|>Change</);
+    assert.doesNotMatch(page, /Review draft|can see it|>Change</);
   });
 });

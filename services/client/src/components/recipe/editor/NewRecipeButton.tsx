@@ -15,7 +15,13 @@ export function NewRecipeButton({ className }: { className?: string }) {
   const aiOffered = isOffered(useAiCapabilities(), "recipePhoto");
   return (
     <>
-      <Button className={className} onClick={() => setOpen(true)}>
+      {/* CROSS-LOT "Header create buttons": outlined secondary; the teal
+          primary belongs to the content. */}
+      <Button
+        variant="outline"
+        className={className}
+        onClick={() => setOpen(true)}
+      >
         <Add aria-hidden />
         New recipe
       </Button>

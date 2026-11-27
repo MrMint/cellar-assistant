@@ -149,6 +149,9 @@ describe("MyRecipes — the top of the Bar (X15)", () => {
     assert.match(html, /aria-label="Your recipes"/);
     assert.match(html, /href="\/recipes\/m1"[^>]*>House sour</);
     assert.match(html, /Friends · 1 ingredient/);
+    // Recipes-Browse 01: "Yours 1", each row led by the recipe face.
+    assert.match(html, />Yours 1</);
+    assert.match(html, /data-slot="recipe-thumb"/);
   });
 
   test("Show all counts every published recipe, not the first page", () => {

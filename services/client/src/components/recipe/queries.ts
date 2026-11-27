@@ -184,9 +184,9 @@ export const RecipeReviewsPageQuery = graphql(
 );
 
 /**
- * `/recipes/groups/[groupId]` — the header, and which version to show:
- * the canonical, or (no votes yet, so none) the first of `recipes`, which is
- * ordered the way the canonical is chosen.
+ * `/recipes/groups/[groupId]` — the group's line, and which version to show:
+ * the community pick (MC-pick), or the original (the oldest of `recipes`)
+ * when there is none. 20 versions × 2 fields is far under the cost cap.
  */
 export const RecipeGroupPageQuery = graphql(
   `
@@ -199,10 +199,12 @@ export const RecipeGroupPageQuery = graphql(
         description
         recipeCount
         canonicalRecipeId
-        recipes(first: 1) {
+        communityPickId
+        recipes(first: 20) {
           edges {
             node {
               id
+              createdAt
             }
           }
         }
@@ -218,6 +220,9 @@ export const RecipeGroupPageQuery = graphql(
 export const RecipeVersionsPageQuery = graphql(
   `
   query RecipeVersionsPage($groupId: ID!) {
+    me {
+      id
+    }
     recipeGroup(id: $groupId) {
       __typename
       ... on RecipeGroup {
@@ -225,6 +230,7 @@ export const RecipeVersionsPageQuery = graphql(
         name
         description
         canonicalRecipeId
+        communityPickId
         recipeCount
         recipes(first: 20) {
           totalCount
@@ -269,6 +275,26 @@ export const RecipeGroupVoteStateQuery = graphql(
   }
 `,
   [RecipeVoteStateFragment, ActorErrorFieldsFragment],
+);
+
+/**
+ * The versions page's pick label after a vote (MC-pick): only the pick, so
+ * the label follows the votes without re-reading every version.
+ */
+export const RecipeGroupPickQuery = graphql(
+  `
+  query RecipeGroupPick($groupId: ID!) {
+    recipeGroup(id: $groupId) {
+      __typename
+      ... on RecipeGroup {
+        id
+        communityPickId
+      }
+      ...ActorErrorFields
+    }
+  }
+`,
+  [ActorErrorFieldsFragment],
 );
 
 // ---------------------------------------------------------------------------

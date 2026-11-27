@@ -36,9 +36,9 @@ export const CanonicalRecipeBadge = ({
         {showText && (
           <span
             className={cn(
-              size === "sm" && "type-footnote text-success",
-              size === "md" && "type-callout",
-              size === "lg" && "type-callout font-semibold",
+              size === "sm" && "t-cap text-ink-3 text-success",
+              size === "md" && "t-cap",
+              size === "lg" && "t-cap font-semibold",
             )}
           >
             Community's Preferred Version

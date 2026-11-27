@@ -2,9 +2,11 @@
 
 import { formatQuantity } from "@cellar-assistant/contracts/quantity";
 import { isNotNil } from "ramda";
+import { ChevronRight } from "@/components/app/icons";
 import { Link } from "@/components/app/Link";
-import { IngredientAvailabilityTag } from "@/components/bar/Availability";
+import { availabilityText } from "@/components/bar/copy";
 import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 import { ingredientItemHref, type RecipeIngredient } from "./adapter";
 
 export type { RecipeIngredient };
@@ -19,7 +21,8 @@ export type RecipeIngredientListProps = {
   showAvailability?: boolean;
 };
 
-const getIngredientDisplay = (ingredient: RecipeIngredient) => {
+/** An ingredient's name and link: the specific bottle, else the generic. */
+export const getIngredientDisplay = (ingredient: RecipeIngredient) => {
   if (isNotNil(ingredient.item)) {
     const vintage = ingredient.item.vintage
       ? `${ingredient.item.vintage} `
@@ -66,30 +69,42 @@ export const RecipeIngredientList = ({
   showAvailability = true,
 }: RecipeIngredientListProps) => {
   return (
-    <ul className="flex flex-col divide-y divide-line">
+    <ul className="m-0 flex list-none flex-col p-0">
       {ingredients.map((ingredient) => {
         const display = getIngredientDisplay(ingredient);
         const amount =
           ingredient.amount ??
           formatQuantity(ingredient.quantity, ingredient.unit);
         const isGarnish = ingredient.role === "garnish";
+        const linked = display.isSpecific && display.href !== null;
+        const note =
+          showAvailability && isNotNil(ingredient.availability)
+            ? ingredient.availability
+            : null;
 
         return (
           <li
             key={ingredient.id}
             data-ingredient-role={ingredient.role ?? undefined}
-            className="flex flex-col gap-1 py-3 first:pt-0 last:pb-0"
+            className="relative flex flex-col gap-1 border-hair border-b py-3 last:border-b-0"
           >
-            <div className="flex items-baseline gap-3 type-body">
-              <span className="tabular w-16 shrink-0 text-ink-2">{amount}</span>
-              <div className="flex min-w-0 flex-1 flex-col gap-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  {display.isSpecific && display.href ? (
-                    <Link href={display.href} underline="always">
+            <div className="flex min-h-8 items-center gap-3">
+              <span className="t-body tabular w-20 shrink-0 text-ink-2">
+                {amount}
+              </span>
+              <div className="flex min-w-0 flex-1 flex-col">
+                <div className="flex min-w-0 flex-wrap items-center gap-2">
+                  {linked && display.href !== null ? (
+                    <Link
+                      href={display.href}
+                      overlay
+                      underline="none"
+                      className="t-body text-ink"
+                    >
                       {display.name}
                     </Link>
                   ) : (
-                    <span>{display.name}</span>
+                    <span className="t-body text-ink">{display.name}</span>
                   )}
                   {ingredient.is_optional && (
                     <Badge variant="outline">Optional</Badge>
@@ -98,17 +113,31 @@ export const RecipeIngredientList = ({
                     <Badge variant="outline">Garnish</Badge>
                   )}
                 </div>
-                {showAvailability && isNotNil(ingredient.availability) && (
-                  <IngredientAvailabilityTag
-                    availability={ingredient.availability}
-                  />
+                {note !== null && (
+                  <span
+                    data-availability={note.status.toLowerCase()}
+                    className={cn(
+                      "t-cap truncate",
+                      note.status === "MISSING" || note.status === "UNKNOWN"
+                        ? "text-ink-3"
+                        : "text-ink-2",
+                    )}
+                  >
+                    {availabilityText(note)}
+                  </span>
                 )}
               </div>
+              {linked && (
+                <ChevronRight
+                  aria-hidden
+                  className="size-5 shrink-0 text-glyph"
+                />
+              )}
             </div>
 
             {showSubstitutions && isNotNil(ingredient.substitution_notes) && (
-              <p className="pl-19 type-callout text-ink-2 italic">
-                Note: {ingredient.substitution_notes}
+              <p className="t-cap m-0 pl-23 text-ink-2">
+                {ingredient.substitution_notes}
               </p>
             )}
           </li>

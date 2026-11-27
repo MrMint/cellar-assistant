@@ -4,9 +4,11 @@ import {
   BASE_SPIRIT_KINDS,
   barKindLabel,
 } from "@cellar-assistant/contracts/bar";
-import { useCallback, useId, useRef, useState } from "react";
+import { type ReactNode, useCallback, useState } from "react";
 import { EmptyState } from "@/components/app/EmptyState";
-import { Close, Restaurant, Search } from "@/components/app/icons";
+import { FilterChip } from "@/components/app/FilterChip";
+import { Check, ChevronDown, NoResults } from "@/components/app/icons";
+import { ResponsiveDialog } from "@/components/app/ResponsiveDialog";
 import {
   type RecipeGroupCardData,
   recipeGroupCardFromNode,
@@ -18,27 +20,15 @@ import {
 } from "@/components/recipe/queries";
 import { RecipeGroupCard } from "@/components/recipe/RecipeGroupCard";
 import { RecipeGroupCardSkeleton } from "@/components/recipe/RecipeGroupCardSkeleton";
+import { SearchField } from "@/components/shell/SearchField";
 import { Button } from "@/components/ui/button";
-import { Field, FieldLabel } from "@/components/ui/field";
-import {
-  InputGroup,
-  InputGroupAddon,
-  InputGroupButton,
-  InputGroupInput,
-} from "@/components/ui/input-group";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { useDebouncedCallback } from "@/hooks/useDebouncedCallback";
 import type { FragmentOf } from "@/lib/api/graphql";
 import { readFragment } from "@/lib/api/graphql";
 import { unwrapResult } from "@/lib/api/result";
+import { feedback } from "@/lib/feedback";
 import { pageOf } from "@/lib/paging/paged-connection";
 import { usePagedConnection } from "@/lib/paging/use-paged-connection";
+import { cn } from "@/lib/utils";
 
 /**
  * The SDL's `RecipeCategory`, in the old Select's style. The old Select offered
@@ -53,10 +43,13 @@ const CATEGORY_OPTIONS = [
   { value: "other", label: "Other" },
 ] as const;
 
-type Category = (typeof CATEGORY_OPTIONS)[number]["value"];
+const categoryLabel = (category: "all" | Category): string =>
+  category === "all"
+    ? "All kinds"
+    : (CATEGORY_OPTIONS.find((option) => option.value === category)?.label ??
+      "All kinds");
 
-/** Radix Select reserves `""` for "no value", so "Any Spirit" needs a name. */
-const ANY_SPIRIT = "any";
+type Category = (typeof CATEGORY_OPTIONS)[number]["value"];
 
 export type RecipeGroupSearchFilters = {
   searchTerm: string;
@@ -86,6 +79,12 @@ export type RecipeGroupSearchProps = {
   initialEndCursor?: string | null;
   initialHasNextPage?: boolean;
   initialTotalCount?: number | null;
+  /**
+   * What sits between the search field and All recipes on the index (the bar
+   * card, your drafts and recipes). Hidden while a search term is in, when
+   * the page is the search's results (Recipes-Browse 08, 09).
+   */
+  between?: ReactNode;
 };
 
 /**
@@ -125,9 +124,11 @@ export const RecipeGroupSearch = ({
   initialEndCursor = null,
   initialHasNextPage = false,
   initialTotalCount = null,
+  between,
 }: RecipeGroupSearchProps) => {
-  const searchId = useId();
-  const searchInputRef = useRef<HTMLInputElement>(null);
+  // Clear remounts the (uncontrolled) search field empty.
+  const [fieldKey, setFieldKey] = useState(0);
+  const [kindsOpen, setKindsOpen] = useState(false);
   const [filters, setFilters] = useState<RecipeGroupSearchFilters>({
     ...DEFAULT_FILTERS,
     searchTerm: initialQuery,
@@ -179,35 +180,26 @@ export const RecipeGroupSearch = ({
           category: next.category,
           baseSpirit: next.baseSpirit,
         },
-        { clear: true },
+        // The rows stay, dimmed, until the new answer lands (Recipes-Browse 08).
+        { clear: false },
       );
     },
     [reset],
   );
-  // The debounced run reads the filters as they are when it fires, so a
-  // Select changed mid-typing is not undone by the term's late search.
-  const latestFilters = useRef(filters);
-  latestFilters.current = filters;
-  const debouncedSearch = useDebouncedCallback(
-    () => search(latestFilters.current),
-    300,
-  );
-
-  // Handle filter updates
   const handleUpdateFilters = useCallback(
     (updates: Partial<RecipeGroupSearchFilters>) => {
       const next = { ...filters, ...updates };
       setFilters(next);
-      // Typing waits 300 ms (the old hook's debounce); a Select applies now.
-      if ("searchTerm" in updates) debouncedSearch();
-      else search(next);
+      // The field debounces itself (300 ms); a chip applies now.
+      search(next);
     },
-    [debouncedSearch, filters, search],
+    [filters, search],
   );
 
-  // Handle clear filters
   const handleClearFilters = useCallback(() => {
+    feedback("tick");
     setFilters(DEFAULT_FILTERS);
+    setFieldKey((key) => key + 1);
     search(DEFAULT_FILTERS);
   }, [search]);
 
@@ -216,167 +208,182 @@ export const RecipeGroupSearch = ({
   const hasMore = list.hasNextPage;
   const totalCount = list.totalCount ?? results.length;
   const error = list.failure;
+  const term = filters.searchTerm.trim();
+  const filtered = filters.category !== "all" || filters.baseSpirit !== null;
+  // Never a fetch limit as a total (CROSS-LOT): "12+" until the API counts.
+  const countText =
+    list.totalCount === null && hasMore
+      ? `${results.length}+`
+      : String(totalCount);
 
   return (
-    <div>
-      {/* Search Header */}
-      <section className="mb-6 flex flex-col gap-4 rounded-lg bg-surface-1 p-4">
-        {/* Main search input */}
-        <Field>
-          <FieldLabel htmlFor={searchId} className="sr-only">
-            Search recipes
-          </FieldLabel>
-          <InputGroup>
-            <InputGroupAddon>
-              <Search aria-hidden />
-            </InputGroupAddon>
-            <InputGroupInput
-              ref={searchInputRef}
-              id={searchId}
-              type="search"
-              enterKeyHint="search"
-              placeholder="Search recipes"
-              value={filters.searchTerm}
-              onChange={(e) =>
-                handleUpdateFilters({ searchTerm: e.target.value })
+    <div data-slot="recipe-group-search" className="flex flex-col gap-6">
+      <div className="sticky top-0 z-10 -mx-4 bg-background px-4 py-2">
+        <SearchField
+          key={fieldKey}
+          defaultValue={filters.searchTerm}
+          placeholder="Search recipes"
+          debounceTimeout={300}
+          searching={isLoading && term !== ""}
+          onDebounced={(value) => handleUpdateFilters({ searchTerm: value })}
+        />
+      </div>
+
+      {term === "" && between}
+
+      <section aria-labelledby="all-recipes" className="flex flex-col gap-3">
+        <h2
+          id="all-recipes"
+          className="t-head m-0 flex items-baseline gap-2 text-ink"
+          aria-live="polite"
+        >
+          {term === "" ? "All recipes" : "Results"}
+          {!(isLoading && results.length === 0) && (
+            <span className="t-cap tabular text-ink-3">{countText}</span>
+          )}
+        </h2>
+
+        <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none]">
+          <FilterChip
+            selected={filters.category !== "all"}
+            aria-haspopup="dialog"
+            onClick={() => setKindsOpen(true)}
+          >
+            <span className="inline-flex items-center gap-1">
+              {categoryLabel(filters.category)}
+              <ChevronDown aria-hidden className="size-4" />
+            </span>
+          </FilterChip>
+          {SPIRIT_OPTIONS.map((option) => (
+            <FilterChip
+              key={option.value}
+              selected={filters.baseSpirit === option.value}
+              onClick={() =>
+                handleUpdateFilters({
+                  baseSpirit:
+                    filters.baseSpirit === option.value ? null : option.value,
+                })
               }
-            />
-            {filters.searchTerm && (
-              <InputGroupAddon align="inline-end">
-                {/* 32 px drawn inside the 44 px field; the pseudo-element
-                    keeps the target at 44. The button unmounts once the term
-                    is empty, so focus goes back to the field, not <body>. */}
-                <InputGroupButton
-                  size="icon-sm"
-                  aria-label="Clear search"
-                  className="relative after:absolute after:-inset-1.5 after:content-['']"
-                  onClick={() => {
-                    handleUpdateFilters({ searchTerm: "" });
-                    searchInputRef.current?.focus();
-                  }}
-                >
-                  <Close aria-hidden />
-                </InputGroupButton>
-              </InputGroupAddon>
-            )}
-          </InputGroup>
-        </Field>
+            >
+              {option.label}
+            </FilterChip>
+          ))}
+        </div>
 
-        {/* Quick filters */}
-        <div className="flex flex-wrap items-center gap-4">
-          <Select
-            value={filters.category}
-            onValueChange={(value) =>
-              handleUpdateFilters({ category: value as "all" | Category })
-            }
-          >
-            <SelectTrigger aria-label="Category" className="min-w-[120px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Categories</SelectItem>
-              {CATEGORY_OPTIONS.map((option) => (
-                <SelectItem key={option.value} value={option.value}>
-                  {option.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
-          <Select
-            value={filters.baseSpirit ?? ANY_SPIRIT}
-            onValueChange={(value) =>
-              handleUpdateFilters({
-                baseSpirit: value === ANY_SPIRIT ? null : value,
-              })
-            }
-          >
-            <SelectTrigger aria-label="Base Spirit" className="min-w-[140px]">
-              <SelectValue placeholder="Base Spirit" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={ANY_SPIRIT}>Any Spirit</SelectItem>
-              {SPIRIT_OPTIONS.map((option) => (
-                <SelectItem key={option.value} value={option.value}>
-                  {option.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
-          {/* Active filters indicator */}
-          {(filters.searchTerm ||
-            filters.category !== "all" ||
-            filters.baseSpirit) && (
-            <Button variant="ghost" onClick={handleClearFilters}>
+        {(filtered || term !== "") && (
+          <div className="flex min-h-11 items-center justify-between gap-2">
+            <p className="t-cap m-0 text-ink-2">
+              {isLoading && results.length === 0
+                ? "Searching…"
+                : totalCount === 1
+                  ? "1 recipe"
+                  : `${countText} recipes`}
+            </p>
+            <Button
+              variant="ghost"
+              className="text-ink-2"
+              onClick={handleClearFilters}
+            >
               Clear
             </Button>
-          )}
-        </div>
-      </section>
+          </div>
+        )}
 
-      {/* Results */}
-      {error && (
-        <p className="type-body text-destructive">
-          Couldn't search recipes: {error.message}
-        </p>
-      )}
+        {error !== null && (
+          <p role="alert" className="t-body m-0 text-danger">
+            Couldn't search recipes. {error.message}
+          </p>
+        )}
 
-      {/* Results summary */}
-      <p className="mb-4 px-1 type-footnote" aria-live="polite">
-        {isLoading && results.length === 0
-          ? "Searching…"
-          : results.length > 0
-            ? hasMore
-              ? `Showing ${results.length} of ${totalCount}`
-              : totalCount === 1
-                ? "1 recipe"
-                : `${totalCount} recipes`
-            : ""}
-      </p>
-
-      {results.length > 0 ? (
-        <div className="flex flex-col gap-4">
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3">
-            {results.map((recipeGroup) => (
-              <RecipeGroupCard
-                key={recipeGroup.id}
-                recipeGroup={recipeGroup}
-                href={`/recipes/groups/${recipeGroup.id}`}
-                onClick={onRecipeGroupSelect}
-              />
-            ))}
-            {list.status === "loadingMore" && (
-              <RecipeGroupCardSkeleton count={3} />
+        {results.length > 0 ? (
+          <div className="flex flex-col gap-3">
+            <ul
+              aria-busy={isLoading || undefined}
+              className={cn(
+                "m-0 grid list-none grid-cols-1 gap-3 p-0 transition-opacity duration-(--ca-dur-short) md:grid-cols-2",
+                // Dim while refining (Recipes-Browse 08): the rows stay put.
+                list.status === "resetting" && "opacity-60",
+              )}
+            >
+              {results.map((recipeGroup) => (
+                <li key={recipeGroup.id}>
+                  <RecipeGroupCard
+                    recipeGroup={recipeGroup}
+                    href={`/recipes/groups/${recipeGroup.id}`}
+                    onClick={onRecipeGroupSelect}
+                  />
+                </li>
+              ))}
+              {list.status === "loadingMore" && (
+                <RecipeGroupCardSkeleton count={3} />
+              )}
+            </ul>
+            {hasMore && (
+              <Button
+                variant="outline"
+                className="self-center"
+                disabled={list.status === "loadingMore"}
+                aria-busy={list.status === "loadingMore" || undefined}
+                onClick={() => void list.loadMore()}
+              >
+                Show more
+              </Button>
             )}
           </div>
-          {hasMore && (
-            <Button
-              variant="secondary"
-              className="self-center"
-              disabled={list.status === "loadingMore"}
-              aria-busy={list.status === "loadingMore" || undefined}
-              onClick={() => void list.loadMore()}
-            >
-              Show more
-            </Button>
-          )}
-        </div>
-      ) : (
-        !isLoading && (
-          <EmptyState
-            className="rounded-lg bg-surface-1"
-            illustration={<Restaurant aria-hidden />}
-            title="No recipes found"
-            description="Try another word, or clear the filters."
-            action={
-              <Button variant="outline" onClick={handleClearFilters}>
-                Clear filters
-              </Button>
-            }
-          />
-        )
-      )}
+        ) : (
+          !isLoading &&
+          error === null && (
+            <EmptyState
+              illustration={<NoResults aria-hidden />}
+              title={
+                term !== ""
+                  ? `No recipe matches “${term}”`
+                  : filtered
+                    ? "No recipe matches"
+                    : "No recipes yet"
+              }
+              action={
+                term !== "" || filtered ? (
+                  <Button variant="outline" onClick={handleClearFilters}>
+                    {term !== "" ? "Clear search" : "Clear filters"}
+                  </Button>
+                ) : undefined
+              }
+            />
+          )
+        )}
+      </section>
+
+      <ResponsiveDialog
+        open={kindsOpen}
+        onOpenChange={setKindsOpen}
+        title="Kind"
+      >
+        <ul className="m-0 flex list-none flex-col p-0">
+          {(
+            [{ value: "all", label: "All kinds" }, ...CATEGORY_OPTIONS] as const
+          ).map((option) => {
+            const on = filters.category === option.value;
+            return (
+              <li key={option.value}>
+                <button
+                  type="button"
+                  aria-pressed={on}
+                  onClick={() => {
+                    feedback("detent");
+                    setKindsOpen(false);
+                    handleUpdateFilters({ category: option.value });
+                  }}
+                  className="t-body flex min-h-12 w-full items-center gap-3 rounded-md px-2 text-left text-ink outline-none active:bg-raised focus-visible:outline-2 focus-visible:outline-act-ink"
+                >
+                  <span className="min-w-0 flex-1">{option.label}</span>
+                  {on && <Check aria-hidden className="size-5 text-act-ink" />}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      </ResponsiveDialog>
     </div>
   );
 };

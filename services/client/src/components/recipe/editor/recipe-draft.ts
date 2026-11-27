@@ -7,9 +7,9 @@
  * - **An AI match is a proposal until the person says so** (D6: Accept /
  *   Reject is the universal "confirm the AI" control). A draft's catalog
  *   matches arrive `suggested`; Keep makes one `confirmed`, Not this drops it
- *   and the line becomes a plain ingredient by name. Saving waits until no
- *   suggestion is left — {@link pendingMatches} — so nothing the model chose
- *   is published without a tap.
+ *   and the line becomes a plain ingredient by name. Save is never blocked by a
+ *   suggestion ({@link pendingMatches} only counts them); an unchecked one
+ *   saves as the words, so nothing the model chose is published without a tap.
  * - **A line that kept its identity keeps its row's facts.** Kind, role, the
  *   numeric quantity and the generic item's id survive a save untouched; a
  *   line whose name or amount changed sends what the person typed and lets
@@ -323,8 +323,7 @@ export const AMOUNT_MAX = 80;
 
 export type FormProblem =
   | { readonly field: "name"; readonly message: string }
-  | { readonly field: "ingredients"; readonly message: string }
-  | { readonly field: "matches"; readonly message: string };
+  | { readonly field: "ingredients"; readonly message: string };
 
 /** Lines with something in them; blank rows are the form's, not the recipe's. */
 export const filledIngredients = (form: RecipeForm) =>
@@ -357,16 +356,6 @@ export const formProblems = (form: RecipeForm): FormProblem[] => {
     problems.push({
       field: "ingredients",
       message: `Keep each amount under ${AMOUNT_MAX} characters.`,
-    });
-  }
-  const pending = pendingMatches(form);
-  if (pending > 0) {
-    problems.push({
-      field: "matches",
-      message:
-        pending === 1
-          ? "Check the ingredient match above: Keep it, or Not this."
-          : `Check the ${pending} ingredient matches above: Keep each, or Not this.`,
     });
   }
   return problems;
@@ -522,4 +511,11 @@ export const PRIVACY_COPY: Readonly<
     label: "Public",
     line: "Anyone can see it, and you can share a link to it.",
   },
+};
+
+/** Who sees a recipe, in the rows' and the page's words ("Everyone · 3 ingredients"). */
+export const PRIVACY_WHO: Readonly<Record<RecipePrivacy, string>> = {
+  PRIVATE: "Only you",
+  FRIENDS: "Friends",
+  PUBLIC: "Everyone",
 };
