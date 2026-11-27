@@ -118,8 +118,18 @@ globalThis.fetch = (async (_url: unknown, init?: { body?: unknown }) => {
               cellarItemId: "ci-1",
             },
           }
-        : operationName === "ReferenceOptions"
-          ? {}
+        : operationName === "NeedsDetails"
+          ? {
+              needsDetailsCount: 4,
+              needsDetails: {
+                __typename: "ItemOnboardingConnection",
+                // The first page's last draft again, then one new one.
+                edges: [MORE_DUPLICATE, MORE_NEW].map((node) => ({
+                  node: { __typename: "ItemOnboarding", ...node },
+                })),
+                pageInfo: { hasNextPage: false, endCursor: null },
+              },
+            }
           : {};
   return new Response(JSON.stringify({ data }), {
     status: 200,
@@ -130,6 +140,27 @@ globalThis.fetch = (async (_url: unknown, init?: { body?: unknown }) => {
 const GARNACHA_ID = "11111111-1111-4111-8111-111111111111";
 const ROSE_ID = "22222222-2222-4222-8222-222222222222";
 const COFFEE_ID = "33333333-3333-4333-8333-333333333333";
+
+const MORE_DUPLICATE = {
+  id: COFFEE_ID,
+  itemType: "COFFEE",
+  status: "NEEDS_DETAILS",
+  cellarId: "c-home",
+  displayName: "Morning Field",
+  displayMaker: null,
+  draftFields: { name: "Morning Field" },
+  confirmedFields: ["name"],
+  vintageAnswer: "UNANSWERED",
+  imageId: null,
+  updatedAt: "2026-11-27T00:00:00Z",
+};
+const MORE_NEW = {
+  ...MORE_DUPLICATE,
+  id: "44444444-4444-4444-8444-444444444444",
+  itemType: "BEER",
+  displayName: "Harbour Pale",
+  draftFields: { name: "Harbour Pale" },
+};
 
 const DRAFTS = [
   {
@@ -421,5 +452,32 @@ describe("NeedsDetailsScreen", () => {
       />,
     );
     assert.match(document.body.textContent ?? "", /Nothing needs details/);
+  });
+  test("Show more asks for the page after the cursor once, and lists each draft once", async () => {
+    await render(
+      <NeedsDetailsScreen
+        cellar={null}
+        count={4}
+        drafts={DRAFTS}
+        endCursor="cursor-1"
+        failed={false}
+      />,
+    );
+    const more = () =>
+      [...document.querySelectorAll("button")].find(
+        (b) => b.textContent?.trim() === "Show more",
+      );
+    await click(more());
+    await flush(30);
+    const pages = sent.filter((s) => s.operationName === "NeedsDetails");
+    assert.equal(pages.length, 1);
+    assert.equal(pages[0]?.variables.after, "cursor-1");
+    assert.deepEqual(rowTitles(), [
+      "Hillside Garnacha",
+      "Dockside Rosé",
+      "Morning Field",
+      "Harbour Pale",
+    ]);
+    assert.equal(more(), undefined, "no further page");
   });
 });

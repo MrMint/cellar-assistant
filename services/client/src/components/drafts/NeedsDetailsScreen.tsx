@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useClient } from "urql";
+import { useMutation, useQuery } from "urql";
 import { AppBar } from "@/components/app/AppBar";
 import { EmptyState, ErrorState } from "@/components/app/EmptyState";
 import { FilterChip } from "@/components/app/FilterChip";
@@ -76,7 +76,8 @@ export function NeedsDetailsScreen({
   endCursor: string | null;
   failed: boolean;
 }) {
-  const client = useClient();
+  const [, runSave] = useMutation(SaveNeedsDetailsDraftMutation);
+  const [, runConfirm] = useMutation(ConfirmNeedsDetailsDraftMutation);
   const router = useRouter();
   const [rows, setRows] = useState<Row[]>(() =>
     drafts.map((draft) => rowWith(draft, draft.imageUrl)),
@@ -87,7 +88,9 @@ export function NeedsDetailsScreen({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [cursor, setCursor] = useState(endCursor);
-  const [loadingMore, setLoadingMore] = useState(false);
+  // "Show more" asks for the page after this cursor; null when not asking.
+  const [after, setAfter] = useState<string | null>(null);
+  const loadingMore = after !== null;
   const pending = useRef(new Map<string, Pending>());
 
   const visible = useMemo(
@@ -116,24 +119,21 @@ export function NeedsDetailsScreen({
       const entry = pending.current.get(id);
       if (entry === undefined) return;
       pending.current.delete(id);
-      void client
-        .mutation(ConfirmNeedsDetailsDraftMutation, {
-          onboardingId: id,
-          input: confirmInput(entry.plan),
-        })
-        .toPromise()
-        .then((result) => {
-          const filed = unwrapResult(
-            result.data?.confirmItemOnboarding,
-            "ConfirmedItemOnboarding",
-          );
-          if (!filed.ok) {
-            putBack(entry);
-            notify(`Couldn't add ${entry.row.title}`, { tone: "error" });
-          }
-        });
+      void runConfirm({
+        onboardingId: id,
+        input: confirmInput(entry.plan),
+      }).then((result) => {
+        const filed = unwrapResult(
+          result.data?.confirmItemOnboarding,
+          "ConfirmedItemOnboarding",
+        );
+        if (!filed.ok) {
+          putBack(entry);
+          notify(`Couldn't add ${entry.row.title}`, { tone: "error" });
+        }
+      });
     },
-    [client, putBack],
+    [runConfirm, putBack],
   );
 
   const confirmAll = useCallback(() => {
@@ -158,11 +158,9 @@ export function NeedsDetailsScreen({
     }
     setSaving(true);
     setError(null);
-    const result = await client
-      .mutation(SaveNeedsDetailsDraftMutation, {
-        input: { onboardingId: row.draft.id, ...plan.save },
-      })
-      .toPromise();
+    const result = await runSave({
+      input: { onboardingId: row.draft.id, ...plan.save },
+    });
     setSaving(false);
     const saved = unwrapResult(result.data?.saveDraft, "ItemOnboarding");
     if (!saved.ok) {
@@ -219,58 +217,59 @@ export function NeedsDetailsScreen({
           setRows((current) =>
             current.map((r) => (r.draft.id === id ? row : r)),
           );
-        void client
-          .mutation(SaveNeedsDetailsDraftMutation, {
-            input: restoreInput(row.draft),
-          })
-          .toPromise();
+        void runSave({ input: restoreInput(row.draft) });
       },
       onAutoClose: () => confirm(id),
       onClose: () => confirm(id),
     });
   };
 
-  const loadMore = async () => {
-    if (cursor === null) return;
-    setLoadingMore(true);
-    const result = await client
-      .query(NeedsDetailsQuery, {
-        cellarId: cellar?.id ?? null,
-        first: 100,
-        after: cursor,
-      })
-      .toPromise();
-    setLoadingMore(false);
+  const [morePage] = useQuery({
+    query: NeedsDetailsQuery,
+    variables: { cellarId: cellar?.id ?? null, first: 100, after },
+    pause: after === null,
+    requestPolicy: "network-only",
+  });
+  useEffect(() => {
+    if (after === null || morePage.fetching) return;
+    if (morePage.data === undefined && morePage.error === undefined) return;
+    setAfter(null);
     const page = unwrapResult(
-      result.data?.needsDetails,
+      morePage.data?.needsDetails,
       "ItemOnboardingConnection",
     );
     if (!page.ok) {
       notify("Couldn't load more", { tone: "error" });
       return;
     }
-    const seen = new Set(rows.map((row) => row.draft.id));
-    const more = page.data.edges
-      .map(({ node }) =>
-        rowWith({
-          id: node.id,
-          itemType: node.itemType,
-          cellarId: node.cellarId ?? null,
-          displayName: node.displayName ?? null,
-          displayMaker: node.displayMaker ?? null,
-          draftFields: node.draftFields,
-          confirmedFields: node.confirmedFields,
-          vintageAnswer: node.vintageAnswer,
-          imageId: node.imageId ?? null,
-        }),
-      )
-      .filter((row) => !seen.has(row.draft.id));
-    setRows((current) => [...current, ...more]);
+    const more = page.data.edges.map(({ node }) =>
+      rowWith({
+        id: node.id,
+        itemType: node.itemType,
+        cellarId: node.cellarId ?? null,
+        displayName: node.displayName ?? null,
+        displayMaker: node.displayMaker ?? null,
+        draftFields: node.draftFields,
+        confirmedFields: node.confirmedFields,
+        vintageAnswer: node.vintageAnswer,
+        imageId: node.imageId ?? null,
+      }),
+    );
+    setRows((current) => {
+      const seen = new Set(current.map((row) => row.draft.id));
+      return [...current, ...more.filter((row) => !seen.has(row.draft.id))];
+    });
     setCursor(
       page.data.pageInfo.hasNextPage
         ? (page.data.pageInfo.endCursor ?? null)
         : null,
     );
+  }, [after, morePage]);
+
+  const loadMore = () => {
+    if (cursor === null || after !== null) return;
+    feedback("press");
+    setAfter(cursor);
   };
 
   const parent = cellar === null ? "/" : `/cellars/${cellar.id}/items`;
@@ -395,7 +394,7 @@ export function NeedsDetailsScreen({
           {cursor !== null && (
             <Button
               variant="outline"
-              onClick={() => void loadMore()}
+              onClick={loadMore}
               disabled={loadingMore}
               className={cn("self-center")}
             >
