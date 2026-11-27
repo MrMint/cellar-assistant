@@ -499,6 +499,84 @@ export const graphcacheSchema: MinifiedIntrospection = {
         interfaces: [],
       },
       {
+        kind: "OBJECT",
+        name: "AiQuota",
+        fields: [
+          {
+            name: "kind",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "String" },
+            },
+          },
+          {
+            name: "limit",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
+          {
+            name: "resetsAt",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "DateTime" },
+            },
+          },
+          {
+            name: "used",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "AiQuotaConnection",
+        fields: [
+          {
+            name: "edges",
+            type: {
+              kind: "NON_NULL",
+              ofType: {
+                kind: "LIST",
+                ofType: {
+                  kind: "NON_NULL",
+                  ofType: { kind: "OBJECT", name: "AiQuotaEdge" },
+                },
+              },
+            },
+          },
+          {
+            name: "pageInfo",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "PageInfo" },
+            },
+          },
+          { name: "totalCount", type: { kind: "SCALAR", name: "Int" } },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "AiQuotaEdge",
+        fields: [
+          {
+            name: "cursor",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "String" },
+            },
+          },
+          {
+            name: "node",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "AiQuota" },
+            },
+          },
+        ],
+        interfaces: [],
+      },
+      {
         kind: "UNION",
         name: "AttachItemImageResult",
         possibleTypes: [
@@ -5663,6 +5741,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
             },
           },
           {
+            name: "requestTierListInsights",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "UNION", name: "RequestTierListInsightsResult" },
+            },
+          },
+          {
             name: "rereadItemLabel",
             type: {
               kind: "NON_NULL",
@@ -7274,6 +7359,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
             },
           },
           {
+            name: "myAiQuota",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "UNION", name: "QueryMyAiQuotaResult" },
+            },
+          },
+          {
             name: "myCellars",
             type: {
               kind: "NON_NULL",
@@ -7755,6 +7847,18 @@ export const graphcacheSchema: MinifiedIntrospection = {
           { kind: "OBJECT", name: "ConflictError" },
           { kind: "OBJECT", name: "ForbiddenError" },
           { kind: "OBJECT", name: "MenuScan" },
+          { kind: "OBJECT", name: "NotFoundError" },
+          { kind: "OBJECT", name: "ValidationError" },
+        ],
+      },
+      {
+        kind: "UNION",
+        name: "QueryMyAiQuotaResult",
+        possibleTypes: [
+          { kind: "OBJECT", name: "AiQuotaConnection" },
+          { kind: "OBJECT", name: "BudgetExceededError" },
+          { kind: "OBJECT", name: "ConflictError" },
+          { kind: "OBJECT", name: "ForbiddenError" },
           { kind: "OBJECT", name: "NotFoundError" },
           { kind: "OBJECT", name: "ValidationError" },
         ],
@@ -9626,6 +9730,18 @@ export const graphcacheSchema: MinifiedIntrospection = {
           { kind: "OBJECT", name: "ForbiddenError" },
           { kind: "OBJECT", name: "ItemBrand" },
           { kind: "OBJECT", name: "NotFoundError" },
+          { kind: "OBJECT", name: "ValidationError" },
+        ],
+      },
+      {
+        kind: "UNION",
+        name: "RequestTierListInsightsResult",
+        possibleTypes: [
+          { kind: "OBJECT", name: "BudgetExceededError" },
+          { kind: "OBJECT", name: "ConflictError" },
+          { kind: "OBJECT", name: "ForbiddenError" },
+          { kind: "OBJECT", name: "NotFoundError" },
+          { kind: "OBJECT", name: "TierList" },
           { kind: "OBJECT", name: "ValidationError" },
         ],
       },

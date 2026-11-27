@@ -99,10 +99,11 @@ export const ACTOR_ERROR_REASONS = [
   /* -- AI outcomes (N07) -------------------------------------------------- */
 
   /**
-   * A per-user budget window (`BudgetActor`'s `USER_CAPS`, the rolling hour
-   * or day) refused a paid or metered call for *this account*. Everyone else
-   * is unaffected and the window rolls on its own: `retryAt` is when this
-   * account's next call fits. `BUDGET_EXCEEDED`.
+   * A per-user budget window (`BudgetActor`'s `USER_CAPS`: the rolling hour
+   * or day, or the calendar period — a UTC month by default, see
+   * `BUDGET_USER_CAPS`) refused a paid or metered call for *this account*.
+   * Everyone else is unaffected: `retryAt` is when this account's next call
+   * fits — for the period cap, the next period start. `BUDGET_EXCEEDED`.
    */
   "USER_CAP",
   /**

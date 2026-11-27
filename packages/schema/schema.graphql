@@ -364,6 +364,38 @@ enum AiJobStatus {
   RUNNING
 }
 
+"""Your own allowance for one kind of AI call this period (SV-A, L5)."""
+type AiQuota {
+  """
+  The budget kind, `ai_model/<seam>` — e.g. `ai_model/tier_list_insights`.
+  """
+  kind: String!
+
+  """The period's cap. `used >= limit` is 'Limit reached'."""
+  limit: Int!
+
+  """
+  When the period resets — the same instant a USER_CAP refusal carries as `BudgetExceededError.retryAt`.
+  """
+  resetsAt: DateTime!
+
+  """Your calls counted this period."""
+  used: Int!
+}
+
+type AiQuotaConnection {
+  edges: [AiQuotaEdge!]!
+  pageInfo: PageInfo!
+
+  """Total rows matching the query, or null when counting is not cheap."""
+  totalCount: Int
+}
+
+type AiQuotaEdge {
+  cursor: String!
+  node: AiQuota!
+}
+
 input AttachItemImageInput {
   """
   A `files.id` whose object `FileActor.verify` confirms. An unverified file is refused with `ConflictError`.
@@ -4360,6 +4392,11 @@ type Mutation {
   replaceItemBrand(brandId: ID!, itemId: ID!, replacesBrandId: ID, type: ItemType!): ReplaceItemBrandResult!
 
   """
+  SV-A (L12): write this list's Insights now. The client sends it when it sees `insightsStatus: IDLE` on a list of 3+ entries the viewer owns; a read never writes. Idempotent: from any other status (too few entries, pending, failed, ready, no provider) it changes nothing and returns the list as it is. Creator only. The generation counts against the viewer's `ai_model/tier_list_insights` allowance (`myAiQuota`); a refusal shows as FAILED with reason USER_CAP and `insightsRetryAt` at the reset.
+  """
+  requestTierListInsights(tierListId: ID!): RequestTierListInsightsResult!
+
+  """
   X19 “Re-read label”: the item's stored label photographs, read again by the vision model. The creator only. **Slow** (the model runs in the request, as `startItemOnboarding`'s does) and **writes nothing**.
   """
   rereadItemLabel(itemId: ID!, type: ItemType!): RereadItemLabelResult!
@@ -5499,6 +5536,29 @@ type Query {
   menuScan(id: ID!): QueryMenuScanResult!
 
   """
+  MC-quota: how much of your AI allowance you have used this period, per kind, and when it resets. Signed-in only; always your own.
+  """
+  myAiQuota(
+    """
+    An `edge.cursor` from a previous page. Opaque and owned by the actor that minted it: cursors are not interchangeable between fields.
+    """
+    after: String
+
+    """**Not supported.** See `last`. Paging is forward-only."""
+    before: String
+
+    """
+    How many edges to return, 1 to 100 inclusive; defaults to 20. Over the cap is a `VALIDATION` error, not a silent clamp.
+    """
+    first: Int
+
+    """
+    **Not supported.** Present because the Relay spec puts it here; passing it is a `VALIDATION` error rather than a silently forward page. Paging is forward-only — use `first`/`after`.
+    """
+    last: Int
+  ): QueryMyAiQuotaResult!
+
+  """
   `/cellars` — every cellar the viewer may see: their own, ones they co-own, and other people's that are PUBLIC or FRIENDS-and-a-friend (C3's `CellarsCollectionActor`, §2.2). The collection returns ids; the `Cellar` DataLoader batches them into parallel `CellarActor.get` calls (§1.5). Ordered with the viewer's own and co-owned cellars first, then the rest, each by most recent activity: a bottle added or changed, or a check-in (decision D13). `section` narrows to one part of that set — Yours, From friends or Discover (decision D2).
   """
   myCellars(
@@ -6049,6 +6109,8 @@ union QueryLovedRecipesResult = BudgetExceededError | ConflictError | ForbiddenE
 union QueryMapBrowseResult = BudgetExceededError | ConflictError | ForbiddenError | MapEntryConnection | NotFoundError | ValidationError
 
 union QueryMenuScanResult = BudgetExceededError | ConflictError | ForbiddenError | MenuScan | NotFoundError | ValidationError
+
+union QueryMyAiQuotaResult = AiQuotaConnection | BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | ValidationError
 
 union QueryMyCellarsResult = BudgetExceededError | CellarConnection | ConflictError | ForbiddenError | NotFoundError | ValidationError
 
@@ -7001,6 +7063,8 @@ type ReorderBandPayload {
 union ReorderTierListBandResult = BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | ReorderBandPayload | ValidationError
 
 union ReplaceItemBrandResult = BudgetExceededError | ConflictError | ForbiddenError | ItemBrand | NotFoundError | ValidationError
+
+union RequestTierListInsightsResult = BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | TierList | ValidationError
 
 union RereadItemLabelResult = BudgetExceededError | ConflictError | ForbiddenError | ItemLabelReading | NotFoundError | ValidationError
 
