@@ -27,8 +27,12 @@
  * (`recipeVisibleSql`): a log outlives a recipe going private, and the count
  * may keep it, but its name must not leak into a chip or a share image.
  */
-import type { ItemType, RecapLogRow } from "@cellar-assistant/contracts";
-import { isItemType } from "@cellar-assistant/contracts";
+import type {
+  ItemType,
+  RecapLogRow,
+  RecapPeriodKind,
+} from "@cellar-assistant/contracts";
+import { isItemType, RECAP_PERIODS_LIMIT } from "@cellar-assistant/contracts";
 import { type SQL, sql } from "@cellar-assistant/db/orm";
 import type { DbOrTx } from "./db.ts";
 import { ARCS } from "./item-arcs.ts";
@@ -120,4 +124,83 @@ export const readRecapLogs = async (
     score: row.score === null ? null : Number(row.score),
     inPeriod: row.in_period === true,
   }));
+};
+
+/** `ts` inside the window, read in the window's zone. */
+const inWindow = (ts: SQL, window: RecapWindow): SQL => sql`(
+  ${ts} >= (${window.start}::timestamp at time zone ${window.timeZone})
+  and ${ts} < (${window.end}::timestamp at time zone ${window.timeZone})
+)`;
+
+/**
+ * MC-recap / L4: the two totals the drink log cannot give. A rating is one of
+ * the viewer's `item_reviews` (the stars the item page reads) created or
+ * changed in the window; a bottle is a `cellar_items` row the viewer created,
+ * in any cellar, co-owned ones included. `created_by` is who added it, so a
+ * co-owner's additions to the same cellar never count.
+ */
+export const readRecapTotals = async (
+  db: DbOrTx,
+  viewerId: string,
+  window: RecapWindow,
+): Promise<{ readonly ratings: number; readonly bottlesAdded: number }> => {
+  const result = await db.execute<{
+    readonly ratings: number | string;
+    readonly bottles_added: number | string;
+  }>(sql`
+    select
+      (select count(*) from public.item_reviews r
+        where r.user_id = ${viewerId}::uuid
+          and (${inWindow(sql`r.created_at`, window)}
+               or ${inWindow(sql`r.updated_at`, window)})) as ratings,
+      (select count(*) from public.cellar_items ci
+        where ci.created_by = ${viewerId}::uuid
+          and ${inWindow(sql`ci.created_at`, window)}) as bottles_added
+  `);
+  const row = result.rows[0];
+  return {
+    ratings: Number(row?.ratings ?? 0),
+    bottlesAdded: Number(row?.bottles_added ?? 0),
+  };
+};
+
+/**
+ * MC-recap: every period, in `recap(period)`'s format, holding any activity
+ * the totals count, newest first. Check-ins follow `readRecapLogs`' rule (a
+ * recipe log counts only while the viewer may see its recipe), so a listed
+ * period never opens on an empty recap.
+ */
+export const readRecapPeriods = async (
+  db: DbOrTx,
+  viewerId: string,
+  scope: RecipeScope,
+  kind: RecapPeriodKind,
+  timeZone: string,
+): Promise<string[]> => {
+  const format = kind === "MONTH" ? "YYYY-MM" : "YYYY";
+  const result = await db.execute<{ readonly period: string }>(sql`
+    with activity(at) as (
+      select ci.created_at
+      from public.check_ins ci
+      left join public.recipes r on r.id = ci.recipe_id
+      where ci.user_id = ${viewerId}::uuid
+        and (ci.recipe_id is null
+             or (r.id is not null and ${recipeVisibleSql(scope, "r")}))
+      union all
+      select r.created_at from public.item_reviews r
+      where r.user_id = ${viewerId}::uuid
+      union all
+      select r.updated_at from public.item_reviews r
+      where r.user_id = ${viewerId}::uuid
+      union all
+      select ci.created_at from public.cellar_items ci
+      where ci.created_by = ${viewerId}::uuid
+    )
+    select distinct to_char(at at time zone ${timeZone}, ${format}) as period
+    from activity
+    where at is not null
+    order by period desc
+    limit ${RECAP_PERIODS_LIMIT}
+  `);
+  return result.rows.map((row) => row.period);
 };
