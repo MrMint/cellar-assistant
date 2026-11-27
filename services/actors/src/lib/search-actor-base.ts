@@ -56,8 +56,23 @@
  * `ActorBase.tx()` already refuses a `search` category (§1.1), and
  * `packages/db`'s single-writer test would catch a write anyway. Nothing here
  * needs to add a second fence; this class simply never opens one.
+ *
+ * ## Totals are counted before the cap (MC-search, L3)
+ *
+ * The held set is capped, so its length is not the number of matches: a
+ * section that showed it would show its limit as a total. `runSearch` may
+ * therefore answer a {@link CountedHits} instead of a bare array:
+ *
+ * - a **lexical** search counts every match with the same `where` and answers
+ *   {@link exactTotal} — `totalIsLowerBound` false, however far past the cap;
+ * - a **semantic** search has no natural match count, so it reads one row past
+ *   its limit and answers {@link cappedTotal}: the full count when under the
+ *   cap, else the cap with `totalIsLowerBound` true (shown as "200+").
+ *
+ * A bare array (the cellar-item and duplicate-place actors, which are not
+ * sections) is taken as its own exact total, which it is: nothing was cut.
  */
-import type { Ctx, Page, PageArgs } from "@cellar-assistant/contracts";
+import type { Ctx, PageArgs, SearchPage } from "@cellar-assistant/contracts";
 import {
   type ActorCategory,
   offsetPage,
@@ -66,10 +81,59 @@ import {
 import { ActorBase } from "./actor-base.ts";
 import { requireSignedIn } from "./guards.ts";
 
+/** A result set with its total, counted before the cap. */
+export type CountedHits<THit> = {
+  readonly hits: readonly THit[];
+  readonly total: number;
+  readonly totalIsLowerBound: boolean;
+};
+
+/** A lexical search: `total` is a `count(*)` over the same `where`. */
+export const exactTotal = <THit>(
+  hits: readonly THit[],
+  total: number,
+): CountedHits<THit> => ({
+  hits,
+  // A count read in a different statement can trail the rows by a write;
+  // never report fewer matches than the page itself holds.
+  total: Math.max(total, hits.length),
+  totalIsLowerBound: false,
+});
+
+/**
+ * A semantic search read with `limit + 1`: the extra row is the proof there
+ * are more, and is dropped. Under the cap the count is the full count.
+ */
+export const cappedTotal = <THit>(
+  hitsPlusOne: readonly THit[],
+  limit: number,
+): CountedHits<THit> => {
+  const capped = hitsPlusOne.length > limit;
+  const hits = capped ? hitsPlusOne.slice(0, limit) : hitsPlusOne;
+  return { hits, total: hits.length, totalIsLowerBound: capped };
+};
+
+const asCounted = <THit>(
+  result: readonly THit[] | CountedHits<THit>,
+): CountedHits<THit> =>
+  isCounted(result)
+    ? result
+    : { hits: result, total: result.length, totalIsLowerBound: false };
+
+const isCounted = <THit>(
+  result: readonly THit[] | CountedHits<THit>,
+): result is CountedHits<THit> => !Array.isArray(result);
+
+const EMPTY: CountedHits<never> = {
+  hits: [],
+  total: 0,
+  totalIsLowerBound: false,
+};
+
 export abstract class SearchActorBase<TInput, THit> extends ActorBase {
   static readonly category: ActorCategory = "search";
 
-  #results: readonly THit[] | null = null;
+  #results: CountedHits<THit> | null = null;
   #runs = 0;
   #cacheThisRun = true;
 
@@ -104,7 +168,7 @@ export abstract class SearchActorBase<TInput, THit> extends ActorBase {
   protected abstract runSearch(
     ctx: Ctx,
     input: TInput,
-  ): Promise<readonly THit[]>;
+  ): Promise<readonly THit[] | CountedHits<THit>>;
 
   /**
    * How many times this activation has actually queried. Diagnostics for tests
@@ -120,15 +184,19 @@ export abstract class SearchActorBase<TInput, THit> extends ActorBase {
 
   /** The capped result set, run once and held for the life of the activation. */
   protected async resultSet(ctx: Ctx, input: TInput): Promise<readonly THit[]> {
+    return (await this.#counted(ctx, input)).hits;
+  }
+
+  async #counted(ctx: Ctx, input: TInput): Promise<CountedHits<THit>> {
     this.#requireKeyMatches(ctx, input);
     // Before the cache, every turn. See the module doc: putting this inside
     // `runSearch` means the second caller of a warm activation is never
     // checked, which is how an anonymous request got a full result set.
-    if ((await this.authorize(ctx, input)) === "empty") return [];
+    if ((await this.authorize(ctx, input)) === "empty") return EMPTY;
     if (this.#results !== null) return this.#results;
     this.#runs += 1;
     this.#cacheThisRun = true;
-    const results = await this.runSearch(ctx, input);
+    const results = asCounted(await this.runSearch(ctx, input));
     if (this.#cacheThisRun) this.#results = results;
     return results;
   }
@@ -143,13 +211,21 @@ export abstract class SearchActorBase<TInput, THit> extends ActorBase {
     this.#cacheThisRun = false;
   }
 
-  /** §1.5's "pages it in memory". The cursor is an offset into a stable set. */
+  /**
+   * §1.5's "pages it in memory". The cursor is an offset into a stable set;
+   * `totalCount` is the pre-cap total, not the held set's length.
+   */
   protected async pageOf(
     ctx: Ctx,
     input: TInput,
     page: PageArgs,
-  ): Promise<Page<THit>> {
-    return offsetPage(await this.resultSet(ctx, input), page);
+  ): Promise<SearchPage<THit>> {
+    const counted = await this.#counted(ctx, input);
+    return {
+      ...offsetPage(counted.hits, page),
+      totalCount: counted.total,
+      totalIsLowerBound: counted.totalIsLowerBound,
+    };
   }
 
   #requireKeyMatches(ctx: Ctx, input: TInput): void {

@@ -37,6 +37,7 @@ import type { ApiContext } from "../context.ts";
 import { builder } from "./builder.ts";
 import { ItemInterface, ItemTypeEnum } from "./item.ts";
 import { connectionFromPage, toPageArgs } from "./pagination.ts";
+import { avatarUrlForUser } from "./user.ts";
 
 // §1.5 has no exception for a list the server knows is short: each list
 // here is a connection, paged in memory over the actor's bounded answer.
@@ -157,7 +158,13 @@ const TasteAgreementType = builder
     fields: (t) => ({
       userId: t.exposeID("userId"),
       name: t.exposeString("name"),
-      avatarUrl: t.string({ nullable: true, resolve: (a) => a.avatarUrl }),
+      // MC-avatar: through the one avatar helper, so an uploaded picture
+      // wins here too; the actor's `user.image` is the fallback.
+      avatarUrl: t.string({
+        nullable: true,
+        resolve: (a, _args, context) =>
+          avatarUrlForUser(context, a.userId, a.avatarUrl),
+      }),
       shared: t.exposeInt("shared"),
       agreed: t.int({ nullable: true, resolve: (a) => a.agreed }),
       byType: t.field({

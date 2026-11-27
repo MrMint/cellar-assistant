@@ -50,11 +50,11 @@
 import type {
   ActorCategory,
   Ctx,
-  Page,
   PageArgs,
   RecipeSearchActorInterface,
   RecipeSearchHit,
   RecipeSearchInput,
+  SearchPage,
 } from "@cellar-assistant/contracts";
 import {
   RECIPE_HYBRID_DISTANCE_GAP,
@@ -74,7 +74,12 @@ import { daprEmbedQuery } from "../lib/embedding-client.ts";
 import { requireSignedIn } from "../lib/guards.ts";
 import { withHnswScan } from "../lib/hnsw.ts";
 import { recipeScope, recipeVisibleSql } from "../lib/recipe-visibility.ts";
-import { SearchActorBase } from "../lib/search-actor-base.ts";
+import {
+  type CountedHits,
+  cappedTotal,
+  exactTotal,
+  SearchActorBase,
+} from "../lib/search-actor-base.ts";
 import { toVectorLiteral } from "../lib/vectors.ts";
 import { escapeLike } from "./brand-search-actor.ts";
 import { embeddingUnavailable } from "./item-search-actor.ts";
@@ -124,7 +129,7 @@ export class RecipeSearchActor
     ctx: Ctx,
     input: RecipeSearchInput,
     page: PageArgs,
-  ): Promise<Page<RecipeSearchHit>> {
+  ): Promise<SearchPage<RecipeSearchHit>> {
     return this.pageOf(ctx, input, page);
   }
 
@@ -138,7 +143,7 @@ export class RecipeSearchActor
   protected async runSearch(
     ctx: Ctx,
     input: RecipeSearchInput,
-  ): Promise<readonly RecipeSearchHit[]> {
+  ): Promise<CountedHits<RecipeSearchHit>> {
     const term = (input.term ?? "").trim();
     const semanticQuery = (input.semanticQuery ?? "").trim();
     const type = (input.type ?? "").trim();
@@ -180,7 +185,13 @@ export class RecipeSearchActor
                  r.id asc
         limit ${limit}
       `);
-      return rows.map(toHit);
+      // Lexical, so exact (L3): the same `where`, counted without the limit.
+      const { rows: counted } = await this.db.execute<{ n: number }>(sql`
+        select count(*)::int as n
+        from public.recipes r
+        where ${lexical} and ${typeFilter} and ${visible}
+      `);
+      return exactTotal(rows.map(toHit), counted[0]?.n ?? 0);
     }
 
     const literal = toVectorLiteral(await this.#embed(ctx, semanticQuery));
@@ -200,7 +211,7 @@ export class RecipeSearchActor
           where rv.vector is not null and ${lexical} and ${typeFilter}
             and ${visible}
           order by rv.vector <=> ${literal}::halfvec
-          limit ${limit}
+          limit ${limit + 1}
         )
         select id, name, description, type, recipe_group_id, distance
         from nearest
@@ -208,7 +219,9 @@ export class RecipeSearchActor
         order by distance asc, lower(name) asc, id asc
       `),
     );
-    return rows.map(toHit);
+    // Semantic: one row past the limit says "more" (shown "200+"), and since
+    // the scan is nearest-first, a cut-off row means every later one is too.
+    return cappedTotal(rows.map(toHit), limit);
   }
 
   /**
@@ -230,7 +243,7 @@ export class RecipeSearchActor
       readonly limit: number;
       readonly maxDistance: number;
     },
-  ): Promise<readonly RecipeSearchHit[]> {
+  ): Promise<CountedHits<RecipeSearchHit>> {
     if (q.term === "") {
       throw new ValidationError("a hybrid recipe search needs a term");
     }
@@ -252,7 +265,7 @@ export class RecipeSearchActor
                length(r.name) asc,
                lower(r.name) asc,
                r.id asc
-      limit ${q.limit}
+      limit ${q.limit + 1}
     `);
 
     let vector: readonly number[];
@@ -263,7 +276,7 @@ export class RecipeSearchActor
       // D25 parity: the names still answer. Not cached — the embedding may
       // be back on the next turn.
       this.doNotCache();
-      return named.map(toHit);
+      return cappedTotal(named.map(toHit), q.limit);
     }
     const literal = toVectorLiteral(vector);
     const { rows: near } = await withHnswScan(this.db, (tx) =>
@@ -275,7 +288,7 @@ export class RecipeSearchActor
           join public.recipes r on r.id = rv.recipe_id
           where rv.vector is not null and ${typeFilter} and ${visible}
           order by rv.vector <=> ${literal}::halfvec
-          limit ${q.limit}
+          limit ${q.limit + 1}
         )
         select id, name, description, type, recipe_group_id, distance
         from nearest
@@ -283,7 +296,12 @@ export class RecipeSearchActor
         order by distance asc, lower(name) asc, id asc
       `),
     );
-    return mergeHybridRecipes(named.map(toHit), near.map(toHit), q.limit);
+    // Both halves read one row past the limit, so a merge longer than the
+    // limit proves more matches; one at or under it is every match.
+    return cappedTotal(
+      mergeHybridRecipes(named.map(toHit), near.map(toHit), q.limit + 1),
+      q.limit,
+    );
   }
 }
 

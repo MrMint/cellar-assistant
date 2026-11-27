@@ -76,6 +76,17 @@ export type SearchAllInterface<TInput, THit> = {
   all(ctx: Ctx, input: TInput): Promise<readonly THit[]>;
 };
 
+/**
+ * A search section's page (MC-search, L3). `totalCount` is counted before the
+ * actor's cap: exact for a lexical section, and for a semantic one either the
+ * full count (under the cap) or the cap itself with `totalIsLowerBound` true,
+ * which a client shows as "200+" — never as a total.
+ */
+export type SearchPage<T> = Page<T> & {
+  readonly totalCount: number;
+  readonly totalIsLowerBound: boolean;
+};
+
 /** The hash every search actor id is. Exported for tests, not for call sites. */
 export const searchHash = (input: unknown): string =>
   createHash("sha256").update(canonical(input)).digest("hex");
@@ -337,7 +348,7 @@ export type ItemSearchActorInterface = {
     ctx: Ctx,
     input: ItemSearchInput,
     page: PageArgs,
-  ): Promise<Page<ItemSearchHit>>;
+  ): Promise<SearchPage<ItemSearchHit>>;
 };
 
 export const ItemSearchActorDescriptor: ActorDescriptor<
@@ -466,7 +477,7 @@ export type BrandSearchActorInterface = {
     ctx: Ctx,
     input: BrandSearchInput,
     page: PageArgs,
-  ): Promise<Page<BrandSearchHit>>;
+  ): Promise<SearchPage<BrandSearchHit>>;
 };
 
 export const BrandSearchActorDescriptor: ActorDescriptor<
@@ -556,7 +567,7 @@ export type RecipeSearchActorInterface = {
     ctx: Ctx,
     input: RecipeSearchInput,
     page: PageArgs,
-  ): Promise<Page<RecipeSearchHit>>;
+  ): Promise<SearchPage<RecipeSearchHit>>;
 };
 
 export const RecipeSearchActorDescriptor: ActorDescriptor<
@@ -625,7 +636,9 @@ export type PersonRelation = (typeof PERSON_RELATIONS)[number];
 export type UserSearchHit = {
   readonly userId: string;
   readonly displayName: string;
+  /** `user.image`; see `UserProfileDto.avatarUrl` — the same pair, the same helper. */
   readonly avatarUrl: string | null;
+  readonly avatarFileId: string | null;
   /**
    * X12: set on an `includeConnected` search only; a default search returns
    * no one but `NONE`s and leaves it absent.
@@ -638,7 +651,7 @@ export type UserSearchActorInterface = {
     ctx: Ctx,
     input: UserSearchInput,
     page: PageArgs,
-  ): Promise<Page<UserSearchHit>>;
+  ): Promise<SearchPage<UserSearchHit>>;
 };
 
 export const UserSearchActorDescriptor: ActorDescriptor<
@@ -835,7 +848,7 @@ export type PlaceSearchActorInterface = {
     ctx: Ctx,
     input: PlaceSearchInput,
     page: PageArgs,
-  ): Promise<Page<PlaceSearchHit>>;
+  ): Promise<SearchPage<PlaceSearchHit>>;
 };
 
 export const PlaceSearchActorDescriptor: ActorDescriptor<

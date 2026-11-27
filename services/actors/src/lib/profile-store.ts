@@ -45,7 +45,14 @@
 // screen-long structural type error. The table now lives in `packages/db` with
 // everything else, so the exception is retired along with the second database.
 import { user } from "@cellar-assistant/db";
-import { and, eq, inArray, notInArray, sql } from "@cellar-assistant/db/orm";
+import {
+  and,
+  count,
+  eq,
+  inArray,
+  notInArray,
+  sql,
+} from "@cellar-assistant/db/orm";
 import { actorDb } from "./db.ts";
 
 /** The columns `UserProfileDto` is built from. */
@@ -53,6 +60,8 @@ export type ProfileFields = {
   readonly id: string;
   readonly displayName: string;
   readonly avatarUrl: string | null;
+  /** SV-D: `user.avatar_file_id`, the uploaded picture; wins over `avatarUrl`. */
+  readonly avatarFileId: string | null;
   readonly locale: string | null;
   readonly email: string | null;
 };
@@ -61,6 +70,8 @@ export type ProfileFields = {
 export type ProfilePatch = {
   readonly displayName?: string;
   readonly avatarUrl?: string | null;
+  /** Checked by `UserActor.setAvatar` before it gets here: own, verified, `avatar`. */
+  readonly avatarFileId?: string | null;
   readonly locale?: string | null;
 };
 
@@ -94,12 +105,29 @@ export type ProfileStore = {
    * with many friends from getting a short page or an empty one.
    */
   search(input: ProfileSearch): Promise<readonly ProfileFields[]>;
+  /**
+   * How many rows `search` would match with no `limit` — a people section's
+   * exact total (MC-search, L3: lexical sections are exact).
+   */
+  count(input: Omit<ProfileSearch, "limit">): Promise<number>;
+};
+
+const searchWhere = ({ term, excludeIds }: Omit<ProfileSearch, "limit">) => {
+  const pattern = `%${term.replace(/[\\%_]/g, (m) => `\\${m}`)}%`;
+  return and(
+    sql`${user.name} ilike ${pattern} escape '\\'`,
+    eq(user.disabled, false),
+    excludeIds.length === 0
+      ? sql`true`
+      : notInArray(user.id, [...new Set(excludeIds)]),
+  );
 };
 
 const toFields = (row: {
   id: string;
   name: string;
   image: string | null;
+  avatarFileId: string | null;
   locale: string | null;
   email: string;
 }): ProfileFields => ({
@@ -110,6 +138,7 @@ const toFields = (row: {
   // `""` is Nhost's default for `avatar_url`, and it survived the migration.
   // An empty string is not a URL, so it reaches GraphQL as null.
   avatarUrl: row.image === null || row.image === "" ? null : row.image,
+  avatarFileId: row.avatarFileId,
   locale: row.locale,
   email: row.email,
 });
@@ -118,6 +147,7 @@ const SELECTION = {
   id: user.id,
   name: user.name,
   image: user.image,
+  avatarFileId: user.avatarFileId,
   locale: user.locale,
   email: user.email,
 } as const;
@@ -135,19 +165,10 @@ export const betterAuthProfileStore = (): ProfileStore => ({
   },
 
   search: async ({ term, excludeIds, limit }) => {
-    const pattern = `%${term.replace(/[\\%_]/g, (m) => `\\${m}`)}%`;
     const rows = await actorDb()
       .select(SELECTION)
       .from(user)
-      .where(
-        and(
-          sql`${user.name} ilike ${pattern} escape '\\'`,
-          eq(user.disabled, false),
-          excludeIds.length === 0
-            ? sql`true`
-            : notInArray(user.id, [...new Set(excludeIds)]),
-        ),
-      )
+      .where(searchWhere({ term, excludeIds }))
       // A total order, so an offset cursor over the held result set is stable:
       // exact match, then shortest, then alphabetical, then id.
       .orderBy(
@@ -160,10 +181,19 @@ export const betterAuthProfileStore = (): ProfileStore => ({
     return rows.map(toFields);
   },
 
+  count: async (input) => {
+    const [row] = await actorDb()
+      .select({ n: count() })
+      .from(user)
+      .where(searchWhere(input));
+    return row?.n ?? 0;
+  },
+
   update: async (userId, patch) => {
     const set: Record<string, unknown> = { updatedAt: new Date() };
     if (patch.displayName !== undefined) set.name = patch.displayName;
     if (patch.avatarUrl !== undefined) set.image = patch.avatarUrl;
+    if (patch.avatarFileId !== undefined) set.avatarFileId = patch.avatarFileId;
     if (patch.locale !== undefined) set.locale = patch.locale;
 
     const rows = await actorDb()

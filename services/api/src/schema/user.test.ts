@@ -39,7 +39,8 @@ const BOB = "22222222-2222-4222-8222-222222222222";
 const profile = (id: string, name: string, email: string | null = null) => ({
   id,
   displayName: name,
-  avatarUrl: null,
+  avatarUrl: null as string | null,
+  avatarFileId: null as string | null,
   locale: "en",
   email,
 });
@@ -131,6 +132,101 @@ describe("user profile", () => {
       code: "FORBIDDEN",
       message: "sign in to view a profile",
     });
+  });
+});
+
+describe("profile picture (SV-D, MC-avatar)", () => {
+  const FILE = "33333333-3333-4333-8333-333333333333";
+  const query = `{ user(id: "${BOB}") { ... on UserProfile { avatarUrl } } }`;
+
+  it("presigns the uploaded picture when there is one", async () => {
+    const { invoke, calls } = stubSidecar({
+      "UserActor.getProfile": (actorId) => ({
+        ...profile(actorId, "Bob"),
+        avatarUrl: "https://example.test/oauth.png",
+        avatarFileId: FILE,
+      }),
+      "FileActor.presignRead": () => ({
+        url: "https://files.example.test/signed",
+        expiresAt: "2026-11-27T00:30:00.000Z",
+      }),
+    });
+    const result = await run(query, testContext(invoke, alice));
+    expect(result.errors).toBeUndefined();
+    expect(result.data?.user).toEqual({
+      avatarUrl: "https://files.example.test/signed",
+    });
+    expect(calls.find((c) => c.actorType === "FileActor")).toMatchObject({
+      actorId: FILE,
+      method: "presignRead",
+    });
+  });
+
+  it("falls back to user.image with no picture, and when the picture cannot be read", async () => {
+    for (const avatarFileId of [null, FILE]) {
+      const { invoke } = stubSidecar({
+        "UserActor.getProfile": (actorId) => ({
+          ...profile(actorId, "Bob"),
+          avatarUrl: "https://example.test/oauth.png",
+          avatarFileId,
+        }),
+        "FileActor.presignRead": () => {
+          throw new NotFoundError("gone");
+        },
+      });
+      const result = await run(query, testContext(invoke, alice));
+      expect(result.data?.user).toEqual({
+        avatarUrl: "https://example.test/oauth.png",
+      });
+    }
+  });
+
+  it("setAvatar and removeAvatar run on the viewer's own actor", async () => {
+    const { invoke, calls } = stubSidecar({
+      "UserActor.setAvatar": (actorId) => ({
+        ...profile(actorId, "Alice"),
+        avatarFileId: FILE,
+      }),
+      "UserActor.removeAvatar": (actorId) => profile(actorId, "Alice"),
+      "FileActor.presignRead": () => ({
+        url: "https://files.example.test/signed",
+        expiresAt: "2026-11-27T00:30:00.000Z",
+      }),
+    });
+    const set = await run(
+      `mutation { setAvatar(fileId: "${FILE}") { ... on UserProfile { avatarUrl } } }`,
+      testContext(invoke, alice),
+    );
+    expect(set.errors).toBeUndefined();
+    expect(set.data?.setAvatar).toEqual({
+      avatarUrl: "https://files.example.test/signed",
+    });
+    expect(calls[0]).toMatchObject({
+      actorType: "UserActor",
+      actorId: alice.id,
+      method: "setAvatar",
+    });
+    expect(calls[0]?.args[1]).toEqual({ fileId: FILE });
+
+    const removed = await run(
+      "mutation { removeAvatar { ... on UserProfile { avatarUrl } } }",
+      testContext(invoke, alice),
+    );
+    expect(removed.data?.removeAvatar).toEqual({ avatarUrl: null });
+  });
+
+  it("relays another person's file as a typed NotFound", async () => {
+    const { invoke } = stubSidecar({
+      "UserActor.setAvatar": () => {
+        throw new NotFoundError(`file ${FILE} not found`);
+      },
+    });
+    const result = await run(
+      `mutation { setAvatar(fileId: "${FILE}") { __typename } }`,
+      testContext(invoke, alice),
+    );
+    expect(result.errors).toBeUndefined();
+    expect(result.data?.setAvatar).not.toEqual({ __typename: "UserProfile" });
   });
 });
 

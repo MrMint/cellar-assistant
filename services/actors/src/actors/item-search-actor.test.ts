@@ -781,4 +781,60 @@ describe.skipIf(skip)("ItemSearchActor (§2.3)", () => {
       });
     });
   });
+
+  /* ------------------------------------------------------------------ */
+  /* Section totals (MC-search, L3)                                      */
+  /* ------------------------------------------------------------------ */
+
+  describe("section totals: a semantic section is capped, never a limit shown as a total", () => {
+    const seedThree = async (db: DbOrTx, owner: string) => {
+      for (const name of ["Alpha", "Beta", "Gamma"]) {
+        const wine = await seedWine(db, owner, name);
+        await seedItemVector(db, wine, unitVector(0));
+      }
+    };
+
+    it("is the full count when every match fits under the cap", async () => {
+      await withTestDb(async (db) => {
+        const owner = await seedUser(db);
+        await seedThree(db, owner);
+        const input: ItemSearchInput = { text: "anything", limit: 3 };
+        const page = await newActor(input, db, owner).results(
+          userCtx(owner),
+          input,
+          { first: 1, after: null },
+        );
+        expect(page.entries).toHaveLength(1);
+        expect(page.totalCount).toBe(3);
+        expect(page.totalIsLowerBound).toBe(false);
+      });
+    });
+
+    it("is the cap, as a lower bound, when there are more matches than it", async () => {
+      await withTestDb(async (db) => {
+        const owner = await seedUser(db);
+        await seedThree(db, owner);
+        for (const narrow of [false, true]) {
+          const input: ItemSearchInput = {
+            text: "anything",
+            limit: 2,
+            ...(narrow ? { narrow } : {}),
+          };
+          const actor = newActor(input, db, owner);
+          const page = await actor.results(userCtx(owner), input, {
+            first: 10,
+            after: null,
+          });
+          // The row read past the cap proves "more" and is never served.
+          expect(page.entries.map((e) => e.node.name)).toEqual([
+            "Alpha",
+            "Beta",
+          ]);
+          expect(await actor.all(userCtx(owner), input)).toHaveLength(2);
+          expect(page.totalCount).toBe(2);
+          expect(page.totalIsLowerBound).toBe(true);
+        }
+      });
+    });
+  });
 });

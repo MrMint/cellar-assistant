@@ -68,7 +68,14 @@ import type {
 export type UserProfileDto = {
   readonly id: string;
   readonly displayName: string;
+  /**
+   * `user.image` — the fallback picture (an OAuth avatar, or one set by URL).
+   * Never shown as is when {@link avatarFileId} is set: every resolver goes
+   * through the API's one avatar helper (MC-avatar, L17).
+   */
   readonly avatarUrl: string | null;
+  /** SV-D: the uploaded profile picture, presigned at read; wins over `avatarUrl`. */
+  readonly avatarFileId: string | null;
   readonly locale: string | null;
   /** Owner or admin only; `null` for every other viewer. */
   readonly email: string | null;
@@ -92,6 +99,10 @@ export type UserCountsDto = {
   readonly logs: number;
   readonly places: number;
   readonly tierLists: number;
+};
+
+export type SetAvatarInput = {
+  readonly fileId: string;
 };
 
 /** The mutable half. Every field is optional; omitted means unchanged. */
@@ -382,6 +393,15 @@ export type UserActorInterface = {
    */
   aiCapabilities(ctx: Ctx): Promise<AiCapabilities>;
   updateProfile(ctx: Ctx, input: UpdateProfileInput): Promise<UserProfileDto>;
+  /**
+   * SV-D (MC-avatar). Self only. `fileId` must be a verified
+   * {@link AVATAR_FILE_KIND} upload of the viewer's own: anyone else's file is
+   * `NotFoundError` (it is not theirs to name), the wrong kind
+   * `ValidationError`, an unverified one `ConflictError` (finish the upload).
+   */
+  setAvatar(ctx: Ctx, input: SetAvatarInput): Promise<UserProfileDto>;
+  /** Self only. Clears the picture; the profile falls back to `user.image`. */
+  removeAvatar(ctx: Ctx): Promise<UserProfileDto>;
 
   friends(ctx: Ctx, page: PageArgs): Promise<Page<FriendDto>>;
   friendRequests(
@@ -590,6 +610,8 @@ export const UserActorDescriptor: ActorDescriptor<UserActorInterface> = {
     getProfile: {},
     aiCapabilities: {},
     updateProfile: {},
+    setAvatar: {},
+    removeAvatar: {},
     friends: {},
     friendRequests: {},
     sendFriendRequest: {},
