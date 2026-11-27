@@ -3,14 +3,16 @@ import { AppBar } from "@/components/app/AppBar";
 import { Page } from "@/components/app/Page";
 import { PantryEditor } from "@/components/bar/PantryEditor";
 import { BarPantryQuery } from "@/components/bar/queries";
+import { BarLoadError } from "@/components/bar/your-bar/BarLoadError";
 import { unwrapResult } from "@/lib/api/result";
 import { apiServerQuery } from "@/lib/api/urql-server";
 
-export const metadata: Metadata = { title: "Bar pantry" };
+export const metadata: Metadata = { title: "Pantry" };
 
 /**
- * `/recipes/bar/pantry` — **the Bar pantry** (D23): ~30 toggles, separate
- * from cellars. Bottles in your cellars count automatically.
+ * `/recipes/bar/pantry` — **the pantry** (D23; Recipes-Make board): about
+ * thirty toggles, separate from cellars. Bottles in your cellars count
+ * automatically.
  */
 export const dynamic = "force-dynamic";
 
@@ -20,13 +22,13 @@ export default async function BarPantryPage() {
 
   return (
     <Page>
-      <AppBar title="Bar pantry" parent="/recipes/bar" />
       {result.ok ? (
         <PantryEditor initial={result.data.have} />
       ) : (
-        <p role="alert" className="type-body text-destructive">
-          {result.error.message}
-        </p>
+        <>
+          <AppBar title="Pantry" parent="/recipes/bar" />
+          <BarLoadError title="Couldn't load your pantry" />
+        </>
       )}
     </Page>
   );

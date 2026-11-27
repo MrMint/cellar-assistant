@@ -53,6 +53,11 @@ const match = (
     requiredCount: 3,
     haveCount: 3 - missing.length,
   },
+  recipe: {
+    __typename: "Recipe" as const,
+    id: recipeId,
+    ingredients: { edges: [] as { node: never }[] },
+  },
 });
 
 describe("copy", () => {
@@ -91,7 +96,7 @@ describe("copy", () => {
         missing: [],
         substituteCount: 0,
       }),
-      "Everything's in your bar",
+      "Ready to make",
     );
     assert.equal(
       copy.matchDescription({
@@ -198,14 +203,13 @@ describe("What can I make", () => {
 
   test("opens on Make now, with counts on both segments", () => {
     const html = render(<WhatCanIMake data={data} />);
-    assert.match(text(html), /Make now · 1/);
-    assert.match(text(html), /One bottle away · 3/);
+    assert.match(text(html), /Make now\D*1/);
+    assert.match(text(html), /One bottle away\D*3/);
+    assert.match(text(html), /1 ready · 3 one away/);
     assert.match(html, /data-testid="make-now"/);
     assert.match(html, /href="\/recipes\/r1"/);
-    assert.match(
-      text(html),
-      /From 2 bottles in your cellars and 5 pantry items/,
-    );
+    assert.match(html, /href="\/recipes\/r1\/make"/);
+    assert.match(text(html), /From 2 bottles and 5 pantry items/);
   });
 
   test("opens on One bottle away when nothing is makeable yet", () => {
@@ -214,7 +218,7 @@ describe("What can I make", () => {
     );
     assert.match(html, /data-testid="one-bottle-away"/);
     assert.match(text(html), /Worth picking up/);
-    assert.match(text(html), /Campari2 more cocktails/);
+    assert.match(text(html), /Campari\s*In 2 drinks/);
   });
 
   test("an empty bar says how to fill it", () => {
@@ -232,12 +236,13 @@ describe("What can I make", () => {
       />,
     );
     assert.match(text(html), /Your bar is empty/);
+    assert.match(text(html), /Stock pantry/);
     assert.match(html, /href="\/recipes\/bar\/pantry"/);
   });
 
   test("Worth picking up counts what would unlock more than one", () => {
     assert.deepEqual(nextBottles(data.oneBottleAway), [
-      { name: "Campari", unlocks: 2 },
+      { name: "Campari", unlocks: 2, kind: null },
     ]);
   });
 
@@ -257,8 +262,8 @@ describe("What can I make", () => {
         missingOne("Gin", "gin"),
       ] as Parameters<typeof nextBottles>[0]),
       [
-        { name: "Campari / red bitter", unlocks: 2 },
-        { name: "falernum", unlocks: 2 },
+        { name: "Campari / red bitter", unlocks: 2, kind: "red_bitter" },
+        { name: "falernum", unlocks: 2, kind: null },
       ],
     );
   });
@@ -276,7 +281,8 @@ describe("Bar pantry", () => {
       html,
       /data-pantry-kind="lime"[^>]*aria-pressed="true"|aria-pressed="true"[^>]*data-pantry-kind="lime"/,
     );
-    assert.match(text(html), /1 of \d+ in your pantry/);
+    assert.match(text(html), /1 of \d+/);
+    assert.match(text(html), /Bottles in your cellars already count/);
     assert.match(text(html), /Citrus &amp; juice|Citrus & juice/);
   });
 });
