@@ -183,7 +183,7 @@ test("a place: Want to try on its page, a visit takes it off the list", async ({
     )
     .toContain(`place:${placeId}`);
 
-  await primary.getByRole("button", { name: "Mark Visited" }).click();
+  await primary.getByRole("button", { name: "Visited", exact: true }).click();
   await expect(primary.getByText("Taken off Want to try.")).toBeVisible();
   await expect(want).toHaveAttribute("aria-pressed", "false");
   await expect

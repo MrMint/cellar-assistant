@@ -6,8 +6,8 @@ import {
   Place,
   Restaurant,
 } from "@/components/app/icons";
+import { PageHero } from "@/components/app/Page";
 import { TypeGlyph } from "@/components/app/TypeChip";
-import { cn } from "@/lib/utils";
 
 /**
  * B03: a place with no photo gets a tonal hero from its category's hue —
@@ -68,25 +68,7 @@ export const placeTone = (category: string | null | undefined): PlaceTone => {
   return "neutral";
 };
 
-/**
- * Each tone's three layers, as literal Tailwind classes over surface-1: the
- * wash (the hue deep), the large ring (the text-safe hue, ~22%), the small
- * ring (ink at 10%). Ink-1 text sits on every wash.
- */
-const TONE_CLASSES: Readonly<
-  Record<PlaceTone, { wash: string; ring: string }>
-> = {
-  wine: { wash: "bg-type-wine/45", ring: "bg-type-wine-text/22" },
-  beer: { wash: "bg-type-beer/30", ring: "bg-type-beer-text/24" },
-  spirit: { wash: "bg-type-spirit/35", ring: "bg-type-spirit-text/24" },
-  sake: { wash: "bg-type-sake/35", ring: "bg-type-sake-text/22" },
-  coffee: { wash: "bg-type-coffee/45", ring: "bg-type-coffee-text/24" },
-  tea: { wash: "bg-type-tea/35", ring: "bg-type-tea-text/22" },
-  food: { wash: "bg-brand/40", ring: "bg-brand-ink/22" },
-  neutral: { wash: "bg-surface-3", ring: "bg-ink-3/18" },
-};
-
-const GLYPH_CLASS = "size-7 text-ink-1";
+const GLYPH_CLASS = "size-10 text-glyph";
 
 /** The tone's glyph: the item type's own, a cocktail, a dish, or a pin. */
 const TONE_GLYPH: Readonly<Record<PlaceTone, () => ReactNode>> = {
@@ -108,30 +90,38 @@ const TONE_GLYPH: Readonly<Record<PlaceTone, () => ReactNode>> = {
 
 export type PlaceHeroProps = {
   name: string;
-  /** The category slug the tone and glyph come from. */
+  /** The category slug the glyph comes from. */
   category: string | null | undefined;
-  /** The category as printed: "Wine bar". */
+  /** The categories as printed: "Coffee shop · Café". */
   categoryLabel?: string | null;
-  /** A real photo: drawn over the tone, which then never shows. */
+  /** A real photo: drawn in the frame, so the glyph plate never shows. */
   photoUrl?: string | null;
+  /** The hero bar's discs (`HERO_DISC`): back at the left, the rest right. */
+  back?: ReactNode;
+  actions?: ReactNode;
+  /** A page-sized `Heart` beside the name. */
+  heart?: ReactNode;
   className?: string;
 };
 
 /**
- * The place page's hero (Main board): a 20 px-rounded tonal card, two soft
- * rings and the category's glyph at its top right, the name in Fraunces and
- * the category under it at the bottom left. The name is the page's `h1`, in
- * the app's title style (Fraunces 28 px; the board's 20 px is a 3-up tile).
+ * The place page's hero (Places-Place 01, 20): KIT § 3's page hero — the
+ * photo 300 high under glass discs, the name in t-title below it (never on
+ * the photo: LIGHT-places ruling 2), the categories in t-cap. With no photo
+ * the frame is the raised well with the category's glyph (KIT "No-photo
+ * plate"), so the page does not jump when a photo arrives.
  */
 export function PlaceHero({
   name,
   category,
   categoryLabel,
   photoUrl,
+  back,
+  actions,
+  heart,
   className,
 }: PlaceHeroProps) {
   const tone = placeTone(category);
-  const classes = TONE_CLASSES[tone];
   const hasPhoto =
     photoUrl !== null && photoUrl !== undefined && photoUrl !== "";
   return (
@@ -139,48 +129,40 @@ export function PlaceHero({
       data-slot="place-hero"
       data-tone={tone}
       data-photo={hasPhoto ? "true" : "false"}
-      className={cn(
-        "relative isolate flex h-40 flex-col justify-end overflow-hidden rounded-[20px] bg-surface-1 p-4",
-        className,
-      )}
+      className="contents"
     >
-      {hasPhoto ? (
-        <>
-          <Image
-            src={photoUrl}
-            alt=""
-            fill
-            sizes="(max-width: 720px) 100vw, 720px"
-            className="-z-10 object-cover"
-          />
-          <div className="absolute inset-0 -z-10 bg-linear-to-t from-black/70 via-black/20 to-transparent" />
-        </>
-      ) : (
-        <div aria-hidden className="absolute inset-0 -z-10">
-          <div className={cn("absolute inset-0", classes.wash)} />
-          <div
-            className={cn(
-              "absolute -top-8 -right-8 size-38 rounded-full",
-              classes.ring,
-            )}
-          />
-          <div className="absolute top-6 right-6 size-16 rounded-full bg-ink-1/10" />
-          <div
-            data-slot="place-hero-glyph"
-            className="absolute top-10 right-10 text-ink-1"
-          >
-            {TONE_GLYPH[tone]()}
-          </div>
-        </div>
-      )}
-      <h1 className="type-title-1 text-ink-1">{name}</h1>
-      {categoryLabel !== null &&
-        categoryLabel !== undefined &&
-        categoryLabel !== "" && (
-          <p className="type-footnote relative text-ink-1/86">
-            {categoryLabel}
-          </p>
-        )}
+      <PageHero
+        className={className}
+        title={name}
+        back={back}
+        actions={actions}
+        heart={heart}
+        meta={
+          categoryLabel === null ||
+          categoryLabel === undefined ||
+          categoryLabel === ""
+            ? undefined
+            : categoryLabel
+        }
+        photo={
+          hasPhoto ? (
+            <Image
+              src={photoUrl}
+              alt=""
+              fill
+              sizes="(max-width: 720px) 100vw, 720px"
+            />
+          ) : (
+            <div
+              aria-hidden
+              data-slot="place-hero-glyph"
+              className="absolute inset-0 flex items-center justify-center pb-10"
+            >
+              {TONE_GLYPH[tone]()}
+            </div>
+          )
+        }
+      />
     </div>
   );
 }

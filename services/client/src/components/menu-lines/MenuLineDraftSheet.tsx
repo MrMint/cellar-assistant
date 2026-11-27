@@ -33,6 +33,7 @@ import {
   entryPath,
   type FormEntry,
   formLayout,
+  toCheckLabel,
 } from "@/components/item/itemFormLayout";
 import {
   ATTRIBUTE_INPUT_KEY,
@@ -47,6 +48,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { isOffered, useAiCapabilities } from "@/lib/ai/capabilities";
 import type { AiOutcome } from "@/lib/ai/outcome";
 import { unwrapResult } from "@/lib/api/result";
+import { feedback } from "@/lib/feedback";
 import { isDrafted } from "@/lib/forms/ai-draft";
 import {
   type CorrectionProposal,
@@ -54,6 +56,7 @@ import {
   defaultsObject,
 } from "@/lib/items/correction";
 import { menuLineText } from "@/utilities/menu-line-text";
+import { draftToCheck } from "./menu-line-draft-check";
 import { lineItemType } from "./menu-lines";
 import {
   OpenItemDraftMutation,
@@ -392,7 +395,21 @@ export function MenuLineDraftSheet({
     });
   };
 
+  const toCheck = draftToCheck(layout, valueAt);
+  /** "n to check": to the first open field, with the refuse haptic. */
+  const goToCheck = () => {
+    feedback("refuse");
+    const first = toCheck[0];
+    if (first === undefined) return;
+    const field = document
+      .getElementById(`menu-line-draft-${current.id}`)
+      ?.querySelector<HTMLElement>(`[name="${CSS.escape(first)}"]`);
+    field?.scrollIntoView({ block: "center" });
+    field?.focus({ preventScroll: true });
+  };
+
   const onInvalid = () => {
+    feedback("refuse");
     setError("root", {
       type: "custom",
       message: "Fill in the starred fields first.",
@@ -423,23 +440,39 @@ export function MenuLineDraftSheet({
       }}
       dismissible={!isSubmitting}
       title="Add to catalog"
-      description="From this menu line. Nothing is added until you tap Add."
+      description="From the menu line. Nothing is added until you tap Add."
       footer={
         <div className="flex w-full flex-col gap-2">
           {errors.root !== undefined && (
-            <p role="alert" className="type-footnote text-destructive">
+            <p role="alert" className="t-body text-danger">
               {errors.root.message}
             </p>
           )}
-          <Button
-            type="submit"
-            form={`menu-line-draft-${current.id}`}
-            disabled={isSubmitting || type === null}
-            aria-busy={isSubmitting || undefined}
-          >
-            {isSubmitting && <Spinner aria-hidden />}
-            Add to catalog
-          </Button>
+          {/* CROSS-LOT: the primary says its verb; "n to check" beside it. */}
+          <div className="flex items-center gap-3" data-slot="draft-footer">
+            {type !== null && toCheck.length > 0 && (
+              <Button
+                type="button"
+                variant="outline"
+                className="shrink-0"
+                data-slot="to-check"
+                silent
+                onClick={goToCheck}
+              >
+                {toCheckLabel(toCheck.length)}
+              </Button>
+            )}
+            <Button
+              type="submit"
+              form={`menu-line-draft-${current.id}`}
+              className="min-w-0 flex-1"
+              disabled={isSubmitting || type === null}
+              aria-busy={isSubmitting || undefined}
+            >
+              {isSubmitting && <Spinner aria-hidden />}
+              Add to catalog
+            </Button>
+          </div>
         </div>
       }
     >
@@ -450,7 +483,7 @@ export function MenuLineDraftSheet({
         className="flex flex-col gap-5 pb-2"
       >
         <fieldset className="flex flex-col gap-2">
-          <legend className="type-overline mb-2 text-ink-3">What is it?</legend>
+          <legend className="t-micro mb-2 text-ink-2">What is it?</legend>
           <div className="flex flex-wrap gap-2">
             {ITEM_TYPES_IN_ORDER.map((option) => (
               <FilterChip
@@ -506,7 +539,7 @@ export function MenuLineDraftSheet({
             {!allDetails && shown.length < layout.length && (
               <Button
                 type="button"
-                variant="ghost"
+                variant="quiet"
                 className="self-start"
                 onClick={() => setAllDetails(true)}
               >
@@ -514,10 +547,10 @@ export function MenuLineDraftSheet({
               </Button>
             )}
             {canSuggest && (
-              <div className="flex flex-col gap-2 rounded-lg bg-surface-1 p-4">
+              <div className="flex flex-col gap-2">
                 <Button
                   type="button"
-                  variant="secondary"
+                  variant="outline"
                   disabled={status.state === "working" || isSubmitting}
                   onClick={() => void suggest()}
                 >
@@ -526,13 +559,13 @@ export function MenuLineDraftSheet({
                 </Button>
                 <div aria-live="polite" className="empty:hidden">
                   {status.state === "working" && (
-                    <p className="type-callout flex items-center gap-2 text-ai">
+                    <p className="t-body flex items-center gap-2 text-ink-2">
                       <Spinner aria-hidden />
                       Looking this up…
                     </p>
                   )}
                   {status.state === "done" && (
-                    <p className="type-callout text-ink-2">{status.message}</p>
+                    <p className="t-body text-ink-2">{status.message}</p>
                   )}
                   {status.state === "failed" && (
                     <AiStatus

@@ -663,7 +663,7 @@ export function CreatePlaceForm({
 
         {/* Address section */}
         <div className="flex flex-row items-center gap-2">
-          <h2 className="type-callout font-semibold text-ink-1">Address</h2>
+          <h2 className="t-body font-semibold text-ink">Address</h2>
           {addressLoading && (
             <Badge variant="secondary">
               <Spinner />
@@ -672,7 +672,7 @@ export function CreatePlaceForm({
           )}
         </div>
         {pinAddressNotFound(addressLoading, pinDraft) && (
-          <p className="type-footnote">
+          <p className="t-cap">
             Couldn't find an address for this pin. Add it below if you know it.
           </p>
         )}
@@ -788,9 +788,7 @@ export function CreatePlaceForm({
         <Separator />
 
         {/* Contact info */}
-        <h2 className="type-callout font-semibold text-ink-1">
-          Contact (optional)
-        </h2>
+        <h2 className="t-body font-semibold text-ink">Contact (optional)</h2>
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Controller
@@ -916,7 +914,7 @@ export function CreatePlaceForm({
         </Button>
 
         {duplicates.length > 0 && !duplicatesConfirmed && (
-          <p className="type-footnote text-center text-ink-2">
+          <p className="t-cap text-center text-ink-2">
             Please review the similar places above before submitting
           </p>
         )}

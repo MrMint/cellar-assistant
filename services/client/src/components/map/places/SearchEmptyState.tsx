@@ -18,7 +18,7 @@ export function SearchEmptyState({ query, onAddHere }: SearchEmptyStateProps) {
   return (
     <div role="status" className="surface-glass rounded-lg px-4 py-3">
       <div className="flex flex-row items-center justify-between gap-3">
-        <p className="type-callout min-w-0 truncate text-ink-1">
+        <p className="t-body min-w-0 truncate text-ink">
           {NOT_ON_MAP_TITLE}
           {query ? (
             <span className="text-ink-3"> · &ldquo;{query}&rdquo;</span>

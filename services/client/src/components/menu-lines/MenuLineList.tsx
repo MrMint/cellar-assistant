@@ -111,16 +111,16 @@ export function MenuLineList({
           aria-labelledby={`menu-group-${group.key}`}
           data-slot="menu-group"
           data-group={group.key}
-          className="flex flex-col gap-2"
+          className="flex flex-col"
         >
           <h3
             id={`menu-group-${group.key}`}
-            className="flex items-baseline justify-between gap-2 px-4 type-overline text-ink-3"
+            className="t-micro flex items-baseline justify-between gap-2 border-rule border-b pb-2 text-ink-2"
           >
             {group.label}
-            <span className="tabular">{group.lines.length}</span>
+            <span className="t-cap tabular">{group.lines.length}</span>
           </h3>
-          <ul className="flex flex-col divide-y divide-line overflow-hidden rounded-lg bg-surface-1">
+          <ul className="flex flex-col">
             {group.lines.map((line) => (
               <MenuLineRow
                 key={line.id}

@@ -36,21 +36,16 @@
 
 import { type ReactNode, useCallback, useMemo, useState } from "react";
 import { useMutation, useQuery } from "urql";
-import {
-  Back,
-  Check,
-  Close,
-  ErrorIcon,
-  Help,
-  Success,
-  Warning,
-} from "@/components/app/icons";
+import { AppBar } from "@/components/app/AppBar";
+import { EmptyState } from "@/components/app/EmptyState";
+import { AI, Check, ErrorIcon, NoResults } from "@/components/app/icons";
 import { Link } from "@/components/app/Link";
+import { Page } from "@/components/app/Page";
+import { CountFilters } from "@/components/app/parts/CountStrip";
 import { Timestamp } from "@/components/common/Timestamp";
 import { MenuLineList } from "@/components/menu-lines/MenuLineList";
-import { Alert, AlertDescription } from "@/components/ui/alert";
+import { MenuLineNote } from "@/components/menu-lines/MenuLineRow";
 import { Button } from "@/components/ui/button";
-import { Spinner } from "@/components/ui/spinner";
 import { failureFromTransport, unwrapResult } from "@/lib/api/result";
 import { cn } from "@/lib/utils";
 import { menuLineText } from "@/utilities/menu-line-text";
@@ -68,15 +63,15 @@ import {
   SUGGESTIONS_PAGE_SIZE,
 } from "../queries";
 import { HeaderRenameOffer } from "./HeaderRenameOffer";
-import { ScanStatusBadge, type ScanTone } from "./ScanStatusBadge";
+import { MenuLineSkeleton, ScanSteps } from "./ScanSteps";
 import {
-  isExtractionDone,
   isScanSettled,
   type LineMatch,
   lineMatch,
   type PendingDecision,
   type ScanProgress,
   scanHeadline,
+  scanPhase,
 } from "./scan-progress";
 import { usePollWhile } from "./use-poll-while";
 
@@ -84,29 +79,16 @@ interface MenuScanResultsProps {
   scanId: string;
 }
 
-/** One chip for both halves of the pipeline. */
-const statusChip = (
-  progress: ScanProgress,
-): { label: string; tone: ScanTone } => {
-  if (progress.processingStatus === "failed") {
-    return { label: "failed", tone: "danger" };
-  }
-  if (!isExtractionDone(progress)) return { label: "reading", tone: "working" };
-  if (!isScanSettled(progress)) return { label: "matching", tone: "working" };
-  return { label: "complete", tone: "success" };
-};
+type LineFilter = LineMatch["kind"];
 
-/**
- * A full-width notice row: Joy's soft `Alert` on the tokens. Only a danger
- * notice is an `alert`; a line's match status is not news to announce.
- */
+/** A calm notice row: what happened, and at most one way on. */
 function Notice({
   tone,
   children,
   action,
   className,
 }: {
-  tone: "neutral" | "danger" | "success" | "ai";
+  tone: "neutral" | "danger";
   children: ReactNode;
   action?: ReactNode;
   className?: string;
@@ -117,11 +99,9 @@ function Notice({
       data-slot="notice"
       data-tone={tone}
       className={cn(
-        "type-callout flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border px-4 py-2.5",
-        tone === "neutral" && "border-transparent bg-surface-2 text-ink-1",
-        tone === "danger" && "border-destructive/60 text-destructive",
-        tone === "success" && "border-transparent bg-success/10 text-success",
-        tone === "ai" && "border-transparent bg-ai/10 text-ink-1",
+        "t-body flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border px-4 py-2.5",
+        tone === "neutral" && "border-edge text-ink",
+        tone === "danger" && "border-danger text-ink",
         className,
       )}
     >
@@ -130,6 +110,23 @@ function Notice({
       <div className="min-w-0 flex-[1_1_12rem]">{children}</div>
       {action}
     </div>
+  );
+}
+
+/** The bar: "Menu scan" over the place's name (Places-Menus 01, 03). */
+function ScanBar({ placeName }: { placeName?: string | null }) {
+  return (
+    <AppBar
+      parent="/map"
+      title={
+        <span className="flex min-w-0 flex-col">
+          <span className="t-head truncate text-ink">Menu scan</span>
+          {placeName && (
+            <span className="t-cap truncate text-ink-2">{placeName}</span>
+          )}
+        </span>
+      }
+    />
   );
 }
 
@@ -148,6 +145,7 @@ export function MenuScanResults({ scanId }: MenuScanResultsProps) {
     ReadonlyMap<string, PendingDecision>
   >(() => new Map());
   const [actionError, setActionError] = useState<string | null>(null);
+  const [filter, setFilter] = useState<LineFilter | null>(null);
 
   const result = useMemo(
     () => unwrapResult(data?.menuScan, "MenuScan"),
@@ -171,9 +169,10 @@ export function MenuScanResults({ scanId }: MenuScanResultsProps) {
 
   if (fetching && !scanNode) {
     return (
-      <div className="flex justify-center p-8">
-        <Spinner className="size-8 text-ink-2" />
-      </div>
+      <Page>
+        <ScanBar />
+        <MenuLineSkeleton />
+      </Page>
     );
   }
 
@@ -185,14 +184,31 @@ export function MenuScanResults({ scanId }: MenuScanResultsProps) {
 
   if (error || !scanNode) {
     return (
-      <div className="p-4">
-        <Alert variant="destructive" className="border-destructive/60">
-          <ErrorIcon aria-hidden />
-          <AlertDescription className="text-destructive">
-            {error || "Scan not found"}
-          </AlertDescription>
-        </Alert>
-      </div>
+      <Page>
+        <ScanBar />
+        {error ? (
+          <EmptyState
+            illustration={
+              <ErrorIcon aria-hidden className="size-7 text-glyph" />
+            }
+            title="Couldn't open this scan"
+            description={error}
+            action={
+              <Button variant="outline" onClick={refresh}>
+                Try again
+              </Button>
+            }
+          />
+        ) : (
+          <EmptyState
+            illustration={
+              <NoResults aria-hidden className="size-7 text-glyph" />
+            }
+            title="Scan not found"
+            description="It's gone, or it isn't yours."
+          />
+        )}
+      </Page>
     );
   }
 
@@ -235,7 +251,8 @@ export function MenuScanResults({ scanId }: MenuScanResultsProps) {
     Array.from(matchByLine.values()),
     { server: scanNode.matchCounts, complete },
   );
-  const chip = statusChip(scanProgress);
+  const failed = scanNode.processingStatus === "failed";
+  const phase = scanPhase(scanProgress);
 
   const decide = (suggestionId: string, action: PendingDecision | null) =>
     setDecisions((current) => {
@@ -281,32 +298,35 @@ export function MenuScanResults({ scanId }: MenuScanResultsProps) {
     if (!complete) refresh();
   };
 
-  /** Under each line: its match, or the suggestion to accept or reject. */
+  /**
+   * Under each line: its match, or the suggestion asked as a question with
+   * an inline Not this / That's it (Places-Menus 03): secondary, outlined —
+   * the teal primary is the screen's main job, not a row's (CROSS-LOT).
+   */
   const lineStatus = (item: MenuItemView): ReactNode => {
     const match = matchByLine.get(item.id) ?? { kind: "new" as const };
     if (match.kind === "matched") {
+      const lineName = menuLineText(item.menu_item_name);
+      if (match.name.trim().toLowerCase() === lineName.trim().toLowerCase()) {
+        return <MenuLineNote icon={Check}>Matched</MenuLineNote>;
+      }
       return (
-        <p className="type-footnote inline-flex flex-wrap items-center gap-1 text-success">
-          <Success aria-hidden className="size-4 shrink-0" />
-          Matched
+        <MenuLineNote icon={Check}>
+          <span className="sr-only">Matched to </span>
           {match.href ? (
-            <>
-              {" to "}
-              {/* 24px tall at least (WCAG 2.5.8): the line sits on the
-                  row's own open button, so an 18px text link fails axe
-                  target-size on every matched row. */}
-              <Link
-                href={match.href}
-                underline="always"
-                className="inline-flex min-h-6 items-center text-ink-1"
-              >
-                {match.name}
-              </Link>
-            </>
+            // 24px tall at least (WCAG 2.5.8): the line sits on the row's
+            // own open button.
+            <Link
+              href={match.href}
+              underline="none"
+              className="inline-flex min-h-6 items-center text-ink-2"
+            >
+              {match.name}
+            </Link>
           ) : (
-            <span className="text-ink-1"> to {match.name}</span>
+            match.name
           )}
-        </p>
+        </MenuLineNote>
       );
     }
     if (match.kind === "suggested") {
@@ -314,103 +334,93 @@ export function MenuScanResults({ scanId }: MenuScanResultsProps) {
         match.suggestion.suggested?.name ?? "a catalog item";
       const lineName = menuLineText(item.menu_item_name);
       return (
-        <Notice
-          tone="ai"
-          action={
-            <div className="flex flex-row flex-wrap gap-2">
-              <Button
-                variant="destructive"
-                size="sm"
-                aria-label={`Reject ${suggestedName} for ${lineName}`}
-                onClick={() => handleSuggestion(match.suggestion, "REJECT")}
-              >
-                <Close aria-hidden />
-                Reject
-              </Button>
-              <Button
-                size="sm"
-                aria-label={`Accept ${suggestedName} for ${lineName}`}
-                onClick={() => handleSuggestion(match.suggestion, "ACCEPT")}
-              >
-                <Check aria-hidden />
-                Accept
-              </Button>
-            </div>
-          }
-        >
-          <span className="inline-flex flex-wrap items-center gap-1">
-            <Help aria-hidden className="size-4 shrink-0 text-ai" />
-            Is it {suggestedName}?
-          </span>
-        </Notice>
+        <div data-slot="line-suggestion" className="flex flex-col gap-2">
+          <MenuLineNote icon={AI}>Is it {suggestedName}?</MenuLineNote>
+          <div className="grid grid-cols-2 gap-2">
+            <Button
+              variant="outline"
+              aria-label={`Not this: ${suggestedName} for ${lineName}`}
+              onClick={() => handleSuggestion(match.suggestion, "REJECT")}
+            >
+              Not this
+            </Button>
+            <Button
+              variant="outline"
+              aria-label={`That's it: ${suggestedName} for ${lineName}`}
+              onClick={() => handleSuggestion(match.suggestion, "ACCEPT")}
+            >
+              That&apos;s it
+            </Button>
+          </div>
+        </div>
       );
     }
     return (
-      <p className="type-footnote text-ink-3">
+      <p className="t-cap text-ink-2">
         {settled ? "Not in the catalog yet" : "Matching…"}
       </p>
     );
   };
 
-  return (
-    <div className="flex flex-col gap-6">
-      {/* Summary */}
-      <section className="rounded-xl bg-surface-1 p-4">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <h1 className="type-title-1">Scan Results</h1>
-            {scan.place && (
-              <p className="type-body text-ink-2">{scan.place.name}</p>
-            )}
-            {scan.scanned_at && (
-              <p className="type-footnote text-ink-2">
-                Scanned <Timestamp iso={scan.scanned_at} precision="date" />
-              </p>
-            )}
-          </div>
-          <ScanStatusBadge tone={chip.tone}>{chip.label}</ScanStatusBadge>
-        </div>
+  const shownItems =
+    filter === null
+      ? items
+      : items.filter(
+          (item) => (matchByLine.get(item.id)?.kind ?? "new") === filter,
+        );
 
-        <p aria-live="polite" className="type-headline tabular mt-4">
-          {headline.text}
-        </p>
-        {headline.toConfirm > 0 && (
-          <p className="type-callout text-ink-2">
-            {headline.toConfirm === 1
-              ? "Accept or reject the suggested match below."
-              : "Accept or reject the suggested matches below."}
+  return (
+    <Page>
+      <ScanBar placeName={scan.place?.name} />
+
+      {!settled && !failed && <ScanSteps phase={phase} slow={gaveUp} />}
+
+      {settled && !failed && items.length > 0 && (
+        <div className="flex flex-col gap-2">
+          <p aria-live="polite" className="t-cap tabular text-ink-2">
+            {items.length} {items.length === 1 ? "line" : "lines"}
+            {scan.scanned_at && (
+              <>
+                {" · Read "}
+                <Timestamp iso={scan.scanned_at} precision="date" />
+              </>
+            )}
+            <span className="sr-only"> · {headline.text}</span>
           </p>
-        )}
-        {scanNode.matchStatus === "failed" && (
-          <Notice tone="neutral" className="mt-4">
-            <span className="inline-flex items-center gap-2">
-              <Warning aria-hidden className="size-4 shrink-0" />
-              Matching didn&apos;t finish, so some lines may show as new.
-            </span>
-          </Notice>
-        )}
-        {gaveUp && (
-          <Notice
-            tone="neutral"
-            className="mt-4"
-            action={
-              <Button variant="secondary" size="sm" onClick={restart}>
-                Check again
-              </Button>
-            }
-          >
-            <span className="inline-flex items-center gap-2">
-              <Warning aria-hidden className="size-4 shrink-0" />
-              This is taking longer than usual.
-            </span>
-          </Notice>
-        )}
-        {scan.processing_error && (
-          <Notice tone="danger" className="mt-4">
-            {scan.processing_error}
-          </Notice>
-        )}
-      </section>
+          <CountFilters<LineFilter>
+            aria-label="Show lines"
+            value={filter}
+            onValueChange={setFilter}
+            cells={[
+              { value: "matched", label: "Matched", count: headline.matched },
+              {
+                value: "suggested",
+                label: "To check",
+                count: headline.toConfirm,
+              },
+              { value: "new", label: "New", count: headline.fresh },
+            ]}
+          />
+        </div>
+      )}
+
+      {scanNode.matchStatus === "failed" && !failed && (
+        <Notice tone="neutral">
+          Matching didn&apos;t finish, so some lines show as new.
+        </Notice>
+      )}
+      {gaveUp && (
+        <Notice
+          tone="neutral"
+          action={
+            <Button variant="outline" onClick={restart}>
+              Check again
+            </Button>
+          }
+        >
+          This is taking longer than usual.
+        </Notice>
+      )}
 
       {/* L10: the menu's printed name, offered as a rename — never applied unconfirmed. */}
       {settled && scan.place && (
@@ -419,40 +429,45 @@ export function MenuScanResults({ scanId }: MenuScanResultsProps) {
 
       {actionError && <Notice tone="danger">{actionError}</Notice>}
 
-      {/* Items by Category */}
-      {items.length === 0 && !settled ? (
-        <section className="flex flex-col items-center gap-2 rounded-xl bg-surface-1 px-4 py-8 text-center">
-          <Spinner className="text-ink-2" />
-          <p className="type-body text-ink-2">Reading the menu lines...</p>
-        </section>
+      {failed ? (
+        <EmptyState
+          illustration={<ErrorIcon aria-hidden className="size-7 text-glyph" />}
+          title="Couldn't read this menu"
+          description={
+            scan.processing_error ?? "Try a sharper photo, closer in."
+          }
+          action={
+            scan.place ? (
+              <Button variant="outline" asChild>
+                <Link href={`/places/${scan.place.id}`} underline="none">
+                  Back to {scan.place.name}
+                </Link>
+              </Button>
+            ) : undefined
+          }
+        />
+      ) : items.length === 0 && !settled ? (
+        <MenuLineSkeleton />
       ) : items.length === 0 ? (
-        <section className="rounded-xl bg-surface-1 px-4 py-8 text-center">
-          <p className="type-body text-ink-2">
-            {scan.items_detected > 0
+        <EmptyState
+          illustration={<NoResults aria-hidden className="size-7 text-glyph" />}
+          title="No drinks on this menu"
+          description={
+            scan.items_detected > 0
               ? // Read, but never filed on a place (no place was known, or
                 // filing failed), so there are no lines to show or match.
-                "The lines this scan read weren't saved to a place, so there's nothing to show here."
-              : "No items were extracted from this scan."}
-          </p>
-        </section>
+                "The lines weren't saved to a place."
+              : "Nothing on it read as a drink."
+          }
+        />
       ) : (
         <MenuLineList
-          lines={items}
+          lines={shownItems}
           place={scan.place}
           renderStatus={lineStatus}
           onChanged={refresh}
         />
       )}
-
-      {/* Back button */}
-      {scan.place && (
-        <Button variant="outline" asChild>
-          <Link href={`/map?placeId=${scan.place_id}`} underline="none">
-            <Back aria-hidden />
-            Back to {scan.place.name}
-          </Link>
-        </Button>
-      )}
-    </div>
+    </Page>
   );
 }

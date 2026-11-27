@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { MenuScanResults } from "@/components/map/scanning/MenuScanResults";
-import { Spinner } from "@/components/ui/spinner";
+import { MenuLineSkeleton } from "@/components/map/scanning/ScanSteps";
 
-export const metadata: Metadata = { title: "Scan results" };
+export const metadata: Metadata = { title: "Menu scan" };
 
 interface ScanDetailsPageProps {
   params: Promise<{
@@ -12,6 +12,10 @@ interface ScanDetailsPageProps {
   }>;
 }
 
+/**
+ * `/map/scans/[scanId]` — a menu scan's lines (Places-Menus). The shell's
+ * `<main data-app-scroller>` scrolls this page and supplies its gutter (D26).
+ */
 export default async function ScanDetailsPage({
   params,
 }: ScanDetailsPageProps) {
@@ -21,21 +25,9 @@ export default async function ScanDetailsPage({
     notFound();
   }
 
-  // The shell's `<main data-app-scroller>` scrolls this page (D26), so tab
-  // re-tap reaches it; a `100dvh` box of its own was a second scroller,
-  // taller than the space the tab bar leaves.
   return (
-    <div className="p-4">
-      <Suspense
-        fallback={
-          <div className="flex h-[50vh] flex-col items-center justify-center gap-4">
-            <Spinner className="size-8 text-ink-2" />
-            <p className="type-body">Loading scan results...</p>
-          </div>
-        }
-      >
-        <MenuScanResults scanId={scanId} />
-      </Suspense>
-    </div>
+    <Suspense fallback={<MenuLineSkeleton />}>
+      <MenuScanResults scanId={scanId} />
+    </Suspense>
   );
 }

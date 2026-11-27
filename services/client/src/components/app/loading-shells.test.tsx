@@ -155,10 +155,7 @@ describe("the route shells", () => {
     const hero = html(
       <PlaceDetailsShell hero={{ name: "Cork & Barrel", category: "bar" }} />,
     );
-    assert.match(
-      hero,
-      /<h1 class="type-title-1 text-ink-1">Cork &amp; Barrel<\/h1>/,
-    );
+    assert.match(hero, /<h1 class="t-title[^"]*">Cork &amp; Barrel<\/h1>/);
     assert.match(hero, /Loading Cork &amp; Barrel…/);
     // The hero is not behind the reveal delay: it is chrome, drawn before
     // the first (aria-hidden, delayed) block.

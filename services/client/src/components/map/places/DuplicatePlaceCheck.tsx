@@ -20,7 +20,7 @@ export function DuplicatePlaceCheck({
 
   return (
     <div className="mb-4">
-      <p className="type-callout mb-2 font-semibold text-ink-1">
+      <p className="t-body mb-2 font-semibold text-ink">
         We found similar places nearby. Is yours one of these?
       </p>
       <ul className="flex flex-col divide-y divide-line overflow-hidden rounded-lg bg-surface-1">
@@ -36,7 +36,7 @@ export function DuplicatePlaceCheck({
                   strokeWidth={ICON_STROKE}
                   className="size-5 shrink-0 text-ink-2"
                 />
-                <span className="type-callout truncate font-semibold text-ink-1">
+                <span className="t-body truncate font-semibold text-ink">
                   {dup.name}
                 </span>
               </div>
@@ -51,13 +51,13 @@ export function DuplicatePlaceCheck({
                 </Badge>
                 <Badge
                   variant="outline"
-                  className={dup.similarity > 0.7 ? "text-ink-1" : "text-ink-3"}
+                  className={dup.similarity > 0.7 ? "text-ink" : "text-ink-3"}
                 >
                   {Math.round(dup.similarity * 100)}% match
                 </Badge>
               </div>
               {(dup.street_address || dup.locality) && (
-                <p className="type-footnote mt-1 truncate">
+                <p className="t-cap mt-1 truncate">
                   {[dup.street_address, dup.locality]
                     .filter(Boolean)
                     .join(", ")}

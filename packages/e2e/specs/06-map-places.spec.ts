@@ -197,8 +197,10 @@ test("creates a place through the form", async ({ primary }) => {
     primary.getByRole("heading", { name: placeName }),
     `the place page never showed the name (body: ${(await bodyText(primary)).slice(0, 200)})`,
   ).toBeVisible({ timeout: 20_000 });
-  await expect(primary.getByRole("tab", { name: /Menu/ })).toBeVisible();
-  await expect(primary.getByRole("tab", { name: "Scan menu" })).toBeVisible();
+  await expect(primary.locator('[data-slot="place-menu"]')).toBeVisible();
+  await expect(
+    primary.getByRole("button", { name: "Scan a menu" }),
+  ).toBeVisible();
   expect(noise.pageErrors, "the place page threw").toEqual([]);
 });
 
