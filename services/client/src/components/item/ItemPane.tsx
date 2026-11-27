@@ -1,12 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useClient } from "urql";
+import { useQuery } from "urql";
 import { Link } from "@/components/app/Link";
 import type { ApiItemType } from "@/components/cellar-api/itemTypes";
 import { itemPageHref } from "./adapter";
+import { ItemPageQuery } from "./fragments";
 import { ItemPageView } from "./ItemPageView";
-import type { PageQuery } from "./page-lists";
 import { type ItemPageData, loadItemPageData } from "./parts/load-item-page";
 
 export type ItemPaneProps = {
@@ -24,25 +24,32 @@ type State =
 /**
  * The item's body inside the desktop pane (MC-panes, L32): the item page's
  * own sections (`ItemPageView`, `pane`) at pane width — no bar and no bleed,
- * the menu as a plain `⋯` — read in the browser through the urql client with
+ * the menu as a plain `⋯` — read in the browser with urql's `useQuery` and
  * the page's own loader (`loadItemPageData`), so the pane and the page never
  * disagree. C1 mounts it in F2a's `DesktopPane`.
  */
 export function ItemPane({ itemId, itemType, cellarId }: ItemPaneProps) {
-  const client = useClient();
+  // urql's own hook, so only the answer for the current item lands (the
+  // no-to-promise rule); the lists then stop at their first page of 100.
+  const [result] = useQuery({
+    query: ItemPageQuery,
+    variables: { itemId, type: itemType },
+    requestPolicy: "cache-and-network",
+  });
   const [state, setState] = useState<State>({ phase: "loading" });
+  const { data, error } = result;
 
   useEffect(() => {
+    if (error !== undefined && data === undefined) {
+      setState({ phase: "error", message: error.message });
+      return;
+    }
+    if (data === undefined) {
+      setState({ phase: "loading" });
+      return;
+    }
     let live = true;
-    setState({ phase: "loading" });
-    const query = (async (document, variables) => {
-      const result = await client
-        .query(document, variables ?? {}, { requestPolicy: "network-only" })
-        .toPromise();
-      if (result.error !== undefined) throw result.error;
-      return result.data;
-    }) as PageQuery;
-    loadItemPageData(query, itemType, itemId).then(
+    loadItemPageData(null, itemType, itemId, data).then(
       (loaded) => {
         if (!live) return;
         setState(
@@ -58,7 +65,7 @@ export function ItemPane({ itemId, itemType, cellarId }: ItemPaneProps) {
     return () => {
       live = false;
     };
-  }, [client, itemId, itemType]);
+  }, [data, error, itemId, itemType]);
 
   if (state.phase === "ready") {
     return (

@@ -2,6 +2,7 @@ import { ChevronRight } from "@/components/app/icons";
 import { Link } from "@/components/app/Link";
 import { bottleState } from "@/components/cellar/bottle-state";
 import type { ApiItemType } from "@/components/cellar-api/itemTypes";
+import { Timestamp } from "@/components/common/Timestamp";
 import { thisContainerLabel } from "@/components/drink-log/type-words";
 import { bottleStateLine } from "../item-page-model";
 
@@ -25,13 +26,11 @@ export function VisitorBottle({
 }) {
   const state = bottleState(bottle, null);
   const opened =
-    bottle.openAt === null
-      ? null
-      : `Opened ${new Date(bottle.openAt).toLocaleDateString(undefined, {
-          month: "short",
-          day: "numeric",
-          year: "numeric",
-        })}`;
+    bottle.openAt === null ? null : (
+      <>
+        Opened <Timestamp iso={bottle.openAt} precision="date" />
+      </>
+    );
   return (
     <section
       data-testid="visitor-bottle"

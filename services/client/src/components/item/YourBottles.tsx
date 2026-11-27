@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { type ReactNode, useState, useTransition } from "react";
 import { useMutation } from "urql";
 import { Add, Pour } from "@/components/app/icons";
 import { Link } from "@/components/app/Link";
@@ -8,6 +8,7 @@ import { notify } from "@/components/app/notify";
 import { LEVEL_FILL } from "@/components/cellar/BottleCard";
 import { bottleState } from "@/components/cellar/bottle-state";
 import type { ApiItemType } from "@/components/cellar-api/itemTypes";
+import { Timestamp } from "@/components/common/Timestamp";
 import { DeleteDrinkLogMutation } from "@/components/drink-log/queries";
 import {
   containerCountLabel,
@@ -71,16 +72,17 @@ function LevelGauge({
   );
 }
 
-/** "Added Apr 25, 2024", "Opened today": the row's date door. */
-const dateLine = (bottle: YourBottle): string | null => {
+/** "Opened Apr 25, 2024": the row's date door, through `Timestamp` (the one
+ * place allowed to format a date for a human — no hydration mismatch). */
+const dateLine = (bottle: YourBottle): ReactNode => {
   const at = bottle.emptyAt ?? bottle.openAt;
   if (at === null) return null;
-  const day = new Date(at).toLocaleDateString(undefined, {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-  return bottle.emptyAt !== null ? `Finished ${day}` : `Opened ${day}`;
+  return (
+    <>
+      {bottle.emptyAt !== null ? "Finished " : "Opened "}
+      <Timestamp iso={at} precision="date" />
+    </>
+  );
 };
 
 /** "3 in Home" when every bottle is in one cellar; "3 bottles" otherwise. */
@@ -240,11 +242,9 @@ export function YourBottles({
                     >
                       {bottleStateLine(bottle)}
                     </Link>
-                    <span
-                      suppressHydrationWarning
-                      className="t-cap truncate text-ink-2"
-                    >
-                      {[cellar, date].filter(Boolean).join(" · ")}
+                    <span className="t-cap truncate text-ink-2">
+                      {cellar}
+                      {date !== null && <> · {date}</>}
                     </span>
                   </div>
                   {expanded && !finished && (
