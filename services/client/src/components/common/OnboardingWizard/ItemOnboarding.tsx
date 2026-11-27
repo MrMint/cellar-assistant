@@ -362,7 +362,10 @@ const ItemOnboardingRun = ({
       name,
       href,
       photo: context.displayImageDataUrl,
-      bottle: filedBottleOf(context),
+      bottle: filedBottleOf({
+        cellarId: context.cellarId,
+        cellarItemId: context.cellarItemId,
+      }),
     };
     feedback("success");
     // Capture-Place: a bottle kept gets its one-tap Undo; catalog only, View.
