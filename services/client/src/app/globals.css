@@ -1,61 +1,103 @@
 /*
- * The app's only stylesheet with values (D20; design-direction.md §3–§4).
+ * The app's only stylesheet with values (the 2026-11 kit: KIT § 1, LIGHT § 1
+ * and § 4).
  *
- * - `--ca-*` on :root are the tokens. `src/lib/tokens.ts` holds the same
- *   values for code that cannot read CSS (MapLibre, canvas, contrast tests);
- *   `src/lib/dev-checks/tokens-parity.test.ts` fails when the two differ.
+ * - `--ca-*` are the tokens: dark on `:root` (and `.keep-dark` subtrees: the
+ *   camera viewfinder), light on `[data-theme="light"]`. `src/lib/tokens.ts`
+ *   holds the same values (`cssVars`, `cssVarsLight`) for code that cannot
+ *   read CSS; `src/lib/dev-checks/tokens-parity.test.ts` fails when they drift.
+ * - The theme is `data-theme="dark|light"` on <html> (L9), rendered by the
+ *   server from the `theme` cookie and kept by the pre-paint script
+ *   (`src/lib/theme/`).
  * - `@theme inline` maps them onto shadcn's semantic names and the app's own
  *   roles, which is what makes `bg-primary`, `text-ink-3`, `bg-surface-1` …
  * - NAMING TRAP: shadcn's `accent` is the hover/pressed surface, NOT the
- *   brass accent. Brass is `primary` (or `brass`).
+ *   action colour. Action is `primary` (or `act`), teal. `brass` is a shim
+ *   onto gold until its last use is gone (L27).
  */
 @import "tailwindcss";
 @import "tw-animate-css";
 
-/* shadcn's `dark:` classes. Dark is the default (D21); Daylight is defined below
-   but nothing switches to it yet. */
-@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+/* shadcn's `dark:` classes: the dark theme, and `.keep-dark` subtrees. */
+@custom-variant dark (
+  &:where([data-theme="dark"], [data-theme="dark"] *, .keep-dark, .keep-dark *)
+);
 
 :root,
-[data-theme="dark"] {
+[data-theme="dark"],
+.keep-dark {
   color-scheme: dark;
-  --ca-bg: #0e0c0f;
-  --ca-surface-1: #171418;
-  --ca-surface-2: #1f1b21;
-  --ca-surface-3: #29242b;
-  --ca-line: rgb(255 240 225 / 0.08);
-  --ca-highlight: rgb(255 240 225 / 0.06);
-  --ca-ink-1: #f3ede4;
-  --ca-ink-2: #bdb3a7;
-  --ca-ink-3: #9c9287;
-  /* Action. Never white on brass: the ink is --ca-on-accent. */
-  --ca-accent: #c9a15b;
-  --ca-on-accent: #1a1408;
+  --ca-bg: #111015;
+  --ca-surface-1: #221f2a;
+  --ca-surface-2: #332f3e;
+  --ca-surface-3: #443f53;
+  --ca-line: #433f4d;
+  --ca-edge-2: #71678a;
+  --ca-hair: #2c2936;
+  --ca-rule: #3c3847;
+  --ca-dash: #736d89;
+  --ca-highlight: rgb(255 255 255 / 0.06);
+  --ca-ink-1: #ffffff;
+  --ca-ink-2: #b8b5c0;
+  --ca-ink-3: #aea9bd;
+  --ca-glyph: #857e9f;
+  /* act: action fills, teal. Never white on act: the ink is --ca-on-accent. */
+  --ca-accent: #70a2a9;
+  --ca-on-accent: #111015;
+  --ca-act-ink: #8cc0c6;
+  --ca-act-on-glass: #8cc0c6;
+  /* Legacy name, now act-ink: the AI is marked by its glyph, not a colour. */
+  --ca-ai: #8cc0c6;
+  --ca-gold: #d59d24;
+  --ca-heart: #fe0000;
+  --ca-danger: #f0c5c8;
+  /* Not in the kit; kept so existing screens keep their colour. */
   --ca-brand: #7b2233;
-  --ca-brand-ink: #d06a7c;
-  /* AI-drafted / AI-working ONLY (enters through AIDraftField). */
-  --ca-ai: #7fb3b9;
+  --ca-brand-ink: #d98796;
   --ca-success: #6faf7b;
-  --ca-danger: #e07a6a;
-  /* Six types, deep / text-safe; order wine, beer, spirit, sake, coffee, tea. */
+  --ca-on-band: #111015;
+  --ca-band-edge: transparent;
+  --ca-here: #3d7ef0;
+  --ca-scrim: rgba(8, 7, 12, 0.62);
+  --ca-scrim-pk: rgba(8, 7, 12, 0.78);
+  --ca-glass: rgba(17, 16, 21, 0.86);
+  --ca-glass-hover: rgba(17, 16, 21, 0.96);
+  --ca-on-glass: #ffffff;
+  --ca-toast: #332f3e;
+  --ca-toast-edge: #71678a;
+  --ca-toast-ink: #ffffff;
+  --ca-toast-act: #8cc0c6;
+  --ca-skel: #3c3847;
+  --ca-note: rgba(17, 16, 21, 0.94);
+  --ca-ring: #e6e3ee;
+  /* Elevation: containers are tonal; only these cast a shadow. */
+  --ca-sh-bar: 0 10px 12px -10px rgba(4, 3, 8, 0.9);
+  --ca-sh-bar-up: 0 -10px 12px -10px rgba(4, 3, 8, 0.9);
+  --ca-sh-pop: 0 12px 32px rgba(4, 3, 8, 0.6);
+  --ca-sh-dlg: 0 20px 48px rgba(4, 3, 8, 0.7);
+  --ca-sh-pin: 0 2px 6px rgba(4, 3, 8, 0.55);
+  --ca-sh-pin-on: 0 3px 10px rgba(4, 3, 8, 0.7);
+  --ca-sh-you: 0 0 0 2px rgba(17, 16, 21, 0.5), 0 1px 6px rgba(4, 3, 8, 0.7);
+  --ca-sh-dock: 0 -6px 20px rgba(4, 3, 8, 0.45);
+  /* Six types (not in the kit); order wine, beer, spirit, sake, coffee, tea. */
   --ca-type-wine: #8e2a3a;
-  --ca-type-wine-text: #d06a7c;
+  --ca-type-wine-text: #d98796;
   --ca-type-beer: #c98a2b;
-  --ca-type-beer-text: #c98a2b;
+  --ca-type-beer-text: #daa350;
   --ca-type-spirit: #9a6a3c;
-  --ca-type-spirit-text: #c8925e;
+  --ca-type-spirit-text: #ce9e6f;
   --ca-type-sake: #5e6fa8;
-  --ca-type-sake-text: #8e9bd0;
+  --ca-type-sake-text: #99a5d4;
   --ca-type-coffee: #6b4a3a;
-  --ca-type-coffee-text: #b88a72;
+  --ca-type-coffee-text: #c09781;
   --ca-type-tea: #5e8c6a;
-  --ca-type-tea-text: #7fb08c;
-  /* Tier bands, Outstanding → Bad. Unrated sits on surface-3. */
-  --ca-band-5: #7b2233;
-  --ca-band-4: #9a4a3a;
-  --ca-band-3: #b8783f;
-  --ca-band-2: #8c7a62;
-  --ca-band-1: #5e5650;
+  --ca-type-tea-text: #85b492;
+  /* Tier bands k5 → k1, both themes; ink on them is --ca-on-band. */
+  --ca-band-5: #4fb469;
+  --ca-band-4: #9cc25a;
+  --ca-band-3: #e5c84a;
+  --ca-band-2: #ec8f3e;
+  --ca-band-1: #e8615a;
   /* Motion (src/lib/motion.ts holds the same values). */
   --ca-dur-micro: 90ms;
   --ca-dur-short: 160ms;
@@ -68,25 +110,77 @@
   /* Loading shells: placeholder blocks appear only after this (X24). */
   --ca-skeleton-delay: 120ms;
   /* shadcn's base radius, used by a few vendored calc()s; = --radius-md. */
-  --radius: 12px;
+  --radius: 8px;
 }
 
-/* Daylight (design §3.1). Unused until there is evidence for it (D21). */
 [data-theme="light"] {
   color-scheme: light;
-  --ca-bg: #f6f1e8;
-  --ca-surface-1: #fbf8f2;
-  --ca-surface-2: #efe8dc;
-  --ca-surface-3: #e6ddcd;
-  --ca-line: rgb(42 36 32 / 0.1);
+  --ca-bg: #f5f4f8;
+  --ca-surface-1: #ffffff;
+  --ca-surface-2: #ebe9f0;
+  --ca-surface-3: #dedbe7;
+  --ca-line: #d6d3de;
+  --ca-edge-2: #867f99;
+  --ca-hair: #e4e2ea;
+  --ca-rule: #e1dee7;
+  --ca-dash: #8f89a1;
   --ca-highlight: rgb(255 255 255 / 0.6);
-  --ca-ink-1: #2a2420;
-  --ca-ink-2: #5e5449;
-  --ca-ink-3: #6f6357;
-  --ca-accent: #8a6a2e;
-  --ca-on-accent: #ffffff;
+  --ca-ink-1: #17151c;
+  --ca-ink-2: #4a4656;
+  --ca-ink-3: #5c576b;
+  --ca-glyph: #7d7791;
+  /* act: action fills, teal. Never white on act: the ink is --ca-on-accent. */
+  --ca-accent: #5f949b;
+  --ca-on-accent: #0e0d12;
+  --ca-act-ink: #2d6a71;
+  --ca-act-on-glass: #8cc0c6;
+  /* Legacy name, now act-ink: the AI is marked by its glyph, not a colour. */
+  --ca-ai: #2d6a71;
+  --ca-gold: #a2700c;
+  --ca-heart: #e0001b;
+  --ca-danger: #b3261e;
+  /* Not in the kit; kept so existing screens keep their colour. */
   --ca-brand: #9c2f43;
-  --ca-ai: #2f6b70;
+  --ca-brand-ink: #b83a50;
+  --ca-success: #407349;
+  --ca-on-band: #111015;
+  --ca-band-edge: rgba(17, 16, 21, 0.4);
+  --ca-here: #3d7ef0;
+  --ca-scrim: rgba(23, 21, 28, 0.42);
+  --ca-scrim-pk: rgba(23, 21, 28, 0.62);
+  --ca-glass: rgba(17, 16, 21, 0.86);
+  --ca-glass-hover: rgba(17, 16, 21, 0.96);
+  --ca-on-glass: #ffffff;
+  --ca-toast: #2a2733;
+  --ca-toast-edge: #2a2733;
+  --ca-toast-ink: #ffffff;
+  --ca-toast-act: #8cc0c6;
+  --ca-skel: #e2dfe8;
+  --ca-note: rgba(255, 255, 255, 0.96);
+  --ca-ring: #17151c;
+  /* Elevation: containers are tonal; only these cast a shadow. */
+  --ca-sh-bar: 0 10px 12px -10px rgba(40, 36, 52, 0.22);
+  --ca-sh-bar-up: 0 -10px 12px -10px rgba(40, 36, 52, 0.22);
+  --ca-sh-pop: 0 12px 32px rgba(40, 36, 52, 0.18);
+  --ca-sh-dlg: 0 20px 48px rgba(40, 36, 52, 0.24);
+  --ca-sh-pin: 0 2px 6px rgba(40, 36, 52, 0.32);
+  --ca-sh-pin-on: 0 3px 10px rgba(40, 36, 52, 0.36);
+  --ca-sh-you:
+    0 0 0 2px rgba(40, 36, 52, 0.24), 0 1px 6px rgba(40, 36, 52, 0.32);
+  --ca-sh-dock: 0 -6px 20px rgba(40, 36, 52, 0.18);
+  /* Six types (not in the kit); order wine, beer, spirit, sake, coffee, tea. */
+  --ca-type-wine: #8e2a3a;
+  --ca-type-wine-text: #9b3144;
+  --ca-type-beer: #c98a2b;
+  --ca-type-beer-text: #7f581b;
+  --ca-type-spirit: #9a6a3c;
+  --ca-type-spirit-text: #7e542b;
+  --ca-type-sake: #5e6fa8;
+  --ca-type-sake-text: #4457a4;
+  --ca-type-coffee: #6b4a3a;
+  --ca-type-coffee-text: #78513d;
+  --ca-type-tea: #5e8c6a;
+  --ca-type-tea-text: #3f6649;
 }
 
 @theme inline {
@@ -103,15 +197,18 @@
   --color-secondary-foreground: var(--ca-ink-1);
   --color-muted: var(--ca-surface-1);
   --color-muted-foreground: var(--ca-ink-3);
-  /* NOT brass: shadcn's "accent" is the hover/pressed surface. */
+  /* NOT the action colour: shadcn's "accent" is the hover/pressed surface. */
   --color-accent: var(--ca-surface-3);
   --color-accent-foreground: var(--ca-ink-1);
   --color-destructive: var(--ca-danger);
   --color-border: var(--ca-line);
+  /* Fills (`bg-input/30`) as well as borders use it, so it stays a surface;
+     input boundaries move to `border-edge-2` in their own files (ruling 1). */
   --color-input: var(--ca-surface-3);
-  --color-ring: var(--ca-accent);
+  /* The focus ring is act-ink (KIT § 1). */
+  --color-ring: var(--ca-act-ink);
 
-  /* app roles */
+  /* app roles (existing names) */
   --color-surface-1: var(--ca-surface-1);
   --color-surface-2: var(--ca-surface-2);
   --color-surface-3: var(--ca-surface-3);
@@ -119,7 +216,9 @@
   --color-ink-1: var(--ca-ink-1);
   --color-ink-2: var(--ca-ink-2);
   --color-ink-3: var(--ca-ink-3);
-  --color-brass: var(--ca-accent);
+  /* Shim (L27): stars stay gold while the action fill turns teal. Goes when
+     the last *-brass use does. */
+  --color-brass: var(--ca-gold);
   --color-on-brass: var(--ca-on-accent);
   --color-brand: var(--ca-brand);
   --color-brand-ink: var(--ca-brand-ink);
@@ -144,15 +243,65 @@
   --color-band-2: var(--ca-band-2);
   --color-band-1: var(--ca-band-1);
 
-  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
-  --font-display: var(--font-fraunces), ui-serif, Georgia, serif;
+  /* app roles (kit names, KIT § 1) */
+  --color-raised: var(--ca-surface-2);
+  --color-sel: var(--ca-surface-3);
+  --color-edge: var(--ca-line);
+  --color-edge-2: var(--ca-edge-2);
+  --color-hair: var(--ca-hair);
+  --color-rule: var(--ca-rule);
+  --color-dash: var(--ca-dash);
+  --color-ink: var(--ca-ink-1);
+  --color-glyph: var(--ca-glyph);
+  --color-act: var(--ca-accent);
+  --color-on-act: var(--ca-on-accent);
+  --color-act-ink: var(--ca-act-ink);
+  --color-act-on-glass: var(--ca-act-on-glass);
+  --color-gold: var(--ca-gold);
+  --color-heart: var(--ca-heart);
+  --color-on-band: var(--ca-on-band);
+  --color-band-edge: var(--ca-band-edge);
+  --color-here: var(--ca-here);
+  --color-scrim: var(--ca-scrim);
+  --color-scrim-pk: var(--ca-scrim-pk);
+  --color-glass: var(--ca-glass);
+  --color-glass-hover: var(--ca-glass-hover);
+  --color-on-glass: var(--ca-on-glass);
+  --color-toast: var(--ca-toast);
+  --color-toast-edge: var(--ca-toast-edge);
+  --color-toast-ink: var(--ca-toast-ink);
+  --color-toast-act: var(--ca-toast-act);
+  --color-skel: var(--ca-skel);
+  --color-note: var(--ca-note);
+  /* Desktop 2 px selection ring (`ring-ring-select`, `outline-ring-select`);
+     `ring` itself is shadcn's focus ring. */
+  --color-ring-select: var(--ca-ring);
 
-  /* inputs / tiles / cards + sheets (design §3.3) */
+  /* Elevation (KIT § 1): `shadow-bar`, `shadow-pop`, … */
+  --shadow-bar: var(--ca-sh-bar);
+  --shadow-bar-up: var(--ca-sh-bar-up);
+  --shadow-pop: var(--ca-sh-pop);
+  --shadow-dlg: var(--ca-sh-dlg);
+  --shadow-pin: var(--ca-sh-pin);
+  --shadow-pin-on: var(--ca-sh-pin-on);
+  --shadow-you: var(--ca-sh-you);
+  --shadow-dock: var(--ca-sh-dock);
+
+  /* Inter only. `font-display` is an alias until its last use goes (L26). */
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+
+  /* Radii (KIT § 1): 2 grabber, 4 no-photo plate, 6 small badges, 7 segment,
+     8 fields / chips / tiles / buttons / toast, 16 sheet tops / switch /
+     avatar / desktop dialog, 22 the 44 px discs. */
+  --radius-grabber: 2px;
   --radius-xs: 4px;
   --radius-sm: 6px;
-  --radius-md: 12px;
-  --radius-lg: 20px;
-  --radius-xl: 20px;
+  --radius-segment: 7px;
+  --radius-md: 8px;
+  --radius-lg: 16px;
+  --radius-xl: 16px;
+  --radius-disc: 22px;
 
   --ease-standard: var(--ca-ease-standard);
   --ease-enter: var(--ca-ease-enter);
@@ -168,60 +317,124 @@
   --breakpoint-xl: 1536px;
 }
 
-/* The type ramp (design §3.2): family + size + line + weight in one class. */
-@utility type-large-title {
-  font-family: var(--font-display);
-  font-variation-settings: "SOFT" 50;
-  font-size: 34px;
-  line-height: 40px;
+/* The type scale (KIT § 1 Type): Inter only, family + size + line + weight
+   (+ tracking) in one class; numbers in t-score and t-pin are tabular. */
+@utility t-score {
+  font-family: var(--font-sans);
+  font-size: 40px;
+  line-height: 44px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums lining-nums;
+}
+@utility t-title {
+  font-family: var(--font-sans);
+  font-size: 24px;
+  line-height: 28px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+@utility t-quote {
+  font-family: var(--font-sans);
+  font-size: 20px;
+  line-height: 28px;
+  font-weight: 400;
+}
+@utility t-head {
+  font-family: var(--font-sans);
+  font-size: 16px;
+  line-height: 20px;
   font-weight: 600;
+}
+@utility t-body {
+  font-family: var(--font-sans);
+  font-size: 16px;
+  line-height: 22px;
+  font-weight: 400;
+}
+@utility t-cap {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 17px;
+  font-weight: 400;
+}
+@utility t-micro {
+  font-family: var(--font-sans);
+  font-size: 11px;
+  line-height: 14px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+@utility t-pin {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  line-height: 15px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums lining-nums;
+}
+/* Aliases (L26): every `type-*` keeps working, at its `t-*` value (KIT
+   "Today" column), until a sweeper retires the last use. Kept in step with
+   the t-* above by tokens-parity.test.ts. */
+@utility type-large-title {
+  font-family: var(--font-sans);
+  font-size: 24px;
+  line-height: 28px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
 }
 @utility type-title-1 {
-  font-family: var(--font-display);
-  font-variation-settings: "SOFT" 50;
-  font-size: 28px;
-  line-height: 34px;
-  font-weight: 600;
+  font-family: var(--font-sans);
+  font-size: 24px;
+  line-height: 28px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
 }
 @utility type-title-2 {
-  font-size: 22px;
+  font-family: var(--font-sans);
+  font-size: 24px;
   line-height: 28px;
-  font-weight: 600;
+  font-weight: 700;
+  letter-spacing: -0.01em;
 }
 @utility type-headline {
-  font-size: 17px;
-  line-height: 22px;
+  font-family: var(--font-sans);
+  font-size: 16px;
+  line-height: 20px;
   font-weight: 600;
 }
 @utility type-body {
+  font-family: var(--font-sans);
   font-size: 16px;
-  line-height: 24px;
+  line-height: 22px;
   font-weight: 400;
 }
 @utility type-callout {
-  font-size: 15px;
-  line-height: 20px;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 17px;
   font-weight: 400;
 }
 @utility type-footnote {
+  font-family: var(--font-sans);
   font-size: 13px;
-  line-height: 18px;
+  line-height: 17px;
   font-weight: 400;
   color: var(--ca-ink-3);
 }
 @utility type-overline {
+  font-family: var(--font-sans);
   font-size: 11px;
   line-height: 14px;
   font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  letter-spacing: 0.01em;
 }
 @utility type-numeral-xl {
-  font-family: var(--font-display);
-  font-variation-settings: "SOFT" 50;
-  font-size: 44px;
+  font-family: var(--font-sans);
+  font-size: 40px;
   line-height: 44px;
-  font-weight: 500;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums lining-nums;
 }
 @utility tabular {
   font-variant-numeric: tabular-nums lining-nums;
@@ -234,7 +447,7 @@
   backdrop-filter: blur(20px) saturate(140%);
   box-shadow:
     inset 0 1px 0 var(--ca-highlight),
-    0 12px 32px rgb(0 0 0 / 0.55);
+    var(--ca-sh-pop);
 }
 /* A loading shell's placeholder blocks (X24, design §4.7): invisible for
    the first 120 ms, then a short fade, so a route that answers quickly never
