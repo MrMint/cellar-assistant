@@ -8,7 +8,7 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 
-const here = import.meta.dir;
+const here = join(import.meta.dir, "..");
 const css = readFileSync(join(here, "../../app/globals.css"), "utf8");
 const defined = new Set(
   Array.from(css.matchAll(/--color-([a-z0-9-]+)\s*:/g), (m) => m[1]),
