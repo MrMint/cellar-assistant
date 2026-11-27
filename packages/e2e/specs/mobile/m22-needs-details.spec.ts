@@ -10,19 +10,22 @@ import { Gql } from "../../fixtures/test.ts";
  *
  * The draft is made through the API: `startItemOnboarding` with no photo
  * leaves an open session (refused, nothing to read), and `saveDraft` files
- * it as Needs details. There is no draft delete, so the draft outlives the
+ * it as Needs details — but only while it is below the server's floor
+ * (`draftMeetsFloor`): a name alone meets a beer's, so a named beer keeps
+ * its open status and is never listed. The draft is a wine with no style,
+ * which the floor refuses. There is no draft delete, so the draft outlives the
  * run; its name is unique, and the spec only ever looks for its own row.
  */
 
 let api: Gql;
-const name = unique("M22 draft beer");
+const name = unique("M22 draft wine");
 
 test.beforeAll(async () => {
   api = await Gql.forAccount("primary");
   const onboardingId = crypto.randomUUID();
   await api.query(
     `mutation S($id: ID!) {
-       startItemOnboarding(input: { itemType: BEER }, onboardingId: $id) {
+       startItemOnboarding(input: { itemType: WINE }, onboardingId: $id) {
          __typename
        }
      }`,
@@ -30,7 +33,11 @@ test.beforeAll(async () => {
   );
   const saved = await api.query(
     `mutation D($input: SaveDraftInput!) {
-       saveDraft(input: $input) { __typename ... on Error { message } }
+       saveDraft(input: $input) {
+         __typename
+         ... on ItemOnboarding { status }
+         ... on Error { message }
+       }
      }`,
     {
       input: {
@@ -43,6 +50,12 @@ test.beforeAll(async () => {
   );
   if (saved.saveDraft.__typename.endsWith("Error")) {
     throw new Error(`saveDraft refused: ${JSON.stringify(saved.saveDraft)}`);
+  }
+  // Only a draft below the floor is listed; say so here, not as a missing row.
+  if (saved.saveDraft.status !== "NEEDS_DETAILS") {
+    throw new Error(
+      `the draft is ${saved.saveDraft.status}, not NEEDS_DETAILS: it would not be listed`,
+    );
   }
 });
 
@@ -61,7 +74,7 @@ test("Needs details lists the draft, filters it, and finishes it with an Undo", 
 
   const row = page.locator('[data-slot="draft-row"]', { hasText: name });
   await expect(row).toBeVisible();
-  await expect(row).toContainText(/Needs brewery/);
+  await expect(row).toContainText(/Needs winery/);
 
   // The chips filter by what is missing; the draft needs a maker.
   const maker = page.getByRole("button", { name: /^Maker/ });
@@ -79,8 +92,11 @@ test("Needs details lists the draft, filters it, and finishes it with an Undo", 
   await expect(sheet).toContainText(/\d+ left/);
   await expect(sheet.getByRole("button", { name: "Not now" })).toBeVisible();
 
-  await sheet.getByLabel("Brewery").fill("M22 Brewing");
-  await sheet.getByLabel("Strength").fill("5.2");
+  // Every need filled, so the Save completes the draft.
+  await sheet.getByLabel("Winery").fill("M22 Cellars");
+  await sheet.getByLabel("Style").selectOption({ index: 1 });
+  await sheet.getByLabel("Strength").fill("13.5");
+  await sheet.getByRole("button", { name: "No vintage" }).click();
   await sheet.getByRole("button", { name: "Save", exact: true }).click();
 
   // Complete: the row leaves, and the toast offers Undo before it is filed.
