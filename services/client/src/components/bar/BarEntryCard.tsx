@@ -1,13 +1,29 @@
 import { BarEntryRow } from "@/components/recipe/BarEntryRow";
 import { unwrapResult } from "@/lib/api/result";
 import { apiServerQuery } from "@/lib/api/urql-server";
-import { WhatCanIMakeQuery } from "./queries";
+import type { MakeabilityLike } from "./copy";
+import { BAR_SECTION_LIMIT, YourBarQuery } from "./queries";
+import { readinessLine, splitBar } from "./your-bar/sections";
 
 const FALLBACK_SUMMARY = "From your cellars and Bar pantry";
 
-/** "1 ready · 5 one away" (Recipes-Browse 01). */
-export const barCounts = (ready: number, oneAway: number): string =>
-  `${ready} ready · ${oneAway} one away`;
+type Rows<Row> = { readonly edges: readonly { readonly node: Row }[] };
+
+/** "1 ready · 5 one away", as Your bar counts it. */
+const barSummary = <Row extends { makeability: MakeabilityLike }>(data: {
+  makeNow: Rows<Row>;
+  oneBottleAway: Rows<Row>;
+  makeNowCount: number;
+  oneBottleAwayCount: number;
+}): string => {
+  const bar = splitBar({
+    makeNow: data.makeNow.edges.map((edge) => edge.node),
+    oneBottleAway: data.oneBottleAway.edges.map((edge) => edge.node),
+    makeNowCount: data.makeNowCount,
+    oneBottleAwayCount: data.oneBottleAwayCount,
+  });
+  return readinessLine(bar.readyCount, bar.awayCount);
+};
 
 /**
  * What `/recipes` shows while the bar is judged (the `<Suspense>` fallback):
@@ -29,13 +45,17 @@ export function BarEntryCardFallback() {
 export async function BarEntryCard() {
   let summary = FALLBACK_SUMMARY;
   try {
-    const data = await apiServerQuery(WhatCanIMakeQuery, { limit: 1 });
+    // The read Your bar makes, split the way Your bar splits it (R3's
+    // `splitBar`: a swap is never Make now), so the two counts agree.
+    const data = await apiServerQuery(YourBarQuery, {
+      limit: BAR_SECTION_LIMIT,
+    });
     const result = unwrapResult(data.whatCanIMake, "WhatCanIMake");
     if (result.ok) {
       summary =
         result.data.bottleCount === 0 && result.data.pantryCount === 0
           ? "Stock your Bar pantry to find out"
-          : barCounts(result.data.makeNowCount, result.data.oneBottleAwayCount);
+          : barSummary(result.data);
     }
   } catch {
     // The plain link is still the right card; the bar page says what failed.
