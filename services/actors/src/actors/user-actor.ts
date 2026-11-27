@@ -1178,6 +1178,9 @@ export class UserActor
    * is the only stale copy left, and it still repairs a legacy half-state left
    * by an older `removeFriend`.
    *
+   * And only a row older than the removal: one written after it belongs to a
+   * newer friendship, which a late delivery must not undo (F-31).
+   *
    * Deliberately still one-sided: a `system` ctx could delete both directions,
    * but widening it would make a redelivery that lands *after* the two have
    * re-friended destroy the new friendship's rows instead of one of them.
@@ -1191,12 +1194,28 @@ export class UserActor
     this.requireAggregate();
     requirePrivileged(ctx, deliveredOnly("removeFriendOtherSide"));
     const friendId = requireUuid(payload?.friendId, "friendId");
+    // F-31 (FR-11): only a row that predates the removal is the removal's to
+    // delete. A delivery that lands after the two have re-friended (Alice
+    // removes, then asks again and Bob accepts before this arrives) would
+    // otherwise delete Bob's new row and leave the new friendship half-made.
+    // The removal's moment is its outbox row's `created_at` — `removeFriend`'s
+    // own transaction — which redeliveries keep; a direct privileged call
+    // with no delivery is a removal made now.
+    const outboxId = deliveryOf(ctx)?.outboxId ?? null;
+    const removedAt =
+      outboxId === null
+        ? sql`clock_timestamp()`
+        : sql`(select o.created_at from public.outbox o where o.id = ${outboxId}::uuid)`;
 
     const deleted = await this.tx(async (tx) =>
       tx
         .delete(friends)
         .where(
-          and(eq(friends.userId, this.key), eq(friends.friendId, friendId)),
+          and(
+            eq(friends.userId, this.key),
+            eq(friends.friendId, friendId),
+            sql`${friends.createdAt} < ${removedAt}`,
+          ),
         )
         .returning({ userId: friends.userId }),
     );

@@ -403,7 +403,7 @@ describe.skipIf(skip)("TasteActor", () => {
   });
 
   describe("agreement", () => {
-    it("counts only ratings the viewer may see: a stranger's drink-log scores never count", async () => {
+    it("refuses a stranger as it refuses a missing person, whatever they have rated (F-55)", async () => {
       await withTestDb(async (db) => {
         const viewer = await seedUser(db);
         const stranger = await seedUser(db);
@@ -428,10 +428,36 @@ describe.skipIf(skip)("TasteActor", () => {
         );
         expect(unfiltered).toHaveLength(8);
 
+        // FR-7: a compare is between friends, so a stranger's five public
+        // reviews in common say nothing either: the same refusal as nobody.
         const actor = await newActor(viewer, db);
-        const answer = await actor.agreement(userCtx(viewer), stranger);
-        expect(answer.shared).toBe(5);
-        expect(answer.agreed).toBe(5);
+        const refused = actor.agreement(userCtx(viewer), stranger);
+        await expect(refused).rejects.toBeInstanceOf(NotFoundError);
+        await expect(refused).rejects.toThrow(PROFILE_NOT_SHARED);
+      });
+    });
+
+    it("refuses a pending request, either way round, as it refuses a missing person (F-55)", async () => {
+      await withTestDb(async (db) => {
+        const viewer = await seedUser(db);
+        const asked = await seedUser(db);
+        const asker = await seedUser(db);
+        for (let i = 0; i < AGREEMENT_MIN_SHARED + 1; i += 1) {
+          const ref = await seedItemOfType(db, "WINE", viewer, `Pending ${i}`);
+          await seedItemReview(db, viewer, ref, 4);
+          await seedItemReview(db, asked, ref, 4);
+          await seedItemReview(db, asker, ref, 4);
+        }
+        await db.execute(sql`
+          insert into public.friend_requests (user_id, friend_id, status)
+          values (${viewer}::uuid, ${asked}::uuid, 'PENDING'),
+                 (${asker}::uuid, ${viewer}::uuid, 'PENDING')`);
+        const actor = await newActor(viewer, db);
+        for (const other of [asked, asker]) {
+          const refused = actor.agreement(userCtx(viewer), other);
+          await expect(refused).rejects.toBeInstanceOf(NotFoundError);
+          await expect(refused).rejects.toThrow(PROFILE_NOT_SHARED);
+        }
       });
     });
 
@@ -641,7 +667,7 @@ describe.skipIf(skip)("TasteActor", () => {
       });
     });
 
-    it("a non-friend gets nothing, though their reviews are shared enough for agreement", async () => {
+    it("a non-friend gets nothing, though their reviews are shared enough to compare", async () => {
       await withTestDb(async (db) => {
         const viewer = await seedUser(db);
         const stranger = await seedUser(db);
@@ -651,9 +677,10 @@ describe.skipIf(skip)("TasteActor", () => {
           await seedItemReview(db, stranger, ref, 2);
         }
         const actor = await newActor(viewer, db);
-        expect((await actor.agreement(userCtx(viewer), stranger)).shared).toBe(
-          AGREEMENT_MIN_SHARED + 1,
-        );
+        // F-55: the agreement read refuses them too, not only the rows.
+        await expect(
+          actor.agreement(userCtx(viewer), stranger),
+        ).rejects.toThrow(PROFILE_NOT_SHARED);
         expect(
           await actor.compare(userCtx(viewer), { userId: stranger }),
         ).toEqual([]);
