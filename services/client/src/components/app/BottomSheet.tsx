@@ -1,6 +1,6 @@
 "use client";
 
-import { useReducedMotion } from "motion/react";
+import { motion, useReducedMotion } from "motion/react";
 import {
   type ReactNode,
   useCallback,
@@ -16,7 +16,9 @@ import {
   DrawerHeader,
   DrawerTitle,
 } from "@/components/ui/drawer";
+import { distance, spring } from "@/lib/motion";
 import { cn } from "@/lib/utils";
+import { tapOrigin, watchTaps } from "./overlays/tap-origin";
 import { type SnapDecision, settleMs, VAUL_SETTLE_MS } from "./sheet-physics";
 import { keepOpenForToasts } from "./toastLayer";
 import { useReturnFocus } from "./useReturnFocus";
@@ -230,6 +232,15 @@ export function BottomSheet({
   const reducedMotion = useReducedMotion() ?? false;
   const settleAfterMs = settleMs(reducedMotion);
   useOpenSheetSignal(open, contentRef, snap, settleAfterMs);
+  useEffect(watchTaps, []);
+  // SPEC movement 9: the sheet rises from .94 at the tap's x. vaul owns the
+  // rise from 100 %; the scale is the content's, read once per open.
+  const [origin, setOrigin] = useState("50% 100%");
+  useEffect(() => {
+    if (!open) return;
+    const width = typeof window === "undefined" ? 0 : window.innerWidth;
+    setOrigin(tapOrigin(0, width));
+  }, [open]);
 
   // A close vaul starts (drag, fling, backdrop, Escape) passes through here,
   // and vaul may still pick a snap in the same release: from then on, nothing
@@ -376,35 +387,48 @@ export function BottomSheet({
         onCloseAutoFocus={returnFocus}
         onInteractOutside={keepOpenForToasts}
         className={cn(
-          "surface-glass touch-none-select rounded-t-lg border-none text-foreground outline-none",
-          "pb-[max(1rem,env(safe-area-inset-bottom))]",
+          // KIT § 2: r16 tops, the 36 × 4 grabber (ui/drawer), sh-pop, at
+          // most 788 tall; a hairline edge where it meets the page.
+          "touch-none-select rounded-t-lg border-x-0 border-t border-b-0 border-hair bg-surface-1 text-ink shadow-pop outline-none",
+          "pb-[max(1rem,env(safe-area-inset-bottom))] md:mx-auto md:w-full md:max-w-[788px]",
           // Written with ui/drawer's own `data-[vaul-drawer-direction=bottom]:`
           // variant so tailwind-merge replaces its 80vh cap; a bare `max-h-*`
           // loses to that variant's higher specificity. A snapping sheet is
           // exactly `full` tall (94dvh = SNAP_FRACTION.full) and only moves.
           fractions === undefined
-            ? "data-[vaul-drawer-direction=bottom]:max-h-[90dvh]"
+            ? "data-[vaul-drawer-direction=bottom]:max-h-[min(90dvh,788px)]"
             : "h-[94dvh] data-[vaul-drawer-direction=bottom]:max-h-[94dvh]",
           className,
         )}
       >
-        <DrawerHeader className={cn("px-4 pt-3 pb-2", hideTitle && "sr-only")}>
-          <DrawerTitle className="type-title-2 text-left">{title}</DrawerTitle>
-          {description !== undefined && (
-            <DrawerDescription className="type-callout text-left text-ink-2">
-              {description}
-            </DrawerDescription>
+        <motion.div
+          data-slot="bottom-sheet-body"
+          className="flex min-h-0 flex-1 flex-col"
+          style={{ transformOrigin: origin }}
+          initial={reducedMotion ? false : { scale: distance.sheetFrom }}
+          animate={{ scale: 1 }}
+          transition={spring.sheet}
+        >
+          <DrawerHeader
+            className={cn("px-4 pt-3 pb-2", hideTitle && "sr-only")}
+          >
+            <DrawerTitle className="t-title text-left">{title}</DrawerTitle>
+            {description !== undefined && (
+              <DrawerDescription className="t-body text-left text-ink-2">
+                {description}
+              </DrawerDescription>
+            )}
+          </DrawerHeader>
+          {description === undefined && (
+            // vaul (Radix Dialog) warns without a description; an empty one
+            // tells assistive tech there is none rather than leaving it unset.
+            <DrawerDescription className="sr-only" />
           )}
-        </DrawerHeader>
-        {description === undefined && (
-          // vaul (Radix Dialog) warns without a description; an empty one
-          // tells assistive tech there is none rather than leaving it unset.
-          <DrawerDescription className="sr-only" />
-        )}
-        <div className="min-h-0 flex-1 overflow-y-auto px-4">{children}</div>
-        {footer !== undefined && (
-          <DrawerFooter className="px-4 pt-3 pb-0">{footer}</DrawerFooter>
-        )}
+          <div className="min-h-0 flex-1 overflow-y-auto px-4">{children}</div>
+          {footer !== undefined && (
+            <DrawerFooter className="px-4 pt-3 pb-0">{footer}</DrawerFooter>
+          )}
+        </motion.div>
       </DrawerContent>
     </Drawer>
   );

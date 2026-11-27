@@ -194,7 +194,7 @@ describe("BottomSheet snaps", () => {
     assert.match(cls, /direction=bottom\]:max-h-\[94dvh\]/);
   });
 
-  test("a content-sized sheet is capped at 90dvh, through the same variant", async () => {
+  test("a content-sized sheet is capped at 90dvh or 788 (KIT § 2), through the same variant", async () => {
     await render(
       <BottomSheet open onOpenChange={() => {}} title="Add">
         <p>rows</p>
@@ -204,7 +204,7 @@ describe("BottomSheet snaps", () => {
     const cls =
       document.querySelector('[data-slot="bottom-sheet"]')?.className ?? "";
     assert.doesNotMatch(cls, /direction=bottom\]:max-h-\[80vh\]/);
-    assert.match(cls, /direction=bottom\]:max-h-\[90dvh\]/);
+    assert.match(cls, /direction=bottom\]:max-h-\[min\(90dvh,788px\)\]/);
   });
 });
 
@@ -490,7 +490,7 @@ describe("ResponsiveDialog", () => {
 });
 
 describe("ConfirmSheet", () => {
-  test("an alert dialog; the danger button confirms, Cancel closes", async () => {
+  test("an alert dialog; Keep it first, the outlined danger verb confirms", async () => {
     let confirmed = 0;
     const changes: boolean[] = [];
     await render(
@@ -511,8 +511,18 @@ describe("ConfirmSheet", () => {
     assert.equal(document.querySelector('[role="dialog"]'), null);
     const buttons = [...document.querySelectorAll("button")];
     const del = buttons.find((b) => b.textContent === "Delete");
-    const cancel = buttons.find((b) => b.textContent === "Cancel");
-    assert.match(del?.className ?? "", /bg-destructive/);
+    const cancel = buttons.find((b) => b.textContent === "Keep it");
+    // KIT § 2: destructive is outlined in danger with the trash glyph, and
+    // never first (CROSS-LOT "Delete confirm").
+    assert.match(del?.className ?? "", /border-danger/);
+    assert.doesNotMatch(del?.className ?? "", /bg-destructive/);
+    assert.ok(del?.querySelector("svg"), "the trash glyph");
+    assert.ok(
+      cancel !== undefined &&
+        del !== undefined &&
+        buttons.indexOf(cancel) < buttons.indexOf(del),
+      "Keep it comes first",
+    );
     await click(del);
     assert.equal(confirmed, 1);
     await click(cancel);
@@ -532,7 +542,7 @@ describe("ConfirmSheet", () => {
     );
     await flush(10);
     const buttons = [...document.querySelectorAll("button")].filter((b) =>
-      ["Delete", "Cancel"].includes(b.textContent ?? ""),
+      ["Delete", "Keep it"].includes(b.textContent ?? ""),
     );
     assert.equal(buttons.length, 2);
     assert.ok(buttons.every((b) => b.disabled));
