@@ -33,9 +33,10 @@ const render = (node: ReactNode) =>
   );
 
 describe("RankingsClient", () => {
-  test("Top rated, the labelled scope control from the URL, the type chips", () => {
+  test("Top rated, the labelled scope control from the URL, the kind chips", () => {
     const html = render(<RankingsClient />);
-    assert.match(html, /^(?:<[^>]+>)*Top rated</);
+    assert.match(html, />Top rated</);
+    assert.match(html, /href="\/tier-lists"/);
     assert.match(html, /role="radiogroup"[^>]*aria-label="Whose scores"/);
     const segments = [
       ...html.matchAll(/role="radio"[^>]*>(?:<[^>]+>)*([^<]+)</g),
@@ -46,24 +47,37 @@ describe("RankingsClient", () => {
       html,
       /aria-checked="true"[^>]*>(?:<[^>]+>)*Friends<|data-state="on"[^>]*>(?:<[^>]+>)*Friends</,
     );
-    for (const type of ["Beer", "Wine", "Spirit", "Coffee", "Sake", "Tea"]) {
-      assert.match(html, new RegExp(`aria-label="${type}"`));
-    }
-    assert.match(
-      html,
-      /aria-pressed="true"[^>]*aria-label="Wine"|aria-label="Wine"[^>]*aria-pressed="true"/,
-    );
+    const chips = [
+      ...html.matchAll(
+        /data-slot="filter-chip"[^>]*>(?:<[^>]+>)*<span class="t-head">([^<]+)</g,
+      ),
+    ].map((m) => m[1]);
+    assert.deepEqual(chips, [
+      "All",
+      "Beer",
+      "Wine",
+      "Spirit",
+      "Coffee",
+      "Tea",
+      "Sake",
+    ]);
+    // `?types=["WINE"]` lights Wine, and only Wine: one kind at a time.
+    const pressed = [
+      ...html.matchAll(
+        /aria-pressed="true"[^>]*>(?:<[^>]+>)*<span class="t-head">([^<]+)</g,
+      ),
+    ].map((m) => m[1]);
+    assert.deepEqual(pressed, ["Wine"]);
   });
 });
 
 describe("RankNumeral", () => {
-  test("says Rank N to assistive tech; #1 in claret ink, the text-safe claret", () => {
-    const first = renderToStaticMarkup(<RankNumeral rank={1} />);
+  test("says Rank N to assistive tech, a plain numeral, crowned only when told", () => {
+    const first = renderToStaticMarkup(<RankNumeral rank={1} crown />);
     assert.match(first, /<span class="sr-only">Rank <\/span>1/);
-    assert.match(first, /\btext-brand-ink\b/);
-    // Claret itself is a fill: as text on the dark surfaces it fails AA.
-    assert.doesNotMatch(first, /\btext-brand(?!-ink)\b/);
-    const second = renderToStaticMarkup(<RankNumeral rank={2} />);
-    assert.match(second, /\btext-ink-1\b/);
+    assert.match(first, /<svg/);
+    const plain = renderToStaticMarkup(<RankNumeral rank={1} />);
+    assert.doesNotMatch(plain, /<svg/);
+    assert.match(plain, /\bt-head\b/);
   });
 });

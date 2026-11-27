@@ -116,7 +116,7 @@ test.afterAll(async () => {
   }
 });
 
-const COUNT_LINE = /^You agree on \d+ of \d+ shared \w+$/;
+const COUNT_LINE = /^You agree on \d+ of \d+$/;
 
 test("Me → taste profile → friend agreement, as a count", async ({ page }) => {
   await page.goto("/me");
@@ -126,17 +126,19 @@ test("Me → taste profile → friend agreement, as a count", async ({ page }) =
     page.getByRole("heading", { name: "Taste profile" }),
   ).toBeVisible();
 
-  // Their row, by its link: the viewer may have other friends too.
+  // "Agree with friends": their row is the link, by its href, since the
+  // viewer may have other friends too. The row says "a of n", as a count.
+  await expect(
+    page.getByRole("heading", { name: "Agree with friends" }),
+  ).toBeVisible({ timeout: 15_000 });
   const compare = page.locator(
     `a[href="/users/${ACCOUNTS.secondary.id}#compare"]`,
   );
   await expect(compare).toBeVisible({ timeout: 15_000 });
-  const line = page
-    .locator('[data-slot="list-row"]')
-    .filter({ has: compare })
-    .getByText(COUNT_LINE);
+  await expect(compare).toHaveAccessibleName(/you agree on \d+ of \d+$/);
+  const line = compare.getByText(/^\d+ of \d+$/);
   await expect(line).toBeVisible();
-  await expect(line).not.toContainText("%");
+  await expect(compare).not.toContainText("%");
 
   await compare.tap();
   await expect(page).toHaveURL(

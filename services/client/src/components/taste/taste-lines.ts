@@ -96,3 +96,46 @@ export function agreementCounts(row: {
 }): AgreementCounts {
   return { shared: row.shared, agreed: row.agreed, byType: nodes(row.byType) };
 }
+
+/** Under the archetype: "190 ratings · 4 kinds". */
+export const ratingsLine = (ratingCount: number, kinds: number): string =>
+  [
+    `${ratingCount} ${ratingCount === 1 ? "rating" : "ratings"}`,
+    kinds > 0 ? `${kinds} ${kinds === 1 ? "kind" : "kinds"}` : "",
+  ]
+    .filter((part) => part !== "")
+    .join(" · ");
+
+/**
+ * The locked archetype's meter: `need` dashed cells, the first `have` filled.
+ * "Rate 10 drinks to see yours" and "3 of 10".
+ */
+export const archetypeMeter = (
+  ratingCount: number,
+  need: number,
+): { cells: boolean[]; line: string } => {
+  const have = Math.max(0, Math.min(need, ratingCount));
+  return {
+    cells: Array.from({ length: need }, (_, k) => k < have),
+    line: `${have} of ${need}`,
+  };
+};
+
+/**
+ * Agreement as cells, one per shared item, the agreed ones lit (FIX-social-b
+ * ruling 5: a two-state grid, never a chart or a percentage). Past `max`
+ * shared items the grid stops growing and the count says the rest. `null`
+ * below the server's gate, which says only how much is shared.
+ */
+export const agreementCells = (
+  counts: Pick<AgreementCounts, "shared" | "agreed">,
+  max = 16,
+): { cells: boolean[]; line: string } | null => {
+  if (counts.agreed === null) return null;
+  const shown = Math.min(counts.shared, max);
+  const lit = Math.round((counts.agreed / Math.max(1, counts.shared)) * shown);
+  return {
+    cells: Array.from({ length: shown }, (_, k) => k < lit),
+    line: `${counts.agreed} of ${counts.shared}`,
+  };
+};

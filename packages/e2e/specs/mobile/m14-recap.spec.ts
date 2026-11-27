@@ -7,10 +7,10 @@ import { Gql } from "../../fixtures/test.ts";
 /**
  * L04 · the recap deck, at 390×844 with a thumb.
  *
- * Me → "Your <month> recap" → the deck → tap to the next card → "Share this
- * card". The browser here is told it cannot share files, so the card must
- * fall back to a download: a PNG named for the period and card, with nothing
- * public involved (L16).
+ * Me → "Your <month> recap" → the deck → tap to the next card → Share →
+ * the share sheet ("Image only · no link") → Save image: a PNG named for the
+ * period and card, with nothing public involved (L16). The browser here is
+ * told it cannot share files, so Share image would download too.
  *
  * Creates three teas in three tea categories as `test@test.com` and logs each
  * once this month, so the deck has at least "New to you" and a styles card
@@ -103,7 +103,8 @@ test("Me → recap → next card → share falls back to download", async ({
   const entry = page.getByRole("link", { name: /recap$/ });
   await expect(entry).toBeVisible();
   await entry.click();
-  await expect(page).toHaveURL(/\/recap$/);
+  // The latest recap opens; picking another writes `?period=`.
+  await expect(page).toHaveURL(/\/recap(\?period=[\d-]+)?$/);
 
   const deck = page.locator('[data-slot="recap-deck"]');
   await expect(deck).toBeVisible();
@@ -116,14 +117,20 @@ test("Me → recap → next card → share falls back to download", async ({
   await next.click();
   await expect(overline).not.toHaveText("New to you");
 
+  await page.getByRole("button", { name: "Share", exact: true }).click();
+  const sheet = page.getByRole("dialog", { name: "Share" });
+  await expect(sheet.getByText("Image only · no link")).toBeVisible();
+  const save = sheet.getByRole("button", { name: "Save image" });
+  // Enabled once the preview image has loaded.
+  await expect(save).toBeEnabled({ timeout: 15_000 });
   const [download] = await Promise.all([
     page.waitForEvent("download"),
-    page.getByRole("button", { name: "Share this card" }).click(),
+    save.click(),
   ]);
   expect(download.suggestedFilename()).toMatch(
     /^cellar-recap-\d{4}-\d{2}-2\.png$/,
   );
-  await expect(page.getByText(/Saved the image to your device/)).toBeVisible();
+  await expect(page.getByText("Image saved")).toBeVisible();
 
   // Close goes back to Me.
   // A button now: Close goes back (history), not a push of /me (CR-6).

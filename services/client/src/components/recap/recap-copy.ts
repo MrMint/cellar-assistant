@@ -8,10 +8,11 @@
  * Every number on a card is a count of distinct things; there is no copy here
  * for "drinks logged" because no card carries one.
  */
-import type {
-  BreadthStampKind,
-  RecapCardKind,
-  RecapPeriod,
+import {
+  type BreadthStampKind,
+  parseRecapPeriod,
+  type RecapCardKind,
+  type RecapPeriod,
 } from "@cellar-assistant/contracts/recap";
 import { stampLabel, stampNoun, stampTierText } from "@/lib/stamps/stamps";
 
@@ -176,3 +177,122 @@ export const viewerTimeZone = (): string => {
     return "UTC";
   }
 };
+
+/** A period in `recap(period)`'s format: `2026-05` or `2026`. */
+export const recapPeriodKey = (period: RecapPeriod): string =>
+  period.kind === "year"
+    ? String(period.year)
+    : `${period.year}-${String(period.month).padStart(2, "0")}`;
+
+/** The header and sheet name: "May 2026", "2026". */
+export const recapPeriodName = (period: RecapPeriod): string =>
+  period.kind === "year"
+    ? String(period.year)
+    : `${MONTHS[period.month - 1] ?? ""} ${period.year}`;
+
+/** In a sentence: "November" ("Nothing to recap for November yet"), "2026". */
+export const recapPeriodShort = (period: RecapPeriod): string =>
+  period.kind === "year"
+    ? String(period.year)
+    : (MONTHS[period.month - 1] ?? "");
+
+/** The share image's foot: "Dec 2023", "2024". */
+export const recapPeriodFoot = (period: RecapPeriod): string =>
+  period.kind === "year"
+    ? String(period.year)
+    : `${(MONTHS[period.month - 1] ?? "").slice(0, 3)} ${period.year}`;
+
+export type RecapPeriodOption = {
+  readonly key: string;
+  readonly label: string;
+  /** "This month", "So far", "Whole year", or "". */
+  readonly sub: string;
+};
+
+/**
+ * The Recaps sheet (MC-recap): this month first (even when it is empty), then
+ * each year newest first, the year itself ("So far" for this one, "Whole
+ * year" for the rest) followed by its months, newest first. Only periods the
+ * server lists appear, apart from this month and this year.
+ */
+export const recapPeriodList = (
+  periods: {
+    readonly months: readonly string[];
+    readonly years: readonly string[];
+  },
+  now: Date = new Date(),
+): RecapPeriodOption[] => {
+  const thisMonth = currentRecapPeriod(now);
+  const thisYear = String(now.getFullYear());
+  const years = new Set([thisYear, ...periods.years]);
+  for (const month of periods.months) years.add(month.slice(0, 4));
+  const options: RecapPeriodOption[] = [
+    { key: thisMonth, label: labelOf(thisMonth), sub: "This month" },
+  ];
+  for (const year of Array.from(years).sort().reverse()) {
+    if (!/^\d{4}$/.test(year)) continue;
+    if (year === thisYear || periods.years.includes(year)) {
+      options.push({
+        key: year,
+        label: year,
+        sub: year === thisYear ? "So far" : "Whole year",
+      });
+    }
+    for (const month of Array.from(new Set(periods.months)).sort().reverse()) {
+      if (month.slice(0, 4) !== year || month === thisMonth) continue;
+      if (parseRecapPeriod(month) === null) continue;
+      options.push({ key: month, label: labelOf(month), sub: "" });
+    }
+  }
+  return options;
+};
+
+const labelOf = (key: string): string => {
+  const period = parseRecapPeriod(key);
+  return period === null ? key : recapPeriodName(period);
+};
+
+export type RecapTotals = {
+  readonly checkIns: number;
+  readonly ratings: number;
+  readonly bottlesAdded: number;
+};
+
+const counted = (n: number, one: string, many: string): string =>
+  `${n} ${n === 1 ? one : many}`;
+
+/** "12 check-ins · 8 ratings · 3 bottles added"; zeros left out. */
+export const recapTotalsLine = (totals: RecapTotals): string =>
+  [
+    totals.checkIns > 0
+      ? counted(totals.checkIns, "check-in", "check-ins")
+      : "",
+    totals.ratings > 0 ? counted(totals.ratings, "rating", "ratings") : "",
+    totals.bottlesAdded > 0
+      ? `${counted(totals.bottlesAdded, "bottle", "bottles")} added`
+      : "",
+  ]
+    .filter((part) => part !== "")
+    .join(" · ");
+
+const STAT_LABEL: Partial<Record<RecapCardKind, string>> = {
+  NEW_TO_YOU: "new to you",
+  TYPES: "kinds",
+  STYLES: "styles",
+  REGIONS: "regions",
+};
+
+/** The end card's tiles: one per counted card, in the deck's order. */
+export const recapEndStats = (
+  cards: readonly RecapCardView[],
+): { readonly value: number; readonly label: string }[] =>
+  cards.flatMap((card) => {
+    const label = STAT_LABEL[card.kind];
+    return label === undefined ? [] : [{ value: card.count, label }];
+  });
+
+/** "+7 more" when a card counts more than its chips show, else "". */
+export const recapMoreText = (card: RecapCardView): string =>
+  card.count > card.chips.length && card.kind !== "TOP_RATED"
+    ? `+${card.count - card.chips.length} more`
+    : "";
