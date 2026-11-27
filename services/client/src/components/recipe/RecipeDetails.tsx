@@ -442,7 +442,12 @@ export const RecipeDetails = ({
                 myReview={
                   mine === null
                     ? null
-                    : { id: mine.id, score: mine.score, text: mine.text }
+                    : {
+                        id: mine.id,
+                        userId: mine.userId,
+                        score: mine.score,
+                        text: mine.text,
+                      }
                 }
                 onReviewAdded={changed}
               />

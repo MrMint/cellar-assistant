@@ -20,6 +20,11 @@ import {
   UpdateRecipeReviewMutation,
 } from "./queries";
 import { QUIET_ACTION } from "./RecipePageParts";
+import {
+  type OwnReview,
+  reviewDeleteWrite,
+  reviewRestoreWrite,
+} from "./review-plan";
 
 export type AddRecipeReviewResult = {
   userId: string;
@@ -35,12 +40,7 @@ export type AddRecipeReviewProps = {
    * The viewer's own review, which this form edits rather than adding a
    * second: the API allows one per viewer per recipe.
    */
-  myReview?: {
-    id: string;
-    score?: number;
-    /** Serialized Lexical state, or null. */
-    text?: string | null;
-  } | null;
+  myReview?: OwnReview | null;
   /** Whether anyone else has reviewed it: "No reviews yet" when not. */
   hasReviews?: boolean;
   onReviewAdded?: (review: AddRecipeReviewResult) => void;
@@ -148,15 +148,12 @@ export const AddRecipeReview = ({
    * the same words and stars back, as a new review on this recipe.
    */
   const handleDelete = () => {
-    if (myReview === null) return;
-    const gone = {
-      score: myReview.score,
-      text: myReview.text ?? undefined,
-    };
+    const write = reviewDeleteWrite(recipeId, myReview, viewerId);
+    if (write === null || myReview === null) return;
+    const gone = reviewRestoreWrite(myReview);
     startTransition(async () => {
       const result = unwrapResult(
-        (await deleteReview({ recipeId, reviewId: myReview.id })).data
-          ?.deleteRecipeReview,
+        (await deleteReview(write)).data?.deleteRecipeReview,
         "DeletedRecipeReview",
       );
       if (!result.ok) {
