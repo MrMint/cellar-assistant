@@ -21,6 +21,11 @@ export type SuccessSheetProps = {
   imageError?: string;
   onSnapAnother: () => void;
   /**
+   * Capture-Place: one-tap Undo of the +1, only when a bottle was kept. It
+   * takes back that bottle alone (`removeItemFromCellar`).
+   */
+  onUndo?: () => void;
+  /**
    * "Open it now", only for a bottle in a cellar: its page, where opening it
    * is one tap (X06's call — the sheet itself uncorks nothing).
    */
@@ -50,6 +55,7 @@ export function SuccessSheet({
   photo,
   imageError,
   onSnapAnother,
+  onUndo,
   onOpenNow,
   onDone,
 }: SuccessSheetProps) {
@@ -85,6 +91,11 @@ export function SuccessSheet({
           ) : (
             <Button variant="secondary" onClick={onDone}>
               {inCellar ? "View bottle" : "View item"}
+            </Button>
+          )}
+          {onUndo !== undefined && (
+            <Button variant="quiet-muted" onClick={onUndo}>
+              Undo
             </Button>
           )}
         </div>

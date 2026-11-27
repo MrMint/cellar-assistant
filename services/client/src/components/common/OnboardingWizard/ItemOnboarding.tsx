@@ -10,7 +10,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { useClient, useQuery } from "urql";
+import { useClient, useMutation, useQuery } from "urql";
 import { BottomSheet } from "@/components/app/BottomSheet";
 import { Camera, ErrorIcon, Scan, Warning } from "@/components/app/icons";
 import { notify } from "@/components/app/notify";
@@ -36,6 +36,7 @@ import {
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
+import { RemoveItemFromCellarMutation } from "@/lib/api/cellars";
 import { unwrapResult } from "@/lib/api/result";
 import {
   defaultCellarId,
@@ -59,6 +60,7 @@ import { type OnboardingResult, OnboardingWizard } from "./index";
 import { MatchList } from "./MatchList";
 import { OnboardingMachine } from "./machines";
 import { OnboardingItemForm } from "./OnboardingItemForm";
+import { type FiledBottle, filedBottleOf, undoFiledBottle } from "./undo-file";
 
 export type ItemOnboardingProps = {
   /** The type to read the label as: the route's, or the first default. */
@@ -103,13 +105,43 @@ export type ItemOnboardingProps = {
  * starts a fresh run in place.
  */
 /** A bottle filed this visit, for the camera's tray (Capture-Camera 04). */
-type Filed = { name: string; href: string; photo?: string };
+type Filed = {
+  name: string;
+  href: string;
+  photo?: string;
+  /** The bottle kept, when one was: what Undo takes back out. */
+  bottle?: FiledBottle;
+};
 
 export const ItemOnboarding = (props: ItemOnboardingProps) => {
   const navigate = useNavigate();
   const pathname = usePathname();
   const [run, setRun] = useState(0);
   const [tray, setTray] = useState<readonly Filed[]>([]);
+  // Held here, not in the run: "Snap another" remounts the run while the
+  // toast's Undo is still up.
+  const [, removeFromCellar] = useMutation(RemoveItemFromCellarMutation);
+  const undoFiled = useCallback(
+    async (filed: Filed) => {
+      if (filed.bottle === undefined) return;
+      try {
+        await undoFiledBottle(
+          (variables) => removeFromCellar(variables),
+          filed.bottle,
+        );
+        setTray((before) => before.filter((entry) => entry !== filed));
+        feedback("success");
+        notify("Taken back out");
+      } catch (error) {
+        feedback("refuse");
+        notify(
+          error instanceof Error ? error.message : "That bottle stayed in.",
+          { tone: "error" },
+        );
+      }
+    },
+    [removeFromCellar],
+  );
   const [resumeId, setResumeId] = useState(() => draftIdFrom(props.resumeId));
   const restart = useCallback(() => {
     // Drop `?draft=`: the next run is a new bottle.
@@ -127,6 +159,7 @@ export const ItemOnboarding = (props: ItemOnboardingProps) => {
       onRestart={restart}
       tray={tray}
       onFiled={(filed) => setTray((before) => [...before, filed])}
+      onUndoFiled={undoFiled}
     />
   );
 };
@@ -146,10 +179,12 @@ const ItemOnboardingRun = ({
   onRestart,
   tray = [],
   onFiled,
+  onUndoFiled,
 }: ItemOnboardingProps & {
   onRestart: () => void;
   tray?: readonly Filed[];
   onFiled?: (filed: Filed) => void;
+  onUndoFiled?: (filed: Filed) => void;
 }) => {
   const urqlClient = useClient();
   const navigate = useNavigate();
@@ -323,14 +358,23 @@ const ItemOnboardingRun = ({
       cellarId: context.cellarId,
       cellarItemId: context.cellarItemId,
     });
+    const filed: Filed = {
+      name,
+      href,
+      photo: context.displayImageDataUrl,
+      bottle: filedBottleOf(context),
+    };
     feedback("success");
+    // Capture-Place: a bottle kept gets its one-tap Undo; catalog only, View.
     notify(
       context.imageError === undefined
         ? `Added ${name}`
         : "Added, photo not saved",
-      { undo: () => navigate.push(href), actionLabel: "View" },
+      filed.bottle !== undefined && onUndoFiled !== undefined
+        ? { undo: () => onUndoFiled(filed) }
+        : { undo: () => navigate.push(href), actionLabel: "View" },
     );
-    onFiled?.({ name, href, photo: context.displayImageDataUrl });
+    onFiled?.(filed);
     send({ type: "SNAP_ANOTHER" });
   }, [
     state.value,
@@ -344,6 +388,7 @@ const ItemOnboardingRun = ({
     itemType,
     navigate,
     onFiled,
+    onUndoFiled,
     send,
   ]);
 
@@ -792,6 +837,19 @@ const ItemOnboardingRun = ({
         photo={displayPhoto}
         imageError={context.imageError}
         onSnapAnother={() => send({ type: "SNAP_ANOTHER" })}
+        onUndo={
+          onUndoFiled !== undefined && filedBottleOf(context) !== undefined
+            ? () => {
+                const bottle = filedBottleOf(context);
+                send({ type: "SNAP_ANOTHER" });
+                onUndoFiled({
+                  name: context.itemName ?? itemTypeLabel(itemType),
+                  href: "",
+                  bottle,
+                });
+              }
+            : undefined
+        }
         onOpenNow={
           inCellar && isNotNil(context.cellarItemId)
             ? () => send({ type: "OPEN_NOW" })
