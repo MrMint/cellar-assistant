@@ -116,7 +116,7 @@ test.afterAll(async () => {
   }
 });
 
-const COUNT_LINE = /^You agree on \d+ of \d+ shared \w+$/;
+const COUNT_LINE = /^You agree on \d+ of \d+$/;
 
 test("Me → taste profile → friend agreement, as a count", async ({ page }) => {
   await page.goto("/me");
