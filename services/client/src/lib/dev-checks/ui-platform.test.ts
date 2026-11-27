@@ -11,7 +11,7 @@
  * code that cannot read a CSS variable or that defines the motion tokens.
  */
 import assert from "node:assert/strict";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { describe, test } from "node:test";
 import {
   formatFindings,
@@ -92,6 +92,18 @@ describe("ui-platform rules (the scanner itself)", () => {
          import { motion as m } from "motion/react";`,
       ),
       ["joy-import", "joy-import", "legacy-dep", "legacy-dep", "framer-motion"],
+    );
+  });
+
+  test("Inter only: another next/font family, or a local font, fails", () => {
+    assert.deepEqual(
+      rules(
+        "src/app/layout.tsx",
+        `import { Fraunces, Inter } from "next/font/google";
+         import { Inter as Sans } from "next/font/google";
+         import local from "next/font/local";`,
+      ),
+      ["second-font", "second-font"],
     );
   });
 
@@ -227,5 +239,26 @@ describe("ui-platform rules (the scanner itself)", () => {
         file,
       );
     }
+  });
+});
+
+describe("the kit's style rules, on the stylesheet", () => {
+  const css = readFileSync(
+    new URL("../../app/globals.css", import.meta.url),
+    "utf8",
+  );
+  test("action is teal: primary is --ca-accent, and --ca-accent is act", () => {
+    assert.match(css, /--color-primary:\s*var\(--ca-accent\)/);
+    assert.match(css, /:root,[^{]*\{[^}]*--ca-accent:\s*#70a2a9;/);
+    assert.match(
+      css,
+      /\[data-theme="light"\]\s*\{[^}]*--ca-accent:\s*#5f949b;/,
+    );
+  });
+  test("brass is a shim onto gold until its last use goes (L27)", () => {
+    assert.match(css, /--color-brass:\s*var\(--ca-gold\)/);
+  });
+  test("Inter only", () => {
+    assert.doesNotMatch(css, /fraunces/i);
   });
 });

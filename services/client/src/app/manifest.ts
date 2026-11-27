@@ -1,5 +1,5 @@
 import type { MetadataRoute } from "next";
-import { color } from "@/lib/tokens";
+import { darkValues } from "@/lib/tokens";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
@@ -12,8 +12,10 @@ export default function manifest(): MetadataRoute.Manifest {
     scope: "/",
     display: "standalone",
     display_override: ["standalone"],
-    background_color: color.bg,
-    theme_color: color.bg,
+    // One value per install, so the manifest stays dark whatever the theme
+    // (L45); the page itself follows the theme through viewport.themeColor.
+    background_color: darkValues.bg,
+    theme_color: darkValues.bg,
     orientation: "any",
     categories: ["food", "lifestyle", "utilities"],
     launch_handler: {
