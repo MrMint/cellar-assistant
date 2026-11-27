@@ -3,7 +3,7 @@
  * it re-exported from `@cellar-assistant/shared/constants/bands` (a package
  * that no longer exists) are inlined; the colours are the design tokens now
  * (design-direction.md §3.1: one claret → brass → ash ramp, Unrated on
- * surface-3, the band word always printed beside the hue).
+ * raised, the band word always printed beside the hue).
  */
 export const BANDS = [5, 4, 3, 2, 1, 0] as const;
 export type Band = (typeof BANDS)[number];
@@ -22,7 +22,7 @@ export const BAND_LABELS: Record<number, string> = {
  * than a class: a chart's SVG `fill`, an inline swatch. MapLibre paint cannot
  * read a variable; it reads `bandColor` from `lib/tokens.ts` instead.
  *
- * Unrated is a mark here, not a surface: `surface-3` on a `surface-1`
+ * Unrated is a mark here, not a surface: `raised` on the page
  * section is about 1.2:1, so its bar all but vanished from the histogram.
  * Half-strength ink-3 stays the quietest bar and still reads as one.
  */
@@ -32,7 +32,7 @@ export const BAND_COLORS: Record<number, string> = {
   3: "var(--ca-band-3)",
   2: "var(--ca-band-2)",
   1: "var(--ca-band-1)",
-  0: "color-mix(in oklab, var(--ca-ink-3) 50%, transparent)",
+  0: "color-mix(in oklab, var(--color-ink-3) 50%, transparent)",
 };
 
 /**
@@ -75,9 +75,9 @@ export const BAND_TONES: Record<
     divider: "border-band-1/40",
   },
   0: {
-    rule: "border-surface-3",
-    tint: "bg-surface-3/60",
-    swatch: "bg-surface-3",
+    rule: "border-edge-2",
+    tint: "bg-raised/60",
+    swatch: "bg-raised",
     divider: "border-line",
   },
 };

@@ -29,6 +29,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
 import { aiOutcome } from "@/lib/ai/outcome";
 import { failureFromTransport, unwrapResult } from "@/lib/api/result";
+import { feedback } from "@/lib/feedback";
 import { createLatestOnly } from "@/lib/latest-only";
 import { cn } from "@/lib/utils";
 import { displayItemName } from "@/utilities/smart-title-case";
@@ -46,7 +47,12 @@ import {
   suggestionSections,
   togglePick,
 } from "./add-entry";
-import { BAND_LABELS, BAND_TONES, type TierListEntityType } from "./constants";
+import {
+  BAND_LABELS,
+  BAND_TONES,
+  entryNoun,
+  type TierListEntityType,
+} from "./constants";
 import { bandForScore } from "./history";
 import { PairwisePlacement } from "./pairwise/PairwisePlacement";
 import {
@@ -100,6 +106,7 @@ export function AddEntryModal({
   busy,
   error,
   listType,
+  listName,
   onList,
   tierListId,
 }: {
@@ -110,6 +117,8 @@ export function AddEntryModal({
   busy: boolean;
   error: string | null;
   listType: string;
+  /** The list's name: the sheet's "To …" line. */
+  listName?: string;
   /** Board hrefs of the entries already on the list (`onListHrefs`). */
   onList: ReadonlySet<string>;
   tierListId: string;
@@ -265,7 +274,10 @@ export function AddEntryModal({
       onOpenChange={(next) => {
         if (!next) onClose();
       }}
-      title="Add entry"
+      title={`Add a ${entryNoun(entityType, 1)}`}
+      {...(listName === undefined || listName === ""
+        ? {}
+        : { description: `To ${listName}` })}
       className="md:max-w-[480px]"
       footer={
         <div className="flex w-full flex-col gap-2">
@@ -333,7 +345,7 @@ export function AddEntryModal({
         </form>
 
         {message !== null && (
-          <p role="alert" className="text-destructive type-callout">
+          <p role="alert" className="t-body m-0 text-danger">
             {message}
           </p>
         )}
@@ -344,8 +356,8 @@ export function AddEntryModal({
           </div>
         ) : rows !== null ? (
           rows.length === 0 ? (
-            <p className="text-center text-ink-3 type-callout">
-              Nothing matched that phrase.
+            <p className="t-body m-0 text-center text-ink-3">
+              No {entryNoun(entityType, 1)} matches “{text.trim()}”
             </p>
           ) : (
             <CandidateList
@@ -434,7 +446,7 @@ function Suggestions({
 
   if (error !== undefined || sections === null || sections.length === 0) {
     return (
-      <p className="text-center text-ink-3 type-callout">
+      <p className="t-body m-0 text-center text-ink-3">
         {error !== undefined
           ? "Couldn't load what you've had just now. Search instead."
           : `Search for ${entityType === "place" ? "a place" : "an item"} to add.`}{" "}
@@ -508,14 +520,14 @@ function CandidateList({
   return (
     <section className="flex flex-col gap-1.5">
       {heading && (
-        <h3 id={headingId} className="px-1 text-ink-2 type-overline">
+        <h3 id={headingId} className="t-micro m-0 px-1 text-ink-2">
           {label}
         </h3>
       )}
       <ul
         aria-label={heading ? undefined : label}
         aria-labelledby={heading ? headingId : undefined}
-        className="flex flex-col divide-y divide-line overflow-hidden rounded-lg bg-surface-1"
+        className="m-0 flex list-none flex-col divide-y divide-edge overflow-hidden rounded-md border border-edge bg-card p-0"
       >
         {rows.map((row) => {
           const key = candidateKey(row);
@@ -569,39 +581,38 @@ export function CandidateRow({
       data-slot="add-entry-candidate"
       disabled={onList || busy}
       aria-disabled={onList || busy}
-      onClick={() => onToggle(row)}
+      onClick={() => {
+        feedback("toggle");
+        onToggle(row);
+      }}
       className={cn(
-        "flex min-h-14 w-full items-center gap-3 px-4 py-2.5 text-left outline-none transition-colors duration-(--ca-dur-micro) ease-standard focus-visible:ring-[3px] focus-visible:ring-ring/50 enabled:hover:bg-surface-2 enabled:active:bg-surface-3",
+        "flex min-h-14 w-full items-center gap-3 px-4 py-2.5 text-left outline-none transition-colors focus-visible:bg-raised enabled:hover:bg-raised enabled:active:bg-raised",
         busy && !onList && "opacity-60",
       )}
     >
       <span
         aria-hidden
         className={cn(
-          "flex size-6 shrink-0 items-center justify-center rounded-full transition-colors duration-(--ca-dur-micro) ease-standard",
+          "flex size-6 shrink-0 items-center justify-center rounded-full transition-colors",
           onList
             ? "text-success"
             : picked
-              ? "bg-ink-1 text-background"
-              : "border-2 border-ink-3/60",
+              ? "bg-act text-on-act"
+              : "border-2 border-edge-2",
         )}
       >
         {(onList || picked) && <Check strokeWidth={2.25} className="size-4" />}
       </span>
       <span className="flex min-w-0 flex-1 flex-col">
-        <span className="truncate font-semibold text-ink-1 type-callout">
-          {row.name}
-        </span>
+        <span className="t-head truncate text-ink">{row.name}</span>
         {detail !== "" && (
-          <span className="truncate type-footnote">{detail}</span>
+          <span className="t-cap truncate text-ink-2">{detail}</span>
         )}
       </span>
       {onList ? (
-        <span className="shrink-0 text-success type-footnote">
-          On this list
-        </span>
+        <span className="t-cap shrink-0 text-success">On this list</span>
       ) : (
-        <span className="flex shrink-0 items-center gap-1.5 text-ink-2 type-footnote">
+        <span className="t-cap flex shrink-0 items-center gap-1.5 text-ink-2">
           {row.myScore !== null && (
             <span className="tabular">You {formatScore(row.myScore)} ·</span>
           )}

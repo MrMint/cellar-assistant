@@ -117,7 +117,7 @@ test("Add entry opens on what you have; two ticks are one add, and one Undo", as
     await page
       .getByRole("button", { name: "Add from what you've tasted", exact: true })
       .tap();
-    const sheet = page.getByRole("dialog", { name: "Add entry" });
+    const sheet = page.getByRole("dialog", { name: "Add a wine" });
     await expect(sheet).toBeVisible();
     // No typing: the sections are there before any search.
     const cellars = sheet.getByRole("list", { name: "In your cellars" });

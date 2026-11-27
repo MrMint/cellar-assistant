@@ -70,7 +70,7 @@ export default async function TierListPage({
   if (!result.ok) {
     if (isNotFound(result.error)) notFound();
     return (
-      <p role="alert" className="text-destructive type-body">
+      <p role="alert" className="t-body text-danger">
         {result.error.message}
       </p>
     );

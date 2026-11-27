@@ -16,14 +16,14 @@ import {
   itemDisplayFromNode,
   itemEntrySubtitle,
   itemTypeOfList,
+  moveEntry,
   onListHrefs,
   placeEntrySubtitle,
+  rankOf,
   reorderCallFor,
   type TierListItemNode,
   tierListDataFrom,
   tierListOptionsFor,
-  moveEntry,
-  rankOf,
 } from "./adapter";
 
 const placeNode = (

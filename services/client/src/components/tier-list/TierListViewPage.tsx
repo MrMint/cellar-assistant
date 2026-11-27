@@ -652,6 +652,7 @@ export function TierListViewPage({
         busy={adding}
         error={addError}
         listType={data.listType}
+        listName={data.name}
         onList={onList}
         tierListId={data.id}
       />
