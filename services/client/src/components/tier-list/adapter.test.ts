@@ -22,6 +22,8 @@ import {
   type TierListItemNode,
   tierListDataFrom,
   tierListOptionsFor,
+  moveEntry,
+  rankOf,
 } from "./adapter";
 
 const placeNode = (
@@ -461,5 +463,66 @@ describe("itemTypeOfList (X08: which lists offer Try This Next)", () => {
     assert.equal(itemTypeOfList("SAKE"), "SAKE");
     assert.equal(itemTypeOfList("place"), null);
     assert.equal(itemTypeOfList("bottle"), null);
+  });
+});
+
+describe("moves in Arrange (SPEC 16): one band order, one rank", () => {
+  const map = () =>
+    bandMapOf([
+      { id: "a", band: 5 },
+      { id: "b", band: 5 },
+      { id: "c", band: 4 },
+      { id: "d", band: 2 },
+    ]);
+
+  test("rankOf counts across the bands, best first", () => {
+    const m = map();
+    assert.equal(rankOf(m, "a"), 1);
+    assert.equal(rankOf(m, "c"), 3);
+    assert.equal(rankOf(m, "d"), 4);
+    assert.equal(rankOf(m, "nope"), null);
+  });
+
+  test("up within a band swaps, and names that band in full", () => {
+    const move = moveEntry(map(), "b", { kind: "up" });
+    assert.ok(move);
+    assert.deepEqual(move.call, { band: 5, orderedIds: ["b", "a"] });
+    assert.equal(move.rank, 1);
+    assert.equal(move.band, 5);
+  });
+
+  test("up from the top of a band goes to the end of the band above", () => {
+    const move = moveEntry(map(), "c", { kind: "up" });
+    assert.ok(move);
+    assert.deepEqual(move.call, { band: 5, orderedIds: ["a", "b", "c"] });
+    assert.equal(move.rank, 3);
+  });
+
+  test("down from the end of a band goes to the top of the band below, empty or not", () => {
+    const move = moveEntry(map(), "c", { kind: "down" });
+    assert.ok(move);
+    assert.deepEqual(move.call, { band: 3, orderedIds: ["c"] });
+    assert.equal(move.band, 3);
+    assert.equal(move.rank, 3);
+  });
+
+  test("the very top cannot go up, the very bottom of Bad cannot go down", () => {
+    assert.equal(moveEntry(map(), "a", { kind: "up" }), null);
+    const bottom = bandMapOf([{ id: "z", band: 1 }]);
+    assert.equal(moveEntry(bottom, "z", { kind: "down" }), null);
+  });
+
+  test("Move to band lands last in that band; its own band is no move", () => {
+    const move = moveEntry(map(), "d", { kind: "band", band: 5 });
+    assert.ok(move);
+    assert.deepEqual(move.call, { band: 5, orderedIds: ["a", "b", "d"] });
+    assert.equal(move.rank, 3);
+    assert.equal(moveEntry(map(), "d", { kind: "band", band: 2 }), null);
+  });
+
+  test("the rank a move reports is the rank in the map it produces", () => {
+    const move = moveEntry(map(), "d", { kind: "band", band: 4 });
+    assert.ok(move);
+    assert.equal(move.rank, rankOf(move.after, "d"));
   });
 });
