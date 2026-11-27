@@ -577,6 +577,18 @@ export type TierListActorInterface = {
   redo(ctx: Ctx, expectedSeq: number): Promise<TierListHistoryStepResult>;
 
   /**
+   * SV-A (L12): "write my Insights now" — the explicit, idempotent trigger the
+   * client sends when it sees `IDLE` on a list of 3+ entries it owns (a read
+   * never writes). Creator only: anybody else gets the same refusal as any
+   * other creator-only write. Asks only from `IDLE`; every other status —
+   * too few entries, already pending, failed, ready, no provider — is a
+   * no-op that returns the list as it is, so a panel that re-renders cannot
+   * re-request in a loop. The generation it enqueues is attributed to the
+   * caller and counts against their `ai_model/tier_list_insights` allowance.
+   */
+  requestInsights(ctx: Ctx): Promise<TierListDto>;
+
+  /**
    * `system`, via the outbox — replaces the `tier_list_items_content_changed`
    * trigger plus the `generate_tier_list_insights` event trigger. Enqueued by
    * every content-changing write, never by `update`. Idempotent by
@@ -615,6 +627,8 @@ export const TierListActorDescriptor: ActorDescriptor<TierListActorInterface> =
       editHistory: {},
       undo: { modelBacked: true },
       redo: { modelBacked: true },
+      // SV-A: enqueues `generateInsights` from IDLE.
+      requestInsights: { modelBacked: true },
       generateInsights: {},
     },
   };

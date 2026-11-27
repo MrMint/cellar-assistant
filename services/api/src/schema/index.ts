@@ -91,5 +91,7 @@ import "./recap.ts";
 import "./brew-prefs.ts";
 // L10 (wave C seenat): `Item.seenAt`.
 import "./seen-at.ts";
+// SV-A (redesign-2026-11): `myAiQuota`. References only its own types.
+import "./budget.ts";
 
 export const schema = builder.toSchema();

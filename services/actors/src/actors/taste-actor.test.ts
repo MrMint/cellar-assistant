@@ -8,13 +8,16 @@
  * that the actor's answer leaves them out, so a passing test cannot mean the
  * fixture was simply wrong.
  */
+import { randomUUID } from "node:crypto";
 import {
   AGREEMENT_MIN_SHARED,
   BudgetExceededError,
   type Ctx,
+  ForbiddenError,
   type ItemRef,
   NotFoundError,
   PROFILE_NOT_SHARED,
+  ValidationError,
 } from "@cellar-assistant/contracts";
 import { sql } from "@cellar-assistant/db/orm";
 import { ActorId, DaprClient } from "@dapr/dapr";
@@ -576,6 +579,166 @@ describe.skipIf(skip)("TasteActor", () => {
         await expect(actor.profile(userCtx(other))).rejects.toThrow(
           /may only be called by that viewer/,
         );
+      });
+    });
+  });
+
+  describe("compare (MC-compare)", () => {
+    const befriend = async (db: DbOrTx, a: string, b: string) => {
+      await seedFriendship(db, a, b);
+      await seedFriendship(db, b, a);
+    };
+
+    it("rows for items both rated, biggest difference first, then by name, filtered by kind", async () => {
+      await withTestDb(async (db) => {
+        const viewer = await seedUser(db);
+        const friend = await seedUser(db);
+        await befriend(db, viewer, friend);
+        const wine = (name: string) => seedItemOfType(db, "WINE", viewer, name);
+        const [a, b, c, d, e] = [
+          await wine("Cmp A"),
+          await wine("Cmp B"),
+          await wine("Cmp C"),
+          await wine("Cmp D"),
+          await wine("Cmp E"),
+        ] as const;
+        const beer = await seedItemOfType(db, "BEER", viewer, "Cmp Beer");
+        const onlyMine = await wine("Cmp Mine");
+        const onlyTheirs = await wine("Cmp Theirs");
+        for (const ref of [a, b, c, d, e])
+          await seedItemReview(db, viewer, ref, 4);
+        await seedItemReview(db, viewer, beer, 3);
+        await seedItemReview(db, viewer, onlyMine, 5);
+        await seedItemReview(db, friend, a, 4);
+        await seedItemReview(db, friend, b, 2);
+        // A friend's drink-log score is theirs to share with a friend.
+        await scoreCheckIn(db, friend, c, 4.5);
+        await seedItemReview(db, friend, d, 1);
+        await seedItemReview(db, friend, e, 4);
+        await seedItemReview(db, friend, beer, 5);
+        await seedItemReview(db, friend, onlyTheirs, 3);
+
+        const actor = await newActor(viewer, db);
+        const rows = await actor.compare(userCtx(viewer), { userId: friend });
+        expect(
+          rows.map((row) => [row.name, row.myScore, row.theirScore]),
+        ).toEqual([
+          ["Cmp D", 4, 1],
+          ["Cmp B", 4, 2],
+          ["Cmp Beer", 3, 5],
+          ["Cmp C", 4, 4.5],
+          ["Cmp A", 4, 4],
+          ["Cmp E", 4, 4],
+        ]);
+        expect(rows[0]?.item).toEqual({ type: "WINE", id: d.id });
+        const beers = await actor.compare(userCtx(viewer), {
+          userId: friend,
+          itemType: "BEER",
+        });
+        expect(beers).toEqual([
+          { item: beer, name: "Cmp Beer", myScore: 3, theirScore: 5 },
+        ]);
+      });
+    });
+
+    it("a non-friend gets nothing, though their reviews are shared enough for agreement", async () => {
+      await withTestDb(async (db) => {
+        const viewer = await seedUser(db);
+        const stranger = await seedUser(db);
+        for (let i = 0; i < AGREEMENT_MIN_SHARED + 1; i += 1) {
+          const ref = await seedItemOfType(db, "WINE", viewer, `Stranger ${i}`);
+          await seedItemReview(db, viewer, ref, 4);
+          await seedItemReview(db, stranger, ref, 2);
+        }
+        const actor = await newActor(viewer, db);
+        expect((await actor.agreement(userCtx(viewer), stranger)).shared).toBe(
+          AGREEMENT_MIN_SHARED + 1,
+        );
+        expect(
+          await actor.compare(userCtx(viewer), { userId: stranger }),
+        ).toEqual([]);
+        // Unknown, malformed and yourself answer the same.
+        for (const userId of [randomUUID(), "not-a-uuid", viewer]) {
+          expect(await actor.compare(userCtx(viewer), { userId })).toEqual([]);
+        }
+      });
+    });
+
+    it("a friend's rating the viewer may not see never appears", async () => {
+      await withTestDb(async (db) => {
+        const viewer = await seedUser(db);
+        const friend = await seedUser(db);
+        const stranger = await seedUser(db);
+        await befriend(db, viewer, friend);
+        const refs: ItemRef[] = [];
+        for (let i = 0; i < AGREEMENT_MIN_SHARED; i += 1) {
+          refs.push(await seedItemOfType(db, "WINE", viewer, `Shared ${i}`));
+        }
+        for (const ref of refs) {
+          await seedItemReview(db, viewer, ref, 4);
+          await seedItemReview(db, friend, ref, 4);
+        }
+        // A log the friend wrote for a stranger is the stranger's, and its
+        // score is not the friend's to compare.
+        const hidden = await seedItemOfType(db, "WINE", viewer, "Hidden");
+        await seedItemReview(db, viewer, hidden, 4);
+        const logId = await seedCheckIn(db, {
+          userId: stranger,
+          item: hidden,
+          createdById: friend,
+        });
+        await db.execute(
+          sql`update public.check_ins set score = 1 where id = ${logId}::uuid`,
+        );
+        const rows = await (await newActor(viewer, db)).compare(
+          userCtx(viewer),
+          {
+            userId: friend,
+          },
+        );
+        expect(rows.map((row) => row.name).sort()).toEqual(
+          refs.map((_, i) => `Shared ${i}`),
+        );
+      });
+    });
+
+    it("is empty below the agreement minimum, whatever the chip", async () => {
+      await withTestDb(async (db) => {
+        const viewer = await seedUser(db);
+        const friend = await seedUser(db);
+        await befriend(db, viewer, friend);
+        for (let i = 0; i < AGREEMENT_MIN_SHARED - 1; i += 1) {
+          const ref = await seedItemOfType(db, "WINE", viewer, `Thin ${i}`);
+          await seedItemReview(db, viewer, ref, 4);
+          await seedItemReview(db, friend, ref, 3);
+        }
+        const actor = await newActor(viewer, db);
+        expect(
+          await actor.compare(userCtx(viewer), { userId: friend }),
+        ).toEqual([]);
+        expect(
+          await actor.compare(userCtx(viewer), {
+            userId: friend,
+            itemType: "WINE",
+          }),
+        ).toEqual([]);
+      });
+    });
+
+    it("refuses another caller and an unknown kind", async () => {
+      await withTestDb(async (db) => {
+        const viewer = await seedUser(db);
+        const other = await seedUser(db);
+        const actor = await newActor(viewer, db);
+        await expect(
+          actor.compare(userCtx(other), { userId: viewer }),
+        ).rejects.toBeInstanceOf(ForbiddenError);
+        await expect(
+          actor.compare(userCtx(viewer), {
+            userId: other,
+            itemType: "CIDER" as "WINE",
+          }),
+        ).rejects.toBeInstanceOf(ValidationError);
       });
     });
   });

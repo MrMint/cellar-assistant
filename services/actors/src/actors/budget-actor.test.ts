@@ -16,6 +16,7 @@ import {
   ConflictError,
   ForbiddenError,
   NotFoundError,
+  pageArgs,
   type ReserveInput,
   systemCtx,
   userCtx,
@@ -48,6 +49,7 @@ import {
   GOOGLE_PLACES_BUDGET_SERVICE,
   googlePlacesPoolRefusal,
   MODEL_RATES,
+  MODEL_SEAMS,
   MODEL_SPENDERS,
   modelCallNanoCents,
   monthStart,
@@ -56,7 +58,9 @@ import {
   parseGooglePlacesPaidCents,
   parseModelPrices,
   parseRequestCaps,
+  parseUserCapConfig,
   parseUserCaps,
+  periodLimit,
   readModelBudgetPolicy,
   UNKNOWN_PAID_RATE,
   USER_CAP_REASON,
@@ -1661,6 +1665,41 @@ describe("per-user caps: parsing (W4 security F4)", () => {
     }
   });
 
+  it("SV-A: parses an optional period cap and one period= entry", () => {
+    expect(
+      parseUserCapConfig(
+        "ai_model/tier_list_insights=30/150/40, period=week, ai_model/embedding=1/2",
+      ),
+    ).toEqual({
+      caps: {
+        "ai_model/tier_list_insights": { hourly: 30, daily: 150, period: 40 },
+        "ai_model/embedding": { hourly: 1, daily: 2 },
+      },
+      period: "week",
+    });
+    expect(parseUserCapConfig("period=month").period).toBe("month");
+    expect(parseUserCapConfig(undefined)).toEqual({ caps: {}, period: null });
+    for (const bad of [
+      "period=day",
+      "period=month,period=week",
+      "ai_model/embedding=1/2/0",
+      "ai_model/embedding=1/2/lots",
+      "ai_model/embedding=1/2/3/4",
+    ]) {
+      expect(() => parseUserCapConfig(bad), bad).toThrow(ValidationError);
+    }
+  });
+
+  it("SV-A (L5): defaults to a UTC calendar month and ten days' worth per kind", () => {
+    const policy = readModelBudgetPolicy({});
+    expect(policy.userCapPeriod).toBe("month");
+    expect(periodLimit({ hourly: 30, daily: 150 })).toBe(1_500);
+    expect(periodLimit({ hourly: 30, daily: 150, period: 7 })).toBe(7);
+    expect(
+      readModelBudgetPolicy({ BUDGET_USER_CAPS: "period=week" }).userCapPeriod,
+    ).toBe("week");
+  });
+
   it("layers BUDGET_USER_CAPS over the defaults, and a malformed one stops the boot", () => {
     const policy = readModelBudgetPolicy({
       BUDGET_USER_CAPS: "ai_model/embedding=1/2",
@@ -1826,6 +1865,148 @@ describe.skipIf(skip)("per-user caps: enforcement (W4 security F4)", () => {
       const replay = await actor.reserve(system, once);
       expect(replay.allowed).toBe(true);
       expect(replay.reason).toMatch(/already reserved/);
+    });
+  });
+});
+
+/**
+ * SV-A (L5): the period cap beside the rolling windows, and MC-quota's
+ * `myQuota` — the viewer's own allowance, never anybody else's.
+ */
+describe.skipIf(skip)("per-user period cap and myQuota (SV-A)", () => {
+  afterAll(closeTestDb);
+
+  const OTHER = "44444444-4444-4444-8444-444444444444";
+  const other = userCtx(OTHER, "r-other-quota");
+  const matchCall = (): ModelReserveInput => ({
+    seam: "menu_match",
+    provider: "vertex-ai",
+    model: "gemini-2.5-flash",
+    inputTokens: 10,
+    outputTokens: 10,
+    reservationId: `period-${crypto.randomUUID()}`,
+  });
+  const quotaFor = async (actor: BudgetActor, ctx: typeof user) => {
+    const page = await actor.myQuota(ctx, pageArgs({ first: 50 }));
+    return page.entries.find((e) => e.node.kind === "ai_model/menu_match")
+      ?.node;
+  };
+
+  it("refuses at the period cap with retryAt at the next period start, and counts nobody else's calls", async () => {
+    await withTestDb(async (db) => {
+      const actor = await withEnv(
+        { BUDGET_USER_CAPS: "ai_model/menu_match=10/10/2" },
+        () => reactivate(db),
+      );
+      expect((await actor.reserveForModel(user, matchCall())).allowed).toBe(
+        true,
+      );
+      expect((await actor.reserveForModel(user, matchCall())).allowed).toBe(
+        true,
+      );
+      const refused = await actor.reserveForModel(user, matchCall());
+      expect(refused.allowed).toBe(false);
+      expect(refused.refusal).toBe("USER_CAP");
+      expect(refused.reason).toMatch(
+        new RegExp(`^${USER_CAP_REASON}: .*2 of its 2 calls this month`),
+      );
+      expect(refused.retryAt).toBe(nextMonthStart().toISOString());
+      // Another account's period is its own.
+      expect((await actor.reserveForModel(other, matchCall())).allowed).toBe(
+        true,
+      );
+    });
+  });
+
+  it("lets the person through once a new period starts", async () => {
+    await withTestDb(async (db) => {
+      const actor = await withEnv(
+        { BUDGET_USER_CAPS: "ai_model/menu_match=10/10/2" },
+        () => reactivate(db),
+      );
+      await actor.reserveForModel(user, matchCall());
+      await actor.reserveForModel(user, matchCall());
+      expect((await actor.reserveForModel(user, matchCall())).allowed).toBe(
+        false,
+      );
+      // Both calls belong to the previous period now.
+      await db
+        .update(apiUsageLog)
+        .set({
+          createdAt: sql`(date_trunc('month', now() at time zone 'UTC') at time zone 'UTC') - interval '1 minute'`,
+        })
+        .where(eq(apiUsageLog.triggeredBy, USER));
+      expect((await actor.reserveForModel(user, matchCall())).allowed).toBe(
+        true,
+      );
+    });
+  });
+
+  it("names a Monday reset for period=week", async () => {
+    await withTestDb(async (db) => {
+      const actor = await withEnv(
+        { BUDGET_USER_CAPS: "period=week,ai_model/menu_match=10/10/1" },
+        () => reactivate(db),
+      );
+      await actor.reserveForModel(user, matchCall());
+      const refused = await actor.reserveForModel(user, matchCall());
+      expect(refused.allowed).toBe(false);
+      const reset = new Date(refused.retryAt ?? "");
+      expect(reset.getUTCDay()).toBe(1);
+      expect(reset.getUTCHours()).toBe(0);
+      const days = (reset.getTime() - Date.now()) / 86_400_000;
+      expect(days).toBeGreaterThan(0);
+      expect(days).toBeLessThanOrEqual(7);
+      expect(refused.reason).toMatch(/this week/);
+    });
+  });
+
+  it("myQuota reads only the viewer's own usage", async () => {
+    await withTestDb(async (db) => {
+      const actor = await withEnv(
+        { BUDGET_USER_CAPS: "ai_model/menu_match=10/10/5" },
+        () => reactivate(db),
+      );
+      const userBefore = (await quotaFor(actor, user))?.used ?? 0;
+      const otherBefore = (await quotaFor(actor, other))?.used ?? 0;
+      await actor.reserveForModel(user, matchCall());
+      await actor.reserveForModel(user, matchCall());
+      await actor.reserveForModel(other, matchCall());
+
+      const mine = await quotaFor(actor, user);
+      expect(mine).toEqual({
+        kind: "ai_model/menu_match",
+        used: userBefore + 2,
+        limit: 5,
+        resetsAt: nextMonthStart().toISOString(),
+      });
+      expect((await quotaFor(actor, other))?.used).toBe(otherBefore + 1);
+
+      // Every model seam is listed, each with its own limit.
+      const all = await actor.myQuota(user, pageArgs({ first: 50 }));
+      expect(all.entries.map((e) => e.node.kind)).toEqual(
+        MODEL_SEAMS.map((seam) => `${AI_MODEL_SERVICE}/${seam}`),
+      );
+      expect(
+        all.entries.find((e) => e.node.kind === "ai_model/tier_list_insights")
+          ?.node.limit,
+      ).toBe(
+        periodLimit(
+          USER_CAPS["ai_model/tier_list_insights"] ?? { hourly: 0, daily: 0 },
+        ),
+      );
+    });
+  });
+
+  it("myQuota refuses a caller with no viewer", async () => {
+    await withTestDb(async (db) => {
+      const actor = await reactivate(db);
+      await expect(
+        actor.myQuota(anonymous, pageArgs({ first: 10 })),
+      ).rejects.toBeInstanceOf(ForbiddenError);
+      await expect(
+        actor.myQuota(system, pageArgs({ first: 10 })),
+      ).rejects.toBeInstanceOf(ForbiddenError);
     });
   });
 });

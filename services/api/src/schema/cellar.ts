@@ -851,6 +851,13 @@ const UpdateCellarItemInput = builder.inputType("UpdateCellarItemInput", {
       required: false,
       description: "At most 80 characters.",
     }),
+    cellarId: t.id({
+      required: false,
+      description:
+        "Move the bottle to this cellar, which the viewer must be able to " +
+        "write. A move clears `location`; the bottle's logs follow it. Its " +
+        "own cellar is a no-op.",
+    }),
   }),
 });
 
@@ -937,6 +944,8 @@ const UPDATE_CELLAR_ITEM = {
   priceAmount: "clearable",
   priceCurrency: "clearable",
   location: "clearable",
+  // `null` is the same as absent: no move.
+  cellarId: { policy: "keep", map: String },
 } satisfies PatchPolicy<typeof UpdateCellarItemInput.$inferInput>;
 
 /* -------------------------------------------------------------------------- */

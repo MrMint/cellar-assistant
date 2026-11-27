@@ -7,11 +7,19 @@
  * Agreement is a count ("7 of 9 shared"), never a percentage, and its
  * `agreed` is null below `AGREEMENT_MIN_SHARED` — the gate is the actor's,
  * not the client's.
+ *
+ * `tasteCompare` (MC-compare) is the side-by-side rows behind that count: one
+ * per item you and a friend both rated. Its rows are a connection on a
+ * `TasteCompare` object rather than a list at the root: §1.5 allows a list of
+ * objects only as a connection's edges, and the root's paging fields are a
+ * counted set (schema.test.ts, A7e), the same reason `friends` sits on the
+ * profile.
  */
 import type {
   TasteAgreementDto,
   TasteAgreementTypeDto,
   TasteArchetypeDto,
+  TasteCompareRowDto,
   TasteProfileDto,
   TasteStyleDto,
   TasteTypeCountDto,
@@ -19,6 +27,7 @@ import type {
 import {
   AGREEMENT_MIN_SHARED,
   ForbiddenError,
+  itemActorId,
   offsetPage,
   TASTE_ARCHETYPE_KEYS,
   TasteActorDescriptor,
@@ -26,7 +35,7 @@ import {
 } from "@cellar-assistant/contracts";
 import type { ApiContext } from "../context.ts";
 import { builder } from "./builder.ts";
-import { ItemTypeEnum } from "./item.ts";
+import { ItemInterface, ItemTypeEnum } from "./item.ts";
 import { connectionFromPage, toPageArgs } from "./pagination.ts";
 
 // §1.5 has no exception for a list the server knows is short: each list
@@ -213,5 +222,70 @@ builder.objectField(TasteProfileType, "friends", (t) =>
           toPageArgs(args),
         ),
       ),
+  }),
+);
+
+const TasteCompareRowType = builder
+  .objectRef<TasteCompareRowDto>("TasteCompareRow")
+  .implement({
+    description:
+      "MC-compare: one item you and a friend both rated, on the half-star " +
+      "scale, as you may see the ratings.",
+    fields: (t) => ({
+      item: t.field({
+        type: ItemInterface,
+        description: "Through the item DataLoader (§1.5).",
+        resolve: (row) => itemActorId(row.item),
+      }),
+      myScore: t.exposeFloat("myScore"),
+      theirScore: t.exposeFloat("theirScore"),
+    }),
+  });
+
+const TasteCompareRowConnection = builder.connectionObject(
+  { type: TasteCompareRowType, name: "TasteCompareRowConnection" },
+  { name: "TasteCompareRowEdge" },
+);
+
+type CompareRows = readonly TasteCompareRowDto[];
+
+const TasteCompareType = builder
+  .objectRef<CompareRows>("TasteCompare")
+  .implement({
+    description:
+      "MC-compare: you and one friend, item by item. Empty for anyone who is " +
+      `not your friend, and below ${AGREEMENT_MIN_SHARED} shared items.`,
+    fields: (t) => ({
+      rows: t.field({
+        type: TasteCompareRowConnection,
+        description:
+          "Biggest difference between the two scores first, then by name.",
+        args: t.arg.connectionArgs(),
+        resolve: (rows, args) =>
+          connectionFromPage(offsetPage(rows, toPageArgs(args))),
+      }),
+    }),
+  });
+
+builder.queryField("tasteCompare", (t) =>
+  t.field({
+    type: TasteCompareType,
+    description:
+      "MC-compare / L11: the items you and this friend both rated. A " +
+      "non-friend, a missing user and a malformed id answer alike (no rows).",
+    errors: {},
+    args: {
+      userId: t.arg.id({ required: true }),
+      itemType: t.arg({
+        type: ItemTypeEnum,
+        required: false,
+        description: "A kind chip: only this type's rows.",
+      }),
+    },
+    resolve: (_root, args, context) =>
+      tasteActor(context, "compare tastes").compare({
+        userId: String(args.userId),
+        itemType: args.itemType ?? null,
+      }),
   }),
 );

@@ -499,6 +499,84 @@ export const graphcacheSchema: MinifiedIntrospection = {
         interfaces: [],
       },
       {
+        kind: "OBJECT",
+        name: "AiQuota",
+        fields: [
+          {
+            name: "kind",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "String" },
+            },
+          },
+          {
+            name: "limit",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
+          {
+            name: "resetsAt",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "DateTime" },
+            },
+          },
+          {
+            name: "used",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "AiQuotaConnection",
+        fields: [
+          {
+            name: "edges",
+            type: {
+              kind: "NON_NULL",
+              ofType: {
+                kind: "LIST",
+                ofType: {
+                  kind: "NON_NULL",
+                  ofType: { kind: "OBJECT", name: "AiQuotaEdge" },
+                },
+              },
+            },
+          },
+          {
+            name: "pageInfo",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "PageInfo" },
+            },
+          },
+          { name: "totalCount", type: { kind: "SCALAR", name: "Int" } },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "AiQuotaEdge",
+        fields: [
+          {
+            name: "cursor",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "String" },
+            },
+          },
+          {
+            name: "node",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "AiQuota" },
+            },
+          },
+        ],
+        interfaces: [],
+      },
+      {
         kind: "UNION",
         name: "AttachItemImageResult",
         possibleTypes: [
@@ -823,6 +901,19 @@ export const graphcacheSchema: MinifiedIntrospection = {
             type: {
               kind: "NON_NULL",
               ofType: { kind: "ENUM", name: "ItemType" },
+            },
+          },
+          {
+            name: "unconfirmedFields",
+            type: {
+              kind: "NON_NULL",
+              ofType: {
+                kind: "LIST",
+                ofType: {
+                  kind: "NON_NULL",
+                  ofType: { kind: "SCALAR", name: "String" },
+                },
+              },
             },
           },
           {
@@ -2097,6 +2188,19 @@ export const graphcacheSchema: MinifiedIntrospection = {
             type: {
               kind: "NON_NULL",
               ofType: { kind: "ENUM", name: "ItemType" },
+            },
+          },
+          {
+            name: "unconfirmedFields",
+            type: {
+              kind: "NON_NULL",
+              ofType: {
+                kind: "LIST",
+                ofType: {
+                  kind: "NON_NULL",
+                  ofType: { kind: "SCALAR", name: "String" },
+                },
+              },
             },
           },
           {
@@ -3754,6 +3858,19 @@ export const graphcacheSchema: MinifiedIntrospection = {
             },
           },
           {
+            name: "unconfirmedFields",
+            type: {
+              kind: "NON_NULL",
+              ofType: {
+                kind: "LIST",
+                ofType: {
+                  kind: "NON_NULL",
+                  ofType: { kind: "SCALAR", name: "String" },
+                },
+              },
+            },
+          },
+          {
             name: "updatedAt",
             type: {
               kind: "NON_NULL",
@@ -4270,7 +4387,21 @@ export const graphcacheSchema: MinifiedIntrospection = {
           { name: "backLabelImageId", type: { kind: "SCALAR", name: "ID" } },
           { name: "barcode", type: { kind: "SCALAR", name: "String" } },
           { name: "barcodeType", type: { kind: "SCALAR", name: "String" } },
+          { name: "cellarId", type: { kind: "SCALAR", name: "ID" } },
           { name: "confidence", type: { kind: "SCALAR", name: "Float" } },
+          {
+            name: "confirmedFields",
+            type: {
+              kind: "NON_NULL",
+              ofType: {
+                kind: "LIST",
+                ofType: {
+                  kind: "NON_NULL",
+                  ofType: { kind: "SCALAR", name: "String" },
+                },
+              },
+            },
+          },
           {
             name: "createdAt",
             type: {
@@ -4279,11 +4410,15 @@ export const graphcacheSchema: MinifiedIntrospection = {
             },
           },
           { name: "defaults", type: { kind: "SCALAR", name: "JSON" } },
+          { name: "displayMaker", type: { kind: "SCALAR", name: "String" } },
+          { name: "displayName", type: { kind: "SCALAR", name: "String" } },
+          { name: "draftFields", type: { kind: "SCALAR", name: "JSON" } },
           { name: "frontLabelImageId", type: { kind: "SCALAR", name: "ID" } },
           {
             name: "id",
             type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "ID" } },
           },
+          { name: "imageId", type: { kind: "SCALAR", name: "ID" } },
           {
             name: "itemType",
             type: {
@@ -4309,6 +4444,41 @@ export const graphcacheSchema: MinifiedIntrospection = {
             name: "userId",
             type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "ID" } },
           },
+          {
+            name: "vintageAnswer",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "ENUM", name: "VintageAnswer" },
+            },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "ItemOnboardingConnection",
+        fields: [
+          {
+            name: "edges",
+            type: {
+              kind: "NON_NULL",
+              ofType: {
+                kind: "LIST",
+                ofType: {
+                  kind: "NON_NULL",
+                  ofType: { kind: "OBJECT", name: "ItemOnboardingEdge" },
+                },
+              },
+            },
+          },
+          {
+            name: "pageInfo",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "PageInfo" },
+            },
+          },
+          { name: "totalCount", type: { kind: "SCALAR", name: "Int" } },
         ],
         interfaces: [],
       },
@@ -4323,6 +4493,27 @@ export const graphcacheSchema: MinifiedIntrospection = {
           { kind: "OBJECT", name: "NotFoundError" },
           { kind: "OBJECT", name: "ValidationError" },
         ],
+      },
+      {
+        kind: "OBJECT",
+        name: "ItemOnboardingEdge",
+        fields: [
+          {
+            name: "cursor",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "String" },
+            },
+          },
+          {
+            name: "node",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "ItemOnboarding" },
+            },
+          },
+        ],
+        interfaces: [],
       },
       {
         kind: "OBJECT",
@@ -5550,6 +5741,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
             },
           },
           {
+            name: "requestTierListInsights",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "UNION", name: "RequestTierListInsightsResult" },
+            },
+          },
+          {
             name: "rereadItemLabel",
             type: {
               kind: "NON_NULL",
@@ -5582,6 +5780,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
             type: {
               kind: "NON_NULL",
               ofType: { kind: "UNION", name: "ResubmitPlaceResult" },
+            },
+          },
+          {
+            name: "saveDraft",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "UNION", name: "SaveDraftResult" },
             },
           },
           {
@@ -7154,6 +7359,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
             },
           },
           {
+            name: "myAiQuota",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "UNION", name: "QueryMyAiQuotaResult" },
+            },
+          },
+          {
             name: "myCellars",
             type: {
               kind: "NON_NULL",
@@ -7214,6 +7426,17 @@ export const graphcacheSchema: MinifiedIntrospection = {
             },
           },
           {
+            name: "needsDetails",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "UNION", name: "QueryNeedsDetailsResult" },
+            },
+          },
+          {
+            name: "needsDetailsCount",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
+          {
             name: "ping",
             type: {
               kind: "NON_NULL",
@@ -7246,6 +7469,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
             type: {
               kind: "NON_NULL",
               ofType: { kind: "UNION", name: "QueryRecapResult" },
+            },
+          },
+          {
+            name: "recapPeriods",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "UNION", name: "QueryRecapPeriodsResult" },
             },
           },
           {
@@ -7320,6 +7550,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
             type: {
               kind: "NON_NULL",
               ofType: { kind: "UNION", name: "QueryTasteAgreementResult" },
+            },
+          },
+          {
+            name: "tasteCompare",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "UNION", name: "QueryTasteCompareResult" },
             },
           },
           {
@@ -7616,6 +7853,18 @@ export const graphcacheSchema: MinifiedIntrospection = {
       },
       {
         kind: "UNION",
+        name: "QueryMyAiQuotaResult",
+        possibleTypes: [
+          { kind: "OBJECT", name: "AiQuotaConnection" },
+          { kind: "OBJECT", name: "BudgetExceededError" },
+          { kind: "OBJECT", name: "ConflictError" },
+          { kind: "OBJECT", name: "ForbiddenError" },
+          { kind: "OBJECT", name: "NotFoundError" },
+          { kind: "OBJECT", name: "ValidationError" },
+        ],
+      },
+      {
+        kind: "UNION",
         name: "QueryMyCellarsResult",
         possibleTypes: [
           { kind: "OBJECT", name: "BudgetExceededError" },
@@ -7724,6 +7973,18 @@ export const graphcacheSchema: MinifiedIntrospection = {
       },
       {
         kind: "UNION",
+        name: "QueryNeedsDetailsResult",
+        possibleTypes: [
+          { kind: "OBJECT", name: "BudgetExceededError" },
+          { kind: "OBJECT", name: "ConflictError" },
+          { kind: "OBJECT", name: "ForbiddenError" },
+          { kind: "OBJECT", name: "ItemOnboardingConnection" },
+          { kind: "OBJECT", name: "NotFoundError" },
+          { kind: "OBJECT", name: "ValidationError" },
+        ],
+      },
+      {
+        kind: "UNION",
         name: "QueryPlaceResult",
         possibleTypes: [
           { kind: "OBJECT", name: "BudgetExceededError" },
@@ -7757,6 +8018,38 @@ export const graphcacheSchema: MinifiedIntrospection = {
           { kind: "OBJECT", name: "RankingsConnection" },
           { kind: "OBJECT", name: "ValidationError" },
         ],
+      },
+      {
+        kind: "UNION",
+        name: "QueryRecapPeriodsResult",
+        possibleTypes: [
+          { kind: "OBJECT", name: "BudgetExceededError" },
+          { kind: "OBJECT", name: "ConflictError" },
+          { kind: "OBJECT", name: "ForbiddenError" },
+          { kind: "OBJECT", name: "NotFoundError" },
+          { kind: "OBJECT", name: "QueryRecapPeriodsSuccess" },
+          { kind: "OBJECT", name: "ValidationError" },
+        ],
+      },
+      {
+        kind: "OBJECT",
+        name: "QueryRecapPeriodsSuccess",
+        fields: [
+          {
+            name: "data",
+            type: {
+              kind: "NON_NULL",
+              ofType: {
+                kind: "LIST",
+                ofType: {
+                  kind: "NON_NULL",
+                  ofType: { kind: "SCALAR", name: "String" },
+                },
+              },
+            },
+          },
+        ],
+        interfaces: [],
       },
       {
         kind: "UNION",
@@ -7887,6 +8180,18 @@ export const graphcacheSchema: MinifiedIntrospection = {
           { kind: "OBJECT", name: "ForbiddenError" },
           { kind: "OBJECT", name: "NotFoundError" },
           { kind: "OBJECT", name: "TasteAgreement" },
+          { kind: "OBJECT", name: "ValidationError" },
+        ],
+      },
+      {
+        kind: "UNION",
+        name: "QueryTasteCompareResult",
+        possibleTypes: [
+          { kind: "OBJECT", name: "BudgetExceededError" },
+          { kind: "OBJECT", name: "ConflictError" },
+          { kind: "OBJECT", name: "ForbiddenError" },
+          { kind: "OBJECT", name: "NotFoundError" },
+          { kind: "OBJECT", name: "TasteCompare" },
           { kind: "OBJECT", name: "ValidationError" },
         ],
       },
@@ -8067,6 +8372,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
               ofType: { kind: "SCALAR", name: "String" },
             },
           },
+          {
+            name: "totals",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "RecapTotals" },
+            },
+          },
         ],
         interfaces: [],
       },
@@ -8132,6 +8444,25 @@ export const graphcacheSchema: MinifiedIntrospection = {
           { name: "styles", type: { kind: "OBJECT", name: "RecapCard" } },
           { name: "topRated", type: { kind: "OBJECT", name: "RecapCard" } },
           { name: "types", type: { kind: "OBJECT", name: "RecapCard" } },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "RecapTotals",
+        fields: [
+          {
+            name: "bottlesAdded",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
+          {
+            name: "checkIns",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
+          {
+            name: "ratings",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
         ],
         interfaces: [],
       },
@@ -8323,6 +8654,7 @@ export const graphcacheSchema: MinifiedIntrospection = {
               ofType: { kind: "ENUM", name: "RecipeCategory" },
             },
           },
+          { name: "communityPickId", type: { kind: "SCALAR", name: "ID" } },
           { name: "createdAt", type: { kind: "SCALAR", name: "DateTime" } },
           { name: "createdById", type: { kind: "SCALAR", name: "ID" } },
           { name: "description", type: { kind: "SCALAR", name: "String" } },
@@ -9403,6 +9735,18 @@ export const graphcacheSchema: MinifiedIntrospection = {
       },
       {
         kind: "UNION",
+        name: "RequestTierListInsightsResult",
+        possibleTypes: [
+          { kind: "OBJECT", name: "BudgetExceededError" },
+          { kind: "OBJECT", name: "ConflictError" },
+          { kind: "OBJECT", name: "ForbiddenError" },
+          { kind: "OBJECT", name: "NotFoundError" },
+          { kind: "OBJECT", name: "TierList" },
+          { kind: "OBJECT", name: "ValidationError" },
+        ],
+      },
+      {
+        kind: "UNION",
         name: "RereadItemLabelResult",
         possibleTypes: [
           { kind: "OBJECT", name: "BudgetExceededError" },
@@ -9658,6 +10002,19 @@ export const graphcacheSchema: MinifiedIntrospection = {
             },
           },
           {
+            name: "unconfirmedFields",
+            type: {
+              kind: "NON_NULL",
+              ofType: {
+                kind: "LIST",
+                ofType: {
+                  kind: "NON_NULL",
+                  ofType: { kind: "SCALAR", name: "String" },
+                },
+              },
+            },
+          },
+          {
             name: "updatedAt",
             type: {
               kind: "NON_NULL",
@@ -9668,6 +10025,18 @@ export const graphcacheSchema: MinifiedIntrospection = {
           { name: "yeastStrain", type: { kind: "SCALAR", name: "String" } },
         ],
         interfaces: [{ kind: "INTERFACE", name: "Item" }],
+      },
+      {
+        kind: "UNION",
+        name: "SaveDraftResult",
+        possibleTypes: [
+          { kind: "OBJECT", name: "BudgetExceededError" },
+          { kind: "OBJECT", name: "ConflictError" },
+          { kind: "OBJECT", name: "ForbiddenError" },
+          { kind: "OBJECT", name: "ItemOnboarding" },
+          { kind: "OBJECT", name: "NotFoundError" },
+          { kind: "OBJECT", name: "ValidationError" },
+        ],
       },
       {
         kind: "OBJECT",
@@ -10520,6 +10889,19 @@ export const graphcacheSchema: MinifiedIntrospection = {
             },
           },
           {
+            name: "unconfirmedFields",
+            type: {
+              kind: "NON_NULL",
+              ofType: {
+                kind: "LIST",
+                ofType: {
+                  kind: "NON_NULL",
+                  ofType: { kind: "SCALAR", name: "String" },
+                },
+              },
+            },
+          },
+          {
             name: "updatedAt",
             type: {
               kind: "NON_NULL",
@@ -10783,6 +11165,97 @@ export const graphcacheSchema: MinifiedIntrospection = {
             type: {
               kind: "NON_NULL",
               ofType: { kind: "SCALAR", name: "String" },
+            },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "TasteCompare",
+        fields: [
+          {
+            name: "rows",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "TasteCompareRowConnection" },
+            },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "TasteCompareRow",
+        fields: [
+          {
+            name: "item",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "INTERFACE", name: "Item" },
+            },
+          },
+          {
+            name: "myScore",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "Float" },
+            },
+          },
+          {
+            name: "theirScore",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "Float" },
+            },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "TasteCompareRowConnection",
+        fields: [
+          {
+            name: "edges",
+            type: {
+              kind: "NON_NULL",
+              ofType: {
+                kind: "LIST",
+                ofType: {
+                  kind: "NON_NULL",
+                  ofType: { kind: "OBJECT", name: "TasteCompareRowEdge" },
+                },
+              },
+            },
+          },
+          {
+            name: "pageInfo",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "PageInfo" },
+            },
+          },
+          { name: "totalCount", type: { kind: "SCALAR", name: "Int" } },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "TasteCompareRowEdge",
+        fields: [
+          {
+            name: "cursor",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "String" },
+            },
+          },
+          {
+            name: "node",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "TasteCompareRow" },
             },
           },
         ],
@@ -11147,6 +11620,19 @@ export const graphcacheSchema: MinifiedIntrospection = {
             type: {
               kind: "NON_NULL",
               ofType: { kind: "ENUM", name: "ItemType" },
+            },
+          },
+          {
+            name: "unconfirmedFields",
+            type: {
+              kind: "NON_NULL",
+              ofType: {
+                kind: "LIST",
+                ofType: {
+                  kind: "NON_NULL",
+                  ofType: { kind: "SCALAR", name: "String" },
+                },
+              },
             },
           },
           {
@@ -12546,6 +13032,19 @@ export const graphcacheSchema: MinifiedIntrospection = {
             type: {
               kind: "NON_NULL",
               ofType: { kind: "ENUM", name: "ItemType" },
+            },
+          },
+          {
+            name: "unconfirmedFields",
+            type: {
+              kind: "NON_NULL",
+              ofType: {
+                kind: "LIST",
+                ofType: {
+                  kind: "NON_NULL",
+                  ofType: { kind: "SCALAR", name: "String" },
+                },
+              },
             },
           },
           {

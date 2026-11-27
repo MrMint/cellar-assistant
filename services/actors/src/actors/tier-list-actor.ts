@@ -1693,6 +1693,41 @@ export class TierListActor
   }
 
   /**
+   * SV-A (L12): the open-time trigger. See the contract's doc.
+   *
+   * Creator only, checked before anything is read off the list. Then it asks
+   * only when `insightsStatus` reads `IDLE` — enough entries, a provider, no
+   * insights yet, nothing pending or failed — so it is idempotent by status:
+   * the bump to `insightsRequestedAt` turns the next read `PENDING`, and
+   * `enqueueOutboxOnce` keeps one live row whatever races it. A FAILED list
+   * (a budget refusal included) is not re-asked here; the next edit or the
+   * stored retry does that, as before.
+   */
+  async requestInsights(ctx: Ctx): Promise<TierListDto> {
+    const aggregate = this.requireAggregate();
+    await this.#requireCreator(ctx, aggregate, "ask for insights on");
+    if (this.#insightsStatus(ctx, aggregate).insightsStatus !== "IDLE") {
+      return await this.#dtoFor(ctx, aggregate);
+    }
+    await this.tx(async (tx) => {
+      await tx
+        .update(tierLists)
+        .set({ insightsRequestedAt: new Date() })
+        .where(eq(tierLists.id, this.key));
+      await enqueueOutboxOnce(
+        tx,
+        OUTBOX_TARGETS["TierListActor.generateInsights"],
+        { targetId: this.key, payload: {} },
+        // Attributed to the owner: the generation's reservation is booked to
+        // them, which is what makes it count against their allowance.
+        { attributeTo: ctx },
+      );
+    });
+    await this.reload();
+    return await this.#dtoFor(ctx, this.requireAggregate());
+  }
+
+  /**
    * `system`, via the outbox (§1.7-style split: this method exists only to be
    * *delivered*, never called directly by a request). Idempotent by
    * recomputation — see the class doc.

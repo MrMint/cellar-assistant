@@ -156,7 +156,8 @@ describe.skipIf(unreachable !== null)("db:migrate against Postgres", () => {
         await client.query(`DROP DATABASE IF EXISTS ${name} WITH (FORCE)`);
       }
     });
-  });
+    // Forced DROP DATABASE outlasts vitest's 10 s hook default under load.
+  }, 60_000);
 
   it("applies what is pending and records it, once", async () => {
     stderr();

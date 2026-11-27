@@ -130,6 +130,7 @@
  */
 import type {
   ActorCategory,
+  AiQuotaDto,
   BudgetActorInterface,
   BudgetConfigDto,
   BudgetKind,
@@ -138,6 +139,8 @@ import type {
   ModelReleaseInput,
   ModelReserveInput,
   ModelSettleInput,
+  Page,
+  PageArgs,
   ReserveInput,
   ReserveResult,
   SetBudgetInput,
@@ -153,6 +156,7 @@ import {
   ConflictError,
   ForbiddenError,
   NotFoundError,
+  offsetPage,
   ValidationError,
 } from "@cellar-assistant/contracts";
 import { apiBudgetConfig, apiUsageLog, outbox } from "@cellar-assistant/db";
@@ -794,8 +798,54 @@ export const parseRequestCaps = (
 /* Per-user caps (W4 security F4)                                              */
 /* -------------------------------------------------------------------------- */
 
-/** Rolling-window call counts one user may cause against one kind. */
-export type UserCap = { readonly hourly: number; readonly daily: number };
+/**
+ * Call counts one user may cause against one kind: two rolling windows, and
+ * (redesign-2026-11 SV-A, L5) one calendar period — the allowance a person can
+ * see (`myQuota`) and that resets on a nameable day. `period` absent means
+ * {@link defaultPeriodLimit}.
+ */
+export type UserCap = {
+  readonly hourly: number;
+  readonly daily: number;
+  readonly period?: number;
+};
+
+/**
+ * The calendar period every per-user period cap counts over, in UTC: `month`
+ * resets on the 1st at 00:00, `week` on Monday at 00:00 (ISO week).
+ */
+export type UserCapPeriod = "month" | "week";
+
+export const DEFAULT_USER_CAP_PERIOD: UserCapPeriod = "month";
+
+/**
+ * L5: until the owner sets real numbers, a kind's period allowance is ten of
+ * its days. A bound, like the rolling caps — a person who meets it has used
+ * ten heavy days' worth inside one month.
+ */
+export const DEFAULT_PERIOD_DAYS = 10;
+
+/** The period cap that binds for `cap`: its own, else ten days' worth. */
+export const periodLimit = (cap: UserCap): number =>
+  cap.period ?? cap.daily * DEFAULT_PERIOD_DAYS;
+
+/**
+ * The current period's first instant and the next one's, as SQL on the
+ * database's clock — the same clock the rolling windows read (`now()`), so a
+ * count and its reset never disagree about which period a row is in.
+ */
+const periodBounds = (
+  period: UserCapPeriod,
+): { readonly start: SQL; readonly next: SQL } => {
+  const unit = sql.raw(`'${period}'`);
+  const step = sql.raw(`interval '1 ${period}'`);
+  const start = sql`(date_trunc(${unit}, now() at time zone 'UTC') at time zone 'UTC')`;
+  return { start, next: sql`(${start} + ${step})` };
+};
+
+/** `timestamptz` as the fixed-width UTC ISO string every `retryAt` uses. */
+const isoSql = (value: SQL): SQL<string> =>
+  sql<string>`to_char(${value} at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')`;
 
 /**
  * **Per-user** caps, beside the global ones — the fairness bound that
@@ -872,39 +922,75 @@ export const DEFAULT_USER_CAP: UserCap = { hourly: 100, daily: 500 };
 export const USER_CAP_REASON = "per-user cap reached";
 
 /**
- * `BUDGET_USER_CAPS`, as `service/endpoint=<hourly>/<daily>` pairs:
- * `ai_model/embedding=600/4000`. Throws on anything malformed, including an
- * hourly cap above the daily one, which could never bind — the same rule as
- * {@link parseRequestCaps}, for the same reason.
+ * `BUDGET_USER_CAPS`, as comma-separated entries:
+ *
+ * - `service/endpoint=<hourly>/<daily>[/<period>]` — a kind's caps, e.g.
+ *   `ai_model/embedding=600/4000` or `ai_model/tier_list_insights=30/150/200`.
+ *   Without `<period>` the period cap is {@link periodLimit}'s default.
+ * - `period=month|week` — the calendar period every period cap counts over
+ *   (default {@link DEFAULT_USER_CAP_PERIOD}). At most one.
+ *
+ * Throws on anything malformed, including an hourly cap above the daily one,
+ * which could never bind — the same rule as {@link parseRequestCaps}, for the
+ * same reason. The period cap is only required to be at least 1: a weekly
+ * allowance below a day's burst is a reasonable thing for an owner to want.
  */
-export const parseUserCaps = (
+export const parseUserCapConfig = (
   raw: string | undefined,
-): Readonly<Record<string, UserCap>> => {
-  if (raw === undefined || raw.trim() === "") return {};
-  const out: Record<string, UserCap> = {};
+): {
+  readonly caps: Readonly<Record<string, UserCap>>;
+  readonly period: UserCapPeriod | null;
+} => {
+  if (raw === undefined || raw.trim() === "") return { caps: {}, period: null };
+  const caps: Record<string, UserCap> = {};
+  let period: UserCapPeriod | null = null;
   for (const entry of raw.split(",")) {
     const text = entry.trim();
     if (text === "") continue;
-    const match = /^([a-z0-9_]+\/[a-z0-9_]*)=(\d+)\/(\d+)$/.exec(text);
+    const periodMatch = /^period=(month|week)$/.exec(text);
+    if (periodMatch !== null) {
+      if (period !== null) {
+        throw new ValidationError(
+          "BUDGET_USER_CAPS names `period=` more than once",
+        );
+      }
+      period = periodMatch[1] === "week" ? "week" : "month";
+      continue;
+    }
+    const match = /^([a-z0-9_]+\/[a-z0-9_]*)=(\d+)\/(\d+)(?:\/(\d+))?$/.exec(
+      text,
+    );
     const hourly = Number(match?.[2]);
     const daily = Number(match?.[3]);
+    const periodCap = match?.[4] === undefined ? undefined : Number(match[4]);
     if (
       match === null ||
       !Number.isSafeInteger(hourly) ||
       !Number.isSafeInteger(daily) ||
       hourly < 1 ||
-      daily < hourly
+      daily < hourly ||
+      (periodCap !== undefined &&
+        (!Number.isSafeInteger(periodCap) || periodCap < 1))
     ) {
       throw new ValidationError(
         `BUDGET_USER_CAPS entry ${JSON.stringify(text)} is not ` +
-          "`service/endpoint=<hourly>/<daily>` with 1 <= hourly <= daily, e.g. " +
-          "`ai_model/embedding=600/4000`",
+          "`service/endpoint=<hourly>/<daily>[/<period>]` with 1 <= hourly <= " +
+          "daily and period >= 1, nor `period=month|week`, e.g. " +
+          "`ai_model/embedding=600/4000` or `period=week`",
       );
     }
-    out[match[1] ?? ""] = { hourly, daily };
+    caps[match[1] ?? ""] =
+      periodCap === undefined
+        ? { hourly, daily }
+        : { hourly, daily, period: periodCap };
   }
-  return out;
+  return { caps, period };
 };
+
+/** {@link parseUserCapConfig}'s per-kind caps alone. */
+export const parseUserCaps = (
+  raw: string | undefined,
+): Readonly<Record<string, UserCap>> => parseUserCapConfig(raw).caps;
 
 /* -------------------------------------------------------------------------- */
 /* Google Places: one paid allowance for the whole service (D16)               */
@@ -1008,6 +1094,8 @@ export type ModelBudgetPolicy = {
   readonly freeProviders: FreeModelProviders;
   /** `BUDGET_USER_CAPS` over {@link USER_CAPS}; every kind, not only models. */
   readonly userCaps: Readonly<Record<string, UserCap>>;
+  /** `BUDGET_USER_CAPS`'s `period=`, else {@link DEFAULT_USER_CAP_PERIOD}. */
+  readonly userCapPeriod: UserCapPeriod;
   /**
    * D16: the paid cents all of Google Places may book in one UTC month,
    * across every endpoint ({@link DEFAULT_GOOGLE_PLACES_MONTHLY_PAID_CENTS}).
@@ -1017,15 +1105,19 @@ export type ModelBudgetPolicy = {
 
 export const readModelBudgetPolicy = (
   env: Readonly<Record<string, string | undefined>> = process.env,
-): ModelBudgetPolicy => ({
-  modelPrices: parseModelPrices(env.AI_MODEL_PRICES),
-  modelRequestCaps: parseRequestCaps(env.AI_BUDGET_MAX_REQUESTS),
-  freeProviders: freeModelProviders(env),
-  userCaps: { ...USER_CAPS, ...parseUserCaps(env.BUDGET_USER_CAPS) },
-  googlePlacesMonthlyPaidCents: parseGooglePlacesPaidCents(
-    env.GOOGLE_PLACES_MONTHLY_PAID_CENTS,
-  ),
-});
+): ModelBudgetPolicy => {
+  const userCapConfig = parseUserCapConfig(env.BUDGET_USER_CAPS);
+  return {
+    modelPrices: parseModelPrices(env.AI_MODEL_PRICES),
+    modelRequestCaps: parseRequestCaps(env.AI_BUDGET_MAX_REQUESTS),
+    freeProviders: freeModelProviders(env),
+    userCaps: { ...USER_CAPS, ...userCapConfig.caps },
+    userCapPeriod: userCapConfig.period ?? DEFAULT_USER_CAP_PERIOD,
+    googlePlacesMonthlyPaidCents: parseGooglePlacesPaidCents(
+      env.GOOGLE_PLACES_MONTHLY_PAID_CENTS,
+    ),
+  };
+};
 
 /** The free-provider set that applies to one seam's calls. */
 const freeFor = (
@@ -1458,6 +1550,7 @@ export class BudgetActor
           kind,
           triggeredBy,
           aggregate.userCaps[budgetKind(kind)] ?? DEFAULT_USER_CAP,
+          aggregate.userCapPeriod,
         );
         if (refusal !== null) {
           return {
@@ -1919,6 +2012,7 @@ export class BudgetActor
     kind: BudgetKind,
     userId: string,
     cap: UserCap,
+    period: UserCapPeriod,
   ): Promise<{ reason: string; retryAt: string | null } | null> {
     const mine = and(
       eq(apiUsageLog.service, kind.service),
@@ -1945,8 +2039,27 @@ export class BudgetActor
         ? [{ count: day, cap: cap.daily, span: "1 day", label: "24 hours" }]
         : []),
     ];
+
+    // SV-A (L5): the calendar period, counted from its first instant. Unlike
+    // the windows it does not roll — the whole allowance comes back at once,
+    // at `next`, which is what lets a person be told the day it resets.
+    const bounds = periodBounds(period);
+    const limit = periodLimit(cap);
+    const [periodRow] = await tx
+      .select({
+        used: sql<string>`count(*)`,
+        resetsAt: isoSql(bounds.next),
+      })
+      .from(apiUsageLog)
+      .where(and(mine, sql`${apiUsageLog.createdAt} >= ${bounds.start}`));
+    const used = int(periodRow?.used);
+    const periodFull =
+      used >= limit
+        ? { count: used, cap: limit, resetsAt: periodRow?.resetsAt ?? null }
+        : null;
+
     const window = full[0];
-    if (window === undefined) return null;
+    if (window === undefined && periodFull === null) return null;
 
     // For each full window, the (count - cap + 1)th oldest row in it is the
     // one whose expiry brings that count back under its cap; `offset count -
@@ -1970,21 +2083,36 @@ export class BudgetActor
       return freed?.at ?? null;
     };
     // One statement at a time: they share this transaction's connection.
-    let retryAt: string | null = null;
+    // The period's reset joins the windows' free times: the call fits only
+    // once every full bound has room, so the latest of them is the answer.
+    let retryAt: string | null = periodFull?.resetsAt ?? null;
+    let unknown = periodFull !== null && periodFull.resetsAt === null;
     for (const w of full) {
+      if (unknown) break;
       const at = await freedAt(w);
       if (at === null) {
-        retryAt = null;
+        unknown = true;
         break;
       }
       // Same fixed-width UTC format, so the string order is the time order.
       if (retryAt === null || at > retryAt) retryAt = at;
     }
+    if (unknown) retryAt = null;
 
+    if (periodFull !== null) {
+      return {
+        reason:
+          `${USER_CAP_REASON}: this account has made ${periodFull.count} of ` +
+          `its ${periodFull.cap} calls this ${period} to ${budgetKind(kind)}. ` +
+          "It resets at the start of the next one; the caps are BUDGET_USER_CAPS.",
+        retryAt,
+      };
+    }
+    const rolling = window ?? { count: 0, cap: 0, label: "" };
     return {
       reason:
-        `${USER_CAP_REASON}: this account has made ${window.count} of its ` +
-        `${window.cap} calls in the last ${window.label} to ${budgetKind(kind)}. ` +
+        `${USER_CAP_REASON}: this account has made ${rolling.count} of its ` +
+        `${rolling.cap} calls in the last ${rolling.label} to ${budgetKind(kind)}. ` +
         "It frees up as the window rolls; the caps are BUDGET_USER_CAPS.",
       retryAt,
     };
@@ -2037,6 +2165,58 @@ export class BudgetActor
   /* ---------------------------------------------------------------------- */
   /* Reporting and configuration                                             */
   /* ---------------------------------------------------------------------- */
+
+  /**
+   * MC-quota (SV-A): the viewer's own period allowance for every model seam —
+   * `used` counted exactly as `#userCapRefusal` counts it (this period, rows
+   * `triggered_by` the viewer, released reservations excluded), `limit` the
+   * period cap that binds, `resetsAt` the next period start.
+   *
+   * **Only ever the viewer's own.** The one user id this reads is
+   * `ctx.viewerId`; nothing in the input can name another, and an anonymous
+   * caller (or a system/admin ctx with no viewer) is refused — this is not the
+   * "how much has user X used" oracle `#userCapRefusal`'s doc keeps private.
+   * Read on the shared pool rather than under the kind locks: a count that is
+   * one call stale is a display, and the cap itself is enforced in `#reserve`.
+   */
+  async myQuota(ctx: Ctx, page: PageArgs): Promise<Page<AiQuotaDto>> {
+    const aggregate = this.requireAggregate();
+    if (ctx.viewerId === null) {
+      throw new ForbiddenError("sign in to see your AI allowance");
+    }
+    const viewerId = ctx.viewerId;
+    const bounds = periodBounds(aggregate.userCapPeriod);
+    const rows = await this.db
+      .select({
+        endpoint: apiUsageLog.endpoint,
+        used: sql<string>`count(*)`,
+      })
+      .from(apiUsageLog)
+      .where(
+        and(
+          eq(apiUsageLog.service, AI_MODEL_SERVICE),
+          eq(apiUsageLog.triggeredBy, viewerId),
+          countsAgainstCaps,
+          sql`${apiUsageLog.createdAt} >= ${bounds.start}`,
+        ),
+      )
+      .groupBy(apiUsageLog.endpoint);
+    const reset = await this.db.execute<{ resets_at: string }>(
+      sql`select ${isoSql(bounds.next)} as resets_at`,
+    );
+    const resetsAt = reset.rows[0]?.resets_at ?? nextMonthStart().toISOString();
+    const used = new Map(rows.map((row) => [row.endpoint, int(row.used)]));
+    const quotas: AiQuotaDto[] = MODEL_SEAMS.map((seam) => {
+      const kind = `${AI_MODEL_SERVICE}/${seam}`;
+      return {
+        kind,
+        used: used.get(seam) ?? 0,
+        limit: periodLimit(aggregate.userCaps[kind] ?? DEFAULT_USER_CAP),
+        resetsAt,
+      };
+    });
+    return offsetPage(quotas, page);
+  }
 
   async usage(ctx: Ctx, range: UsageRange): Promise<UsageReport> {
     this.requireAggregate();
