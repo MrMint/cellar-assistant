@@ -78,7 +78,7 @@ describe("fetchDefaults with no AI provider", () => {
   test("still starts the session confirm needs, and says nothing", async () => {
     const { client, mutations } = stub(refusal("AI_UNCONFIGURED", "CONFLICT"));
     const result = await run(client);
-    assert.deepEqual(mutations, ["StartItemOnboarding"]);
+    assert.deepEqual(mutations, ["OnboardingStart"]);
     assert.equal(result.extractionError, undefined);
     assert.equal(result.confidence, 0);
   });
@@ -98,38 +98,28 @@ describe("fetchDefaults resuming a saved draft (F-59)", () => {
   const draftId = "00000000-0000-4000-8000-000000000003";
   const cellarB = "00000000-0000-4000-8000-0000000000bb";
   const resumedClient = () => {
-    const queried: string[] = [];
+    const mutations: string[] = [];
     const client = {
-      mutation: () => ({
-        toPromise: async () => ({
-          data: {
-            startItemOnboarding: {
-              __typename: "ItemOnboarding",
-              id: draftId,
-              itemType: "WINE",
-              status: "NEEDS_DETAILS",
-              defaults: { name: "GUESSED NAME", wine: { style: "WHITE" } },
-              confidence: 0.4,
-              barcode: null,
-              barcodeType: null,
-              frontLabelImageId: null,
-              backLabelImageId: null,
-              aiModel: null,
-              userId: "u1",
-              createdAt: "2026-11-27T00:00:00Z",
-              updatedAt: "2026-11-27T00:00:00Z",
-            },
-          },
-        }),
-      }),
-      query: (document: unknown) => {
-        queried.push(nameOf(document));
+      mutation: (document: unknown) => {
+        mutations.push(nameOf(document));
         return {
           toPromise: async () => ({
             data: {
-              itemOnboarding: {
+              startItemOnboarding: {
                 __typename: "ItemOnboarding",
                 id: draftId,
+                itemType: "WINE",
+                status: "NEEDS_DETAILS",
+                defaults: { name: "GUESSED NAME", wine: { style: "WHITE" } },
+                confidence: 0.4,
+                barcode: null,
+                barcodeType: null,
+                frontLabelImageId: null,
+                backLabelImageId: null,
+                aiModel: null,
+                userId: "u1",
+                createdAt: "2026-11-27T00:00:00Z",
+                updatedAt: "2026-11-27T00:00:00Z",
                 cellarId: cellarB,
                 draftFields: {
                   name: "Hillside Garnacha",
@@ -142,7 +132,7 @@ describe("fetchDefaults resuming a saved draft (F-59)", () => {
         };
       },
     } as unknown as Client;
-    return { client, queried };
+    return { client, mutations };
   };
 
   test("what the person typed and the draft's cellar come back", async () => {
@@ -166,8 +156,8 @@ describe("fetchDefaults resuming a saved draft (F-59)", () => {
     assert.equal(result.defaults.confidences.name, undefined);
   });
 
-  test("a fresh read never asks for a draft", async () => {
-    const { client, queried } = resumedClient();
+  test("a fresh read takes neither the typed fields nor the cellar", async () => {
+    const { client, mutations } = resumedClient();
     const result = await toPromise(
       createActor(fetchDefaults, {
         input: {
@@ -177,7 +167,12 @@ describe("fetchDefaults resuming a saved draft (F-59)", () => {
         },
       }).start(),
     );
-    assert.deepEqual(queried, []);
+    assert.deepEqual(
+      mutations,
+      ["OnboardingStart"],
+      "one call, no second read",
+    );
     assert.equal(result.draftCellarId, undefined);
+    assert.equal(result.defaults.values.attributes.style, "WHITE");
   });
 });

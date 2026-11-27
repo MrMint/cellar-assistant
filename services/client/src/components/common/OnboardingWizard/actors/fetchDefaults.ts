@@ -2,17 +2,14 @@ import { fromPromise } from "xstate";
 import { captureDrafts } from "@/components/capture/drafts";
 import { aiOutcome } from "@/lib/ai/outcome";
 import { readFragment } from "@/lib/api/graphql";
-import {
-  ItemOnboardingFragment,
-  StartItemOnboardingMutation,
-} from "@/lib/api/items";
+import { ItemOnboardingFragment } from "@/lib/api/items";
 import { unwrapResult } from "@/lib/api/result";
 import {
   emptyDefaults,
   formDefaultsFromDraft,
   formDefaultsFromOnboarding,
 } from "../adapter";
-import { ResumeDraftQuery } from "../queries";
+import { OnboardingStartMutation } from "../queries";
 import type { DefaultValuesResult, FetchDefaultsInput } from "./types";
 
 /**
@@ -53,9 +50,10 @@ export const readDefaults = async ({
   barcode,
   frontLabelFileId,
   backLabelFileId,
+  resumed,
 }: FetchDefaultsInput): Promise<DefaultValuesResult> => {
   const response = await urqlClient
-    .mutation(StartItemOnboardingMutation, {
+    .mutation(OnboardingStartMutation, {
       onboardingId: itemOnboardingId,
       input: {
         itemType,
@@ -90,8 +88,15 @@ export const readDefaults = async ({
     };
   }
   const onboarding = readFragment(ItemOnboardingFragment, result.data);
+  const read = formDefaultsFromOnboarding(itemType, onboarding.defaults);
+  // F-59: a saved draft reopens on what the person typed, in its own cellar.
+  const draftCellarId = resumed === true ? result.data.cellarId : null;
   return {
-    defaults: formDefaultsFromOnboarding(itemType, onboarding.defaults),
+    defaults:
+      resumed === true
+        ? formDefaultsFromDraft(itemType, read, result.data.draftFields)
+        : read,
+    ...(draftCellarId === null ? {} : { draftCellarId }),
     itemOnboardingId: onboarding.id,
     confidence: onboarding.confidence ?? 0,
     // A resumed draft sends no ids; the session remembers what it read.
@@ -112,43 +117,10 @@ export const readDefaults = async ({
  * rather than asked again.
  */
 export const fetchDefaults = fromPromise(
-  async ({
-    input,
-  }: {
-    input: FetchDefaultsInput;
-  }): Promise<DefaultValuesResult> => {
-    const read = await (input.draft === undefined
+  ({ input }: { input: FetchDefaultsInput }): Promise<DefaultValuesResult> =>
+    input.draft === undefined
       ? readDefaults(input)
       : captureDrafts.track(input.itemOnboardingId, input.draft, () =>
           readDefaults(input),
-        ));
-    return input.resumed === true ? withSavedDraft(input, read) : read;
-  },
+        ),
 );
-
-/**
- * F-59: a resumed draft's own cellar and typed fields over the read. Outside
- * `captureDrafts.track`, so a read adopted from the background still gets
- * them. A draft that cannot be read back (gone, refused, offline) opens on
- * the read alone, as before: it is a convenience, never the form's failure.
- */
-const withSavedDraft = async (
-  { urqlClient, itemType, itemOnboardingId }: FetchDefaultsInput,
-  read: DefaultValuesResult,
-): Promise<DefaultValuesResult> => {
-  const response = await urqlClient
-    .query(
-      ResumeDraftQuery,
-      { id: itemOnboardingId },
-      { requestPolicy: "network-only" },
-    )
-    .toPromise()
-    .catch(() => undefined);
-  const draft = response?.data?.itemOnboarding;
-  if (draft?.__typename !== "ItemOnboarding") return read;
-  return {
-    ...read,
-    defaults: formDefaultsFromDraft(itemType, read.defaults, draft.draftFields),
-    ...(draft.cellarId === null ? {} : { draftCellarId: draft.cellarId }),
-  };
-};
