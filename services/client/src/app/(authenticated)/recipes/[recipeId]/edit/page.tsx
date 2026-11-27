@@ -1,5 +1,8 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { AppBar } from "@/components/app/AppBar";
+import { ErrorState } from "@/components/app/EmptyState";
+import { Page } from "@/components/app/Page";
 import { RecipeEditQuery } from "@/components/recipe/editor/documents";
 import { RecipeEditor } from "@/components/recipe/editor/RecipeEditor";
 import { formFromRecipe } from "@/components/recipe/editor/recipe-draft";
@@ -26,7 +29,15 @@ export default async function EditRecipePage({
   const result = unwrapResult(data.recipe, "Recipe");
   if (!result.ok) {
     if (isNotFound(result.error)) notFound();
-    return <p className="t-body text-destructive">{result.error.message}</p>;
+    return (
+      <Page>
+        <AppBar title="Edit recipe" parent={`/recipes/${recipeId}`} />
+        <ErrorState
+          title="Couldn't open the editor"
+          reason={result.error.message}
+        />
+      </Page>
+    );
   }
   const recipe = result.data;
   const viewer = data.me?.id ?? null;
@@ -38,10 +49,13 @@ export default async function EditRecipePage({
     recipe.instructions.pageInfo.hasNextPage
   ) {
     return (
-      <p className="t-body text-ink-2">
-        This recipe has more ingredients or steps than the editor can hold, so
-        it can't be edited here without losing some of them.
-      </p>
+      <Page>
+        <AppBar title="Edit recipe" parent={`/recipes/${recipeId}`} />
+        <ErrorState
+          title="Too long to edit here"
+          reason="It has more ingredients or steps than the editor holds, and saving would lose some."
+        />
+      </Page>
     );
   }
 
