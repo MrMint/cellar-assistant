@@ -225,10 +225,7 @@ describe("NewPlaceSheet (L10: scan anywhere)", () => {
     );
     assert.match(document.body.textContent ?? "", /Under review/);
     // W-16: the pin says how good the fix is.
-    assert.match(
-      document.body.textContent ?? "",
-      /Pinned at your location, about 12 m accurate/,
-    );
+    assert.match(document.body.textContent ?? "", /Pinned · ±12\u202fm/);
     // The listing said "bar": that chip is picked.
     assert.equal(
       document.querySelector('[role="radio"][aria-checked="true"]')
@@ -331,6 +328,69 @@ describe("NewPlaceSheet (L10: scan anywhere)", () => {
     assert.equal(
       sent.filter((s) => s.operationName === "MapCreatePlace").length,
       0,
+    );
+  });
+  test("On the map?: a name a nearby place has offers that place, and using it creates nothing", async () => {
+    const chosen: unknown[] = [];
+    await render(
+      <NewPlaceSheet
+        open
+        onOpenChange={() => {}}
+        location={HERE}
+        hasPhoto
+        onCreated={() => assert.fail("nothing is created")}
+        onPickInstead={() => {}}
+        nearby={[{ id: "p-known", name: "Bar Lumen", distanceMeters: 60 }]}
+        onChooseExisting={(place) => chosen.push(place)}
+      />,
+    );
+    await flush(30);
+    const box = document.querySelector('[data-slot="new-place-duplicate"]');
+    assert.match(
+      box?.textContent ?? "",
+      /On the map\?Bar Lumen · 60\u202fm from you/,
+    );
+    await click(button("Use it"));
+    await flush(10);
+    assert.deepEqual(chosen, [{ id: "p-known", name: "Bar Lumen" }]);
+    assert.equal(
+      sent.filter((s) => s.operationName === "MapCreatePlace").length,
+      0,
+    );
+  });
+
+  test("More kinds files the kind picked there, not the listing's", async () => {
+    await render(
+      <NewPlaceSheet
+        open
+        onOpenChange={() => {}}
+        location={HERE}
+        hasPhoto={false}
+        onCreated={() => {}}
+        onPickInstead={() => {}}
+      />,
+    );
+    await flush(30);
+    assert.equal(
+      document.querySelectorAll('[role="radiogroup"] [role="radio"]').length,
+      6,
+      "six kinds until More kinds",
+    );
+    await click(button("More kinds"));
+    await click(button("Sake bar"));
+    assert.equal(
+      document.querySelectorAll('[role="radio"][aria-checked="true"]').length,
+      1,
+      "one kind picked",
+    );
+    await click(button("Add place"));
+    await flush(30);
+    const creates = sent.filter((s) => s.operationName === "MapCreatePlace");
+    assert.equal(creates.length, 1);
+    assert.deepEqual(
+      (creates[0]?.variables.input as { categories?: string[] } | undefined)
+        ?.categories,
+      ["sake_bar"],
     );
   });
 });
