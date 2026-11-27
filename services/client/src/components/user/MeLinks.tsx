@@ -4,7 +4,6 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useMutation } from "urql";
 import { ICON_STROKE, Settings } from "@/components/app/icons";
-import { Link, type LinkProps } from "@/components/app/Link";
 import { notify } from "@/components/app/notify";
 import { PersonRow } from "@/components/app/parts/PersonRow";
 import { UserAvatar } from "@/components/app/UserAvatar";
@@ -14,23 +13,7 @@ import { failureFromTransport, unwrapResult } from "@/lib/api/result";
 import { feedback } from "@/lib/feedback";
 import { EditProfileSheet } from "./EditProfileSheet";
 import type { HubRequest } from "./me-hub-data";
-
-/** An `app/Link` that presses like every other control (MC-feedback). */
-export function PressLink(props: LinkProps) {
-  return (
-    <Link
-      {...props}
-      onPointerDown={(event) => {
-        feedback("press", { phase: "down" });
-        props.onPointerDown?.(event);
-      }}
-      onPointerUp={(event) => {
-        feedback("press", { phase: "up" });
-        props.onPointerUp?.(event);
-      }}
-    />
-  );
-}
+import { PressLink } from "./PressLink";
 
 /**
  * The hub's header (Shell-Me): the viewer's picture, name and email, which

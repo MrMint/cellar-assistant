@@ -10,30 +10,60 @@
  */
 
 import { type FormEvent, useCallback, useState } from "react";
-import { Link } from "@/components/app/Link";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
+import { PressLink } from "@/components/user/PressLink";
 import { usePurgeUserCachesOnMount } from "@/hooks/usePurgeUserCachesOnMount";
 import { authClient, useAuthAction } from "@/lib/api/auth-client";
 import type { PasswordMode } from "@/lib/auth/password-mode";
+import { feedback } from "@/lib/feedback";
 import { HOME_PATH, withReturnTo } from "@/utilities/sanitize-return-to";
-import { AuthField, AuthPage, AuthPanel, WordDivider } from "./AuthCard";
+import {
+  AuthBack,
+  AuthField,
+  AuthPage,
+  AuthPanel,
+  WordDivider,
+} from "./AuthCard";
 import { SocialButtons, useSocialSignIn } from "./SocialButtons";
 import { useLanding } from "./useLanding";
 
-/** "Already have an account? Sign in", under both versions of the form. */
+/** "Have an account? Sign in", under both versions of the form. */
 function SignInInstead({ returnTo }: { returnTo?: string }) {
   return (
-    <p className="type-callout text-ink-2">
-      Already have an account?{" "}
-      <Link
+    <p className="t-body m-0 text-center text-ink-2">
+      Have an account?{" "}
+      <PressLink
         href={withReturnTo("/sign-in", returnTo)}
         underline="always"
-        className="text-ink-1"
+        className="font-semibold text-act-ink"
       >
         Sign in
-      </Link>
+      </PressLink>
     </p>
+  );
+}
+
+/** Back, the title, then the providers: the head of both versions. */
+function SignUpHead({ returnTo, busy }: { returnTo?: string; busy?: boolean }) {
+  const { ssoError, redirectingTo, start } = useSocialSignIn(
+    returnTo ?? HOME_PATH,
+  );
+  return (
+    <>
+      <AuthBack
+        href={withReturnTo("/sign-in", returnTo)}
+        title="Create an account"
+      />
+      <div className="flex flex-col gap-2">
+        <SocialButtons
+          busy={busy === true || redirectingTo !== null}
+          redirectingTo={redirectingTo}
+          ssoError={ssoError}
+          onSelect={(provider) => void start(provider)}
+        />
+      </div>
+    </>
   );
 }
 
@@ -73,25 +103,12 @@ export function SignUpApiClient({
 }
 
 function SocialSignUp({ returnTo }: { returnTo?: string }) {
-  const { ssoError, redirectingTo, start } = useSocialSignIn(
-    returnTo ?? HOME_PATH,
-  );
   return (
     <AuthPage>
       <AuthPanel>
-        <div className="flex flex-col gap-4">
-          <h1 className="type-title-2">Sign up for Cellar Assistant</h1>
-          <div className="flex flex-col gap-2">
-            <SocialButtons
-              busy={redirectingTo !== null}
-              redirectingTo={redirectingTo}
-              ssoError={ssoError}
-              onSelect={(provider) => void start(provider)}
-            />
-          </div>
-          <WordDivider />
-          <SignInInstead returnTo={returnTo} />
-        </div>
+        <SignUpHead returnTo={returnTo} />
+        <WordDivider />
+        <SignInInstead returnTo={returnTo} />
       </AuthPanel>
     </AuthPage>
   );
@@ -116,17 +133,15 @@ function PasswordSignUp({ returnTo }: { returnTo?: string }) {
       const form = new FormData(event.currentTarget);
       const password = String(form.get("password") ?? "");
       if (password.length < MIN_PASSWORD_LENGTH) {
-        setLocalError(
-          `Password must be at least ${MIN_PASSWORD_LENGTH} characters.`,
-        );
+        feedback("refuse");
+        setLocalError(`Needs ${MIN_PASSWORD_LENGTH} or more characters`);
         return;
       }
       const email = String(form.get("email") ?? "");
       const name = String(form.get("name") ?? "").trim();
       if (EMAIL_SHAPED.test(name)) {
-        setLocalError(
-          "Your display name is shown to other users, so it can't be an email address.",
-        );
+        feedback("refuse");
+        setLocalError("Friends see your name, so it can't be an email");
         return;
       }
       // Blank stays blank: the server gives a neutral handle. It used to send
@@ -141,16 +156,17 @@ function PasswordSignUp({ returnTo }: { returnTo?: string }) {
   return (
     <AuthPage>
       <AuthPanel>
+        <SignUpHead returnTo={returnTo} busy={pending} />
+        <WordDivider>or</WordDivider>
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-          <h1 className="type-title-2">Sign up for Cellar Assistant</h1>
           <AuthField
             id="sign-up-name"
-            label="Display name"
+            label="Name"
+            optional
             name="name"
             autoComplete="nickname"
-            placeholder="Optional"
             disabled={pending}
-            description="Shown to other users. Leave it blank and you'll get a neutral handle you can change later — your email is never shown."
+            description="Friends see this, never your email"
           />
           <AuthField
             id="sign-up-email"
@@ -171,20 +187,20 @@ function PasswordSignUp({ returnTo }: { returnTo?: string }) {
             required
             invalid={formError !== null}
             message={formError}
+            description={`${MIN_PASSWORD_LENGTH} or more characters`}
             disabled={pending}
           />
           <Button
             type="submit"
             disabled={pending}
             aria-busy={pending || undefined}
-            className="mt-2"
+            className="mt-1"
           >
             {pending && <Spinner aria-hidden />}
-            Sign up
+            Create account
           </Button>
-          <WordDivider />
-          <SignInInstead returnTo={returnTo} />
         </form>
+        <SignInInstead returnTo={returnTo} />
       </AuthPanel>
     </AuthPage>
   );

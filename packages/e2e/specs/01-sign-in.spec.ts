@@ -20,7 +20,9 @@ test("signs in through the form and lands on Home (X01)", async ({
   const page = await ctx.newPage();
 
   await page.goto("/sign-in");
-  await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { level: 1, name: "Cellar Assistant" }),
+  ).toBeVisible();
 
   await page.getByLabel("Email").fill(ACCOUNTS.primary.email);
   await page.getByLabel("Password").fill(ACCOUNTS.primary.password);

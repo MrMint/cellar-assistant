@@ -21,7 +21,7 @@ import { badgeVariants } from "@/components/ui/badge-variants";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import type { ServerUser } from "@/utilities/auth-server";
-import { MeHeader, MeRequestRow, PressLink } from "./MeLinks";
+import { MeHeader, MeRequestRow } from "./MeLinks";
 import { MeStamps } from "./MeStamps";
 import {
   BAND_STRIP_MAX,
@@ -36,6 +36,7 @@ import {
   type MeHubData,
   type PinnedTierList,
 } from "./me-hub-data";
+import { PressLink } from "./PressLink";
 
 export type MeLink = {
   label: string;
