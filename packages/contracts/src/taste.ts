@@ -18,7 +18,7 @@
  */
 import type { ActorDescriptor } from "./actors.ts";
 import type { Ctx } from "./ctx.ts";
-import type { ItemType } from "./items.ts";
+import type { ItemRef, ItemType } from "./items.ts";
 
 /** Two scores agree when they are at most half a star apart. */
 export const AGREEMENT_MAX_DIFFERENCE = 0.5;
@@ -100,6 +100,24 @@ export type TasteAgreementDto = {
   readonly byType: readonly TasteAgreementTypeDto[];
 };
 
+/**
+ * MC-compare / L11: one item both of you rated, as you may see the ratings
+ * (the same newest score `agreement` counts, so the rows are its `shared`).
+ */
+export type TasteCompareRowDto = {
+  readonly item: ItemRef;
+  /** The item's name, the tie-break of the row order. */
+  readonly name: string;
+  readonly myScore: number;
+  readonly theirScore: number;
+};
+
+export type TasteCompareInput = {
+  readonly userId: string;
+  /** A kind chip: only rows of this type. Absent or null is every type. */
+  readonly itemType?: ItemType | null;
+};
+
 export type TasteActorInterface = {
   profile(ctx: Ctx): Promise<TasteProfileDto>;
   /**
@@ -109,6 +127,16 @@ export type TasteActorInterface = {
   agreement(ctx: Ctx, userId: string): Promise<TasteAgreementDto>;
   /** Agreement with each of your friends, most shared first. */
   friendAgreements(ctx: Ctx): Promise<readonly TasteAgreementDto[]>;
+  /**
+   * MC-compare: the items you and a **friend** both rated, biggest
+   * difference first, then by name. Empty for anyone who is not your friend
+   * (a malformed or unknown id alike), and empty below
+   * {@link AGREEMENT_MIN_SHARED} shared items across every type.
+   */
+  compare(
+    ctx: Ctx,
+    input: TasteCompareInput,
+  ): Promise<readonly TasteCompareRowDto[]>;
 };
 
 export const TasteActorDescriptor: ActorDescriptor<TasteActorInterface> = {
@@ -119,6 +147,7 @@ export const TasteActorDescriptor: ActorDescriptor<TasteActorInterface> = {
     profile: { modelBacked: true },
     agreement: {},
     friendAgreements: {},
+    compare: {},
   },
 };
 
