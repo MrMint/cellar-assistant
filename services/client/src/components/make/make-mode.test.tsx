@@ -8,7 +8,8 @@ import assert from "node:assert/strict";
 import { afterEach, beforeEach, describe, test } from "node:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 
-GlobalRegistrator.register({ url: "http://localhost/recipes/r1/make" });
+if (!GlobalRegistrator.isRegistered)
+  GlobalRegistrator.register({ url: "http://localhost/recipes/r1/make" });
 (
   globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
 ).IS_REACT_ACT_ENVIRONMENT = true;

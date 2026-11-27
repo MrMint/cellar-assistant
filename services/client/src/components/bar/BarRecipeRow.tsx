@@ -1,6 +1,9 @@
+"use client";
+
 import { ChevronRight } from "@/components/app/icons";
 import { LabelPlate } from "@/components/app/LabelPlate";
 import { Link } from "@/components/app/Link";
+import { pressFeedback } from "@/components/app/overlays/press";
 import { Button } from "@/components/ui/button";
 import { type MakeabilityLike, matchDescription } from "./copy";
 
@@ -42,6 +45,7 @@ export function BarRecipeRow({
           href={`/recipes/${recipeId}`}
           overlay
           underline="none"
+          {...pressFeedback()}
           className="t-head truncate text-ink"
         >
           {name}

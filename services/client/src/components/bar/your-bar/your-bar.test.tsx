@@ -9,7 +9,8 @@ import { afterEach, beforeEach, describe, test } from "node:test";
 import { PANTRY_KINDS } from "@cellar-assistant/contracts/bar";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 
-GlobalRegistrator.register({ url: "http://localhost/recipes/bar" });
+if (!GlobalRegistrator.isRegistered)
+  GlobalRegistrator.register({ url: "http://localhost/recipes/bar" });
 (
   globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
 ).IS_REACT_ACT_ENVIRONMENT = true;

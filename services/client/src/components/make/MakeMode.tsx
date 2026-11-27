@@ -5,6 +5,7 @@ import { useMemo, useRef, useState } from "react";
 import { useMutation } from "urql";
 import { BottomSheet } from "@/components/app/BottomSheet";
 import { notify } from "@/components/app/notify";
+import { pressFeedback } from "@/components/app/overlays/press";
 import { useNavigate } from "@/components/app/useNavigate";
 import {
   DeleteDrinkLogMutation,
@@ -170,10 +171,8 @@ export const MakeMode = ({ recipe, viewerId }: MakeModeProps) => {
       <header className="flex items-center gap-2 px-2 pt-3">
         <button
           type="button"
-          onClick={() => {
-            feedback("press");
-            leave();
-          }}
+          {...pressFeedback()}
+          onClick={leave}
           aria-label="Leave Make mode"
           className="grid size-11 shrink-0 place-items-center rounded-md text-ink outline-none focus-visible:outline-2 focus-visible:outline-act-ink active:scale-97"
         >

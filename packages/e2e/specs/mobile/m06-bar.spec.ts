@@ -157,8 +157,8 @@ test("a pantry toggle moves the recipe to Make now", async ({ page }) => {
   await expect(limes).toBeVisible();
   await expect(limes).toHaveAttribute("aria-pressed", "false");
   const box = await limes.boundingBox();
-  // The chip is 36 pt tall inside a 44 pt target (its ::after).
-  expect(box?.height ?? 0).toBeGreaterThanOrEqual(36);
+  // KIT § 2 Chips: 44 tall.
+  expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
   const saved = page.waitForResponse(
     (response) =>
       response.url().includes("/graphql") &&
@@ -171,7 +171,12 @@ test("a pantry toggle moves the recipe to Make now", async ({ page }) => {
   await page.goto("/recipes/bar");
   await expect(page.getByRole("radio", { name: /Make now/ })).toBeVisible();
   const makeNow = page.getByTestId("make-now");
-  await expect(makeNow.getByRole("link", { name })).toBeVisible();
+  await expect(makeNow.getByRole("link", { name, exact: true })).toBeVisible();
+  // A drink you can make carries Make straight into Make mode.
+  await expect(
+    makeNow.getByRole("link", { name: `Make ${name}`, exact: true }),
+  ).toHaveAttribute("href", /\/make$/);
+  await expect(page.getByTestId("bar-readiness")).toContainText(/\d+ ready/);
 
   // No horizontal scroll at phone width.
   const overflow = await page.evaluate(
