@@ -5,11 +5,11 @@ import { attributionLines } from "../adapter";
 import type { PlaceEnrichment, PlaceGooglePhoto } from "../types/places";
 
 /**
- * The old drawer and place page printed "Powered by Google" and nothing
- * else; the attribution blocks Google returns were fetched and dropped. The
- * Places terms require them wherever the data is shown, so they are printed
- * here, under the old line, in the old style: the enrichment's own blocks,
- * then the photo authors' for the photos on screen.
+ * FR-15 (H-43): one quiet line on place pages, "Place details from Google",
+ * in the kit's caption (`t-cap`, ink-3). The Places terms require Google's
+ * attribution blocks wherever its data shows, so they follow on that line:
+ * the enrichment's own blocks, then the photo authors' for the photos on
+ * screen.
  */
 export function GoogleAttribution({
   enrichment,
@@ -31,7 +31,7 @@ export function GoogleAttribution({
       className={cn("t-cap mb-2 text-ink-3", className)}
       data-testid="google-attribution"
     >
-      Powered by Google
+      Place details from Google
       {lines.length > 0 && ` · ${lines.join(" · ")}`}
       {photoLines.length > 0 && ` · Photos: ${photoLines.join(", ")}`}
     </p>

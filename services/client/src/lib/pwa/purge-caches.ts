@@ -1,3 +1,4 @@
+import { forgetRememberedCompanions } from "@/components/pour/remembered-companions";
 import { MAP_TILES_CACHE, WASM_CACHE } from "./cache-names";
 
 /**
@@ -58,6 +59,7 @@ export async function purgeUserCaches(
     | Pick<CacheStorage, "keys" | "delete">
     | undefined = globalThis.caches,
 ): Promise<string[]> {
+  forgetRememberedCompanions();
   if (storage === undefined) return [];
   try {
     const doomed = cachesToPurge(await storage.keys());
