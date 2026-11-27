@@ -50,8 +50,8 @@ export default async function SharedRecipePage({ params }: Props) {
   return (
     <ShareFrame
       canonicalPath={canonical}
-      pitch="Save recipes and see what you can make from your own bar."
-      cta="Join Cellar Assistant"
+      pitch="See what your bar can make."
+      cta="Join"
     >
       <SharedRecipeView
         name={recipe.name}

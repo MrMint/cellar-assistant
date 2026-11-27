@@ -26,6 +26,8 @@ export default async function Image({
   return new ImageResponse(
     <TierListCard
       name={list.name}
+      listType={list.listType}
+      itemCount={list.entries.totalCount ?? nodesOf(list.entries).length}
       ownerDisplayName={list.ownerDisplayName}
       top={topEntries(nodesOf(list.entries), 3)}
     />,

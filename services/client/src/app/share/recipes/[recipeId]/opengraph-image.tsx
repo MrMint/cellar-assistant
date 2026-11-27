@@ -1,5 +1,5 @@
 import { ImageResponse } from "next/og";
-import { loadSharedRecipe, nodesOf } from "@/components/share/loaders";
+import { loadSharedRecipe } from "@/components/share/loaders";
 import { BrandCard, OG_SIZE, RecipeCard } from "@/components/share/og-cards";
 import { recipeFacts } from "@/components/share/SharedRecipeView";
 
@@ -28,11 +28,15 @@ export default async function Image({
   const recipe = result.data;
   return new ImageResponse(
     <RecipeCard
+      kind={recipeFacts({
+        ...recipe,
+        prepTimeMinutes: null,
+        difficultyLevel: null,
+        servingSize: null,
+      })}
       name={recipe.name}
-      facts={recipeFacts(recipe)}
-      ingredients={nodesOf(recipe.ingredients)
-        .map((row) => row.name)
-        .filter((name): name is string => name !== null)}
+      facts={recipeFacts({ ...recipe, type: "", servingSize: null })}
+      blurb={recipe.description}
     />,
     size,
   );

@@ -71,8 +71,8 @@ export default async function SharedItemPage({ params }: Props) {
   return (
     <ShareFrame
       canonicalPath={canonical}
-      pitch="Keep track of every bottle, and what you thought of it."
-      cta="Join Cellar Assistant"
+      pitch="Keep track of every bottle."
+      cta="Join"
     >
       <SharedItemView
         type={type}

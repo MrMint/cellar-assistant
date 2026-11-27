@@ -106,16 +106,17 @@ test.describe("signed out", () => {
       page.getByRole("heading", { level: 1, name: publicName }),
     ).toBeVisible();
     await expect(
-      page.getByText(`by ${ACCOUNTS.primary.displayName}`, { exact: true }),
+      // The byline is "<maker> · <count kind>" ("Test · 3 beers").
+      page.getByText(new RegExp(`^${ACCOUNTS.primary.displayName} · \\d+ `)),
     ).toBeVisible();
 
     const back = encodeURIComponent(`/tier-lists/${publicId}`);
     await expect(
-      page.getByRole("link", { name: "Join Cellar Assistant" }),
+      page.getByRole("link", { name: "Join", exact: true }),
     ).toHaveAttribute("href", `/sign-up?returnTo=${back}`);
     // The join button sits within thumb reach, on screen without scrolling.
     await expect(
-      page.getByRole("link", { name: "Join Cellar Assistant" }),
+      page.getByRole("link", { name: "Join", exact: true }),
     ).toBeInViewport();
 
     const og = await page

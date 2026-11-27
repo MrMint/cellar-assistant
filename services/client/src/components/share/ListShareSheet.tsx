@@ -34,10 +34,10 @@ import {
   asPrivacy,
   canEditList,
   kindNoun,
-  LIST_KINDS,
   PRIVACY_OPTIONS,
   type Privacy,
   privacyLine,
+  rankedKind,
 } from "@/components/tier-list/lists/model";
 import { ListShareQuery } from "@/components/tier-list/lists/queries";
 import { EditTierListMutation } from "@/components/tier-list/queries";
@@ -52,12 +52,6 @@ export type ListSharePreview = {
   ownerName: string | null;
   photoUrl: string | null;
   top: { id: string; name: string; band: number }[];
-};
-
-/** "Ranked places", "Ranked beers". */
-const rankedKind = (listType: string): string => {
-  const kind = LIST_KINDS.find((k) => k.value === listType.toLowerCase());
-  return `Ranked ${kind?.many ?? "entries"}`;
 };
 
 function Row({

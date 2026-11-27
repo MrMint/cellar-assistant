@@ -149,3 +149,9 @@ export const canEditList = (
   viewerId !== "" &&
   typeof createdById === "string" &&
   viewerId === createdById;
+
+/** "Ranked places", "Ranked wines": a list's overline when shared. */
+export const rankedKind = (listType: string): string => {
+  const kind = LIST_KINDS.find((k) => k.value === listType.toLowerCase());
+  return `Ranked ${kind?.many ?? "entries"}`;
+};

@@ -9,7 +9,11 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { inviteShareRequest } from "./InviteFriendsCard";
 import { acceptFailureCopy, InviteHero, inviteCopy } from "./InviteHero";
 import { recipeDescription, tierListDescription } from "./metadata";
-import { SharedItemView, sharedItemSubtitle } from "./SharedItemView";
+import {
+  SharedItemView,
+  sharedItemStyle,
+  sharedItemSubtitle,
+} from "./SharedItemView";
 import { SharedNotFound } from "./SharedNotFound";
 import {
   formatAmount,
@@ -46,13 +50,19 @@ const entry = (
 describe("ShareFrame", () => {
   test("sign-in and sign-up both come back to the page", () => {
     const html = renderToStaticMarkup(
-      <ShareFrame canonicalPath="/tier-lists/abc" cta="Join Cellar Assistant">
+      <ShareFrame
+        canonicalPath="/tier-lists/abc"
+        cta="Join"
+        pitch="Rank what you drink, too."
+      >
         <p>content</p>
       </ShareFrame>,
     );
     assert.match(html, /href="\/sign-in\?returnTo=%2Ftier-lists%2Fabc"/);
     assert.match(html, /href="\/sign-up\?returnTo=%2Ftier-lists%2Fabc"/);
-    assert.match(html, />Join Cellar Assistant</);
+    assert.match(html, />Join</);
+    assert.match(html, />Rank what you drink, too\.</);
+    assert.match(html, />Sign in</);
     // No tab bar: there is no app to navigate yet.
     assert.doesNotMatch(html, /data-slot="tab-bar"/);
   });
@@ -102,14 +112,15 @@ describe("SharedTierListView", () => {
         entry("p", 3, 0, { entryType: "PLACE", name: "Corner Bar" }),
         entry("u", 0, 0),
       ]}
+      itemCount={6}
       moreCount={2}
     />,
   );
 
   test("title, author and the bands in board order", () => {
     assert.match(html, />Fridge beers</);
-    assert.match(html, />by Riley</);
-    assert.match(html, />Beer · ranked</);
+    assert.match(html, />Riley · 6 beers</);
+    assert.match(html, />Ranked beers</);
     const order = ["Outstanding", "Good", "Unrated"].map((label) =>
       html.indexOf(`aria-label="${label}"`),
     );
@@ -162,8 +173,11 @@ describe("SharedItemView", () => {
     assert.match(html, /Monte Bello/);
     assert.match(html, /2016/);
     assert.match(html, /Santa Cruz Mountains/);
-    assert.match(html, /from 12 ratings/);
-    assert.match(html, /aria-label="Rated 4\.5 out of 5"/);
+    assert.match(html, />Wine · Red</);
+    assert.equal(sharedItemStyle({ style: "PALE_ALE" }), "Pale ale");
+    assert.equal(sharedItemStyle({ style: "IPA, hazy" }), "IPA");
+    assert.equal(sharedItemStyle({}), "");
+    assert.match(html, /aria-label="People rate it 4\.5 out of 5, 12 ratings"/);
   });
 
   test("the subtitle reads the shared, unaliased style", () => {
@@ -179,7 +193,7 @@ describe("SharedItemView", () => {
     const unrated = renderToStaticMarkup(
       <SharedItemView {...props} scoreAverage={null} scoreCount={0} />,
     );
-    assert.doesNotMatch(unrated, /ratings? on/);
+    assert.doesNotMatch(unrated, /data-slot="public-rating"/);
   });
 });
 
@@ -202,7 +216,7 @@ describe("SharedRecipeView", () => {
 
   test("ingredients, method and the facts line", () => {
     assert.match(html, />Negroni</);
-    assert.match(html, />Cocktail · 3 min · Serves 1</);
+    assert.match(html, />Cocktail · 3 min · Very Easy · Serves 1</);
     assert.match(html, /Campari/);
     assert.match(html, />1 oz</);
     assert.match(html, /· optional/);

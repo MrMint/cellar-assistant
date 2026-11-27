@@ -7,7 +7,10 @@ import {
   inlineImage,
   OG_SIZE,
 } from "@/components/share/og-cards";
-import { sharedItemSubtitle } from "@/components/share/SharedItemView";
+import {
+  sharedItemStyle,
+  sharedItemSubtitle,
+} from "@/components/share/SharedItemView";
 import { itemTypeOfSegment } from "@/lib/share/routes";
 import { displayItemName } from "@/utilities/smart-title-case";
 
@@ -41,6 +44,9 @@ export default async function Image({
       subtitle={sharedItemSubtitle(
         type,
         item,
+        (item.attributes ?? {}) as Record<string, unknown>,
+      )}
+      style={sharedItemStyle(
         (item.attributes ?? {}) as Record<string, unknown>,
       )}
       scoreAverage={item.scoreAverage}
