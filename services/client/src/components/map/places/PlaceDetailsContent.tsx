@@ -32,6 +32,7 @@ import {
 } from "@/components/app/icons";
 import { Link } from "@/components/app/Link";
 import { notify } from "@/components/app/notify";
+import { pressFeedback } from "@/components/app/overlays/press";
 import { TogglePop } from "@/components/app/TogglePop";
 import { AddToTierListModal } from "@/components/tier-list/AddToTierListModal";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -641,6 +642,7 @@ function ContactRow({
   return (
     <button
       type="button"
+      {...pressFeedback()}
       onClick={onClick}
       className="t-body flex min-h-11 flex-row items-center gap-4 rounded-sm text-left text-act-ink outline-none hover:underline focus-visible:ring-[3px] focus-visible:ring-ring/50"
     >

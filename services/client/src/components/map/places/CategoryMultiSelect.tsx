@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Check, ChevronDown, ICON_STROKE } from "@/components/app/icons";
+import { pressFeedback } from "@/components/app/overlays/press";
 import { Badge } from "@/components/ui/badge";
 import {
   Command,
@@ -87,6 +88,7 @@ export function CategoryMultiSelect<V extends string>({
         <button
           id={id}
           type="button"
+          {...pressFeedback()}
           role="combobox"
           aria-expanded={open}
           aria-controls={listId}

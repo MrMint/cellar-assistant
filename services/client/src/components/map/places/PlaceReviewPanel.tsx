@@ -34,6 +34,7 @@ import {
 } from "@/components/app/icons";
 import { Link } from "@/components/app/Link";
 import { notify } from "@/components/app/notify";
+import { pressFeedback } from "@/components/app/overlays/press";
 import { useNavigate } from "@/components/app/useNavigate";
 import { Button } from "@/components/ui/button";
 import { failureFromTransport, unwrapResult } from "@/lib/api/result";
@@ -350,6 +351,7 @@ function Suggestions({
                 <button
                   type="button"
                   aria-label={`Add category ${label}`}
+                  {...pressFeedback()}
                   onClick={() =>
                     void onAccept({ category }, `Tagged as ${label}`)
                   }

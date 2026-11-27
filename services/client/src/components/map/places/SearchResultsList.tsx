@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { useCallback, useRef, useState } from "react";
 import { IconButton } from "@/components/app/IconButton";
 import { Close, ICON_STROKE, Place } from "@/components/app/icons";
+import { pressFeedback } from "@/components/app/overlays/press";
 import { Score } from "@/components/app/Score";
 import { itemTypeTokens } from "@/components/app/TypeChip";
 import { Badge } from "@/components/ui/badge";
@@ -279,6 +280,7 @@ function ResultCard({
   return (
     <button
       type="button"
+      {...pressFeedback()}
       onClick={onClick}
       className={cn(
         "flex w-full items-start gap-3 rounded-md bg-surface-1 text-left outline-none transition-colors duration-(--ca-dur-short) ease-standard hover:bg-surface-2 focus-visible:ring-[3px] focus-visible:ring-ring/50",
