@@ -4,9 +4,10 @@
  * then `setAvatar(fileId)`. The deps come in as arguments so the order and
  * the refusal path are tested without a network (`avatar.test.ts`).
  */
-import type { Client } from "urql";
+import type { Client, OperationResult } from "urql";
 import { type UploadKind, uploadFile } from "@/lib/api/files";
-import { SetAvatarMutation } from "./fragments";
+import type { ResultOf } from "@/lib/api/graphql";
+import type { SetAvatarMutation } from "./fragments";
 
 /**
  * The server accepts any kind matching its pattern and checks an avatar's
@@ -37,13 +38,22 @@ export async function saveAvatar(
   return fileId;
 }
 
-/** The real deps, over the app's urql client. */
-export const avatarDeps = (client: Client): AvatarDeps => ({
+/** `useMutation(SetAvatarMutation)`'s executor. */
+export type RunSetAvatar = (variables: {
+  fileId: string;
+}) => Promise<OperationResult<ResultOf<typeof SetAvatarMutation>>>;
+
+/**
+ * The real deps: the upload over the app's urql client, and `setAvatar`
+ * through the caller's `useMutation` (no bare `.toPromise()` in components).
+ */
+export const avatarDeps = (
+  client: Client,
+  runSetAvatar: RunSetAvatar,
+): AvatarDeps => ({
   upload: (file, kind, options) => uploadFile(client, file, kind, options),
   setAvatar: async (fileId) => {
-    const response = await client
-      .mutation(SetAvatarMutation, { fileId })
-      .toPromise();
+    const response = await runSetAvatar({ fileId });
     const payload = response.data?.setAvatar;
     if (payload?.__typename === "UserProfile") return { ok: true };
     const message =

@@ -12,7 +12,11 @@ import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { feedback } from "@/lib/feedback";
 import { avatarDeps, saveAvatar } from "./avatar";
-import { RemoveAvatarMutation, UpdateProfileMutation } from "./fragments";
+import {
+  RemoveAvatarMutation,
+  SetAvatarMutation,
+  UpdateProfileMutation,
+} from "./fragments";
 
 export type EditableProfile = {
   displayName: string;
@@ -45,6 +49,7 @@ export function ProfileEditor({
   const client = useClient();
   const [, updateProfile] = useMutation(UpdateProfileMutation);
   const [, removeAvatar] = useMutation(RemoveAvatarMutation);
+  const [, setAvatar] = useMutation(SetAvatarMutation);
   const fileInput = useRef<HTMLInputElement>(null);
 
   const [name, setName] = useState(profile.displayName);
@@ -78,7 +83,8 @@ export function ProfileEditor({
     setSaving(true);
     setError(null);
     try {
-      if (photo !== null) await saveAvatar(photo, avatarDeps(client));
+      if (photo !== null)
+        await saveAvatar(photo, avatarDeps(client, setAvatar));
       else if (removing) {
         const result = await removeAvatar({});
         if (result.data?.removeAvatar.__typename !== "UserProfile") {

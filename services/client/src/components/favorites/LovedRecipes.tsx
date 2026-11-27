@@ -23,11 +23,11 @@ import {
 /** 44 pt: the recipe's photo, or the recipe glyph. */
 function Thumbnail({ row }: { row: LovedRecipeRow }) {
   return row.imageUrl === null ? (
-    <span className="flex size-11 items-center justify-center rounded-sm bg-surface-2 text-ink-2">
+    <span className="flex size-11 items-center justify-center rounded-sm bg-raised text-glyph">
       <Recipe aria-hidden strokeWidth={ICON_STROKE} className="size-5" />
     </span>
   ) : (
-    <span className="relative block size-11 overflow-hidden rounded-sm bg-surface-2">
+    <span className="relative block size-11 overflow-hidden rounded-sm bg-raised">
       <Image
         src={row.imageUrl}
         alt=""
@@ -101,7 +101,7 @@ export function LovedRecipes({
                     href={row.href}
                     overlay
                     underline="none"
-                    className="text-ink-1"
+                    className="text-ink"
                   >
                     {row.name}
                   </Link>
