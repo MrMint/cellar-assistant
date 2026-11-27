@@ -1,9 +1,9 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { type KeyboardEvent, useCallback, useRef, useState } from "react";
 import { MORE, TABS } from "../nav";
 import { ResponsiveDialog } from "../ResponsiveDialog";
+import { useNavigate } from "../useNavigate";
 import { handleAppKey, KEY_ROWS, OPEN_MORE_EVENT } from "./app-keys";
 import { Kbd } from "./Kbd";
 
@@ -60,7 +60,7 @@ export function useShellKeys(): {
   keysOpen: boolean;
   setKeysOpen: (open: boolean) => void;
 } {
-  const router = useRouter();
+  const navigate = useNavigate();
   const [keysOpen, setKeysOpen] = useState(false);
   const chord = useRef({ armed: false });
 
@@ -69,7 +69,7 @@ export function useShellKeys(): {
       const handled = handleAppKey(
         event,
         {
-          navigate: (href) => router.push(href),
+          navigate: (href) => navigate.push(href),
           openKeys: () => setKeysOpen(true),
           openMore: () => window.dispatchEvent(new Event(OPEN_MORE_EVENT)),
           focusSearch: () => {
@@ -84,7 +84,7 @@ export function useShellKeys(): {
       );
       if (handled) event.preventDefault();
     },
-    [router],
+    [navigate],
   );
 
   return { onKeyDown, keysOpen, setKeysOpen };

@@ -2,7 +2,13 @@
 
 import { createContext, type ReactNode, useContext } from "react";
 import { useQuery } from "urql";
-import { graphql, type ResultOf } from "@/lib/api/graphql";
+import {
+  FRIEND_REQUESTS_PAGE,
+  MeHubQuery,
+  meHubFromResult,
+  PINNED_TIER_LISTS,
+} from "@/components/user/me-hub-data";
+import type { ResultOf } from "@/lib/api/graphql";
 
 /** Who is signed in, as the tab bar's Me avatar draws them. */
 export type ShellViewer = {
@@ -19,33 +25,15 @@ export const ShellViewerContext = createContext<ShellViewer>({});
 export const useShellViewer = (): ShellViewer => useContext(ShellViewerContext);
 
 /** The API caps `first` at 100; past that the badge reads "99+". */
-const REQUESTS_PAGE = 100;
+const REQUESTS_PAGE = FRIEND_REQUESTS_PAGE;
 
-const MeBadgeQuery = graphql(`
-  query ShellMeBadge($requests: Int!) {
-    myFriendRequests(direction: INCOMING, first: $requests) {
-      __typename
-      ... on FriendRequestConnection {
-        edges {
-          node {
-            id
-            status
-          }
-        }
-      }
-    }
-  }
-`);
-
-/** The pending requests in the badge query's result; a failed read is 0. */
+/**
+ * The pending requests in the Me hub's result (the same document the Me
+ * page reads, so the two share one cache entry); a failed read is 0.
+ */
 export const pendingRequests = (
-  data: ResultOf<typeof MeBadgeQuery> | null | undefined,
-): number => {
-  const connection = data?.myFriendRequests;
-  return connection?.__typename === "FriendRequestConnection"
-    ? connection.edges.filter(({ node }) => node.status === "PENDING").length
-    : 0;
-};
+  data: ResultOf<typeof MeHubQuery> | null | undefined,
+): number => meHubFromResult(data).pendingFriendRequests;
 
 /** The badge's words: the count, capped where the read stops. */
 export const badgeCount = (count: number): string =>
@@ -72,8 +60,8 @@ export function ShellViewerProvider({
   children: ReactNode;
 }) {
   const [{ data }] = useQuery({
-    query: MeBadgeQuery,
-    variables: { requests: REQUESTS_PAGE },
+    query: MeHubQuery,
+    variables: { pinned: PINNED_TIER_LISTS, requests: REQUESTS_PAGE },
     requestPolicy: "cache-and-network",
   });
   const requests = pendingRequests(data);

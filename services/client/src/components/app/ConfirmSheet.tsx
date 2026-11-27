@@ -44,7 +44,9 @@ export function ConfirmSheet({
   title,
   description,
   confirmLabel,
-  cancelLabel = "Keep it",
+  // The kit's word is "Keep it"; the default stays "Cancel" until the
+  // callers' tests that press "Cancel" move with it (f2a hand-off).
+  cancelLabel = "Cancel",
   onConfirm,
   pending = false,
   children,

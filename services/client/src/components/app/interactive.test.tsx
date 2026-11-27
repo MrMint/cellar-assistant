@@ -557,6 +557,7 @@ describe("ConfirmSheet", () => {
     const changes: boolean[] = [];
     await render(
       <ConfirmSheet
+        cancelLabel="Keep it"
         open
         onOpenChange={(o) => changes.push(o)}
         title="Delete this cellar?"
@@ -594,6 +595,7 @@ describe("ConfirmSheet", () => {
   test("pending: both buttons disabled", async () => {
     await render(
       <ConfirmSheet
+        cancelLabel="Keep it"
         open
         onOpenChange={() => {}}
         title="Delete?"
