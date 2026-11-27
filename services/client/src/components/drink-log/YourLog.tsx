@@ -316,19 +316,24 @@ export function YourLog({
   );
 }
 
-/** The viewer's own date ("Nov 24, 2026"), stable until mounted (Timestamp's rule). */
+/**
+ * The viewer's own date ("Nov 24, 2026"), as a string because HistoryRow and
+ * the sheet title take one. Timestamp's rule keeps it hydration-safe: the
+ * server and the first client render both show the ISO day, and the
+ * viewer's zone and locale apply only after mount.
+ */
 function useLocalDate(iso: string, time: boolean): string {
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return "";
   if (!mounted) return iso.slice(0, 10);
-  return date.toLocaleString(
+  return new Intl.DateTimeFormat(
     undefined,
     time
       ? { dateStyle: "medium", timeStyle: "short" }
       : { dateStyle: "medium" },
-  );
+  ).format(date);
 }
 
 /**

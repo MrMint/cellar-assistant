@@ -3,9 +3,10 @@ import { notFound } from "next/navigation";
 import { cache } from "react";
 import { itemTypeTokens } from "@/components/app/TypeChip";
 import type { ApiItemType } from "@/components/cellar-api/itemTypes";
+import { ItemUncheckedFieldsQuery } from "@/components/drink-log/queries";
 import { attributesFrom } from "@/components/item-api/itemFormRules";
 import { ViewerQuery } from "@/lib/api/cellars";
-import { graphql, readFragment } from "@/lib/api/graphql";
+import { readFragment } from "@/lib/api/graphql";
 import { ItemCorrectionQuery } from "@/lib/api/item-correction";
 import {
   ItemAttributesFragment,
@@ -19,26 +20,6 @@ import { displayItemName } from "@/utilities/smart-title-case";
 import { ItemAppBar } from "./ItemAppBar";
 import { ItemForm } from "./ItemForm";
 import { shownBrandOf } from "./shown-brand";
-
-/**
- * C3 "Check this": the label read's guesses the creator never confirmed
- * (`Item.unconfirmedFields`, empty for anyone else and for an item not
- * created from a read).
- */
-const ItemUncheckedFieldsQuery = graphql(`
-  query ItemUncheckedFields($itemId: ID!, $type: ItemType!) {
-    item(id: $itemId, type: $type) {
-      __typename
-      ... on QueryItemSuccess {
-        data {
-          __typename
-          id
-          unconfirmedFields
-        }
-      }
-    }
-  }
-`);
 
 /** One `ItemSummaryQuery` per request, for the page and its title (X21). */
 const loadItemSummary = cache((type: ApiItemType, itemId: string) =>
