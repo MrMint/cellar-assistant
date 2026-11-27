@@ -43,6 +43,7 @@
  * its brand is not another producer's ({@link brandCompatible}).
  */
 
+import { formatScore } from "@/components/app/Score";
 import type { ApiItemType } from "@/components/cellar-api/itemTypes";
 import type { ItemCardItem } from "@/components/item/ItemCard/types";
 import type { ItemFormValues } from "@/components/item/ItemForm";
@@ -354,3 +355,45 @@ export const catalogMatchSummary = (match: CatalogMatch): string =>
   [match.item.vintage, match.item.subtitle]
     .filter((part): part is string => part !== undefined && part !== "")
     .join(" · ");
+
+/** Fewer letters than this offer no quick-add row (F-60). */
+export const TYPE_AHEAD_MIN = 3;
+
+/**
+ * F-60 (board add-bottle-17): Type it's quick-add row under Name. The first
+ * search result — the search's own rank — where every typed word starts a
+ * word of the item's name, skipping items the person already declined. A
+ * prefix rule, not `findCatalogMatch`'s exact one: the person is still
+ * typing, and the row only offers; nothing is filed until they tap Add.
+ */
+export const typeAheadMatch = ({
+  typed,
+  candidates,
+  excludeItemIds,
+}: {
+  typed: string;
+  candidates: readonly CatalogCandidate[];
+  excludeItemIds: readonly string[];
+}): CatalogCandidate | null => {
+  const wanted = normalizeName(typed);
+  if (wanted.replace(/\s/g, "").length < TYPE_AHEAD_MIN) return null;
+  const words = wanted.split(" ");
+  return (
+    candidates.find((candidate) => {
+      if (excludeItemIds.includes(candidate.item.itemId)) return false;
+      const own = normalizeName(candidate.item.name).split(" ");
+      return words.every((word) => own.some((part) => part.startsWith(word)));
+    }) ?? null
+  );
+};
+
+/** The row's second line: "Kazematten · You gave it 5", either half alone. */
+export const typeAheadLine = (match: CatalogCandidate): string | undefined => {
+  const parts = [
+    match.brandName,
+    typeof match.item.myScore === "number"
+      ? `You gave it ${formatScore(match.item.myScore)}`
+      : undefined,
+  ].filter((part): part is string => part !== undefined && part !== "");
+  return parts.length === 0 ? undefined : parts.join(" · ");
+};

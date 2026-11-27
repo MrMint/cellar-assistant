@@ -856,6 +856,9 @@ const ItemOnboardingRun = ({
                   }
             }
             onUseDeclined={() => send({ type: "USE_DECLINED_MATCH" })}
+            onUseTypedMatch={(item) => send({ type: "USE_IMAGE_MATCH", item })}
+            inCellar={inCellar}
+            declinedItemIds={context.declinedItemIds}
           />
           <BottomSheet
             open={backOpen}

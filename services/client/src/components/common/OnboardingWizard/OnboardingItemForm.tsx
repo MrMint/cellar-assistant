@@ -45,7 +45,12 @@ import {
 } from "@/lib/forms/ai-draft";
 import { cn } from "@/lib/utils";
 import { createOnboardedItem } from "./actors/createItem";
-import { type OnboardingDefaults, saveBlocker, skippedNotes } from "./adapter";
+import {
+  type ExistingItem,
+  type OnboardingDefaults,
+  saveBlocker,
+  skippedNotes,
+} from "./adapter";
 import {
   asksVintage,
   confirmedFieldsFrom,
@@ -55,6 +60,9 @@ import {
   saveOnboardingDraft,
 } from "./draft-save";
 import { SaveDraftMutation } from "./queries";
+import { TypeAheadRow } from "./TypeAheadRow";
+
+const NO_IDS: readonly string[] = [];
 
 type OnboardingItemFormProps = {
   type: ApiItemType;
@@ -80,6 +88,15 @@ type OnboardingItemFormProps = {
    */
   declinedMatch?: { name: string; brandName?: string; summary?: string };
   onUseDeclined?: () => void;
+  /**
+   * F-60 (board add-bottle-17): the catalog item the typed name points at,
+   * offered under Name with "Add". Without it, no row.
+   */
+  onUseTypedMatch?: (match: ExistingItem) => void;
+  /** The bottle goes into a cellar (the row says "Add", else "Use"). */
+  inCellar?: boolean;
+  /** Items the person declined: the row never offers them again. */
+  declinedItemIds?: readonly string[];
 };
 
 /**
@@ -125,6 +142,9 @@ export const OnboardingItemForm = ({
   onSavedForLater,
   declinedMatch,
   onUseDeclined,
+  onUseTypedMatch,
+  inCellar = false,
+  declinedItemIds = NO_IDS,
 }: OnboardingItemFormProps) => {
   const client = useClient();
   const [, executeSaveDraft] = useMutation(SaveDraftMutation);
@@ -414,6 +434,16 @@ export const OnboardingItemForm = ({
                     control={control}
                     disabled={busy}
                   />,
+                )}
+                {entry.kind === "name" && onUseTypedMatch !== undefined && (
+                  <TypeAheadRow
+                    type={type}
+                    name={current.name ?? ""}
+                    inCellar={inCellar}
+                    excludeItemIds={declinedItemIds}
+                    disabled={busy}
+                    onAdd={onUseTypedMatch}
+                  />
                 )}
                 {entry.kind === "description" &&
                   field(
