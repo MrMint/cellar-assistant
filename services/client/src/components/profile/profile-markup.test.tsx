@@ -28,7 +28,7 @@ mock.module("next/image", () => ({
 }));
 
 const { FriendProfile } = await import("./FriendProfile");
-const { textOf } = await import("@/test-support/markup");
+const { openTag, textOf } = await import("@/test-support/markup");
 
 const client = new Client({
   url: "http://test.invalid/graphql",
@@ -62,7 +62,7 @@ describe("FriendProfile", () => {
 
   test("nothing shared is one empty state, and no empty sections", () => {
     const html = render(<FriendProfile view={base} />);
-    assert.ok(textOf(html).includes("Nothing shared yet."));
+    assert.ok(textOf(html).includes("Nothing shared yet"));
     assert.ok(!html.includes("data-section="));
   });
 
@@ -88,6 +88,7 @@ describe("FriendProfile", () => {
             rows: [
               {
                 id: "e1",
+                kind: "item",
                 createdAt: "2026-10-05T12:00:00.000Z",
                 title: "2016 Barolo",
                 href: "/wines/w1",
@@ -105,12 +106,14 @@ describe("FriendProfile", () => {
         }}
       />,
     );
-    assert.ok(!textOf(html).includes("Nothing shared yet."));
+    assert.ok(!textOf(html).includes("Nothing shared yet"));
     assert.ok(html.includes('data-section="tier-lists"'));
     assert.ok(!html.includes('data-section="cellars"'));
     assert.ok(html.includes('data-section="logs"'));
     assert.deepEqual(
-      links(html).filter((link) => !link.endsWith("-> /friends")),
+      links(html).filter(
+        (link) => !/-> \/(friends|me|users\/f1\/compare)$/.test(link),
+      ),
       ["Reds, ranked -> /tier-lists/t1", "2016 Barolo -> /wines/w1"],
     );
     const text = textOf(html);
@@ -158,9 +161,47 @@ describe("FriendProfile", () => {
     assert.ok(!textOf(html).includes("Showing 20 of"));
   });
 
-  test("nothing on the page edits: no form, no destructive control", () => {
+  test("the one write is Remove friend, at the foot, behind a confirm", () => {
     const html = render(<FriendProfile view={base} />);
     assert.ok(!html.includes("<form"));
-    assert.ok(!/Remove|Delete|Edit/.test(textOf(html)));
+    assert.ok(!/Delete|Edit/.test(textOf(html)));
+    assert.match(html, /<button\b[^>]*>[\s\S]*?Remove friend<\/button>/);
+    // The confirm is closed on first paint: nothing destructive is drawn.
+    assert.ok(!html.includes('role="alertdialog"'));
+  });
+
+  test("the agreement card keeps #compare and opens the compare screen", () => {
+    const html = render(<FriendProfile view={base} />);
+    assert.notEqual(openTag(html, 'id="compare"'), "");
+    assert.match(html, /href="\/users\/f1\/compare"/);
+  });
+
+  test("every list a friend shares can be copied, past the first page too (CR-16), with a 44px Copy (CR-9)", () => {
+    const html = render(
+      <FriendProfile
+        view={{
+          ...base,
+          tierLists: {
+            rows: Array.from({ length: 20 }, (_, i) => ({
+              id: `l${i + 1}`,
+              name: `List ${i + 1}`,
+              href: `/tier-lists/l${i + 1}`,
+              description: "",
+            })),
+            endCursor: "c20",
+            hasNextPage: true,
+            totalCount: 25,
+          },
+        }}
+      />,
+    );
+    assert.equal(
+      (html.match(/aria-label="Copy List \d+ to your lists"/g) ?? []).length,
+      20,
+    );
+    const copy = openTag(html, 'aria-label="Copy List 1 to your lists"');
+    assert.match(copy, /\bmin-h-11\b/);
+    assert.match(copy, /\bmin-w-11\b/);
+    assert.ok(textOf(html).includes("20 of 25"));
   });
 });

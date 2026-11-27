@@ -17,7 +17,7 @@ import {
   useAllFriendRequests,
 } from "@/components/friend/friend-lists";
 import { Button } from "@/components/ui/button";
-import { ProfileHeader, personCrumbs } from "./FriendProfile";
+import { ProfileHeader, personCrumbs } from "./ProfileHeader";
 
 export type LockedPerson = {
   readonly userId: string;
