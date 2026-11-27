@@ -222,4 +222,67 @@ describe("MenuLineDraftSheet", () => {
     const footer = document.querySelector('[data-slot="draft-footer"]');
     assert.match(footer?.textContent ?? "", /Add to catalog$/);
   });
+
+  test("Finish later sets the card aside as a draft (H-41): it opens and saves one, and creates no item", async () => {
+    const { client, seen } = recording((sent) => {
+      const op = opName(sent);
+      if (op === "OpenItemDraft") {
+        return {
+          openItemDraft: {
+            __typename: "ItemOnboarding",
+            id: sent.variables.draftId,
+            status: "AWAITING_CONFIRMATION",
+          },
+        };
+      }
+      if (op === "SaveOnboardingDraft") {
+        return {
+          saveDraft: {
+            __typename: "ItemOnboarding",
+            id: (sent.variables.input as { onboardingId: string }).onboardingId,
+            status: "NEEDS_DETAILS",
+            cellarId: null,
+            confirmedFields: [],
+            vintageAnswer: "UNANSWERED",
+          },
+        };
+      }
+      return { me: null };
+    });
+    let closed = false;
+    await act(async () =>
+      root.render(
+        <Provider value={client}>
+          <MenuLineDraftSheet
+            line={line}
+            placeId="p1"
+            open
+            onOpenChange={(next) => {
+              if (!next) closed = true;
+            }}
+          />
+        </Provider>,
+      ),
+    );
+    await flush();
+    const later = button(/^Finish later$/);
+    assert.ok(later, "the footer offers Finish later");
+    await act(async () => later.click());
+    await flush();
+    const mutations = seen
+      .filter((s) => /^\s*mutation\b/.test(s.query))
+      .map(opName);
+    assert.deepEqual(mutations, ["OpenItemDraft", "SaveOnboardingDraft"]);
+    const opened = seen.find((s) => opName(s) === "OpenItemDraft");
+    const saved = seen.find((s) => opName(s) === "SaveOnboardingDraft");
+    const input = saved?.variables.input as {
+      onboardingId: string;
+      cellarId: string | null;
+      fields: { name?: string };
+    };
+    assert.equal(input.onboardingId, opened?.variables.draftId);
+    assert.equal(input.cellarId, null);
+    assert.equal(input.fields.name, "Lagavulin 16");
+    assert.equal(closed, true, "the card closes once the draft is saved");
+  });
 });
