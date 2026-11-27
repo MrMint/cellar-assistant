@@ -6,6 +6,7 @@ import { cookies } from "next/headers";
 import { NuqsAdapter } from "nuqs/adapters/next/app";
 import { SkipLink } from "@/components/app/SkipLink";
 import AppClientProviders from "@/components/providers/AppClientProviders";
+import { FeedbackProvider } from "@/components/providers/FeedbackProvider";
 import SerwistClientProvider from "@/components/providers/SerwistClientProvider";
 import { AppleSplashScreens } from "@/components/pwa/AppleSplashScreens";
 import {
@@ -107,9 +108,11 @@ export default async function RootLayout({
         <SerwistClientProvider>
           <NuqsAdapter>
             <AppClientProviders>
-              <div className="flex h-dvh w-screen pt-[env(safe-area-inset-top)] pr-[env(safe-area-inset-right)] pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)]">
-                {children}
-              </div>
+              <FeedbackProvider>
+                <div className="flex h-dvh w-screen pt-[env(safe-area-inset-top)] pr-[env(safe-area-inset-right)] pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)]">
+                  {children}
+                </div>
+              </FeedbackProvider>
             </AppClientProviders>
           </NuqsAdapter>
           <Analytics />
