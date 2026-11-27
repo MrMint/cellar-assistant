@@ -45,6 +45,7 @@ const { ContinueSection } = await import("./ContinueShelf");
 const { FriendsFeed } = await import("./FriendsFeed");
 const { NearbySection, HOME_LOCATION_COPY } = await import("./NearbySection");
 const { TodayHeader } = await import("./TodayHeader");
+const { NewPersonHero } = await import("./HomeLayout");
 const { SearchSheetHeader } = await import("../search/SearchSheetHeader");
 const { seenHash } = await import("./seen-cookie");
 const { seenKeyOf } = await import("./inbox");
@@ -87,6 +88,24 @@ describe("TodayHeader", () => {
     assert.equal(html.match(/<h1\b/g)?.length, 1);
     assert.match(html, /href="\/search"/);
     assert.match(html, /aria-label="Search bottles, places and recipes"/);
+    const words = text(html);
+    assert.match(words, /Bottles, places, lists/);
+    assert.match(words, /Scan/);
+    assert.match(words, /Photo/);
+  });
+
+  test("a new person: the hero, one way on, and no number anywhere", () => {
+    const html = render(
+      <>
+        <TodayHeader displayName="Riley Park" collectionLine={null} />
+        <NewPersonHero />
+      </>,
+    );
+    const words = text(html);
+    assert.match(words, /Start with a bottle/);
+    assert.match(words, /Snap its label to add it/);
+    assert.match(html, /href="\/add\?mode=bottle"/);
+    assert.doesNotMatch(words, /\d/, "no count that isn't theirs");
   });
 });
 
@@ -232,7 +251,10 @@ describe("ContinueSection", () => {
       />,
     );
     assert.match(text(html), /Rate the 2/);
-    assert.match(html, /href="\/cellars\/c1\/wines\/u1"[^>]*>[\s\S]*?Rate the 2/);
+    assert.match(
+      html,
+      /href="\/cellars\/c1\/wines\/u1"[^>]*>[\s\S]*?Rate the 2/,
+    );
     const none = render(
       <ContinueSection
         bottles={[{ ...bottle("rated", null, 1), rating: 4 }]}
