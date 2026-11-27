@@ -89,7 +89,7 @@ export const HeaderBar = ({
         <AppBar
           title={
             titleIsContentHeading ? (
-              <p className="type-headline truncate">{header.title}</p>
+              <p className="t-head truncate">{header.title}</p>
             ) : (
               header.title
             )

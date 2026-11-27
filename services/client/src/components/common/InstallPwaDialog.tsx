@@ -232,7 +232,7 @@ export const InstallPwaDialog = () => {
               checked={dontShowAgain}
               onCheckedChange={(checked) => setDontShowAgain(checked === true)}
             />
-            <Label htmlFor={checkboxId} className="type-callout font-normal">
+            <Label htmlFor={checkboxId} className="t-body font-normal">
               Don&apos;t show this again
             </Label>
           </div>
@@ -257,12 +257,12 @@ export const InstallPwaDialog = () => {
     >
       {/* The sheet and the dialog pad their own content. */}
       <div className="flex flex-col gap-3 pb-2">
-        <p className="type-body text-ink-2">
+        <p className="t-body text-ink-2">
           To get the full experience of Cellar Assistant we recommend installing
           it as an app. This will allow easy access from the home screen.
         </p>
         {steps !== null && (
-          <ol className="type-body flex list-decimal flex-col gap-1 pl-6 text-ink-1">
+          <ol className="t-body flex list-decimal flex-col gap-1 pl-6 text-ink">
             {steps.map((step, i) => (
               // Static steps, never reordered.
               // biome-ignore lint/suspicious/noArrayIndexKey: fixed list.

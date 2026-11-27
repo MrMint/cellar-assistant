@@ -59,7 +59,7 @@ export const RichTextEditor = ({
             />
           }
           placeholder={
-            <div className="type-body pointer-events-none absolute top-4 left-4 select-none text-muted-foreground">
+            <div className="t-body pointer-events-none absolute top-4 left-4 select-none text-ink-3">
               {placeholder}
             </div>
           }

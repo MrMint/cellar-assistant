@@ -68,7 +68,7 @@ function confidenceBadge(confidence: number): {
   if (confidence >= 0.9)
     return { variant: "secondary", className: "bg-success/15 text-success" };
   if (confidence >= 0.7)
-    return { variant: "secondary", className: "bg-surface-3 text-ink-1" };
+    return { variant: "secondary", className: "bg-sel text-ink" };
   return { variant: "destructive" };
 }
 
@@ -194,11 +194,11 @@ export const QuickAddCard = ({
       onFocus={handlePause}
     >
       {heading !== undefined && (
-        <p className="type-callout font-semibold text-ink-2">{heading}</p>
+        <p className="t-body font-semibold text-ink-2">{heading}</p>
       )}
       {/* Header with name and confidence */}
       <div className="flex flex-row items-start justify-between">
-        <h2 className="type-headline mr-2 flex-1">
+        <h2 className="t-head mr-2 flex-1">
           {defaults.name || "Unknown Item"}
         </h2>
         <Badge
@@ -212,7 +212,7 @@ export const QuickAddCard = ({
       {/* Brand info */}
       {defaults.brand_name && (
         <div className="flex flex-row items-center gap-2">
-          <p className="type-body font-semibold">{defaults.brand_name}</p>
+          <p className="t-body font-semibold">{defaults.brand_name}</p>
           {defaults.is_new_brand && (
             <Badge variant="secondary" className="bg-success/15 text-success">
               New
@@ -222,7 +222,7 @@ export const QuickAddCard = ({
       )}
 
       {/* Item summary */}
-      <p className="type-callout text-ink-2">
+      <p className="t-body text-ink-2">
         {summary !== undefined && summary !== ""
           ? summary
           : getItemSummary(defaults, itemType)}
@@ -230,7 +230,7 @@ export const QuickAddCard = ({
 
       {/* Description preview if available */}
       {defaults.description && (
-        <p className="type-footnote line-clamp-2">{defaults.description}</p>
+        <p className="t-cap line-clamp-2">{defaults.description}</p>
       )}
 
       {children}
@@ -244,18 +244,16 @@ export const QuickAddCard = ({
             aria-label="Time until it is added"
             className="h-1"
           />
-          <p className="type-footnote tabular mt-1 text-center">
+          <p className="t-cap tabular mt-1 text-center">
             Adding in {countdown}s...
           </p>
         </div>
       )}
 
-      {error !== null && (
-        <p className="type-callout text-destructive">{error}</p>
-      )}
+      {error !== null && <p className="t-body text-danger">{error}</p>}
 
       {isPaused && !isConfirming && error === null && (
-        <p className="type-footnote text-center">Auto-add paused</p>
+        <p className="t-cap text-center">Auto-add paused</p>
       )}
 
       {/* Action buttons */}

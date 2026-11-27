@@ -892,7 +892,7 @@ export function AnimationShowcase({
       </div>
 
       <div className="flex flex-col items-center gap-3 border-line border-t bg-background/90 p-4 backdrop-blur-md">
-        <p role="status" className="type-overline text-ai">
+        <p role="status" className="t-micro uppercase text-ai">
           {statusText}
         </p>
         {stages !== undefined && stages.length > 0 && (
@@ -906,8 +906,8 @@ export function AnimationShowcase({
                 data-state={stage.state}
                 aria-current={stage.state === "active" ? "step" : undefined}
                 className={cn(
-                  "flex items-center gap-2 type-callout",
-                  stage.state === "pending" ? "text-ink-3" : "text-ink-1",
+                  "flex items-center gap-2 t-body",
+                  stage.state === "pending" ? "text-ink-3" : "text-ink",
                 )}
               >
                 <span
