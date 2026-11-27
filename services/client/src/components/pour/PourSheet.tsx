@@ -3,11 +3,14 @@
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { useClient, useMutation, useQuery } from "urql";
 import { FilterChip } from "@/components/app/FilterChip";
-import { Check, People, Pour } from "@/components/app/icons";
-import { Link } from "@/components/app/Link";
+import { ErrorIcon } from "@/components/app/icons";
 import { notify } from "@/components/app/notify";
+import { BandSheet } from "@/components/app/parts/BandSheet";
+import { type Band, bandName } from "@/components/app/parts/Rank";
+import { formatKitScore } from "@/components/app/parts/Stars";
 import { RatingInput } from "@/components/app/RatingInput";
 import { ResponsiveDialog } from "@/components/app/ResponsiveDialog";
+import { useNavigate } from "@/components/app/useNavigate";
 import { ApiError } from "@/components/cellar-api/ApiError";
 import type { ApiItemType } from "@/components/cellar-api/itemTypes";
 import {
@@ -23,11 +26,7 @@ import {
 import { WhenPicker } from "@/components/drink-log/WhenPicker";
 import { useFinishToast } from "@/components/item/FinishBottleDialogs";
 import { useFinishBottle } from "@/components/item/useFinishBottle";
-import { BAND_LABELS } from "@/components/tier-list/constants";
-import {
-  bandForScore,
-  historyStepFailure,
-} from "@/components/tier-list/history";
+import { historyStepFailure } from "@/components/tier-list/history";
 import {
   ReorderBandMutation,
   UndoTierListEditMutation,
@@ -41,28 +40,36 @@ import {
   UpdateItemReviewMutation,
 } from "@/lib/api/items";
 import { type ApiFailure, unwrapResult } from "@/lib/api/result";
+import { feedback } from "@/lib/feedback";
 import { cn } from "@/lib/utils";
 import { PourLevel } from "./PourLevel";
 import {
   type BottleBefore,
+  bandCounts,
   bandMoveOrder,
   type Companion,
   canPourTo,
   clampLevel,
-  containerNote,
+  containerLabel,
+  crossesStop,
   defaultPour,
   GLASS_PRESETS,
   type ListPlacement,
   levelAfterPreset,
+  levelStops,
   meAndLabel,
   movedEditSeq,
   notYetLevel,
   ownPlacements,
   parseCompanions,
+  pourAmount,
   pourBottleInput,
   pouredMessage,
   pourLabel,
+  pourVerb,
   presetAmount,
+  rankAfterMove,
+  rankOf,
   rememberedCompanions,
   undoPourBottleInput,
 } from "./pour-plan";
@@ -340,172 +347,226 @@ export function PourSheet({
     if (step === "finish" && finishPhase === "finished") setStep("rate");
   }, [step, finishPhase]);
 
+  // After the last pour: your rating and the lists it is on.
+  const [followUp, refetchFollowUp] = useQuery({
+    query: PourFollowUpQuery,
+    variables: { type: subject.itemType, itemId: subject.itemId },
+    requestPolicy: "network-only",
+    pause: !open || (step !== "rate" && step !== "band"),
+  });
+  const followed = unwrapResult(followUp.data?.item, "QueryItemSuccess");
+  const followItem = followed.ok ? followed.data.data : null;
+  const kept = followItem?.myReview?.score ?? null;
+  const placements = ownPlacements(
+    followItem?.tierListEntries.edges.map((edge) => edge.node) ?? [],
+    followUp.data?.me?.id ?? null,
+  ).filter((placement) => isBand(placement.band));
+
+  const verb = pourVerb(type);
   const title =
     step === "pour"
-      ? "Pour"
+      ? verb
       : step === "finish"
-        ? "That's the last of it"
-        : step === "rate"
-          ? "How was it?"
-          : "On your lists";
+        ? "That’s the last of it"
+        : "How was it?";
+
+  const moveLevel = (next: number) => {
+    if (crossesStop(level, next, levelStops(type, from))) feedback("detent");
+    setLevel(next);
+  };
 
   return (
-    <ResponsiveDialog
-      open={open}
-      onOpenChange={(next) => {
-        if (busy) return;
-        // Closing on "Finished?" is "Not yet": the drink is already logged,
-        // and the bottle must not keep reading as if it had not been poured.
-        // Not yet leaves a drop, closes the sheet and offers Undo.
-        if (!next && step === "finish" && finishPhase === "idle") {
-          void notYet();
-          return;
+    <>
+      <ResponsiveDialog
+        open={open && step !== "band"}
+        onOpenChange={(next) => {
+          if (busy) return;
+          // Closing on "Finished?" is "Not yet": the drink is already logged,
+          // and the bottle must not keep reading as if it had not been
+          // poured. Not yet leaves a drop, closes the sheet and offers Undo.
+          if (!next && step === "finish" && finishPhase === "idle") {
+            void notYet();
+            return;
+          }
+          onOpenChange(next);
+        }}
+        dismissible={!busy && finishPhase !== "finishing"}
+        title={title}
+        description={
+          step === "rate"
+            ? kept === null
+              ? subject.itemName
+              : `${subject.itemName} · you gave it ${formatKitScore(kept)}`
+            : undefined
         }
-        onOpenChange(next);
-      }}
-      dismissible={!busy && finishPhase !== "finishing"}
-      title={title}
-      description={subject.itemName}
-      footer={
-        step === "pour" ? (
-          <Button
-            className="w-full"
-            disabled={busy || !canPourTo(from, level) || whenProblem !== null}
-            aria-busy={busy || undefined}
-            onClick={() => void pour()}
-            data-slot="pour-submit"
-          >
-            {busy ? <Spinner aria-hidden /> : <Pour aria-hidden />}
-            {error !== null && pouredAt !== null
-              ? "Try again"
-              : pourLabel(type, from, level)}
-          </Button>
-        ) : step === "finish" ? (
-          <div className="flex w-full flex-col gap-2 md:flex-row-reverse md:justify-start">
+        footer={
+          step === "pour" ? (
             <Button
-              disabled={busy || finishPhase === "finishing"}
-              aria-busy={finishPhase === "finishing" || undefined}
-              onClick={() =>
-                finish.finishNow({
-                  percentageRemaining: before.percentageRemaining,
-                  openAt: before.openAt,
-                })
-              }
+              className="w-full"
+              disabled={busy || !canPourTo(from, level) || whenProblem !== null}
+              aria-busy={busy || undefined}
+              onClick={() => void pour()}
+              data-slot="pour-submit"
             >
-              {finishPhase === "finishing" ? (
-                <Spinner aria-hidden />
-              ) : (
-                <Check aria-hidden />
-              )}
-              Finished
+              {busy && <Spinner aria-hidden />}
+              {error !== null && pouredAt !== null
+                ? "Try again"
+                : pourLabel(type, from, level)}
             </Button>
-            <Button
-              variant="ghost"
-              disabled={busy || finishPhase === "finishing"}
-              onClick={() => void notYet()}
-            >
-              Not yet — leave a drop
-            </Button>
-          </div>
-        ) : null
-      }
-    >
-      {open && step === "pour" && (
-        <div className="flex flex-col gap-6 pb-2" data-slot="pour-sheet">
-          <div className="flex flex-wrap items-end gap-4">
-            <PourLevel
-              type={type}
-              from={from}
-              value={level}
-              onChange={setLevel}
-            />
-            <div className="flex min-w-0 flex-1 flex-col gap-3">
-              <p className="flex flex-col" aria-live="polite">
-                <span className="t-score tabular text-ink-1">{level}%</span>
-                <span className="t-cap text-ink-3">
-                  {from === 0
-                    ? "left — this is the last of it"
-                    : level >= from
-                      ? `left of ${from}% — drag the level down`
-                      : `left · pouring ${from - level}%`}
+          ) : step === "finish" ? (
+            <div className="grid w-full grid-cols-2 gap-3">
+              <Button
+                variant="outline"
+                disabled={busy || finishPhase === "finishing"}
+                onClick={() => void notYet()}
+              >
+                Not yet
+              </Button>
+              <Button
+                disabled={busy || finishPhase === "finishing"}
+                aria-busy={finishPhase === "finishing" || undefined}
+                onClick={() =>
+                  finish.finishNow({
+                    percentageRemaining: before.percentageRemaining,
+                    openAt: before.openAt,
+                  })
+                }
+              >
+                {finishPhase === "finishing" && <Spinner aria-hidden />}
+                Finished
+              </Button>
+            </div>
+          ) : null
+        }
+      >
+        {open && step === "pour" && (
+          <div className="flex flex-col gap-5 pb-2" data-slot="pour-sheet">
+            <div className="flex gap-4">
+              <div className="flex shrink-0 flex-col items-center gap-2">
+                <PourLevel
+                  type={type}
+                  from={from}
+                  value={level}
+                  onChange={moveLevel}
+                />
+                <span
+                  className="t-cap tabular font-semibold text-ink-2"
+                  data-slot="pour-container"
+                >
+                  {containerLabel(type)}
                 </span>
-              </p>
-              <GlassPresets
-                type={type}
-                from={from}
-                level={level}
-                onPick={setLevel}
-              />
-            </div>
-          </div>
-          <p className="t-cap text-ink-3 -mt-3">{containerNote(type)}</p>
-
-          <WhoWith
-            recent={recent}
-            selected={companionIds}
-            onChange={setCompanionIds}
-            othersOpen={othersOpen}
-            onOthersOpen={setOthersOpen}
-            preloaded={preloadedFriends}
-          />
-
-          <WhenPicker
-            value={drankAt}
-            onChange={setDrankAt}
-            onProblem={setWhenProblem}
-          />
-
-          {error !== null && (
-            <div className="flex flex-col gap-1">
-              {pouredAt !== null && (
-                <p className="t-cap text-ink-1">
-                  Logged — but the level didn't save.
+              </div>
+              <div className="flex min-w-0 flex-1 flex-col gap-3">
+                <p className="m-0 flex flex-col" aria-live="polite">
+                  <span className="t-score text-ink">{level}%</span>
+                  <span className="t-cap text-ink-2">
+                    {from === 0
+                      ? "left · the last of it"
+                      : level >= from
+                        ? "left · drag the level down"
+                        : `left · ${verb === "Steep" ? "steeping" : "pouring"} ${pourAmount(type, from, level)}`}
+                  </span>
                 </p>
-              )}
-              <ApiError error={error} />
+                <GlassPresets
+                  type={type}
+                  from={from}
+                  level={level}
+                  onPick={setLevel}
+                />
+              </div>
             </div>
-          )}
-        </div>
-      )}
 
-      {open && step === "finish" && (
-        <div className="flex flex-col items-center gap-4 pb-2 text-center">
-          <PourLevel
-            type={type}
-            from={0}
-            value={0}
-            onChange={() => {}}
-            readOnly
-          />
-          <p className="t-body text-ink-2">
-            Finished the bottle? It leaves the cellar; every log of it stays,
-            and you can undo this.
-          </p>
-          {finishError !== null && (
-            <p role="alert" className="t-cap text-destructive">
-              {finishError}
+            <WhoWith
+              recent={recent}
+              selected={companionIds}
+              onChange={setCompanionIds}
+              othersOpen={othersOpen}
+              onOthersOpen={setOthersOpen}
+              preloaded={preloadedFriends}
+            />
+
+            <WhenPicker
+              inline
+              value={drankAt}
+              onChange={setDrankAt}
+              onProblem={setWhenProblem}
+            />
+
+            {error !== null &&
+              (pouredAt !== null ? (
+                <p
+                  role="alert"
+                  className="t-cap m-0 flex items-center gap-1.5 text-danger"
+                  data-slot="pour-level-error"
+                >
+                  <ErrorIcon aria-hidden className="size-4 shrink-0" />
+                  Logged, but the level didn’t save.
+                </p>
+              ) : (
+                <ApiError error={error} />
+              ))}
+          </div>
+        )}
+
+        {open && step === "finish" && (
+          <div className="flex flex-col gap-3 pb-2">
+            <p className="t-body m-0 text-ink-2">
+              Finish the bottle? It leaves the cellar. Your log keeps every
+              glass.
             </p>
-          )}
-          {error !== null && <ApiError error={error} />}
-        </div>
-      )}
+            {finishError !== null && (
+              <p role="alert" className="t-cap m-0 text-danger">
+                {finishError}
+              </p>
+            )}
+            {error !== null && <ApiError error={error} />}
+          </div>
+        )}
 
-      {open && (step === "rate" || step === "band") && (
-        <AfterFinish
-          step={step}
+        {open && step === "rate" && (
+          <RateStep
+            subject={subject}
+            loading={followUp.fetching && followUp.data === undefined}
+            reviewId={followItem?.myReview?.id ?? null}
+            kept={kept}
+            onRated={() => {
+              refetchFollowUp({ requestPolicy: "network-only" });
+              if (placements.length > 0) setStep("band");
+              else onOpenChange(false);
+            }}
+            onKeep={() => {
+              if (placements.length > 0) setStep("band");
+              else onOpenChange(false);
+            }}
+            onSkip={() => onOpenChange(false)}
+          />
+        )}
+      </ResponsiveDialog>
+
+      {step === "band" && (
+        <BandStep
+          open={open}
+          placements={placements}
           subject={subject}
-          onBand={() => setStep("band")}
           onDone={() => onOpenChange(false)}
         />
       )}
-    </ResponsiveDialog>
+    </>
   );
 }
+
+const isBand = (band: number): band is Band =>
+  band === 1 || band === 2 || band === 3 || band === 4 || band === 5;
 
 /* -------------------------------------------------------------------------- */
 /* Glass presets                                                               */
 /* -------------------------------------------------------------------------- */
 
+/**
+ * The type's three pours and "The rest", as full-width rows with the amount
+ * at the right (Cellars-Pour 04): one is on when the level sits exactly
+ * there. A tap ticks and moves the level on its spring.
+ */
 function GlassPresets({
   type,
   from,
@@ -517,40 +578,59 @@ function GlassPresets({
   level: number;
   onPick: (level: number) => void;
 }) {
-  const presets = GLASS_PRESETS[type].filter(
-    (preset) => levelAfterPreset(type, from, preset) > 0,
-  );
+  const rows = [
+    ...GLASS_PRESETS[type]
+      .filter((preset) => levelAfterPreset(type, from, preset) > 0)
+      .map((preset) => ({
+        id: preset.id,
+        label: preset.label,
+        to: levelAfterPreset(type, from, preset),
+        amount: presetAmount(type, preset),
+      })),
+    ...(from > 0
+      ? [
+          {
+            id: "rest",
+            label: "The rest",
+            to: 0,
+            amount: pourAmount(type, from, 0),
+          },
+        ]
+      : []),
+  ];
   return (
-    <ul aria-label="How much" className="flex flex-col items-start gap-2">
-      {presets.map((preset) => {
-        const to = levelAfterPreset(type, from, preset);
+    <div
+      role="radiogroup"
+      aria-label="How much"
+      className="flex flex-col gap-2"
+    >
+      {rows.map((row) => {
+        const on = level === row.to;
         return (
-          <li key={preset.id}>
-            <FilterChip
-              selected={level === to}
-              onClick={() => onPick(to)}
-              data-preset={preset.id}
-            >
-              {preset.label}
-              <span className="tabular opacity-70">
-                {presetAmount(type, preset)}
-              </span>
-            </FilterChip>
-          </li>
+          // biome-ignore lint/a11y/useSemanticElements: a row that moves the level, styled as the board's option row.
+          <button
+            key={row.id}
+            type="button"
+            role="radio"
+            aria-checked={on}
+            data-preset={row.id}
+            onClick={() => {
+              feedback("tick");
+              onPick(row.to);
+            }}
+            className={cn(
+              "flex min-h-11 items-center justify-between gap-3 rounded-md border px-4 text-left outline-none transition-transform active:scale-[.97] focus-visible:ring-[3px] focus-visible:ring-ring/50",
+              on ? "border-edge-2 bg-sel text-ink" : "border-edge text-ink-2",
+            )}
+          >
+            <span className="t-head min-w-0 truncate">{row.label}</span>
+            <span className="t-cap tabular shrink-0 text-ink-2">
+              {row.amount}
+            </span>
+          </button>
         );
       })}
-      {from > 0 && (
-        <li>
-          <FilterChip
-            selected={level === 0}
-            onClick={() => onPick(0)}
-            data-preset="rest"
-          >
-            The rest
-          </FilterChip>
-        </li>
-      )}
-    </ul>
+    </div>
   );
 }
 
@@ -558,10 +638,20 @@ function GlassPresets({
 /* Who with                                                                    */
 /* -------------------------------------------------------------------------- */
 
+/** "Who" / "When": the row label at the left (Cellars-Pour 04). */
+function RowLabel({ id, children }: { id: string; children: string }) {
+  return (
+    <span id={id} className="t-cap w-14 shrink-0 text-ink-2">
+      {children}
+    </span>
+  );
+}
+
 /**
- * "Just me" / "me + Sam" / "Others…" — Bulk Check In, replaced. "me + Sam"
- * is the last table you poured with on this device (`localStorage`, a
- * per-viewer convenience), kept to people who are still your friends.
+ * "Just me" / "me + Sam" / "With friends" — Bulk Check In, replaced.
+ * "me + Sam" is the last table you poured with on this device
+ * (`localStorage`, a per-viewer convenience), kept to people who are still
+ * your friends; "With friends" opens the picker.
  */
 function WhoWith({
   recent,
@@ -586,34 +676,39 @@ function WhoWith({
     recentIds.every((id) => selected.includes(id));
   return (
     <section className="flex flex-col gap-2" aria-labelledby={`${ids}-who`}>
-      <h3 id={`${ids}-who`} className="t-cap font-semibold">
-        Who
-      </h3>
-      <div className="flex flex-wrap gap-2">
-        <FilterChip
-          selected={selected.length === 0}
-          onClick={() => {
-            onChange([]);
-            onOthersOpen(false);
-          }}
-        >
-          Just me
-        </FilterChip>
-        {recent.length > 0 && (
-          <FilterChip selected={isRecent} onClick={() => onChange(recentIds)}>
-            {meAndLabel(recent)}
+      <div className="flex items-center gap-3">
+        <RowLabel id={`${ids}-who`}>Who</RowLabel>
+        <div className="flex min-w-0 flex-wrap gap-2">
+          <FilterChip
+            selected={selected.length === 0 && !othersOpen}
+            onClick={() => {
+              onChange([]);
+              onOthersOpen(false);
+            }}
+          >
+            Just me
           </FilterChip>
-        )}
-        <FilterChip
-          selected={othersOpen || (selected.length > 0 && !isRecent)}
-          aria-expanded={othersOpen}
-          icon={<People aria-hidden />}
-          onClick={() => onOthersOpen(!othersOpen)}
-        >
-          {selected.length > 0 && !isRecent
-            ? `me + ${selected.length}`
-            : "Others…"}
-        </FilterChip>
+          {recent.length > 0 && (
+            <FilterChip
+              selected={isRecent}
+              onClick={() => {
+                onChange(recentIds);
+                onOthersOpen(false);
+              }}
+            >
+              {meAndLabel(recent)}
+            </FilterChip>
+          )}
+          <FilterChip
+            selected={othersOpen || (selected.length > 0 && !isRecent)}
+            aria-expanded={othersOpen}
+            onClick={() => onOthersOpen(!othersOpen)}
+          >
+            {selected.length > 0 && !isRecent
+              ? `With ${selected.length}`
+              : "With friends"}
+          </FilterChip>
+        </div>
       </div>
       {othersOpen && (
         <CompanionPicker
@@ -629,67 +724,57 @@ function WhoWith({
           }
         />
       )}
-      {selected.length > 0 && !othersOpen && (
-        <p className="t-cap text-ink-3">
-          Each friend gets this pour in their own log.
-        </p>
-      )}
     </section>
   );
 }
 
 /* -------------------------------------------------------------------------- */
-/* After the last pour: rate, then a band                                      */
+/* After the last pour: rate, then the band                                    */
 /* -------------------------------------------------------------------------- */
 
-function AfterFinish({
-  step,
+/**
+ * "How was it?" — the review (one per item, D5), not this glass. Stars and
+ * the score; Skip, and the primary: "Keep 4.0" for the rating you have,
+ * "Save 2.5" once the stars change.
+ */
+function RateStep({
   subject,
-  onBand,
-  onDone,
+  loading,
+  reviewId,
+  kept,
+  onRated,
+  onKeep,
+  onSkip,
 }: {
-  step: "rate" | "band";
   subject: PourSubject;
-  onBand: () => void;
-  onDone: () => void;
+  loading: boolean;
+  reviewId: string | null;
+  kept: number | null;
+  onRated: () => void;
+  onKeep: () => void;
+  onSkip: () => void;
 }) {
-  const [{ data, fetching }] = useQuery({
-    query: PourFollowUpQuery,
-    variables: { type: subject.itemType, itemId: subject.itemId },
-    requestPolicy: "network-only",
-  });
-  const result = unwrapResult(data?.item, "QueryItemSuccess");
-  const item = result.ok ? result.data.data : null;
-  const myReview = item?.myReview ?? null;
-  const placements = ownPlacements(
-    item?.tierListEntries.edges.map((edge) => edge.node) ?? [],
-    data?.me?.id ?? null,
-  );
   const [score, setScore] = useState<number | null>(null);
-  const [rated, setRated] = useState<number | null>(null);
   const [error, setError] = useState<ApiFailure | null>(null);
   const [saving, setSaving] = useState(false);
-  const shown = score ?? myReview?.score ?? null;
-  // "Keep it" is only for a rating already saved, and suggests a band from
-  // that one — not from stars tapped and then not saved.
-  const kept = myReview?.score ?? null;
-  const canKeep = placements.length > 0 && kept !== null;
+  const shown = score ?? kept;
+  const changed = score !== null && score !== kept;
 
   const [, addReview] = useMutation(AddItemReviewMutation);
   const [, updateReview] = useMutation(UpdateItemReviewMutation);
 
   const save = async () => {
-    if (shown === null) return;
+    if (score === null) return;
     setSaving(true);
     setError(null);
     const saved =
-      myReview === null
+      reviewId === null
         ? unwrapResult(
             (
               await addReview({
                 itemId: subject.itemId,
                 type: subject.itemType,
-                input: { reviewId: crypto.randomUUID(), score: shown },
+                input: { reviewId: crypto.randomUUID(), score },
               })
             ).data?.addItemReview,
             "ItemReview",
@@ -699,8 +784,8 @@ function AfterFinish({
               await updateReview({
                 itemId: subject.itemId,
                 type: subject.itemType,
-                reviewId: myReview.id,
-                input: { score: shown },
+                reviewId,
+                input: { score },
               })
             ).data?.updateItemReview,
             "ItemReview",
@@ -710,81 +795,39 @@ function AfterFinish({
       setError(saved.error);
       return;
     }
-    setRated(shown);
-    if (placements.length > 0) {
-      onBand();
-      return;
-    }
-    notify(`Rated ${subject.itemName}`, { tone: "success" });
-    onDone();
+    notify(`Rated ${formatKitScore(score)} · ${subject.itemName}`, {
+      tone: "success",
+    });
+    onRated();
   };
 
-  if (step === "band") {
-    const verdict = rated ?? shown;
-    return (
-      <div className="flex flex-col gap-4 pb-2" data-slot="pour-bands">
-        <p className="t-body text-ink-2">
-          {verdict === null
-            ? "Where it sits on your lists."
-            : `Your ${verdict}★ reads as ${BAND_LABELS[bandForScore(verdict)] ?? "Unrated"}.`}
-        </p>
-        <ul className="flex flex-col divide-y divide-line rounded-md bg-surface-2">
-          {placements.map((placement) => (
-            <BandRow
-              key={placement.tierListId}
-              placement={placement}
-              suggested={bandForScore(verdict)}
-              itemName={subject.itemName}
-            />
-          ))}
-        </ul>
-        <Button className="w-full" onClick={onDone}>
-          Done
-        </Button>
-      </div>
-    );
-  }
-
   return (
-    <div className="flex flex-col gap-4 pb-2" data-slot="pour-rate">
-      <p className="t-body text-ink-2">
-        Your rating of the {subject.itemName} — the one on its page, not this
-        glass.
-      </p>
-      {fetching && data === undefined ? (
+    <div className="flex flex-col gap-5 pb-2" data-slot="pour-rate">
+      {loading ? (
         <Spinner aria-label="Loading your rating" />
       ) : (
         <RatingInput
           label={`Rate ${subject.itemName}`}
           value={shown}
           onChange={(next) => setScore(next)}
-          onClear={() => setScore(null)}
         />
       )}
       {error !== null && <ApiError error={error} />}
-      <div className="flex w-full flex-col gap-2">
-        <Button
-          disabled={shown === null || saving}
-          aria-busy={saving || undefined}
-          onClick={() => void save()}
-        >
-          {saving ? <Spinner aria-hidden /> : <Check aria-hidden />}
-          {myReview === null ? "Save rating" : "Update rating"}
+      <div className="grid grid-cols-2 gap-3">
+        <Button variant="outline" disabled={saving} onClick={onSkip}>
+          Skip
         </Button>
         <Button
-          variant="ghost"
-          disabled={saving}
-          onClick={() => {
-            if (!canKeep) {
-              onDone();
-              return;
-            }
-            setScore(null);
-            setRated(kept);
-            onBand();
-          }}
+          disabled={shown === null || saving || loading}
+          aria-busy={saving || undefined}
+          onClick={() => (changed ? void save() : onKeep())}
         >
-          {canKeep ? "Keep my rating, see my lists" : "Skip"}
+          {saving && <Spinner aria-hidden />}
+          {shown === null
+            ? "Save"
+            : changed
+              ? `Save ${formatKitScore(shown)}`
+              : `Keep ${formatKitScore(shown)}`}
         </Button>
       </div>
     </div>
@@ -792,62 +835,105 @@ function AfterFinish({
 }
 
 /**
- * One of your lists: where the item sits, and — when your rating says
- * otherwise — "Move to <band>" in one tap (the band's order is kept; it
- * goes to the end), with Undo through the list's own history (D4).
+ * The band step: F2b's `BandSheet` for each of your lists the drink is on,
+ * one after another, showing where it really sits (ruling 3: a list's band
+ * is the list's, not the stars'). Choosing a band moves it to that band's
+ * end with `reorderTierListBand` and toasts "Moved to Very Good · #27 ·
+ * Earl Grey" with Undo through the list's own history (D4).
  */
-function BandRow({
-  placement,
-  suggested,
-  itemName,
+function BandStep({
+  open,
+  placements,
+  subject,
+  onDone,
 }: {
+  open: boolean;
+  placements: readonly ListPlacement[];
+  subject: PourSubject;
+  onDone: () => void;
+}) {
+  const [index, setIndex] = useState(0);
+  const placement = placements[index];
+  const next = () => {
+    if (index + 1 < placements.length) setIndex(index + 1);
+    else onDone();
+  };
+  if (placement === undefined) return null;
+  return (
+    <ListBand
+      // A fresh sheet (and read) per list.
+      key={placement.tierListId}
+      open={open}
+      placement={placement}
+      subject={subject}
+      onClose={next}
+    />
+  );
+}
+
+function ListBand({
+  open,
+  placement,
+  subject,
+  onClose,
+}: {
+  open: boolean;
   placement: ListPlacement;
-  suggested: number;
-  itemName: string;
+  subject: PourSubject;
+  onClose: () => void;
 }) {
   const [{ data }] = useQuery({
     query: PourTierListBandQuery,
     variables: { tierListId: placement.tierListId },
     requestPolicy: "network-only",
   });
-  const [band, setBand] = useState(placement.band);
-  const [moving, setMoving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [, reorder] = useMutation(ReorderBandMutation);
   const [, undoEdit] = useMutation(UndoTierListEditMutation);
   const client = useClient();
+  const navigate = useNavigate();
 
   const list = unwrapResult(data?.tierList, "TierList");
   // `reorderTierListBand` takes the band's whole membership; past one page
-  // the sheet cannot know it, so the move is the list page's to make.
+  // the sheet cannot know it, nor the rank, so the list page places it.
   const tooLong = list.ok && list.data.items.pageInfo.hasNextPage;
   const items =
     list.ok && !tooLong ? list.data.items.edges.map((edge) => edge.node) : null;
-  const order =
-    items === null ? null : bandMoveOrder(items, placement.entryId, suggested);
+  const band = isBand(placement.band) ? placement.band : 1;
 
-  const settled = band === suggested;
+  // A long list is the list page's to place: on to the next list, once.
+  const skipped = useRef(false);
+  useEffect(() => {
+    if (tooLong && !skipped.current) {
+      skipped.current = true;
+      onClose();
+    }
+  }, [tooLong, onClose]);
 
-  const move = async () => {
+  if (items === null) return null;
+  const counts = bandCounts(items);
+  const rank = rankOf(items, placement.entryId) ?? 1;
+  const listHref = `/tier-lists/${placement.tierListId}`;
+
+  const move = async (to: Band) => {
+    const order = bandMoveOrder(items, placement.entryId, to);
     if (order === null) return;
-    setMoving(true);
-    setError(null);
     const moved = unwrapResult(
       (
         await reorder({
           tierListId: placement.tierListId,
-          band: suggested,
+          band: to,
           orderedIds: order,
         })
       ).data?.reorderTierListBand,
       "ReorderBandPayload",
     );
     if (!moved.ok) {
-      setMoving(false);
-      setError(moved.error.message);
+      notify(`Couldn’t move it on ${placement.name}`, {
+        tone: "error",
+        description: moved.error.message,
+      });
       return;
     }
-    const was = band;
     // D4: an Undo names the edit it takes back. The move's payload does not
     // carry its `seq`, so read the list's top edit now and offer Undo only
     // when it is this move.
@@ -864,86 +950,48 @@ function BandRow({
       "TierList",
     );
     const seq = history.ok
-      ? movedEditSeq(history.data.editHistory?.undo, was, suggested)
+      ? movedEditSeq(history.data.editHistory?.undo, band, to)
       : null;
-    setMoving(false);
-    setBand(suggested);
-    notify(
-      `Moved ${itemName} to ${BAND_LABELS[suggested] ?? "Unrated"} on ${placement.name}`,
-      {
-        tone: "success",
-        undo:
-          seq === null
-            ? undefined
-            : () => {
-                void (async () => {
-                  const undone = unwrapResult(
-                    (
-                      await undoEdit({
-                        tierListId: placement.tierListId,
-                        expectedSeq: seq,
-                      })
-                    ).data?.undoTierListEdit,
-                    "TierListHistoryStep",
-                  );
-                  if (undone.ok) setBand(was);
-                  else
-                    notify("Couldn't undo that move", {
-                      tone: "error",
-                      description: historyStepFailure("undo", undone.error),
-                    });
-                })();
-              },
-      },
-    );
+    const landed = rankAfterMove(items, placement.entryId, to);
+    notify(`Moved to ${bandName(to)} · #${landed} · ${subject.itemName}`, {
+      tone: "success",
+      undo:
+        seq === null
+          ? undefined
+          : () => {
+              void (async () => {
+                const undone = unwrapResult(
+                  (
+                    await undoEdit({
+                      tierListId: placement.tierListId,
+                      expectedSeq: seq,
+                    })
+                  ).data?.undoTierListEdit,
+                  "TierListHistoryStep",
+                );
+                if (!undone.ok)
+                  notify("Couldn’t undo that move", {
+                    tone: "error",
+                    description: historyStepFailure("undo", undone.error),
+                  });
+              })();
+            },
+    });
   };
 
   return (
-    <li className="flex min-h-14 items-center gap-3 px-4 py-2">
-      <div className="flex min-w-0 flex-1 flex-col">
-        <span className="t-cap truncate font-semibold text-ink-1">
-          {placement.name}
-        </span>
-        <span className="t-cap text-ink-3">
-          {BAND_LABELS[band] ?? "Unrated"}
-          {tooLong && !settled && (
-            <span className="block">
-              A long list —{" "}
-              <Link
-                href={`/tier-lists/${placement.tierListId}`}
-                underline="always"
-              >
-                move it there
-              </Link>
-            </span>
-          )}
-          {error !== null && (
-            <span role="alert" className="block text-destructive">
-              {error}
-            </span>
-          )}
-        </span>
-      </div>
-      {settled ? (
-        <span className="t-cap text-ink-3 inline-flex items-center gap-1 text-success">
-          <Check aria-hidden className="size-4" />
-          {BAND_LABELS[band] ?? "Unrated"}
-        </span>
-      ) : (
-        <Button
-          size="sm"
-          variant="secondary"
-          disabled={order === null || moving}
-          aria-busy={moving || undefined}
-          className={cn(
-            "relative shrink-0 after:absolute after:-inset-y-1 after:inset-x-0 after:content-['']",
-          )}
-          onClick={() => void move()}
-        >
-          {moving && <Spinner aria-hidden />}
-          Move to {BAND_LABELS[suggested] ?? "Unrated"}
-        </Button>
-      )}
-    </li>
+    <BandSheet
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) onClose();
+      }}
+      subject={subject.itemName}
+      rank={rank}
+      band={band}
+      listName={placement.name}
+      counts={counts}
+      onChoose={(to) => void move(to)}
+      onExactPosition={() => navigate.push(listHref)}
+    />
   );
 }
