@@ -166,16 +166,17 @@ const listSeed = (
   page: {
     rows: rows.map((row) => ({
       __typename: "TierList",
-      description: null,
       privacy: "PUBLIC",
-      listType: "wine",
+      listType: "place",
       itemCount: 3,
-      createdAt: "2026-10-01T00:00:00.000Z",
+      contentUpdatedAt: "2026-10-01T00:00:00.000Z",
       createdBy: {
         id: row.createdById,
         displayName: row.createdById,
         avatarUrl: null,
       },
+      top: { edges: [] },
+      bands: { edges: [] },
       ...row,
     })) as never[],
     endCursor: null,
@@ -186,26 +187,25 @@ const listSeed = (
 });
 
 describe("/tier-lists sections", () => {
-  test("Yours empty says so with New tier list; strangers' lists sit under Discover", () => {
+  test("an empty Yours carries the one New list; strangers' lists sit under Discover", () => {
     const html = render(
       <TierListsPage
         sections={{
           MINE: listSeed([]),
           FRIENDS: listSeed([]),
           DISCOVER: listSeed([
-            { id: "t9", name: "apiwave public", createdById: "stranger" },
+            { id: "t9", name: "Madison drinking spots", createdById: "Test" },
           ]),
         }}
       />,
     );
     assert.deepEqual(sectionTitles(html), ["Yours", "Discover"]);
-    assert.match(textOf(html), /Nothing ranked yet\./);
-    assert.match(
-      html,
-      /href="\/tier-lists\/add"[^>]*>(?:<[^>]+>)*New tier list/,
-    );
+    assert.match(textOf(html), /Nothing ranked yet/);
+    // Social-Lists ruling 4: one New list on the empty index, the empty card's.
+    assert.equal(html.match(/>New list</g)?.length, 1);
     const discover = html.slice(html.indexOf('data-section="DISCOVER"'));
-    assert.match(textOf(discover), /apiwave public/);
+    assert.match(textOf(discover), /Madison drinking spots/);
+    assert.match(textOf(discover), /Test · 3 places/);
   });
 });
 

@@ -4,7 +4,8 @@ import { useEffect } from "react";
 import { unwrapResult } from "@/lib/api/result";
 import { type Page, toPage } from "@/lib/paging/paged-connection";
 import { usePagedConnection } from "@/lib/paging/use-paged-connection";
-import { MyTierListOptionsPageQuery, TIER_LISTS_PAGE_SIZE } from "./queries";
+import { MyListOptionsPageQuery } from "./lists/queries";
+import { TIER_LISTS_PAGE_SIZE } from "./queries";
 
 /**
  * Every tier list the viewer owns, walked to the last page — for the two
@@ -27,6 +28,7 @@ export type TierListOptionNode = {
   name: string;
   listType: string;
   createdById: string;
+  itemCount: number;
 };
 
 /** A runaway guard, not a product limit: 50 pages is 5,000 visible lists. */
@@ -52,7 +54,7 @@ export function useAllMyTierLists({
   error: string | null;
 } {
   const paged = usePagedConnection({
-    query: MyTierListOptionsPageQuery,
+    query: MyListOptionsPageQuery,
     variables: (_args: null, after) => ({ first: TIER_LISTS_PAGE_SIZE, after }),
     select: (data) => {
       const result = unwrapResult(data?.myTierLists, "TierListConnection");
@@ -65,6 +67,7 @@ export function useAllMyTierLists({
             name: edge.node.name,
             listType: edge.node.listType,
             createdById: edge.node.createdById,
+            itemCount: edge.node.itemCount,
           })),
           meta: data?.me?.id ?? null,
         },
