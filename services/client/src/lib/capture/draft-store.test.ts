@@ -99,6 +99,36 @@ describe("draft store (X05 background continuation)", () => {
   });
 });
 
+describe("list (F-64: the background pill's own reads)", () => {
+  test("every draft still held, newest first, past the TTL pruned", async () => {
+    let clock = 0;
+    const store = createDraftStore<string>(() => clock);
+    const slow = deferred<string>();
+    store.track("old", meta, () => Promise.resolve("x"));
+    await tick();
+    clock = DRAFT_TTL_MS + 1;
+    store.track("reading", meta, () => slow.promise);
+    clock += 1;
+    store.track("ready", { ...meta, label: "beer" }, () =>
+      Promise.resolve("y"),
+    );
+    await tick();
+    const listed = store.list();
+    assert.deepEqual(
+      listed.map((draft) => draft.id),
+      ["ready", "reading"],
+    );
+    assert.equal(listed[0]?.settled.state, "ready");
+    assert.equal(listed[0]?.meta.label, "beer");
+    assert.equal(listed[1]?.settled.state, "reading");
+    store.release("ready");
+    assert.deepEqual(
+      store.list().map((draft) => draft.id),
+      ["reading"],
+    );
+  });
+});
+
 describe("?draft= (X05 resume link)", () => {
   test("only a session id resumes; anything else opens a fresh capture", () => {
     const id = "0f8fad5b-d9cb-469f-a165-70867728950e";

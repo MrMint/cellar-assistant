@@ -12,6 +12,8 @@ import {
   readVintage,
   sameVintage,
   tellingWords,
+  typeAheadLine,
+  typeAheadMatch,
   wordsAgree,
 } from "./catalog-match";
 
@@ -415,5 +417,71 @@ describe("catalogMatchSummary — the item's own details, not the read's", () =>
       }),
       "",
     );
+  });
+});
+
+describe("Type it's quick-add row (F-60, board add-bottle-17)", () => {
+  const candidate = (
+    id: string,
+    name: string,
+    extra: Partial<CatalogCandidate["item"]> = {},
+    brandName?: string,
+  ): CatalogCandidate => ({
+    item: { id, itemId: id, name, ...extra },
+    type: "BEER",
+    source: "search",
+    distance: 0.3,
+    ...(brandName === undefined ? {} : { brandName }),
+  });
+
+  test("the first result whose name starts with what was typed", () => {
+    const match = typeAheadMatch({
+      typed: "Wip",
+      candidates: [
+        candidate("a", "Hopwip Pale"),
+        candidate("b", "Wipers Times"),
+      ],
+      excludeItemIds: [],
+    });
+    assert.equal(match?.item.id, "b");
+  });
+
+  test("every typed word must start a word of the name; declined ones never come back", () => {
+    const list = [candidate("b", "Wipers Times"), candidate("c", "Times Wipe")];
+    assert.equal(
+      typeAheadMatch({
+        typed: "wipers tim",
+        candidates: list,
+        excludeItemIds: ["b"],
+      }),
+      null,
+    );
+    assert.equal(
+      typeAheadMatch({
+        typed: "time wip",
+        candidates: list,
+        excludeItemIds: [],
+      })?.item.id,
+      "b",
+    );
+    assert.equal(
+      typeAheadMatch({ typed: "wi", candidates: list, excludeItemIds: [] }),
+      null,
+      "two letters is too little to offer anything",
+    );
+  });
+
+  test("the row's line: maker, then the viewer's own score", () => {
+    assert.equal(
+      typeAheadLine(
+        candidate("b", "Wipers Times", { myScore: 5 }, "Kazematten"),
+      ),
+      "Kazematten · You gave it 5",
+    );
+    assert.equal(
+      typeAheadLine(candidate("b", "Wipers Times", {}, "Kazematten")),
+      "Kazematten",
+    );
+    assert.equal(typeAheadLine(candidate("b", "Wipers Times")), undefined);
   });
 });
