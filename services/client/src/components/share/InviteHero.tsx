@@ -18,13 +18,13 @@ export const inviteCopy = (
   switch (state) {
     case "SIGNED_OUT":
       return {
-        title: `${name} invited you to Cellar Assistant`,
-        body: `Join to become friends with ${name} and see each other's cellars, rankings and what you've been drinking.`,
+        title: `${name} invited you`,
+        body: "Friends see each other's shared cellars, rankings and what they've been drinking.",
       };
     case "CAN_ACCEPT":
       return {
         title: `${name} invited you to be friends`,
-        body: "You'll see each other's shared cellars, rankings and check-ins.",
+        body: "You'll see each other's shared cellars, rankings and logs.",
       };
     case "ALREADY_FRIENDS":
       return {
@@ -76,24 +76,26 @@ export function InviteHero({
   const copy = inviteCopy(name, state);
   const friends = state === "ACCEPTED" || state === "ALREADY_FRIENDS";
   return (
-    <div className="flex flex-col items-center gap-4 pt-6 text-center">
-      <div className="relative">
+    <div className="flex flex-col items-center gap-3 pt-10 text-center">
+      <div className="relative mb-1">
         <UserAvatar
           avatarUrl={avatarUrl}
           displayName={name}
-          size="lg"
-          className="size-20 text-3xl"
+          size="xl"
+          className="size-26 text-[2.5rem]"
         />
         {friends ? (
-          <span className="absolute -right-1 -bottom-1 flex size-7 items-center justify-center rounded-full bg-success text-background ring-2 ring-background">
+          <span className="absolute -right-0.5 -bottom-0.5 flex size-8 items-center justify-center rounded-full bg-success text-bg ring-2 ring-bg">
             <Check aria-hidden strokeWidth={ICON_STROKE} className="size-4" />
           </span>
         ) : null}
       </div>
-      <h1 className="type-title-1 max-w-[420px] font-display text-ink-1">
+      <h1 className="t-title m-0 max-w-[420px] text-balance text-ink">
         {copy.title}
       </h1>
-      <p className="type-body max-w-[420px] text-ink-2">{copy.body}</p>
+      <p className="t-body m-0 max-w-[360px] text-balance text-ink-2">
+        {copy.body}
+      </p>
     </div>
   );
 }
