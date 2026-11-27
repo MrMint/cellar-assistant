@@ -5,6 +5,7 @@ import { IconButton } from "@/components/app/IconButton";
 import { Close } from "@/components/app/icons";
 import { canGoBack } from "@/components/app/nav-history";
 import { useNavigate } from "@/components/app/useNavigate";
+import { feedback } from "@/lib/feedback";
 import { cn } from "@/lib/utils";
 
 /**
@@ -36,18 +37,31 @@ export function CaptureClose({
   );
 }
 
-/** The surface's header row: Close (or nothing), then the page's title. */
+/**
+ * The surface's header row (Capture-Camera 01): Close at the left, the title
+ * centred — a plain heading, or the "Add to … ▾" button — and an optional
+ * action at the right.
+ */
 export function CaptureHeader({
   leading,
   title,
+  trailing,
 }: {
   leading?: ReactNode;
   title: ReactNode;
+  trailing?: ReactNode;
 }) {
   return (
-    <div className="flex min-h-11 items-center gap-1">
-      {leading}
-      <h1 className="type-title-2 min-w-0 truncate text-ink-1">{title}</h1>
+    <div className="grid min-h-14 grid-cols-[44px_1fr_44px] items-center gap-1 px-2">
+      <div className="flex justify-start">{leading}</div>
+      <div className="flex min-w-0 justify-center">
+        {typeof title === "string" ? (
+          <h1 className="t-head min-w-0 truncate text-ink">{title}</h1>
+        ) : (
+          <h1 className="m-0 flex min-w-0 justify-center">{title}</h1>
+        )}
+      </div>
+      <div className="flex justify-end">{trailing}</div>
     </div>
   );
 }
@@ -72,23 +86,26 @@ export function CapturePhotoPreview({
   return (
     <div
       data-slot="capture-preview"
-      className="relative aspect-[3/4] max-h-[64dvh] w-full overflow-hidden rounded-lg bg-surface-2"
+      className="keep-dark relative aspect-[3/4] max-h-[64dvh] w-full overflow-hidden bg-raised md:rounded-lg"
     >
       {/* biome-ignore lint/performance/noImgElement: a local capture (data URL); nothing for /_next/image to optimise. */}
       <img src={photo} alt={alt} className="size-full object-cover" />
       {onRetake !== undefined && (
-        <div className="absolute inset-x-0 top-0 flex justify-end bg-gradient-to-b from-black/45 to-transparent p-3 pb-8">
+        <div className="absolute inset-x-0 top-0 flex justify-end p-3">
           <button
             type="button"
-            onClick={onRetake}
-            className="inline-flex min-h-11 items-center rounded-full bg-black/40 px-4 font-medium text-[15px] text-white backdrop-blur-sm outline-none focus-visible:ring-[3px] focus-visible:ring-ring/60"
+            onClick={() => {
+              feedback("press");
+              onRetake();
+            }}
+            className="t-head inline-flex min-h-11 items-center rounded-lg bg-glass px-4 text-on-glass outline-none transition-transform duration-(--ca-dur-micro) focus-visible:outline-2 focus-visible:outline-act-on-glass active:scale-97 motion-reduce:active:scale-100"
           >
             Retake
           </button>
         </div>
       )}
       {children !== undefined && (
-        <div className="absolute inset-x-0 bottom-0 flex flex-col items-center gap-2 bg-gradient-to-t from-black/60 to-transparent px-4 pt-10 pb-4 text-center text-white">
+        <div className="absolute inset-x-0 bottom-0 flex flex-col items-center gap-2 bg-gradient-to-t from-scrim-pk to-transparent px-4 pt-10 pb-4 text-center text-on-glass">
           {children}
         </div>
       )}

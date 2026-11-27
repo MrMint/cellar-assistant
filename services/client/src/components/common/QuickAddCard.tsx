@@ -1,13 +1,9 @@
 "use client";
 
-import { type ReactNode, useCallback, useEffect, useState } from "react";
-import { Badge } from "@/components/ui/badge";
+import { type ReactNode, useCallback, useState } from "react";
+import { AI } from "@/components/app/icons";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { Progress } from "@/components/ui/progress";
 import { Spinner } from "@/components/ui/spinner";
-import { QUICK_ADD_AUTO_CONFIRM_DELAY } from "@/constants";
-import { cn } from "@/lib/utils";
 
 export type ItemType = "WINE" | "BEER" | "SPIRIT" | "COFFEE" | "SAKE" | "TEA";
 
@@ -32,15 +28,17 @@ export type QuickAddItemDefaults = {
 type QuickAddCardProps = {
   defaults: QuickAddItemDefaults;
   itemType: ItemType;
+  /** The read's confidence; no longer shown (kept for callers). */
   confidence: number;
   onConfirm: () => Promise<string | undefined>;
   onEdit: () => void;
+  /** Retired with the countdown (B-223); kept so callers still compile. */
   autoConfirmSeconds?: number;
   /** A line above the name — "Is it this one?" when it names a known item. */
   heading?: string;
-  /** The confirm button's words; the old "Add to Cellar" / "Add (Ns)" if unset. */
+  /** The confirm button's words ("+1 bottle" if unset). */
   confirmLabel?: string;
-  /** The secondary button's words (default "Edit Details"). */
+  /** The quiet button's words (default "Not this"). */
   editLabel?: string;
   /**
    * The details line, when the caller already has it in words — the
@@ -55,22 +53,6 @@ type QuickAddCardProps = {
    */
   children?: ReactNode;
 };
-
-/**
- * The match chip's tone: Joy's soft success / warning / danger. The tokens
- * have no amber, so the middle band is a neutral chip; danger is text and
- * outline (design §3.1), never a solid slab.
- */
-function confidenceBadge(confidence: number): {
-  variant: "secondary" | "destructive";
-  className?: string;
-} {
-  if (confidence >= 0.9)
-    return { variant: "secondary", className: "bg-success/15 text-success" };
-  if (confidence >= 0.7)
-    return { variant: "secondary", className: "bg-sel text-ink" };
-  return { variant: "destructive" };
-}
 
 function getItemSummary(
   defaults: QuickAddItemDefaults,
@@ -116,170 +98,88 @@ function getItemSummary(
   return parts.join(" · ") || "No additional details";
 }
 
+/**
+ * Quick add (Capture-Place 11, Add-bottle 12): the read names a known item,
+ * so "+1 bottle" files another bottle of it with one tap. No countdown any
+ * more (B-223 lost): nothing is filed until the person taps. "Not this" is
+ * the quiet way to the draft. One primary on the card (CROSS-LOT 2).
+ */
 export const QuickAddCard = ({
   defaults,
   itemType,
-  confidence,
   onConfirm,
   onEdit,
-  autoConfirmSeconds = QUICK_ADD_AUTO_CONFIRM_DELAY,
   heading,
-  confirmLabel,
-  editLabel = "Edit Details",
+  confirmLabel = "+1 bottle",
+  editLabel = "Not this",
   summary,
   children,
 }: QuickAddCardProps) => {
-  const [countdown, setCountdown] = useState(autoConfirmSeconds);
-  const [isPaused, setIsPaused] = useState(false);
   const [isConfirming, setIsConfirming] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Handle confirm action
   const handleConfirm = useCallback(async () => {
     if (isConfirming) return;
     setIsConfirming(true);
-    setIsPaused(true);
     setError(null);
-
     try {
       await onConfirm();
     } catch (cause) {
-      // Stays paused. The old card un-paused here, and with the countdown
-      // already at 0 the auto-confirm effect fired again at once — a failed
-      // save retried in a loop with nothing on screen. Now it says why and
-      // waits for a click.
+      // Says why and waits for another tap; never retries on its own.
       setIsConfirming(false);
       setError(
-        cause instanceof Error ? cause.message : "Failed to add the item.",
+        cause instanceof Error ? cause.message : "The bottle wasn't added.",
       );
     }
   }, [isConfirming, onConfirm]);
 
-  // Countdown timer logic
-  useEffect(() => {
-    if (isPaused || countdown <= 0 || isConfirming) return;
-
-    const timer = setTimeout(() => {
-      setCountdown((c) => c - 1);
-    }, 1000);
-
-    return () => clearTimeout(timer);
-  }, [countdown, isPaused, isConfirming]);
-
-  // Auto-confirm when countdown reaches 0
-  useEffect(() => {
-    if (countdown === 0 && !isPaused && !isConfirming) {
-      handleConfirm();
-    }
-  }, [countdown, isPaused, isConfirming, handleConfirm]);
-
-  // Pause countdown on any user interaction
-  const handlePause = useCallback(() => {
-    if (!isPaused) {
-      setIsPaused(true);
-    }
-  }, [isPaused]);
-
-  const progress = (countdown / autoConfirmSeconds) * 100;
-  const confidencePercent = Math.round(confidence * 100);
-  const badge = confidenceBadge(confidence);
-
   return (
-    <Card
-      className="mx-auto w-full max-w-[400px] gap-4 border-0 bg-surface-1 p-4 shadow-none"
-      onMouseEnter={handlePause}
-      onTouchStart={handlePause}
-      // A keyboard reaching either button pauses it too, so the countdown
-      // never files the item under someone still deciding (WCAG 2.2.1).
-      onFocus={handlePause}
+    <section
+      data-slot="quick-add"
+      aria-label={heading ?? "Quick add"}
+      className="mx-auto flex w-full max-w-[600px] flex-col gap-4 rounded-t-2xl bg-card p-4 shadow-pop md:rounded-2xl"
     >
       {heading !== undefined && (
-        <p className="t-body font-semibold text-ink-2">{heading}</p>
+        <h2 className="t-title m-0 text-ink">{heading}</h2>
       )}
-      {/* Header with name and confidence */}
-      <div className="flex flex-row items-start justify-between">
-        <h2 className="t-head mr-2 flex-1">
-          {defaults.name || "Unknown Item"}
-        </h2>
-        <Badge
-          variant={badge.variant}
-          className={cn("tabular", badge.className)}
-        >
-          {confidencePercent}% match
-        </Badge>
-      </div>
-
-      {/* Brand info */}
-      {defaults.brand_name && (
-        <div className="flex flex-row items-center gap-2">
-          <p className="t-body font-semibold">{defaults.brand_name}</p>
-          {defaults.is_new_brand && (
-            <Badge variant="secondary" className="bg-success/15 text-success">
-              New
-            </Badge>
-          )}
-        </div>
-      )}
-
-      {/* Item summary */}
-      <p className="t-body text-ink-2">
-        {summary !== undefined && summary !== ""
-          ? summary
-          : getItemSummary(defaults, itemType)}
+      <p className="t-cap flex items-center gap-1.5 text-ink-2">
+        <AI aria-hidden className="size-4" />
+        Read from the label
       </p>
-
-      {/* Description preview if available */}
-      {defaults.description && (
-        <p className="t-cap line-clamp-2">{defaults.description}</p>
-      )}
+      <div className="flex flex-col gap-0.5 rounded-lg bg-raised p-3">
+        <p className="t-head text-ink">{defaults.name || "Unknown item"}</p>
+        {defaults.brand_name && (
+          <p className="t-cap text-ink-2">{defaults.brand_name}</p>
+        )}
+        <p className="t-cap text-ink-2">
+          {summary !== undefined && summary !== ""
+            ? summary
+            : getItemSummary(defaults, itemType)}
+        </p>
+      </div>
 
       {children}
 
-      {/* Countdown progress */}
-      {!isPaused && !isConfirming && (
-        <div>
-          <Progress
-            value={progress}
-            aria-valuetext={`${countdown} seconds`}
-            aria-label="Time until it is added"
-            className="h-1"
-          />
-          <p className="t-cap tabular mt-1 text-center">
-            Adding in {countdown}s...
-          </p>
-        </div>
+      {error !== null && (
+        <p role="alert" className="t-body text-danger">
+          {error}
+        </p>
       )}
 
-      {error !== null && <p className="t-body text-danger">{error}</p>}
-
-      {isPaused && !isConfirming && error === null && (
-        <p className="t-cap text-center">Auto-add paused</p>
-      )}
-
-      {/* Action buttons */}
-      <div className="flex flex-row gap-4">
-        <Button
-          variant="outline"
-          onClick={onEdit}
-          disabled={isConfirming}
-          className="flex-1"
-        >
+      <div className="flex items-center gap-2">
+        <Button variant="quiet-muted" onClick={onEdit} disabled={isConfirming}>
           {editLabel}
         </Button>
         <Button
           onClick={handleConfirm}
           disabled={isConfirming}
           aria-busy={isConfirming || undefined}
-          className="tabular flex-1"
+          className="flex-1"
         >
           {isConfirming && <Spinner aria-hidden />}
-          {isConfirming
-            ? "Adding..."
-            : isPaused
-              ? (confirmLabel ?? "Add to Cellar")
-              : `${confirmLabel ?? "Add"} (${countdown}s)`}
+          {confirmLabel}
         </Button>
       </div>
-    </Card>
+    </section>
   );
 };

@@ -254,12 +254,12 @@ export function MenuCapture({
           }
         >
           {busy ? (
-            <p role="status" className="flex items-center gap-2 type-callout">
+            <p role="status" className="flex items-center gap-2 t-cap">
               <Spinner aria-hidden className="size-4" />
               Sending the menu…
             </p>
           ) : chosen === null ? (
-            <p className="type-callout">
+            <p className="t-cap">
               Where&rsquo;s this menu from? It&rsquo;s read as soon as you say.
             </p>
           ) : null}
@@ -303,7 +303,7 @@ export function MenuCapture({
       )}
 
       {photo === null && (
-        <p className="text-center type-callout text-ink-2">
+        <p className="text-center t-cap text-ink-2">
           Get the whole drinks list in. Each line is read and matched to the
           catalog.
         </p>
@@ -395,11 +395,11 @@ function PlaceCard({
   if (chosen !== null) {
     return shell(
       <>
-        <p className="type-headline flex items-center gap-1.5 text-ink-1">
+        <p className="t-head flex items-center gap-1.5 text-ink-1">
           <Check aria-hidden className="size-4 shrink-0 text-success" />
           <span className="truncate">At {chosen.name}</span>
         </p>
-        <p className="type-footnote">The menu is filed here.</p>
+        <p className="t-cap">The menu is filed here.</p>
       </>,
       <Button variant="ghost" size="sm" onClick={onPick} disabled={disabled}>
         Change
@@ -410,8 +410,8 @@ function PlaceCard({
   if (nearest !== null) {
     return shell(
       <>
-        <p className="type-headline truncate text-ink-1">At {nearest.name}?</p>
-        <p className="type-footnote">
+        <p className="t-head truncate text-ink-1">At {nearest.name}?</p>
+        <p className="t-cap">
           {[
             nearest.category ? formatCategoryName(nearest.category) : null,
             `${formatDistance(nearest.distanceMeters)} away`,
@@ -478,10 +478,7 @@ function PlaceCard({
     (geo.requested && geo.loading)
   ) {
     return shell(
-      <p
-        role="status"
-        className="type-callout flex items-center gap-2 text-ink-2"
-      >
+      <p role="status" className="t-cap flex items-center gap-2 text-ink-2">
         <Spinner aria-hidden className="size-4" />
         Finding where you are…
       </p>,
@@ -491,8 +488,8 @@ function PlaceCard({
 
   return shell(
     <>
-      <p className="type-headline text-ink-1">Which place is this menu from?</p>
-      <p className="type-footnote">
+      <p className="t-head text-ink-1">Which place is this menu from?</p>
+      <p className="t-cap">
         {geo.location === null
           ? "Pick it, and the menu is filed there."
           : declined

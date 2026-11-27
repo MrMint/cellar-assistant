@@ -50,7 +50,7 @@ export async function PinnedCellarCapture({
   if (!result.ok) {
     if (isNotFound(result.error)) notFound();
     return (
-      <p role="alert" className="type-body text-destructive">
+      <p role="alert" className="t-body text-destructive">
         {result.error.message}
       </p>
     );

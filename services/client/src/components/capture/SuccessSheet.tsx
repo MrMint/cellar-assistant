@@ -103,7 +103,7 @@ export function SuccessSheet({
             <Success className="size-5" />
           </span>
         </div>
-        <p className="type-body text-ink-2">
+        <p className="t-body text-ink-2">
           {inCellar
             ? "Rate it when you open it — it'll be waiting in your cellar."
             : "Add it to a cellar from its page whenever you buy a bottle."}

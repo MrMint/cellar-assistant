@@ -112,7 +112,7 @@ export function RecipeCapture({
             <div className="flex w-full flex-col gap-2">
               <p
                 role="status"
-                className="flex items-center justify-between type-callout"
+                className="flex items-center justify-between t-cap"
               >
                 <span>{label}</span>
                 <span className="tabular">{Math.round(progress)}%</span>
@@ -149,7 +149,7 @@ export function RecipeCapture({
           {phase.lastError !== null && (
             // A stage that throws is retried with backoff — a note, not a
             // failure. Only `status: FAILED` ends the job.
-            <p className="type-footnote text-ink-2">
+            <p className="t-cap text-ink-2">
               Retry {phase.attempts}: {phase.lastError}
             </p>
           )}
@@ -200,7 +200,7 @@ export function RecipeCapture({
       )}
 
       {photo === null && (
-        <p className="text-center type-callout text-ink-2">
+        <p className="text-center t-cap text-ink-2">
           A recipe card, a book page or a screenshot. It&rsquo;s read as soon as
           you snap, into a private draft you can edit.
         </p>

@@ -235,9 +235,9 @@ export const CameraCapture = ({
           role="alert"
           className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-4 bg-surface-2 p-6 text-center"
         >
-          <p className="type-body">{failed.message}</p>
+          <p className="t-body">{failed.message}</p>
           {libraryError !== null && (
-            <p className="type-callout text-destructive">{libraryError}</p>
+            <p className="t-cap text-destructive">{libraryError}</p>
           )}
           <div className="flex flex-row flex-wrap justify-center gap-2">
             <Button onClick={openLibrary}>

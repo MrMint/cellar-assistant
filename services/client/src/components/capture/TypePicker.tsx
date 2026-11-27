@@ -7,6 +7,7 @@ import {
   TypeGlyph,
 } from "@/components/app/TypeChip";
 import type { ApiItemType } from "@/components/cellar-api/itemTypes";
+import { feedback } from "@/lib/feedback";
 import { cn } from "@/lib/utils";
 
 /**
@@ -31,7 +32,9 @@ export function TypePicker({
       type="single"
       value={value}
       onValueChange={(next) => {
-        if (next !== "") onValueChange(next as ApiItemType);
+        if (next === "") return;
+        feedback("tick");
+        onValueChange(next as ApiItemType);
       }}
       aria-label="What are you adding?"
       data-slot="type-picker"
@@ -46,14 +49,11 @@ export function TypePicker({
           value={type}
           data-slot="type-option"
           className={cn(
-            "group relative inline-flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-3.5 font-medium text-sm outline-none transition-[color,background-color,transform] duration-(--ca-dur-micro) ease-standard after:absolute after:-inset-y-1 after:inset-x-0 after:content-[''] focus-visible:ring-[3px] focus-visible:ring-ring/50 active:scale-97 motion-reduce:active:scale-100",
-            "bg-surface-2 text-ink-2 hover:bg-surface-3 data-[state=on]:bg-ink-1 data-[state=on]:text-background",
+            "group t-body relative inline-flex h-11 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg border border-edge px-3.5 text-ink-2 outline-none transition-[color,background-color,transform] duration-(--ca-dur-micro) ease-standard focus-visible:outline-2 focus-visible:outline-act-ink active:scale-97 motion-reduce:active:scale-100",
+            "data-[state=on]:border-edge-2 data-[state=on]:bg-sel data-[state=on]:text-ink",
           )}
         >
-          <TypeGlyph
-            type={type}
-            className="group-data-[state=on]:text-background"
-          />
+          <TypeGlyph type={type} className="text-glyph" />
           {itemTypeTokens[type].label}
         </ToggleGroupPrimitive.Item>
       ))}

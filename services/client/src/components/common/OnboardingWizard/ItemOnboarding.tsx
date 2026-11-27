@@ -48,10 +48,11 @@ import {
   captureHrefWithPhoto,
   photoHandoff,
 } from "@/lib/capture/photo-handoff";
+import { feedback } from "@/lib/feedback";
 import { AiStatus } from "../AiStatus";
 import { AnimationShowcase, type ShowcaseStage } from "../AnimationShowcase";
 import { QuickAddCard } from "../QuickAddCard";
-import { emptyDefaults } from "./adapter";
+import { emptyDefaults, finishedHref } from "./adapter";
 import { CatalogMatchPrompt } from "./CatalogMatchPrompt";
 import { catalogMatchSummary } from "./catalog-match";
 import { type OnboardingResult, OnboardingWizard } from "./index";
@@ -101,10 +102,14 @@ export type ItemOnboardingProps = {
  * ending (X05, N21). One component over all six types; "Snap another"
  * starts a fresh run in place.
  */
+/** A bottle filed this visit, for the camera's tray (Capture-Camera 04). */
+type Filed = { name: string; href: string; photo?: string };
+
 export const ItemOnboarding = (props: ItemOnboardingProps) => {
   const navigate = useNavigate();
   const pathname = usePathname();
   const [run, setRun] = useState(0);
+  const [tray, setTray] = useState<readonly Filed[]>([]);
   const [resumeId, setResumeId] = useState(() => draftIdFrom(props.resumeId));
   const restart = useCallback(() => {
     // Drop `?draft=`: the next run is a new bottle.
@@ -120,6 +125,8 @@ export const ItemOnboarding = (props: ItemOnboardingProps) => {
       // A carried photo is the first bottle's; "Snap another" is a new one.
       initialPhoto={run === 0 ? props.initialPhoto : undefined}
       onRestart={restart}
+      tray={tray}
+      onFiled={(filed) => setTray((before) => [...before, filed])}
     />
   );
 };
@@ -137,7 +144,13 @@ const ItemOnboardingRun = ({
   initialPhoto,
   onScanAsMenu,
   onRestart,
-}: ItemOnboardingProps & { onRestart: () => void }) => {
+  tray = [],
+  onFiled,
+}: ItemOnboardingProps & {
+  onRestart: () => void;
+  tray?: readonly Filed[];
+  onFiled?: (filed: Filed) => void;
+}) => {
   const urqlClient = useClient();
   const navigate = useNavigate();
   const pathname = usePathname();
@@ -294,6 +307,80 @@ const ItemOnboardingRun = ({
     }
   }, [state.value, context.itemOnboardingId, context.cellarId]);
 
+  // Capture-Camera 04 / Add-bottle 06: a bottle shot from the camera lands
+  // with a toast, and the camera stays open for the next one; the tray
+  // keeps count and "Done" leaves. A typed one (no photo) opens its page.
+  const filedOnce = useRef(false);
+  const shotFromCamera = context.frontLabel !== undefined;
+  useEffect(() => {
+    if (state.value !== "finalPrompt" || filedOnce.current) return;
+    if (!shotFromCamera || context.existingItemId === undefined) return;
+    filedOnce.current = true;
+    const name = context.itemName ?? itemTypeLabel(itemType);
+    const href = finishedHref({
+      type: itemType,
+      itemId: context.existingItemId,
+      cellarId: context.cellarId,
+      cellarItemId: context.cellarItemId,
+    });
+    feedback("success");
+    notify(
+      context.imageError === undefined
+        ? `Added ${name}`
+        : "Added, photo not saved",
+      { undo: () => navigate.push(href), actionLabel: "View" },
+    );
+    onFiled?.({ name, href, photo: context.displayImageDataUrl });
+    send({ type: "SNAP_ANOTHER" });
+  }, [
+    state.value,
+    shotFromCamera,
+    context.existingItemId,
+    context.itemName,
+    context.cellarId,
+    context.cellarItemId,
+    context.imageError,
+    context.displayImageDataUrl,
+    itemType,
+    navigate,
+    onFiled,
+    send,
+  ]);
+
+  const lastFiled = tray.at(-1);
+  const trayButton =
+    lastFiled === undefined ? undefined : (
+      <button
+        type="button"
+        data-slot="capture-tray"
+        aria-label={`Done, ${tray.length} added`}
+        onClick={() => {
+          feedback("press");
+          navigate.push(
+            context.cellarId === undefined
+              ? lastFiled.href
+              : `/cellars/${context.cellarId}/items`,
+          );
+        }}
+        className="flex min-h-11 flex-col items-center gap-0.5 rounded-lg px-2 outline-none transition-transform duration-(--ca-dur-micro) focus-visible:outline-2 focus-visible:outline-act-ink active:scale-97 motion-reduce:active:scale-100"
+      >
+        <span className="relative block size-11 rounded-md border-2 border-ink bg-raised">
+          {lastFiled.photo !== undefined && (
+            // biome-ignore lint/performance/noImgElement: the local capture (data URL).
+            <img
+              src={lastFiled.photo}
+              alt=""
+              className="size-full rounded-[4px] object-cover"
+            />
+          )}
+          <span className="t-micro absolute -top-2 -right-2 flex size-5 items-center justify-center rounded-full bg-act text-on-act tabular-nums">
+            {tray.length}
+          </span>
+        </span>
+        <span className="t-cap text-ink">Done</span>
+      </button>
+    );
+
   // Quick add files another bottle of the matched catalogue item (N02). It
   // creates nothing: the machine only reaches quickReview with a match.
   const { catalogMatch } = context;
@@ -331,14 +418,6 @@ const ItemOnboardingRun = ({
   const typeLabel = itemTypeLabel(itemType);
   const showCellarPicker =
     pinnedCellarId === undefined && cellars !== undefined && cellars.length > 0;
-
-  const cellarRow = showCellarPicker ? (
-    <CellarPicker
-      cellars={cellars ?? []}
-      value={context.cellarId ?? null}
-      onValueChange={(cellarId) => send({ type: "SET_CELLAR", cellarId })}
-    />
-  ) : null;
 
   const stages: ShowcaseStage[] =
     context.frontLabel === undefined
@@ -402,60 +481,71 @@ const ItemOnboardingRun = ({
     );
   };
 
+  // Capture-Camera 01: the title says where the bottle goes, and is the
+  // "Add to" picker itself when the person may choose.
+  const title = showCellarPicker ? (
+    <CellarPicker
+      cellars={cellars ?? []}
+      value={context.cellarId ?? null}
+      onValueChange={(cellarId) => send({ type: "SET_CELLAR", cellarId })}
+    />
+  ) : cellarName !== undefined ? (
+    `Add to ${cellarName}`
+  ) : chooseType ? (
+    "Add a bottle"
+  ) : (
+    `Add ${typeLabel.toLowerCase()}`
+  );
+  const framing = state.value === "wizard";
+
   return (
     <div className="flex flex-col gap-4">
-      <CaptureHeader
-        leading={leading}
-        title={
-          chooseType && state.value === "wizard"
-            ? "Add a bottle"
-            : `Add ${typeLabel}`
-        }
-      />
+      {/* The camera is one dark place, header included (LIGHT-capture 1). */}
+      <div className={framing ? "keep-dark -mx-4 bg-bg text-ink" : undefined}>
+        <CaptureHeader leading={leading} title={title} />
 
-      {state.value === "wizard" && (
-        <div className="flex w-full max-w-[600px] flex-col gap-3">
-          {chooseType && (
-            <TypePicker
-              value={itemType}
-              onValueChange={(next) => {
-                send({ type: "SET_TYPE", itemType: next });
-                rememberCapturePrefs({ itemType: next });
-              }}
-            />
-          )}
-          {carried !== undefined ? (
-            <>
-              <CapturePhotoPreview
-                photo={carried}
-                alt="Your label, as snapped"
-                onRetake={() => setCarried(undefined)}
-              >
-                <Button
-                  onClick={() =>
-                    handleOnComplete({ frontLabelDataUrl: carried })
-                  }
+        {framing && (
+          <div className="flex w-full flex-col gap-3">
+            {chooseType && (
+              <TypePicker
+                className="mx-0 px-4"
+                value={itemType}
+                onValueChange={(next) => {
+                  send({ type: "SET_TYPE", itemType: next });
+                  rememberCapturePrefs({ itemType: next });
+                }}
+              />
+            )}
+            {carried !== undefined ? (
+              <>
+                <CapturePhotoPreview
+                  photo={carried}
+                  alt="Your label, as snapped"
+                  onRetake={() => setCarried(undefined)}
                 >
-                  <Scan aria-hidden />
-                  Read this label
-                </Button>
-              </CapturePhotoPreview>
-              {modeRow}
-              <p className="text-center type-callout text-ink-2">
-                Check the type above, then read the label — it lands in a draft
-                you can fix.
-              </p>
-            </>
-          ) : (
-            <OnboardingWizard
-              onComplete={handleOnComplete}
-              itemType={itemType}
-              inCellar={inCellar}
-              belowCamera={modeRow}
-            />
-          )}
-        </div>
-      )}
+                  <Button
+                    onClick={() =>
+                      handleOnComplete({ frontLabelDataUrl: carried })
+                    }
+                  >
+                    <Scan aria-hidden />
+                    Read this label
+                  </Button>
+                </CapturePhotoPreview>
+                <div className="px-2 pb-4">{modeRow}</div>
+              </>
+            ) : (
+              <OnboardingWizard
+                onComplete={handleOnComplete}
+                itemType={itemType}
+                inCellar={inCellar}
+                belowCamera={modeRow}
+                tray={trayButton}
+              />
+            )}
+          </div>
+        )}
+      </div>
 
       {reading && (
         <div className="flex w-full max-w-[600px] flex-col gap-3">
@@ -487,7 +577,7 @@ const ItemOnboardingRun = ({
           >
             {slow && includes(state.value, ["analyze", "retryAnalyze"]) && (
               <div className="flex flex-col items-center gap-2 text-center">
-                <p className="type-callout text-ink-2">
+                <p className="t-cap text-ink-2">
                   Still reading — a label can take up to a minute. You
                   don&rsquo;t have to wait here.
                 </p>
@@ -519,7 +609,11 @@ const ItemOnboardingRun = ({
       {state.value === "quickReview" && isNotNil(catalogMatch) && (
         <div className="flex w-full max-w-[600px] flex-col gap-3">
           <QuickAddCard
-            heading="Is it this one?"
+            heading={
+              inCellar && cellarName !== undefined
+                ? `In ${cellarName} already?`
+                : "Is it this one?"
+            }
             // The card names the item it will file, in the catalogue's
             // words — not the label read's, and not its raw enum codes.
             defaults={{
@@ -530,16 +624,11 @@ const ItemOnboardingRun = ({
             summary={catalogMatchSummary(catalogMatch)}
             itemType={itemType}
             confidence={context.confidence ?? 0}
-            // "No cellar — just the catalog" chosen mid-countdown: the
-            // match is used, with no bottle filed.
             confirmLabel={inCellar ? "+1 bottle" : "Use this"}
-            editLabel="Not this one"
+            editLabel="Not this"
             onConfirm={handleQuickAddConfirm}
             onEdit={handleQuickAddEdit}
-          >
-            {/* Inside the card: touching it pauses the countdown. */}
-            {cellarRow}
-          </QuickAddCard>
+          />
         </div>
       )}
 
@@ -555,13 +644,10 @@ const ItemOnboardingRun = ({
               />
             )}
             <div className="flex min-w-0 flex-col gap-1">
-              <p className="type-overline text-ink-3">Draft</p>
+              <p className="t-micro text-ink-3">Draft</p>
               <TypeChip type={itemType} />
             </div>
           </div>
-          {cellarRow !== null && (
-            <div className="max-w-[600px]">{cellarRow}</div>
-          )}
           {isNotNil(context.error) && (
             <Alert className="max-w-[600px]">
               <Warning aria-hidden />
@@ -619,7 +705,7 @@ const ItemOnboardingRun = ({
               {state.matches({ form: "rereading" }) ? (
                 <p
                   role="status"
-                  className="flex items-center gap-2 type-callout text-ai"
+                  className="flex items-center gap-2 t-cap text-ai"
                 >
                   <Spinner aria-hidden className="size-4" />
                   Reading the back label…
@@ -699,7 +785,7 @@ const ItemOnboardingRun = ({
       )}
 
       <SuccessSheet
-        open={state.value === "finalPrompt"}
+        open={state.value === "finalPrompt" && !shotFromCamera}
         itemType={itemType}
         itemName={context.itemName}
         cellarName={inCellar ? (cellarName ?? "your cellar") : undefined}
