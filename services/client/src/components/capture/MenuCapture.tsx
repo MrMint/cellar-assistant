@@ -344,6 +344,12 @@ export function MenuCapture({
           setAdding(false);
           setPicking(true);
         }}
+        // Capture-Place 07: a name a nearby place has asks "On the map?".
+        nearby={nearby}
+        onChooseExisting={(place) => {
+          setAdding(false);
+          choose(place);
+        }}
       />
     </div>
   );
