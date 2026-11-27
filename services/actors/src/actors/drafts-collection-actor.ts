@@ -20,13 +20,22 @@ import type {
 import {
   DraftsCollectionActorDescriptor,
   FIELD_CONFIDENCE_KEY,
+  FIELD_CONFIDENCES,
   isItemType,
   requireReverseEdgeBatch,
   sanitiseFieldConfidence,
   ValidationError,
 } from "@cellar-assistant/contracts";
 import { itemOnboardings } from "@cellar-assistant/db";
-import { and, desc, eq, inArray, type SQL } from "@cellar-assistant/db/orm";
+import {
+  and,
+  desc,
+  eq,
+  inArray,
+  type SQL,
+  sql,
+} from "@cellar-assistant/db/orm";
+import { cellarOwnedBySql } from "../lib/cellar-ownership.ts";
 import { ViewerCollectionActorBase } from "../lib/collection-actor-base.ts";
 import { requireUuidValue } from "../lib/collection-sql.ts";
 import { ITEM_TABLES } from "../lib/item-bindings.ts";
@@ -152,6 +161,47 @@ export class DraftsCollectionActor
         });
       },
     );
+  }
+
+  async unconfirmedBottleCount(ctx: Ctx): Promise<number> {
+    return await this.batch(ctx, null, 0, async () => {
+      const viewer = this.key;
+      // One join per item table: a bottle names exactly one item. The guessed
+      // fields test is `guessedFieldsOf` in SQL — a key of
+      // `defaults.fieldConfidence` with a known level — less `confirmed_fields`.
+      const { rows } = await this.db.execute<{ n: number }>(sql`
+        select count(*)::int as n
+        from public.cellar_items ci
+        join public.cellars c on c.id = ci.cellar_id
+        left join public.wines w on w.id = ci.wine_id
+        left join public.beers b on b.id = ci.beer_id
+        left join public.spirits s on s.id = ci.spirit_id
+        left join public.coffees f on f.id = ci.coffee_id
+        left join public.sakes k on k.id = ci.sake_id
+        left join public.teas t on t.id = ci.tea_id
+        join public.item_onboardings o on o.id = coalesce(
+          w.item_onboarding_id, b.item_onboarding_id, s.item_onboarding_id,
+          f.item_onboarding_id, k.item_onboarding_id, t.item_onboarding_id)
+        where ${cellarOwnedBySql(viewer, "c")}
+          and ci.empty_at is null
+          and o.user_id = ${viewer}::uuid
+          and coalesce(w.created_by_id, b.created_by_id, s.created_by_id,
+                       f.created_by_id, k.created_by_id, t.created_by_id)
+              = ${viewer}::uuid
+          and jsonb_typeof(o.defaults -> ${FIELD_CONFIDENCE_KEY}) = 'object'
+          and exists (
+            select 1
+            from jsonb_each(o.defaults -> ${FIELD_CONFIDENCE_KEY}) as g(field, level)
+            where jsonb_typeof(g.level) = 'string'
+              and (g.level #>> '{}') in (${sql.join(
+                FIELD_CONFIDENCES.map((level) => sql`${level}`),
+                sql`, `,
+              )})
+              and not (g.field = any(o.confirmed_fields))
+          )
+      `);
+      return rows[0]?.n ?? 0;
+    });
   }
 
   #needsDetailsWhere(ctx: Ctx, args: NeedsDetailsArgs): SQL | undefined {

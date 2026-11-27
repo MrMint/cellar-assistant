@@ -39,6 +39,7 @@ import type { ApiContext } from "../context.ts";
 import { builder } from "./builder.ts";
 import { ItemInterface, ItemTypeEnum } from "./item.ts";
 import { connectionFromPage, toPageArgs } from "./pagination.ts";
+import { Viewer } from "./viewer.ts";
 
 const OnboardingStatusEnum = builder.enumType("OnboardingStatus", {
   description:
@@ -510,6 +511,22 @@ builder.queryField("needsDetailsCount", (t) =>
         )
         .needsDetailsCount(needsDetailsArgs(args.cellarId));
     },
+  }),
+);
+
+builder.objectField(Viewer, "unconfirmedBottleCount", (t) =>
+  t.int({
+    description:
+      "F-76: Home's “n to check” — how many of your bottles (open or " +
+      "sealed, not finished, in cellars you created or co-own) are of an " +
+      "item you created whose `unconfirmedFields` is not empty.",
+    resolve: async (viewer, _args, context) =>
+      await context
+        .actor(
+          DraftsCollectionActorDescriptor,
+          viewerCollectionActorId(viewer.id),
+        )
+        .unconfirmedBottleCount(),
   }),
 );
 

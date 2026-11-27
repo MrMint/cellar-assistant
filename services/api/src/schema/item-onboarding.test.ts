@@ -198,6 +198,23 @@ describe("needsDetails / needsDetailsCount (SV-B)", () => {
   });
 });
 
+describe("Viewer.unconfirmedBottleCount (F-76)", () => {
+  it("asks the viewer's DraftsCollectionActor", async () => {
+    const { invoke, calls } = stubSidecar({
+      "DraftsCollectionActor.unconfirmedBottleCount": () => 3,
+    });
+    const result = await run(
+      "{ me { unconfirmedBottleCount } }",
+      testContext(invoke, viewer),
+    );
+    expect(result.errors).toBeUndefined();
+    expect(result.data).toEqual({ me: { unconfirmedBottleCount: 3 } });
+    expect(calls.map((c) => [c.actorId, c.method])).toEqual([
+      [viewer.id, "unconfirmedBottleCount"],
+    ]);
+  });
+});
+
 describe("confirmItemOnboarding: absent cellar vs null (SV-B)", () => {
   const confirmed = {
     onboardingId: ONBOARDING_ID,

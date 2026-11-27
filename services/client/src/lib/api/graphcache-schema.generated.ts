@@ -12791,6 +12791,10 @@ export const graphcacheSchema: MinifiedIntrospection = {
             },
           },
           {
+            name: "unconfirmedBottleCount",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
+          {
             name: "wantToTry",
             type: {
               kind: "NON_NULL",

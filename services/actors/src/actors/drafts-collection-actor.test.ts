@@ -217,4 +217,61 @@ describe.skipIf(skip)("DraftsCollectionActor (SV-B)", () => {
       ).toEqual([[]]);
     });
   });
+
+  it("unconfirmedBottleCount: the viewer's bottles, open or sealed, with a guess never checked (F-76)", async () => {
+    await withTestDb(async (db) => {
+      const viewer = await seedUser(db);
+      const other = await seedUser(db);
+      const mine = await seedCellar(db, viewer);
+      const theirs = await seedCellar(db, other);
+      const guessed = { fieldConfidence: { name: "sure", country: "check" } };
+      const bottle = async (
+        cellarId: string,
+        wineId: string,
+        extra: { open?: boolean; empty?: boolean } = {},
+      ) => {
+        await db.execute(sql`
+          insert into public.cellar_items (cellar_id, created_by, wine_id, open_at, empty_at)
+          values (${cellarId}::uuid, ${viewer}::uuid, ${wineId}::uuid,
+                  ${extra.open === true ? new Date().toISOString() : null}::timestamptz,
+                  ${extra.empty === true ? new Date().toISOString() : null}::timestamptz)
+        `);
+      };
+      // A wine with a guess left: a sealed bottle, an open one, an empty one.
+      const open = await seedOnboarding(db, {
+        userId: viewer,
+        status: "CONFIRMED",
+        defaults: guessed,
+        confirmedFields: ["name"],
+      });
+      const unchecked = await seedWine(db, viewer, open);
+      await bottle(mine, unchecked);
+      await bottle(mine, unchecked, { open: true });
+      await bottle(mine, unchecked, { empty: true });
+      // Every guess confirmed: nothing to check.
+      const done = await seedOnboarding(db, {
+        userId: viewer,
+        status: "CONFIRMED",
+        defaults: guessed,
+        confirmedFields: ["name", "country"],
+      });
+      await bottle(mine, await seedWine(db, viewer, done));
+      // Another person's wine in my cellar, and my wine in their cellar.
+      const theirsRead = await seedOnboarding(db, {
+        userId: other,
+        status: "CONFIRMED",
+        defaults: guessed,
+      });
+      await bottle(mine, await seedWine(db, other, theirsRead));
+      await bottle(theirs, unchecked);
+
+      const actor = await activate(
+        createActor(DraftsCollectionActor, viewer, db),
+      );
+      expect(await actor.unconfirmedBottleCount(userCtx(viewer, "r"))).toBe(2);
+      await expect(
+        actor.unconfirmedBottleCount(userCtx(other, "r")),
+      ).rejects.toBeInstanceOf(ForbiddenError);
+    });
+  });
 });
