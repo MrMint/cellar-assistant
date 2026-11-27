@@ -239,7 +239,7 @@ export function TabBar({ className }: { className?: string }) {
       aria-label="Main"
       data-slot="tab-bar"
       className={cn(
-        "touch-none-select relative z-40 shrink-0 border-hair border-t bg-glass backdrop-blur-xl",
+        "touch-none-select relative z-40 shrink-0 border-hair border-t bg-background/90 backdrop-blur-xl",
         // Under the home indicator: AppShell reclaims the safe area the root
         // layout pads, and the bar pads its own content instead.
         "pb-[env(safe-area-inset-bottom)]",
