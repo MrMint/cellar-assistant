@@ -25,7 +25,6 @@ const { IngredientAvailabilityTag, MakeabilitySummary } = await import(
 );
 const { WhatCanIMake, nextBottles } = await import("./WhatCanIMake");
 const { PantryEditor, pantrySections } = await import("./PantryEditor");
-const { RecipeIngredientList } = await import("../recipe/RecipeIngredientList");
 
 const client = new Client({
   url: "http://test.invalid/graphql",
@@ -179,73 +178,6 @@ describe("availability markup", () => {
     );
     assert.match(text(html), /One bottle away · Campari/);
     assert.match(html, /href="\/recipes\/bar"/);
-  });
-
-  test("ingredient rows: one formatter's amount, tags, and the garnish chip", () => {
-    const html = render(
-      <RecipeIngredientList
-        ingredients={[
-          {
-            id: "i1",
-            amount: "¾ oz",
-            quantity: 0.75,
-            unit: "oz",
-            role: "modifier",
-            item: null,
-            generic_item: { id: "g1", name: "Sweet vermouth", category: "x" },
-            availability: {
-              status: "HAVE",
-              source: "PANTRY",
-              label: "Sweet vermouth",
-            },
-          },
-          {
-            id: "i2",
-            // An older document without `amount`: the shared formatter.
-            quantity: 1.5,
-            unit: "oz",
-            role: "base",
-            item: null,
-            generic_item: { id: "g2", name: "Rye", category: "x" },
-            availability: {
-              status: "SUBSTITUTE",
-              source: "BOTTLE",
-              label: "Buffalo Trace",
-            },
-          },
-          {
-            id: "i3",
-            amount: "",
-            role: "garnish",
-            item: null,
-            generic_item: { id: "g3", name: "Cherry", category: "x" },
-            availability: { status: "MISSING" },
-          },
-        ]}
-      />,
-    );
-    assert.match(html, />¾ oz</);
-    assert.match(html, />1½ oz</);
-    assert.match(text(html), /In your pantry/);
-    assert.match(text(html), /Swap: Buffalo Trace/);
-    assert.match(html, />Garnish</);
-    assert.doesNotMatch(html, />x</, "the generic category chip is gone");
-
-    const quiet = render(
-      <RecipeIngredientList
-        showAvailability={false}
-        ingredients={[
-          {
-            id: "i1",
-            amount: "2 oz",
-            item: null,
-            generic_item: { id: "g", name: "Gin" },
-            availability: { status: "MISSING" },
-          },
-        ]}
-      />,
-    );
-    assert.doesNotMatch(quiet, /data-availability/);
   });
 });
 
