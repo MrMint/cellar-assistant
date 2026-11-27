@@ -47,7 +47,31 @@ const POURED_AT = "2026-10-08T19:30:00.000Z";
 
 type Sent = { operationName: string; variables: Record<string, unknown> };
 const sent: Sent[] = [];
+/** One test's answers over the defaults: a value, or one built from variables. */
+let override: Record<string, unknown> = {};
+/** Who `/api/auth/get-session` says is signed in (F-57). */
+let viewer: string | null = "me";
 globalThis.fetch = (async (url: unknown, init?: { body?: unknown }) => {
+  if (String(url).includes("/get-session")) {
+    const session =
+      viewer === null
+        ? null
+        : {
+            user: {
+              id: viewer,
+              email: `${viewer}@example.com`,
+              emailVerified: true,
+              name: viewer,
+              image: null,
+              role: "user",
+            },
+            session: { id: `s-${viewer}`, expiresAt: "2099-01-01T00:00:00Z" },
+          };
+    return new Response(JSON.stringify(session), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  }
   // urql sends a query as a GET (its parameters in the URL) and a mutation
   // as a POST body.
   const params = new URL(String(url), "http://localhost").searchParams;
@@ -235,6 +259,17 @@ globalThis.fetch = (async (url: unknown, init?: { body?: unknown }) => {
       },
     },
   };
+  if (operationName in override) {
+    const given = override[operationName];
+    const answer =
+      typeof given === "function"
+        ? (given as (v: Record<string, unknown>) => unknown)(variables)
+        : given;
+    return new Response(JSON.stringify(answer), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  }
   return new Response(JSON.stringify({ data: answers[operationName] ?? {} }), {
     status: 200,
     headers: { "content-type": "application/json" },
@@ -313,6 +348,8 @@ beforeEach(() => {
   sent.length = 0;
   changes = 0;
   closes = 0;
+  viewer = "me";
+  override = {};
   window.localStorage.clear();
   container = document.createElement("div");
   document.body.appendChild(container);
@@ -466,9 +503,9 @@ describe("PourSheet", () => {
     assert.match(document.body.textContent ?? "", /That’s the last of it/);
   });
 
-  test("me + Sam is the last table poured with on this device", async () => {
+  test("me + Sam is the last table this account poured with", async () => {
     window.localStorage.setItem(
-      "ca.pour.lastCompanions",
+      "ca.pour.lastCompanions:me",
       JSON.stringify([{ id: "sam", displayName: "Sam", avatarUrl: null }]),
     );
     await render(
@@ -484,6 +521,44 @@ describe("PourSheet", () => {
       | { companionIds?: string[] }
       | undefined;
     assert.deepEqual(input?.companionIds, ["sam"]);
+  });
+
+  test("a second account on the phone never reads the first one's companions (F-57)", async () => {
+    // The first account pours with Sam…
+    await render(
+      sheet({ percentageRemaining: 60, openAt: "2026-10-01T00:00:00Z" }),
+    );
+    await flush(20);
+    await click(button("With friends"));
+    await flush(10);
+    await click(
+      document.querySelector('ul[aria-label="Friends"] button') ?? undefined,
+    );
+    await flush(10);
+    await click(button("Pour 150 ml"));
+    await flush(50);
+    assert.deepEqual(
+      (ops("LogDrink")[0]?.variables.input as { companionIds?: string[] })
+        ?.companionIds,
+      ["sam"],
+    );
+    assert.ok(window.localStorage.getItem("ca.pour.lastCompanions:me"));
+
+    // …then someone else signs in on the same phone, without a sign-out.
+    viewer = "ana";
+    window.dispatchEvent(new Event("focus"));
+    await flush(20);
+    await act(async () => root.unmount());
+    document.body.innerHTML = "";
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+    await render(
+      sheet({ percentageRemaining: 60, openAt: "2026-10-01T00:00:00Z" }),
+    );
+    await flush(20);
+    assert.equal(button("me + Sam"), undefined);
+    assert.doesNotMatch(document.body.textContent ?? "", /me \+ Sam/);
   });
 
   test("Finished, then rate — the review — then the band sheet on your own lists", async () => {
@@ -556,4 +631,128 @@ describe("PourSheet", () => {
       expectedSeq: 7,
     });
   });
+
+  test("a band step that cannot read its list says so and moves on (F-158)", async () => {
+    override = { PourTierListBand: { errors: [{ message: "offline" }] } };
+    await toBandStep();
+    assert.equal(
+      document.querySelector('[data-slot="band-sheet"]'),
+      null,
+      "no band sheet for a list it could not read",
+    );
+    assert.match(document.body.textContent ?? "", /Couldn’t open Best reds/);
+    assert.equal(closes, 1, "the sheet is closed, not left open with nothing");
+  });
+
+  test("Remove from list, confirmed, takes the drink off that list (F-159)", async () => {
+    override = {
+      RemoveItemFromTierList: {
+        data: {
+          removeTierListItem: { __typename: "RemovedTierListItem", id: "e1" },
+        },
+      },
+    };
+    await toBandStep();
+    await click(button("Remove from list"));
+    await flush(20);
+    assert.match(document.body.textContent ?? "", /Remove it from Best reds\?/);
+    assert.equal(ops("RemoveItemFromTierList").length, 0, "it asks first");
+    await click(button("Remove"));
+    await flush(50);
+    assert.deepEqual(ops("RemoveItemFromTierList")[0]?.variables, {
+      tierListId: "t1",
+      id: "e1",
+    });
+    assert.match(document.body.textContent ?? "", /Removed from Best reds/);
+    assert.equal(closes, 1, "the last list done, the pour is done");
+  });
+
+  test("keeping it where it is on the first list moves on to the next (F-159)", async () => {
+    override = {
+      PourFollowUp: { data: followUpOnTwoLists() },
+      PourTierListBand: (v: Record<string, unknown>) => ({
+        data: {
+          tierList: {
+            __typename: "TierList",
+            id: v.tierListId,
+            items: {
+              pageInfo: { hasNextPage: false },
+              edges: [
+                {
+                  node: {
+                    __typename: "TierListItem",
+                    id: v.tierListId === "t1" ? "e1" : "e2",
+                    band: 3,
+                    position: 0,
+                  },
+                },
+              ],
+            },
+          },
+        },
+      }),
+    };
+    await toBandStep();
+    assert.match(document.body.textContent ?? "", /· Best reds/);
+    await click(currentBand());
+    await flush(50);
+    assert.match(document.body.textContent ?? "", /· Weeknight wines/);
+    assert.equal(ops("ReorderBand").length, 0, "keeping moves nothing");
+    await click(currentBand());
+    await flush(30);
+    assert.equal(closes, 1);
+  });
+});
+
+/** The checked band row: "keep it where it is". */
+const currentBand = () =>
+  document.querySelector<HTMLElement>(
+    '[data-slot="band-sheet"] [role="radio"][aria-checked="true"]',
+  );
+
+/** Pour the last of it, finish, rate 5: the band step opens. */
+const toBandStep = async () => {
+  await render(
+    sheet({ percentageRemaining: 15, openAt: "2026-10-01T00:00:00Z" }),
+  );
+  await flush(20);
+  await click(button("Pour the last of it"));
+  await flush(50);
+  await click(button("Finished"));
+  await flush(80);
+  await click(
+    document.querySelector<HTMLInputElement>('input[type="radio"][value="5"]'),
+  );
+  await click(button("Save 5.0"));
+  await flush(80);
+};
+
+const followUpOnTwoLists = () => ({
+  me: { id: "me" },
+  item: {
+    __typename: "QueryItemSuccess",
+    data: {
+      __typename: "Wine",
+      id: "w1",
+      myReview: null,
+      tierListEntries: {
+        edges: [
+          { id: "e1", list: "t1", name: "Best reds" },
+          { id: "e2", list: "t2", name: "Weeknight wines" },
+        ].map((entry) => ({
+          node: {
+            __typename: "TierListItem",
+            id: entry.id,
+            band: 3,
+            tierList: {
+              __typename: "TierList",
+              id: entry.list,
+              name: entry.name,
+              createdById: "me",
+            },
+          },
+        })),
+      },
+    },
+  },
 });
