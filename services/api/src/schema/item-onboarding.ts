@@ -21,14 +21,24 @@ import type {
   ConfirmOnboardingInput as ConfirmOnboardingInputType,
   ConfirmOnboardingResult,
   ItemOnboardingDto,
+  ItemRef,
+  SaveDraftInput as SaveDraftInputType,
 } from "@cellar-assistant/contracts";
 import {
+  DraftsCollectionActorDescriptor,
   ItemOnboardingActorDescriptor,
   itemActorId,
   ONBOARDING_STATUSES,
+  offsetPage,
+  parseItemActorId,
+  REVERSE_EDGE_MAX_PARENTS,
+  VINTAGE_ANSWERS,
+  viewerCollectionActorId,
 } from "@cellar-assistant/contracts";
+import type { ApiContext } from "../context.ts";
 import { builder } from "./builder.ts";
 import { ItemInterface, ItemTypeEnum } from "./item.ts";
+import { connectionFromPage, toPageArgs } from "./pagination.ts";
 
 const OnboardingStatusEnum = builder.enumType("OnboardingStatus", {
   description:
@@ -40,6 +50,15 @@ const OnboardingStatusEnum = builder.enumType("OnboardingStatus", {
     "session whose bottle was an item the catalogue already held " +
     "(`closeItemOnboarding`): nothing was created from it.",
   values: ONBOARDING_STATUSES,
+});
+
+const VintageAnswerEnum = builder.enumType("VintageAnswer", {
+  description:
+    "SV-B: a draft's answer to “which vintage?”. `NON_VINTAGE` is the " +
+    "answer “No vintage”; `UNANSWERED` is no answer yet. Both read as a " +
+    "NULL vintage once the item exists, which is why the draft keeps them " +
+    "apart.",
+  values: VINTAGE_ANSWERS,
 });
 
 export const ItemOnboardingType = builder
@@ -79,6 +98,42 @@ export const ItemOnboardingType = builder
       }),
       createdAt: t.expose("createdAt", { type: "DateTime" }),
       updatedAt: t.expose("updatedAt", { type: "DateTime" }),
+      cellarId: t.exposeID("cellarId", {
+        nullable: true,
+        description: "SV-B: the cellar a saved draft is aimed at.",
+      }),
+      confirmedFields: t.exposeStringList("confirmedFields", {
+        description:
+          "SV-B: the guessed fields the person accepted or edited (`saveDraft`, " +
+          "`confirmItemOnboarding`).",
+      }),
+      vintageAnswer: t.field({
+        type: VintageAnswerEnum,
+        resolve: (onboarding) => onboarding.vintageAnswer,
+      }),
+      displayName: t.exposeString("displayName", {
+        nullable: true,
+        description: "SV-B: a saved draft's name, for its “Needs details” row.",
+      }),
+      displayMaker: t.exposeString("displayMaker", {
+        nullable: true,
+        description: "SV-B: a saved draft's maker (its brand name).",
+      }),
+      imageId: t.exposeID("imageId", {
+        nullable: true,
+        description: "SV-B: a saved draft's picture, a `files.id`.",
+      }),
+      draftFields: t.field({
+        type: "JSON",
+        nullable: true,
+        description:
+          "SV-B: the saved draft's fields (`SaveDraftInput.fields`), to finish " +
+          "it from. Null until `saveDraft`.",
+        resolve: (onboarding) =>
+          onboarding.draftFields === null
+            ? null
+            : JSON.parse(onboarding.draftFields),
+      }),
     }),
   });
 
@@ -159,11 +214,49 @@ const ConfirmItemOnboardingInput = builder.inputType(
           "Resolved through `BrandRegistryActor` (find-or-create by " +
           "`lower(trim(name))`), never written directly.",
       }),
-      cellarId: t.id({ required: false }),
+      cellarId: t.id({
+        required: false,
+        description:
+          "Absent: a saved draft's own cellar, if it has one. `null`: none.",
+      }),
       cellarItemId: t.id({ required: false }),
+      confirmedFields: t.stringList({
+        required: false,
+        description:
+          "SV-B: the guessed fields the person accepted or edited, so " +
+          "`Item.unconfirmedFields` can name the ones they never touched. " +
+          "Absent keeps what a saved draft recorded.",
+      }),
     }),
   },
 );
+
+const SaveDraftInput = builder.inputType("SaveDraftInput", {
+  description:
+    "SV-B: an unfinished bottle, kept on the account. A draft missing a " +
+    "floor field (its name, or an attribute the item type requires) is saved " +
+    "as `NEEDS_DETAILS`; one whose floor is met keeps its status, for " +
+    "`confirmItemOnboarding`.",
+  fields: (t) => ({
+    onboardingId: t.id({
+      required: true,
+      description: "From `startItemOnboarding` or `openItemDraft`.",
+    }),
+    cellarId: t.id({
+      required: false,
+      description: "The cellar it is aimed at; yours to write.",
+    }),
+    fields: t.field({
+      type: "JSON",
+      required: true,
+      description:
+        "`{ name, description, country, brandName, attributes }`, any of " +
+        "them missing — `ConfirmItemOnboardingInput`'s item fields.",
+    }),
+    confirmedFields: t.stringList({ required: true }),
+    vintageAnswer: t.field({ type: VintageAnswerEnum, required: true }),
+  }),
+});
 
 builder.queryField("itemOnboarding", (t) =>
   t.field({
@@ -277,15 +370,25 @@ builder.mutationField("confirmItemOnboarding", (t) =>
           attributes:
             (args.input.attributes as Record<string, unknown> | null) ?? null,
           brandName: args.input.brandName ?? null,
-          cellarId:
-            args.input.cellarId === undefined || args.input.cellarId === null
-              ? null
-              : String(args.input.cellarId),
+          // Absent and `null` differ here (SV-B): absent lets a saved draft's
+          // own cellar stand; `null` files the item into no cellar.
+          ...(args.input.cellarId === undefined
+            ? {}
+            : {
+                cellarId:
+                  args.input.cellarId === null
+                    ? null
+                    : String(args.input.cellarId),
+              }),
           cellarItemId:
             args.input.cellarItemId === undefined ||
             args.input.cellarItemId === null
               ? null
               : String(args.input.cellarItemId),
+          ...(args.input.confirmedFields === undefined ||
+          args.input.confirmedFields === null
+            ? {}
+            : { confirmedFields: args.input.confirmedFields }),
         } satisfies ConfirmOnboardingInputType),
   }),
 );
@@ -304,5 +407,129 @@ builder.mutationField("closeItemOnboarding", (t) =>
       context
         .actor(ItemOnboardingActorDescriptor, String(args.onboardingId))
         .closeAsMatched(),
+  }),
+);
+
+/* -------------------------------------------------------------------------- */
+/* SV-B · MC-drafts — saved "Needs details" drafts                             */
+/* -------------------------------------------------------------------------- */
+
+builder.mutationField("saveDraft", (t) =>
+  t.field({
+    type: ItemOnboardingType,
+    description:
+      "SV-B: keep an unfinished bottle on your account, aimed at a cellar. " +
+      "Yours alone: someone else's draft, or a cellar you cannot write, is a " +
+      "`NotFoundError`. A filed session (`CONFIRMED`, `MATCHED`) is a " +
+      "`ConflictError`. No model call.",
+    errors: {},
+    args: { input: t.arg({ type: SaveDraftInput, required: true }) },
+    resolve: (_root, args, context) =>
+      context
+        .actor(ItemOnboardingActorDescriptor, String(args.input.onboardingId))
+        .saveDraft({
+          cellarId:
+            args.input.cellarId === undefined || args.input.cellarId === null
+              ? null
+              : String(args.input.cellarId),
+          fields: args.input.fields as SaveDraftInputType["fields"],
+          confirmedFields: args.input.confirmedFields,
+          vintageAnswer: args.input.vintageAnswer,
+        } satisfies SaveDraftInputType),
+  }),
+);
+
+const needsDetailsArgs = (cellarId: string | number | null | undefined) =>
+  cellarId === undefined || cellarId === null
+    ? {}
+    : { cellarId: String(cellarId) };
+
+const ItemOnboardingConnection = builder.connectionObject(
+  { type: ItemOnboardingType, name: "ItemOnboardingConnection" },
+  { name: "ItemOnboardingEdge" },
+);
+
+builder.queryField("needsDetails", (t) =>
+  t.field({
+    type: ItemOnboardingConnection,
+    description:
+      "SV-B: your saved “Needs details” drafts, newest first — one cellar's, " +
+      "or all of yours without `cellarId`. Empty when signed out. Pages over " +
+      "the newest 200.",
+    errors: {},
+    args: {
+      ...t.arg.connectionArgs(),
+      cellarId: t.arg.id({ required: false }),
+    },
+    resolve: async (_root, args, context) => {
+      const viewerId = context.ctx.viewerId;
+      const drafts =
+        viewerId === null
+          ? []
+          : await context
+              .actor(
+                DraftsCollectionActorDescriptor,
+                viewerCollectionActorId(viewerId),
+              )
+              .needsDetails(needsDetailsArgs(args.cellarId));
+      return connectionFromPage(offsetPage(drafts, toPageArgs(args)));
+    },
+  }),
+);
+
+builder.queryField("needsDetailsCount", (t) =>
+  t.int({
+    description:
+      "SV-B: how many of your drafts need details — on one cellar, or in all " +
+      "of yours without `cellarId`. A draft is not a cellar item, so this is " +
+      "not in the cellar's item counts. 0 when signed out.",
+    args: { cellarId: t.arg.id({ required: false }) },
+    resolve: async (_root, args, context) => {
+      const viewerId = context.ctx.viewerId;
+      if (viewerId === null) return 0;
+      return await context
+        .actor(
+          DraftsCollectionActorDescriptor,
+          viewerCollectionActorId(viewerId),
+        )
+        .needsDetailsCount(needsDetailsArgs(args.cellarId));
+    },
+  }),
+);
+
+/**
+ * `Item.unconfirmedFields` (C3's "Check this"): one batched
+ * `DraftsCollectionActor` call per `REVERSE_EDGE_MAX_PARENTS` items in a tick.
+ */
+const loadUnconfirmedFields = async (
+  keys: string[],
+  context: ApiContext,
+): Promise<string[][]> => {
+  const viewerId = context.ctx.viewerId;
+  if (viewerId === null) return keys.map(() => []);
+  const refs = keys.map(parseItemActorId);
+  const valid = refs.filter((ref): ref is ItemRef => ref !== null);
+  const answers = new Map<string, readonly string[]>();
+  for (let start = 0; start < valid.length; start += REVERSE_EDGE_MAX_PARENTS) {
+    const chunk = valid.slice(start, start + REVERSE_EDGE_MAX_PARENTS);
+    const fields = await context
+      .actor(DraftsCollectionActorDescriptor, viewerCollectionActorId(viewerId))
+      .unconfirmedFields(chunk);
+    chunk.forEach((ref, index) => {
+      answers.set(itemActorId(ref), fields[index] ?? []);
+    });
+  }
+  return keys.map((key) => [...(answers.get(key) ?? [])]);
+};
+
+builder.interfaceField(ItemInterface, "unconfirmedFields", (t) =>
+  t.loadableList({
+    type: "String",
+    description:
+      "SV-B: the fields the label read guessed that you never accepted or " +
+      "edited, from the onboarding that created this item — what “Check " +
+      "this” points at. Empty unless you created the item from a read.",
+    resolve: (item) => itemActorId(item),
+    load: loadUnconfirmedFields,
   }),
 );
