@@ -87,7 +87,7 @@ export function BuiltFrom({
         return (
           <Link
             key={row.itemType}
-            href={`/rankings?types=${row.itemType}`}
+            href={`/rankings?types=${encodeURIComponent(JSON.stringify([row.itemType]))}`}
             underline="none"
             onClick={() => feedback("tick")}
             aria-label={`${label}, ${row.count} rated, see them ranked`}

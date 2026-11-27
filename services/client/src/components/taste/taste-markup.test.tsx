@@ -94,7 +94,7 @@ describe("TasteProfileView", () => {
     assert.ok(text.includes("Riesling"));
     assert.ok(text.includes("4.5"));
     assert.ok(text.includes("12 ratings · 1 kind"));
-    assert.match(html, /href="\/rankings\?types=WINE"/);
+    assert.match(html, /href="\/rankings\?types=%5B%22WINE%22%5D"/);
     assert.match(html, /href="\/tier-lists"/);
   });
 
