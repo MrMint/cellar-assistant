@@ -20,7 +20,7 @@ export type QuickLookItem = {
   id: string;
   /** The name, `t-title`. */
   title: string;
-  /** The line under it: "Red · 2019 · Garage". */
+  /** The line under it: "Red · 2019 · Home Cellar". */
   meta?: ReactNode;
   /** The photo, square (an `<img>`, `next/image` or the label plate). */
   photo?: ReactNode;

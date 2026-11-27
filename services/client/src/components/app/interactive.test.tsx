@@ -1024,7 +1024,7 @@ describe("AppBar", () => {
   test("over a photo: Back and ⋯ are glass discs, the title is for screen readers", async () => {
     await render(
       <AppBar
-        title="Demo Cabernet"
+        title="Ridge Lytton Springs"
         parent="/cellars"
         tone="photo"
         overflow={[{ label: "Edit", onSelect: () => {} }]}

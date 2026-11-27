@@ -249,7 +249,7 @@ describe("toasts", () => {
   });
 
   test("a quick look pauses the toast and hands back the time it had left", async () => {
-    const id = notify("Removed from Garage", { undo: () => {} });
+    const id = notify("Removed from Home Cellar", { undo: () => {} });
     const shown = raised.at(-1)?.duration ?? 0;
     assert.ok(shown > 0);
     await new Promise((r) => setTimeout(r, 30));

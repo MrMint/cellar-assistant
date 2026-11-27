@@ -71,9 +71,24 @@ afterEach(async () => {
 
 // Demo-seed names (services/actors/scripts/demo-seed-data.ts).
 const ITEMS = [
-  { id: "a", title: "Demo Cabernet", meta: "Red · 2019", href: "/wines/a" },
-  { id: "b", title: "Demo Pilsner", meta: "Lager", href: "/beers/b" },
-  { id: "c", title: "Demo Rye", meta: "Whiskey", href: "/spirits/c" },
+  {
+    id: "a",
+    title: "Ridge Lytton Springs",
+    meta: "Red · Zinfandel",
+    href: "/wines/a",
+  },
+  {
+    id: "b",
+    title: "Muga Reserva Rioja",
+    meta: "Red · Tempranillo",
+    href: "/wines/b",
+  },
+  {
+    id: "c",
+    title: "Cloudy Bay Sauvignon Blanc",
+    meta: "White · Sauvignon Blanc",
+    href: "/wines/c",
+  },
 ];
 
 describe("quick look release", () => {
@@ -136,7 +151,7 @@ describe("QuickLook", () => {
     assert.ok(dialog);
     assert.equal(dialog.getAttribute("role"), "dialog");
     assert.ok(byText("11 of 240", dialog));
-    assert.ok(byText("Demo Cabernet", dialog));
+    assert.ok(byText("Ridge Lytton Springs", dialog));
     const open = byText("Open page", dialog);
     assert.equal(open?.closest("a")?.getAttribute("href"), "/wines/a");
     assert.equal(
@@ -151,7 +166,7 @@ describe("QuickLook", () => {
         new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }),
       );
     });
-    assert.ok(byText("Demo Pilsner"));
+    assert.ok(byText("Muga Reserva Rioja"));
     assert.ok(byText("12 of 240"));
 
     await act(async () => {
@@ -189,7 +204,7 @@ describe("DesktopPane", () => {
         <DesktopPane
           open={open}
           onClose={() => setOpen(false)}
-          title="Demo Cabernet"
+          title="Ridge Lytton Springs"
           onNext={() => {}}
         >
           <p>body</p>
@@ -207,7 +222,7 @@ describe("DesktopPane", () => {
     const pane = container.querySelector('[data-slot="desktop-pane"]');
     assert.ok(pane);
     assert.match(pane.className, /\bw-110\b/);
-    assert.equal(pane.getAttribute("aria-label"), "Demo Cabernet");
+    assert.equal(pane.getAttribute("aria-label"), "Ridge Lytton Springs");
     assert.ok(pane.querySelector('[aria-label="Close"]'));
     assert.equal(
       pane.querySelector<HTMLButtonElement>('[aria-label="Previous"]')

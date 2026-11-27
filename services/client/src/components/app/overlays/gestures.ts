@@ -1,6 +1,6 @@
 "use client";
 
-import { animate } from "motion/react";
+import { animate, useReducedMotion } from "motion/react";
 import { type RefObject, useEffect, useRef, useState } from "react";
 import { feedback } from "@/lib/feedback";
 import { gesture, refreshMs, spring, tween } from "@/lib/motion";
@@ -66,6 +66,8 @@ export function useEdgeSwipeBack(
 ): void {
   const onBackRef = useRef(onBack);
   onBackRef.current = onBack;
+  const reducedRef = useRef(false);
+  reducedRef.current = useReducedMotion() ?? false;
 
   useEffect(() => {
     const el = target.current;
@@ -127,11 +129,8 @@ export function useEdgeSwipeBack(
         onBackRef.current();
         return;
       }
-      const reduced = window.matchMedia?.(
-        "(prefers-reduced-motion: reduce)",
-      ).matches;
       animate(dx, 0, {
-        ...(reduced ? tween("micro") : spring.snappy),
+        ...(reducedRef.current ? tween("micro") : spring.snappy),
         onUpdate: (x) => {
           el.style.transform = `translateX(${x}px)`;
         },
