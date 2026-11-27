@@ -15,7 +15,7 @@ import {
  * old `Math.random()` icons.
  *
  * Colour never carries the meaning alone (the word is always printed): Have
- * is the success ink, a swap stays ink-1, missing and not tracked recede to
+ * is the success ink, a swap stays ink, missing and not tracked recede to
  * ink-3. No `"use client"` — it renders from the server or the client.
  */
 export function IngredientAvailabilityTag({
@@ -38,10 +38,10 @@ export function IngredientAvailabilityTag({
     <span
       data-availability={status.toLowerCase()}
       className={cn(
-        "inline-flex min-w-0 items-center gap-1 type-footnote",
+        "t-cap inline-flex min-w-0 items-center gap-1",
         status === "HAVE" && availability.source !== "STAPLE" && "text-success",
         status === "HAVE" && availability.source === "STAPLE" && "text-ink-3",
-        status === "SUBSTITUTE" && "text-ink-1",
+        status === "SUBSTITUTE" && "text-ink",
         (status === "MISSING" || status === "UNKNOWN") && "text-ink-3",
         className,
       )}
@@ -70,7 +70,7 @@ export function MakeabilitySummary({
     <div
       data-makeability={makeability.status.toLowerCase()}
       className={cn(
-        "flex items-center gap-3 rounded-md bg-surface-2 px-3 py-2",
+        "flex min-h-14 items-center gap-3 rounded-md border border-edge bg-card px-3 py-2",
         className,
       )}
     >
@@ -79,8 +79,8 @@ export function MakeabilitySummary({
       ) : (
         <Missing aria-hidden className="size-5 shrink-0 text-ink-3" />
       )}
-      <p className="min-w-0 flex-1 type-callout">
-        <span className="font-semibold text-ink-1">
+      <p className="t-body m-0 min-w-0 flex-1">
+        <span className="font-semibold text-ink">
           {makeabilityHeadline(makeability)}
         </span>
         {detail !== null && <span className="text-ink-2"> · {detail}</span>}
@@ -88,7 +88,7 @@ export function MakeabilitySummary({
       <Link
         href="/recipes/bar"
         underline="none"
-        className="relative shrink-0 type-callout font-medium text-ink-1 after:absolute after:-inset-3 after:content-['']"
+        className="t-head relative shrink-0 text-act-ink after:absolute after:-inset-3 after:content-['']"
       >
         Your bar
       </Link>

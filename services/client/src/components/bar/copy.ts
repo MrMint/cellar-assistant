@@ -63,7 +63,7 @@ export const makeabilityDetail = (
 export const matchDescription = (makeability: MakeabilityLike): string => {
   if (makeability.status === "MAKE_NOW") {
     return makeability.substituteCount === 0
-      ? "Everything's in your bar"
+      ? "Ready to make"
       : `Make it ${makeabilityDetail(makeability)}`;
   }
   if (makeability.status === "ONE_AWAY") {

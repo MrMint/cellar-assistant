@@ -1,32 +1,28 @@
 "use client";
 
-import { Minus, Plus, X } from "lucide-react";
-import { useMemo, useState } from "react";
+import { Clock, Sun, X } from "lucide-react";
+import { useMemo, useRef, useState } from "react";
 import { useMutation } from "urql";
+import { BottomSheet } from "@/components/app/BottomSheet";
 import { notify } from "@/components/app/notify";
+import { pressFeedback } from "@/components/app/overlays/press";
 import { useNavigate } from "@/components/app/useNavigate";
 import {
   DeleteDrinkLogMutation,
   LogDrinkMutation,
 } from "@/components/drink-log/queries";
-import { AddRecipeReview } from "@/components/recipe/AddRecipeReview";
 import type { RecipeDetailsItem } from "@/components/recipe/adapter";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Button } from "@/components/ui/button";
 import { unwrapResult } from "@/lib/api/result";
+import { feedback } from "@/lib/feedback";
 import { cn } from "@/lib/utils";
 import { leaveTo } from "./leave";
-import {
-  baseServings,
-  clampServings,
-  ingredientName,
-  MAX_SERVINGS,
-  MIN_SERVINGS,
-  scaledAmount,
-  scaleFactor,
-} from "./scaling";
-import { type MakeStep, stepsFrom } from "./steps";
+import { MadeIt } from "./MadeIt";
+import { MakeChecklist, ServingsStepper } from "./MakeChecklist";
+import { baseServings, clampServings, scaleFactor } from "./scaling";
+import { stepsFrom } from "./steps";
 import { formatClock } from "./timer";
-import { useCountdown } from "./useCountdown";
+import { type StepTimerView, useStepTimers } from "./useStepTimers";
 import { useWakeLock } from "./useWakeLock";
 
 export type MakeModeProps = {
@@ -34,18 +30,27 @@ export type MakeModeProps = {
   viewerId: string | null;
 };
 
-const pill =
-  "inline-flex h-14 items-center justify-center rounded-full px-6 font-semibold text-base outline-none transition-transform duration-(--ca-dur-micro) focus-visible:ring-[3px] focus-visible:ring-ring/50 active:scale-97 disabled:opacity-50 motion-reduce:active:scale-100";
+/** How far a finger travels before a swipe changes the step. */
+const SWIPE_PX = 56;
 
 /**
- * ux-c L08: a recipe, full screen, one step at a time — `/recipes/[id]/make`.
+ * The one write Made it makes: a recipe-only drink log (L23, L44). It names
+ * the recipe and nothing else — no bottle, no cellar item, no person — so it
+ * cannot change a bottle's level (#677) or land in anyone else's log (the
+ * API takes the drinker from the session).
+ */
+export const madeItInput = (recipeId: string) => ({ recipeId });
+
+/**
+ * Make mode (Recipes-Make board; ux-c L08) at `/recipes/[id]/make`: the
+ * ingredients and servings first (the prep page, lead's ruling 2), then one
+ * step at a time, then Made it.
  *
- * The screen stays on where the browser can promise it (`useWakeLock`,
- * feature-detected). Servings scale every amount (`scaling.ts`); a step that
- * names a time gets a countdown (`steps.ts`, `timer.ts`). The last step's
- * Next is "Made it": a recipe-only drink log (L23, L44 — CheckInActor's one
- * target), with Undo in its toast. The optional rating afterwards is the
- * recipe's own review form (L29), never PourSheet.
+ * The screen stays on where the browser can promise it (`useWakeLock`). A
+ * step that names a time gets a countdown that keeps running when you move
+ * on, shown in the segment bar (ruling 4). Back / Next, or a swipe, move
+ * between steps; the last step's Next is "Made it": the log, with Undo in
+ * its toast, then the Made it screen.
  */
 export const MakeMode = ({ recipe, viewerId }: MakeModeProps) => {
   const navigate = useNavigate();
@@ -56,271 +61,305 @@ export const MakeMode = ({ recipe, viewerId }: MakeModeProps) => {
   const base = baseServings(recipe.serving_size);
   const [servings, setServings] = useState(base);
   const factor = scaleFactor(servings, base);
-  const [index, setIndex] = useState(0);
+  // 0 is the prep page; 1..n are the steps.
+  const [stage, setStage] = useState(0);
   const [checked, setChecked] = useState<ReadonlySet<string>>(new Set());
+  const [sheetOpen, setSheetOpen] = useState(false);
   const [loggedId, setLoggedId] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const [logState, logDrink] = useMutation(LogDrinkMutation);
   const [, deleteLog] = useMutation(DeleteDrinkLogMutation);
   const keepsAwake = useWakeLock(loggedId === null);
+  const timers = useStepTimers(steps);
+  const swipeFrom = useRef<number | null>(null);
 
   const total = steps.length;
-  const step: MakeStep | undefined = steps[index];
-  const last = index >= total - 1;
-  const mine =
-    viewerId === null
-      ? null
-      : (recipe.recipe_reviews?.find((r) => r.userId === viewerId) ?? null);
+  const stepIndex = stage - 1;
+  const step = stage > 0 ? steps[stepIndex] : undefined;
+  const last = stage >= total;
 
   const leave = () => leaveTo(navigate, `/recipes/${recipe.id}`);
+  const go = (next: number) => {
+    const clamped = Math.max(0, Math.min(total, next));
+    if (clamped === stage) return;
+    feedback("tick");
+    setStage(clamped);
+  };
+
+  const toggle = (id: string, on: boolean) =>
+    setChecked((current) => {
+      const copy = new Set(current);
+      if (on) copy.add(id);
+      else copy.delete(id);
+      return copy;
+    });
+
+  const undoLog = async (entryId: string) => {
+    const undone = unwrapResult(
+      (await deleteLog({ id: entryId })).data?.deleteDrinkLog,
+      "DeletedDrinkLogPayload",
+    );
+    if (!undone.ok) {
+      notify("Couldn't undo that", { tone: "error" });
+      return;
+    }
+    setLoggedId(null);
+  };
 
   const madeIt = async () => {
-    setError(null);
-    const id = crypto.randomUUID();
     const result = unwrapResult(
-      (await logDrink({ id, input: { recipeId: recipe.id } })).data?.logDrink,
+      (
+        await logDrink({
+          id: crypto.randomUUID(),
+          input: madeItInput(recipe.id),
+        })
+      ).data?.logDrink,
       "LoggedDrinkPayload",
     );
     if (!result.ok) {
-      setError(result.error.message);
+      feedback("refuse");
+      notify(`Couldn't log ${recipe.name}`, {
+        tone: "error",
+        actionLabel: "Try again",
+        undo: () => void madeIt(),
+      });
       return;
     }
     const entryId = result.data.entry.id;
+    feedback("success");
     setLoggedId(entryId);
-    notify(`Made ${recipe.name}`, {
-      tone: "success",
-      description: "Logged to your drinks.",
-      undo: () => {
-        void (async () => {
-          const undone = unwrapResult(
-            (await deleteLog({ id: entryId })).data?.deleteDrinkLog,
-            "DeletedDrinkLogPayload",
-          );
-          if (!undone.ok) {
-            notify("Couldn't undo that log", {
-              tone: "error",
-              description: undone.error.message,
-            });
-            return;
-          }
-          setLoggedId(null);
-          notify("Log removed");
-        })();
-      },
+    notify(`${recipe.name} logged`, {
+      undo: () => void undoLog(entryId),
     });
   };
 
   if (loggedId !== null) {
     return (
-      <div
-        data-slot="make-mode"
-        className="mx-auto flex min-h-full max-w-xl flex-col gap-6 bg-background px-4 py-8"
-      >
-        <p className="type-overline text-brass">Made it</p>
-        <h1 className="font-display text-[32px] text-ink-1 leading-10">
-          {recipe.name}
-        </h1>
-        <p className="type-body text-ink-2">
-          It&rsquo;s in your drinks. Rate it if you like — or don&rsquo;t.
-        </p>
-        <AddRecipeReview
-          key={mine?.id ?? "new"}
-          recipeId={recipe.id}
-          viewerId={viewerId}
-          myReview={
-            mine === null
-              ? null
-              : { id: mine.id, score: mine.score, text: mine.text }
-          }
-        />
-        <button
-          type="button"
-          onClick={leave}
-          className={cn(pill, "bg-surface-2 text-ink-1")}
-        >
-          Back to the recipe
-        </button>
-      </div>
+      <MadeIt
+        recipe={recipe}
+        viewerId={viewerId}
+        onRecipe={() => navigate.replace(`/recipes/${recipe.id}`)}
+        onDone={leave}
+      />
     );
   }
+
+  const running = timers.elsewhere(stepIndex);
+  const checklist = (idPrefix: string) => (
+    <MakeChecklist
+      ingredients={recipe.ingredients}
+      factor={factor}
+      checked={checked}
+      onToggle={toggle}
+      idPrefix={idPrefix}
+    />
+  );
+  const ingredientsHead = (
+    <div className="flex items-center justify-between gap-3">
+      <h2 className="t-title m-0 text-ink">Ingredients</h2>
+      <ServingsStepper
+        servings={servings}
+        onChange={(next) => setServings(clampServings(next))}
+      />
+    </div>
+  );
 
   return (
     <div
       data-slot="make-mode"
-      className="mx-auto flex min-h-full max-w-xl flex-col bg-background"
+      className="mx-auto flex min-h-full w-full max-w-xl flex-col bg-background"
     >
-      <header className="flex items-center gap-3 px-4 pt-4">
+      <header className="flex items-center gap-2 px-2 pt-3">
         <button
           type="button"
+          {...pressFeedback()}
           onClick={leave}
           aria-label="Leave Make mode"
-          className="grid size-11 place-items-center rounded-full bg-surface-2 text-ink-1"
+          className="grid size-11 shrink-0 place-items-center rounded-md text-ink outline-none focus-visible:outline-2 focus-visible:outline-act-ink active:scale-97"
         >
-          <X className="size-5" />
+          <X aria-hidden className="size-6" />
         </button>
         <div className="min-w-0 flex-1">
-          <h1 className="type-headline truncate text-ink-1">{recipe.name}</h1>
+          <h1 className="t-head m-0 truncate text-ink">{recipe.name}</h1>
           {keepsAwake && (
-            <p className="type-footnote text-ink-3">
-              Screen stays on while you make it
+            <p className="t-cap m-0 flex items-center gap-1 text-ink-2">
+              <Sun aria-hidden className="size-3.5 text-glyph" />
+              Screen stays on
             </p>
           )}
         </div>
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            aria-label="Fewer servings"
-            disabled={servings <= MIN_SERVINGS}
-            onClick={() => setServings((n) => clampServings(n - 1))}
-            className="grid size-11 place-items-center rounded-full bg-surface-2 text-ink-1 disabled:opacity-40"
-          >
-            <Minus className="size-4" />
-          </button>
-          <output aria-live="polite" className="type-callout w-8 text-center">
-            {servings} ×
-          </output>
-          <button
-            type="button"
-            aria-label="More servings"
-            disabled={servings >= MAX_SERVINGS}
-            onClick={() => setServings((n) => clampServings(n + 1))}
-            className="grid size-11 place-items-center rounded-full bg-surface-2 text-ink-1 disabled:opacity-40"
-          >
-            <Plus className="size-4" />
-          </button>
-        </div>
+        {stage > 0 && recipe.ingredients.length > 0 && (
+          <Button variant="quiet" onClick={() => setSheetOpen(true)}>
+            Ingredients
+          </Button>
+        )}
       </header>
 
-      <section className="flex flex-1 flex-col gap-4 px-4 py-6">
-        {total > 0 && (
-          <div className="flex gap-1" aria-hidden="true">
-            {steps.map((s, i) => (
-              <span
-                key={s.id}
-                className={cn(
-                  "h-1 flex-1 rounded-full",
-                  i <= index ? "bg-brass" : "bg-surface-3",
-                )}
-              />
-            ))}
-          </div>
+      <div className="flex items-center gap-2 px-4 pt-4">
+        <ol
+          aria-label={stage === 0 ? "Ingredients" : `Step ${stage} of ${total}`}
+          className="m-0 flex flex-1 list-none gap-1 p-0"
+        >
+          {Array.from({ length: total + 1 }, (_, i) => (
+            <li
+              // biome-ignore lint/suspicious/noArrayIndexKey: segments are positions
+              key={i}
+              className={cn(
+                "h-1 flex-1 rounded-full",
+                i <= stage ? "bg-ink-2" : "bg-raised",
+              )}
+            />
+          ))}
+        </ol>
+        {running !== null && (
+          <TimerChip timer={running} onOpen={() => go(running.stepIndex + 1)} />
         )}
-        {step === undefined ? (
-          <p className="type-body text-ink-2">
-            This recipe has no steps yet — the ingredients below are all of it.
-          </p>
-        ) : (
-          <>
-            <p className="font-semibold text-[11px] text-brass uppercase tracking-wider">
-              Step {index + 1} of {total}
-            </p>
+      </div>
+
+      {stage === 0 ? (
+        <section
+          aria-label="Ingredients"
+          className="flex flex-1 flex-col gap-4 px-4 py-6"
+        >
+          {ingredientsHead}
+          {checklist("make-ing")}
+          {total === 0 && (
             <p
-              aria-live="polite"
-              className="font-display text-[32px] text-ink-1 leading-10"
+              data-testid="no-steps"
+              className="t-body m-0 flex min-h-14 items-center gap-3 rounded-md border border-edge-2 border-dashed px-4 text-ink-2"
             >
-              {step.text}
+              No steps yet
             </p>
-            {step.timerSeconds !== null && (
-              <StepTimer key={step.id} seconds={step.timerSeconds} />
-            )}
-          </>
-        )}
-      </section>
-
-      <section
-        aria-label="Ingredients"
-        className="rounded-t-[20px] bg-surface-1 px-4 py-5"
-      >
-        <h2 className="type-overline mb-3 text-ink-3">Ingredients</h2>
-        <ul className="flex flex-col gap-3">
-          {recipe.ingredients.map((ingredient) => {
-            const id = `make-ing-${ingredient.id}`;
-            const done = checked.has(ingredient.id);
-            return (
-              <li key={ingredient.id} className="flex items-center gap-3">
-                <Checkbox
-                  id={id}
-                  checked={done}
-                  onCheckedChange={(next) =>
-                    setChecked((current) => {
-                      const copy = new Set(current);
-                      if (next === true) copy.add(ingredient.id);
-                      else copy.delete(ingredient.id);
-                      return copy;
-                    })
-                  }
-                  className="size-5"
-                />
-                <label
-                  htmlFor={id}
-                  className={cn(
-                    "type-body flex-1 text-ink-1",
-                    done && "text-ink-3 line-through",
-                  )}
-                >
-                  {ingredientName(ingredient)}
-                </label>
-                <span className="type-callout text-ink-2 tabular-nums">
-                  {scaledAmount(ingredient, factor)}
-                </span>
-              </li>
-            );
-          })}
-        </ul>
-      </section>
-
-      <footer className="sticky bottom-0 grid grid-cols-2 gap-3 bg-surface-1 px-4 pt-2 pb-[max(1rem,env(safe-area-inset-bottom))]">
-        {error !== null && (
-          <p role="alert" className="type-footnote col-span-2 text-destructive">
-            {error}
+          )}
+        </section>
+      ) : (
+        <section
+          aria-label={`Step ${stage} of ${total}`}
+          className="flex flex-1 touch-pan-y flex-col gap-4 px-4 py-6"
+          onPointerDown={(event) => {
+            swipeFrom.current = event.clientX;
+          }}
+          onPointerUp={(event) => {
+            const from = swipeFrom.current;
+            swipeFrom.current = null;
+            if (from === null) return;
+            const dx = event.clientX - from;
+            if (dx <= -SWIPE_PX && !last) go(stage + 1);
+            else if (dx >= SWIPE_PX) go(stage - 1);
+          }}
+        >
+          <p className="t-cap m-0 text-ink-2">
+            Step {stage} of {total}
           </p>
+          <p aria-live="polite" className="t-title m-0 text-ink">
+            {step?.text}
+          </p>
+          {step?.timerSeconds != null && (
+            <StepTimer
+              timer={timers.view(stepIndex)}
+              onToggle={() => timers.toggle(stepIndex)}
+            />
+          )}
+        </section>
+      )}
+
+      <footer
+        className={cn(
+          "sticky bottom-0 grid gap-3 border-rule border-t bg-background px-4 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))]",
+          stage > 0 && "grid-cols-2",
         )}
-        <button
-          type="button"
-          disabled={index === 0}
-          onClick={() => setIndex((i) => Math.max(0, i - 1))}
-          className={cn(pill, "bg-surface-3 text-ink-1")}
-        >
-          Back
-        </button>
-        <button
-          type="button"
+      >
+        {stage > 0 && (
+          <Button variant="outline" onClick={() => go(stage - 1)}>
+            Back
+          </Button>
+        )}
+        <Button
           disabled={logState.fetching}
-          onClick={() =>
-            last ? void madeIt() : setIndex((i) => Math.min(total - 1, i + 1))
-          }
-          className={cn(pill, "bg-brass text-on-brass")}
+          onClick={() => (last ? void madeIt() : go(stage + 1))}
         >
-          {last ? "Made it" : "Next"}
-        </button>
+          {last ? "Made it" : stage === 0 ? "Start" : "Next"}
+        </Button>
       </footer>
+
+      <BottomSheet
+        open={sheetOpen}
+        onOpenChange={setSheetOpen}
+        title="Ingredients"
+        hideTitle
+      >
+        <div className="flex flex-col gap-4 pb-2">
+          {ingredientsHead}
+          {checklist("make-sheet-ing")}
+        </div>
+      </BottomSheet>
     </div>
   );
 };
 
-/** A step's own countdown: one button, start / pause / resume. */
-const StepTimer = ({ seconds }: { seconds: number }) => {
-  const timer = useCountdown(seconds * 1000);
+/** A step's countdown card: the clock, Start / Pause / Resume, its bar. */
+const StepTimer = ({
+  timer,
+  onToggle,
+}: {
+  timer: StepTimerView | null;
+  onToggle: () => void;
+}) => {
+  if (timer === null) return null;
   const clock = formatClock(timer.remainingMs);
   const label =
     timer.status === "idle"
-      ? `Start ${clock}`
+      ? "Start"
       : timer.status === "running"
-        ? `${clock} left · Pause`
+        ? "Pause"
         : timer.status === "paused"
-          ? `${clock} left · Resume`
-          : "Done · Start again";
+          ? "Resume"
+          : "Again";
+  const left =
+    timer.durationMs === 0 ? 0 : timer.remainingMs / timer.durationMs;
   return (
-    <button
-      type="button"
-      onClick={timer.toggle}
-      aria-live="polite"
-      className={cn(
-        pill,
-        "self-start bg-surface-2 text-ink-1 tabular-nums ring-2 ring-brass ring-inset",
-      )}
+    <div
+      data-slot="step-timer"
+      className="flex flex-col gap-3 rounded-md border border-edge bg-card p-4"
     >
-      {label}
-    </button>
+      <div className="flex items-center justify-between gap-3">
+        <span
+          role="timer"
+          aria-live={timer.status === "running" ? "off" : "polite"}
+          className="font-semibold text-5xl text-ink tabular-nums leading-none"
+        >
+          {timer.status === "done" ? "Done" : clock}
+        </span>
+        <Button variant="outline" className="min-w-28" onClick={onToggle}>
+          {label}
+        </Button>
+      </div>
+      <div className="h-1.5 overflow-hidden rounded-full bg-raised">
+        <div
+          className="h-full rounded-full bg-ink-2 transition-[width] duration-(--ca-dur-short) ease-linear motion-reduce:transition-none"
+          style={{ width: `${Math.round(left * 100)}%` }}
+        />
+      </div>
+    </div>
   );
 };
+
+/** A timer running on another step, in the segment bar: tap to go to it. */
+const TimerChip = ({
+  timer,
+  onOpen,
+}: {
+  timer: StepTimerView;
+  onOpen: () => void;
+}) => (
+  <button
+    type="button"
+    onClick={onOpen}
+    aria-label={`${formatClock(timer.remainingMs)} left on step ${timer.stepIndex + 1}`}
+    className="group grid h-11 shrink-0 place-items-center outline-none"
+  >
+    <span className="t-cap flex h-7 items-center gap-1.5 rounded-full border border-edge-2 bg-card px-3 text-ink tabular-nums group-focus-visible:outline-2 group-focus-visible:outline-act-ink group-active:scale-97">
+      <Clock aria-hidden className="size-4 text-glyph" />
+      {formatClock(timer.remainingMs)}
+    </span>
+  </button>
+);

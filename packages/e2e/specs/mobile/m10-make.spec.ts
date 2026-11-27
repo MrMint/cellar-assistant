@@ -98,48 +98,48 @@ test("recipe → Make → steps → Made it → Undo", async ({ page }) => {
   await expect(page.locator("main")).toHaveCount(1);
   await expect(page.getByRole("navigation", { name: "Main" })).toBeHidden();
 
-  // Servings: one up, one down; the stepper never goes below one.
+  // The prep page: ingredients and servings before step 1 (Recipes-Make
+  // board, ruling 2). The stepper never goes below one drink.
   await expect(
-    page.getByRole("button", { name: "Fewer servings" }),
+    page.getByRole("button", { name: "Fewer drinks" }),
   ).toBeDisabled();
-  await page.getByRole("button", { name: "More servings" }).click();
-  await expect(page.getByText("2 ×")).toBeVisible();
-  await page.getByRole("button", { name: "Fewer servings" }).click();
-  await expect(page.getByText("1 ×")).toBeVisible();
+  await page.getByRole("button", { name: "More drinks" }).click();
+  await expect(page.getByText("2 drinks")).toBeVisible();
+  await page.getByRole("button", { name: "Fewer drinks" }).click();
+  await expect(page.getByText("1 drink", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Start", exact: true }).click();
 
   // Step 1, then the timed step 2 with its countdown.
   await expect(page.getByText("Step 1 of 3")).toBeVisible();
   await expect(page.getByText(STEPS[0] ?? "")).toBeVisible();
   await page.getByRole("button", { name: "Next" }).click();
   await expect(page.getByText("Step 2 of 3")).toBeVisible();
-  const timer = page.getByRole("button", { name: "Start 0:30" });
-  await expect(timer).toBeVisible();
-  await timer.click();
-  await expect(
-    page.getByRole("button", { name: /left · Pause$/ }),
-  ).toBeVisible();
+  await expect(page.getByRole("timer")).toHaveText("0:30");
+  await page.getByRole("button", { name: "Start", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Pause" })).toBeVisible();
 
-  // Back and forward, then the last step's Next reads "Made it".
+  // Back and forward: the timer keeps running, shown beside the segments
+  // (ruling 4); the last step's Next reads "Made it".
   await page.getByRole("button", { name: "Back" }).click();
   await expect(page.getByText("Step 1 of 3")).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: /left on step 2$/ }),
+  ).toBeVisible();
   await page.getByRole("button", { name: "Next" }).click();
   await page.getByRole("button", { name: "Next" }).click();
   await expect(page.getByText("Step 3 of 3")).toBeVisible();
   await page.getByRole("button", { name: "Made it" }).click();
 
-  // Logged: a recipe-only log, and the optional rating is the recipe's own
-  // review form (L29).
-  await expect(page.getByText(`Made ${recipeName}`)).toBeVisible({
+  // Logged: a recipe-only log, the Made it screen with the recipe's own
+  // review form (L29), and the toast's Undo.
+  await expect(page.getByRole("heading", { name: "Made it" })).toBeVisible({
     timeout: 15_000,
   });
-  await expect(
-    page.getByText("It’s in your drinks.", { exact: false }),
-  ).toBeVisible();
+  await expect(page.getByText(`${recipeName} logged`)).toBeVisible();
   await expect.poll(myRecipeLogs, { timeout: 10_000 }).toHaveLength(1);
 
-  // Undo takes the log back.
+  // Undo takes the log back, and Make mode with it.
   await page.getByRole("button", { name: "Undo" }).click();
-  await expect(page.getByText("Log removed")).toBeVisible({ timeout: 10_000 });
   await expect.poll(myRecipeLogs, { timeout: 10_000 }).toHaveLength(0);
   await expect(page.getByText("Step 3 of 3")).toBeVisible();
 

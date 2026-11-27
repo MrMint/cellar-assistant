@@ -29,12 +29,69 @@ export const BarRecipeMatchFragment = graphql(`
 export type BarRecipeMatch = ResultOf<typeof BarRecipeMatchFragment>;
 
 /**
+ * One row of Your bar: the match, plus each ingredient's answer, so the row
+ * can name the bottles it pours ("Crystal Head Aurora +2") and the swap it
+ * makes ("Swap: Kraken for white rum"). `makeability` alone carries counts,
+ * not names. `ingredients(first: 20)`: no recipe has more, and 100 rows × 20
+ * keeps the read well under the API's row cost (`bar-cost.test.ts`).
+ */
+export const YourBarMatchFragment = graphql(`
+  fragment YourBarMatchData on BarRecipeMatch @_unmask {
+    __typename
+    recipeId
+    recipeGroupId
+    name
+    makeability {
+      status
+      missing
+      missingKinds
+      substituteCount
+      requiredCount
+      haveCount
+    }
+    recipe {
+      __typename
+      id
+      ingredients(first: 20) {
+        edges {
+          node {
+            id
+            isOptional
+            role
+            kindLabel
+            item {
+              __typename
+              id
+              name
+            }
+            genericItem {
+              id
+              name
+            }
+            availability {
+              status
+              source
+              label
+            }
+          }
+        }
+      }
+    }
+  }
+`);
+
+export type YourBarMatch = ResultOf<typeof YourBarMatchFragment>;
+
+/**
  * Rows per section. The API caps a page at 100; past it the count still says
  * how many there are.
  */
 export const BAR_SECTION_LIMIT = 100;
 
-/** `/recipes/bar`: both sections in one read. */
+/**
+ * Both sections in one read, matches only: what Browse's bar card (R2) reads
+ * for its counts. Your bar itself reads `YourBarQuery`.
+ */
 export const WhatCanIMakeQuery = graphql(
   `
   query WhatCanIMake($limit: Int!) {
@@ -66,6 +123,40 @@ export const WhatCanIMakeQuery = graphql(
   }
 `,
   [BarRecipeMatchFragment, ActorErrorFieldsFragment],
+);
+
+/** `/recipes/bar`: both sections in one read. */
+export const YourBarQuery = graphql(
+  `
+  query YourBar($limit: Int!) {
+    whatCanIMake(limit: $limit) {
+      __typename
+      ... on WhatCanIMake {
+        makeNowCount
+        oneBottleAwayCount
+        bottleCount
+        pantryCount
+        scanned
+        makeNow(first: 100) {
+          edges {
+            node {
+              ...YourBarMatchData
+            }
+          }
+        }
+        oneBottleAway(first: 100) {
+          edges {
+            node {
+              ...YourBarMatchData
+            }
+          }
+        }
+      }
+      ...ActorErrorFields
+    }
+  }
+`,
+  [YourBarMatchFragment, ActorErrorFieldsFragment],
 );
 
 /** `/recipes/bar/pantry`: which toggles are on. */

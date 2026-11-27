@@ -1,17 +1,17 @@
 import type { Metadata } from "next";
 import { Page } from "@/components/app/Page";
 import { BarAppBar } from "@/components/bar/BarAppBar";
-import { BAR_SECTION_LIMIT, WhatCanIMakeQuery } from "@/components/bar/queries";
+import { BAR_SECTION_LIMIT, YourBarQuery } from "@/components/bar/queries";
 import { WhatCanIMake } from "@/components/bar/WhatCanIMake";
+import { BarLoadError } from "@/components/bar/your-bar/BarLoadError";
 import { unwrapResult } from "@/lib/api/result";
 import { apiServerQuery } from "@/lib/api/urql-server";
 
-export const metadata: Metadata = { title: "What can I make" };
+export const metadata: Metadata = { title: "Your bar" };
 
 /**
- * `/recipes/bar` — **What can I make** (G29, D18): Make now · One bottle
- * away, from the viewer's own cellars and Bar pantry (D23). Under `/recipes`,
- * so the Cellar tab stays lit (its "Bar" segment, D1).
+ * `/recipes/bar` — **Your bar** (Recipes-Make board; G29, D18): Make now ·
+ * One bottle away, from the viewer's own cellars and pantry (D23).
  *
  * Read fresh on every visit: a bottle finished or a pantry toggle flipped a
  * moment ago has to show.
@@ -19,14 +19,13 @@ export const metadata: Metadata = { title: "What can I make" };
 export const dynamic = "force-dynamic";
 
 export default async function BarPage() {
-  const data = await apiServerQuery(WhatCanIMakeQuery, {
+  const data = await apiServerQuery(YourBarQuery, {
     limit: BAR_SECTION_LIMIT,
   });
   const result = unwrapResult(data.whatCanIMake, "WhatCanIMake");
 
   return (
     <Page>
-      <BarAppBar />
       {result.ok ? (
         <WhatCanIMake
           data={{
@@ -42,9 +41,10 @@ export default async function BarPage() {
           }}
         />
       ) : (
-        <p role="alert" className="type-body text-destructive">
-          {result.error.message}
-        </p>
+        <>
+          <BarAppBar />
+          <BarLoadError title="Couldn't load your bar" />
+        </>
       )}
     </Page>
   );

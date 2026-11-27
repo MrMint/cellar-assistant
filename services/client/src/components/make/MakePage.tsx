@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { ErrorState } from "@/components/app/EmptyState";
 import { recipeDetailsFromNode } from "@/components/recipe/adapter";
 import {
   RecipeDetailsFragment,
@@ -28,7 +29,12 @@ export async function MakePage({ recipeId }: { recipeId: string }) {
   const result = unwrapResult(data.recipe, "Recipe");
   if (!result.ok) {
     if (isNotFound(result.error)) notFound();
-    return <p className="type-body text-destructive">{result.error.message}</p>;
+    return (
+      <ErrorState
+        title="Couldn't open this recipe"
+        reason="Check your connection"
+      />
+    );
   }
   const recipe = recipeDetailsFromNode(
     readFragment(RecipeDetailsFragment, result.data),
