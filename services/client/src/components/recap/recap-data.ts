@@ -6,7 +6,11 @@
 import { ActorErrorFieldsFragment } from "@/lib/api/errors";
 import { graphql, type ResultOf } from "@/lib/api/graphql";
 import { unwrapResult } from "@/lib/api/result";
-import type { RecapCardView } from "./recap-copy";
+import {
+  type RecapCardView,
+  type RecapTotals,
+  recapEndStats,
+} from "./recap-copy";
 
 export const RecapCardFieldsFragment = graphql(`
   fragment RecapCardFields on RecapCard @_unmask {
@@ -51,6 +55,11 @@ export const RecapQuery = graphql(
       ... on Recap {
         period
         timeZone
+        totals {
+          checkIns
+          ratings
+          bottlesAdded
+        }
         cards {
           newToYou {
             ...RecapCardFields
@@ -98,12 +107,50 @@ export const BreadthStampsQuery = graphql(
   [ActorErrorFieldsFragment, BreadthStampSetFragment],
 );
 
+/**
+ * MC-recap: the periods with a recap, newest first. Months and years are two
+ * reads (one `kind` each), merged by `recapPeriodList`.
+ */
+export const RecapPeriodsQuery = graphql(
+  `
+  query RecapPeriods($timeZone: String!) {
+    months: recapPeriods(kind: MONTH, timeZone: $timeZone) {
+      __typename
+      ... on QueryRecapPeriodsSuccess {
+        data
+      }
+      ...ActorErrorFields
+    }
+    years: recapPeriods(kind: YEAR, timeZone: $timeZone) {
+      __typename
+      ... on QueryRecapPeriodsSuccess {
+        data
+      }
+      ...ActorErrorFields
+    }
+  }
+`,
+  [ActorErrorFieldsFragment],
+);
+
+/** The months and years with a recap, or `null` while unread or refused. */
+export const periodsFromResult = (
+  result: ResultOf<typeof RecapPeriodsQuery> | null | undefined,
+): { months: string[]; years: string[] } | null => {
+  const months = unwrapResult(result?.months, "QueryRecapPeriodsSuccess");
+  const years = unwrapResult(result?.years, "QueryRecapPeriodsSuccess");
+  return months.ok && years.ok
+    ? { months: [...months.data.data], years: [...years.data.data] }
+    : null;
+};
+
 export type RecapData = Extract<
   ResultOf<typeof RecapQuery>["recap"],
   { __typename: "Recap" }
 >;
 type StampSet = RecapData["stamps"];
 export type BreadthStampData = NonNullable<StampSet["styles"]>;
+export type RecapTotalsData = RecapData["totals"];
 
 /** A stamp set's earned stamps, in `BREADTH_STAMP_KINDS` order. */
 export const stampsOf = (
@@ -196,3 +243,36 @@ export const recapImagePath = (
   timeZone: string,
 ): string =>
   `/api/recap/${encodeURIComponent(ownerId)}/${encodeURIComponent(period)}/${index}?tz=${encodeURIComponent(timeZone)}`;
+
+/** The end card's face: the deck's counts as tiles, and the period's totals. */
+export type RecapEndView = {
+  readonly kind: "END";
+  readonly stats: readonly { readonly value: number; readonly label: string }[];
+  readonly totals: RecapTotals;
+};
+
+/** What a share image draws: one of the deck's cards, or the end card. */
+export type RecapShareFace = RecapCardView | RecapEndView;
+
+/**
+ * Face `index` of the shareable deck: the cards in `deckOf` order, then the
+ * end card (SR-5). `undefined` past the end, or for an empty deck, which has
+ * no end card to share.
+ */
+export const shareFaceAt = (
+  recap: RecapData,
+  index: number,
+): RecapShareFace | undefined => {
+  const deck = deckOf(recap);
+  if (index < deck.length) return deck[index];
+  if (index > deck.length || deck.length === 0) return undefined;
+  return {
+    kind: "END",
+    stats: recapEndStats(deck),
+    totals: {
+      checkIns: recap.totals.checkIns,
+      ratings: recap.totals.ratings,
+      bottlesAdded: recap.totals.bottlesAdded,
+    },
+  };
+};

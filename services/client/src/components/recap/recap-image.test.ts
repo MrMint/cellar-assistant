@@ -29,6 +29,7 @@ const recap: RecapData = {
   __typename: "Recap",
   period: "2026-10",
   timeZone: "UTC",
+  totals: { checkIns: 3, ratings: 2, bottlesAdded: 1 },
   cards: {
     newToYou: null,
     types: null,
@@ -99,7 +100,7 @@ describe("recap share-image route", () => {
       ["missing period", OWNER, { period: undefined }],
       ["malformed period", OWNER, { period: "2026-13" }],
       ["bad time zone", OWNER, { timeZone: "Not/AZone" }],
-      ["card past the deck", OWNER, { card: "1" }],
+      ["card past the end card", OWNER, { card: "2" }],
       ["non-numeric card", OWNER, { card: "first" }],
     ];
     const answers = [];
@@ -119,6 +120,30 @@ describe("recap share-image route", () => {
         cache: PRIVATE_NO_STORE,
       });
     }
+  });
+
+  test("the card after the last is the end card, with the period's totals (SR-5)", async () => {
+    const { value, rendered } = deps(OWNER);
+    const response = await handleRecapImage(request({ card: "1" }), value);
+    assert.equal(response.status, 200);
+    assert.deepEqual(rendered, [
+      {
+        kind: "END",
+        stats: [{ value: 6, label: "regions" }],
+        totals: { checkIns: 3, ratings: 2, bottlesAdded: 1 },
+      },
+    ]);
+  });
+
+  test("an empty deck has no end card to share: the same 404", async () => {
+    const empty: RecapData = {
+      ...recap,
+      cards: { ...recap.cards, regions: null },
+    };
+    const { value, rendered } = deps(OWNER, { loadRecap: async () => empty });
+    const response = await handleRecapImage(request({ card: "0" }), value);
+    assert.equal(response.status, 404);
+    assert.equal(rendered.length, 0);
   });
 
   test("another user never reaches the API read", async () => {
