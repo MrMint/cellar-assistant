@@ -10,29 +10,23 @@ export type PlaceHero = {
   category: string | null;
 };
 
-/** The hero and action sections' frame, as `PlaceDetails` draws them. */
-const SECTION = "rounded-lg bg-surface-1 p-4";
-
 /**
- * A place page while it loads (X24), in `PlaceDetails`' own sections: the
- * hero (B03's tonal hero with the name, then the rating and address lines), the action grid
- * (Directions, three rows of two, Add to Tier List), then the tabbed menu.
+ * A place page while it loads (X24), in the page's own frame: the 300 hero
+ * with the name under it, Your rank, the where card with Directions, the
+ * Visited / Want to try / Share row, then the Menu card.
  *
- * With a `hero` the tonal hero and the name are real — the server's existence check
- * already read them — so the page's one stable element is on screen as soon
- * as the route answers, outside every wait (design §4.4: heroes stay outside
- * Suspense, or B05's map-sheet → place morph never pairs). Without one (the
- * route's `loading.tsx`, before the server has answered) they are
- * placeholders in the same boxes.
+ * With a `hero` the glyph plate and the name are real — the server's
+ * existence check already read them — so the page's one stable element is on
+ * screen as soon as the route answers, outside every wait (design §4.4).
+ * Without one (the route's `loading.tsx`) they are placeholders in the same
+ * boxes.
  */
 export function PlaceDetailsShell({ hero }: { hero?: PlaceHero }) {
   return (
     <LoadingShell label={hero?.name ?? "the place"}>
       <Page>
-        <section className={`flex flex-col gap-4 ${SECTION}`}>
+        <div className="-mt-4">
           {hero !== undefined ? (
-            // B03: the same tonal hero the page draws, from the server's
-            // name and category; a photo, if any, arrives into this frame.
             <PlaceHeroCard
               name={hero.name}
               category={hero.category}
@@ -43,36 +37,40 @@ export function PlaceDetailsShell({ hero }: { hero?: PlaceHero }) {
               }
             />
           ) : (
-            <ShellBlocks>
-              <Skeleton className="h-40 w-full rounded-[20px]" />
+            <ShellBlocks className="-mx-4 flex flex-col gap-3">
+              <Skeleton className="h-[300px] w-full rounded-none" />
+              <div className="flex flex-col gap-2 px-4">
+                <Skeleton className="h-7 w-[60%]" />
+                <Skeleton className="h-4 w-[35%]" />
+              </div>
             </ShellBlocks>
           )}
-          <ShellBlocks className="flex flex-col gap-2">
-            <Skeleton className="h-4 w-[40%]" />
-            <Skeleton className="h-4 w-[80%]" />
-          </ShellBlocks>
-        </section>
-        <ShellBlocks className={`flex flex-col gap-3 ${SECTION}`}>
-          <Skeleton className="h-11 w-full" />
-          {["contact", "want-visited", "love-share"].map((row) => (
-            <div key={row} className="flex gap-2">
-              <Skeleton className="h-11 flex-1" />
-              <Skeleton className="h-11 flex-1" />
+        </div>
+        <ShellBlocks className="flex flex-col gap-3">
+          <Skeleton className="h-4 w-20" />
+          <div className="flex items-center gap-3">
+            <Skeleton className="h-11 w-[70px] rounded-lg" />
+            <div className="flex flex-1 flex-col gap-2">
+              <Skeleton className="h-4 w-16" />
+              <Skeleton className="h-3 w-24" />
             </div>
-          ))}
-          {/* Add to Tier List, full width. */}
+          </div>
+        </ShellBlocks>
+        <ShellBlocks className="flex flex-col gap-3 rounded-lg bg-surface-1 p-4">
+          <Skeleton className="h-4 w-[70%]" />
+          <Skeleton className="h-3 w-[40%]" />
           <Skeleton className="h-11 w-full" />
         </ShellBlocks>
-        <ShellBlocks className="flex flex-col rounded-lg bg-surface-1">
-          <div className="flex h-11 items-center gap-4 border-line border-b px-5">
-            <Skeleton className="h-4 w-14" />
-            <Skeleton className="h-4 w-14" />
-          </div>
-          <div className="flex flex-col gap-3 p-4">
-            <Skeleton className="h-5 w-[60%]" />
-            <Skeleton className="h-5 w-[45%]" />
-            <Skeleton className="h-5 w-[55%]" />
-          </div>
+        <ShellBlocks className="grid grid-cols-3 gap-2">
+          {["visited", "want", "share"].map((key) => (
+            <Skeleton key={key} className="h-11" />
+          ))}
+        </ShellBlocks>
+        <ShellBlocks className="flex flex-col gap-3 rounded-lg bg-surface-1 p-4">
+          <Skeleton className="h-3 w-12" />
+          <Skeleton className="h-5 w-[60%]" />
+          <Skeleton className="h-5 w-[45%]" />
+          <Skeleton className="h-5 w-[55%]" />
         </ShellBlocks>
       </Page>
     </LoadingShell>

@@ -1,9 +1,9 @@
 "use client";
 
 /**
- * `82450ad1:src/components/map/scanning/MenuScanner.tsx`, restored — the
- * place page's "Scan menu" tab, which is where scanning a menu starts. X07:
- * its copy names every type a line can be read as.
+ * The place page's "Scan a menu" (Places-Place 07, 08): a sheet with Take a
+ * photo / Choose a photo, then the progress in the Menu card itself (the
+ * `ScanSteps` card), then the results page once lines are read.
  *
  * `uploadAndProcessMenuScan(formData)` (a server action that uploaded to
  * Nhost and fired `processMenuScan` with the webhook secret) →
@@ -22,30 +22,21 @@
  * filed, which was the place page's refetch race.
  */
 
-import { useEffect, useRef, useState } from "react";
-import {
-  Camera,
-  ErrorIcon,
-  PhotoLibrary,
-  Success,
-  Visible,
-  Warning,
-} from "@/components/app/icons";
+import { type ReactNode, useEffect, useRef, useState } from "react";
+import { BottomSheet } from "@/components/app/BottomSheet";
+import { Camera, ICON_STROKE, PhotoLibrary } from "@/components/app/icons";
 import { Link } from "@/components/app/Link";
 import { ResponsiveDialog } from "@/components/app/ResponsiveDialog";
 import { useNavigate } from "@/components/app/useNavigate";
 import { kickAiJobs } from "@/components/home/ai-job-store";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { Spinner } from "@/components/ui/spinner";
+import { feedback } from "@/lib/feedback";
 import { CameraCapture } from "../../common/CameraCapture";
 import { type MenuScanStatus, usePlaceActions } from "../actions";
-import { ScanProgressBar } from "./ScanProgressBar";
-import { ScanStatusBadge } from "./ScanStatusBadge";
+import { ScanSteps } from "./ScanSteps";
 import {
   isExtractionDone,
   isScanSettled,
-  type ScanPhase,
   type ScanProgress,
   scanPhase,
   shouldOpenResults,
@@ -57,6 +48,11 @@ interface MenuScannerProps {
   /** The old `getServerUserId()`; unused — the API knows the viewer. */
   userId?: string;
   onScanComplete?: () => void;
+  /**
+   * What the card shows while no scan is running: given `start`, which opens
+   * the Take a photo / Choose a photo sheet.
+   */
+  idle: (start: () => void) => ReactNode;
 }
 
 /** A `data:` URL as a `File`, decoded in memory (no `fetch`, so no CSP). */
@@ -77,36 +73,53 @@ const progressOf = (status: MenuScanStatus | null): ScanProgress | null =>
         matchStatus: status.match_status,
       };
 
-const PHASES = ["uploading", "reading", "matching"] as const;
+/** A sheet row: glyph and words, 56 tall (Places-Place 07). */
+function SheetRow({
+  icon: Icon,
+  onSelect,
+  children,
+}: {
+  icon: typeof Camera;
+  onSelect: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        feedback("tick");
+        onSelect();
+      }}
+      className="t-body flex min-h-14 w-full items-center gap-4 rounded-lg px-2 text-left text-ink outline-none transition-transform duration-(--ca-dur-micro) focus-visible:ring-[3px] focus-visible:ring-ring/50 active:scale-[.97]"
+    >
+      <Icon
+        aria-hidden
+        strokeWidth={ICON_STROKE}
+        className="size-5 shrink-0 text-glyph"
+      />
+      {children}
+    </button>
+  );
+}
 
-const PHASE_CHIPS: Record<(typeof PHASES)[number], string> = {
-  uploading: "Upload",
-  reading: "Read",
-  matching: "Match",
-};
-
-const PHASE_LABELS: Record<ScanPhase, string> = {
-  uploading: "Uploading image...",
-  reading: "Reading the menu...",
-  matching: "Matching lines to the catalog...",
-  done: "",
-};
-
-export function MenuScanner({ placeId, onScanComplete }: MenuScannerProps) {
+export function MenuScanner({
+  placeId,
+  onScanComplete,
+  idle,
+}: MenuScannerProps) {
   const navigate = useNavigate();
   const { getMenuScanStatus, uploadAndProcessMenuScan } = usePlaceActions();
+  const [sheetOpen, setSheetOpen] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
   const [scanId, setScanId] = useState<string | null>(null);
   const [scanStatus, setScanStatus] = useState<MenuScanStatus | null>(null);
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [showCamera, setShowCamera] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const settledRef = useRef<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const progress = progressOf(scanStatus);
-  const processingStep = scanPhase(progress);
+  const phase = scanPhase(progress);
   const isComplete = scanStatus?.processing_status === "completed";
   const isFailed = scanStatus?.processing_status === "failed";
   const opensResults =
@@ -120,7 +133,7 @@ export function MenuScanner({ placeId, onScanComplete }: MenuScannerProps) {
   // fires then. A scan with lines hands off to the results page as soon as
   // extraction is done, which unmounts this and stops the loop; one with
   // none is `skipped` at once.
-  const { gaveUp, restart } = usePollWhile(
+  const { gaveUp } = usePollWhile(
     scanId !== null && progress !== null && !isScanSettled(progress),
     async () => {
       if (!scanId) return;
@@ -141,6 +154,7 @@ export function MenuScanner({ placeId, onScanComplete }: MenuScannerProps) {
     if (isExtractionDone(now)) setIsScanning(false);
     if (opensResults && handledRef.current.opened !== scanId) {
       handledRef.current.opened = scanId;
+      feedback("success");
       navigate.push(`/map/scans/${scanId}`);
     }
     if (isScanSettled(now) && settledRef.current !== scanId) {
@@ -180,275 +194,122 @@ export function MenuScanner({ placeId, onScanComplete }: MenuScannerProps) {
         place_id: placeId,
       });
     } else {
-      setUploadError(result.error || "Failed to start scan");
+      feedback("refuse");
+      setUploadError(result.error || "The photo didn't send.");
       setIsScanning(false);
     }
   };
 
-  // Revoke object URL on unmount to prevent memory leaks
-  useEffect(() => {
-    return () => {
-      if (previewUrl?.startsWith("blob:")) {
-        URL.revokeObjectURL(previewUrl);
-      }
-    };
-  }, [previewUrl]);
-
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (file) {
-      // Revoke previous object URL before creating a new one
-      if (previewUrl?.startsWith("blob:")) {
-        URL.revokeObjectURL(previewUrl);
-      }
-      setSelectedFile(file);
-      const url = URL.createObjectURL(file);
-      setPreviewUrl(url);
-    }
+    event.target.value = "";
+    if (file) void startScan(file);
   };
 
   const handleCameraCapture = async (imageDataUrl: string) => {
     setShowCamera(false);
-
-    const file = dataUrlToFile(imageDataUrl, `menu-scan-${Date.now()}.jpg`);
-
-    setSelectedFile(file);
-    setPreviewUrl(imageDataUrl);
-    await startScan(file);
-  };
-
-  const handleStartScan = async () => {
-    if (!selectedFile) return;
-    await startScan(selectedFile);
+    await startScan(dataUrlToFile(imageDataUrl, `menu-scan-${Date.now()}.jpg`));
   };
 
   const handleReset = () => {
-    setSelectedFile(null);
-    if (previewUrl) {
-      URL.revokeObjectURL(previewUrl);
-    }
-    setPreviewUrl(null);
     setScanId(null);
     setScanStatus(null);
     setUploadError(null);
   };
 
-  const showCaptureButtons = !selectedFile && !scanStatus && !isScanning;
-  const showPreview =
-    selectedFile && previewUrl && !scanStatus && !isScanning && !uploadError;
-  const showProcessing = isScanning && !isComplete && !isFailed;
-  const showResult = isComplete || isFailed || uploadError;
+  const start = () => setSheetOpen(true);
+  const running = isScanning && !isComplete && !isFailed;
 
   return (
-    <div className="flex flex-col gap-6">
-      <section className="rounded-xl bg-surface-1 p-4">
-        <h2 className="type-title-2 mb-4">Scan the drinks menu</h2>
-
-        <p className="type-body mb-6 text-ink-2">
-          Photograph the drinks menu and we&apos;ll read every line — wine,
-          beer, spirits, cocktails, sake, tea and coffee — sort it by type, and
-          match what we can to the catalog.
-        </p>
-
-        {showCaptureButtons && (
-          <div className="flex flex-col gap-4">
-            <div className="flex flex-row flex-wrap gap-4">
-              <Button size="lg" onClick={() => setShowCamera(true)}>
-                <Camera aria-hidden />
-                Take Photo
-              </Button>
-
-              <Button
-                variant="outline"
-                size="lg"
-                onClick={() => fileInputRef.current?.click()}
-              >
-                <PhotoLibrary aria-hidden />
-                Choose File
-              </Button>
-              <input
-                ref={fileInputRef}
-                id="camera-file-input"
-                type="file"
-                accept="image/*"
-                capture="environment"
-                onChange={handleFileSelect}
-                className="hidden"
-              />
-            </div>
-
-            <p className="type-footnote text-ink-2">
-              Best results with clear, well-lit photos. Make sure the text is
-              readable.
-            </p>
-          </div>
-        )}
-
-        {showPreview && (
-          <div className="flex flex-col gap-6">
-            <div className="relative mx-auto min-h-[200px] w-full max-w-[400px]">
-              {/* biome-ignore lint/performance/noImgElement: a local blob: preview of the chosen photo; nothing for /_next/image to optimise. */}
-              <img
-                src={previewUrl}
-                alt="Menu preview"
-                width={400}
-                height={300}
-                className="h-auto w-full rounded-md"
-              />
-            </div>
-
-            <p className="type-callout text-center">
-              <strong>{selectedFile.name}</strong> (
-              {(selectedFile.size / 1024 / 1024).toFixed(1)} MB)
-            </p>
-
-            <div className="flex flex-row flex-wrap justify-center gap-4">
-              <Button
-                size="lg"
-                onClick={handleStartScan}
-                disabled={isScanning}
-                aria-busy={isScanning}
-              >
-                {isScanning && <Spinner />}
-                Scan Menu
-              </Button>
-
-              <Button
-                variant="outline"
-                onClick={handleReset}
-                disabled={isScanning}
-              >
-                Choose Different Photo
-              </Button>
-            </div>
-          </div>
-        )}
-
-        {showProcessing && (
-          <div className="flex flex-col gap-4">
-            <ScanProgressBar label="Scanning the menu" />
-            <div className="flex flex-row items-center justify-center gap-2">
-              {PHASES.map((step, index) => {
-                const current = PHASES.indexOf(
-                  processingStep as (typeof PHASES)[number],
-                );
-                return (
-                  <ScanStatusBadge
-                    key={step}
-                    tone={
-                      processingStep === step
-                        ? "working"
-                        : index < current
-                          ? "success"
-                          : "neutral"
-                    }
-                    aria-current={processingStep === step ? "step" : undefined}
-                  >
-                    {PHASE_CHIPS[step]}
-                  </ScanStatusBadge>
-                );
-              })}
-            </div>
-            <p
-              aria-live="polite"
-              className="type-callout text-center text-ink-2"
-            >
-              {PHASE_LABELS[processingStep] || "Processing your menu image..."}
-            </p>
-            {gaveUp && (
-              <Alert className="flex flex-wrap items-center justify-between gap-2 bg-surface-2">
-                <span className="type-callout flex items-center gap-2">
-                  <Warning aria-hidden className="size-4 shrink-0" />
-                  This is taking longer than usual.
-                </span>
-                <Button variant="secondary" size="sm" onClick={restart}>
-                  Check again
-                </Button>
-              </Alert>
-            )}
-          </div>
-        )}
-
-        {showResult && (
-          <div className="flex flex-col gap-4">
-            {uploadError ? (
-              <Alert variant="destructive" className="border-destructive/60">
-                <ErrorIcon aria-hidden />
-                <AlertTitle>Upload Failed</AlertTitle>
-                <AlertDescription className="text-destructive/90">
-                  {uploadError}
-                </AlertDescription>
-              </Alert>
-            ) : opensResults ? (
-              <Alert className="border-success/40 text-success">
-                <Success aria-hidden />
-                <AlertDescription className="text-success">
-                  Read {scanStatus?.items_detected ?? 0}{" "}
-                  {scanStatus?.items_detected === 1 ? "line" : "lines"}. Opening
-                  the results...
-                </AlertDescription>
-              </Alert>
-            ) : isComplete ? (
-              <Alert className="bg-surface-2">
-                <ErrorIcon aria-hidden />
-                <AlertTitle>No drinks found</AlertTitle>
-                <AlertDescription className="text-ink-2">
-                  We couldn&apos;t read any menu lines in this photo. Try a
-                  closer, well-lit shot of the drinks list.
-                </AlertDescription>
-              </Alert>
-            ) : (
-              <Alert variant="destructive" className="border-destructive/60">
-                <ErrorIcon aria-hidden />
-                <AlertTitle>Scan Failed</AlertTitle>
-                <AlertDescription className="text-destructive/90">
-                  {scanStatus?.processing_error ||
-                    "Failed to process the menu image."}
-                </AlertDescription>
-              </Alert>
-            )}
-
-            <div className="flex flex-row flex-wrap justify-center gap-4">
-              {opensResults && scanId && (
-                <Button asChild>
-                  <Link href={`/map/scans/${scanId}`} underline="none">
-                    <Visible aria-hidden />
-                    View Results
-                  </Link>
-                </Button>
-              )}
-
-              <Button variant="outline" onClick={handleReset}>
-                Scan Another Menu
-              </Button>
-            </div>
-          </div>
-        )}
-      </section>
-
-      <section className="rounded-xl bg-surface-1 p-4">
-        <h3 className="type-headline mb-4">Tips for Better Results</h3>
-        <div className="flex flex-col gap-2">
-          <p className="type-callout">
-            Ensure the menu text is clear and well-lit
+    <div data-slot="menu-scanner" className="flex flex-col gap-3">
+      {running ? (
+        <ScanSteps phase={phase} slow={gaveUp} className="bg-transparent p-0" />
+      ) : uploadError || isFailed ? (
+        <div role="alert" className="flex flex-col gap-3">
+          <p className="t-head text-ink">Couldn&apos;t read this menu</p>
+          <p className="t-cap text-ink-2">
+            {uploadError ??
+              scanStatus?.processing_error ??
+              "Try a sharper photo, closer in."}
           </p>
-          <p className="type-callout">Hold the camera steady to avoid blur</p>
-          <p className="type-callout">
-            Take multiple photos if the menu spans several pages
-          </p>
-          <p className="type-callout">
-            Include every drinks section — wine, beer, spirits, cocktails, sake,
-            tea and coffee
-          </p>
+          <Button variant="outline" className="self-start" onClick={start}>
+            <Camera aria-hidden />
+            Try again
+          </Button>
         </div>
-      </section>
+      ) : opensResults && scanId ? (
+        <div className="flex items-center justify-between gap-3">
+          <p className="t-body text-ink">
+            Read {scanStatus?.items_detected ?? 0}{" "}
+            {scanStatus?.items_detected === 1 ? "line" : "lines"}
+          </p>
+          <Button variant="outline" asChild>
+            <Link href={`/map/scans/${scanId}`} underline="none">
+              See the lines
+            </Link>
+          </Button>
+        </div>
+      ) : isComplete ? (
+        <div className="flex flex-col gap-3">
+          <p className="t-head text-ink">No drinks on this photo</p>
+          <Button
+            variant="outline"
+            className="self-start"
+            onClick={() => {
+              handleReset();
+              start();
+            }}
+          >
+            <Camera aria-hidden />
+            Try another photo
+          </Button>
+        </div>
+      ) : (
+        idle(start)
+      )}
+
+      <input
+        ref={fileInputRef}
+        id="camera-file-input"
+        type="file"
+        accept="image/*"
+        onChange={handleFileSelect}
+        className="hidden"
+      />
+
+      <BottomSheet
+        open={sheetOpen}
+        onOpenChange={setSheetOpen}
+        title="Scan a menu"
+      >
+        <div className="flex flex-col pb-4">
+          <SheetRow
+            icon={Camera}
+            onSelect={() => {
+              setSheetOpen(false);
+              setShowCamera(true);
+            }}
+          >
+            Take a photo
+          </SheetRow>
+          <SheetRow
+            icon={PhotoLibrary}
+            onSelect={() => {
+              setSheetOpen(false);
+              fileInputRef.current?.click();
+            }}
+          >
+            Choose a photo
+          </SheetRow>
+        </div>
+      </BottomSheet>
 
       {/* Camera sheet (a dialog from md) */}
       <ResponsiveDialog
         open={showCamera}
         onOpenChange={setShowCamera}
-        title="Scan Menu"
-        description="Position the menu clearly in the frame and tap the capture button."
+        title="Scan a menu"
+        description="The drinks list, flat and well lit."
         className="sm:max-w-[600px]"
       >
         <div className="h-[400px]">
