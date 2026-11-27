@@ -194,8 +194,8 @@ function ReviewState({
         <PlaceReviewBadge status={status} />
         <p
           className={cn(
-            "type-callout",
-            status === "REJECTED" ? "text-ink-1" : "text-ink-2",
+            "t-body",
+            status === "REJECTED" ? "text-ink" : "text-ink-2",
           )}
           data-testid="place-review-explanation"
         >
@@ -323,7 +323,7 @@ function Suggestions({
   return (
     <div className="flex flex-col gap-3" data-testid="place-suggestions">
       <div className="flex flex-row items-center justify-between gap-2">
-        <h2 className="type-callout flex flex-row items-center gap-1.5 font-semibold text-ink-1">
+        <h2 className="t-body flex flex-row items-center gap-1.5 font-semibold text-ink">
           <AI
             aria-hidden
             strokeWidth={ICON_STROKE}
@@ -369,8 +369,8 @@ function Suggestions({
       )}
       {offerDescription && (
         <div className="flex flex-col gap-2 border-ai/60 border-l-2 pl-3">
-          <p className="type-footnote text-ai">Suggested description</p>
-          <p className="type-callout text-ink-1">{suggestedDescription}</p>
+          <p className="t-cap text-ai">Suggested description</p>
+          <p className="t-body text-ink">{suggestedDescription}</p>
           <Button
             variant="secondary"
             className="self-start"

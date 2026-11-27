@@ -70,7 +70,7 @@ export function ScanHistory() {
     return (
       <p
         role="alert"
-        className="type-callout rounded-md border border-destructive/60 px-4 py-3 text-destructive"
+        className="t-body rounded-md border border-destructive/60 px-4 py-3 text-danger"
       >
         {paged.failure.message}
       </p>
@@ -111,12 +111,12 @@ export function ScanHistory() {
                   href={`/map/scans/${scan.id}`}
                   overlay
                   underline="none"
-                  className="type-headline text-ink-1"
+                  className="t-head text-ink"
                 >
                   {scan.place?.name ?? "Unknown place"}
                 </Link>
                 {scan.scanned_at && (
-                  <p className="type-footnote text-ink-2">
+                  <p className="t-cap text-ink-2">
                     <Timestamp iso={scan.scanned_at} precision="datetime" />
                   </p>
                 )}
@@ -132,18 +132,18 @@ export function ScanHistory() {
 
             <div className="mt-2 flex gap-4">
               {scan.items_detected != null && (
-                <p className="type-footnote tabular text-ink-1">
+                <p className="t-cap tabular text-ink">
                   {scan.items_detected} items detected
                 </p>
               )}
               {scan.confidence_score != null && (
-                <p className="type-footnote tabular text-ink-1">
+                <p className="t-cap tabular text-ink">
                   {(scan.confidence_score * 100).toFixed(0)}% confidence
                 </p>
               )}
             </div>
             {scan.processing_error && (
-              <p className="type-footnote mt-1 text-destructive">
+              <p className="t-cap mt-1 text-danger">
                 {scan.processing_error}
               </p>
             )}

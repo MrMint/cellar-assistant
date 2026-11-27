@@ -47,7 +47,7 @@ export default async function EditPlacePage({ params }: EditPlacePageProps) {
 
   return (
     <div className="mx-auto max-w-[600px] px-4 py-4 md:py-8">
-      <h1 className="type-title-2 mb-6 text-ink-1">
+      <h1 className="t-title mb-6 text-ink">
         {data.reviewStatus === "REJECTED" ? "Edit & resubmit" : "Edit place"}
       </h1>
       <CreatePlaceForm

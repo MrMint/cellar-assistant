@@ -28,7 +28,7 @@ export function GoogleAttribution({
   );
   return (
     <p
-      className={cn("type-footnote mb-2 text-ink-3", className)}
+      className={cn("t-cap mb-2 text-ink-3", className)}
       data-testid="google-attribution"
     >
       Powered by Google

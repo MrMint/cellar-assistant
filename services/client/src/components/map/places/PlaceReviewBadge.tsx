@@ -30,7 +30,7 @@ export function PlaceReviewBadge({
       data-review-status={status}
       aria-label={badge.description}
       className={cn(
-        badge.tone === "pending" && "bg-surface-2 text-ink-1",
+        badge.tone === "pending" && "bg-surface-2 text-ink",
         className,
       )}
     >
