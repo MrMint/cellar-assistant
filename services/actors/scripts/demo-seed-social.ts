@@ -1,13 +1,9 @@
 /**
  * SV-C's demo-seed module (L36): the social states the recap, compare and
  * recipe screens need, on top of what `demo-seed.ts` has already made. It is
- * called once from `demo-seed.ts`, after its own steps, with the seed's
- * database handle:
- *
- * ```ts
- * import { seedDemoSocial } from "./demo-seed-social.ts";
- * await seedDemoSocial(db);
- * ```
+ * loaded by `demo-seed.ts` after its own steps, which calls its
+ * `seed(ctx: DemoSeedContext)` (the sibling-module contract in
+ * `demo-seed-data.ts`).
  *
  * What it adds, all among the fictional demo people of `demo-seed-data.ts`:
  *
@@ -24,8 +20,7 @@
  *
  * Both are rows the app makes through `voteOnRecipe` and `rateItem`, and
  * `demo-seed.ts` would make them through the API as each user. This module
- * has only the database handle (L36 fixes the call), so it writes them
- * directly, the same way `demo-seed.ts` already backdates reviews. Nothing
+ * writes them through the context's database handle, the same way `demo-seed.ts` already backdates reviews. Nothing
  * downstream is skipped: the community pick and an item's score are computed
  * on read; the one derived value a vote moves in-turn, the group's canonical
  * recipe, is unchanged by these votes (each group has one demo version).
@@ -40,6 +35,7 @@
 import type { createDb } from "@cellar-assistant/db";
 import { sql } from "@cellar-assistant/db/orm";
 import {
+  type DemoSeedContext,
   type DemoUserKey,
   ITEMS,
   type ItemType,
@@ -99,7 +95,13 @@ const first = async <T>(
   query: ReturnType<typeof sql>,
 ): Promise<T | undefined> => (await db.execute(query)).rows[0] as T | undefined;
 
-export const seedDemoSocial = async (db: Db): Promise<SocialSeedResult> => {
+/** Called once per row: whether this run created it (`ctx.count`). */
+type Tally = (step: string, created: boolean) => void;
+
+export const seedDemoSocial = async (
+  db: Db,
+  tally: Tally = () => {},
+): Promise<SocialSeedResult> => {
   const skipped: string[] = [];
   let votes = 0;
   let reviews = 0;
@@ -143,6 +145,7 @@ export const seedDemoSocial = async (db: Db): Promise<SocialSeedResult> => {
         returning id
       `);
       votes += inserted.rows.length;
+      tally("recipe votes (social)", inserted.rows.length > 0);
     }
   }
 
@@ -177,14 +180,26 @@ export const seedDemoSocial = async (db: Db): Promise<SocialSeedResult> => {
         sql`select 1 as one from public.item_reviews
             where user_id = ${test2}::uuid and ${column} = ${mine.item_id}::uuid`,
       );
-      if (exists !== undefined) continue;
+      if (exists !== undefined) {
+        tally("Test Two ratings (social)", false);
+        continue;
+      }
       await db.execute(sql`
         insert into public.item_reviews (user_id, ${column}, score)
         values (${test2}::uuid, ${mine.item_id}::uuid, ${score})
       `);
       reviews += 1;
+      tally("Test Two ratings (social)", true);
     }
   }
 
   return { votes, reviews, skipped };
+};
+
+/** The sibling-seed entry point `demo-seed.ts` calls (L36). */
+export const seed = async (ctx: DemoSeedContext): Promise<void> => {
+  const result = await seedDemoSocial(ctx.db as Db, ctx.count);
+  for (const what of result.skipped) {
+    console.warn(`[demo-seed-social] skipped: ${what} not found`);
+  }
 };
