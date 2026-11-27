@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
-import { ShellBlocks } from "@/components/app/LoadingShell";
 import { Page } from "@/components/app/Page";
+import { HomeColumns, HomeRowsFallback } from "@/components/home/HomeLayout";
 import {
   CollectionLine,
   ContinueSectionServer,
@@ -9,9 +9,9 @@ import {
   FriendsSection,
   InboxSection,
   NearbySectionServer,
+  NewPersonGate,
 } from "@/components/home/sections";
 import { TodayHeader } from "@/components/home/TodayHeader";
-import { Skeleton } from "@/components/ui/skeleton";
 import { getServerUser } from "@/utilities/auth-server";
 
 export const metadata: Metadata = { title: "Home" };
@@ -19,30 +19,31 @@ export const metadata: Metadata = { title: "Home" };
 export const dynamic = "force-dynamic";
 
 /**
- * `/` — Home, "Today" (roadmap X10, decision D1). Every landing comes here:
- * sign-in, sign-up and the installed app's `start_url`.
+ * `/` — Home (the Landing and Shell-Home boards; L22: there is no signed-out
+ * landing). Every landing comes here: sign-in, sign-up and the installed
+ * app's `start_url`.
  *
- * Top to bottom, in the order a thumb wants them:
+ * Top to bottom on a phone, and the left column from `md`:
  *
- * 1. **The greeting and the search field.** Search is a full-screen sheet
- *    (`/search`), opened from here or by tapping Home again at the top.
- * 2. **The AI job tray** — what is reading right now, and what failed — and
- *    **Waiting on you**: menu matches to confirm, capture drafts to check,
- *    friend requests, finished insights and reads. This is where
- *    `/discoveries` and the `/map/scans` list went.
- * 3. **Continue**: your open bottles across every cellar, each with Pour;
- *    then **Drink soon** — deterministic, from the style table (D29).
- * 4. **Friends ranked** (D1) and the **Friends** feed: sentences, bursts
- *    folded, paged.
- * 5. **Nearby**, after D14's one-line reason when the browser has not been
- *    asked yet.
+ * 1. **The greeting, the count and the search field** (Scan, Photo).
+ * 2. **The AI tray** (no header: failures first) and **Waiting on you**
+ *    (matches, Needs details, n to check, friend requests, finished reads).
+ * 3. **Open**: the open bottles as tiles, the furthest past its best first,
+ *    and "Rate the n"; then **Drink soon**: sealed bottles whose window is
+ *    ending, each with Open (Shell-Home ruling 1).
+ * 4. **Nearby**, place-aware: "You're at …" within 25 m (DECISIONS 23).
  *
- * Each section streams in, and fails, on its own (`components/home/sections`).
+ * The right column from `md`, after the rest on a phone: **Friends ranked**
+ * and the **Friends** feed.
+ *
+ * A new person (no bottles yet) gets the hero empty state instead, and no
+ * count that isn't theirs (CROSS-LOT 3). Each section streams in, and fails,
+ * on its own (`components/home/sections`).
  */
 export default async function Today() {
   const user = await getServerUser();
   return (
-    <Page className="pb-6">
+    <Page wide className="pb-6">
       <TodayHeader
         displayName={user.displayName}
         collectionLine={
@@ -51,43 +52,38 @@ export default async function Today() {
           </Suspense>
         }
       />
-      <Suspense fallback={null}>
-        <InboxSection />
-      </Suspense>
-      <Suspense fallback={<ContinueFallback />}>
-        <ContinueSectionServer />
-      </Suspense>
-      <Suspense fallback={null}>
-        <FriendsRankedSection />
-      </Suspense>
-      <Suspense fallback={<RowsFallback />}>
-        <FriendsSection viewerId={user.id} />
-      </Suspense>
-      <Suspense fallback={null}>
-        <NearbySectionServer />
+      <Suspense fallback={<HomeRowsFallback />}>
+        <NewPersonGate
+          inbox={<InboxSection />}
+          full={
+            <HomeColumns
+              main={
+                <>
+                  <Suspense fallback={null}>
+                    <InboxSection />
+                  </Suspense>
+                  <Suspense fallback={<HomeRowsFallback tiles />}>
+                    <ContinueSectionServer />
+                  </Suspense>
+                  <Suspense fallback={null}>
+                    <NearbySectionServer />
+                  </Suspense>
+                </>
+              }
+              side={
+                <>
+                  <Suspense fallback={null}>
+                    <FriendsRankedSection />
+                  </Suspense>
+                  <Suspense fallback={<HomeRowsFallback />}>
+                    <FriendsSection viewerId={user.id} />
+                  </Suspense>
+                </>
+              }
+            />
+          }
+        />
       </Suspense>
     </Page>
-  );
-}
-
-function ContinueFallback() {
-  return (
-    <ShellBlocks className="flex flex-col gap-2">
-      <Skeleton className="mx-4 h-4 w-20" />
-      <div className="flex gap-3 overflow-hidden">
-        {[0, 1, 2].map((key) => (
-          <Skeleton key={key} className="h-72 w-36 shrink-0 rounded-md" />
-        ))}
-      </div>
-    </ShellBlocks>
-  );
-}
-
-function RowsFallback() {
-  return (
-    <ShellBlocks className="flex flex-col gap-2">
-      <Skeleton className="mx-4 h-4 w-16" />
-      <Skeleton className="h-48 w-full rounded-lg" />
-    </ShellBlocks>
   );
 }

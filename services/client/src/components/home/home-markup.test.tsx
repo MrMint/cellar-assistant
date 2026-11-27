@@ -45,6 +45,7 @@ const { ContinueSection } = await import("./ContinueShelf");
 const { FriendsFeed } = await import("./FriendsFeed");
 const { NearbySection, HOME_LOCATION_COPY } = await import("./NearbySection");
 const { TodayHeader } = await import("./TodayHeader");
+const { NewPersonHero } = await import("./HomeLayout");
 const { SearchSheetHeader } = await import("../search/SearchSheetHeader");
 const { seenHash } = await import("./seen-cookie");
 const { seenKeyOf } = await import("./inbox");
@@ -87,6 +88,24 @@ describe("TodayHeader", () => {
     assert.equal(html.match(/<h1\b/g)?.length, 1);
     assert.match(html, /href="\/search"/);
     assert.match(html, /aria-label="Search bottles, places and recipes"/);
+    const words = text(html);
+    assert.match(words, /Bottles, places, lists/);
+    assert.match(words, /Scan/);
+    assert.match(words, /Photo/);
+  });
+
+  test("a new person: the hero, one way on, and no number anywhere", () => {
+    const html = render(
+      <>
+        <TodayHeader displayName="Riley Park" collectionLine={null} />
+        <NewPersonHero />
+      </>,
+    );
+    const words = text(html);
+    assert.match(words, /Start with a bottle/);
+    assert.match(words, /Snap its label to add it/);
+    assert.match(html, /href="\/add\?mode=bottle"/);
+    assert.doesNotMatch(words, /\d/, "no count that isn't theirs");
   });
 });
 
@@ -195,98 +214,101 @@ describe("ContinueSection", () => {
     style,
     form: null,
     styleFields: { style, variety: null, form: null },
+    rating: null as number | null,
+    maker: null,
   });
 
-  test("open bottles with Pour, and Drink soon labelled by its style", () => {
+  test("Open: tiles past their best first, the rest with their level; no Pour in a tile", () => {
     const html = render(
       <ContinueSection
-        bottles={[bottle("a", "RED", 6), bottle("b", null, 30)]}
-        serverNow={NOW}
-      />,
-    );
-    const words = text(html);
-    assert.match(words, /Continue/);
-    assert.match(words, /2 open/);
-    assert.equal(html.match(/aria-label="Pour Wine a"/g)?.length, 2);
-    assert.match(words, /Drink soon/);
-    assert.match(words, /Typical for red wine once open: 3–5 days/);
-    // No style, no window (D29): b is open but never under Drink soon.
-    assert.equal(html.match(/aria-label="Pour Wine b"/g)?.length, 1);
-  });
-
-  test("the shelf holds a dozen; Drink soon ranks the longest open past it", () => {
-    // Newest opened first, as `me.openBottles` reads: the overdue red is the
-    // fourteenth, past the shelf's dozen — exactly the one Drink soon is for.
-    const recent = Array.from({ length: 13 }, (_, index) =>
-      bottle(`n${index}`, null, 0),
-    );
-    const html = render(
-      <ContinueSection
-        bottles={[...recent, bottle("old", "RED", 9)]}
+        bottles={[bottle("fresh", "RED", 0), bottle("old", "RED", 9)]}
         total={20}
         serverNow={NOW}
       />,
     );
-    assert.equal(html.match(/data-slot="open-bottle"/g)?.length, 12);
-    assert.match(text(html), /20 open/);
-    assert.match(text(html), /Drink soon/);
-    assert.equal(html.match(/aria-label="Pour Wine old"/g)?.length, 1);
-    assert.match(text(html), /Open 9 days · Typical for red wine/);
-  });
-
-  test("Pour is at least 44x44 on the shelf and in Drink soon (L27)", () => {
-    const html = render(
-      <ContinueSection bottles={[bottle("a", "RED", 6)]} serverNow={NOW} />,
+    const words = text(html);
+    assert.match(words, /Open 20/);
+    assert.equal(html.match(/data-slot="open-bottle"/g)?.length, 2);
+    assert.ok(
+      words.indexOf("Wine old") < words.indexOf("Wine fresh"),
+      "the furthest past its best leads",
     );
-    const pours = [
-      ...html.matchAll(/<button[^>]*aria-label="Pour Wine a"[^>]*>/g),
-    ].map((m) => m[0]);
-    assert.equal(pours.length, 2);
-    for (const tag of pours) assert.match(tag, /min-h-11/);
-    // The row's Pour is a compact button, so it carries its width too.
-    assert.ok(pours.some((tag) => /min-w-11/.test(tag)));
+    assert.match(words, /Past its best/);
+    assert.match(words, /Open · 40%/);
+    assert.doesNotMatch(words, /Pour/, "Pour lives on the bottle card");
+    assert.match(html, /href="\/cellars\/c1\/wines\/old"/);
   });
 
-  test("Drink soon: opened first, then sealed bottles closing soon (L02)", () => {
-    const sealed = [
-      {
-        id: "s1",
-        href: "/cellars/c1/beers/s1",
-        type: "BEER" as const,
-        title: "Hazy One",
-        name: "Hazy One",
-        past: false,
-        line: "Sealed · window ends Jan 2027 · typical for IPA",
-      },
-    ];
+  test("Rate the n counts the open bottles without the owner's rating, and goes to the first", () => {
+    const html = render(
+      <ContinueSection
+        bottles={[
+          { ...bottle("rated", null, 1), rating: 4 },
+          bottle("u1", null, 1),
+          bottle("u2", null, 1),
+        ]}
+        serverNow={NOW}
+      />,
+    );
+    assert.match(text(html), /Rate the 2/);
+    assert.match(
+      html,
+      /href="\/cellars\/c1\/wines\/u1"[^>]*>[\s\S]*?Rate the 2/,
+    );
+    const none = render(
+      <ContinueSection
+        bottles={[{ ...bottle("rated", null, 1), rating: 4 }]}
+        serverNow={NOW}
+      />,
+    );
+    assert.doesNotMatch(text(none), /Rate the/);
+  });
+
+  test("Drink soon: sealed rows only, each with a 44 Open, four then Show more", () => {
+    const sealedRow = (id: string) => ({
+      id,
+      cellarId: "c1",
+      href: `/cellars/c1/beers/${id}`,
+      type: "BEER" as const,
+      title: `Hazy ${id}`,
+      name: `Hazy ${id}`,
+      photoUrl: null,
+      past: true,
+      line: "Sealed · ended Jan 2026",
+      typical: "Typical for IPA",
+    });
     const html = render(
       <ContinueSection
         bottles={[bottle("a", "RED", 6)]}
-        sealed={sealed}
+        sealed={["s1", "s2", "s3", "s4", "s5"].map(sealedRow)}
+        sealedTotal={9}
         serverNow={NOW}
       />,
     );
     const words = text(html);
-    assert.match(words, /Sealed · window ends Jan 2027 · typical for IPA/);
-    assert.ok(
-      words.indexOf("Typical for red wine") < words.indexOf("Sealed ·"),
-      "opened rows come first",
-    );
-    assert.match(html, /aria-label="Open Hazy One"/);
-    assert.match(html, /href="\/cellars\/c1\/beers\/s1"/);
-    // H-19: a sealed row is still a list row (m07-home-today finds rows by
-    // `data-slot="list-row"`); what kind of row it is goes in `data-kind`.
-    assert.match(
-      html,
-      /data-slot="list-row"[^>]*data-kind="drink-soon-sealed"/,
-      "the sealed row keeps ListRow's slot",
-    );
+    assert.match(words, /Drink soon 9/);
+    assert.match(words, /Sealed · ended Jan 2026/);
+    assert.match(words, /Typical for IPA/);
+    assert.equal(html.match(/data-kind="drink-soon-sealed"/g)?.length, 4);
+    assert.match(words, /Show more · 1/);
+    const open = html.match(/<button[^>]*aria-label="Open Hazy s1"[^>]*>/)?.[0];
+    assert.ok(open !== undefined);
+    assert.match(open, /h-11/, "Open is 44 tall (KIT § 2 buttons)");
+    // The opened bottle is in the rail, never a Drink soon row.
+    assert.doesNotMatch(html, /aria-label="Open Wine a"/);
 
-    // Nothing open: no shelf, but the sealed rows still draw.
+    // Nothing open: no rail, but the sealed rows still draw.
     const only = render(
-      <ContinueSection bottles={[]} sealed={sealed} serverNow={NOW} />,
+      <ContinueSection
+        bottles={[]}
+        sealed={[sealedRow("s1")]}
+        serverNow={NOW}
+      />,
     );
-    assert.doesNotMatch(text(only), /Continue/);
+    assert.doesNotMatch(
+      html.length > 0 ? text(only) : "",
+      /Past its best|Rate the/,
+    );
     assert.match(text(only), /Drink soon/);
   });
 
@@ -306,7 +328,7 @@ describe("FriendsFeed", () => {
         viewerId="v"
       />,
     );
-    assert.match(text(html), /Taste is better compared\./);
+    assert.match(text(html), /Taste is better compared/);
   });
 
   test("friends with nothing yet: the section stays out of the way", () => {
@@ -365,6 +387,16 @@ describe("FriendsFeed", () => {
     assert.match(text(html), /Sam made Negroni/);
     assert.match(html, /data-thumb="recipe"/);
     assert.doesNotMatch(html, /data-thumb="place"/);
+    // F2b's activity card, under the four chips with All on.
+    assert.match(html, /data-slot="activity-item"/);
+    assert.deepEqual(
+      [
+        ...html.matchAll(
+          /aria-pressed="(true|false)"[^>]*>(?:<[^>]+>)*([A-Za-z]+)</g,
+        ),
+      ].map((m) => `${m[2]}:${m[1]}`),
+      ["All:true", "Rated:false", "Ranked:false", "Added:false"],
+    );
   });
 });
 

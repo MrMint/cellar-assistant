@@ -296,3 +296,26 @@ export const groupBursts = (entries: readonly FeedEntry[]): FeedBurst[] => {
 /** A sentence as plain text, for an accessible name or a test. */
 export const sentenceText = (sentence: readonly Token[]): string =>
   sentence.map((token) => token.text).join("");
+
+/** Shell-Home's feed chips: what kind of thing a friend did. */
+export const FEED_FILTERS = ["All", "Rated", "Ranked", "Added"] as const;
+export type FeedFilter = (typeof FEED_FILTERS)[number];
+
+const FILTER_KINDS: Record<
+  Exclude<FeedFilter, "All">,
+  readonly FeedBurst["kind"][]
+> = {
+  // A logged glass carries its own stars, so it reads as a rating too.
+  Rated: ["reviewed", "drank"],
+  Ranked: ["tier-listed"],
+  Added: ["added"],
+};
+
+/** The bursts a chip keeps; "All" keeps every one. */
+export const filterBursts = (
+  bursts: readonly FeedBurst[],
+  filter: FeedFilter,
+): readonly FeedBurst[] =>
+  filter === "All"
+    ? bursts
+    : bursts.filter((burst) => FILTER_KINDS[filter].includes(burst.kind));

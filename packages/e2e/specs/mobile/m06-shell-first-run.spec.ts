@@ -97,12 +97,15 @@ test("a brand-new account: lands Home, has My Cellar, and every empty screen off
     await expect(page).toHaveURL(/^https?:\/\/[^/]+\/(?:\?.*)?$/, {
       timeout: 30_000,
     });
-    // A brand-new account has no bottles: Home's one first-run line and
-    // action, and no friends: N15's invite.
-    await expect(page.getByText("Your cellar is waiting.")).toBeVisible({
-      timeout: 20_000,
-    });
-    await expect(page.getByText("Taste is better compared.")).toBeVisible();
+    // A brand-new account has no bottles: the new-person Home, the bottle
+    // glyph, one line and one way on, the camera — and no count that isn't
+    // theirs (CROSS-LOT 3): not one digit on the page's main.
+    const start = page.getByRole("region", { name: "Start with a bottle" });
+    await expect(start).toBeVisible({ timeout: 20_000 });
+    await expect(
+      start.getByRole("link", { name: "Open camera" }),
+    ).toHaveAttribute("href", "/add?mode=bottle");
+    await expect(page.getByRole("main")).not.toContainText(/\d/);
 
     // The starter cellar is made through the outbox, a few seconds behind
     // the sign-up: poll for it rather than racing it.

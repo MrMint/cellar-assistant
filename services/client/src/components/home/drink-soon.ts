@@ -144,3 +144,40 @@ export const drinkSoonList = <
       return state === null ? [] : [{ bottle, state }];
     })
     .sort((a, b) => b.state.ratio - a.state.ratio);
+
+/** The badge on an Open rail tile: "Past its best", or "Open · 16%". */
+export type RailBadge = { readonly past: boolean; readonly text: string };
+
+/**
+ * The Open rail (Shell-Home ruling 1): every open bottle, the furthest past
+ * its window first, then the rest in the order they came (newest opened);
+ * a bottle past its style's span wears "Past its best", any other its level.
+ */
+export const openRail = <
+  T extends StyleFields & {
+    readonly openAt: string | null;
+    readonly emptyAt?: string | null;
+    readonly percentageRemaining: number;
+  },
+>(
+  bottles: readonly T[],
+  now: number,
+): { bottle: T; badge: RailBadge }[] =>
+  bottles
+    .map((bottle, index) => {
+      const state = drinkSoonState(bottle, now);
+      const past = state?.urgency === "past";
+      return {
+        bottle,
+        index,
+        ratio: past ? (state?.ratio ?? 0) : -1,
+        badge: past
+          ? { past: true, text: "Past its best" }
+          : {
+              past: false,
+              text: `Open · ${Math.round(bottle.percentageRemaining)}%`,
+            },
+      };
+    })
+    .sort((a, b) => b.ratio - a.ratio || a.index - b.index)
+    .map(({ bottle, badge }) => ({ bottle, badge }));

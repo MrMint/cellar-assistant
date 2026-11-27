@@ -59,6 +59,25 @@ export const HomeContinueQuery = graphql(`
               type
               name
               country
+              myReview {
+                __typename
+                id
+                score
+              }
+              brands(first: 3) {
+                edges {
+                  node {
+                    __typename
+                    id
+                    isPrimary
+                    brand {
+                      __typename
+                      id
+                      name
+                    }
+                  }
+                }
+              }
               ... on Wine {
                 __typename
                 vintage
@@ -146,13 +165,19 @@ export const AiJobsQuery = graphql(
   [AiJobFieldsFragment],
 );
 
+/** How many open bottles "n to check" looks through (`unconfirmedFields`). */
+export const TO_CHECK_READ = 100;
+
 /**
  * "Waiting on you" and the job tray: the AI work, menu matches to confirm
- * (the viewer's own scans, `myDiscoveries`) and friend requests to answer.
+ * (the viewer's own scans, `myDiscoveries`), friend requests to answer, the
+ * saved drafts that need details (MC-drafts, L41), the open bottles with a
+ * guessed field never checked ("n to check"), and the AI allowance, so
+ * "Limit reached" can name its reset (MC-quota).
  */
 export const HomeInboxQuery = graphql(
   `
-  query HomeInbox {
+  query HomeInbox($toCheck: Int!) {
     me {
       __typename
       id
@@ -163,6 +188,38 @@ export const HomeInboxQuery = graphql(
           }
         }
       }
+      openBottles(first: $toCheck) {
+        edges {
+          node {
+            __typename
+            id
+            cellarId
+            item {
+              __typename
+              id
+              type
+              name
+              unconfirmedFields
+            }
+          }
+        }
+      }
+    }
+    needsDetailsCount
+    myAiQuota(first: 20) {
+      __typename
+      ... on AiQuotaConnection {
+        edges {
+          node {
+            __typename
+            kind
+            used
+            limit
+            resetsAt
+          }
+        }
+      }
+      ...ActorErrorFields
     }
     myDiscoveries(first: 50) {
       __typename
@@ -404,6 +461,7 @@ export const HomeDrinkSoonQuery = graphql(`
       __typename
       id
       drinkSoon(first: $first) {
+        totalCount
         edges {
           node {
             reason
@@ -417,6 +475,15 @@ export const HomeDrinkSoonQuery = graphql(`
               __typename
               id
               cellarId
+              displayImage {
+                __typename
+                id
+                file {
+                  __typename
+                  id
+                  url
+                }
+              }
               item {
                 __typename
                 id

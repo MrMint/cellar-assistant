@@ -13,16 +13,17 @@ import { Gql, settleNetwork } from "../../fixtures/test.ts";
 /**
  * X10 · Home "Today" at 390x844, on touch.
  *
- * - `/` is Home: one h1 (the greeting), a search field that opens the
- *   full-screen search sheet (no tab bar there), whose Close comes back; a
- *   second tap on Home at the top opens search too.
- * - Continue: an open bottle with Pour, which opens the drink-log sheet.
- * - Drink soon: a bottle open past its style's window, labelled "Typical for
- *   <style> once open" — a table, never a model (D29); then (L02) a sealed
- *   bottle whose own drink-by date is a month away, "Sealed · your date:
- *   drink by <Mon YYYY>", after the opened ones. Pour is at least 44x44 (L27).
- * - Friends: a friend's rating reads as a sentence, and a friend's PRIVATE
- *   list never shows.
+ * - `/` is Home: one h1, a search pill that opens the full-screen search
+ *   sheet (no tab bar there), whose Close comes back; a second tap on the
+ *   Search tab at the top opens search too.
+ * - Open: the rail of open bottles as cellar tiles; the one past its style's
+ *   window (D29) leads with "Past its best", the fresh one reads
+ *   "Open · n%". No Pour in a tile's foot (CROSS-LOT).
+ * - Drink soon is sealed only (L02): a sealed bottle whose own drink-by date
+ *   is a month away, "Sealed · your date: drink by <Mon YYYY>", with Open,
+ *   at least 44x44 (L27), which opens it at once with Undo.
+ * - Friends: a friend's rating reads as a sentence in an activity card, the
+ *   Ranked chip narrows it away, and a friend's PRIVATE list never shows.
  * - `/discoveries` and `/map/scans` land on Home's inbox.
  *
  * Fixtures: one cellar of two teas (teas, because `createItem` writes one
@@ -229,7 +230,7 @@ test("/ is Home: one h1, and its search field opens the search sheet and comes b
   await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
   const nav = await bottomNav(page);
   await expect(
-    nav.getByRole("link", { name: "Home", exact: true }),
+    nav.getByRole("link", { name: "Search", exact: true }),
   ).toHaveAttribute("aria-current", "page");
 
   await searchField(page).tap();
@@ -246,70 +247,61 @@ test("/ is Home: one h1, and its search field opens the search sheet and comes b
   await expect(page.locator('nav[data-slot="tab-bar"]')).toBeVisible();
 });
 
-test("tapping Home again at the top opens search", async ({ page }) => {
+test("tapping Search again at the top opens search", async ({ page }) => {
   await page.goto("/");
   const nav = await bottomNav(page);
   await settleNetwork(page);
-  await nav.getByRole("link", { name: "Home", exact: true }).tap();
+  await nav.getByRole("link", { name: "Search", exact: true }).tap();
   await expect(page).toHaveURL(/\/search$/);
 });
 
-test("Continue: the open bottle, with Pour opening the drink-log sheet", async ({
+test("Open: past its best leads the rail, the fresh bottle shows its level, no Pour", async ({
   page,
 }) => {
   await page.goto("/");
-  const card = page
-    .locator('[data-slot="open-bottle"]')
-    .filter({ hasText: names.fresh });
-  await expect(card).toBeVisible({ timeout: 20_000 });
-  await expect(card).toContainText(/Open · .*%/);
-  await card.getByRole("button", { name: `Pour ${names.fresh}` }).tap();
-  await expect(page.getByRole("dialog")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Log it" })).toBeVisible();
+  const tiles = page.locator('[data-slot="open-bottle"]');
+  const stale = tiles.filter({ hasText: names.stale });
+  const fresh = tiles.filter({ hasText: names.fresh });
+  await expect(fresh).toBeVisible({ timeout: 20_000 });
+  await expect(fresh).toContainText(/Open · \d+%/);
+  await expect(stale).toContainText("Past its best");
+  await expect(stale).toHaveAttribute("data-past", "true");
+  // Past its best comes first.
+  const texts = await tiles.allTextContents();
+  expect(texts.findIndex((t) => t.includes(names.stale))).toBeLessThan(
+    texts.findIndex((t) => t.includes(names.fresh)),
+  );
+  // The tile is a link to the bottle; nothing in its foot pours.
+  await expect(fresh.getByRole("link", { name: names.fresh })).toBeVisible();
+  await expect(fresh.getByRole("button", { name: /^Pour/ })).toHaveCount(0);
 });
 
-test("Drink soon: a bottle past its style's window, labelled with the style (D29)", async ({
+test("Drink soon: a sealed bottle whose own date is close, with Open and Undo (L02)", async ({
   page,
 }) => {
   await page.goto("/");
   const section = page.getByRole("region", { name: "Drink soon" });
-  const row = section.locator('[data-slot="list-row"]').filter({
-    hasText: names.stale,
-  });
-  await expect(row).toBeVisible({ timeout: 20_000 });
-  await expect(row).toContainText(/Open 8\d\d days/);
-  await expect(row).toContainText(/Typical for .+ once open: /);
-  // Opened just now, the other tea is open but not yet "soon".
-  await expect(section).not.toContainText(names.fresh);
-
-  // The row's Pour is a 44x44 target at least (L27).
-  const pour = row.getByRole("button", { name: `Pour ${names.stale}` });
-  const box = await pour.boundingBox();
-  expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
-  expect(box?.width ?? 0).toBeGreaterThanOrEqual(44);
-});
-
-test("Drink soon: a sealed bottle whose own date is close, after the opened ones (L02)", async ({
-  page,
-}) => {
-  await page.goto("/");
-  const section = page.getByRole("region", { name: "Drink soon" });
-  const rows = section.locator('[data-slot="list-row"]');
-  const sealed = rows.filter({ hasText: names.sealed });
+  const sealed = section
+    .locator('[data-kind="drink-soon-sealed"]')
+    .filter({ hasText: names.sealed });
   await expect(sealed).toBeVisible({ timeout: 20_000 });
   await expect(sealed).toContainText(
     `Sealed · your date: drink by ${inAMonth.label}`,
   );
-  // Sealed rows come after every opened one.
-  const texts = await rows.allTextContents();
-  const stale = texts.findIndex((t) => t.includes(names.stale));
-  const sealedAt = texts.findIndex((t) => t.includes(names.sealed));
-  expect(stale).toBeGreaterThanOrEqual(0);
-  expect(sealedAt).toBeGreaterThan(stale);
-  // Its verb is Open: the bottle's page, not a pour.
-  await expect(
-    sealed.getByRole("link", { name: `Open ${names.sealed}` }),
-  ).toBeVisible();
+  // Sealed only: the opened teas are on the Open rail, not here.
+  await expect(section).not.toContainText(names.stale);
+  await expect(section).not.toContainText(names.fresh);
+
+  const open = sealed.getByRole("button", { name: `Open ${names.sealed}` });
+  const box = await open.boundingBox();
+  expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
+  expect(box?.width ?? 0).toBeGreaterThanOrEqual(44);
+  await open.tap();
+  await expect(sealed).toHaveCount(0);
+  await expect(page.getByText(`${names.sealed} opened`)).toBeVisible();
+  // Undo puts it back to sealed.
+  await page.getByRole("button", { name: "Undo" }).tap();
+  await expect(sealed).toBeVisible();
 });
 
 test("Friends: a friend's rating reads as a sentence; their PRIVATE list never shows", async ({
@@ -318,10 +310,19 @@ test("Friends: a friend's rating reads as a sentence; their PRIVATE list never s
   await page.goto("/");
   const friends = page.getByRole("region", { name: "Friends", exact: true });
   await expect(friends).toBeVisible({ timeout: 20_000 });
-  await expect(
-    friends.getByRole("article").filter({ hasText: names.rated }).first(),
-  ).toContainText(/rated .+ ★4\.5/);
+  const rated = friends
+    .getByRole("article")
+    .filter({ hasText: names.rated })
+    .first();
+  await expect(rated).toContainText(/rated .+ ★4\.5/);
   await expect(page.locator("body")).not.toContainText(secretList);
+  // The Ranked chip keeps lists only: the rating steps out, All brings it back.
+  await friends.getByRole("button", { name: "Ranked" }).tap();
+  await expect(
+    friends.getByRole("article").filter({ hasText: names.rated }),
+  ).toHaveCount(0);
+  await friends.getByRole("button", { name: "All" }).tap();
+  await expect(rated).toBeVisible();
 });
 
 test("/discoveries and the /map/scans list land on Home's inbox (D1)", async ({

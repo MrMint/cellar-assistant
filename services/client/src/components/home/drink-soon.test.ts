@@ -9,6 +9,7 @@ import {
   drinkSoonState,
   formatSpan,
   openLifeFor,
+  openRail,
   typicalLine,
 } from "./drink-soon";
 
@@ -148,7 +149,11 @@ describe("drinkSoonList", () => {
 
 // H-1 and L02 live in continue.ts, whose own test file another stream owns;
 // they are proven here, beside the drink-soon rules they feed.
-import { openBottleFromNode, sealedSoonFromNodes } from "./continue";
+import {
+  openBottleFromNode,
+  openVariables,
+  sealedSoonFromNodes,
+} from "./continue";
 
 describe("continue.ts — the plate's vessel fields (H-1, B03)", () => {
   const node = (item: Record<string, unknown>) =>
@@ -220,12 +225,12 @@ describe("sealedSoonFromNodes (L02)", () => {
         window: { until: "2027-02-14", untilSource: "USER" },
       }),
     ]);
-    assert.equal(
-      typical?.line,
-      "Sealed · window ends Jan 2027 · typical for IPA",
-    );
+    assert.equal(typical?.line, "Sealed · ends Jan 2027");
+    assert.equal(typical?.typical, "Typical for IPA");
     assert.equal(typical?.href, "/cellars/c1/beers/s1");
+    assert.equal(typical?.photoUrl, null);
     assert.equal(yours?.line, "Sealed · your date: drink by Feb 2027");
+    assert.equal(yours?.typical, null);
   });
 
   test("past says so; opened rows are Home's own, so dropped", () => {
@@ -235,6 +240,42 @@ describe("sealedSoonFromNodes (L02)", () => {
     ]);
     assert.equal(rows.length, 1);
     assert.equal(rows[0]?.past, true);
-    assert.match(rows[0]?.line ?? "", /window ended Jan 2027/);
+    assert.match(rows[0]?.line ?? "", /ended Jan 2027/);
+  });
+
+  test("Open sends only a row the viewer's own Drink soon holds", () => {
+    const rows = sealedSoonFromNodes([soon({})]);
+    assert.deepEqual(openVariables("s1", rows), {
+      cellarId: "c1",
+      cellarItemId: "s1",
+    });
+    // Someone else's bottle id, or any id not in the read, opens nothing.
+    assert.equal(openVariables("someone-elses", rows), null);
+  });
+});
+
+describe("openRail (Shell-Home ruling 1)", () => {
+  const NOW = Date.parse("2026-06-01T00:00:00Z");
+  const bottle = (id: string, openDaysAgo: number, level = 50) => ({
+    id,
+    type: "WINE" as const,
+    style: "RED",
+    form: null,
+    openAt: new Date(NOW - openDaysAgo * 86_400_000).toISOString(),
+    emptyAt: null,
+    percentageRemaining: level,
+  });
+
+  test("past its best first, the furthest past leading; the rest keep their order with their level", () => {
+    const rail = openRail(
+      [bottle("fresh", 0, 16), bottle("past", 30), bottle("pastest", 90)],
+      NOW,
+    );
+    assert.deepEqual(
+      rail.map((row) => row.bottle.id),
+      ["pastest", "past", "fresh"],
+    );
+    assert.deepEqual(rail[0]?.badge, { past: true, text: "Past its best" });
+    assert.deepEqual(rail[2]?.badge, { past: false, text: "Open · 16%" });
   });
 });
