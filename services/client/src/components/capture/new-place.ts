@@ -18,6 +18,12 @@
  * - The header the menu prints can only be *proposed* as a rename of that
  *   place, and only applied from an explicit confirm (`headerRenameInput`).
  */
+
+import {
+  isPlaceCategory,
+  PLACE_CATEGORIES,
+  type PlaceCategorySlug,
+} from "@cellar-assistant/contracts/place-categories";
 import type { CreatePlaceInput } from "@/components/map/actions";
 import { validateCreatePlaceInput } from "@/components/map/actions";
 import type { KnownPlace } from "@/lib/capture/menu-place";
@@ -28,21 +34,34 @@ export const NEW_PLACE_WITHIN_METERS = 50;
 /** A listing farther than this is not where the person is standing. */
 export const LISTING_PREFILL_WITHIN_METERS = 75;
 
-/** The categories a menu's place usually is, in the sheet's order. */
-export const NEW_PLACE_CATEGORIES = [
-  "wine_bar",
-  "bar",
-  "cocktail_bar",
-  "taproom",
-  "pub",
-  "restaurant",
-  "izakaya",
-  "cafe",
-] as const;
-export type NewPlaceCategory = (typeof NEW_PLACE_CATEGORIES)[number];
+/**
+ * The sheet's six kinds (Capture-Place 04, after Places-Place's create
+ * form), each filed as one category. "More kinds" offers the rest of
+ * {@link NEW_PLACE_CATEGORIES}.
+ */
+export const NEW_PLACE_KINDS = [
+  { label: "Coffee", category: "coffee_shop" },
+  { label: "Food", category: "restaurant" },
+  { label: "Bar", category: "bar" },
+  { label: "Beer", category: "taproom" },
+  { label: "Wine", category: "wine_bar" },
+  { label: "Shop", category: "liquor_store" },
+] as const satisfies readonly {
+  label: string;
+  category: PlaceCategorySlug;
+}[];
+
+/** Every category a place may be filed under: the server's own list. */
+export const NEW_PLACE_CATEGORIES: readonly PlaceCategorySlug[] =
+  PLACE_CATEGORIES;
+export type NewPlaceCategory = PlaceCategorySlug;
 
 const isNewPlaceCategory = (value: string): value is NewPlaceCategory =>
-  (NEW_PLACE_CATEGORIES as readonly string[]).includes(value);
+  isPlaceCategory(value);
+
+/** The six kinds' label for a category, or null when it is one of the rest. */
+export const kindLabel = (category: string | null): string | null =>
+  NEW_PLACE_KINDS.find((kind) => kind.category === category)?.label ?? null;
 
 type Fix = { readonly latitude: number; readonly longitude: number };
 
@@ -114,10 +133,16 @@ export const namePrefill = (
     : { kind: "listing", name: best.name };
 };
 
-/** A Google type list's best category among the sheet's, if any. */
+/**
+ * A Google type list's best category: one of the six kinds first, else any
+ * category the server takes.
+ */
 export const categoryFromTypes = (
   types: readonly string[],
-): NewPlaceCategory | null => types.find(isNewPlaceCategory) ?? null;
+): NewPlaceCategory | null =>
+  NEW_PLACE_KINDS.find((kind) => types.includes(kind.category))?.category ??
+  types.find(isNewPlaceCategory) ??
+  null;
 
 /**
  * The `createPlace` input, or the reason it may not be sent. The bounds are
@@ -217,4 +242,44 @@ export const pinnedLine = (accuracy: number | null | undefined): string => {
       ? Math.max(1, Math.round(accuracy))
       : Math.round(accuracy / 10) * 10;
   return `Pinned at your location, about ${meters} m accurate`;
+};
+
+/** Capture-Place 04's short pin line: "Pinned · ±12 m", or "Pinned". */
+export const pinnedShort = (accuracy: number | null | undefined): string => {
+  if (accuracy === null || accuracy === undefined) return "Pinned";
+  if (!Number.isFinite(accuracy) || accuracy < 0) return "Pinned";
+  const meters =
+    accuracy < 100
+      ? Math.max(1, Math.round(accuracy))
+      : Math.round(accuracy / 10) * 10;
+  return `Pinned \u00b7 \u00b1${meters}\u202fm`;
+};
+
+const foldName = (name: string): string =>
+  name
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/gi, " ")
+    .trim()
+    .toLowerCase();
+
+/**
+ * Capture-Place 07, "On the map?": a known place near by whose name is the
+ * one being typed (either contains the other, folded), nearest first. Under
+ * three characters typed, nothing is matched.
+ */
+export const likelyDuplicate = (
+  name: string,
+  nearby: readonly KnownPlace[],
+): KnownPlace | null => {
+  const typed = foldName(name);
+  if (typed.length < 3) return null;
+  return (
+    [...nearby]
+      .sort((a, b) => a.distanceMeters - b.distanceMeters)
+      .find((place) => {
+        const known = foldName(place.name);
+        return known !== "" && (known.includes(typed) || typed.includes(known));
+      }) ?? null
+  );
 };

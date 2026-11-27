@@ -3,12 +3,16 @@ import {
   categoryFromTypes,
   headerRenameInput,
   headerRenameProposal,
+  kindLabel,
+  likelyDuplicate,
+  NEW_PLACE_KINDS,
   NEW_PLACE_WITHIN_METERS,
   namePrefill,
   nearbyWithCreated,
   newPlaceInput,
   offerNewPlace,
   pinnedLine,
+  pinnedShort,
 } from "./new-place";
 
 const HERE = { latitude: 37.7749, longitude: -122.4194 };
@@ -46,6 +50,13 @@ describe("L10 · when the new place is offered", () => {
   });
 });
 
+const okInput = {
+  name: "Demo Place",
+  category: "wine_bar",
+  location: HERE,
+  placeId: "p-1",
+};
+
 describe("L10 · place creation bounds (N09)", () => {
   const ok = {
     name: "Bar Lumen",
@@ -76,9 +87,11 @@ describe("L10 · place creation bounds (N09)", () => {
     expect(newPlaceInput({ ...ok, name: "x".repeat(200) }).ok).toBe(true);
   });
 
-  test("a category outside the sheet's list, none, or no real fix is refused", () => {
+  test("a category the server does not take, none, or no real fix is refused", () => {
     expect(newPlaceInput({ ...ok, category: null }).ok).toBe(false);
-    expect(newPlaceInput({ ...ok, category: "liquor_store" }).ok).toBe(false);
+    expect(newPlaceInput({ ...ok, category: "not_a_kind" }).ok).toBe(false);
+    // "More kinds" offers the rest of the server's list.
+    expect(newPlaceInput({ ...ok, category: "sake_bar" }).ok).toBe(true);
     expect(newPlaceInput({ ...ok, location: null }).ok).toBe(false);
     expect(
       newPlaceInput({ ...ok, location: { latitude: 91, longitude: 0 } }).ok,
@@ -139,6 +152,54 @@ describe("L10 · the prefill and the D16 budget", () => {
   test("a listing's types pick the category when the sheet has it", () => {
     expect(categoryFromTypes(["point_of_interest", "bar"])).toBe("bar");
     expect(categoryFromTypes(["point_of_interest"])).toBeNull();
+    // One of the six kinds wins over the rest of the list.
+    expect(categoryFromTypes(["pub", "bar"])).toBe("bar");
+    expect(categoryFromTypes(["point_of_interest", "pub"])).toBe("pub");
+  });
+});
+
+describe("Capture-Place 04 · six kinds and More kinds", () => {
+  test("six kinds, each filed as a category the server takes", () => {
+    expect(NEW_PLACE_KINDS.map((kind) => kind.label)).toEqual([
+      "Coffee",
+      "Food",
+      "Bar",
+      "Beer",
+      "Wine",
+      "Shop",
+    ]);
+    for (const kind of NEW_PLACE_KINDS) {
+      expect(newPlaceInput({ ...okInput, category: kind.category }).ok).toBe(
+        true,
+      );
+    }
+    expect(kindLabel("wine_bar")).toBe("Wine");
+    expect(kindLabel("sake_bar")).toBeNull();
+    expect(kindLabel(null)).toBeNull();
+  });
+
+  test("the short pin line", () => {
+    expect(pinnedShort(12.4)).toBe("Pinned \u00b7 \u00b112\u202fm");
+    expect(pinnedShort(143)).toBe("Pinned \u00b7 \u00b1140\u202fm");
+    expect(pinnedShort(null)).toBe("Pinned");
+    expect(pinnedShort(Number.NaN)).toBe("Pinned");
+  });
+});
+
+describe("Capture-Place 07 · On the map?", () => {
+  const nearby = [
+    { id: "far", name: "Demo Taproom", distanceMeters: 300 },
+    { id: "near", name: "The Demo Taproom", distanceMeters: 60 },
+    { id: "other", name: "Corner Cafe", distanceMeters: 20 },
+  ];
+  test("the nearest known place named as typed, folded", () => {
+    expect(likelyDuplicate("demo taproom", nearby)?.id).toBe("near");
+    expect(likelyDuplicate("  Corner Café ", nearby)?.id).toBe("other");
+  });
+  test("short or unmatched names match nothing", () => {
+    expect(likelyDuplicate("de", nearby)).toBeNull();
+    expect(likelyDuplicate("Harbour Wines", nearby)).toBeNull();
+    expect(likelyDuplicate("demo taproom", [])).toBeNull();
   });
 });
 
