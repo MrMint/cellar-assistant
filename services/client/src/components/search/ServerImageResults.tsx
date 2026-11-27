@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { EmptyState } from "@/components/app/EmptyState";
-import { Photo, Search } from "@/components/app/icons";
+import { CloudOff, Photo, Search } from "@/components/app/icons";
 import { Link } from "@/components/app/Link";
 import { AiFailureStatus } from "@/components/common/AiStatus";
 import { buttonVariants } from "@/components/ui/button-variants";
@@ -14,7 +14,9 @@ import { cn } from "@/lib/utils";
 import { searchResultsFromNodes } from "./adapter";
 import { SearchImageQuery } from "./queries";
 import { ReadLabelInstead } from "./ReadLabelInstead";
+import { RetrySearchButton } from "./RetrySearchButton";
 import { SearchResultGrid } from "./SearchResultGrid";
+import { fetchedTotalLabel } from "./universal-search";
 
 /** The old page's empty state for an image search, verbatim. */
 /** A photo search's empty or refused face: glyph, title, one action. */
@@ -60,10 +62,27 @@ export async function ServerImageResults({
 }: {
   imageFileId: string;
 }) {
+  // F-101: a read that throws (transport, GraphQL) is this face's failure,
+  // not error.tsx's — the search box above stays.
   const data = await apiServerQuery(SearchImageQuery, {
     imageFileId,
     first: IMAGE_SEARCH_LIMIT,
+  }).catch((error: unknown) => {
+    console.error("[search] the photo read failed:", error);
+    return null;
   });
+  if (data === null) {
+    return (
+      <>
+        <NoImageMatches
+          glyph={<CloudOff aria-hidden strokeWidth={1.5} />}
+          title="Couldn't search this photo"
+          action={<RetrySearchButton />}
+        />
+        <ReadLabelInstead imageFileId={imageFileId} />
+      </>
+    );
+  }
   const result = unwrapResult(data.itemSearch, "ItemSearchConnection");
 
   if (!result.ok) {
@@ -105,7 +124,15 @@ export async function ServerImageResults({
     <div className="flex flex-col gap-3" data-search-image="found">
       <h2 className="t-head m-0 flex items-baseline gap-2 text-ink">
         Matches
-        <span className="t-cap tabular text-ink-2">{results.length}</span>
+        <span className="t-cap tabular text-ink-2">
+          {fetchedTotalLabel({
+            shown: results.length,
+            limit: IMAGE_SEARCH_LIMIT,
+            totalCount: result.data.totalCount,
+            totalIsLowerBound: result.data.totalIsLowerBound,
+            hasNextPage: result.data.pageInfo.hasNextPage,
+          })}
+        </span>
       </h2>
       <SearchResultGrid items={results} />
       <ReadLabelInstead imageFileId={imageFileId} />

@@ -221,6 +221,48 @@ describe("SearchSections", () => {
     assert.match(text, /Try again/);
   });
 
+  test("F-96: a failed section with nothing elsewhere is not 'Nothing matches'", () => {
+    const html = renderToStaticMarkup(
+      <SearchSections
+        query="sotol"
+        sections={[]}
+        focus={null}
+        semanticSearch={true}
+        failed={["items"]}
+      />,
+    );
+    const text = textOf(html);
+    assert.match(text, /Couldn(?:'|&#x27;)t search drinks/);
+    assert.match(text, /Try again/);
+    assert.doesNotMatch(text, /Nothing matches/);
+    assert.doesNotMatch(html, /href="\/add/);
+  });
+
+  test("F-99: See all says when it holds only the first rows of more", () => {
+    const capped = textOf(
+      renderToStaticMarkup(
+        <SearchSections
+          query="red"
+          sections={[{ ...items, rows: rows("Item", 20) }]}
+          focus="items"
+          semanticSearch={true}
+        />,
+      ),
+    );
+    assert.match(capped, /first 20 of 200\+/);
+    const whole = textOf(
+      renderToStaticMarkup(
+        <SearchSections
+          query="red"
+          sections={[brands]}
+          focus="brands"
+          semanticSearch={true}
+        />,
+      ),
+    );
+    assert.doesNotMatch(whole, /first \d+ of/);
+  });
+
   test("people end in their action; a scored row shows its stars", () => {
     const html = renderToStaticMarkup(
       <SearchSections

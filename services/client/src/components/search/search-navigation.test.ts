@@ -59,6 +59,43 @@ describe("textSearchHref", () => {
   });
 });
 
+describe("a scoped search keeps its scope (F-95)", () => {
+  test("textSearchHref carries ?in= beside ?q=", () => {
+    assert.equal(textSearchHref(" gin ", "places"), "/search?q=gin&in=places");
+  });
+
+  test("blank, scoped, is the scoped landing", () => {
+    assert.equal(textSearchHref("  ", "places"), "/search?in=places");
+  });
+
+  test("typing in ?in=places navigates within places", () => {
+    const step = planTypingNavigation(
+      initialSearchNavState(null),
+      "gin",
+      "places",
+    );
+    assert.equal(step.navigation?.href, "/search?q=gin&in=places");
+  });
+
+  test("a commit keeps the scope too", () => {
+    const step = planCommitNavigation(
+      initialSearchNavState("gin"),
+      "rum",
+      "items",
+    );
+    assert.equal(step.navigation?.href, "/search?q=rum&in=items");
+  });
+
+  test("a held-back value sent on landing keeps the scope", () => {
+    const step = planLandedNavigation(
+      initialSearchNavState("gin"),
+      "rum",
+      "items",
+    );
+    assert.equal(step.navigation?.href, "/search?q=rum&in=items");
+  });
+});
+
 describe("planTypingNavigation", () => {
   test("from the landing view: one push, then replaces", () => {
     const { navigations, state } = typeAll(initialSearchNavState(null), [
