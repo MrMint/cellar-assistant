@@ -61,6 +61,8 @@ type DraftInput = {
   readonly resumeHref: (
     itemOnboardingId: string,
     itemType: ApiItemType,
+    /** F-59: the cellar the bottle was aimed at, for "Review" to reopen on. */
+    cellarId?: string,
   ) => string;
 };
 
@@ -193,6 +195,9 @@ export const OnboardingMachine = createMachine(
         itemType: ApiItemType;
         draft?: DraftInput;
         resumed: boolean;
+        /** The page fixed the cellar (`/cellars/<id>/…/add`): a draft's own
+         * cellar does not replace it. */
+        cellarPinned: boolean;
         onRestart?: () => void;
         /** Why the last step failed, when it did (upload, add to cellar). */
         error?: string;
@@ -286,6 +291,7 @@ export const OnboardingMachine = createMachine(
       itemType: input.itemType,
       draft: input.draft,
       resumed: input.resumeId !== undefined,
+      cellarPinned: input.cellarId !== undefined && input.cellarId !== null,
       frontLabel: input.resumePhoto,
       displayImageDataUrl: input.resumePhoto,
       onRestart: input.onRestart,
@@ -427,6 +433,8 @@ export const OnboardingMachine = createMachine(
               frontLabelFileId,
               draft,
               frontLabel,
+              resumed,
+              cellarId,
             },
           }) => ({
             urqlClient,
@@ -435,12 +443,17 @@ export const OnboardingMachine = createMachine(
             barcode,
             backLabelFileId,
             frontLabelFileId,
+            resumed,
             draft:
               draft === undefined
                 ? undefined
                 : {
                     label: itemTypeLabel(itemType).toLowerCase(),
-                    resumeHref: draft.resumeHref(itemOnboardingId, itemType),
+                    resumeHref: draft.resumeHref(
+                      itemOnboardingId,
+                      itemType,
+                      cellarId,
+                    ),
                     ...(frontLabel === undefined ? {} : { photo: frontLabel }),
                   },
           }),
@@ -459,6 +472,12 @@ export const OnboardingMachine = createMachine(
                   event.output.labelSent ??
                   (isNotNil(context.frontLabelFileId) ||
                     isNotNil(context.backLabelFileId)),
+                // F-59: a saved draft opens on the cellar it was saved
+                // against, not the last-used default set at mount.
+                cellarId: ({ event, context }) =>
+                  context.cellarPinned || isNil(event.output.draftCellarId)
+                    ? context.cellarId
+                    : event.output.draftCellarId,
               }),
               // A resumed draft uploaded nothing here: its label's file is
               // the one the session stored (X06), and so is its display

@@ -53,6 +53,7 @@ const run = ({
   labelSent = undefined as boolean | undefined,
   storedFrontLabel = undefined as string | undefined,
   resumePhoto = undefined as string | undefined,
+  draftCellarId = undefined as string | undefined,
 }) => {
   const filed: InsertCellarItemInput[] = [];
   const closed: CloseOnboardingInput[] = [];
@@ -99,6 +100,7 @@ const run = ({
             ...(storedFrontLabel === undefined
               ? {}
               : { frontLabelFileId: storedFrontLabel }),
+            ...(draftCellarId === undefined ? {} : { draftCellarId }),
           };
         },
       ),
@@ -720,5 +722,37 @@ describe("background continuation (X05): a resumed draft", () => {
     const state = await settled(actor);
     assert.equal(state.context.displayImageDataUrl, "data:held");
     assert.equal(state.context.displayImageFileId, "stored-front");
+  });
+});
+
+describe("resuming a saved draft (F-59)", () => {
+  test("the read is told it resumes, and the draft's own cellar is used", async () => {
+    const { actor, read } = run({
+      confidence: 0.5,
+      inCellar: false,
+      resumeId: "onb-left",
+      draftCellarId: "cellar-b",
+    });
+    // The page's last-used default lands first, at mount.
+    actor.send({ type: "SET_CELLAR", cellarId: "cellar-a" });
+    await settled(actor);
+    assert.equal(read[0]?.resumed, true);
+    assert.equal(actor.getSnapshot().context.cellarId, "cellar-b");
+  });
+
+  test("a cellar the page pinned stays pinned", async () => {
+    const { actor } = run({
+      confidence: 0.5,
+      resumeId: "onb-left",
+      draftCellarId: "cellar-b",
+    });
+    await settled(actor);
+    assert.equal(actor.getSnapshot().context.cellarId, "cellar-1");
+  });
+
+  test("a fresh run is not a resume", async () => {
+    const { actor, read } = run({ confidence: 0.5 });
+    await settled(actor);
+    assert.equal(read[0]?.resumed ?? false, false);
   });
 });

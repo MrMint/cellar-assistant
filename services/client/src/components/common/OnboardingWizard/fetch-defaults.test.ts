@@ -93,3 +93,91 @@ describe("fetchDefaults with no AI provider", () => {
     );
   });
 });
+
+describe("fetchDefaults resuming a saved draft (F-59)", () => {
+  const draftId = "00000000-0000-4000-8000-000000000003";
+  const cellarB = "00000000-0000-4000-8000-0000000000bb";
+  const resumedClient = () => {
+    const queried: string[] = [];
+    const client = {
+      mutation: () => ({
+        toPromise: async () => ({
+          data: {
+            startItemOnboarding: {
+              __typename: "ItemOnboarding",
+              id: draftId,
+              itemType: "WINE",
+              status: "NEEDS_DETAILS",
+              defaults: { name: "GUESSED NAME", wine: { style: "WHITE" } },
+              confidence: 0.4,
+              barcode: null,
+              barcodeType: null,
+              frontLabelImageId: null,
+              backLabelImageId: null,
+              aiModel: null,
+              userId: "u1",
+              createdAt: "2026-11-27T00:00:00Z",
+              updatedAt: "2026-11-27T00:00:00Z",
+            },
+          },
+        }),
+      }),
+      query: (document: unknown) => {
+        queried.push(nameOf(document));
+        return {
+          toPromise: async () => ({
+            data: {
+              itemOnboarding: {
+                __typename: "ItemOnboarding",
+                id: draftId,
+                cellarId: cellarB,
+                draftFields: {
+                  name: "Hillside Garnacha",
+                  brandName: "Demo Valley Cellars",
+                  attributes: { style: "RED", vintage: "2019-01-01" },
+                },
+              },
+            },
+          }),
+        };
+      },
+    } as unknown as Client;
+    return { client, queried };
+  };
+
+  test("what the person typed and the draft's cellar come back", async () => {
+    const { client } = resumedClient();
+    const result = await toPromise(
+      createActor(fetchDefaults, {
+        input: {
+          urqlClient: client,
+          itemType: "WINE",
+          itemOnboardingId: draftId,
+          resumed: true,
+        },
+      }).start(),
+    );
+    assert.equal(result.defaults.values.name, "Hillside Garnacha");
+    assert.equal(result.defaults.brandName, "Demo Valley Cellars");
+    assert.equal(result.defaults.values.attributes.style, "RED");
+    assert.equal(result.defaults.values.attributes.vintage, "2019");
+    assert.equal(result.draftCellarId, cellarB);
+    // Typed by the person: nothing of it is a guess to check.
+    assert.equal(result.defaults.confidences.name, undefined);
+  });
+
+  test("a fresh read never asks for a draft", async () => {
+    const { client, queried } = resumedClient();
+    const result = await toPromise(
+      createActor(fetchDefaults, {
+        input: {
+          urqlClient: client,
+          itemType: "WINE",
+          itemOnboardingId: draftId,
+        },
+      }).start(),
+    );
+    assert.deepEqual(queried, []);
+    assert.equal(result.draftCellarId, undefined);
+  });
+});

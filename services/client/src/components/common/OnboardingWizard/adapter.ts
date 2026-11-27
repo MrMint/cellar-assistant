@@ -177,6 +177,73 @@ export const formDefaultsFromOnboarding = (
   };
 };
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+const DRAFT_TEXT_FIELDS = [
+  "name",
+  "description",
+  "country",
+  "brandName",
+] as const;
+
+/**
+ * F-59: a saved draft's form, resumed. What the person typed before "Finish
+ * later" (`ItemOnboarding.draftFields`, in `draftFieldsFrom`'s shape) wins
+ * over the read's guesses field by field, and a field they typed is no
+ * guess to check. Fields the draft left empty keep the read's value.
+ */
+export const formDefaultsFromDraft = (
+  type: ApiItemType,
+  read: OnboardingDefaults,
+  draftFields: unknown,
+): OnboardingDefaults => {
+  if (!isRecord(draftFields)) return read;
+  const text = (key: (typeof DRAFT_TEXT_FIELDS)[number]): string =>
+    typeof draftFields[key] === "string" ? String(draftFields[key]).trim() : "";
+  const attributes = isRecord(draftFields.attributes)
+    ? draftFields.attributes
+    : {};
+  // Through the same merge as a read, so a saved `YYYY-01-01` is a year
+  // again and a picker only takes its own options.
+  const saved = formDefaultsFromOnboarding(type, {
+    ...Object.fromEntries(DRAFT_TEXT_FIELDS.map((key) => [key, text(key)])),
+    [ATTRIBUTE_INPUT_KEY[type]]: attributes,
+  });
+  const typed = new Set<string>();
+  const pick = (path: string, value: string, fallback: string): string => {
+    if (value === "") return fallback;
+    typed.add(path);
+    return value;
+  };
+  const values: ItemFormValues = {
+    // Stored as typed: N17 title-cases only a label's read.
+    name: pick("name", text("name"), read.values.name),
+    description: pick(
+      "description",
+      saved.values.description,
+      read.values.description,
+    ),
+    country: pick("country", saved.values.country, read.values.country),
+    attributes: { ...read.values.attributes },
+  };
+  for (const [key, value] of Object.entries(saved.values.attributes)) {
+    values.attributes[key] = pick(
+      `attributes.${key}`,
+      value,
+      read.values.attributes[key] ?? "",
+    );
+  }
+  return {
+    ...read,
+    values,
+    brandName: pick("brandName", text("brandName"), read.brandName),
+    confidences: Object.fromEntries(
+      Object.entries(read.confidences).filter(([path]) => !typed.has(path)),
+    ),
+  };
+};
+
 /** The form's year fields back to the `YYYY-01-01` the columns hold. */
 const attributesForSave = (
   type: ApiItemType,

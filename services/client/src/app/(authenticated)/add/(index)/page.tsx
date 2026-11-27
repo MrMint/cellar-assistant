@@ -46,6 +46,8 @@ export default async function AddPage({
       }
       cellars={cellars}
       resumeId={draftIdFrom(one(params.draft))}
+      // Checked against `cellars` where it is used: anything else is ignored.
+      resumeCellarId={one(params.cellar)}
       photoToken={photoTokenFrom(params.photo)}
     />
   );

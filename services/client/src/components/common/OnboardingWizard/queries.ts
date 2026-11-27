@@ -178,3 +178,22 @@ export const SaveDraftMutation = graphql(
 `,
   [ActorErrorFieldsFragment],
 );
+
+/**
+ * F-59: a saved draft's own cellar and what the person typed before "Finish
+ * later" (`saveDraft`'s `fields`, as `draftFieldsFrom` wrote them). Asked
+ * only when `/add?draft=` resumes one; `startItemOnboarding`'s row carries
+ * neither.
+ */
+export const ResumeDraftQuery = graphql(`
+  query OnboardingResumeDraft($id: ID!) {
+    itemOnboarding(id: $id) {
+      __typename
+      ... on ItemOnboarding {
+        id
+        cellarId
+        draftFields
+      }
+    }
+  }
+`);

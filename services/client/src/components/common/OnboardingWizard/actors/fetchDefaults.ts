@@ -7,7 +7,12 @@ import {
   StartItemOnboardingMutation,
 } from "@/lib/api/items";
 import { unwrapResult } from "@/lib/api/result";
-import { emptyDefaults, formDefaultsFromOnboarding } from "../adapter";
+import {
+  emptyDefaults,
+  formDefaultsFromDraft,
+  formDefaultsFromOnboarding,
+} from "../adapter";
+import { ResumeDraftQuery } from "../queries";
 import type { DefaultValuesResult, FetchDefaultsInput } from "./types";
 
 /**
@@ -107,10 +112,43 @@ export const readDefaults = async ({
  * rather than asked again.
  */
 export const fetchDefaults = fromPromise(
-  ({ input }: { input: FetchDefaultsInput }): Promise<DefaultValuesResult> =>
-    input.draft === undefined
+  async ({
+    input,
+  }: {
+    input: FetchDefaultsInput;
+  }): Promise<DefaultValuesResult> => {
+    const read = await (input.draft === undefined
       ? readDefaults(input)
       : captureDrafts.track(input.itemOnboardingId, input.draft, () =>
           readDefaults(input),
-        ),
+        ));
+    return input.resumed === true ? withSavedDraft(input, read) : read;
+  },
 );
+
+/**
+ * F-59: a resumed draft's own cellar and typed fields over the read. Outside
+ * `captureDrafts.track`, so a read adopted from the background still gets
+ * them. A draft that cannot be read back (gone, refused, offline) opens on
+ * the read alone, as before: it is a convenience, never the form's failure.
+ */
+const withSavedDraft = async (
+  { urqlClient, itemType, itemOnboardingId }: FetchDefaultsInput,
+  read: DefaultValuesResult,
+): Promise<DefaultValuesResult> => {
+  const response = await urqlClient
+    .query(
+      ResumeDraftQuery,
+      { id: itemOnboardingId },
+      { requestPolicy: "network-only" },
+    )
+    .toPromise()
+    .catch(() => undefined);
+  const draft = response?.data?.itemOnboarding;
+  if (draft?.__typename !== "ItemOnboarding") return read;
+  return {
+    ...read,
+    defaults: formDefaultsFromDraft(itemType, read.defaults, draft.draftFields),
+    ...(draft.cellarId === null ? {} : { draftCellarId: draft.cellarId }),
+  };
+};
