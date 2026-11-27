@@ -51,7 +51,7 @@ export function WhenPicker({
 
   return (
     <section className="flex flex-col gap-2" aria-labelledby={`${ids}-when`}>
-      <h3 id={`${ids}-when`} className="type-callout font-semibold">
+      <h3 id={`${ids}-when`} className="t-cap font-semibold">
         When
       </h3>
       {allowNow && (
@@ -98,7 +98,7 @@ export function WhenPicker({
         />
       )}
       {problem !== null && (
-        <p role="alert" className="type-footnote text-destructive">
+        <p role="alert" className="t-cap text-destructive">
           {problem}
         </p>
       )}

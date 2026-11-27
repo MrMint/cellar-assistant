@@ -208,7 +208,7 @@ export function ItemCorrectionPanel({
       aria-label="Correct this item"
       className="flex flex-col gap-3 rounded-lg bg-surface-1 p-4"
     >
-      <p className="type-callout text-ink-2">
+      <p className="t-cap text-ink-2">
         Something off? Nothing changes until you tap a suggestion and save.
       </p>
       {/* Stacked on a phone: side by side, two icon-and-label buttons need
@@ -243,7 +243,7 @@ export function ItemCorrectionPanel({
       </div>
       <div aria-live="polite" className="empty:hidden">
         {status.state === "working" && (
-          <p className="type-callout flex items-center gap-2 text-ai">
+          <p className="t-cap flex items-center gap-2 text-ai">
             <Spinner aria-hidden />
             {status.kind === "label"
               ? "Reading the label again…"
@@ -251,7 +251,7 @@ export function ItemCorrectionPanel({
           </p>
         )}
         {status.state === "done" && (
-          <p className="type-callout text-ink-2">{status.message}</p>
+          <p className="t-cap text-ink-2">{status.message}</p>
         )}
         {status.state === "failed" && (
           <AiStatus

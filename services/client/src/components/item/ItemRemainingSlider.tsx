@@ -147,7 +147,7 @@ export const ItemRemainingSlider = ({
       )}
       {isOpened && !isEmptied && (
         <div className="flex flex-col gap-4">
-          <p className="type-body tabular text-ink-1">Remaining: {percent}%</p>
+          <p className="t-body tabular text-ink-1">Remaining: {percent}%</p>
           <SliderPrimitive.Root
             data-slot="slider"
             value={[percent]}
@@ -177,14 +177,14 @@ export const ItemRemainingSlider = ({
               className="block h-10 w-3 rounded-full bg-ink-1 shadow-sm outline-none ring-ring/50 transition-shadow focus-visible:ring-4 disabled:pointer-events-none"
             />
           </SliderPrimitive.Root>
-          <p className="type-body text-center text-ink-2">
+          <p className="t-body text-center text-ink-2">
             Opened {now === null ? "" : formatDistance(opened, now)} ago
           </p>
         </div>
       )}
       {isEmptied && (
         <div className="flex flex-col gap-2">
-          <p className="type-body text-center text-ink-2">
+          <p className="t-body text-center text-ink-2">
             Empty {now === null ? "" : formatDistance(emptied, now)} ago
           </p>
           {/* Undo outlives its toast: put a finished bottle back (N13a). */}
@@ -200,7 +200,7 @@ export const ItemRemainingSlider = ({
         </div>
       )}
       {shownError !== null && (
-        <p role="alert" className="type-callout text-destructive">
+        <p role="alert" className="t-cap text-destructive">
           {shownError}
         </p>
       )}

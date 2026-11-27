@@ -245,6 +245,99 @@ describe("the edit form's correction loop (X19)", () => {
   });
 });
 
+const checkForm = (
+  client: ReturnType<typeof createClient>,
+  unconfirmed: readonly string[],
+) => (
+  <Provider value={client}>
+    <ItemForm
+      id="w1"
+      type="WINE"
+      defaultValues={{
+        name: "Lytton Springs",
+        description: "",
+        country: "",
+        attributes: { vintage: "2016-01-01", region: "Dry Creek Valley" },
+      }}
+      onSavedHref="/wines/w1"
+      brand={{ brandId: "b1", name: "Ridge" }}
+      unconfirmed={unconfirmed}
+    />
+  </Provider>
+);
+
+const marked = (): string[] =>
+  [...document.querySelectorAll("[data-check-path]")].map(
+    (el) => el.getAttribute("data-check-path") ?? "",
+  );
+
+const typeInto = async (input: HTMLInputElement | null, value: string) => {
+  assert.ok(input, "input to type into");
+  await act(async () => {
+    const setter = Object.getOwnPropertyDescriptor(
+      HTMLInputElement.prototype,
+      "value",
+    )?.set;
+    setter?.call(input, value);
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  await flush(30);
+};
+
+describe('"Check this" on the label read’s guesses (C3, CROSS-LOT)', () => {
+  test("marks each shown field in unconfirmedFields, in form order, with the count beside Save", async () => {
+    const { client } = clientAnswering({});
+    // `style` is not a field this form shows by that name; `brandName`
+    // is the brand picker; unknown names are ignored.
+    await mount(checkForm(client, ["region", "brandName", "name", "nope"]));
+    assert.deepEqual(marked(), ["name", "brandName", "attributes.region"]);
+    assert.equal(
+      document.querySelectorAll('[data-slot="check-tag"]').length,
+      3,
+    );
+    assert.equal(button("3 to check")?.textContent?.trim(), "3 to check");
+    assert.ok(button("Save"), "Save keeps its verb");
+  });
+
+  test("editing a marked field clears its mark, and editing it back does not bring it back", async () => {
+    const { client } = clientAnswering({});
+    await mount(checkForm(client, ["name", "region"]));
+    const name = document.querySelector<HTMLInputElement>(
+      '[data-check-path="name"] input',
+    );
+    await typeInto(name, "Lytton Springs Zin");
+    assert.deepEqual(marked(), ["attributes.region"]);
+    assert.ok(button("1 to check"));
+
+    await typeInto(
+      document.querySelector<HTMLInputElement>('input[name="name"]'),
+      "Lytton Springs",
+    );
+    assert.deepEqual(marked(), ["attributes.region"], "stays cleared");
+  });
+
+  test("Looks right confirms a field without changing it", async () => {
+    const { client } = clientAnswering({});
+    await mount(checkForm(client, ["region"]));
+    await click(button("Region looks right"));
+    assert.deepEqual(marked(), []);
+    assert.equal(button(/to check$/), undefined, "no counter left");
+    assert.equal(
+      document.querySelector<HTMLInputElement>(
+        'input[name="attributes.region"]',
+      )?.value,
+      "Dry Creek Valley",
+    );
+  });
+
+  test("nothing to check: no marks and no counter", async () => {
+    const { client } = clientAnswering({});
+    await mount(checkForm(client, []));
+    assert.deepEqual(marked(), []);
+    assert.equal(button(/to check$/), undefined);
+  });
+});
+
 describe("Wrong brand? Change it (D8)", () => {
   test("opens the picker; Save waits for an actual change", async () => {
     const { client } = clientAnswering({});

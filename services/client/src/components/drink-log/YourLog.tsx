@@ -226,8 +226,8 @@ export function YourLog({
           </div>
         ) : rows.length === 0 ? (
           <div className="flex flex-col items-start gap-3 p-4">
-            <p className="type-body text-ink-1">Nothing logged yet.</p>
-            <p className="type-footnote">
+            <p className="t-body text-ink-1">Nothing logged yet.</p>
+            <p className="t-cap text-ink-3">
               Log a {typeWords(subject.itemType).serving} to remember it —
               where, who with, what you noticed. Your review stays separate.
             </p>
@@ -249,15 +249,13 @@ export function YourLog({
               >
                 <div className="flex min-w-0 flex-1 flex-col gap-1">
                   <div className="flex items-baseline gap-2">
-                    <span className="type-callout tabular font-semibold text-ink-1">
+                    <span className="t-cap tabular font-semibold text-ink-1">
                       <Timestamp iso={row.createdAt} precision="date" />
                     </span>
                     <Score value={row.score} />
                   </div>
                   {row.note !== null && (
-                    <p className="type-body line-clamp-3 text-ink-2">
-                      {row.note}
-                    </p>
+                    <p className="t-body line-clamp-3 text-ink-2">{row.note}</p>
                   )}
                   {row.tags.length > 0 && (
                     <ul
@@ -275,7 +273,7 @@ export function YourLog({
                     </ul>
                   )}
                   {row.context !== "" && (
-                    <p className="type-footnote truncate">{row.context}</p>
+                    <p className="t-cap text-ink-3 truncate">{row.context}</p>
                   )}
                 </div>
                 {row.photoUrl !== null && (
@@ -301,7 +299,7 @@ export function YourLog({
           </ul>
         )}
         {total > rows.length && (
-          <p className="type-footnote px-4 py-2">
+          <p className="t-cap text-ink-3 px-4 py-2">
             Showing your newest {rows.length} of {total}.
           </p>
         )}

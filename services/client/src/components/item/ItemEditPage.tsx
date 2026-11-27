@@ -5,7 +5,7 @@ import { itemTypeTokens } from "@/components/app/TypeChip";
 import type { ApiItemType } from "@/components/cellar-api/itemTypes";
 import { attributesFrom } from "@/components/item-api/itemFormRules";
 import { ViewerQuery } from "@/lib/api/cellars";
-import { readFragment } from "@/lib/api/graphql";
+import { graphql, readFragment } from "@/lib/api/graphql";
 import { ItemCorrectionQuery } from "@/lib/api/item-correction";
 import {
   ItemAttributesFragment,
@@ -19,6 +19,26 @@ import { displayItemName } from "@/utilities/smart-title-case";
 import { ItemAppBar } from "./ItemAppBar";
 import { ItemForm } from "./ItemForm";
 import { shownBrandOf } from "./shown-brand";
+
+/**
+ * C3 "Check this": the label read's guesses the creator never confirmed
+ * (`Item.unconfirmedFields`, empty for anyone else and for an item not
+ * created from a read).
+ */
+const ItemUncheckedFieldsQuery = graphql(`
+  query ItemUncheckedFields($itemId: ID!, $type: ItemType!) {
+    item(id: $itemId, type: $type) {
+      __typename
+      ... on QueryItemSuccess {
+        data {
+          __typename
+          id
+          unconfirmedFields
+        }
+      }
+    }
+  }
+`);
 
 /** One `ItemSummaryQuery` per request, for the page and its title (X21). */
 const loadItemSummary = cache((type: ApiItemType, itemId: string) =>
@@ -72,7 +92,7 @@ export async function ItemEditPage({
   if (!result.ok) {
     if (isNotFound(result.error)) notFound();
     return (
-      <p role="alert" className="type-body text-destructive">
+      <p role="alert" className="t-body text-destructive">
         {result.error.message}
       </p>
     );
@@ -82,9 +102,10 @@ export async function ItemEditPage({
     ItemAttributesFragment,
     result.data.data,
   ) as unknown as Record<string, unknown>;
-  const [viewer, extras] = await Promise.all([
+  const [viewer, extras, unchecked] = await Promise.all([
     apiServerQuery(ViewerQuery, {}),
     apiServerQuery(ItemCorrectionQuery, { itemId, type }),
+    apiServerQuery(ItemUncheckedFieldsQuery, { itemId, type }),
   ]);
   const isCreator = viewer.me?.id === core.createdById;
   // X19: the brand the form starts from, and the AI helpers it may offer.
@@ -95,6 +116,9 @@ export async function ItemEditPage({
     ? shownBrandOf(correction.data.data.brands.edges.map((edge) => edge.node))
     : undefined;
   const tools = correction.ok ? correction.data.data.correction : null;
+  // A failed read shows no marks rather than failing the page.
+  const checks = unwrapResult(unchecked.item, "QueryItemSuccess");
+  const unconfirmed = checks.ok ? checks.data.data.unconfirmedFields : [];
 
   const itemName = displayItemName(core.name);
 
@@ -118,6 +142,7 @@ export async function ItemEditPage({
           }}
           onSavedHref={backHref}
           brand={brand}
+          unconfirmed={unconfirmed}
           correction={
             tools === null
               ? null
@@ -129,8 +154,8 @@ export async function ItemEditPage({
         />
       ) : (
         <div className="flex flex-col gap-2">
-          <h2 className="type-title-2 text-ink-1">Not yours to edit</h2>
-          <p className="type-callout text-ink-2">
+          <h2 className="t-title text-ink-1">Not yours to edit</h2>
+          <p className="t-cap text-ink-2">
             Only whoever added this {formatItemType(type).toLowerCase()} can
             change it.
           </p>

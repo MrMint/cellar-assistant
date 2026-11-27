@@ -103,14 +103,12 @@ export function DrinkingWindowCard({ model }: { model: FreshnessModel }) {
     <InsetSection label="Drinking window" data-slot="drinking-window">
       <div className="flex flex-col gap-3 px-4 py-4">
         <div className="flex items-baseline justify-between gap-3">
-          <span className="type-title-1 tabular text-ink-1">
-            {model.heading}
-          </span>
+          <span className="t-title tabular text-ink-1">{model.heading}</span>
           {status !== null && (
             <span
               data-tone={status.tone}
               className={cn(
-                "type-footnote shrink-0 rounded-full px-2.5 py-0.5 font-medium",
+                "t-cap text-ink-3 shrink-0 rounded-full px-2.5 py-0.5 font-medium",
                 TONE[status.tone],
               )}
             >
@@ -131,7 +129,7 @@ export function DrinkingWindowCard({ model }: { model: FreshnessModel }) {
                 style={{ left: `${bar.today}%` }}
               />
             </div>
-            <div className="type-footnote tabular flex justify-between text-ink-3">
+            <div className="t-cap tabular flex justify-between text-ink-3">
               <span>{bar.axisFrom}</span>
               <span>Today</span>
               <span>{bar.axisTo}</span>
@@ -139,7 +137,7 @@ export function DrinkingWindowCard({ model }: { model: FreshnessModel }) {
           </div>
         )}
         {model.sourceLine !== null && (
-          <p className="type-footnote text-ink-2">{model.sourceLine}</p>
+          <p className="t-cap text-ink-2">{model.sourceLine}</p>
         )}
       </div>
     </InsetSection>
@@ -272,7 +270,7 @@ function EditSheet({
           />
         </div>
         {error !== null && (
-          <p role="alert" className="type-footnote text-destructive">
+          <p role="alert" className="t-cap text-destructive">
             {error}
           </p>
         )}
@@ -320,7 +318,7 @@ export function ThisBottleRows({
             ) : (
               <span
                 className={cn(
-                  "type-body tabular",
+                  "t-body tabular",
                   row.source === "typical" ? "text-ink-3" : "text-ink-1",
                 )}
               >
@@ -330,7 +328,7 @@ export function ThisBottleRows({
           }
         />
       ))}
-      <p className="type-footnote px-4 py-2.5 text-ink-3">{FOOTNOTE}</p>
+      <p className="t-cap px-4 py-2.5 text-ink-3">{FOOTNOTE}</p>
     </InsetSection>
   );
 }

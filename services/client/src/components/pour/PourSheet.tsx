@@ -421,10 +421,8 @@ export function PourSheet({
             />
             <div className="flex min-w-0 flex-1 flex-col gap-3">
               <p className="flex flex-col" aria-live="polite">
-                <span className="type-numeral-xl tabular text-ink-1">
-                  {level}%
-                </span>
-                <span className="type-footnote">
+                <span className="t-score tabular text-ink-1">{level}%</span>
+                <span className="t-cap text-ink-3">
                   {from === 0
                     ? "left — this is the last of it"
                     : level >= from
@@ -440,7 +438,7 @@ export function PourSheet({
               />
             </div>
           </div>
-          <p className="type-footnote -mt-3">{containerNote(type)}</p>
+          <p className="t-cap text-ink-3 -mt-3">{containerNote(type)}</p>
 
           <WhoWith
             recent={recent}
@@ -460,7 +458,7 @@ export function PourSheet({
           {error !== null && (
             <div className="flex flex-col gap-1">
               {pouredAt !== null && (
-                <p className="type-callout text-ink-1">
+                <p className="t-cap text-ink-1">
                   Logged — but the level didn't save.
                 </p>
               )}
@@ -479,12 +477,12 @@ export function PourSheet({
             onChange={() => {}}
             readOnly
           />
-          <p className="type-body text-ink-2">
+          <p className="t-body text-ink-2">
             Finished the bottle? It leaves the cellar; every log of it stays,
             and you can undo this.
           </p>
           {finishError !== null && (
-            <p role="alert" className="type-callout text-destructive">
+            <p role="alert" className="t-cap text-destructive">
               {finishError}
             </p>
           )}
@@ -588,7 +586,7 @@ function WhoWith({
     recentIds.every((id) => selected.includes(id));
   return (
     <section className="flex flex-col gap-2" aria-labelledby={`${ids}-who`}>
-      <h3 id={`${ids}-who`} className="type-callout font-semibold">
+      <h3 id={`${ids}-who`} className="t-cap font-semibold">
         Who
       </h3>
       <div className="flex flex-wrap gap-2">
@@ -632,7 +630,7 @@ function WhoWith({
         />
       )}
       {selected.length > 0 && !othersOpen && (
-        <p className="type-footnote">
+        <p className="t-cap text-ink-3">
           Each friend gets this pour in their own log.
         </p>
       )}
@@ -725,7 +723,7 @@ function AfterFinish({
     const verdict = rated ?? shown;
     return (
       <div className="flex flex-col gap-4 pb-2" data-slot="pour-bands">
-        <p className="type-body text-ink-2">
+        <p className="t-body text-ink-2">
           {verdict === null
             ? "Where it sits on your lists."
             : `Your ${verdict}★ reads as ${BAND_LABELS[bandForScore(verdict)] ?? "Unrated"}.`}
@@ -749,7 +747,7 @@ function AfterFinish({
 
   return (
     <div className="flex flex-col gap-4 pb-2" data-slot="pour-rate">
-      <p className="type-body text-ink-2">
+      <p className="t-body text-ink-2">
         Your rating of the {subject.itemName} — the one on its page, not this
         glass.
       </p>
@@ -903,10 +901,10 @@ function BandRow({
   return (
     <li className="flex min-h-14 items-center gap-3 px-4 py-2">
       <div className="flex min-w-0 flex-1 flex-col">
-        <span className="type-callout truncate font-semibold text-ink-1">
+        <span className="t-cap truncate font-semibold text-ink-1">
           {placement.name}
         </span>
-        <span className="type-footnote">
+        <span className="t-cap text-ink-3">
           {BAND_LABELS[band] ?? "Unrated"}
           {tooLong && !settled && (
             <span className="block">
@@ -927,7 +925,7 @@ function BandRow({
         </span>
       </div>
       {settled ? (
-        <span className="type-footnote inline-flex items-center gap-1 text-success">
+        <span className="t-cap text-ink-3 inline-flex items-center gap-1 text-success">
           <Check aria-hidden className="size-4" />
           {BAND_LABELS[band] ?? "Unrated"}
         </span>

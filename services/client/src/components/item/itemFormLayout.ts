@@ -205,3 +205,34 @@ export const dateFromYear = (year: string, original: string): string => {
   if (yearFromDate(original) === trimmed) return original;
   return /^\d{4}$/.test(trimmed) ? `${trimmed}-01-01` : trimmed;
 };
+
+/** "alcohol_content_percentage" and "alcoholContentPercentage" alike. */
+const fieldWord = (key: string): string =>
+  key.replace(/[_\s-]/g, "").toLowerCase();
+
+/**
+ * C3 "Check this" (CROSS-LOT): `Item.unconfirmedFields` names the fields the
+ * label read guessed and nobody confirmed (`name`, `brandName`, `country`, or
+ * an attribute key). This maps them to the form's own paths, in the form's
+ * order, keeping only the fields the form shows; `brandName` only when the
+ * form has a brand field.
+ */
+export const checkPaths = (
+  unconfirmed: readonly string[],
+  layout: readonly FormEntry[],
+  withBrand: boolean,
+): string[] => {
+  const wanted = new Set(unconfirmed.map(fieldWord));
+  // The brand field sits right after the description (ItemForm's order).
+  const shown = layout.flatMap((entry) =>
+    withBrand && entry.kind === "description"
+      ? [entryPath(entry), "brandName"]
+      : [entryPath(entry)],
+  );
+  return shown.filter((path) =>
+    wanted.has(fieldWord(path.replace(/^attributes\./, ""))),
+  );
+};
+
+/** "1 to check", "3 to check" (CROSS-LOT: the counter beside the primary). */
+export const toCheckLabel = (count: number): string => `${count} to check`;

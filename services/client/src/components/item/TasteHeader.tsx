@@ -39,17 +39,17 @@ export function TasteHeader({ cells }: { cells: readonly TasteCell[] }) {
           data-cell={cell.key}
           className="flex min-h-[92px] min-w-0 flex-col items-center justify-center gap-1 px-2 py-3 text-center outline-none transition-colors duration-(--ca-dur-short) ease-standard focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:ring-inset active:bg-surface-3"
         >
-          <span aria-hidden className="type-overline text-ink-3">
+          <span aria-hidden className="t-micro text-ink-3">
             {cell.label}
           </span>
           {cell.value === null ? (
-            <span aria-hidden className="type-title-1 leading-none text-ink-3">
+            <span aria-hidden className="t-title leading-none text-ink-3">
               –
             </span>
           ) : (
             <span
               aria-hidden
-              className="type-title-1 tabular inline-flex items-center gap-1 leading-none text-ink-1"
+              className="t-title tabular inline-flex items-center gap-1 leading-none text-ink-1"
             >
               {formatScore(cell.value)}
               <Star
@@ -65,7 +65,7 @@ export function TasteHeader({ cells }: { cells: readonly TasteCell[] }) {
           <span
             aria-hidden
             className={cn(
-              "type-footnote max-w-full truncate",
+              "t-cap text-ink-3 max-w-full truncate",
               cell.key === "you" && cell.value === null && "text-ink-1",
             )}
           >

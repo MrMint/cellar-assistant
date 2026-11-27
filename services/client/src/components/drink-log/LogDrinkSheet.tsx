@@ -311,7 +311,7 @@ export function LogDrinkForm({
   return (
     <div className="flex flex-col gap-6 pb-2">
       <section className="flex flex-col gap-2" aria-labelledby={`${ids}-score`}>
-        <h3 id={`${ids}-score`} className="type-callout font-semibold">
+        <h3 id={`${ids}-score`} className="t-cap font-semibold">
           This glass
         </h3>
         <RatingInput
@@ -320,7 +320,7 @@ export function LogDrinkForm({
           onChange={(score) => patch({ score })}
           onClear={() => patch({ score: null })}
         />
-        <p className="type-footnote">
+        <p className="t-cap text-ink-3">
           Optional. Your review of the {subject.itemName} stays as it is.
         </p>
       </section>
@@ -442,7 +442,7 @@ function NoteAndTags({
       <label
         id={`${ids}-note`}
         htmlFor={`${ids}-note-input`}
-        className="type-callout font-semibold"
+        className="t-cap font-semibold"
       >
         Tasting note
       </label>
@@ -457,10 +457,7 @@ function NoteAndTags({
       />
 
       {suggestState.fetching && (
-        <p
-          className="type-footnote flex items-center gap-2 text-ai"
-          role="status"
-        >
+        <p className="t-cap flex items-center gap-2 text-ai" role="status">
           <Spinner aria-hidden className="size-3.5" />
           Finding the flavours in your note…
         </p>
@@ -469,7 +466,7 @@ function NoteAndTags({
       {shown.length > 0 && (
         <AIDraftField source="suggested" drafted>
           <div className="flex flex-col gap-2 pt-6">
-            <p className="type-footnote" id={`${ids}-suggested`}>
+            <p className="t-cap text-ink-3" id={`${ids}-suggested`}>
               From your note — tap to add
             </p>
             <ul
@@ -508,10 +505,10 @@ function NoteAndTags({
           </div>
         </AIDraftField>
       )}
-      {aiNote !== null && <p className="type-footnote">{aiNote}</p>}
+      {aiNote !== null && <p className="t-cap text-ink-3">{aiNote}</p>}
 
       <div className="flex flex-col gap-2">
-        <label htmlFor={`${ids}-tag`} className="type-footnote">
+        <label htmlFor={`${ids}-tag`} className="t-cap text-ink-3">
           Flavour tags
         </label>
         {draft.tags.length > 0 && (
@@ -560,7 +557,7 @@ function NoteAndTags({
           </Button>
         </form>
         {tagError !== null && (
-          <p role="alert" className="type-footnote text-destructive">
+          <p role="alert" className="t-cap text-destructive">
             {tagError}
           </p>
         )}
@@ -610,16 +607,14 @@ function PlacePicker({
       <label
         id={`${ids}-where`}
         htmlFor={`${ids}-where-input`}
-        className="type-callout font-semibold"
+        className="t-cap font-semibold"
       >
         Where
       </label>
       {place !== null ? (
         <div className="flex min-h-11 items-center gap-3 rounded-md bg-surface-2 pr-1 pl-3">
           <Place aria-hidden className="size-4 text-ink-2" />
-          <span className="type-body min-w-0 flex-1 truncate">
-            {place.name}
-          </span>
+          <span className="t-body min-w-0 flex-1 truncate">{place.name}</span>
           <IconButton
             aria-label={`Remove ${place.name}`}
             variant="ghost"
@@ -640,20 +635,20 @@ function PlacePicker({
             className="h-11"
           />
           {fetching && query.length >= 2 && (
-            <p className="type-footnote" role="status">
+            <p className="t-cap text-ink-3" role="status">
               Searching places…
             </p>
           )}
           {!fetching &&
             query.length >= 2 &&
             (error !== undefined || (data !== undefined && !result.ok)) && (
-              <p className="type-footnote">
+              <p className="t-cap text-ink-3">
                 Place search isn't available right now. You can log without a
                 place.
               </p>
             )}
           {!fetching && query.length >= 2 && result.ok && hits.length === 0 && (
-            <p className="type-footnote">No places match “{query}”.</p>
+            <p className="t-cap text-ink-3">No places match “{query}”.</p>
           )}
           {hits.length > 0 && (
             <ul
@@ -672,9 +667,9 @@ function PlacePicker({
                   >
                     <Place aria-hidden className="size-4 shrink-0 text-ink-3" />
                     <span className="flex min-w-0 flex-col">
-                      <span className="type-body truncate">{hit.name}</span>
+                      <span className="t-body truncate">{hit.name}</span>
                       {hit.locality !== null && (
-                        <span className="type-footnote truncate">
+                        <span className="t-cap text-ink-3 truncate">
                           {hit.locality}
                         </span>
                       )}
@@ -736,7 +731,7 @@ function PhotoPicker({
 
   return (
     <section className="flex flex-col gap-2">
-      <h3 className="type-callout font-semibold">Photo</h3>
+      <h3 className="t-cap font-semibold">Photo</h3>
       {shown !== null ? (
         <div className="relative w-28 overflow-hidden rounded-md bg-surface-2">
           {/* biome-ignore lint/performance/noImgElement: a local blob preview, not a remote image next/image could optimise */}
@@ -782,7 +777,7 @@ function PhotoPicker({
         }}
       />
       {error !== null && (
-        <p role="alert" className="type-footnote text-destructive">
+        <p role="alert" className="t-cap text-destructive">
           {error}
         </p>
       )}
