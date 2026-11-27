@@ -230,7 +230,7 @@ export const easing = {
 } as const;
 
 /** Height of the tab bar, before the bottom safe area. */
-export const TAB_BAR_HEIGHT_PX = 49;
+export const TAB_BAR_HEIGHT_PX = 64;
 
 /**
  * How long a loading shell's placeholder blocks wait before they fade in
