@@ -233,41 +233,48 @@ export function MenuCapture({
 
   return (
     <div data-slot="menu-capture" className="flex flex-col gap-3">
-      <CaptureHeader leading={leading} title="Scan a menu" />
-
       {photo === null ? (
-        <CaptureCamera
-          onCapture={onShutter}
-          shutterLabel="Photograph the menu"
-        />
+        // Capture-Camera: the camera stays dark in both themes.
+        <div className="keep-dark -mx-4 flex flex-col gap-2 bg-bg px-4 pb-3 text-ink">
+          <CaptureHeader leading={leading} title="Scan a menu" />
+          <CaptureCamera
+            onCapture={onShutter}
+            shutterLabel="Photograph the menu"
+            modeRow={modeRow}
+            showBackground
+          />
+        </div>
       ) : (
-        <CapturePhotoPreview
-          photo={photo}
-          alt="Your menu, as snapped"
-          onRetake={
-            busy
-              ? undefined
-              : () => {
-                  setPhoto(null);
-                  setSending({ kind: "idle" });
-                }
-          }
-        >
-          {busy ? (
-            <p role="status" className="flex items-center gap-2 t-cap">
-              <Spinner aria-hidden className="size-4" />
-              Sending the menu…
-            </p>
-          ) : chosen === null ? (
-            <p className="t-cap">
-              Where&rsquo;s this menu from? It&rsquo;s read as soon as you say.
-            </p>
-          ) : null}
-        </CapturePhotoPreview>
+        <>
+          <CaptureHeader leading={leading} title="Scan a menu" />
+          <CapturePhotoPreview
+            photo={photo}
+            alt="Your menu, as snapped"
+            onRetake={
+              busy
+                ? undefined
+                : () => {
+                    setPhoto(null);
+                    setSending({ kind: "idle" });
+                  }
+            }
+          >
+            {busy ? (
+              <p role="status" className="flex items-center gap-2 t-cap">
+                <Spinner aria-hidden className="size-4" />
+                Sending the menu…
+              </p>
+            ) : chosen === null ? (
+              <p className="t-cap">
+                Where&rsquo;s this menu from? It&rsquo;s read as soon as you
+                say.
+              </p>
+            ) : null}
+          </CapturePhotoPreview>
+          {/* Not while the photo is going up: a switch would drop it mid-send. */}
+          {!busy && modeRow}
+        </>
       )}
-
-      {/* Not while the photo is going up: a switch would drop it mid-send. */}
-      {!busy && modeRow}
 
       <PlaceCard
         chosen={chosen}
@@ -286,9 +293,9 @@ export function MenuCapture({
       />
 
       {sending.kind === "failed" && (
-        <Alert variant="destructive" className="border-destructive/60">
+        <Alert variant="destructive" className="border-danger/60">
           <ErrorIcon aria-hidden />
-          <AlertDescription className="gap-2 text-destructive/90">
+          <AlertDescription className="gap-2 text-danger">
             <p>{sending.reason}</p>
             {photo !== null && chosen !== null && (
               <Button
@@ -376,7 +383,7 @@ function PlaceCard({
     <section
       aria-label="Where this menu is from"
       data-slot="menu-place"
-      className="flex flex-col gap-3 rounded-lg bg-surface-1 p-4"
+      className="flex flex-col gap-3 rounded-lg bg-card p-4"
     >
       <div className="flex items-start gap-3">
         <Place
@@ -395,8 +402,8 @@ function PlaceCard({
   if (chosen !== null) {
     return shell(
       <>
-        <p className="t-head flex items-center gap-1.5 text-ink-1">
-          <Check aria-hidden className="size-4 shrink-0 text-success" />
+        <p className="t-head flex items-center gap-1.5 text-ink">
+          <Check aria-hidden className="size-4 shrink-0 text-act-ink" />
           <span className="truncate">At {chosen.name}</span>
         </p>
         <p className="t-cap">The menu is filed here.</p>
@@ -410,7 +417,7 @@ function PlaceCard({
   if (nearest !== null) {
     return shell(
       <>
-        <p className="t-head truncate text-ink-1">At {nearest.name}?</p>
+        <p className="t-head truncate text-ink">At {nearest.name}?</p>
         <p className="t-cap">
           {[
             nearest.category ? formatCategoryName(nearest.category) : null,
@@ -488,7 +495,7 @@ function PlaceCard({
 
   return shell(
     <>
-      <p className="t-head text-ink-1">Which place is this menu from?</p>
+      <p className="t-head text-ink">Which place is this menu from?</p>
       <p className="t-cap">
         {geo.location === null
           ? "Pick it, and the menu is filed there."

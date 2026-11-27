@@ -651,7 +651,7 @@ const ItemOnboardingRun = ({
           {isNotNil(context.error) && (
             <Alert className="max-w-[600px]">
               <Warning aria-hidden />
-              <AlertDescription className="text-ink-1">
+              <AlertDescription className="text-ink">
                 <p>{context.error}</p>
               </AlertDescription>
             </Alert>
@@ -727,7 +727,7 @@ const ItemOnboardingRun = ({
               {typeof context.rereadError === "string" ? (
                 <Alert>
                   <Warning aria-hidden />
-                  <AlertDescription className="text-ink-1">
+                  <AlertDescription className="text-ink">
                     <p>{context.rereadError}</p>
                   </AlertDescription>
                 </Alert>

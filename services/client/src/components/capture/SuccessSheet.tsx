@@ -6,6 +6,7 @@ import { TypeGlyph } from "@/components/app/TypeChip";
 import type { ApiItemType } from "@/components/cellar-api/itemTypes";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { feedback } from "@/lib/feedback";
 
 export type SuccessSheetProps = {
   open: boolean;
@@ -60,7 +61,10 @@ export function SuccessSheet({
     <BottomSheet
       open={open}
       onOpenChange={(next) => {
-        if (!next) onDone();
+        if (!next) {
+          feedback("press");
+          onDone();
+        }
       }}
       title={inCellar ? "+1 bottle" : "Added to the catalog"}
       description={
@@ -87,7 +91,7 @@ export function SuccessSheet({
       }
     >
       <div className="flex items-center gap-4 pb-2">
-        <div className="relative size-20 shrink-0 overflow-hidden rounded-md bg-surface-2">
+        <div className="relative size-20 shrink-0 overflow-hidden rounded-lg bg-raised">
           {photo === undefined ? (
             <span className="flex size-full items-center justify-center">
               <TypeGlyph type={itemType} className="size-8" />
@@ -98,7 +102,7 @@ export function SuccessSheet({
           )}
           <span
             aria-hidden
-            className="zoom-in-50 fade-in-0 absolute right-1 bottom-1 flex size-6 animate-in items-center justify-center rounded-full bg-background text-success duration-(--ca-dur-long) ease-enter motion-reduce:animate-none"
+            className="zoom-in-50 fade-in-0 absolute right-1 bottom-1 flex size-6 animate-in items-center justify-center rounded-full bg-card text-act-ink shadow-pop duration-(--ca-dur-long) ease-enter motion-reduce:animate-none"
           >
             <Success className="size-5" />
           </span>
@@ -112,7 +116,7 @@ export function SuccessSheet({
       {imageError !== undefined && (
         <Alert className="mb-2">
           <Warning aria-hidden />
-          <AlertDescription className="text-ink-1">
+          <AlertDescription className="text-ink">
             <p>The photo was not saved: {imageError}</p>
           </AlertDescription>
         </Alert>

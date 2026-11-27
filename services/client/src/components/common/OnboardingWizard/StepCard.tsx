@@ -16,7 +16,7 @@ export const StepGrid = ({ className, ...props }: ComponentProps<"div">) => (
 /** A tonal step surface: `ui/card` without the border (design §3.3). */
 export const StepCard = ({ className, ...props }: ComponentProps<"div">) => (
   <Card
-    className={cn("gap-4 border-0 bg-surface-1 p-4 shadow-none", className)}
+    className={cn("gap-4 border-0 bg-card p-4 shadow-none", className)}
     {...props}
   />
 );

@@ -12,6 +12,7 @@ import {
   cameraKeepsListening,
 } from "@/lib/camera/camera-status";
 import { libraryImageToDataUrl } from "@/lib/camera/library-image";
+import { feedback } from "@/lib/feedback";
 import { cn } from "@/lib/utils";
 
 // N04: every constraint is `ideal` (`CAMERA_CAPTURE_CONSTRAINTS`). The old
@@ -84,11 +85,15 @@ export const CameraCapture = ({
     },
     [onCapture],
   );
-  const openLibrary = useCallback(() => libraryRef.current?.click(), []);
+  const openLibrary = useCallback(() => {
+    feedback("press");
+    libraryRef.current?.click();
+  }, []);
 
   // Toggle torch/flashlight
   const toggleTorch = useCallback(async () => {
     if (!streamRef.current || !torchSupported) return;
+    feedback("toggle");
 
     try {
       const videoTrack = streamRef.current.getVideoTracks()[0];
@@ -167,7 +172,7 @@ export const CameraCapture = ({
   // Enhanced capture with quality optimization
   const capture = useCallback(async () => {
     if (webcamRef.current === null || isCapturing) return;
-
+    feedback("medium");
     setIsCapturing(true);
 
     try {
@@ -210,7 +215,7 @@ export const CameraCapture = ({
   return (
     <div
       data-slot="camera-capture"
-      className="relative aspect-square max-h-[600px] w-full overflow-hidden rounded-lg bg-surface-2"
+      className="keep-dark relative aspect-square max-h-[600px] w-full overflow-hidden rounded-lg bg-raised text-ink"
     >
       <input
         ref={libraryRef}
@@ -233,11 +238,11 @@ export const CameraCapture = ({
       {failed !== null && (
         <div
           role="alert"
-          className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-4 bg-surface-2 p-6 text-center"
+          className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-4 bg-raised p-6 text-center"
         >
           <p className="t-body">{failed.message}</p>
           {libraryError !== null && (
-            <p className="t-cap text-destructive">{libraryError}</p>
+            <p className="t-cap text-danger">{libraryError}</p>
           )}
           <div className="flex flex-row flex-wrap justify-center gap-2">
             <Button onClick={openLibrary}>
@@ -281,10 +286,10 @@ export const CameraCapture = ({
           <div
             aria-hidden
             className={cn(
-              "pointer-events-none absolute size-[50px] rounded-full border-2 border-white/80",
+              "pointer-events-none absolute size-[50px] rounded-full border-2 border-on-glass",
               "transition-[opacity,scale] duration-(--ca-dur-medium) ease-standard",
-              "before:absolute before:top-1/2 before:left-1/2 before:h-5 before:w-0.5 before:-translate-1/2 before:bg-white/80 before:content-['']",
-              "after:absolute after:top-1/2 after:left-1/2 after:h-0.5 after:w-5 after:-translate-1/2 after:bg-white/80 after:content-['']",
+              "before:absolute before:top-1/2 before:left-1/2 before:h-5 before:w-0.5 before:-translate-1/2 before:bg-on-glass before:content-['']",
+              "after:absolute after:top-1/2 after:left-1/2 after:h-0.5 after:w-5 after:-translate-1/2 after:bg-on-glass after:content-['']",
               showFocusIndicator
                 ? "scale-100 opacity-100"
                 : "scale-150 opacity-0",
@@ -294,7 +299,7 @@ export const CameraCapture = ({
           />
         )}
         {failed === null && (
-          <div className="absolute inset-x-0 bottom-0 flex items-center justify-between bg-black/30 p-4 backdrop-blur-xs">
+          <div className="absolute inset-x-0 bottom-0 flex items-center justify-between bg-scrim p-4 backdrop-blur-xs">
             {/* Torch control, or a spacer that keeps the shutter centred */}
             {torchSupported ? (
               // The label names the action, as BarcodeScanner's torch does, so
@@ -304,10 +309,7 @@ export const CameraCapture = ({
                 aria-label={torchEnabled ? "Turn off light" : "Turn on light"}
                 onClick={toggleTorch}
                 variant="outline"
-                className={cn(
-                  torchEnabled &&
-                    "bg-ink-1 text-background hover:bg-ink-1/90 hover:text-background dark:bg-ink-1 dark:hover:bg-ink-1/90",
-                )}
+                className={cn(torchEnabled && "bg-sel text-ink hover:bg-sel")}
               >
                 <Idea className={cn(torchEnabled && "fill-current")} />
               </IconButton>

@@ -24,7 +24,7 @@ export const CatalogMatchPrompt = ({
 }: CatalogMatchPromptProps) => {
   const summary = catalogMatchSummary(match);
   return (
-    <StepCard className="max-w-[600px] gap-3 bg-surface-2">
+    <StepCard className="max-w-[600px] gap-3 bg-raised">
       <h2 className="t-head">Is it this one?</h2>
       <div className="flex flex-col gap-0.5">
         <p className="t-body font-semibold">{match.item.name}</p>

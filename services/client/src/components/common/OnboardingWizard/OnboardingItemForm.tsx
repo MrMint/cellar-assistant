@@ -429,7 +429,7 @@ export const OnboardingItemForm = ({
             ))}
             <Field
               data-disabled={busy || undefined}
-              className="gap-2 border-transparent border-l-2 pl-3 text-foreground"
+              className="gap-2 border-transparent border-l-2 pl-3 text-ink"
             >
               <FieldLabel htmlFor={barcodeId}>Barcode</FieldLabel>
               <Input

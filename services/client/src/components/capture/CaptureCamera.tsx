@@ -150,7 +150,10 @@ export function CaptureCamera({
     onCapture(image);
   };
 
-  const openLibrary = () => libraryRef.current?.click();
+  const openLibrary = () => {
+    feedback("press");
+    libraryRef.current?.click();
+  };
   const handleLibraryPick = async (
     event: React.ChangeEvent<HTMLInputElement>,
   ) => {

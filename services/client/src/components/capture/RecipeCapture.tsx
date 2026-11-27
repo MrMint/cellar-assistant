@@ -90,55 +90,64 @@ export function RecipeCapture({
 
   return (
     <div data-slot="recipe-capture" className="flex flex-col gap-3">
-      <CaptureHeader leading={leading} title="Snap a recipe" />
-
       {photo === null ? (
-        <CaptureCamera onCapture={read} shutterLabel="Photograph the recipe" />
+        // Capture-Camera: the camera stays dark in both themes.
+        <div className="keep-dark -mx-4 flex flex-col gap-2 bg-bg px-4 pb-3 text-ink">
+          <CaptureHeader leading={leading} title="Snap a recipe" />
+          <CaptureCamera
+            onCapture={read}
+            shutterLabel="Photograph the recipe"
+            modeRow={modeRow}
+            showBackground
+          />
+        </div>
       ) : (
-        <CapturePhotoPreview
-          photo={photo}
-          alt="Your recipe, as snapped"
-          onRetake={
-            inFlight
-              ? undefined
-              : () => {
-                  setPhoto(null);
-                  setUnreadable(false);
-                  reset();
-                }
-          }
-        >
-          {inFlight ? (
-            <div className="flex w-full flex-col gap-2">
-              <p
-                role="status"
-                className="flex items-center justify-between t-cap"
-              >
-                <span>{label}</span>
-                <span className="tabular">{Math.round(progress)}%</span>
-              </p>
-              {/* An AI progress state, so it is drawn in teal. */}
-              <Progress
-                aria-label={label}
-                value={phase.kind === "running" ? progress : null}
-                className="bg-ai/20 [&>[data-slot=progress-indicator]]:bg-ai"
-              />
-            </div>
-          ) : unreadable ? null : phase.kind === "idle" ? (
-            <Button onClick={() => read(photo)}>Read this recipe</Button>
-          ) : phase.kind === "failed" || phase.kind === "cancelled" ? (
-            <Button onClick={() => read(photo)}>Try again</Button>
-          ) : null}
-        </CapturePhotoPreview>
+        <>
+          <CaptureHeader leading={leading} title="Snap a recipe" />
+          <CapturePhotoPreview
+            photo={photo}
+            alt="Your recipe, as snapped"
+            onRetake={
+              inFlight
+                ? undefined
+                : () => {
+                    setPhoto(null);
+                    setUnreadable(false);
+                    reset();
+                  }
+            }
+          >
+            {inFlight ? (
+              <div className="flex w-full flex-col gap-2">
+                <p
+                  role="status"
+                  className="flex items-center justify-between t-cap"
+                >
+                  <span>{label}</span>
+                  <span className="tabular">{Math.round(progress)}%</span>
+                </p>
+                {/* An AI progress state, so it is drawn in teal. */}
+                <Progress
+                  aria-label={label}
+                  value={phase.kind === "running" ? progress : null}
+                  className="bg-ai/20 [&>[data-slot=progress-indicator]]:bg-ai"
+                />
+              </div>
+            ) : unreadable ? null : phase.kind === "idle" ? (
+              <Button onClick={() => read(photo)}>Read this recipe</Button>
+            ) : phase.kind === "failed" || phase.kind === "cancelled" ? (
+              <Button onClick={() => read(photo)}>Try again</Button>
+            ) : null}
+          </CapturePhotoPreview>
+          {/* Not while the read is in flight: a switch would stop watching it. */}
+          {!inFlight && modeRow}
+        </>
       )}
 
-      {/* Not while the read is in flight: a switch would stop watching it. */}
-      {!inFlight && modeRow}
-
       {unreadable && (
-        <Alert variant="destructive" className="border-destructive/60">
+        <Alert variant="destructive" className="border-danger/60">
           <ErrorIcon aria-hidden />
-          <AlertDescription className="text-destructive/90">
+          <AlertDescription className="text-danger">
             The photo could not be read. Retake it.
           </AlertDescription>
         </Alert>
@@ -164,10 +173,10 @@ export function RecipeCapture({
       )}
 
       {phase.kind === "failed" && (
-        <Alert variant="destructive" className="border-destructive/60">
+        <Alert variant="destructive" className="border-danger/60">
           <ErrorIcon aria-hidden />
           <AlertTitle>The recipe wasn&rsquo;t read</AlertTitle>
-          <AlertDescription className="text-destructive/90">
+          <AlertDescription className="text-danger">
             {phase.reason}
           </AlertDescription>
         </Alert>
@@ -189,7 +198,7 @@ export function RecipeCapture({
               <Link
                 href={`/recipes/${phase.recipeId}`}
                 underline="always"
-                className="text-ink-1"
+                className="text-ink"
               >
                 its page
               </Link>{" "}

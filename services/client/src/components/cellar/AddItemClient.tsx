@@ -4,6 +4,7 @@ import { VesselSilhouette } from "@/components/app/LabelPlate";
 import { Link } from "@/components/app/Link";
 import { itemTypeTokens } from "@/components/app/TypeChip";
 import type { ApiItemType } from "@/components/cellar-api/itemTypes";
+import { feedback } from "@/lib/feedback";
 import { cn } from "@/lib/utils";
 
 type ItemType = "Beer" | "Wine" | "Spirit" | "Coffee" | "Sake" | "Tea";
@@ -28,9 +29,9 @@ const AddItemTypeCard = ({ type, href }: AddItemTypeCardProps) => (
   <div
     data-slot="add-item-type-card"
     className={cn(
-      "relative flex min-w-0 flex-col overflow-hidden rounded-lg bg-surface-1",
+      "relative flex min-w-0 flex-col overflow-hidden rounded-lg bg-card",
       href !== undefined &&
-        "transition-[background-color,transform] duration-(--ca-dur-micro) ease-standard hover:bg-surface-2 has-[a:active]:scale-97 motion-reduce:has-[a:active]:scale-100",
+        "transition-[background-color,transform] duration-(--ca-dur-micro) ease-standard hover:bg-raised has-[a:active]:scale-97 motion-reduce:has-[a:active]:scale-100",
     )}
   >
     {/* Decorative: the card's name says the type. */}
@@ -47,14 +48,16 @@ const AddItemTypeCard = ({ type, href }: AddItemTypeCardProps) => (
     </div>
     <div className="flex p-4">
       {href === undefined ? (
-        <span className="t-head grow text-center text-ink-1">
-          {type}
-        </span>
+        <span className="t-head grow text-center text-ink">{type}</span>
       ) : (
-        <Link overlay underline="none" href={href} className="grow">
-          <span className="t-head block text-center text-ink-1">
-            {type}
-          </span>
+        <Link
+          overlay
+          underline="none"
+          href={href}
+          className="grow"
+          onClick={() => feedback("press")}
+        >
+          <span className="t-head block text-center text-ink">{type}</span>
         </Link>
       )}
     </div>
@@ -87,7 +90,7 @@ export function AddItemClient({
 
   return (
     <div className="flex flex-col gap-8">
-      <h2 className="t-title text-ink-1">
+      <h2 className="t-title text-ink">
         {cellarId ? `Add an item to ${cellarName}` : "Add an item"}
       </h2>
       {cellarId && !canAdd && (
