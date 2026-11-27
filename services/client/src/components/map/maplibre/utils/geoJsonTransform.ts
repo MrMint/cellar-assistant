@@ -1,6 +1,6 @@
 import type * as GeoJSON from "geojson";
 import { MAP_CONFIG } from "../../config/constants";
-import { ITEM_TYPE_COLORS } from "../../constants/colors";
+import { placeKind } from "../../core/map-places";
 import { reviewPinLabel } from "../../places/place-review";
 import type {
   ItemType,
@@ -122,7 +122,6 @@ export interface POIFeatureProperties {
   primaryCategory: string;
   iconName: string;
   pinImageName: string;
-  itemTypeColor: string;
   relevance: number;
   opacity: number;
   sortKey: number;
@@ -221,11 +220,8 @@ function placesToGeoJSON(
       const reviewLabel = reviewPinLabel(place.review_status);
       const relevance =
         reviewLabel === null ? (place.overallRelevance ?? 50) : 100;
-      const dominant = getDominantItemType(place.itemTypeScores);
-      const color = dominant
-        ? ITEM_TYPE_COLORS[dominant]
-        : (ITEM_TYPE_COLORS.wine as string);
-      const colorKey = dominant ?? "default";
+      // Map board: a pin takes its place kind's hue (`palette.ts`).
+      const colorKey = placeKind(place);
       const iconName = categoryToIcon(place.primary_category);
       const wantToTry = wantToGo.has(place.id);
       const pinImageName = pinName(colorKey, iconName, wantToTry);
@@ -247,7 +243,6 @@ function placesToGeoJSON(
           primaryCategory: place.primary_category,
           iconName,
           pinImageName,
-          itemTypeColor: color,
           relevance,
           // A pin you saved stays fully drawn even when a filter dims its
           // neighbours: it is the one you came to the map to find. A rejected

@@ -1,6 +1,6 @@
 import type { Map as MaplibreMap } from "maplibre-gl";
-import { color as tokens } from "@/lib/tokens";
-import { ITEM_TYPE_COLORS } from "../../constants/colors";
+import type { PlaceKind } from "../../core/map-places";
+import { type MapPalette, mapPalette } from "../palette";
 
 // Material Design icon SVG paths (viewBox 0 0 24 24)
 const ICON_PATHS: Record<string, string> = {
@@ -38,12 +38,9 @@ const ICON_PATHS: Record<string, string> = {
 // ============================================================================
 
 // Derive pin colors from the single source of truth, plus a "default" entry
-const PIN_COLORS: Record<string, string> = {
-  ...ITEM_TYPE_COLORS,
-  default: "#808080",
-};
+/** The pin colour keys: one per place kind (Map board: pins by kind). */
+const PIN_KINDS: readonly PlaceKind[] = ["coffee", "food", "bar", "other"];
 
-// Compact teardrop pin (Google Maps proportions)
 const PIN_WIDTH = 30;
 const PIN_HEIGHT = 37;
 const PIN_RENDER_WIDTH = PIN_WIDTH * 2;
@@ -73,14 +70,14 @@ export const WANT_BADGE = { cx: 23.5, cy: 6.5, r: 5.5, stroke: 1 } as const;
 /** The pin's viewBox, for the test that keeps the badge inside it. */
 export const PIN_VIEWBOX = { width: PIN_WIDTH, height: PIN_HEIGHT } as const;
 
-export function wantBadgeSVG(): string {
+export function wantBadgeSVG(palette: MapPalette = mapPalette("dark")): string {
   const { cx, cy, r, stroke } = WANT_BADGE;
   const scale = 0.38;
   const offset = 12 * scale;
   return [
-    `<circle cx="${cx}" cy="${cy}" r="${r}" fill="${tokens.bg}" stroke="${tokens.ink1}" stroke-width="${stroke}"/>`,
+    `<circle cx="${cx}" cy="${cy}" r="${r}" fill="${palette.badgeBody}" stroke="${palette.badgeInk}" stroke-width="${stroke}"/>`,
     `<g transform="translate(${cx - offset}, ${cy - offset}) scale(${scale})">`,
-    `<path d="${BOOKMARK_PATH}" fill="${tokens.ink1}" stroke="${tokens.ink1}" stroke-width="2" stroke-linejoin="round"/>`,
+    `<path d="${BOOKMARK_PATH}" fill="${palette.badgeInk}" stroke="${palette.badgeInk}" stroke-width="2" stroke-linejoin="round"/>`,
     `</g>`,
   ].join("");
 }
@@ -97,10 +94,12 @@ export function pinImageName(
 }
 
 function buildPinSVG(
-  color: string,
+  palette: MapPalette,
+  kind: PlaceKind,
   iconPath: string,
   wantToTry = false,
 ): string {
+  const color = palette.kind[kind];
   const circleR = 12;
   const circleCX = 15;
   const circleCY = 14;
@@ -111,14 +110,15 @@ function buildPinSVG(
   return [
     `<svg xmlns="http://www.w3.org/2000/svg" width="${PIN_RENDER_WIDTH}" height="${PIN_RENDER_HEIGHT}" viewBox="0 0 ${PIN_WIDTH} ${PIN_HEIGHT}">`,
     `<defs><filter id="s" x="-20%" y="-10%" width="140%" height="140%">`,
-    `<feDropShadow dx="0" dy="1.5" stdDeviation="1.5" flood-color="rgba(0,0,0,0.35)"/>`,
+    `<feDropShadow dx="0" dy="1.5" stdDeviation="1.5" flood-color="${palette.shadow}" flood-opacity="0.5"/>`,
     `</filter></defs>`,
-    `<path d="${PIN_PATH}" fill="white" stroke="#d0d0d0" stroke-width="0.5" filter="url(#s)"/>`,
-    `<circle cx="${circleCX}" cy="${circleCY}" r="${circleR}" fill="${color}"/>`,
+    // The board's pin: the card surface, a ring and the glyph in the kind's hue.
+    `<path d="${PIN_PATH}" fill="${palette.pinBody}" stroke="${color}" stroke-width="1.5" filter="url(#s)"/>`,
+    `<circle cx="${circleCX}" cy="${circleCY}" r="${circleR - 1.5}" fill="${palette.pinBody}"/>`,
     `<g transform="translate(${iconTranslateX}, ${iconTranslateY}) scale(${iconScale})">`,
-    `<path d="${iconPath}" fill="white"/>`,
+    `<path d="${iconPath}" fill="${color}"/>`,
     `</g>`,
-    wantToTry ? wantBadgeSVG() : "",
+    wantToTry ? wantBadgeSVG(palette) : "",
     `</svg>`,
   ].join("");
 }
@@ -140,26 +140,30 @@ function svgToImage(
  * Generate and load all composite pin images into the map sprite.
  *
  * Produces (colors x icons) images, twice — plain and want-to-go (X08) —
- * currently 7 x 9 x 2 = 126 combinations.
+ * currently 4 kinds x 9 glyphs x 2 = 72 images.
  * Each is a data-URI SVG decoded in-memory, no network requests involved.
  */
-export async function loadPOIIcons(map: MaplibreMap): Promise<void> {
+export async function loadPOIIcons(
+  map: MaplibreMap,
+  palette: MapPalette,
+): Promise<void> {
   const iconEntries = Object.entries(ICON_PATHS);
-  const colorEntries = Object.entries(PIN_COLORS);
 
-  const pinPromises = colorEntries.flatMap(([colorKey, colorHex]) =>
+  // The names carry no theme: a theme change redraws the same images in
+  // place (`updateImage`), and the layers keep their `icon-image`.
+  const pinPromises = PIN_KINDS.flatMap((kind) =>
     iconEntries.flatMap(([iconName, iconPath]) =>
       [false, true].map(async (wantToTry) => {
-        const pinName = pinImageName(colorKey, iconName, wantToTry);
-        if (map.hasImage(pinName)) return;
-
-        const svg = buildPinSVG(colorHex, iconPath, wantToTry);
+        const pinName = pinImageName(kind, iconName, wantToTry);
+        const svg = buildPinSVG(palette, kind, iconPath, wantToTry);
         const image = await svgToImage(
           svg,
           PIN_RENDER_WIDTH,
           PIN_RENDER_HEIGHT,
         );
-        if (!map.hasImage(pinName)) {
+        if (map.hasImage(pinName)) {
+          map.updateImage(pinName, image);
+        } else {
           map.addImage(pinName, image, { pixelRatio: 2 });
         }
       }),

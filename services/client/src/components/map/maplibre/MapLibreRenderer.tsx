@@ -3,22 +3,30 @@
 import type * as GeoJSON from "geojson";
 import "maplibre-gl/dist/maplibre-gl.css";
 
+import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Map as MapGL,
   type MapLayerMouseEvent,
   type MapRef,
 } from "react-map-gl/maplibre";
+import { Add, Decrease, ICON_STROKE, MyLocation } from "@/components/app/icons";
+import { GlassDisc } from "@/components/app/overlays/GlassDisc";
 import { useNavigate } from "@/components/app/useNavigate";
-import { useMediaQuery } from "@/hooks/useMediaQuery";
+import { breakpointUp, useMediaQuery } from "@/hooks/useMediaQuery";
 import type { CachedLocation } from "@/lib/geo-cookie/parse";
+import { useResolvedTheme } from "@/lib/theme/client";
 import { cn } from "@/lib/utils";
 import { useWantToGoPlaceIds } from "../../want-to-try/useWantToGoPlaceIds";
+import type { DockDetent } from "../core/dock";
 import { LocationPrePrompt } from "../core/LocationPrePrompt";
 import { MapBottomStack } from "../core/MapBottomStack";
-import { MapControls } from "../core/MapControls";
 import { MapErrorBanner } from "../core/MapErrorBanner";
+import { MapPlacesColumn, MapPlacesDock } from "../core/MapPlaces";
 import { MapShell } from "../core/MapShell";
+import { matchesKinds } from "../core/map-places";
+import { PlaceQuickLook } from "../core/PlaceQuickLook";
+import { MapPlacePane } from "../desktop/MapPlacePane";
 import {
   LOCATION_DENIED_MESSAGE,
   locationButtonAction,
@@ -27,6 +35,7 @@ import {
 import { useGeolocation } from "../hooks/useGeolocation";
 import { useMapDeepLink } from "../hooks/useMapDeepLink";
 import { useMapInitialFlight } from "../hooks/useMapInitialFlight";
+import { useMapList } from "../hooks/useMapList";
 import {
   useMapActions,
   useMapCore,
@@ -44,9 +53,7 @@ import {
   PlaceDetailsDrawer,
   type PlaceDetailsDrawerRef,
 } from "../places/PlaceDetailsDrawer";
-import { SearchEmptyState } from "../places/SearchEmptyState";
-import { SearchResultsList } from "../places/SearchResultsList";
-import { createPlaceHref, showNotOnMapYet } from "../places/search-empty-state";
+import { createPlaceHref } from "../places/search-empty-state";
 import type { PlaceResult } from "../types";
 import { getDrawerOffset } from "../utils/layout";
 import { basemapStyle, MAP_CANVAS_BACKGROUND } from "./basemap";
@@ -54,6 +61,7 @@ import { INTERACTIVE_LAYER_IDS } from "./constants";
 import { useMapBoundsML } from "./hooks/useMapBoundsML";
 import { useMapInteraction } from "./hooks/useMapInteraction";
 import { POISymbolLayer } from "./POISymbolLayer";
+import { type MapTheme, mapPalette } from "./palette";
 import { SelectedPlaceLayer } from "./SelectedPlaceLayer";
 import { UserLocationLayer } from "./UserLocationLayer";
 import { loadPOIIcons } from "./utils/iconLoader";
@@ -64,6 +72,33 @@ interface MapLibreRendererProps {
   cachedLocation?: CachedLocation | null;
 }
 
+/** The map's own height, measured: the dock's detents come from it. */
+function useHeightOf(element: HTMLElement | null): number {
+  const [height, setHeight] = useState(0);
+  useEffect(() => {
+    if (!element) return;
+    const update = () => setHeight(element.clientHeight);
+    update();
+    const observer =
+      typeof ResizeObserver === "undefined" ? null : new ResizeObserver(update);
+    observer?.observe(element);
+    return () => observer?.disconnect();
+  }, [element]);
+  return height;
+}
+
+/** Before the first measure: a phone's map, roughly. */
+const FALLBACK_MAP_HEIGHT = 700;
+
+/**
+ * The Map (Map board; desktop/Places 13). On a phone, the map fills the
+ * content area under the dock (search, kind chips, the list in view); a pin
+ * or a row opens the quick look, and Open page the place's sheet (the
+ * drawer). From `md`, the list is a column beside the map and a place opens
+ * in the desktop pane over the map's left edge (P2's `PlacePane`, L32). The
+ * map's style and pins follow the app's theme (L23), and Map options can
+ * switch the map alone.
+ */
 export function MapLibreRenderer({
   userId,
   cachedLocation,
@@ -72,10 +107,10 @@ export function MapLibreRenderer({
   const detailDrawerRef = useRef<PlaceDetailsDrawerRef>(null);
   const [iconsLoaded, setIconsLoaded] = useState(false);
   const [mapReady, setMapReady] = useState(false);
-  // The map's own box: the fixed panels sit beside the rail and above the
-  // tab bar by measuring it (`useViewportInsets`).
+  // The map's own box: the drawer's offsets come from where it sits.
   const [container, setContainer] = useState<HTMLDivElement | null>(null);
   const insets = useViewportInsets(container);
+  const mapHeight = useHeightOf(container);
 
   // XState hooks
   const mapCore = useMapCore();
@@ -84,21 +119,15 @@ export function MapLibreRenderer({
   const mapFilters = useMapFilters();
   const { isPlacing } = useMapPinPlacement();
   const navigate = useNavigate();
-  const isDesktop = useMediaQuery("(min-width: 769px)");
+  const isDesktop = useMediaQuery(breakpointUp("md"));
   const hasSidebar = useMediaQuery("(min-width: 600px)");
+  const currentParams = useSearchParams();
 
   // URL state sync
   const searchParams = useMapSearchParams();
   useSearchParamsSync(searchParams);
 
-  const {
-    mapItems,
-    semanticResults,
-    semanticResultsQuery,
-    isLoading: placesLoading,
-    placesError,
-    geocodeTarget,
-  } = useMapDataFromXState();
+  const { mapItems, placesError, geocodeTarget } = useMapDataFromXState();
 
   // X08: the viewer's want-to-go places, drawn as badged pins.
   const wantToGo = useWantToGoPlaceIds();
@@ -112,6 +141,27 @@ export function MapLibreRenderer({
   const geolocation = useGeolocation();
   const { location: userLocation, loading: locationLoading } = geolocation;
   const showLocationPrePrompt = locationPrePromptVisible(geolocation);
+  const origin = useMemo(
+    () =>
+      userLocation
+        ? { latitude: userLocation.latitude, longitude: userLocation.longitude }
+        : null,
+    [userLocation],
+  );
+
+  // The list the dock, the column, the quick look and the pins share.
+  const list = useMapList({ bounds: bounds ?? null, origin, userId });
+
+  // L23: the map follows the app's theme; Map options switch the map alone
+  // until the theme next changes.
+  const appTheme = useResolvedTheme();
+  useEffect(() => {
+    mapActions.setDarkMode(appTheme === "dark");
+  }, [appTheme, mapActions]);
+  const mapTheme: MapTheme = mapCore.isDarkMode ? "dark" : "light";
+  const palette = useMemo(() => mapPalette(mapTheme), [mapTheme]);
+  const paletteRef = useRef(palette);
+  paletteRef.current = palette;
 
   /** N22: the searched name the pin drop carries into the create form. */
   const pendingPlaceNameRef = useRef<string | null>(null);
@@ -143,6 +193,28 @@ export function MapLibreRenderer({
     isManualSelectionRef,
   });
 
+  // The dock rests at two and a half rows; a search lifts it to full.
+  const [detent, setDetent] = useState<DockDetent>("rest");
+  useEffect(() => {
+    if (list.query !== "") setDetent("full");
+  }, [list.query]);
+
+  // The quick look's place, by its index in the list (phone).
+  const [peek, setPeek] = useState<number | null>(null);
+  // Open page lands on `?placeId=` (the drawer): the quick look gives way.
+  useEffect(() => {
+    if (searchParams.placeId) setPeek(null);
+  }, [searchParams.placeId]);
+
+  const placeHref = useCallback(
+    (place: PlaceResult) => {
+      const next = new URLSearchParams(currentParams?.toString() ?? "");
+      next.set("placeId", place.id);
+      return `/map?${next.toString()}`;
+    },
+    [currentParams],
+  );
+
   // Place lookup map — on click we look up the full PlaceResult by ID
   const placeLookup = useMemo(() => {
     const lookup = new Map<string, PlaceResult>();
@@ -153,6 +225,17 @@ export function MapLibreRenderer({
     }
     return lookup;
   }, [mapItems]);
+
+  // The pins follow the kind chips too.
+  const pinItems = useMemo(
+    () =>
+      list.kinds.length === 0
+        ? mapItems
+        : mapItems.filter(
+            (item) => "is_cluster" in item || matchesKinds(item, list.kinds),
+          ),
+    [mapItems, list.kinds],
+  );
 
   // ── Sync effects ─────────────────────────────────────────────────────
 
@@ -214,6 +297,16 @@ export function MapLibreRenderer({
     }
   }, [mapItems, mapUI.selectedPlace, mapActions]);
 
+  // The pins are drawn in the map's theme: redraw them when it changes.
+  useEffect(() => {
+    if (!iconsLoaded) return;
+    const map = mapRef.current?.getMap();
+    if (!map) return;
+    loadPOIIcons(map, palette).catch((err) => {
+      console.error("Failed to redraw map icons:", err);
+    });
+  }, [palette, iconsLoaded]);
+
   // ── Event handlers ───────────────────────────────────────────────────
 
   const handleMapLoad = useCallback(async () => {
@@ -221,13 +314,19 @@ export function MapLibreRenderer({
     if (!map) return;
 
     try {
-      await loadPOIIcons(map);
+      await loadPOIIcons(map, paletteRef.current);
       setIconsLoaded(true);
     } catch (err) {
       console.error("Failed to load map icons:", err);
-      mapActions.setError("Failed to load map icons. Please refresh.");
+      mapActions.setError("The map's pins didn't load. Reload the page.");
       return;
     }
+    // A new basemap (the theme changed) drops the sprites it held.
+    map.on("style.load", () => {
+      loadPOIIcons(map, paletteRef.current).catch((err) => {
+        console.error("Failed to reload map icons:", err);
+      });
+    });
 
     // Report initial bounds so XState can fetch data immediately
     const b = map.getBounds();
@@ -255,6 +354,40 @@ export function MapLibreRenderer({
     });
     mapActions.setZoom(map.getZoom());
   }, [handleBoundsChange, mapActions]);
+
+  const flyToPlace = useCallback(
+    (place: PlaceResult) => {
+      if (!mapRef.current) return;
+      const [lng, lat] = place.location.coordinates;
+      const currentZoom = mapRef.current.getMap()?.getZoom() ?? 15;
+      mapRef.current.flyTo({
+        center: [lng, lat],
+        zoom: Math.max(currentZoom, 15),
+        duration: 600,
+        offset: getDrawerOffset(isDesktop, hasSidebar, insets),
+      });
+    },
+    [isDesktop, hasSidebar, insets],
+  );
+
+  /**
+   * Opening a place: on a phone the quick look over the list (or straight
+   * to its sheet when it is not in the list); on desktop the pane.
+   */
+  const openPlace = useCallback(
+    (place: PlaceResult) => {
+      if (!isDesktop) {
+        const index = list.places.findIndex((p) => p.id === place.id);
+        if (index >= 0) {
+          setPeek(index);
+          return;
+        }
+      }
+      handleSelectPlace(place);
+      flyToPlace(place);
+    },
+    [isDesktop, list.places, handleSelectPlace, flyToPlace],
+  );
 
   const handleClick = useCallback(
     (e: MapLayerMouseEvent) => {
@@ -298,18 +431,7 @@ export function MapLibreRenderer({
           (mapUI.selectedPlace?.id === placeId
             ? mapUI.selectedPlace
             : undefined);
-        if (place) {
-          handleSelectPlace(place);
-          // Center on the visible area accounting for the detail panel
-          const [lng, lat] = place.location.coordinates;
-          const currentZoom = mapRef.current?.getMap()?.getZoom() ?? 15;
-          mapRef.current?.flyTo({
-            center: [lng, lat],
-            zoom: Math.max(currentZoom, 15),
-            duration: 600,
-            offset: getDrawerOffset(isDesktop, hasSidebar, insets),
-          });
-        }
+        if (place) openPlace(place);
       }
     },
     [
@@ -317,11 +439,9 @@ export function MapLibreRenderer({
       mapUI.isDrawerOpen,
       mapUI.selectedPlace,
       handleCloseDrawer,
-      handleSelectPlace,
+      openPlace,
       placeLookup,
       isDesktop,
-      hasSidebar,
-      insets,
     ],
   );
 
@@ -373,37 +493,19 @@ export function MapLibreRenderer({
     if (!isPlacing) pendingPlaceNameRef.current = null;
   }, [isPlacing]);
 
-  // N22: "Not on the map yet: Add it here" drops a pin at the map's centre,
-  // carrying the searched name into the create form.
-  const handleAddSearchedPlace = useCallback(() => {
-    pendingPlaceNameRef.current = mapFilters.searchQuery.trim() || null;
-    searchParams.setSearch("");
+  // N22: Add a place drops a pin at the map's centre; a search that found
+  // nothing carries its words into the create form as the name.
+  const { query: listQuery, clearSearch } = list;
+  const handleAddPlace = useCallback(() => {
+    pendingPlaceNameRef.current = listQuery || null;
+    if (listQuery !== "") clearSearch();
+    setPeek(null);
     mapActions.enterPinPlacement();
-  }, [mapFilters.searchQuery, searchParams, mapActions]);
+  }, [listQuery, clearSearch, mapActions]);
 
-  const notOnMapYet = showNotOnMapYet({
-    isSemanticSearch: mapFilters.isSemanticSearch,
-    searchQuery: mapFilters.searchQuery,
-    answeredQuery: semanticResultsQuery,
-    resultCount: semanticResults?.length ?? 0,
-    isLoading: placesLoading,
-    isPlacing,
-  });
-
-  const handleCenterOnPlace = useCallback(
-    (place: PlaceResult) => {
-      if (mapRef.current) {
-        const [lng, lat] = place.location.coordinates;
-        const currentZoom = mapRef.current.getMap()?.getZoom() ?? 15;
-        mapRef.current.flyTo({
-          center: [lng, lat],
-          zoom: Math.max(currentZoom, 15),
-          duration: 600,
-          offset: getDrawerOffset(isDesktop, hasSidebar, insets),
-        });
-      }
-    },
-    [isDesktop, hasSidebar, insets],
+  const handleMapTheme = useCallback(
+    (theme: MapTheme) => mapActions.setDarkMode(theme === "dark"),
+    [mapActions],
   );
 
   const mapStyle = basemapStyle(mapCore.isDarkMode);
@@ -415,130 +517,216 @@ export function MapLibreRenderer({
     return <MapShell status="Getting your location..." />;
   }
 
+  const errorCard = mapUI.error ? (
+    <MapErrorBanner message={mapUI.error} onDismiss={mapActions.clearError} />
+  ) : placesError ? (
+    <MapErrorBanner message={placesError} />
+  ) : null;
+  const prePrompt =
+    showLocationPrePrompt && !isPlacing ? (
+      <LocationPrePrompt
+        onContinue={geolocation.request}
+        onDismiss={geolocation.dismiss}
+      />
+    ) : null;
+
+  const placesProps = {
+    list,
+    origin,
+    theme: mapTheme,
+    onThemeChange: handleMapTheme,
+    onOpen: (index: number) => {
+      const place = list.places[index];
+      if (place) openPlace(place);
+    },
+    onAddPlace: handleAddPlace,
+  };
+
+  // Desktop: the open place, and its neighbours in the list.
+  const paneIndex =
+    mapUI.selectedPlace === null
+      ? -1
+      : list.places.findIndex((p) => p.id === mapUI.selectedPlace?.id);
+  const stepPane = (by: number) => {
+    const place = list.places[paneIndex + by];
+    if (!place) return;
+    handleSelectPlace(place);
+    flyToPlace(place);
+  };
+
   return (
-    <div
-      ref={setContainer}
-      data-slot="map-canvas"
-      className={cn(
-        // `isolate`: every map overlay (controls 1000+, the drawer, the
-        // results list, the pin) orders itself inside the map, so the app's
-        // own layers — Radix tooltips and popovers (z-50 on <body>), the tab
-        // bar, toasts — draw above all of them.
-        "relative isolate h-full w-full",
-        // N22: the theme's surface until the first tile, never a cream flash.
-        "bg-surface-1",
-        // The attribution stays (a licensing obligation) but on the dark
-        // basemap it was the brightest thing on screen: the theme's surface,
-        // translucent, instead of MapLibre's white pill. `!`: MapLibre's
-        // stylesheet is unlayered, so a plain (layered) utility loses to it.
-        mapCore.isDarkMode &&
-          "[&_.maplibregl-ctrl-attrib]:bg-surface-1/75! [&_.maplibregl-ctrl-attrib]:text-ink-3! [&_.maplibregl-ctrl-attrib_a]:text-ink-2! [&_.maplibregl-ctrl-attrib-button]:invert!",
+    <div data-slot="map-layout" className="flex h-full w-full">
+      {isDesktop && (
+        <MapPlacesColumn
+          {...placesProps}
+          selectedId={mapUI.isDrawerOpen ? mapUI.selectedPlace?.id : null}
+        />
       )}
-    >
-      <MapGL
-        ref={mapRef}
-        workerUrl={MAPLIBRE_WORKER_URL}
-        initialViewState={initialViewState}
-        mapStyle={mapStyle}
-        onLoad={handleMapLoad}
-        onMoveEnd={handleMoveEnd}
-        onClick={handleClick}
-        interactiveLayerIds={INTERACTIVE_LAYER_IDS as unknown as string[]}
-        maxZoom={22}
-        style={{
-          width: "100%",
-          height: "100%",
-          background: MAP_CANVAS_BACKGROUND,
-        }}
+      <div
+        ref={setContainer}
+        data-slot="map-canvas"
+        className={cn(
+          // `isolate`: every map overlay (the dock, the drawer, the pane,
+          // the pin) orders itself inside the map, so the app's own layers —
+          // Radix popovers (z-50 on <body>), the tab bar, toasts — draw
+          // above all of them.
+          "relative isolate h-full min-w-0 flex-1 overflow-hidden",
+          // N22: the theme's surface until the first tile, never a cream flash.
+          "bg-surface-1",
+          // The attribution stays (a licensing obligation), on the theme's
+          // surface instead of MapLibre's white pill. `!`: MapLibre's
+          // stylesheet is unlayered, so a plain (layered) utility loses.
+          "[&_.maplibregl-ctrl-attrib]:bg-surface-1/75! [&_.maplibregl-ctrl-attrib]:text-ink-3! [&_.maplibregl-ctrl-attrib_a]:text-ink-2!",
+          mapTheme === "dark" && "[&_.maplibregl-ctrl-attrib-button]:invert!",
+        )}
       >
-        {iconsLoaded && (
-          <POISymbolLayer
-            items={mapItems}
-            filters={filters}
-            wantToGo={wantToGo}
-            isDarkMode={mapCore.isDarkMode}
-            currentZoom={mapCore.currentZoom}
+        <MapGL
+          ref={mapRef}
+          workerUrl={MAPLIBRE_WORKER_URL}
+          initialViewState={initialViewState}
+          mapStyle={mapStyle}
+          onLoad={handleMapLoad}
+          onMoveEnd={handleMoveEnd}
+          onClick={handleClick}
+          interactiveLayerIds={INTERACTIVE_LAYER_IDS as unknown as string[]}
+          maxZoom={22}
+          style={{
+            width: "100%",
+            height: "100%",
+            background: MAP_CANVAS_BACKGROUND,
+          }}
+        >
+          {iconsLoaded && (
+            <POISymbolLayer
+              items={pinItems}
+              filters={filters}
+              wantToGo={wantToGo}
+              palette={palette}
+              currentZoom={mapCore.currentZoom}
+            />
+          )}
+
+          {iconsLoaded && (
+            <SelectedPlaceLayer
+              selectedPlace={mapUI.selectedPlace}
+              wantToGo={wantToGo}
+              palette={palette}
+            />
+          )}
+
+          {userLocation && (
+            <UserLocationLayer location={userLocation} palette={palette} />
+          )}
+        </MapGL>
+
+        {isDesktop ? (
+          <>
+            {/* Desktop: the cards over the map's foot, the map's own discs
+                at its corner (desktop/Places 13). */}
+            <MapBottomStack>
+              {errorCard}
+              {prePrompt}
+            </MapBottomStack>
+            <div className="absolute right-4 bottom-10 z-[12] flex flex-col gap-2">
+              <GlassDisc
+                aria-label="Zoom in"
+                onClick={() => mapRef.current?.zoomIn({ duration: 300 })}
+              >
+                <Add aria-hidden strokeWidth={ICON_STROKE} />
+              </GlassDisc>
+              <GlassDisc
+                aria-label="Zoom out"
+                onClick={() => mapRef.current?.zoomOut({ duration: 300 })}
+              >
+                <Decrease aria-hidden strokeWidth={ICON_STROKE} />
+              </GlassDisc>
+              <GlassDisc
+                aria-label="Go to my location"
+                onClick={handleLocationClick}
+              >
+                <MyLocation aria-hidden strokeWidth={ICON_STROKE} />
+              </GlassDisc>
+            </div>
+          </>
+        ) : (
+          <MapPlacesDock
+            {...placesProps}
+            mapHeight={mapHeight || FALLBACK_MAP_HEIGHT}
+            detent={detent}
+            onDetentChange={setDetent}
+            hidden={isPlacing || mapUI.isDrawerOpen}
+            above={
+              <>
+                {errorCard !== null && (
+                  <div className="w-full">{errorCard}</div>
+                )}
+                {prePrompt !== null && (
+                  <div className="w-full">{prePrompt}</div>
+                )}
+                <GlassDisc
+                  aria-label="Go to my location"
+                  onClick={handleLocationClick}
+                >
+                  <MyLocation aria-hidden strokeWidth={ICON_STROKE} />
+                </GlassDisc>
+              </>
+            }
           />
         )}
 
-        {iconsLoaded && (
-          <SelectedPlaceLayer
-            selectedPlace={mapUI.selectedPlace}
-            wantToGo={wantToGo}
-            isDarkMode={mapCore.isDarkMode}
+        {/* Pin placement overlay */}
+        {isPlacing && (
+          <CenterPinOverlay
+            onConfirm={handleConfirmPinLocation}
+            onCancel={mapActions.exitPinPlacement}
           />
         )}
 
-        {userLocation && <UserLocationLayer location={userLocation} />}
-      </MapGL>
-
-      {/* Bottom cards, one column: the error above whichever card shows */}
-      <MapBottomStack>
-        {mapUI.error ? (
-          <MapErrorBanner
-            message={mapUI.error}
-            onDismiss={mapActions.clearError}
-          />
-        ) : placesError ? (
-          <MapErrorBanner message={placesError} />
-        ) : null}
-
-        {/* N22: a search that found nothing offers to add the place */}
-        {notOnMapYet && !showLocationPrePrompt && (
-          <SearchEmptyState
-            query={mapFilters.searchQuery.trim()}
-            onAddHere={handleAddSearchedPlace}
-          />
-        )}
-
-        {/* D14: our one-line reason, then the browser's prompt on Continue */}
-        {showLocationPrePrompt && !isPlacing && (
-          <LocationPrePrompt
-            onContinue={geolocation.request}
-            onDismiss={geolocation.dismiss}
-          />
-        )}
-      </MapBottomStack>
-
-      {/* Search results overlay */}
-      {mapFilters.isSemanticSearch &&
-        semanticResults &&
-        semanticResults.length > 0 && (
-          <SearchResultsList
-            results={semanticResults}
-            searchQuery={mapFilters.searchQuery}
-            isLoading={placesLoading}
-            onPlaceSelect={handleSelectPlace}
-            onCenterOnPlace={handleCenterOnPlace}
-            onClose={() => searchParams.setSearch("")}
-            isDetailOpen={mapUI.isDrawerOpen}
+        {isDesktop ? (
+          mapUI.selectedPlace !== null && (
+            <MapPlacePane
+              place={mapUI.selectedPlace}
+              open={mapUI.isDrawerOpen}
+              onClose={handleCloseDrawer}
+              onPrevious={paneIndex > 0 ? () => stepPane(-1) : undefined}
+              onNext={
+                paneIndex >= 0 && paneIndex < list.places.length - 1
+                  ? () => stepPane(1)
+                  : undefined
+              }
+              onExpand={() => {
+                const id = mapUI.selectedPlace?.id;
+                if (id) navigate.push(`/places/${id}`);
+              }}
+            />
+          )
+        ) : (
+          // The place's sheet (Places-Place ruling 1: on the map, a place
+          // opens in the sheet), inside the map's stacking context.
+          <PlaceDetailsDrawer
+            ref={detailDrawerRef}
+            place={mapUI.selectedPlace}
+            open={mapUI.isDrawerOpen}
+            onClose={handleCloseDrawer}
+            userId={userId}
             insets={insets}
           />
         )}
+      </div>
 
-      {/* Pin placement overlay */}
-      {isPlacing && (
-        <CenterPinOverlay
-          onConfirm={handleConfirmPinLocation}
-          onCancel={mapActions.exitPinPlacement}
+      {!isDesktop && (
+        <PlaceQuickLook
+          places={list.places}
+          origin={origin}
+          index={peek ?? 0}
+          open={peek !== null}
+          onOpenChange={(open) => {
+            if (!open) setPeek(null);
+          }}
+          onIndexChange={setPeek}
+          hrefFor={placeHref}
         />
       )}
-
-      {/* Map controls */}
-      <MapControls onLocationClick={handleLocationClick} />
-
-      {/* Place details drawer: fixed to the viewport, but inside the map's
-          stacking context so the desktop search stays above it (it was
-          portalled to <body>, which `isolate` would now put over the
-          controls). */}
-      <PlaceDetailsDrawer
-        ref={detailDrawerRef}
-        place={mapUI.selectedPlace}
-        open={mapUI.isDrawerOpen}
-        onClose={handleCloseDrawer}
-        userId={userId}
-        insets={insets}
-      />
     </div>
   );
 }
