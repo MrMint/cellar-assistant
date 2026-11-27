@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { useClient, useMutation, useQuery } from "urql";
+import { ConfirmSheet } from "@/components/app/ConfirmSheet";
 import { FilterChip } from "@/components/app/FilterChip";
 import { ErrorIcon } from "@/components/app/icons";
 import { notify } from "@/components/app/notify";
@@ -28,6 +29,7 @@ import { useFinishToast } from "@/components/item/FinishBottleDialogs";
 import { useFinishBottle } from "@/components/item/useFinishBottle";
 import { historyStepFailure } from "@/components/tier-list/history";
 import {
+  RemoveItemFromTierListMutation,
   ReorderBandMutation,
   UndoTierListEditMutation,
 } from "@/components/tier-list/queries";
@@ -875,12 +877,17 @@ function ListBand({
   subject: PourSubject;
   onClose: () => void;
 }) {
-  const [{ data }] = useQuery({
+  const [{ data, error: readError, fetching }] = useQuery({
     query: PourTierListBandQuery,
     variables: { tierListId: placement.tierListId },
     requestPolicy: "network-only",
   });
   const [, reorder] = useMutation(ReorderBandMutation);
+  const [, removeEntry] = useMutation(RemoveItemFromTierListMutation);
+  const [confirming, setConfirming] = useState(false);
+  const confirmingRef = useRef(false);
+  const [removing, setRemoving] = useState(false);
+  const [removeError, setRemoveError] = useState<ApiFailure | null>(null);
   const [, undoEdit] = useMutation(UndoTierListEditMutation);
   const client = useClient();
   const navigate = useNavigate();
@@ -893,14 +900,30 @@ function ListBand({
     list.ok && !tooLong ? list.data.items.edges.map((edge) => edge.node) : null;
   const band = isBand(placement.band) ? placement.band : 1;
 
-  // A long list is the list page's to place: on to the next list, once.
+  // A list it could not read (offline, a refused read) says so, rather than
+  // leaving the sheet open with nothing in it (F-158).
+  const failure = fetching
+    ? null
+    : readError !== undefined
+      ? readError.message
+      : data !== undefined && !list.ok
+        ? list.error.message
+        : null;
+
+  // A long list is the list page's to place, and an unreadable one cannot be
+  // placed here: on to the next list, once.
   const skipped = useRef(false);
   useEffect(() => {
-    if (tooLong && !skipped.current) {
+    if ((tooLong || failure !== null) && !skipped.current) {
       skipped.current = true;
+      if (failure !== null)
+        notify(`Couldn’t open ${placement.name}`, {
+          tone: "error",
+          description: failure,
+        });
       onClose();
     }
-  }, [tooLong, onClose]);
+  }, [tooLong, failure, onClose, placement.name]);
 
   if (items === null) return null;
   const counts = bandCounts(items);
@@ -972,19 +995,71 @@ function ListBand({
     });
   };
 
+  const remove = async () => {
+    setRemoving(true);
+    setRemoveError(null);
+    const removed = unwrapResult(
+      (
+        await removeEntry({
+          tierListId: placement.tierListId,
+          id: placement.entryId,
+        })
+      ).data?.removeTierListItem,
+      "RemovedTierListItem",
+    );
+    setRemoving(false);
+    if (!removed.ok) {
+      setRemoveError(removed.error);
+      return;
+    }
+    notify(`Removed from ${placement.name}`, { tone: "success" });
+    confirmingRef.current = false;
+    setConfirming(false);
+    onClose();
+  };
+
   return (
-    <BandSheet
-      open={open}
-      onOpenChange={(next) => {
-        if (!next) onClose();
-      }}
-      subject={subject.itemName}
-      rank={rank}
-      band={band}
-      listName={placement.name}
-      counts={counts}
-      onChoose={(to) => void move(to)}
-      onExactPosition={() => navigate.push(listHref)}
-    />
+    <>
+      <BandSheet
+        open={open && !confirming}
+        onOpenChange={(next) => {
+          if (next) return;
+          // "Remove from list" closes the sheet before it asks: wait a tick
+          // so the confirm, not the next list, follows.
+          queueMicrotask(() => {
+            if (!confirmingRef.current) onClose();
+          });
+        }}
+        subject={subject.itemName}
+        rank={rank}
+        band={band}
+        listName={placement.name}
+        counts={counts}
+        onChoose={(to) => void move(to)}
+        onExactPosition={() => navigate.push(listHref)}
+        onRemove={() => {
+          confirmingRef.current = true;
+          setConfirming(true);
+        }}
+      />
+      <ConfirmSheet
+        open={open && confirming}
+        onOpenChange={(next) => {
+          if (next || removing) return;
+          // "Keep it": back to the band choice on this list.
+          confirmingRef.current = false;
+          setConfirming(false);
+          setRemoveError(null);
+        }}
+        title={`Remove it from ${placement.name}?`}
+        description="Its place on the list goes. Your rating and your log stay."
+        confirmLabel="Remove"
+        cancelLabel="Keep it"
+        pending={removing}
+        onConfirm={() => void remove()}
+      >
+        {removeError !== null && <ApiError error={removeError} />}
+      </ConfirmSheet>
+    </>
   );
 }
