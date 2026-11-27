@@ -7,6 +7,7 @@ import {
   BURST_WINDOW_MS,
   type FeedNode,
   feedEntriesFromNodes,
+  filterBursts,
   groupBursts,
   sentenceText,
 } from "./feed";
@@ -303,5 +304,22 @@ describe("bursts", () => {
     assert.equal(joined.length, 1);
     assert.equal(joined[0]?.entries.length, 3);
     assert.equal(joined[0]?.id, bursts(page1)[0]?.id);
+  });
+});
+
+describe("feed chips", () => {
+  test("Rated keeps ratings and logged glasses, Ranked lists, Added bottles", () => {
+    const all = bursts([
+      added(SAM, 1, "Barolo"),
+      reviewed(ANA, 2, "Pliny", 4.5),
+      drank(SAM, 3, "Lagavulin", { score: 4, place: "Old Mill" }),
+      ranked(ANA, 4, "Barolo", 2),
+    ]);
+    const kinds = (filter: Parameters<typeof filterBursts>[1]) =>
+      filterBursts(all, filter).map((burst) => burst.kind);
+    assert.equal(kinds("All").length, 4);
+    assert.deepEqual(kinds("Rated").sort(), ["drank", "reviewed"]);
+    assert.deepEqual(kinds("Ranked"), ["tier-listed"]);
+    assert.deepEqual(kinds("Added"), ["added"]);
   });
 });

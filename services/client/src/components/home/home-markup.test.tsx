@@ -328,7 +328,7 @@ describe("FriendsFeed", () => {
         viewerId="v"
       />,
     );
-    assert.match(text(html), /Taste is better compared\./);
+    assert.match(text(html), /Taste is better compared/);
   });
 
   test("friends with nothing yet: the section stays out of the way", () => {
@@ -387,6 +387,16 @@ describe("FriendsFeed", () => {
     assert.match(text(html), /Sam made Negroni/);
     assert.match(html, /data-thumb="recipe"/);
     assert.doesNotMatch(html, /data-thumb="place"/);
+    // F2b's activity card, under the four chips with All on.
+    assert.match(html, /data-slot="activity-item"/);
+    assert.deepEqual(
+      [
+        ...html.matchAll(
+          /aria-pressed="(true|false)"[^>]*>(?:<[^>]+>)*([A-Za-z]+)</g,
+        ),
+      ].map((m) => `${m[2]}:${m[1]}`),
+      ["All:true", "Rated:false", "Ranked:false", "Added:false"],
+    );
   });
 });
 
