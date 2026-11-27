@@ -3,10 +3,26 @@
 import { feedback } from "@/lib/feedback";
 import { cn } from "@/lib/utils";
 
+const COUNT = new Intl.NumberFormat("en-US");
+
+/** The result line's words: "240 bottles · A–Z", or "12 of 240 bottles · A–Z". */
+export function countLine(
+  total: number,
+  noun: string,
+  order?: string,
+  matching?: number,
+): string {
+  const head =
+    matching === undefined
+      ? `${COUNT.format(total)} ${noun}`
+      : `${COUNT.format(matching)} of ${COUNT.format(total)} ${noun}`;
+  return order === undefined ? head : `${head} · ${order}`;
+}
+
 /**
  * KIT § 2 "Count strip": a 44 strip, r8, edge, saying how many and in what
  * order ("240 bottles · A–Z"), and how many match while filtered
- * ("240 bottles · A–Z · 12 match"). A polite live region, so a filter's
+ * ("12 of 240 bottles · A–Z", KIT § 5). A polite live region, so a filter's
  * result is heard.
  */
 export function CountStrip({
@@ -25,9 +41,6 @@ export function CountStrip({
   matching?: number;
   className?: string;
 }) {
-  const parts = [`${total.toLocaleString("en-US")} ${noun}`];
-  if (order !== undefined) parts.push(order);
-  if (matching !== undefined) parts.push(`${matching} match`);
   return (
     <p
       role="status"
@@ -37,7 +50,7 @@ export function CountStrip({
         className,
       )}
     >
-      {parts.join(" · ")}
+      {countLine(total, noun, order, matching)}
     </p>
   );
 }

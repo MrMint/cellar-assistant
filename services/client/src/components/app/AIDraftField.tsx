@@ -1,7 +1,8 @@
 import type { ReactNode } from "react";
-import { DRAFT_SOURCE_LABEL, type DraftSource } from "@/lib/forms/ai-draft";
+import { feedback } from "@/lib/feedback";
+import type { DraftSource } from "@/lib/forms/ai-draft";
 import { cn } from "@/lib/utils";
-import { AI, Barcode, Close } from "./icons";
+import { AI, Barcode, Close, ICON_STROKE } from "./icons";
 
 export type DraftConfidence = "sure" | "likely" | "check";
 
@@ -40,22 +41,27 @@ export type AIDraftFieldProps = {
   children: ReactNode;
 };
 
-const MARK: Record<DraftSource, string> = {
-  label: "bg-ai text-background",
-  suggested: "border border-ai border-dashed text-ai",
-  pin: "bg-ai/15 text-ai",
-  barcode: "bg-ai/15 text-ai",
+/**
+ * The kit's words for where a value came from (KIT § 3 "From the label"):
+ * a sentence, not a badge. `DRAFT_SOURCE_LABEL` (`lib/forms/ai-draft`) stays
+ * the short form used elsewhere.
+ */
+export const DRAFT_LINE: Readonly<Record<DraftSource, string>> = {
+  label: "From the label",
+  suggested: "Suggested",
+  pin: "From the pin",
+  barcode: "From the barcode",
 };
 
 /**
- * A field a machine filled in (N19), restyled for B02: a 2 pt teal rule down
- * its left edge and the source's mark on its label row — a solid "From
- * label", a dashed "Suggested", "From pin", a barcode glyph. **Teal enters the
- * UI only through this component** (and AI progress states): it means "the AI
- * did this", never "tap here".
+ * A field a machine filled in (N19), in the kit's form (KIT § 3): the
+ * sparkle and "From the label" in t-micro ink-2 on the field's label row,
+ * with " · Check this" when the read was unsure. No colour of its own: the
+ * words carry it. "Suggested" is the same line in a dashed outline. A
+ * proposal (X19) is a dashed chip under the field, applied only by a tap.
  *
  * The wrapper renders whether or not the field is drafted, so the input inside
- * keeps its identity — and its focus — at the keystroke that removes the mark.
+ * keeps its identity — and its focus — at the keystroke that removes the line.
  */
 export function AIDraftField({
   source,
@@ -70,23 +76,28 @@ export function AIDraftField({
       data-slot="ai-draft-field"
       data-ai-draft={drafted ? source : undefined}
       data-confidence={drafted ? confidence : undefined}
-      className={cn(
-        "relative min-w-0 border-l-2 pl-3 transition-colors duration-(--ca-dur-short)",
-        drafted ? "border-ai" : "border-transparent",
-        className,
-      )}
+      className={cn("relative min-w-0", className)}
     >
       {children}
       {drafted && (
         <span
           data-slot="ai-draft-mark"
           className={cn(
-            "pointer-events-none absolute top-0 right-0 inline-flex h-5 items-center gap-1 rounded-full px-2 font-medium text-[11px]",
-            MARK[source],
+            "t-micro pointer-events-none absolute top-0 right-0 inline-flex h-5 items-center gap-1.5 text-ink-2",
+            source === "suggested" &&
+              "rounded-sm border border-edge-2 border-dashed px-1.5",
           )}
         >
-          {source === "barcode" && <Barcode aria-hidden className="size-3" />}
-          {DRAFT_SOURCE_LABEL[source]}
+          {source === "barcode" ? (
+            <Barcode
+              aria-hidden
+              className="size-3.5"
+              strokeWidth={ICON_STROKE}
+            />
+          ) : (
+            <AI aria-hidden className="size-3.5" strokeWidth={ICON_STROKE} />
+          )}
+          {DRAFT_LINE[source]}
           {confidence !== undefined && ` · ${CONFIDENCE_LABEL[confidence]}`}
         </span>
       )}
@@ -97,40 +108,34 @@ export function AIDraftField({
         >
           <button
             type="button"
-            onClick={proposal.onUse}
-            aria-label={`Use ${DRAFT_SOURCE_LABEL[source].toLowerCase()} ${proposal.label}: ${proposal.display}`}
-            className={cn(
-              "relative inline-flex h-9 min-w-0 items-center gap-1.5 rounded-full px-3 text-sm outline-none transition-transform duration-(--ca-dur-micro) after:absolute after:-inset-y-1 after:inset-x-0 after:content-[''] focus-visible:ring-[3px] focus-visible:ring-ring/50 active:scale-97 motion-reduce:active:scale-100",
-              PROPOSAL[source],
-            )}
+            onClick={() => {
+              feedback("press");
+              proposal.onUse();
+            }}
+            aria-label={`Use ${DRAFT_LINE[source].toLowerCase()} ${proposal.label}: ${proposal.display}`}
+            className="t-cap relative inline-flex h-11 min-w-0 items-center gap-1.5 rounded-md border border-edge-2 border-dashed bg-card px-3 text-ink-2 outline-none transition-transform duration-(--ca-dur-micro) focus-visible:outline-2 focus-visible:outline-act-ink active:scale-97 motion-reduce:active:scale-100"
           >
-            <AI aria-hidden className="size-4 shrink-0" />
-            <span className="shrink-0 font-medium">
-              {DRAFT_SOURCE_LABEL[source]}:
-            </span>
-            <span className="min-w-0 truncate text-ink-1">
+            <AI
+              aria-hidden
+              className="size-4 shrink-0"
+              strokeWidth={ICON_STROKE}
+            />
+            <span className="shrink-0">{DRAFT_LINE[source]}:</span>
+            <span className="t-head min-w-0 truncate text-ink">
               {proposal.display}
             </span>
-            <span className="shrink-0 font-semibold">Use</span>
+            <span className="t-head shrink-0 text-act-ink">Use</span>
           </button>
           <button
             type="button"
             onClick={proposal.onDismiss}
             aria-label={`Dismiss the ${proposal.label} suggestion`}
-            className="inline-flex size-11 shrink-0 items-center justify-center rounded-full text-ink-3 outline-none hover:bg-surface-2 focus-visible:ring-[3px] focus-visible:ring-ring/50"
+            className="inline-flex size-11 shrink-0 items-center justify-center rounded-md text-ink-3 outline-none active:bg-raised focus-visible:outline-2 focus-visible:outline-act-ink"
           >
-            <Close aria-hidden className="size-4" />
+            <Close aria-hidden className="size-5" strokeWidth={ICON_STROKE} />
           </button>
         </div>
       )}
     </div>
   );
 }
-
-/** The chip for a value not yet in the field: the source's mark, outlined. */
-const PROPOSAL: Record<DraftSource, string> = {
-  label: "border border-ai text-ai",
-  suggested: "border border-ai border-dashed text-ai",
-  pin: "border border-ai/60 text-ai",
-  barcode: "border border-ai/60 text-ai",
-};
