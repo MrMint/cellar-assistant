@@ -63,10 +63,10 @@ export function PourTrend({
       className="flex flex-col gap-3 rounded-lg bg-surface-1 p-4"
     >
       <div className="flex items-baseline justify-between gap-3">
-        <h2 id={headingId} className="type-headline">
+        <h2 id={headingId} className="t-head">
           Pours
         </h2>
-        <p className="type-footnote">
+        <p className="t-cap">
           {trend.total} in {trend.months.length} months
         </p>
       </div>
@@ -79,7 +79,7 @@ export function PourTrend({
         <span className="font-semibold text-[1.75rem] leading-none tracking-tight">
           {shown?.count ?? 0}
         </span>
-        <span className="type-callout text-ink-2">
+        <span className="t-body text-ink-2">
           {shown === undefined
             ? ""
             : `${shown.count === 1 ? "pour" : "pours"} in ${
@@ -157,7 +157,7 @@ export function PourTrend({
             ),
           )}
         </svg>
-        <div aria-hidden className="type-footnote mt-1 flex justify-between">
+        <div aria-hidden className="t-cap mt-1 flex justify-between">
           <span>{trend.months[0]?.short}</span>
           <span>{trend.months[last]?.short}</span>
         </div>

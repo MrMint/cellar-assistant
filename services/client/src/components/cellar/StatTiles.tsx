@@ -27,7 +27,7 @@ export function StatTiles({ tiles }: { tiles: readonly StatTile[] }) {
                 "hover:bg-surface-2 focus-visible:ring-[3px] focus-visible:ring-ring/50 active:scale-97 motion-reduce:active:scale-100",
               )}
             >
-              <span className="type-footnote">{tile.label}</span>
+              <span className="t-cap">{tile.label}</span>
               <span
                 className={cn(
                   "font-semibold text-[1.75rem] leading-none tracking-tight",
@@ -37,7 +37,7 @@ export function StatTiles({ tiles }: { tiles: readonly StatTile[] }) {
                 {tile.value}
               </span>
               {tile.detail !== null && (
-                <span className="type-footnote line-clamp-2 text-ink-2">
+                <span className="t-cap line-clamp-2 text-ink-2">
                   {tile.detail}
                 </span>
               )}

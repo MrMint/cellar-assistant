@@ -35,11 +35,11 @@ export function CellarSearchSummary(props: {
   return (
     <div data-slot="cellar-search-summary" className="flex flex-col gap-0.5">
       {count !== null && (
-        <p role="status" className="type-callout text-ink-2">
+        <p role="status" className="t-body text-ink-2">
           {count}
         </p>
       )}
-      {note !== null && <p className="type-footnote">{note}</p>}
+      {note !== null && <p className="t-cap">{note}</p>}
     </div>
   );
 }

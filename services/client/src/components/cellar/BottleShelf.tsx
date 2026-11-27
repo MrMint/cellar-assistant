@@ -50,11 +50,11 @@ export function BottleShelf({
       className="flex flex-col gap-2"
     >
       <div className="flex items-baseline gap-2">
-        <h2 id={headingId} className="type-headline">
+        <h2 id={headingId} className="t-head">
           {title}
         </h2>
         {detail !== undefined && (
-          <span className="type-callout text-ink-3">{detail}</span>
+          <span className="t-body text-ink-3">{detail}</span>
         )}
       </div>
       <ul className="-mx-4 flex snap-x snap-mandatory scroll-px-4 gap-3 overflow-x-auto overscroll-x-contain px-4 pb-1 [scrollbar-width:none] sm:mx-0 sm:scroll-px-0 sm:px-0 [&::-webkit-scrollbar]:hidden">
