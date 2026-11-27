@@ -38,6 +38,7 @@
  */
 import type { ActorDescriptor } from "./actors.ts";
 import type { Ctx } from "./ctx.ts";
+import type { Page, PageArgs } from "./page.ts";
 
 /**
  * The single activation id. §1.5's "true singleton" — Dapr serializes every
@@ -173,6 +174,24 @@ export type UsageReport = {
   readonly totalSpendCents: number;
 };
 
+/**
+ * MC-quota: one kind of AI call, as the viewer's own allowance for the current
+ * period (`BUDGET_USER_CAPS`, default a UTC calendar month).
+ *
+ * - `kind` — the budget kind, `ai_model/<seam>` (e.g. `ai_model/tier_list_insights`).
+ * - `used` — the viewer's own calls counted this period (a released
+ *   reservation does not count).
+ * - `limit` — the period cap.
+ * - `resetsAt` — ISO-8601, the next period start: the same instant a
+ *   `USER_CAP` refusal for the period carries as `retryAt`.
+ */
+export type AiQuotaDto = {
+  readonly kind: string;
+  readonly used: number;
+  readonly limit: number;
+  readonly resetsAt: string;
+};
+
 /** `setBudget`'s input — the admin repair path for a config row. */
 export type SetBudgetInput = {
   readonly kind: BudgetKind;
@@ -199,6 +218,12 @@ export type BudgetConfigDto = {
  * calls it directly rather than through the outbox.
  */
 export type BudgetActorInterface = {
+  /**
+   * MC-quota: the **viewer's own** period usage per AI kind. Signed-in only,
+   * and keyed by `ctx.viewerId` — there is no argument naming a user, so it
+   * can never read anybody else's.
+   */
+  myQuota(ctx: Ctx, page: PageArgs): Promise<Page<AiQuotaDto>>;
   /** Admin (or system). Reading spend is not a user-facing capability. */
   usage(ctx: Ctx, range: UsageRange): Promise<UsageReport>;
   /** Admin only. Upserts one `(service, endpoint)` config row. */
@@ -367,6 +392,7 @@ export const BudgetActorDescriptor: ActorDescriptor<
   actorType: "BudgetActor",
   category: "entity",
   methods: {
+    myQuota: {},
     usage: {},
     setBudget: {},
     config: {},
