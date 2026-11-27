@@ -212,11 +212,25 @@ function EditSheet({
       open={open}
       onOpenChange={onOpenChange}
       title={thisContainerLabel(itemType)}
-      description={FOOTNOTE}
       footer={
-        <Button className="w-full" onClick={save} disabled={pending}>
-          Save
-        </Button>
+        // CROSS-LOT form-sheet footer: the quiet way out left, primary right.
+        <div className="flex w-full items-center gap-3">
+          <Button
+            variant="quiet"
+            disabled={pending}
+            onClick={() => onOpenChange(false)}
+          >
+            Cancel
+          </Button>
+          <Button
+            className="min-w-0 flex-1"
+            onClick={save}
+            disabled={pending}
+            aria-busy={pending || undefined}
+          >
+            Save
+          </Button>
+        </div>
       }
     >
       <form
@@ -226,17 +240,19 @@ function EditSheet({
           save();
         }}
       >
-        {fieldsFor(itemType).map((field) => (
-          <div key={field.key} className="flex flex-col gap-1.5">
-            <Label htmlFor={`fresh-${field.key}`}>{field.label}</Label>
-            <Input
-              id={`fresh-${field.key}`}
-              type={field.type}
-              value={draft[field.key]}
-              onChange={(e) => set(field.key)(e.target.value)}
-            />
-          </div>
-        ))}
+        <div className="grid grid-cols-2 gap-x-3 gap-y-4">
+          {fieldsFor(itemType).map((field) => (
+            <div key={field.key} className="flex min-w-0 flex-col gap-1.5">
+              <Label htmlFor={`fresh-${field.key}`}>{field.label}</Label>
+              <Input
+                id={`fresh-${field.key}`}
+                type={field.type}
+                value={draft[field.key]}
+                onChange={(e) => set(field.key)(e.target.value)}
+              />
+            </div>
+          ))}
+        </div>
         <div className="flex gap-3">
           <div className="flex flex-1 flex-col gap-1.5">
             <Label htmlFor="fresh-price">Price</Label>
@@ -247,7 +263,7 @@ function EditSheet({
               onChange={(e) => set("price")(e.target.value)}
             />
           </div>
-          <div className="flex w-24 flex-col gap-1.5">
+          <div className="flex w-28 flex-col gap-1.5">
             <Label htmlFor="fresh-currency">Currency</Label>
             <Input
               id="fresh-currency"
@@ -274,6 +290,7 @@ function EditSheet({
             {error}
           </p>
         )}
+        <p className="t-cap text-ink-3">Only you see these.</p>
       </form>
     </BottomSheet>
   );

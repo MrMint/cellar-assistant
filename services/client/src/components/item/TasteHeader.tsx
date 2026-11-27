@@ -1,4 +1,4 @@
-import { Star } from "@/components/app/icons";
+import { ICON_STROKE, People } from "@/components/app/icons";
 import { formatScore } from "@/components/app/Score";
 import { ratingSummary } from "@/components/common/rating/rating";
 import { cn } from "@/lib/utils";
@@ -14,65 +14,75 @@ export const tasteCellLabel = (cell: TasteCell): string =>
     : `${cell.label}: ${ratingSummary(cell.value).toLowerCase()}, ${cell.note}`;
 
 /**
- * X09's taste header — **You · Friends · Everyone** — under the hero: your
- * review's score, your friends' average with how many friends, everyone's
- * average with how many ratings (D1 put Rankings' three scopes here). Three
- * equal cells that never reflow; a cell with no number says so in words
- * rather than drawing a zero. No match percentage and no prediction: each
- * figure is an average of reviews somebody wrote (design §3.7).
+ * The taste header (Cellars-Pour): **Your rating** on the left, and on the
+ * right the two numbers to compare it with — "Friends 4.3" and everyone's
+ * "4.0 (3)". A number nobody gave is a dash, never a zero, and no match
+ * percentage or prediction: each figure is an average of reviews somebody
+ * wrote (design §3.7). Your own stars sit under it, on the page.
  *
- * Each cell is a link down the page — You to your review, the other two to
- * the reviews — so the header is also the way to rate.
+ * Each part is a link down the page — yours to your review, the other two
+ * to the reviews — so the header is also the way to rate.
  */
 export function TasteHeader({ cells }: { cells: readonly TasteCell[] }) {
+  const you = cells.find((cell) => cell.key === "you");
+  const others = cells.filter((cell) => cell.key !== "you");
   return (
     <nav
       aria-label="Ratings"
       data-testid="taste-header"
-      className="grid grid-cols-3 divide-x divide-line overflow-hidden rounded-lg bg-surface-1"
+      className="flex min-h-11 items-center justify-between gap-3"
     >
-      {cells.map((cell) => (
+      {you !== undefined && (
         <a
-          key={cell.key}
-          href={cell.href}
-          aria-label={tasteCellLabel(cell)}
-          data-cell={cell.key}
-          className="flex min-h-[92px] min-w-0 flex-col items-center justify-center gap-1 px-2 py-3 text-center outline-none transition-colors duration-(--ca-dur-short) ease-standard focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:ring-inset active:bg-surface-3"
+          href={you.href}
+          aria-label={tasteCellLabel(you)}
+          data-cell={you.key}
+          className={cn(LINK, "t-cap font-semibold text-ink-2")}
         >
-          <span aria-hidden className="t-micro text-ink-3">
-            {cell.label}
-          </span>
-          {cell.value === null ? (
-            <span aria-hidden className="t-title leading-none text-ink-3">
-              –
-            </span>
-          ) : (
+          Your rating
+        </a>
+      )}
+      <span className="flex min-w-0 items-center gap-4">
+        {others.map((cell) => (
+          <a
+            key={cell.key}
+            href={cell.href}
+            aria-label={tasteCellLabel(cell)}
+            data-cell={cell.key}
+            className={cn(LINK, "t-cap gap-1.5 text-ink-2")}
+          >
+            {cell.key === "friends" ? (
+              <span aria-hidden>Friends</span>
+            ) : (
+              <People
+                aria-hidden
+                strokeWidth={ICON_STROKE}
+                className="size-4 text-ink-3"
+              />
+            )}
             <span
               aria-hidden
-              className="t-title tabular inline-flex items-center gap-1 leading-none text-ink-1"
+              className={cn(
+                "t-head tabular leading-none",
+                cell.value === null ? "text-ink-3" : "text-ink",
+              )}
             >
-              {formatScore(cell.value)}
-              <Star
-                className={cn(
-                  "size-4 fill-current",
-                  // Your own stars are brass, as in RatingInput and ItemCard.
-                  cell.key === "you" ? "text-primary" : "text-ink-3",
-                )}
-                strokeWidth={0}
-              />
+              {cell.value === null ? "–" : formatScore(cell.value)}
             </span>
-          )}
-          <span
-            aria-hidden
-            className={cn(
-              "t-cap text-ink-3 max-w-full truncate",
-              cell.key === "you" && cell.value === null && "text-ink-1",
+            {cell.key === "everyone" && cell.value !== null && (
+              <span aria-hidden className="tabular text-ink-3">
+                ({countOf(cell.note)})
+              </span>
             )}
-          >
-            {cell.note}
-          </span>
-        </a>
-      ))}
+          </a>
+        ))}
+      </span>
     </nav>
   );
 }
+
+const LINK =
+  "inline-flex min-h-11 min-w-0 items-center rounded-md outline-none transition-colors duration-(--ca-dur-short) ease-standard focus-visible:ring-[3px] focus-visible:ring-ring/50 active:text-ink";
+
+/** "12 ratings" → "12": the count the note already carries. */
+const countOf = (note: string): string => note.split(" ")[0] ?? note;
