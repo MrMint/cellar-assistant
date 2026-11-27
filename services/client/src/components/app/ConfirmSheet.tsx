@@ -3,6 +3,8 @@
 import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
+import { Delete } from "./icons";
+import { pressFeedback } from "./overlays/press";
 import { ResponsiveDialog } from "./ResponsiveDialog";
 
 export type ConfirmSheetProps = {
@@ -27,12 +29,14 @@ export type ConfirmSheetProps = {
 };
 
 /**
- * The confirm for an action that cannot be undone. Reversible actions don't
- * get one — they get `notify(…, { undo })` (design §4.7).
+ * The confirm for an action Undo cannot bring back (KIT § 4 "Toast or
+ * confirm": deleting a bottle with its rating, note and history; deleting a
+ * list). Everything else acts at once with `notify(…, { undo })`.
  *
- * The only place a **solid** danger button is allowed (design §3.1); its ink
- * is the page background, never white. Cancel comes first in reading order
- * and is the larger target on a phone, where the sheet stacks them.
+ * KIT § 2 Buttons and CROSS-LOT "Delete confirm": destructive is never first
+ * or primary — "Keep it" (outlined secondary) comes first, and the verb is
+ * outlined in danger with the trash glyph beside it. Two equal buttons side by
+ * side, in a sheet on a phone and a 440 dialog on desktop.
  */
 export function ConfirmSheet({
   open,
@@ -40,6 +44,8 @@ export function ConfirmSheet({
   title,
   description,
   confirmLabel,
+  // The kit's word is "Keep it"; the default stays "Cancel" until the
+  // callers' tests that press "Cancel" move with it (f2a hand-off).
   cancelLabel = "Cancel",
   onConfirm,
   pending = false,
@@ -54,21 +60,25 @@ export function ConfirmSheet({
       description={description}
       dismissible={!pending}
       footer={
-        <div className="flex w-full flex-col-reverse gap-2 md:flex-row md:justify-end">
+        <div className="grid w-full grid-cols-2 gap-3">
           <Button
-            variant="secondary"
+            variant="outline"
             disabled={pending}
+            {...pressFeedback()}
             onClick={() => onOpenChange(false)}
+            className="t-head h-11 border-edge-2 bg-transparent text-ink hover:bg-raised dark:border-edge-2 dark:bg-transparent"
           >
             {cancelLabel}
           </Button>
           <Button
+            variant="outline"
             data-tone="danger"
             disabled={pending}
+            {...pressFeedback()}
             onClick={onConfirm}
-            className="bg-destructive text-background hover:bg-destructive/90 focus-visible:ring-destructive/40"
+            className="t-head h-11 border-danger bg-transparent text-danger hover:bg-raised hover:text-danger focus-visible:ring-danger/40 dark:border-danger dark:bg-transparent"
           >
-            {pending && <Spinner aria-hidden />}
+            {pending ? <Spinner aria-hidden /> : <Delete aria-hidden />}
             {confirmLabel}
           </Button>
         </div>

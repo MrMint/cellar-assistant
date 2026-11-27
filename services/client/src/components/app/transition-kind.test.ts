@@ -22,7 +22,9 @@ describe("inferKind (a push, replace or link that did not say)", () => {
     assert.equal(inferKind("/cellars", "/cellars/1"), "forward");
     assert.equal(inferKind("/cellars/1", "/wines/9"), "forward");
     assert.equal(inferKind("/", "/search"), "forward");
-    assert.equal(inferKind("/me", "/tier-lists"), "forward");
+    assert.equal(inferKind("/me", "/favorites"), "forward");
+    // Lists is a tab of its own in the kit's bar, so Me → Lists crossfades.
+    assert.equal(inferKind("/me", "/tier-lists"), "tab");
   });
 
   test("a move to an ancestor of the current page is back", () => {
@@ -43,7 +45,7 @@ describe("inferKind (a push, replace or link that did not say)", () => {
   });
 
   test("within a tab: a path ancestor is Back, a sibling branch is forward", () => {
-    assert.equal(inferKind("/tier-lists/3", "/me"), "forward");
+    assert.equal(inferKind("/favorites/3", "/me"), "forward");
     assert.equal(inferKind("/me/settings", "/me"), "back");
   });
 

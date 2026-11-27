@@ -11,12 +11,13 @@ import type * as React from "react";
 import { Toaster as Sonner, type ToasterProps } from "sonner";
 
 /**
- * shadcn's Sonner wrapper, minus `next-themes`: the app is dark by default
- * and has no theme switch yet (D21), so the theme is fixed rather than read
- * from a provider that is not installed. Mount it through `app/Toaster`, which
- * positions it above the tab bar.
+ * shadcn's Sonner wrapper, drawn as the kit's toast (KIT § 2): 48 minimum,
+ * r8, the toast fill with its edge, one line with an ellipsis, and the action
+ * (Undo) in the toast's act ink at the right. Colours come from the theme
+ * tokens, so both themes follow; sonner's own `theme` only picks its
+ * built-in icon tints. Mount it through `app/Toaster`, which places it.
  */
-const Toaster = ({ ...props }: ToasterProps) => {
+const Toaster = ({ style, toastOptions, ...props }: ToasterProps) => {
   return (
     <Sonner
       theme="dark"
@@ -28,12 +29,25 @@ const Toaster = ({ ...props }: ToasterProps) => {
         error: <OctagonXIcon className="size-4" />,
         loading: <Loader2Icon className="size-4 animate-spin" />,
       }}
+      toastOptions={{
+        ...toastOptions,
+        classNames: {
+          toast:
+            "t-body !min-h-12 !rounded-md !border !border-toast-edge !bg-toast !py-3 !text-toast-ink !shadow-pop",
+          title: "truncate",
+          description: "t-cap !text-ink-2",
+          actionButton:
+            "t-head !h-11 !min-w-11 !bg-transparent !px-2 !text-toast-act",
+          ...toastOptions?.classNames,
+        },
+      }}
       style={
         {
-          "--normal-bg": "var(--ca-surface-2)",
-          "--normal-text": "var(--ca-ink-1)",
-          "--normal-border": "var(--ca-line)",
+          "--normal-bg": "var(--ca-toast)",
+          "--normal-text": "var(--ca-toast-ink)",
+          "--normal-border": "var(--ca-toast-edge)",
           "--border-radius": "var(--radius-md)",
+          ...style,
         } as React.CSSProperties
       }
       {...props}

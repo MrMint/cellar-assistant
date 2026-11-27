@@ -145,6 +145,68 @@ describe("BottomSheet", () => {
     assert.deepEqual(changes, [false]);
   });
 
+  test("back closes the sheet on top, and focus returns to its opener (KIT § 4)", async () => {
+    function Opener() {
+      const [open, setOpen] = useState(false);
+      return (
+        <>
+          <button type="button" onClick={() => setOpen(true)}>
+            Open
+          </button>
+          <BottomSheet open={open} onOpenChange={setOpen} title="Actions">
+            <p>rows</p>
+          </BottomSheet>
+        </>
+      );
+    }
+    await render(<Opener />);
+    const opener = byText("Open");
+    assert.ok(opener);
+    opener.focus();
+    await click(opener);
+    await flush(10);
+    assert.ok(document.querySelector('[role="dialog"]'), "the sheet is open");
+    await act(async () => {
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    });
+    assert.equal(
+      document.querySelector('[role="dialog"]')?.getAttribute("data-state"),
+      "closed",
+      "back asked the sheet to close",
+    );
+  });
+
+  test("on desktop, back closes the dialog on top and focus returns to its opener", async () => {
+    viewportWidth = 1280;
+    function Opener() {
+      const [open, setOpen] = useState(false);
+      return (
+        <>
+          <button type="button" onClick={() => setOpen(true)}>
+            Open
+          </button>
+          <ResponsiveDialog open={open} onOpenChange={setOpen} title="Rename">
+            <p>field</p>
+          </ResponsiveDialog>
+        </>
+      );
+    }
+    await render(<Opener />);
+    const opener = byText("Open");
+    assert.ok(opener);
+    opener.focus();
+    await click(opener);
+    await flush(10);
+    assert.ok(document.querySelector('[role="dialog"]'));
+    assert.notEqual(document.activeElement, opener, "focus moved into it");
+    await act(async () => {
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    });
+    await flush(50);
+    assert.equal(document.querySelector('[role="dialog"]'), null);
+    assert.equal(document.activeElement, opener, "focus is back on Open");
+  });
+
   test("closed: nothing rendered", async () => {
     await render(
       <BottomSheet open={false} onOpenChange={() => {}} title="Hidden">
@@ -194,7 +256,7 @@ describe("BottomSheet snaps", () => {
     assert.match(cls, /direction=bottom\]:max-h-\[94dvh\]/);
   });
 
-  test("a content-sized sheet is capped at 90dvh, through the same variant", async () => {
+  test("a content-sized sheet is capped at 90dvh or 788 (KIT § 2), through the same variant", async () => {
     await render(
       <BottomSheet open onOpenChange={() => {}} title="Add">
         <p>rows</p>
@@ -204,7 +266,7 @@ describe("BottomSheet snaps", () => {
     const cls =
       document.querySelector('[data-slot="bottom-sheet"]')?.className ?? "";
     assert.doesNotMatch(cls, /direction=bottom\]:max-h-\[80vh\]/);
-    assert.match(cls, /direction=bottom\]:max-h-\[90dvh\]/);
+    assert.match(cls, /direction=bottom\]:max-h-\[min\(90dvh,788px\)\]/);
   });
 });
 
@@ -490,11 +552,12 @@ describe("ResponsiveDialog", () => {
 });
 
 describe("ConfirmSheet", () => {
-  test("an alert dialog; the danger button confirms, Cancel closes", async () => {
+  test("an alert dialog; Keep it first, the outlined danger verb confirms", async () => {
     let confirmed = 0;
     const changes: boolean[] = [];
     await render(
       <ConfirmSheet
+        cancelLabel="Keep it"
         open
         onOpenChange={(o) => changes.push(o)}
         title="Delete this cellar?"
@@ -511,8 +574,18 @@ describe("ConfirmSheet", () => {
     assert.equal(document.querySelector('[role="dialog"]'), null);
     const buttons = [...document.querySelectorAll("button")];
     const del = buttons.find((b) => b.textContent === "Delete");
-    const cancel = buttons.find((b) => b.textContent === "Cancel");
-    assert.match(del?.className ?? "", /bg-destructive/);
+    const cancel = buttons.find((b) => b.textContent === "Keep it");
+    // KIT § 2: destructive is outlined in danger with the trash glyph, and
+    // never first (CROSS-LOT "Delete confirm").
+    assert.match(del?.className ?? "", /border-danger/);
+    assert.doesNotMatch(del?.className ?? "", /bg-destructive/);
+    assert.ok(del?.querySelector("svg"), "the trash glyph");
+    assert.ok(
+      cancel !== undefined &&
+        del !== undefined &&
+        buttons.indexOf(cancel) < buttons.indexOf(del),
+      "Keep it comes first",
+    );
     await click(del);
     assert.equal(confirmed, 1);
     await click(cancel);
@@ -522,6 +595,7 @@ describe("ConfirmSheet", () => {
   test("pending: both buttons disabled", async () => {
     await render(
       <ConfirmSheet
+        cancelLabel="Keep it"
         open
         onOpenChange={() => {}}
         title="Delete?"
@@ -532,7 +606,7 @@ describe("ConfirmSheet", () => {
     );
     await flush(10);
     const buttons = [...document.querySelectorAll("button")].filter((b) =>
-      ["Delete", "Cancel"].includes(b.textContent ?? ""),
+      ["Delete", "Keep it"].includes(b.textContent ?? ""),
     );
     assert.equal(buttons.length, 2);
     assert.ok(buttons.every((b) => b.disabled));
@@ -598,24 +672,74 @@ describe("SegmentedControl", () => {
 });
 
 describe("TabBar", () => {
-  test("five labelled entries; the route's tab is the current page", async () => {
+  test("the kit's seven: Cellars, Search, Map, Add, Lists, More, Me", async () => {
     pathname = "/cellars/abc";
     await render(<TabBar />);
     const nav = container.querySelector('nav[aria-label="Main"]');
     assert.ok(nav);
-    const links = [...nav.querySelectorAll("a:not([aria-label])")];
-    assert.deepEqual(
-      links.map((a) => a.textContent),
-      ["Home", "Cellar", "Map", "Me"],
+    const names = [...nav.querySelectorAll("a, button")].map(
+      (el) => el.getAttribute("aria-label") ?? el.textContent,
     );
-    const add = nav.querySelector('a[aria-label="Add"]');
-    assert.ok(add, "the capture button");
+    assert.deepEqual(names, [
+      "Cellars",
+      "Search",
+      "Map",
+      "Add",
+      "Lists",
+      "More",
+      "Me",
+    ]);
     assert.deepEqual(
       [...nav.querySelectorAll("[aria-current=page]")].map(
         (a) => a.textContent,
       ),
-      ["Cellar"],
+      ["Cellars"],
     );
+  });
+
+  test("Me is the avatar, named with its friend-request badge", async () => {
+    const { ShellViewerContext, pendingRequests } = await import(
+      "./overlays/ShellViewer"
+    );
+    const requests = pendingRequests({
+      myFriendRequests: {
+        __typename: "FriendRequestConnection",
+        edges: [
+          { node: { id: "r1", status: "PENDING" } },
+          { node: { id: "r2", status: "PENDING" } },
+          { node: { id: "r3", status: "ACCEPTED" } },
+        ],
+      },
+    } as Parameters<typeof pendingRequests>[0]);
+    await render(
+      <ShellViewerContext.Provider
+        value={{ displayName: "Test User", requests }}
+      >
+        <TabBar />
+      </ShellViewerContext.Provider>,
+    );
+    const me = container.querySelector('[data-slot="me-tab"]');
+    assert.equal(me?.getAttribute("aria-label"), "Me, 2 friend requests");
+    assert.equal(me?.getAttribute("href"), "/me");
+    assert.equal(
+      container.querySelector('[data-slot="me-badge"]')?.textContent,
+      "2",
+    );
+    assert.equal(
+      container.querySelector('[data-slot="user-avatar"]')?.textContent,
+      "T",
+    );
+  });
+
+  test("More opens a sheet of the places with no tab", async () => {
+    await render(<TabBar />);
+    const more = container.querySelector('[data-slot="more-button"]');
+    await click(more);
+    await flush();
+    assert.equal(more?.getAttribute("aria-expanded"), "true");
+    const dialog = document.querySelector('[role="dialog"]');
+    assert.ok(dialog, "More's sheet");
+    assert.ok(byText("Recipes", dialog as ParentNode));
   });
 
   test("a tapped tab lights at once, before the route changes", async () => {
@@ -661,7 +785,7 @@ describe("TabBar", () => {
     assert.match(shell?.className ?? "", /overflow-hidden/);
     assert.match(
       shell?.className ?? "",
-      /max-sm:mb-\[calc\(-1\*env\(safe-area-inset-bottom\)\)\]/,
+      /max-md:mb-\[calc\(-1\*env\(safe-area-inset-bottom\)\)\]/,
     );
     assert.doesNotMatch(bar?.className ?? "", /\bmb-\[/);
     assert.match(bar?.className ?? "", /pb-\[env\(safe-area-inset-bottom\)\]/);
@@ -696,11 +820,11 @@ describe("TabBar", () => {
     );
     assert.equal(container.querySelector('[data-slot="tab-bar"]'), null);
     const shell = container.querySelector('[data-slot="app-shell"]');
-    assert.doesNotMatch(shell?.className ?? "", /max-sm:mb-/);
+    assert.doesNotMatch(shell?.className ?? "", /max-md:mb-/);
   });
 
   test("re-tap: scroll to top first, then pop to the tab's root", () => {
-    const cellar = TABS.find((t) => t.key === "cellar");
+    const cellar = TABS.find((t) => t.key === "cellars");
     assert.ok(cellar);
     const scrolled: number[] = [];
     const scroller = {
@@ -724,8 +848,8 @@ describe("TabBar", () => {
     );
   });
 
-  test("X10: Home at its root and the top opens the search sheet", () => {
-    const home = TABS.find((t) => t.key === "home");
+  test("X10: Search at the landing and the top opens the search sheet", () => {
+    const home = TABS.find((t) => t.key === "search");
     assert.ok(home);
     assert.equal(home.href, "/");
     const scroller = { scrollTop: 0, scrollTo: () => {} } as unknown as Element;
@@ -739,6 +863,53 @@ describe("TabBar", () => {
 });
 
 describe("AppShell", () => {
+  const press = async (target: Element, key: string) => {
+    await act(async () => {
+      target.dispatchEvent(
+        new KeyboardEvent("keydown", { key, bubbles: true }),
+      );
+    });
+  };
+
+  test("keys go to the app element: ? opens Keys, G L goes to Lists, a field keeps its N", async () => {
+    pathname = "/cellars";
+    await render(
+      <AppShell>
+        <input aria-label="Name" />
+      </AppShell>,
+    );
+    const main = container.querySelector("main");
+    assert.ok(main);
+    await press(main, "g");
+    await press(main, "l");
+    assert.deepEqual(pushes, ["/tier-lists"]);
+    const input = container.querySelector("input");
+    assert.ok(input);
+    await press(input, "n");
+    assert.deepEqual(pushes, ["/tier-lists"], "typing is not a key");
+    // A key on the document, outside the app element, is not ours.
+    await press(document.body, "?");
+    assert.equal(document.querySelector('[role="dialog"]'), null);
+    await press(main, "?");
+    await flush(10);
+    const dialog = document.querySelector('[role="dialog"]');
+    assert.ok(dialog);
+    assert.ok(byText("Keys", dialog));
+  });
+
+  test("G O opens the More that is showing", async () => {
+    pathname = "/cellars";
+    await render(<AppShell>page</AppShell>);
+    const main = container.querySelector("main");
+    assert.ok(main);
+    await press(main, "g");
+    await press(main, "o");
+    await flush(10);
+    const dialog = document.querySelector('[role="dialog"]');
+    assert.ok(dialog);
+    assert.ok(byText("Recipes", dialog));
+  });
+
   test("rail, scroller and tab bar; the scroller is the one main", async () => {
     pathname = "/cellars";
     await render(
@@ -852,6 +1023,45 @@ describe("AppBar", () => {
     assert.equal(container.querySelector('button[aria-label="Back"]'), null);
   });
 
+  test("over a photo: Back and ⋯ are glass discs, the title is for screen readers", async () => {
+    await render(
+      <AppBar
+        title="Ridge Lytton Springs"
+        parent="/cellars"
+        tone="photo"
+        overflow={[{ label: "Edit", onSelect: () => {} }]}
+      />,
+    );
+    const bar = container.querySelector('[data-slot="app-bar"]');
+    assert.equal(bar?.getAttribute("data-tone"), "photo");
+    const discs = [
+      ...container.querySelectorAll('[data-slot="glass-disc"]'),
+    ].map((d) => d.getAttribute("aria-label"));
+    assert.deepEqual(discs, ["Back", "More actions"]);
+    assert.match(
+      container.querySelector("h1")?.parentElement?.className ?? "",
+      /sr-only/,
+    );
+  });
+
+  test("sticky: the bar shadow comes once the scroller has moved", async () => {
+    await render(
+      <main data-app-scroller="">
+        <AppBar title="Cellars" root sticky />
+      </main>,
+    );
+    const bar = container.querySelector('[data-slot="app-bar"]');
+    const scroller = container.querySelector("main");
+    assert.ok(bar && scroller);
+    assert.match(bar.className, /data-\[stuck\]:shadow-bar/);
+    assert.equal(bar.hasAttribute("data-stuck"), false);
+    await act(async () => {
+      scroller.scrollTop = 40;
+      scroller.dispatchEvent(new Event("scroll"));
+    });
+    assert.equal(bar.hasAttribute("data-stuck"), true);
+  });
+
   test("overflow on a phone is an action sheet, Delete in danger text", async () => {
     let deleted = 0;
     await render(
@@ -876,7 +1086,7 @@ describe("AppBar", () => {
     const del = [...document.querySelectorAll('[role="dialog"] button')].find(
       (b) => b.textContent === "Delete",
     );
-    assert.match(del?.className ?? "", /text-destructive/);
+    assert.match(del?.className ?? "", /text-danger/);
     await click(del);
     // The action waits for the sheet to finish closing, so a ConfirmSheet it
     // opens never overlaps the closing sheet (stuck pointer-events on body).

@@ -1,15 +1,20 @@
 "use client";
 
-import { usePathname } from "next/navigation";
-import type { ReactNode } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import { mainContentProps } from "./main-content";
 import { isCaptureRoute } from "./nav";
-import { useNavHistoryTracker } from "./nav-history";
+import { canGoBack, useNavHistoryTracker } from "./nav-history";
+import { useEdgeSwipeBack, usePullToRefresh } from "./overlays/gestures";
+import { KeysDialog, useShellKeys } from "./overlays/KeysDialog";
+import { OfflineStrip } from "./overlays/OfflineStrip";
+import { PullIndicator } from "./overlays/PullIndicator";
 import { usePointerDownPrefetch } from "./prefetch";
 import { RouteTransition } from "./RouteTransition";
 import { SideRail } from "./SideRail";
 import { TabBar } from "./TabBar";
+import { useNavigate } from "./useNavigate";
 
 const MAKE_MODE = /^\/recipes\/[^/]+\/make\/?$/;
 
@@ -41,15 +46,16 @@ export function contentLayout(pathname: string): {
   return {
     padded: !isMap && !fullScreen,
     scrolls: pathname !== "/map",
-    // X10: search is a full-screen sheet on a phone, and a full-screen sheet
-    // hides the tab bar (design §2), as does capture (X06: "It hides only in
-    // capture"). The side rail stays from `sm` up.
+    // The kit's tab bar never hides on scroll (KIT § 2). It steps aside for
+    // the search sheet (X10: full screen on a phone, with its own Cancel),
+    // the capture surface (X06: the camera has the screen, and Close is the
+    // way out) and the full-screen routes. The rail stays from `md` up.
     tabBar: pathname !== "/search" && !isCaptureRoute(pathname) && !fullScreen,
   };
 }
 
 /**
- * The signed-in chrome: `SideRail` from `sm` up, `TabBar` below it, and
+ * The signed-in chrome: `SideRail` from `md` (900, L8) up, `TabBar` below it, and
  * between them the **inner scroller** (D26) — the one element that scrolls,
  * which is what tab re-tap and (later) pull-to-refresh act on.
  *
@@ -73,12 +79,34 @@ export function AppShell({ children }: { children: ReactNode }) {
   usePointerDownPrefetch();
   const { padded, scrolls, tabBar } = contentLayout(pathname);
   const rail = !isFullScreenRoute(pathname);
+  const { onKeyDown, keysOpen, setKeysOpen } = useShellKeys();
+
+  // The installed app's gestures (standalone only; each hook checks).
+  const scrollerRef = useRef<HTMLElement | null>(null);
+  const router = useRouter();
+  const navigate = useNavigate();
+  const [hasHistory, setHasHistory] = useState(false);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: re-read on every route change.
+  useEffect(() => setHasHistory(canGoBack()), [pathname]);
+  useEdgeSwipeBack(scrollerRef, {
+    enabled: hasHistory && rail,
+    onBack: () => navigate.back(),
+  });
+  const pull = usePullToRefresh(scrollerRef, {
+    enabled: scrolls && rail,
+    onRefresh: () => {
+      router.refresh();
+      return undefined;
+    },
+  });
 
   return (
+    // biome-ignore lint/a11y/noStaticElementInteractions: the app element hears the keys bubbling from inside it (KIT § 3); it is not a control.
     <div
       data-slot="app-shell"
+      onKeyDown={onKeyDown}
       className={cn(
-        "flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden sm:flex-row",
+        "relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden md:flex-row",
         // Phones: reclaim the bottom safe area the root layout pads, so the
         // tab bar's glass runs under the home indicator. It has to be this
         // element: the shell clips (overflow-hidden), so a negative margin
@@ -86,24 +114,35 @@ export function AppShell({ children }: { children: ReactNode }) {
         // between the root layout and here may clip either. Without a tab
         // bar (the search sheet, X10; capture, X06) there is no glass to run
         // under it, so the root layout's padding keeps the content clear.
-        tabBar && "max-sm:mb-[calc(-1*env(safe-area-inset-bottom))]",
+        tabBar && "max-md:mb-[calc(-1*env(safe-area-inset-bottom))]",
       )}
     >
-      {rail && <SideRail className="hidden sm:flex" />}
+      {rail && <SideRail className="hidden md:flex" />}
       <RouteTransition>
         <main
           {...mainContentProps}
+          ref={scrollerRef}
           data-app-scroller=""
           className={cn(
             "min-h-0 min-w-0 flex-1 overflow-x-hidden outline-none",
             padded && "p-4",
-            scrolls ? "overflow-y-auto" : "flex flex-col overflow-y-hidden",
+            scrolls
+              ? "overflow-y-auto overscroll-y-contain"
+              : "flex flex-col overflow-y-hidden",
           )}
+          style={
+            pull.pull > 0
+              ? { transform: `translateY(${pull.pull}px)` }
+              : undefined
+          }
         >
+          <OfflineStrip />
           {children}
         </main>
       </RouteTransition>
-      {tabBar && <TabBar className="sm:hidden" />}
+      <PullIndicator state={pull} />
+      {tabBar && <TabBar className="md:hidden" />}
+      <KeysDialog open={keysOpen} onOpenChange={setKeysOpen} />
     </div>
   );
 }

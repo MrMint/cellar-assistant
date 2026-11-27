@@ -28,10 +28,10 @@ export function ShellMessage({
       >
         {icon}
       </div>
-      <h1 className="type-title-1 max-w-[420px] text-ink-1">{copy.title}</h1>
-      <p className="type-body max-w-[420px] text-ink-2">{copy.body}</p>
+      <h1 className="t-title max-w-[420px] text-ink">{copy.title}</h1>
+      <p className="t-body max-w-[420px] text-ink-2">{copy.body}</p>
       <div className="flex flex-row gap-3 pt-2">{actions}</div>
-      {footnote ? <p className="type-footnote">{footnote}</p> : null}
+      {footnote ? <p className="t-cap">{footnote}</p> : null}
     </div>
   );
 }

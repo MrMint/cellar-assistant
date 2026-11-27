@@ -66,11 +66,11 @@ export function CollectionSection<T>({
       className="flex flex-col gap-3"
     >
       <div className="flex min-h-6 items-end justify-between gap-2 px-1">
-        <h2 id={headingId} className="type-overline text-ink-3">
+        <h2 id={headingId} className="t-micro uppercase text-ink-3">
           {title}
         </h2>
         {totalCount !== null && totalCount > rows.length && (
-          <span className="type-footnote tabular">{totalCount}</span>
+          <span className="t-cap tabular">{totalCount}</span>
         )}
       </div>
       {failure !== null && <ApiError error={failure} />}

@@ -41,7 +41,7 @@ export function AiStatus({
       variant={danger ? "destructive" : "default"}
       data-tone={outcome.tone}
       className={cn(
-        "border-transparent bg-surface-2",
+        "border-transparent bg-raised",
         danger && "border-destructive/60",
       )}
     >
@@ -53,7 +53,7 @@ export function AiStatus({
       {outcome.canRetry && onRetry !== undefined && (
         <Button
           variant="ghost"
-          className="col-start-2 -ml-3 justify-self-start text-ink-1"
+          className="col-start-2 -ml-3 justify-self-start text-ink"
           onClick={onRetry}
         >
           Try again

@@ -11,6 +11,7 @@ import {
 import { breakpointUp, useMediaQuery } from "@/hooks/useMediaQuery";
 import { cn } from "@/lib/utils";
 import { BottomSheet, type BottomSheetProps } from "./BottomSheet";
+import { useOverlayLayer } from "./overlays/layers";
 import { keepOpenForToasts } from "./toastLayer";
 import { useReturnFocus } from "./useReturnFocus";
 
@@ -49,6 +50,11 @@ export function ResponsiveDialog({
 }: ResponsiveDialogProps) {
   const desktop = useMediaQuery(breakpointUp("md"));
   const returnFocus = useReturnFocus(open && desktop);
+  // KIT § 4: back closes the dialog on top (Radix answers its own Escape).
+  // Below md the BottomSheet registers itself.
+  useOverlayLayer(open && desktop, () => {
+    if (dismissible) onOpenChange(false);
+  });
 
   if (!desktop) {
     return (
@@ -89,14 +95,16 @@ export function ResponsiveDialog({
         className={cn(
           // Capped and scrolling, as Joy's ModalDialog was: ui/dialog has no
           // height limit, so a long body ran off the viewport from md up.
-          "surface-glass max-h-[85dvh] gap-4 overflow-y-auto rounded-lg border-none p-6 text-foreground",
+          // KIT § 3 Desktop: a 440 dialog, centred on the content column
+          // (beside the 88 rail, `ui/dialog`), r16, sh-dlg.
+          "max-h-[85dvh] gap-4 overflow-y-auto p-6",
           className,
         )}
       >
         <DialogHeader className={cn(hideTitle && "sr-only")}>
-          <DialogTitle className="type-title-2">{title}</DialogTitle>
+          <DialogTitle className="t-title text-ink">{title}</DialogTitle>
           {description !== undefined ? (
-            <DialogDescription className="type-callout text-ink-2">
+            <DialogDescription className="t-body text-ink-2">
               {description}
             </DialogDescription>
           ) : (
