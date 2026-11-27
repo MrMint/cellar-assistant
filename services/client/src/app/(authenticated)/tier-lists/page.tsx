@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 import type { SectionKey } from "@/components/common/CollectionSection";
+import { listsPageSize } from "@/components/tier-list/lists/model";
 import { ListsIndexQuery } from "@/components/tier-list/lists/queries";
 import {
-  listsPageSize,
   type TierListSectionSeed,
   TierListsPage,
 } from "@/components/tier-list/TierListsPage";

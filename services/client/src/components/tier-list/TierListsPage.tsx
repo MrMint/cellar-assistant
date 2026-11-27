@@ -2,7 +2,6 @@
 
 import { useId, useState } from "react";
 import { Add, ICON_STROKE, Offline } from "@/components/app/icons";
-import { sectionPageSize } from "@/components/cellar-api/pagination";
 import {
   SECTION_TITLES,
   type SectionKey,
@@ -18,6 +17,7 @@ import { cn } from "@/lib/utils";
 import { useScrollPositionRestore } from "@/utilities/hooks";
 import { ListCard } from "./lists/ListCard";
 import { NewListSheet } from "./lists/ListSheets";
+import { listsPageSize } from "./lists/model";
 import { type ListCardData, ListsIndexQuery } from "./lists/queries";
 
 /** One section's server-rendered first page, or why there is none. */
@@ -25,10 +25,6 @@ export type TierListSectionSeed = {
   page: Page<ListCardData>;
   failure: ApiFailure | null;
 };
-
-/** How many a section reads a page (the cellars index's sizes). */
-export const listsPageSize = (section: SectionKey): number =>
-  sectionPageSize(section, 20);
 
 /**
  * Yours, with nothing in it yet (Social-Lists lists-empty-01): the one New

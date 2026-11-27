@@ -29,6 +29,8 @@ export type TierListOptionNode = {
   listType: string;
   createdById: string;
   itemCount: number;
+  /** The first 100 entries' bands: enough to say where an add lands. */
+  bands: readonly number[];
 };
 
 /** A runaway guard, not a product limit: 50 pages is 5,000 visible lists. */
@@ -68,6 +70,7 @@ export function useAllMyTierLists({
             listType: edge.node.listType,
             createdById: edge.node.createdById,
             itemCount: edge.node.itemCount,
+            bands: edge.node.bands.edges.map((band) => band.node.band),
           })),
           meta: data?.me?.id ?? null,
         },

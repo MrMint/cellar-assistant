@@ -7,6 +7,7 @@ import {
   kindNoun,
   privacyLine,
   rankOf,
+  rankOnAppend,
   shortDate,
 } from "./model";
 
@@ -100,5 +101,19 @@ describe("canEditList: only the list's maker writes to it", () => {
     assert.equal(canEditList(undefined, "u1"), false);
     assert.equal(canEditList("u1", null), false);
     assert.equal(canEditList("", ""), false);
+  });
+});
+
+describe("rankOnAppend: where an add lands, from the bands at hand", () => {
+  test("one past every entry in its band or above", () => {
+    assert.equal(rankOnAppend([5, 5, 4, 2], 4, 5), 3);
+    assert.equal(rankOnAppend([5, 5, 4, 2], 4, 4), 4);
+    assert.equal(rankOnAppend([5, 5, 4, 2], 4, 1), 5);
+    assert.equal(rankOnAppend([], 0, 3), 1);
+  });
+  test("unrated entries never count, and a partial read says nothing", () => {
+    assert.equal(rankOnAppend([0, 0, 3], 3, 3), 2);
+    assert.equal(rankOnAppend([5, 5], 113, 5), null);
+    assert.equal(rankOnAppend([5], 1, 0), null);
   });
 });

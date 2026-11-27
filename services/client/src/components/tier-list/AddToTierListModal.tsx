@@ -21,7 +21,7 @@
 
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
-import { useClient, useQuery } from "urql";
+import { useQuery } from "urql";
 import {
   Add,
   Check,
@@ -49,7 +49,7 @@ import { useTierListActions } from "./actions";
 import { entryTypeOf, tierListOptionsFor } from "./adapter";
 import type { TierListEntityType } from "./constants";
 import { bandForScore } from "./history";
-import { kindNoun, kindOne, rankOf } from "./lists/model";
+import { kindNoun, kindOne, rankOf, rankOnAppend } from "./lists/model";
 import { ListRanksQuery } from "./lists/queries";
 import {
   ENTITY_ENTRIES_PAGE_SIZE,
@@ -111,7 +111,6 @@ export function AddToTierListModal({
   entityName,
 }: AddToTierListModalProps) {
   const router = useRouter();
-  const client = useClient();
   const { addItemToTierListAction, addTierListAction, undoAction } =
     useTierListActions();
   const isPlace = entityType === "place";
@@ -183,28 +182,6 @@ export function AddToTierListModal({
     setNewListName(defaultListName(entityType));
   }, [open, entityType]);
 
-  /** Where it landed, as the toast says it: "#13", or nothing if unread. */
-  const rankAfterAdd = useCallback(
-    async (tierListId: string, entryId: string | undefined) => {
-      if (entryId === undefined) return null;
-      const read = await client
-        .query(
-          ListRanksQuery,
-          { id: tierListId },
-          { requestPolicy: "network-only" },
-        )
-        .toPromise();
-      const list = unwrapResult(read.data?.tierList, "TierList");
-      return list.ok
-        ? rankOf(
-            list.data.items.edges.map((edge) => edge.node),
-            entryId,
-          )
-        : null;
-    },
-    [client],
-  );
-
   /**
    * The add's toast: band, rank and name, and an Undo that takes back
    * exactly that add (`editSeq`) — or no Undo when the add's edit could not
@@ -262,7 +239,11 @@ export function AddToTierListModal({
           band,
         );
         if (result.success) {
-          const rank = await rankAfterAdd(tierListId, result.tierListItemId);
+          const list = lists.find((option) => option.id === tierListId);
+          const rank =
+            list === undefined
+              ? null
+              : rankOnAppend(list.bands, list.itemCount, band);
           router.refresh();
           onClose();
           added(tierListId, listName, band, rank, result.editSeq ?? null);
@@ -281,7 +262,7 @@ export function AddToTierListModal({
       router,
       addItemToTierListAction,
       added,
-      rankAfterAdd,
+      lists,
     ],
   );
 

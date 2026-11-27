@@ -154,7 +154,6 @@ export const ListShareQuery = graphql(
     query ListShare($id: ID!) {
       me {
         id
-        displayName
       }
       tierList(id: $id) {
         __typename
@@ -242,6 +241,14 @@ export const MyListOptionsPageQuery = graphql(
               listType
               createdById
               itemCount
+              bands: items(first: 100) {
+                edges {
+                  node {
+                    id
+                    band
+                  }
+                }
+              }
             }
           }
         }
