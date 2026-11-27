@@ -1,8 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Camera, Cocktail, Scan } from "@/components/app/icons";
-import { SegmentedControl } from "@/components/app/SegmentedControl";
 import type { ApiItemType } from "@/components/cellar-api/itemTypes";
 import { ItemOnboarding } from "@/components/common/OnboardingWizard/ItemOnboarding";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -13,16 +11,11 @@ import {
   rememberCapturePrefs,
 } from "@/lib/capture/capture-prefs";
 import { photoHandoff } from "@/lib/capture/photo-handoff";
+import { ModeRow } from "./add/ModeRow";
 import { CaptureClose } from "./CaptureChrome";
 import type { AddableCellar } from "./CellarPicker";
 import { MenuCapture } from "./MenuCapture";
 import { RecipeCapture } from "./RecipeCapture";
-
-const MODE_OPTIONS = [
-  { value: "bottle", label: "Bottle", icon: <Camera aria-hidden /> },
-  { value: "menu", label: "Menu", icon: <Scan aria-hidden /> },
-  { value: "recipe", label: "Recipe", icon: <Cocktail aria-hidden /> },
-] as const;
 
 export type CaptureSurfaceProps = {
   /** The type a bottle is read as: the route's, or the first default. */
@@ -107,12 +100,7 @@ export function CaptureSurface({
   }
 
   const modeRow = (
-    <SegmentedControl
-      aria-label="What are you capturing?"
-      value={resolved.mode}
-      options={MODE_OPTIONS}
-      onValueChange={(next) => switchTo(next)}
-    />
+    <ModeRow value={resolved.mode} onValueChange={(next) => switchTo(next)} />
   );
 
   return (

@@ -41,19 +41,20 @@ const text = (html: string) => stripTags(html, " ");
 const noop = () => {};
 
 describe("ItemOnboarding (snap-once, X05/N21)", () => {
-  test("opens on 'Add Wine' and the one camera, with no step to skip", () => {
+  test("opens on 'Add wine' and the one camera, with no step to skip", () => {
     const html = render(<ItemOnboarding type="WINE" />);
     const words = text(html);
-    assert.match(words, /Add Wine/);
+    assert.match(words, /Add wine/);
     assert.match(html, /data-slot="capture-camera"/);
-    assert.match(words, /Fill the frame with the front label/);
-    assert.match(words, /Type it in instead/);
+    assert.match(words, /Type it/);
+    // Capture-Camera: the camera is one dark place in both themes.
+    assert.match(html, /class="keep-dark/);
     // N21: the old step copy and the scanner's debug line are gone.
     assert.doesNotMatch(words, /Lets |Scanning \(|used for display/);
   });
 
   test("the heading names the type", () => {
-    assert.match(text(render(<ItemOnboarding type="TEA" />)), /Add Tea/);
+    assert.match(text(render(<ItemOnboarding type="TEA" />)), /Add tea/);
   });
 
   test("a generic entry asks the type; the surface's mode row sits under the camera", () => {
@@ -71,10 +72,10 @@ describe("ItemOnboarding (snap-once, X05/N21)", () => {
     for (const type of ["Wine", "Beer", "Spirit", "Sake", "Coffee", "Tea"]) {
       assert.match(words, new RegExp(`\\b${type}\\b`));
     }
-    // X06: right under the picture, above the hint and "Type it in instead".
+    // X06: right under the picture, above the shutter row and "Type it".
     assert.match(
       html,
-      /data-slot="capture-camera"[\s\S]*data-slot="mode-row"[\s\S]*Type it in instead/,
+      /data-slot="capture-camera"[\s\S]*data-slot="mode-row"[\s\S]*Type it/,
     );
   });
 
@@ -104,7 +105,7 @@ const wine = formDefaultsFromOnboarding("WINE", {
 });
 
 describe("QuickAddCard", () => {
-  test("name, match chip, summary, countdown and the two buttons", () => {
+  test("name, summary and the two buttons; no countdown (B-223)", () => {
     const html = text(
       render(
         <QuickAddCard
@@ -117,11 +118,10 @@ describe("QuickAddCard", () => {
       ),
     );
     assert.match(html, /Château Margaux/);
-    assert.match(html, /93% match/);
     assert.match(html, /2015 · RED · Margaux · France/);
-    assert.match(html, /Adding in 15s\.\.\./);
-    assert.match(html, /Edit Details/);
-    assert.match(html, /Add \(15s\)/);
+    assert.doesNotMatch(html, /Adding in|% match/);
+    assert.match(html, /Not this/);
+    assert.match(html, /\+1 bottle/);
   });
 });
 

@@ -24,11 +24,11 @@ export const CatalogMatchPrompt = ({
 }: CatalogMatchPromptProps) => {
   const summary = catalogMatchSummary(match);
   return (
-    <StepCard className="max-w-[600px] gap-3 bg-surface-2">
-      <h2 className="type-headline">Is it this one?</h2>
+    <StepCard className="max-w-[600px] gap-3 bg-raised">
+      <h2 className="t-head">Is it this one?</h2>
       <div className="flex flex-col gap-0.5">
-        <p className="type-body font-semibold">{match.item.name}</p>
-        {summary !== "" && <p className="type-callout text-ink-2">{summary}</p>}
+        <p className="t-body font-semibold">{match.item.name}</p>
+        {summary !== "" && <p className="t-cap text-ink-2">{summary}</p>}
       </div>
       <div className="flex flex-row flex-wrap gap-2">
         <Button onClick={onUse}>

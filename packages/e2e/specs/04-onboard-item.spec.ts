@@ -17,7 +17,7 @@ import {
  * `{T}Form` in create mode), `confirmItemOnboarding` (an id for a row **the
  * outbox has not written yet**, so the form waits for `ItemActor` to write
  * it), `addItemToCellar` and N21's success sheet. The headless browser has no
- * camera, so the flow is "Type it in instead" — the same path a person
+ * camera, so the flow is "Type it" — the same path a person
  * without a label to photograph takes.
  *
  * The three standalone tests at the bottom are deliberately outside that chain:
@@ -52,19 +52,19 @@ test.describe("onboard → cellar → check in", () => {
 
     await primary.goto(`/cellars/${cellarId}/wines/add`);
     await expect(
-      primary.getByRole("heading", { name: "Add Wine" }),
+      primary.getByRole("heading", { name: `Add to ${cellarName}` }),
     ).toBeVisible();
 
     // X05: one camera, no steps to skip — and N21's copy is fixed.
     await expect(primary.getByText(/^Lets /)).toHaveCount(0);
-    await primary.getByRole("button", { name: "Type it in instead" }).click();
+    await primary.getByRole("button", { name: "Type it" }).click();
 
     // "Opening the form…" while `startItemOnboarding` runs; with no photograph the
     // server refuses to invent (E2c), the session stays open, and the form
     // comes up empty. No alert for that: nothing was sent to be read.
     const add = primary
       .getByRole("main")
-      .getByRole("button", { name: "Add", exact: true });
+      .getByRole("button", { name: "Add bottle", exact: true });
     await expect(
       add,
       "the form never appeared — startItemOnboarding did not answer",

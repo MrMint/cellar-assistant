@@ -159,6 +159,11 @@ export const OnboardingMachine = createMachine(
         declinedItemIds: readonly string[];
         /** N19: the catalogue item the label names, if there is one. */
         catalogMatch?: CatalogMatch;
+        /**
+         * DECISIONS 34 (2): the match the person said "Not this" to. Typing
+         * its name and maker again warns, and "Add that one instead" files it.
+         */
+        declinedMatch?: CatalogMatch;
         /** G32/D12: what the front photo looks like in the catalogue. */
         imageMatches: readonly ExistingItem[];
         /**
@@ -211,6 +216,7 @@ export const OnboardingMachine = createMachine(
         | { type: "CREATED"; itemId: string; name?: string }
         | { type: "USE_MATCH" }
         | { type: "DISMISS_MATCH" }
+        | { type: "USE_DECLINED_MATCH" }
         | { type: "USE_IMAGE_MATCH"; item: ExistingItem }
         | { type: "DISMISS_IMAGE_MATCHES" }
         | { type: "BACK_LABEL"; image: string }
@@ -550,6 +556,8 @@ export const OnboardingMachine = createMachine(
             target: "form",
             actions: assign({
               quickAddEnabled: () => false,
+              declinedMatch: ({ context }) =>
+                context.catalogMatch ?? context.declinedMatch,
               catalogMatch: undefined,
               declinedItemIds: ({ context }) =>
                 isNil(context.catalogMatch)
@@ -581,6 +589,8 @@ export const OnboardingMachine = createMachine(
           ],
           DISMISS_MATCH: {
             actions: assign({
+              declinedMatch: ({ context }) =>
+                context.catalogMatch ?? context.declinedMatch,
               catalogMatch: undefined,
               declinedItemIds: ({ context }) =>
                 isNil(context.catalogMatch)
@@ -591,6 +601,21 @@ export const OnboardingMachine = createMachine(
                     ],
             }),
           },
+          // DECISIONS 34 (2): "Add that one instead" — the declined match
+          // after all. Files a bottle of it; never creates an item.
+          USE_DECLINED_MATCH: [
+            {
+              guard: ({ context }) =>
+                isNotNil(context.declinedMatch) && isNotNil(context.cellarId),
+              actions: ["restoreDeclinedMatch", "useCatalogMatch"],
+              target: "addItemToCellar",
+            },
+            {
+              guard: ({ context }) => isNotNil(context.declinedMatch),
+              actions: ["restoreDeclinedMatch", "useCatalogMatch"],
+              target: "uploadImage",
+            },
+          ],
           // G32/D12: one of the photo matches, tapped. Like USE_MATCH, it
           // files (or shows) a catalogue item; it never creates one.
           USE_IMAGE_MATCH: [
@@ -819,6 +844,9 @@ export const OnboardingMachine = createMachine(
             }
           : {},
       ),
+      restoreDeclinedMatch: assign(({ context }) => ({
+        catalogMatch: context.declinedMatch,
+      })),
       useCatalogMatch: assign(({ context }) => ({
         existingItemId: context.catalogMatch?.item.itemId,
         itemName: context.catalogMatch?.item.name,

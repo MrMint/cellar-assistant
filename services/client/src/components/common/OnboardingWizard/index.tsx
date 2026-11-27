@@ -4,6 +4,7 @@ import { useMachine } from "@xstate/react";
 import { type ReactNode, useCallback } from "react";
 import { useClient } from "urql";
 import { BottomSheet } from "@/components/app/BottomSheet";
+import { Write } from "@/components/app/icons";
 import { CaptureCamera } from "@/components/capture/CaptureCamera";
 import type { ApiItemType } from "@/components/cellar-api/itemTypes";
 import { Button } from "@/components/ui/button";
@@ -32,6 +33,8 @@ export type OnboardingWizardProps = {
   inCellar?: boolean;
   /** Right under the camera: the capture surface's mode row (X06). */
   belowCamera?: ReactNode;
+  /** Right of the shutter: the tray of bottles added this visit ("Done"). */
+  tray?: ReactNode;
 };
 
 /**
@@ -50,6 +53,7 @@ export const OnboardingWizard = ({
   itemType,
   inCellar = false,
   belowCamera,
+  tray,
 }: OnboardingWizardProps) => {
   const urqlClient = useClient();
 
@@ -100,44 +104,49 @@ export const OnboardingWizard = ({
           state.matches("searching") ? (
             <p
               role="status"
-              className="inline-flex h-7 items-center gap-1.5 rounded-full bg-black/40 px-3 font-medium text-[13px] text-white/85 backdrop-blur-sm"
+              className="inline-flex h-7 items-center gap-1.5 rounded-full bg-glass px-3 t-cap font-semibold text-on-glass"
             >
               <Spinner aria-hidden className="size-3.5" />
               Looking it up
             </p>
           ) : undefined
         }
+        modeRow={belowCamera}
+        rightAction={tray}
+        dimShutter={state.matches("chooseExisting")}
+        showBackground
+        leftAction={
+          state.matches("photo") ? undefined : (
+            <Button
+              variant="ghost"
+              className="h-auto min-h-11 flex-col gap-0.5 px-2 text-ink"
+              onClick={() => send({ type: "MANUAL" })}
+            >
+              <Write aria-hidden className="size-5" />
+              <span className="t-cap">Type it</span>
+            </Button>
+          )
+        }
       />
-      {belowCamera}
 
-      {state.matches("photo") && chosen !== undefined ? (
-        <div className="flex flex-col gap-2">
-          <p className="type-callout text-ink-2">
-            <span className="text-ink-1">{chosen.item.name}</span> — snap it for
+      {state.matches("photo") && chosen !== undefined && (
+        <div className="flex flex-col gap-2 px-4">
+          <p className="t-cap text-ink-2">
+            <span className="text-ink">{chosen.item.name}</span> · snap it for
             its photo, or skip.
           </p>
           <div className="flex gap-2">
+            <Button variant="ghost" onClick={() => send({ type: "BACK" })}>
+              Back
+            </Button>
             <Button
-              variant="secondary"
+              variant="outline"
               className="flex-1"
               onClick={() => send({ type: "SKIP" })}
             >
               Skip the photo
             </Button>
-            <Button variant="ghost" onClick={() => send({ type: "BACK" })}>
-              Back
-            </Button>
           </div>
-        </div>
-      ) : (
-        <div className="flex flex-col items-center gap-1 text-center">
-          <p className="type-callout text-ink-2">
-            Fill the frame with the front label. It&rsquo;s read as soon as you
-            snap.
-          </p>
-          <Button variant="ghost" onClick={() => send({ type: "MANUAL" })}>
-            Type it in instead
-          </Button>
         </div>
       )}
 
@@ -151,8 +160,8 @@ export const OnboardingWizard = ({
           barcode === undefined ? undefined : `Barcode ${barcode.text}`
         }
         footer={
-          <Button variant="secondary" onClick={() => send({ type: "SKIP" })}>
-            None of these — snap the label
+          <Button variant="outline" onClick={() => send({ type: "SKIP" })}>
+            None of these · snap the label
           </Button>
         }
       >

@@ -154,3 +154,27 @@ export const BrandPickerSearchQuery = graphql(
 `,
   [ActorErrorFieldsFragment],
 );
+
+/**
+ * "Finish later" (MC-drafts, DECISIONS 34): keep the unfinished bottle on the
+ * account, aimed at a cellar. The server refuses someone else's onboarding or
+ * a cellar the viewer cannot write (`NotFoundError`).
+ */
+export const SaveDraftMutation = graphql(
+  `
+  mutation SaveOnboardingDraft($input: SaveDraftInput!) {
+    saveDraft(input: $input) {
+      __typename
+      ... on ItemOnboarding {
+        id
+        status
+        cellarId
+        confirmedFields
+        vintageAnswer
+      }
+      ...ActorErrorFields
+    }
+  }
+`,
+  [ActorErrorFieldsFragment],
+);

@@ -16,7 +16,7 @@ export const StepGrid = ({ className, ...props }: ComponentProps<"div">) => (
 /** A tonal step surface: `ui/card` without the border (design §3.3). */
 export const StepCard = ({ className, ...props }: ComponentProps<"div">) => (
   <Card
-    className={cn("gap-4 border-0 bg-surface-1 p-4 shadow-none", className)}
+    className={cn("gap-4 border-0 bg-card p-4 shadow-none", className)}
     {...props}
   />
 );
@@ -24,9 +24,7 @@ export const StepCard = ({ className, ...props }: ComponentProps<"div">) => (
 /** The "Tips" card beside each capture step. */
 export const TipsCard = ({ children }: { children: ReactNode }) => (
   <StepCard>
-    <h3 className="type-headline text-center">Tips</h3>
-    <ul className="type-body list-disc space-y-1 pl-5 text-ink-2">
-      {children}
-    </ul>
+    <h3 className="t-head text-center">Tips</h3>
+    <ul className="t-body list-disc space-y-1 pl-5 text-ink-2">{children}</ul>
   </StepCard>
 );

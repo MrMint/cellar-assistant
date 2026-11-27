@@ -1,36 +1,60 @@
 "use client";
 
-import { Fragment, useEffect, useId, useRef, useState } from "react";
+import {
+  Fragment,
+  type MouseEvent,
+  type ReactNode,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+} from "react";
 import {
   type FieldPath,
   type SubmitHandler,
   useForm,
   useWatch,
 } from "react-hook-form";
-import { useClient } from "urql";
+import { useClient, useMutation } from "urql";
 import {
   AIDraftField,
   type DraftConfidence,
 } from "@/components/app/AIDraftField";
 import { Info } from "@/components/app/icons";
+import { notify } from "@/components/app/notify";
 import { BrandPicker } from "@/components/brand/BrandPicker";
 import type { ApiItemType } from "@/components/cellar-api/itemTypes";
 import { requiredSummary } from "@/components/item/form-errors";
 import type { ItemFormValues } from "@/components/item/ItemForm";
 import { ItemFormField } from "@/components/item/ItemFormField";
-import { entryPath, formLayout } from "@/components/item/itemFormLayout";
+import {
+  entryPath,
+  formLayout,
+  toCheckLabel,
+} from "@/components/item/itemFormLayout";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
+import { feedback } from "@/lib/feedback";
 import {
   draftedPaths,
   flattenFormValues,
   isDrafted,
 } from "@/lib/forms/ai-draft";
+import { cn } from "@/lib/utils";
 import { createOnboardedItem } from "./actors/createItem";
 import { type OnboardingDefaults, saveBlocker, skippedNotes } from "./adapter";
+import {
+  asksVintage,
+  confirmedFieldsFrom,
+  differsFrom,
+  isDuplicateOfDeclined,
+  openFloorPaths,
+  saveOnboardingDraft,
+} from "./draft-save";
+import { SaveDraftMutation } from "./queries";
 
 type OnboardingItemFormProps = {
   type: ApiItemType;
@@ -46,6 +70,16 @@ type OnboardingItemFormProps = {
   /** The code the session was opened with — the scanner's, if it saw one. */
   sessionBarcode?: string;
   onCreated: (createdId: string, name: string) => void;
+  /** Where the bottle is aimed: `saveDraft`'s cellar (null: just the catalog). */
+  cellarId?: string | null;
+  /** "Finish later" saved the draft (MC-drafts). */
+  onSavedForLater?: (status: string) => void;
+  /**
+   * DECISIONS 34 (2): the match the person declined ("Not this"). Typing its
+   * name and maker again warns; "Add that one instead" files it.
+   */
+  declinedMatch?: { name: string; brandName?: string; summary?: string };
+  onUseDeclined?: () => void;
 };
 
 /**
@@ -87,9 +121,17 @@ export const OnboardingItemForm = ({
   refill,
   sessionBarcode,
   onCreated,
+  cellarId = null,
+  onSavedForLater,
+  declinedMatch,
+  onUseDeclined,
 }: OnboardingItemFormProps) => {
   const client = useClient();
-  const layout = formLayout(type, "create");
+  const [, executeSaveDraft] = useMutation(SaveDraftMutation);
+  // DECISIONS 34 (3): a beer is never asked for a vintage.
+  const layout = formLayout(type, "create").filter(
+    (entry) => entry.kind !== "attribute" || asksVintage(type, entry.field.key),
+  );
   const [brandName, setBrandName] = useState(defaultValues.brandName);
   const [barcode, setBarcode] = useState(sessionBarcode ?? "");
   const barcodeId = useId();
@@ -149,7 +191,89 @@ export const OnboardingItemForm = ({
   const drafted = draftedPaths(baseline, flattenFormValues(current));
   const notFilled = skippedNotes(type, notFilledFrom);
 
+  // DECISIONS 34: a guess counts only once the person touches it — types in
+  // it, taps one of its chips, or says "Looks right" to them all.
+  // A field the read was sure of is shown settled (the board's plain rows);
+  // every other filled field is a guess to check.
+  const guessed: ReadonlySet<string> = new Set(
+    Object.entries(baseline)
+      .filter(
+        ([path, value]) => value.trim() !== "" && confidences[path] !== "sure",
+      )
+      .map(([path]) => path),
+  );
+  const [touched, setTouched] = useState<ReadonlySet<string>>(new Set());
+  const touch = (path: string) =>
+    setTouched((before) =>
+      before.has(path) ? before : new Set([...Array.from(before), path]),
+    );
+  const touchOn = (path: string) => ({
+    onChangeCapture: () => touch(path),
+    onClickCapture: (event: MouseEvent<HTMLDivElement>) => {
+      if ((event.target as Element).closest("button") !== null) touch(path);
+    },
+  });
+  const toCheck = Array.from(guessed).filter((path) => !touched.has(path));
+  const flat: Readonly<Record<string, string>> = {
+    ...flattenFormValues(current),
+    brandName,
+  };
+  const openFloor = openFloorPaths(layout, flat, guessed, touched);
+  const formRef = useRef<HTMLFormElement>(null);
+  const jumpToOpen = () => {
+    feedback("refuse");
+    const path = openFloor[0] ?? toCheck[0];
+    if (path === undefined) return;
+    const target = formRef.current?.querySelector<HTMLElement>(
+      `[data-path="${path}"]`,
+    );
+    target?.scrollIntoView({ block: "center", behavior: "smooth" });
+    target?.querySelector<HTMLElement>("input, textarea, button")?.focus();
+  };
+
+  // DECISIONS 34 (2): the declined match typed again.
+  const duplicate = isDuplicateOfDeclined(
+    declinedMatch,
+    flat.name ?? "",
+    brandName,
+  );
+  const [differing, setDiffering] = useState<Record<string, string> | null>(
+    null,
+  );
+  const differs = differing !== null && differsFrom(differing, flat);
+
+  const [savingLater, setSavingLater] = useState(false);
+  const finishLater = async () => {
+    setSavingLater(true);
+    try {
+      const { status } = await saveOnboardingDraft({
+        save: (variables) => executeSaveDraft(variables),
+        type,
+        onboardingId: itemOnboardingId,
+        cellarId,
+        values: getValues(),
+        brandName,
+        guessed,
+        touched,
+      });
+      feedback("success");
+      onSavedForLater?.(status);
+    } catch (cause) {
+      feedback("refuse");
+      notify(
+        cause instanceof Error ? cause.message : "The draft wasn't saved.",
+        { tone: "error" },
+      );
+    } finally {
+      setSavingLater(false);
+    }
+  };
+
   const onSubmit: SubmitHandler<ItemFormValues> = async (values) => {
+    if (openFloor.length > 0) {
+      jumpToOpen();
+      return;
+    }
     const blocker = saveBlocker(type, values);
     if (blocker !== null) {
       setError("root", { type: "custom", message: blocker });
@@ -164,6 +288,7 @@ export const OnboardingItemForm = ({
         brandName,
         barcode,
         sessionBarcode,
+        confirmedFields: confirmedFieldsFrom(guessed, touched),
       });
       onCreated(itemId, values.name.trim());
     } catch (cause) {
@@ -194,13 +319,76 @@ export const OnboardingItemForm = ({
     });
   };
 
+  const guessedLine = layout
+    .flatMap((entry) =>
+      entry.kind === "description"
+        ? [entryPath(entry), "brandName"]
+        : [entryPath(entry)],
+    )
+    .filter((path) => guessed.has(path))
+    .map((path) => baseline[path] ?? "")
+    .filter((value) => value.trim() !== "")
+    .join(" · ");
+  const verb = cellarId === null ? "Add to catalog" : "Add bottle";
+  const busy = isSubmitting || savingLater;
+  const field = (path: string, children: ReactNode) => (
+    <div data-path={path} {...touchOn(path)}>
+      <AIDraftField
+        source="label"
+        drafted={drafted.has(path) && !touched.has(path)}
+        confidence={
+          guessed.has(path) ? "check" : (confidences[path] ?? undefined)
+        }
+      >
+        {children}
+      </AIDraftField>
+    </div>
+  );
+
   return (
     <div className="max-w-[600px]">
       {/* noValidate: the required fields carry a native `required`, and the
           browser's own check would cancel the submit before react-hook-form
           runs — so none of N03's messages would ever show. */}
-      <form noValidate onSubmit={handleSubmit(onSubmit, onInvalid)}>
-        <div className="flex flex-col gap-8">
+      <form
+        ref={formRef}
+        noValidate
+        onSubmit={handleSubmit(onSubmit, onInvalid)}
+      >
+        <div className="flex flex-col gap-6 pb-4">
+          {toCheck.length > 0 && guessedLine !== "" && (
+            <div className="flex items-center gap-3 rounded-lg bg-raised p-3">
+              <p className="t-body min-w-0 flex-1 text-ink-2">
+                Guessed: {guessedLine}
+              </p>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={busy}
+                onClick={() => {
+                  feedback("tick");
+                  setTouched(
+                    (before) =>
+                      new Set([...Array.from(before), ...Array.from(guessed)]),
+                  );
+                }}
+              >
+                Looks right
+              </Button>
+            </div>
+          )}
+          {duplicate && declinedMatch !== undefined && (
+            <div
+              role="note"
+              data-slot="duplicate-warning"
+              className="flex flex-col gap-0.5 rounded-lg border border-edge-2 bg-card p-3"
+            >
+              <p className="t-head text-ink">{declinedMatch.name}</p>
+              <p className="t-cap text-ink-2">
+                {declinedMatch.summary ?? "Already in the catalog"}
+              </p>
+            </div>
+          )}
           {notFilled.length > 0 && (
             <Alert>
               <Info aria-hidden />
@@ -219,46 +407,36 @@ export const OnboardingItemForm = ({
               <Fragment
                 key={entry.kind === "attribute" ? entry.field.key : entry.kind}
               >
-                <AIDraftField
-                  source="label"
-                  drafted={drafted.has(entryPath(entry))}
-                  confidence={confidences[entryPath(entry)]}
-                >
+                {field(
+                  entryPath(entry),
                   <ItemFormField
                     entry={entry}
                     control={control}
-                    disabled={isSubmitting}
-                  />
-                </AIDraftField>
-                {entry.kind === "description" && (
-                  <AIDraftField
-                    source="label"
-                    drafted={isDrafted(baseline.brandName, brandName)}
-                    confidence={confidences.brandName}
-                  >
+                    disabled={busy}
+                  />,
+                )}
+                {entry.kind === "description" &&
+                  field(
+                    "brandName",
                     <BrandPicker
                       value={brandName}
-                      onChange={setBrandName}
-                      disabled={isSubmitting}
-                    />
-                  </AIDraftField>
-                )}
+                      onChange={(next) => {
+                        touch("brandName");
+                        setBrandName(next);
+                      }}
+                      disabled={busy}
+                    />,
+                  )}
               </Fragment>
             ))}
-            {/* AIDraftField gives every field above a 2 px rule and 12 px
-                inset whether or not it is drafted; the same inset keeps
-                Barcode's label in their column. `gap-2 text-foreground` is
-                ItemFormField's: without it the label and value inherit Joy's
-                body ink (ink-2) and sit further from the input than the
-                fields above. */}
             <Field
-              data-disabled={isSubmitting || undefined}
-              className="gap-2 border-transparent border-l-2 pl-3 text-foreground"
+              data-disabled={busy || undefined}
+              className="gap-2 border-transparent border-l-2 pl-3 text-ink"
             >
               <FieldLabel htmlFor={barcodeId}>Barcode</FieldLabel>
               <Input
                 id={barcodeId}
-                disabled={isSubmitting}
+                disabled={busy}
                 type="text"
                 inputMode="numeric"
                 value={barcode}
@@ -267,18 +445,87 @@ export const OnboardingItemForm = ({
             </Field>
           </div>
           {errors.root !== undefined && (
-            <p role="alert" className="type-body text-destructive">
+            <p role="alert" className="t-body text-danger">
               {errors.root.message}
             </p>
           )}
-          <Button
-            type="submit"
-            disabled={isSubmitting}
-            aria-busy={isSubmitting || undefined}
-          >
-            {isSubmitting && <Spinner aria-hidden />}
-            Add
-          </Button>
+        </div>
+        {/* CROSS-LOT form-sheet footer: quiet "Finish later" left, the
+            primary right with its verb and an "n to check" chip. */}
+        <div
+          data-slot="draft-footer"
+          className="sticky bottom-0 z-10 -mx-4 flex items-center gap-2 border-hair border-t bg-bg px-4 py-3"
+        >
+          {duplicate && differing === null ? (
+            <>
+              <Button
+                type="button"
+                variant="quiet-muted"
+                disabled={busy}
+                onClick={() => setDiffering({ ...flat })}
+              >
+                It&rsquo;s a different drink
+              </Button>
+              <Button
+                type="button"
+                className="flex-1"
+                disabled={busy}
+                onClick={() => onUseDeclined?.()}
+              >
+                Add that one instead
+              </Button>
+            </>
+          ) : duplicate && !differs ? (
+            <>
+              <Button
+                type="button"
+                variant="quiet-muted"
+                disabled={busy}
+                onClick={() => onUseDeclined?.()}
+              >
+                Use that one
+              </Button>
+              <Button
+                type="button"
+                className="flex-1 opacity-40"
+                aria-disabled
+                silent
+                onClick={() => feedback("refuse")}
+              >
+                Change one detail
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button
+                type="button"
+                variant="quiet-muted"
+                disabled={busy}
+                aria-busy={savingLater || undefined}
+                onClick={finishLater}
+              >
+                {savingLater && <Spinner aria-hidden />}
+                Finish later
+              </Button>
+              <Button
+                type={openFloor.length > 0 ? "button" : "submit"}
+                className={cn("flex-1", openFloor.length > 0 && "opacity-40")}
+                aria-disabled={openFloor.length > 0 || undefined}
+                silent={openFloor.length > 0}
+                disabled={busy}
+                aria-busy={isSubmitting || undefined}
+                onClick={openFloor.length > 0 ? jumpToOpen : undefined}
+              >
+                {isSubmitting && <Spinner aria-hidden />}
+                {verb}
+                {toCheck.length > 0 && (
+                  <span className="t-cap rounded-sm bg-bg/20 px-1.5 py-0.5">
+                    {toCheckLabel(toCheck.length)}
+                  </span>
+                )}
+              </Button>
+            </>
+          )}
         </div>
       </form>
     </div>

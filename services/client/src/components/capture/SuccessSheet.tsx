@@ -6,6 +6,7 @@ import { TypeGlyph } from "@/components/app/TypeChip";
 import type { ApiItemType } from "@/components/cellar-api/itemTypes";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { feedback } from "@/lib/feedback";
 
 export type SuccessSheetProps = {
   open: boolean;
@@ -19,6 +20,11 @@ export type SuccessSheetProps = {
   /** The item was saved but its photo was not. */
   imageError?: string;
   onSnapAnother: () => void;
+  /**
+   * Capture-Place: one-tap Undo of the +1, only when a bottle was kept. It
+   * takes back that bottle alone (`removeItemFromCellar`).
+   */
+  onUndo?: () => void;
   /**
    * "Open it now", only for a bottle in a cellar: its page, where opening it
    * is one tap (X06's call — the sheet itself uncorks nothing).
@@ -49,6 +55,7 @@ export function SuccessSheet({
   photo,
   imageError,
   onSnapAnother,
+  onUndo,
   onOpenNow,
   onDone,
 }: SuccessSheetProps) {
@@ -60,7 +67,10 @@ export function SuccessSheet({
     <BottomSheet
       open={open}
       onOpenChange={(next) => {
-        if (!next) onDone();
+        if (!next) {
+          feedback("press");
+          onDone();
+        }
       }}
       title={inCellar ? "+1 bottle" : "Added to the catalog"}
       description={
@@ -83,11 +93,16 @@ export function SuccessSheet({
               {inCellar ? "View bottle" : "View item"}
             </Button>
           )}
+          {onUndo !== undefined && (
+            <Button variant="quiet-muted" onClick={onUndo}>
+              Undo
+            </Button>
+          )}
         </div>
       }
     >
       <div className="flex items-center gap-4 pb-2">
-        <div className="relative size-20 shrink-0 overflow-hidden rounded-md bg-surface-2">
+        <div className="relative size-20 shrink-0 overflow-hidden rounded-lg bg-raised">
           {photo === undefined ? (
             <span className="flex size-full items-center justify-center">
               <TypeGlyph type={itemType} className="size-8" />
@@ -98,12 +113,12 @@ export function SuccessSheet({
           )}
           <span
             aria-hidden
-            className="zoom-in-50 fade-in-0 absolute right-1 bottom-1 flex size-6 animate-in items-center justify-center rounded-full bg-background text-success duration-(--ca-dur-long) ease-enter motion-reduce:animate-none"
+            className="zoom-in-50 fade-in-0 absolute right-1 bottom-1 flex size-6 animate-in items-center justify-center rounded-full bg-card text-act-ink shadow-pop duration-(--ca-dur-long) ease-enter motion-reduce:animate-none"
           >
             <Success className="size-5" />
           </span>
         </div>
-        <p className="type-body text-ink-2">
+        <p className="t-body text-ink-2">
           {inCellar
             ? "Rate it when you open it — it'll be waiting in your cellar."
             : "Add it to a cellar from its page whenever you buy a bottle."}
@@ -112,7 +127,7 @@ export function SuccessSheet({
       {imageError !== undefined && (
         <Alert className="mb-2">
           <Warning aria-hidden />
-          <AlertDescription className="text-ink-1">
+          <AlertDescription className="text-ink">
             <p>The photo was not saved: {imageError}</p>
           </AlertDescription>
         </Alert>

@@ -28,7 +28,7 @@ export function MatchList({
           key={match.item.id}
           leading={
             match.item.displayImageUrl === undefined ? (
-              <span className="flex size-10 items-center justify-center rounded-md bg-surface-2">
+              <span className="flex size-10 items-center justify-center rounded-md bg-raised">
                 <TypeGlyph type={match.type} className="size-5" />
               </span>
             ) : (

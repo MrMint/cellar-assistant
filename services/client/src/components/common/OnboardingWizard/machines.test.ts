@@ -224,6 +224,29 @@ describe("matching (N19)", () => {
     assert.deepEqual(state.context.declinedItemIds, ["declined", "known"]);
   });
 
+  test("Add that one instead (DECISIONS 34): the declined match is filed, nothing created", async () => {
+    const { actor, filed } = run({ confidence: 0.5, match: exact });
+    await settled(actor);
+    actor.send({ type: "DISMISS_MATCH" });
+    assert.equal(
+      actor.getSnapshot().context.declinedMatch?.item.itemId,
+      "known",
+    );
+    actor.send({ type: "USE_DECLINED_MATCH" });
+    await waitFor(actor, (s) => s.value === "finalPrompt");
+    assert.equal(filed.length, 1);
+    assert.equal(filed[0]?.itemId, "known");
+    assert.equal(filed[0]?.cellarId, "cellar-1");
+  });
+
+  test("with nothing declined, Add that one instead does nothing", async () => {
+    const { actor, filed } = run({ confidence: 0.5 });
+    await settled(actor);
+    actor.send({ type: "USE_DECLINED_MATCH" });
+    assert.ok(actor.getSnapshot().matches("form"));
+    assert.equal(filed.length, 0);
+  });
+
   test("a failed lookup is the old path to the form", async () => {
     const machine = OnboardingMachine.provide({
       actors: {
