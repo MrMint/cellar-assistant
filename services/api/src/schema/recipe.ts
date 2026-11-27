@@ -76,6 +76,7 @@ import type {
 import {
   BAR_KIND_KEYS,
   barKindLabel,
+  COMMUNITY_PICK_MIN_NET,
   DEFAULT_RECIPE_GROUP_ORDER,
   genericItemActorId,
   INGREDIENT_ROLES,
@@ -706,6 +707,27 @@ RecipeGroupType.implement({
     imageUrl: t.exposeString("imageUrl", { nullable: true }),
     createdById: t.exposeID("createdById", { nullable: true }),
     canonicalRecipeId: t.exposeID("canonicalRecipeId", { nullable: true }),
+    communityPickId: t.id({
+      nullable: true,
+      description:
+        "MC-pick: the version with the most net votes from people other " +
+        `than its author, at least ${COMMUNITY_PICK_MIN_NET}, oldest winning ` +
+        "ties; null otherwise, or when you may not see it. A label: it " +
+        "never moves `canonicalRecipeId`.",
+      resolve: async (group, _args, context) => {
+        if (group.communityPickId !== undefined) return group.communityPickId;
+        // A collection projection does not compute it: ask the group.
+        try {
+          const full = await context
+            .actor(RecipeGroupActorDescriptor, group.id)
+            .get();
+          return full.communityPickId ?? null;
+        } catch (cause) {
+          if (cause instanceof NotFoundError) return null;
+          throw cause;
+        }
+      },
+    }),
     recipeCount: t.exposeInt("recipeCount"),
     createdAt: t.expose("createdAt", { type: "DateTime", nullable: true }),
     updatedAt: t.expose("updatedAt", { type: "DateTime", nullable: true }),

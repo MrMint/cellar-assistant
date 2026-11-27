@@ -738,3 +738,62 @@ describe("X15: a recipe the viewer may not see, referred to from elsewhere", () 
     expect(result.data?.recipe).toEqual({ privacy: "PRIVATE", isDraft: true });
   });
 });
+
+describe("RecipeGroup.communityPickId (MC-pick)", () => {
+  it("serves the group's own pick, a label beside the canonical", async () => {
+    const { invoke, calls } = stubSidecar({
+      "RecipeGroupActor.get": () => ({
+        ...groupDto,
+        communityPickId: OTHER_RECIPE_ID,
+      }),
+    });
+    const result = await run(
+      `{ recipeGroup(id: "${GROUP_ID}") { __typename ... on RecipeGroup {
+           canonicalRecipeId communityPickId } } }`,
+      testContext(invoke, viewer),
+    );
+    expect(result.errors).toBeUndefined();
+    expect(result.data?.recipeGroup).toEqual({
+      __typename: "RecipeGroup",
+      canonicalRecipeId: RECIPE_ID,
+      communityPickId: OTHER_RECIPE_ID,
+    });
+    expect(calls.filter((c) => c.method === "get")).toHaveLength(1);
+  });
+
+  it("asks the group when a projection did not compute it, and a hidden group is null", async () => {
+    const { invoke, calls } = stubSidecar({
+      "RecipeGroupsCollectionActor.list": () => pageOf([groupDto]),
+      "RecipeGroupActor.get": () => ({ ...groupDto, communityPickId: null }),
+    });
+    const result = await run(
+      `{ recipeGroups(first: 3) { __typename ... on RecipeGroupConnection {
+           edges { node { communityPickId } } } } }`,
+      testContext(invoke, viewer),
+    );
+    expect(result.errors).toBeUndefined();
+    expect(result.data?.recipeGroups).toMatchObject({
+      edges: [{ node: { communityPickId: null } }],
+    });
+    expect(calls.find((c) => c.method === "get")).toMatchObject({
+      actorType: "RecipeGroupActor",
+      actorId: GROUP_ID,
+    });
+
+    const hidden = stubSidecar({
+      "RecipeGroupsCollectionActor.list": () => pageOf([groupDto]),
+      "RecipeGroupActor.get": () => {
+        throw new NotFoundError("recipe group");
+      },
+    });
+    const none = await run(
+      `{ recipeGroups(first: 3) { __typename ... on RecipeGroupConnection {
+           edges { node { communityPickId } } } } }`,
+      testContext(hidden.invoke, viewer),
+    );
+    expect(none.errors).toBeUndefined();
+    expect(none.data?.recipeGroups).toMatchObject({
+      edges: [{ node: { communityPickId: null } }],
+    });
+  });
+});

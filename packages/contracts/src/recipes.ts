@@ -119,6 +119,9 @@ export const isRecipeType = (value: string): value is RecipeType =>
 
 /** `recipe_votes_vote_type_check`: `vote_type = ANY (ARRAY['upvote', 'downvote'])`. */
 export const RECIPE_VOTE_TYPES = ["downvote", "upvote"] as const;
+
+/** MC-pick: the least net votes from others a version needs to be the pick. */
+export const COMMUNITY_PICK_MIN_NET = 3;
 export type RecipeVoteType = (typeof RECIPE_VOTE_TYPES)[number];
 
 export const isRecipeVoteType = (value: string): value is RecipeVoteType =>
@@ -316,6 +319,15 @@ export type RecipeGroupDto = {
   readonly createdById: string | null;
   /** Recomputed in-turn by `vote`; `null` until a group has recipes and votes. */
   readonly canonicalRecipeId: string | null;
+  /**
+   * MC-pick / L15: the version with the most net votes from people other than
+   * its author, at least {@link COMMUNITY_PICK_MIN_NET}, oldest winning ties;
+   * `null` when none has that many, or the viewer may not see it. A label
+   * computed from votes, never the canonical. Absent (`undefined`) on a
+   * projection that did not compute it (`RecipeGroupsCollectionActor`);
+   * `services/api` asks `RecipeGroupActor.get` then.
+   */
+  readonly communityPickId?: string | null;
   readonly recipeCount: number;
   readonly createdAt: string | null;
   readonly updatedAt: string | null;
