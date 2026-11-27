@@ -206,7 +206,8 @@ describe("scripts/migrate-users.ts", () => {
     } finally {
       await admin.end();
     }
-  });
+    // Same budget as beforeAll: a forced DROP DATABASE outlasts vitest's 10 s default under load.
+  }, 60_000);
 
   it("migrates users, credential accounts and provider accounts", async () => {
     const stdout = await migrate();
