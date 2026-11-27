@@ -337,9 +337,17 @@ describe("PourSheet", () => {
       "40% left, pouring 20%",
     );
     assert.ok(button("Pour 150 ml"), "the button names the glass");
-    assert.match(
-      document.body.textContent ?? "",
-      /Measured against a 750 ml bottle/,
+    // The container under the level, and the pour in its unit.
+    assert.equal(
+      document.querySelector('[data-slot="pour-container"]')?.textContent,
+      "750\u202fml bottle",
+    );
+    assert.match(document.body.textContent ?? "", /left · pouring 150 ml/);
+    assert.equal(
+      document
+        .querySelector('[data-preset="glass"]')
+        ?.getAttribute("aria-checked"),
+      "true",
     );
 
     await click(document.querySelector('[data-preset="taste"]'));
@@ -409,10 +417,10 @@ describe("PourSheet", () => {
     await flush(50);
     assert.equal(ops("LogDrink").length, 1);
     assert.equal(ops("UpdateCellarItem").length, 0, "no level yet");
-    assert.match(document.body.textContent ?? "", /That's the last of it/);
+    assert.match(document.body.textContent ?? "", /That’s the last of it/);
     assert.ok(button("Finished"));
 
-    await click(button("Not yet — leave a drop"));
+    await click(button("Not yet"));
     await flush(50);
     assert.deepEqual(ops("UpdateCellarItem")[0]?.variables.input, {
       percentageRemaining: 5,
@@ -426,7 +434,7 @@ describe("PourSheet", () => {
     await flush(20);
     await click(button("Pour the last of it"));
     await flush(50);
-    assert.match(document.body.textContent ?? "", /That's the last of it/);
+    assert.match(document.body.textContent ?? "", /That’s the last of it/);
     assert.equal(closes, 0);
 
     await act(async () => {
@@ -455,7 +463,7 @@ describe("PourSheet", () => {
     await click(pour);
     await flush(50);
     assert.equal(ops("LogDrink").length, 1);
-    assert.match(document.body.textContent ?? "", /That's the last of it/);
+    assert.match(document.body.textContent ?? "", /That’s the last of it/);
   });
 
   test("me + Sam is the last table poured with on this device", async () => {
@@ -478,7 +486,7 @@ describe("PourSheet", () => {
     assert.deepEqual(input?.companionIds, ["sam"]);
   });
 
-  test("Finished, then rate — the review — then a band from that rating on your own lists", async () => {
+  test("Finished, then rate — the review — then the band sheet on your own lists", async () => {
     await render(
       sheet({ percentageRemaining: 15, openAt: "2026-10-01T00:00:00Z" }),
     );
@@ -499,16 +507,31 @@ describe("PourSheet", () => {
       'input[type="radio"][value="5"]',
     );
     await click(five);
-    await click(button("Save rating"));
+    // Not rated before: the primary saves what the stars say.
+    await click(button("Save 5.0"));
     await flush(80);
     const [review] = ops("AddItemReview");
     const rating = review?.variables.input as { score?: number } | undefined;
     assert.equal(rating?.score, 5, "the rating is the item's review");
 
-    // Only the viewer's own list; 5 stars reads Outstanding.
-    assert.match(document.body.textContent ?? "", /Best reds/);
+    // F2b's band sheet, for the viewer's own list only, showing where the
+    // drink really sits (ruling 3): #3 · Good on Best reds, with the counts.
+    const sheetEl = document.querySelector('[data-slot="band-sheet"]');
+    assert.ok(sheetEl, "the band sheet opens");
+    assert.match(document.body.textContent ?? "", /#3 · Good · Best reds/);
     assert.doesNotMatch(document.body.textContent ?? "", /Sam's list/);
-    await click(button("Move to Outstanding"));
+    const radios = [
+      ...document.querySelectorAll<HTMLButtonElement>(
+        '[data-slot="band-sheet"] [role="radio"]',
+      ),
+    ];
+    assert.equal(
+      radios.find((r) => r.getAttribute("aria-checked") === "true")
+        ?.textContent,
+      "Good1",
+      "the current band is checked, with its count",
+    );
+    await click(radios.find((r) => r.textContent?.startsWith("Outstanding")));
     await flush(50);
     assert.deepEqual(ops("ReorderBand")[0]?.variables, {
       tierListId: "t1",
@@ -520,7 +543,7 @@ describe("PourSheet", () => {
     // list's history — never "whatever is on top".
     const toast = [
       ...document.querySelectorAll<HTMLElement>("[data-sonner-toast]"),
-    ].find((t) => /Moved .* to Outstanding/.test(t.textContent ?? ""));
+    ].find((t) => /Moved to Outstanding · #3 · /.test(t.textContent ?? ""));
     assert.ok(toast, "the move's toast");
     await click(
       [...toast.querySelectorAll("button")].find(

@@ -147,7 +147,7 @@ export const ItemRemainingSlider = ({
       )}
       {isOpened && !isEmptied && (
         <div className="flex flex-col gap-4">
-          <p className="type-body tabular text-ink-1">Remaining: {percent}%</p>
+          <p className="t-body tabular text-ink">Remaining: {percent}%</p>
           <SliderPrimitive.Root
             data-slot="slider"
             value={[percent]}
@@ -164,7 +164,7 @@ export const ItemRemainingSlider = ({
           >
             <SliderPrimitive.Track
               data-slot="slider-track"
-              className="relative h-12 grow overflow-hidden rounded-md bg-surface-3"
+              className="relative h-12 grow overflow-hidden rounded-md bg-sel"
             >
               <SliderPrimitive.Range
                 data-slot="slider-range"
@@ -174,17 +174,17 @@ export const ItemRemainingSlider = ({
             <SliderPrimitive.Thumb
               data-slot="slider-thumb"
               aria-label="Remaining"
-              className="block h-10 w-3 rounded-full bg-ink-1 shadow-sm outline-none ring-ring/50 transition-shadow focus-visible:ring-4 disabled:pointer-events-none"
+              className="block h-10 w-3 rounded-full bg-ink shadow-sm outline-none ring-ring/50 transition-shadow focus-visible:ring-4 disabled:pointer-events-none"
             />
           </SliderPrimitive.Root>
-          <p className="type-body text-center text-ink-2">
+          <p className="t-body text-center text-ink-2">
             Opened {now === null ? "" : formatDistance(opened, now)} ago
           </p>
         </div>
       )}
       {isEmptied && (
         <div className="flex flex-col gap-2">
-          <p className="type-body text-center text-ink-2">
+          <p className="t-body text-center text-ink-2">
             Empty {now === null ? "" : formatDistance(emptied, now)} ago
           </p>
           {/* Undo outlives its toast: put a finished bottle back (N13a). */}
@@ -200,7 +200,7 @@ export const ItemRemainingSlider = ({
         </div>
       )}
       {shownError !== null && (
-        <p role="alert" className="type-callout text-destructive">
+        <p role="alert" className="t-cap text-danger">
           {shownError}
         </p>
       )}

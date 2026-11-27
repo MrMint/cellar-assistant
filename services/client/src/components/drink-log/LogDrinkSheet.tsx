@@ -1,10 +1,18 @@
 "use client";
 
-import { useEffect, useId, useRef, useState } from "react";
+import { type ReactNode, useEffect, useId, useRef, useState } from "react";
 import { useClient, useMutation, useQuery } from "urql";
 import { AIDraftField } from "@/components/app/AIDraftField";
 import { IconButton } from "@/components/app/IconButton";
-import { Add, Camera, Check, Close, Place } from "@/components/app/icons";
+import {
+  Add,
+  Camera,
+  Close,
+  ICON_STROKE,
+  People,
+  Place,
+  Schedule,
+} from "@/components/app/icons";
 import { RatingInput } from "@/components/app/RatingInput";
 import { ResponsiveDialog } from "@/components/app/ResponsiveDialog";
 import { ApiError } from "@/components/cellar-api/ApiError";
@@ -15,6 +23,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { aiOutcome } from "@/lib/ai/outcome";
 import { uploadFile } from "@/lib/api/files";
 import { type ApiFailure, unwrapResult } from "@/lib/api/result";
+import { feedback } from "@/lib/feedback";
 import { cn } from "@/lib/utils";
 import { CompanionPicker, type DrinkLogFriend } from "./CompanionPicker";
 import {
@@ -33,6 +42,7 @@ import {
   shouldSuggest,
   toggleId,
   updateInput,
+  whenLabel,
 } from "./log-draft";
 import { announceDrinkLogChanged } from "./log-events";
 import {
@@ -236,20 +246,22 @@ export function LogDrinkSheet({
       title={isNew ? "Log a drink" : "Edit log"}
       description={subject.itemName}
       footer={
-        <div className="flex w-full flex-col-reverse gap-2 md:flex-row md:justify-end">
+        // CROSS-LOT form-sheet footer: the quiet way out left, primary right.
+        <div className="flex w-full items-center gap-3">
           <Button
-            variant="ghost"
+            variant="quiet"
             disabled={saving}
             onClick={() => onOpenChange(false)}
           >
             Cancel
           </Button>
           <Button
+            className="min-w-0 flex-1"
             disabled={saving || whenProblem !== null}
             aria-busy={saving || undefined}
             onClick={() => void save()}
           >
-            {saving ? <Spinner aria-hidden /> : <Check aria-hidden />}
+            {saving && <Spinner aria-hidden />}
             {isNew ? "Log it" : "Save"}
           </Button>
         </div>
@@ -305,25 +317,23 @@ export function LogDrinkForm({
   initialPhotoUrl,
   error,
 }: FormProps) {
-  const ids = useId();
   const patch = (next: Partial<LogDraft>) => onChange({ ...draft, ...next });
+  // Who / When / Where / Photo: four picker buttons, one open at a time
+  // (Cellars-Pour 25). A time to fix opens When by itself.
+  const [shown, setShown] = useState<Picker | null>(isNew ? null : "when");
+  const toggle = (picker: Picker) =>
+    setShown((open) => (open === picker ? null : picker));
+  const [now] = useState(() => new Date());
+  const companions = draft.companionIds.length;
 
   return (
-    <div className="flex flex-col gap-6 pb-2">
-      <section className="flex flex-col gap-2" aria-labelledby={`${ids}-score`}>
-        <h3 id={`${ids}-score`} className="type-callout font-semibold">
-          This glass
-        </h3>
-        <RatingInput
-          label="Score this glass"
-          value={draft.score}
-          onChange={(score) => patch({ score })}
-          onClear={() => patch({ score: null })}
-        />
-        <p className="type-footnote">
-          Optional. Your review of the {subject.itemName} stays as it is.
-        </p>
-      </section>
+    <div className="flex flex-col gap-5 pb-2">
+      <RatingInput
+        label="Score this glass"
+        value={draft.score}
+        onChange={(score) => patch({ score })}
+        onClear={() => patch({ score: null })}
+      />
 
       <NoteAndTags
         draft={draft}
@@ -332,17 +342,54 @@ export function LogDrinkForm({
         logId={logId}
       />
 
-      <WhenPicker
-        value={draft.drankAt}
-        onChange={(drankAt) => patch({ drankAt })}
-        allowNow={isNew}
-        onProblem={onWhenProblem}
-      />
+      <div className="grid grid-cols-2 gap-3" data-slot="log-pickers">
+        {allowCompanions && (
+          <PickerButton
+            picker="who"
+            shown={shown}
+            onToggle={toggle}
+            icon={<People aria-hidden strokeWidth={ICON_STROKE} />}
+            set={companions > 0}
+            label="Who"
+          >
+            {companions === 0 ? "Just me" : `With ${companions}`}
+          </PickerButton>
+        )}
+        <PickerButton
+          picker="when"
+          shown={shown}
+          onToggle={toggle}
+          icon={<Schedule aria-hidden strokeWidth={ICON_STROKE} />}
+          set={draft.drankAt !== null}
+          label="When"
+        >
+          {whenLabel(draft.drankAt, now)}
+        </PickerButton>
+        <PickerButton
+          picker="where"
+          shown={shown}
+          onToggle={toggle}
+          icon={<Place aria-hidden strokeWidth={ICON_STROKE} />}
+          set={draft.place !== null}
+          label="Where"
+        >
+          {draft.place?.name ?? "Where"}
+        </PickerButton>
+        <PickerButton
+          picker="photo"
+          shown={shown}
+          onToggle={toggle}
+          icon={<Camera aria-hidden strokeWidth={ICON_STROKE} />}
+          set={draft.photoFileId !== null}
+          label="Photo"
+        >
+          {draft.photoFileId === null ? "Photo" : "1 photo"}
+        </PickerButton>
+      </div>
 
-      <PlacePicker place={draft.place} onChange={(place) => patch({ place })} />
-
-      {allowCompanions && (
+      {shown === "who" && allowCompanions && (
         <CompanionPicker
+          heading={null}
           preloaded={friends}
           selected={draft.companionIds}
           onToggle={(id) =>
@@ -350,15 +397,69 @@ export function LogDrinkForm({
           }
         />
       )}
-
-      <PhotoPicker
-        fileId={draft.photoFileId}
-        initialUrl={initialPhotoUrl}
-        onChange={(photoFileId) => patch({ photoFileId })}
-      />
+      {/* Mounted while closed too, so a time it cannot save still holds
+          the button; it shows only when open. */}
+      <div hidden={shown !== "when"}>
+        <WhenPicker
+          value={draft.drankAt}
+          onChange={(drankAt) => patch({ drankAt })}
+          allowNow={isNew}
+          onProblem={onWhenProblem}
+        />
+      </div>
+      {shown === "where" && (
+        <PlacePicker
+          place={draft.place}
+          onChange={(place) => patch({ place })}
+        />
+      )}
+      {(shown === "photo" || draft.photoFileId !== null) && (
+        <PhotoPicker
+          fileId={draft.photoFileId}
+          initialUrl={initialPhotoUrl}
+          onChange={(photoFileId) => patch({ photoFileId })}
+        />
+      )}
 
       {error !== null && <ApiError error={error} />}
     </div>
+  );
+}
+
+type Picker = "who" | "when" | "where" | "photo";
+
+/** One of the four: glyph and what it holds now; on (sel) once it is set. */
+function PickerButton({
+  picker,
+  shown,
+  onToggle,
+  icon,
+  set,
+  label,
+  children,
+}: {
+  picker: Picker;
+  shown: Picker | null;
+  onToggle: (picker: Picker) => void;
+  icon: ReactNode;
+  set: boolean;
+  label: string;
+  children: string;
+}) {
+  return (
+    <Button
+      variant="outline"
+      aria-expanded={shown === picker}
+      aria-label={`${label}: ${children}`}
+      onClick={() => onToggle(picker)}
+      className={cn(
+        "min-w-0 justify-start",
+        (set || shown === picker) && "border-edge-2 bg-sel text-ink",
+      )}
+    >
+      {icon}
+      <span className="min-w-0 truncate">{children}</span>
+    </Button>
   );
 }
 
@@ -442,7 +543,7 @@ function NoteAndTags({
       <label
         id={`${ids}-note`}
         htmlFor={`${ids}-note-input`}
-        className="type-callout font-semibold"
+        className="t-cap font-semibold"
       >
         Tasting note
       </label>
@@ -457,10 +558,7 @@ function NoteAndTags({
       />
 
       {suggestState.fetching && (
-        <p
-          className="type-footnote flex items-center gap-2 text-ai"
-          role="status"
-        >
+        <p className="t-cap flex items-center gap-2 text-ai" role="status">
           <Spinner aria-hidden className="size-3.5" />
           Finding the flavours in your note…
         </p>
@@ -469,7 +567,7 @@ function NoteAndTags({
       {shown.length > 0 && (
         <AIDraftField source="suggested" drafted>
           <div className="flex flex-col gap-2 pt-6">
-            <p className="type-footnote" id={`${ids}-suggested`}>
+            <p className="t-cap text-ink-3" id={`${ids}-suggested`}>
               From your note — tap to add
             </p>
             <ul
@@ -481,9 +579,12 @@ function NoteAndTags({
                   <button
                     type="button"
                     data-slot="suggested-tag"
-                    onClick={() => add(suggestion.tag)}
+                    onClick={() => {
+                      feedback("tick");
+                      add(suggestion.tag);
+                    }}
                     aria-label={`Add ${suggestion.tag} (from “${suggestion.evidence}”)`}
-                    className="relative inline-flex h-9 items-center gap-1 rounded-full border border-line border-dashed bg-surface-2 px-3 font-medium text-ink-1 text-sm transition-transform duration-(--ca-dur-micro) ease-standard after:absolute after:-inset-y-1 after:inset-x-0 after:content-[''] active:scale-97 motion-reduce:active:scale-100"
+                    className="relative inline-flex h-9 items-center gap-1 rounded-full border border-edge border-dashed bg-raised px-3 font-medium text-ink text-sm transition-transform duration-(--ca-dur-micro) ease-standard after:absolute after:-inset-y-1 after:inset-x-0 after:content-[''] active:scale-97 motion-reduce:active:scale-100"
                   >
                     <Add aria-hidden className="size-3.5" />
                     {suggestion.tag}
@@ -493,12 +594,13 @@ function NoteAndTags({
               <li>
                 <button
                   type="button"
-                  onClick={() =>
+                  onClick={() => {
+                    feedback("press");
                     setDismissed((current) => [
                       ...current,
                       ...shown.map((suggestion) => suggestion.tag),
-                    ])
-                  }
+                    ]);
+                  }}
                   className="relative inline-flex h-9 items-center px-2 text-ink-3 text-sm underline-offset-2 after:absolute after:-inset-y-1 after:inset-x-0 after:content-[''] hover:underline"
                 >
                   Not these
@@ -508,24 +610,25 @@ function NoteAndTags({
           </div>
         </AIDraftField>
       )}
-      {aiNote !== null && <p className="type-footnote">{aiNote}</p>}
+      {aiNote !== null && <p className="t-cap text-ink-3">{aiNote}</p>}
 
       <div className="flex flex-col gap-2">
-        <label htmlFor={`${ids}-tag`} className="type-footnote">
+        <label htmlFor={`${ids}-tag`} className="t-cap text-ink-3">
           Flavour tags
         </label>
         {draft.tags.length > 0 && (
           <ul aria-label="Your tags" className="flex flex-wrap gap-2">
             {draft.tags.map((tag) => (
               <li key={tag}>
-                <span className="inline-flex h-9 items-center gap-1 rounded-full bg-ink-1 pr-1 pl-3 font-medium text-background text-sm">
+                <span className="inline-flex h-9 items-center gap-1 rounded-full bg-ink pr-1 pl-3 font-medium text-background text-sm">
                   {tag}
                   <button
                     type="button"
                     aria-label={`Remove ${tag}`}
-                    onClick={() =>
-                      onChange({ ...draft, tags: removeTag(draft.tags, tag) })
-                    }
+                    onClick={() => {
+                      feedback("press");
+                      onChange({ ...draft, tags: removeTag(draft.tags, tag) });
+                    }}
                     className="relative inline-flex size-7 items-center justify-center rounded-full after:absolute after:-inset-2 after:content-['']"
                   >
                     <Close aria-hidden className="size-3.5" />
@@ -560,7 +663,7 @@ function NoteAndTags({
           </Button>
         </form>
         {tagError !== null && (
-          <p role="alert" className="type-footnote text-destructive">
+          <p role="alert" className="t-cap text-danger">
             {tagError}
           </p>
         )}
@@ -610,16 +713,14 @@ function PlacePicker({
       <label
         id={`${ids}-where`}
         htmlFor={`${ids}-where-input`}
-        className="type-callout font-semibold"
+        className="t-cap font-semibold"
       >
         Where
       </label>
       {place !== null ? (
-        <div className="flex min-h-11 items-center gap-3 rounded-md bg-surface-2 pr-1 pl-3">
+        <div className="flex min-h-11 items-center gap-3 rounded-md bg-raised pr-1 pl-3">
           <Place aria-hidden className="size-4 text-ink-2" />
-          <span className="type-body min-w-0 flex-1 truncate">
-            {place.name}
-          </span>
+          <span className="t-body min-w-0 flex-1 truncate">{place.name}</span>
           <IconButton
             aria-label={`Remove ${place.name}`}
             variant="ghost"
@@ -640,41 +741,42 @@ function PlacePicker({
             className="h-11"
           />
           {fetching && query.length >= 2 && (
-            <p className="type-footnote" role="status">
+            <p className="t-cap text-ink-3" role="status">
               Searching places…
             </p>
           )}
           {!fetching &&
             query.length >= 2 &&
             (error !== undefined || (data !== undefined && !result.ok)) && (
-              <p className="type-footnote">
+              <p className="t-cap text-ink-3">
                 Place search isn't available right now. You can log without a
                 place.
               </p>
             )}
           {!fetching && query.length >= 2 && result.ok && hits.length === 0 && (
-            <p className="type-footnote">No places match “{query}”.</p>
+            <p className="t-cap text-ink-3">No places match “{query}”.</p>
           )}
           {hits.length > 0 && (
             <ul
               aria-label="Places"
-              className="flex flex-col divide-y divide-line overflow-hidden rounded-md bg-surface-2"
+              className="flex flex-col divide-y divide-edge overflow-hidden rounded-md bg-raised"
             >
               {hits.map((hit) => (
                 <li key={hit.id}>
                   <button
                     type="button"
                     onClick={() => {
+                      feedback("tick");
                       onChange({ id: hit.id, name: hit.name });
                       setText("");
                     }}
-                    className="flex min-h-11 w-full items-center gap-3 px-3 py-2 text-left active:bg-surface-3"
+                    className="flex min-h-11 w-full items-center gap-3 px-3 py-2 text-left active:bg-sel"
                   >
                     <Place aria-hidden className="size-4 shrink-0 text-ink-3" />
                     <span className="flex min-w-0 flex-col">
-                      <span className="type-body truncate">{hit.name}</span>
+                      <span className="t-body truncate">{hit.name}</span>
                       {hit.locality !== null && (
-                        <span className="type-footnote truncate">
+                        <span className="t-cap text-ink-3 truncate">
                           {hit.locality}
                         </span>
                       )}
@@ -736,9 +838,9 @@ function PhotoPicker({
 
   return (
     <section className="flex flex-col gap-2">
-      <h3 className="type-callout font-semibold">Photo</h3>
+      <h3 className="t-cap font-semibold">Photo</h3>
       {shown !== null ? (
-        <div className="relative w-28 overflow-hidden rounded-md bg-surface-2">
+        <div className="relative w-28 overflow-hidden rounded-md bg-raised">
           {/* biome-ignore lint/performance/noImgElement: a local blob preview, not a remote image next/image could optimise */}
           <img
             src={shown}
@@ -782,7 +884,7 @@ function PhotoPicker({
         }}
       />
       {error !== null && (
-        <p role="alert" className="type-footnote text-destructive">
+        <p role="alert" className="t-cap text-danger">
           {error}
         </p>
       )}

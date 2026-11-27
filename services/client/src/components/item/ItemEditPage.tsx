@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { cache } from "react";
 import { itemTypeTokens } from "@/components/app/TypeChip";
 import type { ApiItemType } from "@/components/cellar-api/itemTypes";
+import { ItemUncheckedFieldsQuery } from "@/components/drink-log/queries";
 import { attributesFrom } from "@/components/item-api/itemFormRules";
 import { ViewerQuery } from "@/lib/api/cellars";
 import { readFragment } from "@/lib/api/graphql";
@@ -72,7 +73,7 @@ export async function ItemEditPage({
   if (!result.ok) {
     if (isNotFound(result.error)) notFound();
     return (
-      <p role="alert" className="type-body text-destructive">
+      <p role="alert" className="t-body text-danger">
         {result.error.message}
       </p>
     );
@@ -82,9 +83,10 @@ export async function ItemEditPage({
     ItemAttributesFragment,
     result.data.data,
   ) as unknown as Record<string, unknown>;
-  const [viewer, extras] = await Promise.all([
+  const [viewer, extras, unchecked] = await Promise.all([
     apiServerQuery(ViewerQuery, {}),
     apiServerQuery(ItemCorrectionQuery, { itemId, type }),
+    apiServerQuery(ItemUncheckedFieldsQuery, { itemId, type }),
   ]);
   const isCreator = viewer.me?.id === core.createdById;
   // X19: the brand the form starts from, and the AI helpers it may offer.
@@ -95,6 +97,9 @@ export async function ItemEditPage({
     ? shownBrandOf(correction.data.data.brands.edges.map((edge) => edge.node))
     : undefined;
   const tools = correction.ok ? correction.data.data.correction : null;
+  // A failed read shows no marks rather than failing the page.
+  const checks = unwrapResult(unchecked.item, "QueryItemSuccess");
+  const unconfirmed = checks.ok ? checks.data.data.unconfirmedFields : [];
 
   const itemName = displayItemName(core.name);
 
@@ -102,7 +107,9 @@ export async function ItemEditPage({
     <div className="flex flex-col gap-4">
       <ItemAppBar
         parent={backHref}
-        title={`Edit ${itemName}`}
+        // Cellars-Pour 31: the bar says what the page is; the crumbs carry
+        // which item.
+        title="Edit details"
         cellarName={cellarName}
         itemName={itemName}
       />
@@ -118,6 +125,7 @@ export async function ItemEditPage({
           }}
           onSavedHref={backHref}
           brand={brand}
+          unconfirmed={unconfirmed}
           correction={
             tools === null
               ? null
@@ -129,8 +137,8 @@ export async function ItemEditPage({
         />
       ) : (
         <div className="flex flex-col gap-2">
-          <h2 className="type-title-2 text-ink-1">Not yours to edit</h2>
-          <p className="type-callout text-ink-2">
+          <h2 className="t-title text-ink">Not yours to edit</h2>
+          <p className="t-cap text-ink-2">
             Only whoever added this {formatItemType(type).toLowerCase()} can
             change it.
           </p>

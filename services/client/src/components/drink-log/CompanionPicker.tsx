@@ -73,14 +73,14 @@ export function CompanionPicker({
       aria-label={heading === null ? "Friends" : undefined}
     >
       {heading !== null && (
-        <h3 id={`${ids}-who`} className="type-callout font-semibold">
+        <h3 id={`${ids}-who`} className="t-cap font-semibold">
           {heading}
         </h3>
       )}
       {fetching && friends.length === 0 ? (
-        <p className="type-footnote">Loading friends…</p>
+        <p className="t-cap text-ink-3">Loading friends…</p>
       ) : friends.length === 0 ? (
-        <p className="type-footnote flex items-center gap-2">
+        <p className="t-cap text-ink-3 flex items-center gap-2">
           <People aria-hidden className="size-4" />
           Just you. Friends you add show up here.
         </p>
@@ -110,7 +110,7 @@ export function CompanionPicker({
         </ul>
       )}
       {selected.length > 0 && footnote !== null && (
-        <p className="type-footnote">{footnote}</p>
+        <p className="t-cap text-ink-3">{footnote}</p>
       )}
     </section>
   );

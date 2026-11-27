@@ -119,7 +119,7 @@ const render = async (bottles: (typeof open)[], selectedId?: string) => {
 
 const pourSheet = () =>
   [...document.querySelectorAll('[role="dialog"]')].find((el) =>
-    el.textContent?.includes("Pour"),
+    /Pour|Steep/.test(el.textContent ?? ""),
   );
 
 describe("Your bottles' Pour (X09 + X03)", () => {

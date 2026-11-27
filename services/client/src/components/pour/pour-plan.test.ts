@@ -8,19 +8,23 @@ import { describe, test } from "node:test";
 import {
   canPourTo,
   clampLevel,
+  containerLabel,
   containerNote,
+  crossesStop,
   defaultPour,
   GLASS_PRESETS,
   LIQUID_BOUNDS,
   levelAfterPreset,
   levelAtPointer,
   levelForKey,
+  levelStops,
   levelValueText,
   liquidTop,
   meAndLabel,
   movedEditSeq,
   notYetLevel,
   parseCompanions,
+  pourAmount,
   pourBottleInput,
   pouredMessage,
   pourLabel,
@@ -159,7 +163,8 @@ describe("what the writes send", () => {
 
   test("the button and the toast name the pour", () => {
     assert.equal(pourLabel("WINE", 60, 40), "Pour 150 ml");
-    assert.equal(pourLabel("WINE", 60, 47), "Pour 13%");
+    // Off a preset, the share of the bottle in its unit (Cellars-Pour).
+    assert.equal(pourLabel("WINE", 60, 47), "Pour 98 ml");
     assert.equal(pourLabel("WINE", 60, 0), "Pour the last of it");
     assert.equal(pourLabel("WINE", 60, 60), "Pour");
     assert.equal(pourLabel("WINE", 0, 0), "Pour the last of it");
@@ -167,8 +172,39 @@ describe("what the writes send", () => {
     assert.equal(canPourTo(60, 59), true);
     assert.equal(canPourTo(0, 0), true);
     assert.equal(pouredMessage("WINE", 60, 40), "Poured 150 ml · 40% left");
-    assert.equal(pouredMessage("SPIRIT", 60, 48), "Poured 12% · 48% left");
+    assert.equal(pouredMessage("SPIRIT", 60, 48), "Poured 84 ml · 48% left");
     assert.equal(pouredMessage("SPIRIT", 60, 47), "Poured 90 ml · 47% left");
+  });
+
+  test("tea steeps, in grams (ruling 6)", () => {
+    assert.equal(pourLabel("TEA", 100, 97), "Steep 3 g");
+    assert.equal(pourLabel("TEA", 10, 0), "Steep the last of it");
+    assert.equal(pouredMessage("TEA", 100, 97), "Steeped 3 g · 97% left");
+  });
+
+  test("the rest names what is left; the container is named under the level", () => {
+    assert.equal(pourAmount("SPIRIT", 86, 0), "602 ml");
+    assert.equal(pourAmount("SPIRIT", 86, 80), "45 ml");
+    assert.equal(containerLabel("SPIRIT"), "700\u202fml bottle");
+    assert.equal(containerLabel("TEA"), "100\u202fg tin");
+  });
+});
+
+describe("the level's detents", () => {
+  test("sit where each preset lands, and at empty", () => {
+    assert.deepEqual(levelStops("SPIRIT", 86), [83, 80, 73, 0]);
+    // Presets that would empty it collapse into "the rest".
+    assert.deepEqual(levelStops("SPIRIT", 5), [2, 0]);
+  });
+
+  test("a drag that reaches or crosses a stop is a detent; one between stops is not", () => {
+    const stops = [83, 80, 73, 0];
+    assert.equal(crossesStop(86, 84, stops), false);
+    assert.equal(crossesStop(84, 83, stops), true, "reaching it");
+    assert.equal(crossesStop(83, 82, stops), false, "leaving it");
+    assert.equal(crossesStop(82, 70, stops), true, "two at once is one");
+    assert.equal(crossesStop(70, 81, stops), true, "going back up");
+    assert.equal(crossesStop(50, 50, stops), false);
   });
 });
 

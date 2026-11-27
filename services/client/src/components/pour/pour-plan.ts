@@ -138,6 +138,53 @@ export const presetFor = (
     (preset) => levelAfterPreset(type, from, preset) === to && to > 0,
   ) ?? null;
 
+/** "700 ml bottle", "100 g tin": the line under the level (Cellars-Pour). */
+export const containerLabel = (type: ApiItemType): string =>
+  `${CONTAINER[type].amount}\u202f${CONTAINER[type].unit} ${CONTAINER_NOUN[type]}`;
+
+/**
+ * How much a pour from `from` to `to` takes, in the container's unit: the
+ * preset's own amount when it is exactly one, otherwise the share of the
+ * container ("602 ml" for the rest of a 700 ml bottle at 86 %).
+ */
+export const pourAmount = (
+  type: ApiItemType,
+  from: number,
+  to: number,
+): string => {
+  const preset = presetFor(type, from, to);
+  if (preset !== null) return presetAmount(type, preset);
+  const { amount, unit } = CONTAINER[type];
+  return `${Math.max(0, Math.round(((from - to) / 100) * amount))} ${unit}`;
+};
+
+/** Tea steeps; everything else pours (Cellars-Pour ruling 6). */
+export const pourVerb = (type: ApiItemType): "Pour" | "Steep" =>
+  type === "TEA" ? "Steep" : "Pour";
+
+/**
+ * The levels the presets land on from `from`, and empty ("The rest"): where
+ * the level's detents sit as a finger drags it.
+ */
+export const levelStops = (type: ApiItemType, from: number): number[] =>
+  [
+    ...GLASS_PRESETS[type]
+      .map((preset) => levelAfterPreset(type, from, preset))
+      .filter((level) => level > 0),
+    0,
+  ].filter((level, index, all) => all.indexOf(level) === index);
+
+/** Whether a move from `prev` to `next` reaches or crosses a stop: a detent. */
+export const crossesStop = (
+  prev: number,
+  next: number,
+  stops: readonly number[],
+): boolean =>
+  prev !== next &&
+  stops.some((stop) =>
+    next < prev ? next <= stop && stop < prev : prev < stop && stop <= next,
+  );
+
 /* -------------------------------------------------------------------------- */
 /* The level                                                                   */
 /* -------------------------------------------------------------------------- */
@@ -267,31 +314,26 @@ export const NOT_YET_LEVEL = 5;
 export const notYetLevel = (before: BottleBefore): number =>
   Math.max(1, Math.min(NOT_YET_LEVEL, clampLevel(before.percentageRemaining)));
 
-/** The toast after a pour: "Poured 150 ml · 40% left", "Poured 12% · 40% left". */
+/** The toast after a pour: "Poured 150 ml · 40% left", "Steeped 3 g · 97% left". */
 export const pouredMessage = (
   type: ApiItemType,
   from: number,
   to: number,
-): string => {
-  const preset = presetFor(type, from, to);
-  const what = preset === null ? `${from - to}%` : presetAmount(type, preset);
-  return `Poured ${what} · ${to}% left`;
-};
+): string =>
+  `${type === "TEA" ? "Steeped" : "Poured"} ${pourAmount(type, from, to)} · ${to}% left`;
 
-/** The primary button: "Pour a glass", "Pour 12%", "Pour the last of it". */
+/** The primary button: "Pour 45 ml", "Steep 3 g", "Pour the last of it". */
 export const pourLabel = (
   type: ApiItemType,
   from: number,
   to: number,
 ): string => {
+  const verb = pourVerb(type);
   // An empty bottle that was never finished (0% left) can still be poured:
   // that is the last of it, and it asks "Finished?".
-  if (to === 0) return "Pour the last of it";
-  if (to >= from) return "Pour";
-  const preset = presetFor(type, from, to);
-  return preset === null
-    ? `Pour ${from - to}%`
-    : `Pour ${presetAmount(type, preset)}`;
+  if (to === 0) return `${verb} the last of it`;
+  if (to >= from) return verb;
+  return `${verb} ${pourAmount(type, from, to)}`;
 };
 
 /* -------------------------------------------------------------------------- */
@@ -457,3 +499,55 @@ export const bandMoveOrder = (
     entryId,
   ];
 };
+
+/* -------------------------------------------------------------------------- */
+/* The band step: counts and ranks for F2b's BandSheet                         */
+/* -------------------------------------------------------------------------- */
+
+type RankedEntry = {
+  readonly id: string;
+  readonly band: number;
+  readonly position: number;
+};
+
+/** A list's order: best band first, then position. */
+const listOrder = (items: readonly RankedEntry[]): RankedEntry[] =>
+  items
+    .slice()
+    .sort((a, b) => b.band - a.band || a.position - b.position)
+    .filter((item) => item.band > 0);
+
+/** How many sit in each band (1–5). */
+export const bandCounts = (
+  items: readonly RankedEntry[],
+): Partial<Record<1 | 2 | 3 | 4 | 5, number>> => {
+  const counts: Partial<Record<1 | 2 | 3 | 4 | 5, number>> = {};
+  for (const item of items) {
+    if (item.band >= 1 && item.band <= 5) {
+      const band = item.band as 1 | 2 | 3 | 4 | 5;
+      counts[band] = (counts[band] ?? 0) + 1;
+    }
+  }
+  return counts;
+};
+
+/** "#4": where an entry sits on its list, or null when it is not ranked. */
+export const rankOf = (
+  items: readonly RankedEntry[],
+  entryId: string,
+): number | null => {
+  const at = listOrder(items).findIndex((item) => item.id === entryId);
+  return at < 0 ? null : at + 1;
+};
+
+/**
+ * The rank an entry lands on when a band move puts it at that band's end
+ * (`bandMoveOrder`): computed once, for the toast (CROSS-LOT "one placement,
+ * one rank").
+ */
+export const rankAfterMove = (
+  items: readonly RankedEntry[],
+  entryId: string,
+  band: number,
+): number =>
+  items.filter((item) => item.id !== entryId && item.band >= band).length + 1;

@@ -91,8 +91,8 @@ export const freshnessItemOf = (item: BottleItem): FreshnessItem | null => {
 const TONE: Record<FreshnessStatus["tone"], string> = {
   good: "bg-success/15 text-success",
   soon: "bg-brass/15 text-brass",
-  wait: "bg-surface-3 text-ink-2",
-  past: "bg-destructive/10 text-destructive",
+  wait: "bg-sel text-ink-2",
+  past: "bg-danger/10 text-danger",
 };
 
 /** The board's "Drinking window" card. Renders nothing without a window. */
@@ -103,14 +103,12 @@ export function DrinkingWindowCard({ model }: { model: FreshnessModel }) {
     <InsetSection label="Drinking window" data-slot="drinking-window">
       <div className="flex flex-col gap-3 px-4 py-4">
         <div className="flex items-baseline justify-between gap-3">
-          <span className="type-title-1 tabular text-ink-1">
-            {model.heading}
-          </span>
+          <span className="t-title tabular text-ink">{model.heading}</span>
           {status !== null && (
             <span
               data-tone={status.tone}
               className={cn(
-                "type-footnote shrink-0 rounded-full px-2.5 py-0.5 font-medium",
+                "t-cap text-ink-3 shrink-0 rounded-full px-2.5 py-0.5 font-medium",
                 TONE[status.tone],
               )}
             >
@@ -120,18 +118,18 @@ export function DrinkingWindowCard({ model }: { model: FreshnessModel }) {
         </div>
         {bar !== null && (
           <div aria-hidden className="flex flex-col gap-1">
-            <div className="relative h-2 rounded-full bg-surface-3">
+            <div className="relative h-2 rounded-full bg-sel">
               <div
                 className="absolute inset-y-0 rounded-full bg-success/60"
                 style={{ left: `${bar.start}%`, width: `${bar.width}%` }}
               />
               <div
                 data-slot="today-marker"
-                className="absolute -top-1 h-4 w-0.5 rounded-full bg-ink-1"
+                className="absolute -top-1 h-4 w-0.5 rounded-full bg-ink"
                 style={{ left: `${bar.today}%` }}
               />
             </div>
-            <div className="type-footnote tabular flex justify-between text-ink-3">
+            <div className="t-cap tabular flex justify-between text-ink-3">
               <span>{bar.axisFrom}</span>
               <span>Today</span>
               <span>{bar.axisTo}</span>
@@ -139,7 +137,7 @@ export function DrinkingWindowCard({ model }: { model: FreshnessModel }) {
           </div>
         )}
         {model.sourceLine !== null && (
-          <p className="type-footnote text-ink-2">{model.sourceLine}</p>
+          <p className="t-cap text-ink-2">{model.sourceLine}</p>
         )}
       </div>
     </InsetSection>
@@ -214,11 +212,25 @@ function EditSheet({
       open={open}
       onOpenChange={onOpenChange}
       title={thisContainerLabel(itemType)}
-      description={FOOTNOTE}
       footer={
-        <Button className="w-full" onClick={save} disabled={pending}>
-          Save
-        </Button>
+        // CROSS-LOT form-sheet footer: the quiet way out left, primary right.
+        <div className="flex w-full items-center gap-3">
+          <Button
+            variant="quiet"
+            disabled={pending}
+            onClick={() => onOpenChange(false)}
+          >
+            Cancel
+          </Button>
+          <Button
+            className="min-w-0 flex-1"
+            onClick={save}
+            disabled={pending}
+            aria-busy={pending || undefined}
+          >
+            Save
+          </Button>
+        </div>
       }
     >
       <form
@@ -228,17 +240,19 @@ function EditSheet({
           save();
         }}
       >
-        {fieldsFor(itemType).map((field) => (
-          <div key={field.key} className="flex flex-col gap-1.5">
-            <Label htmlFor={`fresh-${field.key}`}>{field.label}</Label>
-            <Input
-              id={`fresh-${field.key}`}
-              type={field.type}
-              value={draft[field.key]}
-              onChange={(e) => set(field.key)(e.target.value)}
-            />
-          </div>
-        ))}
+        <div className="grid grid-cols-2 gap-x-3 gap-y-4">
+          {fieldsFor(itemType).map((field) => (
+            <div key={field.key} className="flex min-w-0 flex-col gap-1.5">
+              <Label htmlFor={`fresh-${field.key}`}>{field.label}</Label>
+              <Input
+                id={`fresh-${field.key}`}
+                type={field.type}
+                value={draft[field.key]}
+                onChange={(e) => set(field.key)(e.target.value)}
+              />
+            </div>
+          ))}
+        </div>
         <div className="flex gap-3">
           <div className="flex flex-1 flex-col gap-1.5">
             <Label htmlFor="fresh-price">Price</Label>
@@ -249,7 +263,7 @@ function EditSheet({
               onChange={(e) => set("price")(e.target.value)}
             />
           </div>
-          <div className="flex w-24 flex-col gap-1.5">
+          <div className="flex w-28 flex-col gap-1.5">
             <Label htmlFor="fresh-currency">Currency</Label>
             <Input
               id="fresh-currency"
@@ -272,10 +286,11 @@ function EditSheet({
           />
         </div>
         {error !== null && (
-          <p role="alert" className="type-footnote text-destructive">
+          <p role="alert" className="t-cap text-danger">
             {error}
           </p>
         )}
+        <p className="t-cap text-ink-3">Only you see these.</p>
       </form>
     </BottomSheet>
   );
@@ -320,8 +335,8 @@ export function ThisBottleRows({
             ) : (
               <span
                 className={cn(
-                  "type-body tabular",
-                  row.source === "typical" ? "text-ink-3" : "text-ink-1",
+                  "t-body tabular",
+                  row.source === "typical" ? "text-ink-3" : "text-ink",
                 )}
               >
                 {row.value}
@@ -330,7 +345,7 @@ export function ThisBottleRows({
           }
         />
       ))}
-      <p className="type-footnote px-4 py-2.5 text-ink-3">{FOOTNOTE}</p>
+      <p className="t-cap px-4 py-2.5 text-ink-3">{FOOTNOTE}</p>
     </InsetSection>
   );
 }

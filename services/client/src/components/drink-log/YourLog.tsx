@@ -5,12 +5,19 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useMutation, useQuery } from "urql";
 import { BottomSheet } from "@/components/app/BottomSheet";
 import { IconButton } from "@/components/app/IconButton";
-import { Add, Cocktail, Delete, Edit, More } from "@/components/app/icons";
+import {
+  Cocktail,
+  Delete,
+  Edit,
+  ICON_STROKE,
+  More,
+  Star,
+} from "@/components/app/icons";
 import { notify } from "@/components/app/notify";
 import { InsetSection } from "@/components/app/Page";
-import { Score } from "@/components/app/Score";
+import { HistoryList, HistoryRow } from "@/components/app/parts/HistoryRow";
+import { formatKitScore } from "@/components/app/parts/Stars";
 import { ApiError } from "@/components/cellar-api/ApiError";
-import { Timestamp } from "@/components/common/Timestamp";
 import { useItemActions } from "@/components/item/ItemActions";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -30,7 +37,6 @@ import {
   ItemDrinkLogQuery,
   RestoreDrinkLogMutation,
 } from "./queries";
-import { typeWords } from "./type-words";
 import { useDrinkLogFeedback } from "./useDrinkLogFeedback";
 
 /** The newest this many; the section says when there are more. */
@@ -112,6 +118,8 @@ export function YourLog({
   const [sheetOpen, setSheetOpen] = useState(false);
   const [mode, setMode] = useState<LogDrinkMode>({ kind: "new" });
   const [actionsFor, setActionsFor] = useState<DrinkLogRow | null>(null);
+  // The ⋯ sheet is titled with the log's date and time (Cellars-Pour 28).
+  const menuDate = useLocalDate(actionsFor?.createdAt ?? "", true);
 
   const [{ data, fetching, error }, reexecute] = useQuery({
     query: ItemDrinkLogQuery,
@@ -201,15 +209,7 @@ export function YourLog({
         className={className}
         action={
           rows.length > 0 ? (
-            <Button
-              size="sm"
-              variant="secondary"
-              onClick={openNew}
-              // 36 px on the label row, inside a 44 px target (FilterChip's
-              // recipe): `sm` alone is for dense desktop rows.
-              className="relative after:absolute after:-inset-y-1 after:inset-x-0 after:content-['']"
-            >
-              <Add aria-hidden />
+            <Button variant="quiet" className="-mr-2.5" onClick={openNew}>
               Log a drink
             </Button>
           ) : undefined
@@ -225,83 +225,35 @@ export function YourLog({
             <ApiError error={result.error} />
           </div>
         ) : rows.length === 0 ? (
-          <div className="flex flex-col items-start gap-3 p-4">
-            <p className="type-body text-ink-1">Nothing logged yet.</p>
-            <p className="type-footnote">
-              Log a {typeWords(subject.itemType).serving} to remember it —
-              where, who with, what you noticed. Your review stays separate.
-            </p>
-            <Button onClick={openNew}>
-              <Cocktail aria-hidden />
+          // KIT empty state: glyph, title, one action.
+          <div className="flex flex-col items-center gap-3 px-4 py-6 text-center">
+            <Cocktail
+              aria-hidden
+              strokeWidth={ICON_STROKE}
+              className="size-7 text-ink-3"
+            />
+            <p className="t-head m-0 text-ink">Nothing logged yet.</p>
+            <Button variant="outline" onClick={openNew}>
               Log a drink
             </Button>
           </div>
         ) : (
-          <ul
-            aria-label="Your log"
-            className="flex flex-col divide-y divide-line"
-          >
+          <HistoryList aria-label="Your log" className="px-4 py-3">
             {rows.map((row) => (
-              <li
+              <LogEntry
                 key={row.id}
-                data-slot="drink-log-entry"
-                className="flex min-h-11 items-start gap-3 px-4 py-3"
-              >
-                <div className="flex min-w-0 flex-1 flex-col gap-1">
-                  <div className="flex items-baseline gap-2">
-                    <span className="type-callout tabular font-semibold text-ink-1">
-                      <Timestamp iso={row.createdAt} precision="date" />
-                    </span>
-                    <Score value={row.score} />
-                  </div>
-                  {row.note !== null && (
-                    <p className="type-body line-clamp-3 text-ink-2">
-                      {row.note}
-                    </p>
-                  )}
-                  {row.tags.length > 0 && (
-                    <ul
-                      aria-label="Flavours"
-                      className="flex flex-wrap gap-1.5"
-                    >
-                      {row.tags.map((tag) => (
-                        <li
-                          key={tag}
-                          className="rounded-full bg-surface-2 px-2.5 py-0.5 text-ink-2 text-xs"
-                        >
-                          {tag}
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                  {row.context !== "" && (
-                    <p className="type-footnote truncate">{row.context}</p>
-                  )}
-                </div>
-                {row.photoUrl !== null && (
-                  // biome-ignore lint/performance/noImgElement: a presigned URL that expires; next/image would cache it past its life
-                  <img
-                    src={row.photoUrl}
-                    alt=""
-                    className="size-14 shrink-0 rounded-sm object-cover"
-                  />
-                )}
-                {(row.canEdit || row.canRemove) && (
-                  <IconButton
-                    aria-label="More for this log"
-                    variant="ghost"
-                    className="-mr-2 shrink-0"
-                    onClick={() => setActionsFor(row)}
-                  >
-                    <More aria-hidden />
-                  </IconButton>
-                )}
-              </li>
+                row={row}
+                onMore={
+                  row.canEdit || row.canRemove
+                    ? () => setActionsFor(row)
+                    : undefined
+                }
+              />
             ))}
-          </ul>
+          </HistoryList>
         )}
         {total > rows.length && (
-          <p className="type-footnote px-4 py-2">
+          <p className="t-cap text-ink-3 px-4 py-2">
             Showing your newest {rows.length} of {total}.
           </p>
         )}
@@ -320,14 +272,13 @@ export function YourLog({
         onOpenChange={(open) => {
           if (!open) setActionsFor(null);
         }}
-        title="This log"
-        hideTitle
+        title={menuDate === "" ? "This log" : menuDate}
       >
         <div className="flex flex-col gap-1 pb-2">
           {actionsFor?.canEdit && (
             <Button
               variant="ghost"
-              className="justify-start"
+              className="justify-start [&_svg]:text-act-ink"
               onClick={() => {
                 const row = actionsFor;
                 setActionsFor(null);
@@ -348,7 +299,7 @@ export function YourLog({
           {actionsFor?.canRemove && (
             <Button
               variant="ghost"
-              className="justify-start text-destructive"
+              className="justify-start text-danger"
               onClick={() => {
                 const row = actionsFor;
                 setActionsFor(null);
@@ -361,6 +312,102 @@ export function YourLog({
           )}
         </div>
       </BottomSheet>
+    </>
+  );
+}
+
+/**
+ * The viewer's own date ("Nov 24, 2026"), as a string because HistoryRow and
+ * the sheet title take one. Timestamp's rule keeps it hydration-safe: the
+ * server and the first client render both show the ISO day, and the
+ * viewer's zone and locale apply only after mount.
+ */
+function useLocalDate(iso: string, time: boolean): string {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "";
+  if (!mounted) return iso.slice(0, 10);
+  return new Intl.DateTimeFormat(
+    undefined,
+    time
+      ? { dateStyle: "medium", timeStyle: "short" }
+      : { dateStyle: "medium" },
+  ).format(date);
+}
+
+/**
+ * One log (Cellars-Pour "Your log"): F2b's history row for the event
+ * ("Rated 2.5" in the owner's gold, or "Checked in") and its date, then what
+ * was noticed under it — note, flavours, who and where, the photo — and the
+ * entry's ⋯.
+ */
+function LogEntry({ row, onMore }: { row: DrinkLogRow; onMore?: () => void }) {
+  const date = useLocalDate(row.createdAt, false);
+  const rated = row.score !== null;
+  return (
+    <>
+      <HistoryRow
+        glyph={
+          rated ? (
+            <Star aria-hidden strokeWidth={ICON_STROKE} />
+          ) : (
+            <Cocktail aria-hidden strokeWidth={ICON_STROKE} />
+          )
+        }
+        owner={rated}
+        date={date}
+      >
+        {row.score === null
+          ? "Checked in"
+          : `Rated ${formatKitScore(row.score)}`}
+      </HistoryRow>
+      <li
+        data-slot="drink-log-entry"
+        className="flex items-start gap-3 pb-2 pl-12"
+      >
+        <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+          {row.note !== null && (
+            <p className="t-body m-0 line-clamp-3 text-ink">{row.note}</p>
+          )}
+          {row.tags.length > 0 && (
+            <ul
+              aria-label="Flavours"
+              className="m-0 flex list-none flex-wrap gap-1.5 p-0"
+            >
+              {row.tags.map((tag) => (
+                <li
+                  key={tag}
+                  className="t-cap rounded-sm bg-raised px-2 py-0.5 text-ink-2"
+                >
+                  {tag}
+                </li>
+              ))}
+            </ul>
+          )}
+          {row.context !== "" && (
+            <p className="t-cap m-0 truncate text-ink-2">{row.context}</p>
+          )}
+        </div>
+        {row.photoUrl !== null && (
+          // biome-ignore lint/performance/noImgElement: a presigned URL that expires; next/image would cache it past its life
+          <img
+            src={row.photoUrl}
+            alt=""
+            className="size-11 shrink-0 rounded-sm object-cover"
+          />
+        )}
+        {onMore !== undefined && (
+          <IconButton
+            aria-label="More for this log"
+            variant="ghost"
+            className="-mt-2 -mr-2 shrink-0"
+            onClick={onMore}
+          >
+            <More aria-hidden />
+          </IconButton>
+        )}
+      </li>
     </>
   );
 }
