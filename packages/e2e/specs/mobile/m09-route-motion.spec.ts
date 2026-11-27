@@ -71,7 +71,8 @@ async function walk(page: Page): Promise<void> {
   await expect(page).toHaveURL(/\/cellars$/);
 
   await (await bottomNav(page))
-    .getByRole("link", { name: "Me", exact: true })
+    // The Me tab is the avatar, named "Me" or "Me, 2 friend requests" (f2a).
+    .getByRole("link", { name: /^Me(,|$)/ })
     .click();
   await expect(page).toHaveURL(/\/me$/);
 
@@ -105,7 +106,8 @@ test("forward, back and tab switches each carry their kind", async ({
   await expect.poll(() => takeNavTypes(page)).toEqual(["nav-back"]);
 
   await (await bottomNav(page))
-    .getByRole("link", { name: "Me", exact: true })
+    // The Me tab is the avatar, named "Me" or "Me, 2 friend requests" (f2a).
+    .getByRole("link", { name: /^Me(,|$)/ })
     .click();
   await expect(page).toHaveURL(/\/me$/);
   await expect.poll(() => takeNavTypes(page)).toEqual(["nav-tab"]);

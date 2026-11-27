@@ -253,6 +253,11 @@ export const MODEL_BACKED_FIELDS: ReadonlyMap<string, ModelBackedField> =
     ["Mutation.reorderTierListBand", { via: ["TierListActor.reorderBand"] }],
     ["Mutation.undoTierListEdit", { via: ["TierListActor.undo"] }],
     ["Mutation.redoTierListEdit", { via: ["TierListActor.redo"] }],
+    // SV-A (L12): enqueues `generateInsights` from IDLE.
+    [
+      "Mutation.requestTierListInsights",
+      { via: ["TierListActor.requestInsights"] },
+    ],
     // An embedding it enqueues (`regenerateVector`).
     ["Mutation.createItem", { via: ["ItemActor.create"] }],
     ["Mutation.updateItem", { via: ["ItemActor.update"] }],

@@ -278,7 +278,7 @@ export function VirtualGrid<T>({
     <div
       data-slot="skeleton-card"
       aria-hidden="true"
-      className="flex flex-col overflow-hidden rounded-md bg-surface-2"
+      className="flex flex-col overflow-hidden rounded-md bg-raised"
     >
       <Skeleton className="aspect-6/5 rounded-none sm:aspect-square" />
       <Skeleton className="mx-2 my-3 h-4" />
@@ -302,9 +302,7 @@ export function VirtualGrid<T>({
 
       {items.length === 0 ? (
         (empty ?? (
-          <p className="type-body py-8 text-center text-ink-2">
-            {emptyMessage}
-          </p>
+          <p className="t-body py-8 text-center text-ink-2">{emptyMessage}</p>
         ))
       ) : (
         <div

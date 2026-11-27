@@ -179,3 +179,95 @@ describe("TasteProfile.friends", () => {
     });
   });
 });
+
+describe("tasteCompare (MC-compare)", () => {
+  const WINE_ID = "55555555-5555-4555-8555-555555555555";
+  const wine = {
+    id: WINE_ID,
+    name: "Demo Barolo",
+    description: null,
+    createdAt: "2026-10-08T00:00:00.000Z",
+    updatedAt: "2026-10-08T00:00:00.000Z",
+    createdById: viewer.id,
+    barcodeCode: null,
+    country: "ITALY",
+    type: "WINE" as const,
+    vintage: "2019-01-01",
+    variety: "NEBBIOLO",
+    region: "Piedmont",
+    style: "RED",
+    alcoholContentPercentage: 14,
+  };
+  const COMPARE = `query ($userId: ID!, $itemType: ItemType) {
+    tasteCompare(userId: $userId, itemType: $itemType) {
+      __typename
+      ... on TasteCompare {
+        rows(first: 10) { edges { node { myScore theirScore item { id name type } } } }
+      }
+      ... on Error { message }
+    }
+  }`;
+  const runCompare = (
+    context: ReturnType<typeof testContext>,
+    variables: Record<string, unknown>,
+  ) =>
+    execute({
+      schema,
+      document: parse(COMPARE),
+      contextValue: context,
+      variableValues: variables,
+    });
+
+  it("passes the friend and the kind chip to the viewer's actor, rows with their item", async () => {
+    const { invoke, calls } = stubSidecar({
+      "TasteActor.compare": () => [
+        {
+          item: { type: "WINE", id: WINE_ID },
+          name: "Demo Barolo",
+          myScore: 4.5,
+          theirScore: 2,
+        },
+      ],
+      "ItemActor.get": () => wine,
+    });
+    const result = await runCompare(testContext(invoke, viewer), {
+      userId: FRIEND,
+      itemType: "WINE",
+    });
+    expect(result.errors).toBeUndefined();
+    expect(result.data?.tasteCompare).toEqual({
+      __typename: "TasteCompare",
+      rows: {
+        edges: [
+          {
+            node: {
+              myScore: 4.5,
+              theirScore: 2,
+              item: { id: WINE_ID, name: "Demo Barolo", type: "WINE" },
+            },
+          },
+        ],
+      },
+    });
+    const call = calls.find((c) => c.method === "compare");
+    expect(call).toMatchObject({ actorType: "TasteActor", actorId: viewer.id });
+    expect(call?.args[1]).toEqual({ userId: FRIEND, itemType: "WINE" });
+  });
+
+  it("refuses a signed-out caller before addressing any actor", async () => {
+    const { invoke, calls } = stubSidecar({});
+    const result = await runCompare(testContext(invoke), { userId: FRIEND });
+    expect(result.data?.tasteCompare).toMatchObject({
+      __typename: "ForbiddenError",
+    });
+    expect(calls).toHaveLength(0);
+  });
+
+  it("has no argument naming the viewer", () => {
+    const field = schema.getQueryType()?.getFields().tasteCompare;
+    expect(field?.args.map((arg) => arg.name).sort()).toEqual([
+      "itemType",
+      "userId",
+    ]);
+  });
+});

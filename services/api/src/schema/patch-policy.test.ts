@@ -204,6 +204,8 @@ const FIELDS: ReadonlyArray<
   ["updateCellarItem", "priceAmount", "clearable", "58", 58],
   ["updateCellarItem", "priceCurrency", "clearable", `"EUR"`, "EUR"],
   ["updateCellarItem", "location", "clearable", `"Rack B"`, "Rack B"],
+  // SV-B MC-move: a destination cellar; null means "stay", never "clear".
+  ["updateCellarItem", "cellarId", "keep", `"${ID2}"`, ID2],
 
   ["updateTierList", "name", "keep", `"N"`, "N"],
   ["updateTierList", "description", "clearable", `"D"`, "D"],
@@ -387,6 +389,8 @@ const NOT_PATCHES: Readonly<Record<string, string>> = {
   startRecipeTextJob: STARTS,
   suggestItemDetails: ASKS,
   suggestNewItemDetails: ASKS,
+  // SV-B MC-drafts: a save sends the whole draft, so null is "no value".
+  saveDraft: REPLACES,
 };
 
 /** A name that says "change what is there" cannot be classified away. */

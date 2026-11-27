@@ -173,10 +173,12 @@ describe("pageHeader — the phone's Back and title", () => {
     );
   });
 
-  test("lists that moved under Me (D1) go back to /me, not Home", () => {
-    assert.equal(header("/tier-lists").parent, "/me");
+  test("the Me hub's lists go back to /me; rankings to Lists, not Home", () => {
+    // Lists is a tab of its own in the kit's bar (KIT § 2), so /tier-lists
+    // is a tab root and rankings sit under it.
+    assert.equal(header("/tier-lists").tabRoot, true);
     assert.equal(header("/favorites").parent, "/me");
-    assert.equal(header("/rankings").parent, "/me");
+    assert.equal(header("/rankings").parent, "/tier-lists");
   });
 
   test("a page outside the tabs still goes back Home", () => {

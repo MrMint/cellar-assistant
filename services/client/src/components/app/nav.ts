@@ -1,81 +1,125 @@
 /**
- * The app's top-level destinations (D1, design-direction.md §2) and the rule
- * that decides which one is lit. Shared by `TabBar` (phones) and `SideRail`
- * (from `sm` up) so the two can never disagree.
+ * The app's top-level destinations (KIT § 2 Tab bar, § 3 Desktop) and the
+ * rule that decides which one is lit. Shared by `TabBar` (phones) and
+ * `SideRail` (from `md` up) so the two can never disagree.
+ *
+ * The kit draws Cellars, Search, Map, Add, Lists, More and Me. Search is the
+ * landing (`/`): the Home tab *is* Search in the settled shell
+ * (Shell-Home ruling 2). More is not a route: it opens a sheet (a popover at
+ * the rail on desktop) with the destinations that have no tab of their own.
+ * Me is the viewer's avatar.
  *
  * No `"use client"`: plain data and pure functions, importable from either
  * side of the boundary.
  */
-import { Add, type AppIcon, Cellar, Home, MapIcon, Me } from "./icons";
+import {
+  Add,
+  type AppIcon,
+  Cellar,
+  Lists,
+  MapIcon,
+  Me,
+  More,
+  Search,
+} from "./icons";
 
-export type TabKey = "home" | "cellar" | "map" | "me";
+export type TabKey = "cellars" | "search" | "map" | "lists" | "me";
 
 export type Tab = {
   key: TabKey;
   label: string;
   href: string;
   icon: AppIcon;
+  /** The desktop rail's key, shown in its tooltip ("G C", "/"). */
+  keys: string;
   /**
-   * Path prefixes that light this tab, beyond `href` itself. Until the IA
-   * clean-up (X01) moves them, destinations reached from the Me hub light
-   * Me, Recipes light Cellar (its "Bar" segment), places light Map.
+   * Path prefixes that light this tab, beyond `href` itself: recipes and
+   * brands light Cellars, places light Map, rankings light Lists, and the Me
+   * hub's own pages (loved, want to try, friends, taste profile) light Me.
    */
   also: readonly string[];
   /**
    * Where a tap goes when this tab is already showing its root, scrolled to
-   * the top — the one tap that would otherwise do nothing. Home opens search
-   * (X10: "the tab bar search"), the way a phone's own apps do.
+   * the top — the one tap that would otherwise do nothing. Search at the
+   * landing focuses the full search (X10).
    */
   rootTap?: string;
 };
 
-/** The four tabs, in bar order; the capture ＋ sits between Cellar and Map. */
+/** The five route tabs, in bar order. Add sits after Map; More after Lists. */
 export const TABS: readonly Tab[] = [
-  /**
-   * `/` is Home's own page since X10 ("Today"). Search is a full-screen
-   * sheet reached from Home — its field, or a tap on Home at the top — so
-   * `/search` lights Home too.
-   */
   {
-    key: "home",
-    label: "Home",
-    href: "/",
-    icon: Home,
-    also: ["/search"],
-    rootTap: "/search",
-  },
-  {
-    key: "cellar",
-    label: "Cellar",
+    key: "cellars",
+    label: "Cellars",
     href: "/cellars",
     icon: Cellar,
-    also: ["/recipes"],
+    keys: "G C",
+    also: ["/recipes", "/brands"],
+  },
+  {
+    key: "search",
+    label: "Search",
+    href: "/",
+    icon: Search,
+    keys: "/",
+    also: ["/search"],
+    rootTap: "/search",
   },
   {
     key: "map",
     label: "Map",
     href: "/map",
     icon: MapIcon,
-    // `/discoveries` went to Home's Waiting on you (X10) and redirects there.
+    keys: "M",
+    // `/discoveries` went to the landing (X10) and redirects there.
     also: ["/places"],
+  },
+  {
+    key: "lists",
+    label: "Lists",
+    href: "/tier-lists",
+    icon: Lists,
+    keys: "G L",
+    also: ["/rankings"],
   },
   {
     key: "me",
     label: "Me",
     href: "/me",
     icon: Me,
+    keys: "G M",
     also: [
-      "/tier-lists",
-      "/rankings",
       "/favorites",
       "/want-to-try",
       "/friends",
       "/users",
-      "/brands",
       "/taste-profile",
     ],
   },
 ];
+
+/** The tabs before Add (Cellars, Search, Map) and after it (Lists). Me is apart. */
+export const LEADING_TABS = TABS.slice(0, 3);
+export const TRAILING_TABS = TABS.slice(3, 4);
+export const ME_TAB = TABS[4] as Tab;
+
+/** More: a sheet, not a route (KIT § 2). Its key on desktop is "G O". */
+export const MORE = { label: "More", icon: More, keys: "G O" } as const;
+
+/**
+ * The destinations with no tab of their own, listed in More. H1 takes the
+ * More menu over after wave 1 (L42).
+ */
+export const MORE_LINKS: readonly { label: string; href: string }[] = [
+  { label: "Recipes", href: "/recipes" },
+  { label: "Rankings", href: "/rankings" },
+  { label: "Friends", href: "/friends" },
+  { label: "Taste profile", href: "/taste-profile" },
+  { label: "Your recap", href: "/recap" },
+];
+
+/** Add's key on desktop. */
+export const ADD_KEYS = "N";
 
 /** Whether `pathname` is `prefix` or below it (`/map` matches `/map/scans`, not `/mapx`). */
 export const isUnder = (pathname: string, prefix: string): boolean =>
@@ -83,7 +127,7 @@ export const isUnder = (pathname: string, prefix: string): boolean =>
     ? pathname === "/"
     : pathname === prefix || pathname.startsWith(`${prefix}/`);
 
-/** The tab a route belongs to, or `undefined` for routes outside the four. */
+/** The tab a route belongs to, or `undefined` for routes outside the tabs. */
 export function activeTab(pathname: string): TabKey | undefined {
   return TABS.find(
     (tab) =>

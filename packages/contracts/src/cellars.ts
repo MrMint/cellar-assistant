@@ -248,6 +248,13 @@ export type UpdateCellarItemInput = {
   readonly displayImageId?: string | null;
   readonly openAt?: string | null;
   readonly emptyAt?: string | null;
+  /**
+   * SV-B · MC-move (L13): move the bottle to this cellar, which the viewer
+   * must be able to write. A move clears the shelf `location` (a place inside
+   * the old cellar); the bottle keeps its id, so its logs follow it. The
+   * bottle's own cellar is a no-op for the move.
+   */
+  readonly cellarId?: string | null;
 } & BottleFreshnessInput;
 
 /**

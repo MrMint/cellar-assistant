@@ -205,10 +205,25 @@ export type RecapCardDto = {
   readonly stamp: BreadthStampDto | null;
 };
 
+/**
+ * MC-recap / L4: how much the viewer did in the period. These are the only
+ * counts of volume in the recap, and they stay off the cards and stamps: they
+ * head the deck as a plain record, never a goal.
+ */
+export type RecapTotalsDto = {
+  /** The viewer's own `check_ins` rows dated in the period (as the deck reads them). */
+  readonly checkIns: number;
+  /** The viewer's `item_reviews` (stars on an item) created or changed in the period. */
+  readonly ratings: number;
+  /** `cellar_items` the viewer created in the period, in any cellar; never a co-owner's. */
+  readonly bottlesAdded: number;
+};
+
 export type RecapDto = {
   /** `2026-10` or `2026`. */
   readonly period: string;
   readonly timeZone: string;
+  readonly totals: RecapTotalsDto;
   readonly cards: readonly RecapCardDto[];
   /** Stamps held at the end of the period (all history up to it). */
   readonly stamps: readonly BreadthStampDto[];
@@ -219,6 +234,25 @@ export type RecapInput = {
   readonly timeZone?: string | null;
 };
 
+/** MC-recap: the granularity `recapPeriods` lists, matching `recap(period)`. */
+export const RECAP_PERIOD_KINDS = ["MONTH", "YEAR"] as const;
+export type RecapPeriodKind = (typeof RECAP_PERIOD_KINDS)[number];
+
+export const isRecapPeriodKind = (value: unknown): value is RecapPeriodKind =>
+  typeof value === "string" &&
+  (RECAP_PERIOD_KINDS as readonly string[]).includes(value);
+
+export type RecapPeriodsInput = {
+  readonly kind: RecapPeriodKind;
+  readonly timeZone?: string | null;
+};
+
+/**
+ * The most periods `periods` answers: a century of months. A bound, so the
+ * list is never an unbounded read; nobody has that much history.
+ */
+export const RECAP_PERIODS_LIMIT = 1200;
+
 /* -------------------------------------------------------------------------- */
 /* Actor                                                                       */
 /* -------------------------------------------------------------------------- */
@@ -228,6 +262,11 @@ export type RecapActorInterface = {
   recap(ctx: Ctx, input: RecapInput): Promise<RecapDto>;
   /** The viewer's breadth stamps over their whole drink log. */
   stamps(ctx: Ctx): Promise<readonly BreadthStampDto[]>;
+  /**
+   * MC-recap: the periods (`YYYY-MM` or `YYYY`, as `recap` takes them) that
+   * hold any of the activity `RecapTotalsDto` counts, newest first.
+   */
+  periods(ctx: Ctx, input: RecapPeriodsInput): Promise<readonly string[]>;
 };
 
 export const RecapActorDescriptor: ActorDescriptor<RecapActorInterface> = {
@@ -236,6 +275,7 @@ export const RecapActorDescriptor: ActorDescriptor<RecapActorInterface> = {
   methods: {
     recap: {},
     stamps: {},
+    periods: {},
   },
 };
 

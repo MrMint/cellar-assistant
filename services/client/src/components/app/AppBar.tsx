@@ -26,10 +26,12 @@ import {
 import { breakpointUp, useMediaQuery } from "@/hooks/useMediaQuery";
 import { cn } from "@/lib/utils";
 import { BottomSheet } from "./BottomSheet";
-import { IconButton } from "./IconButton";
+import { IconButton, type IconButtonProps } from "./IconButton";
 import { type AppIcon, Back, More } from "./icons";
 import { Link } from "./Link";
 import { canGoBack } from "./nav-history";
+import { GlassDisc } from "./overlays/GlassDisc";
+import { PRESS_CLASS, pressFeedback } from "./overlays/press";
 import { useNavigate } from "./useNavigate";
 
 export type AppBarAction = {
@@ -66,8 +68,50 @@ export type AppBarProps = {
   overflow?: readonly AppBarOverflowItem[];
   /** Desktop only (N26): hidden below `md`, where Back does the job. */
   breadcrumbs?: readonly { label: string; href?: string }[];
+  /**
+   * `photo`: the bar floats over a page hero (KIT § 2 "Top bar and discs"):
+   * Back, the actions and ⋯ are 44 glass discs, and the title is for screen
+   * readers only (the page sets the name under its photo).
+   */
+  tone?: "page" | "photo";
+  /**
+   * Sticks to the top of the scroller and takes the bar shadow once the
+   * content scrolls under it (KIT § 2).
+   */
+  sticky?: boolean;
   className?: string;
 };
+
+/** A bar's icon control: plain on a surface, a glass disc over a photo. */
+function BarButton({
+  photo,
+  className,
+  ...props
+}: IconButtonProps & { photo: boolean }) {
+  return photo ? (
+    <GlassDisc {...props} className={className} />
+  ) : (
+    <IconButton {...pressFeedback()} {...props} className={className} />
+  );
+}
+
+/** Whether the scroller holding `ref` has scrolled content under it. */
+function useStuck(
+  ref: { current: HTMLElement | null },
+  enabled: boolean,
+): boolean {
+  const [stuck, setStuck] = useState(false);
+  useEffect(() => {
+    if (!enabled) return;
+    const scroller = ref.current?.closest<HTMLElement>("[data-app-scroller]");
+    if (scroller === null || scroller === undefined) return;
+    const read = () => setStuck(scroller.scrollTop > 0);
+    read();
+    scroller.addEventListener("scroll", read, { passive: true });
+    return () => scroller.removeEventListener("scroll", read);
+  }, [ref, enabled]);
+  return stuck;
+}
 
 /**
  * The page header (N26): a real Back, a title, at most two actions and a
@@ -87,8 +131,13 @@ export function AppBar({
   actions = [],
   overflow = [],
   breadcrumbs,
+  tone = "page",
+  sticky = false,
   className,
 }: AppBarProps) {
+  const photo = tone === "photo";
+  const headerRef = useRef<HTMLElement | null>(null);
+  const stuck = useStuck(headerRef, sticky && !photo);
   const router = useRouter();
   const navigate = useNavigate();
   const desktop = useMediaQuery(breakpointUp("md"));
@@ -131,8 +180,19 @@ export function AppBar({
 
   return (
     <header
+      ref={headerRef}
       data-slot="app-bar"
-      className={cn("flex min-h-11 flex-col gap-1", className)}
+      data-tone={tone}
+      data-stuck={stuck ? "" : undefined}
+      className={cn(
+        "flex min-h-11 flex-col gap-1",
+        photo &&
+          "absolute inset-x-0 top-0 z-10 px-3 pt-[calc(env(safe-area-inset-top)+12px)]",
+        sticky &&
+          !photo &&
+          "sticky top-0 z-10 -mx-4 -mt-4 bg-background px-4 pt-4 pb-2 transition-shadow duration-(--ca-dur-short) data-[stuck]:shadow-bar",
+        className,
+      )}
     >
       {breadcrumbs !== undefined && breadcrumbs.length > 0 && (
         <Breadcrumb className="hidden md:block">
@@ -160,33 +220,39 @@ export function AppBar({
       )}
       <div className="flex min-h-11 items-center gap-1">
         {showBack && (
-          <IconButton
+          <BarButton
+            photo={photo}
             aria-label="Back"
             onClick={goBack}
             onPointerDown={warmBack}
-            className="-ml-3"
+            className={photo ? undefined : "-ml-3"}
           >
             <Back />
-          </IconButton>
+          </BarButton>
         )}
-        <div className="min-w-0 flex-1">
+        <div className={cn("min-w-0 flex-1", photo && "sr-only")}>
           {typeof title === "string" ? (
-            <h1 className="type-headline truncate">{title}</h1>
+            <h1 className="t-title truncate text-ink">{title}</h1>
           ) : (
             title
           )}
         </div>
         {trailing.map(({ label, icon: Icon, href, onSelect }) =>
           href !== undefined ? (
-            <IconButton key={label} aria-label={label} asChild>
+            <BarButton photo={photo} key={label} aria-label={label} asChild>
               <Link href={href} underline="none">
                 <Icon />
               </Link>
-            </IconButton>
+            </BarButton>
           ) : (
-            <IconButton key={label} aria-label={label} onClick={onSelect}>
+            <BarButton
+              photo={photo}
+              key={label}
+              aria-label={label}
+              onClick={onSelect}
+            >
               <Icon />
-            </IconButton>
+            </BarButton>
           ),
         )}
         {overflow.length > 0 &&
@@ -195,9 +261,9 @@ export function AppBar({
             // own modal teardown (the same stuck pointer-events as above).
             <DropdownMenu modal={false}>
               <DropdownMenuTrigger asChild>
-                <IconButton aria-label="More actions">
+                <BarButton photo={photo} aria-label="More actions">
                   <More />
-                </IconButton>
+                </BarButton>
               </DropdownMenuTrigger>
               <DropdownMenuContent
                 align="end"
@@ -223,13 +289,14 @@ export function AppBar({
             </DropdownMenu>
           ) : (
             <>
-              <IconButton
+              <BarButton
+                photo={photo}
                 aria-label="More actions"
                 aria-haspopup="dialog"
                 onClick={() => setSheetOpen(true)}
               >
                 <More />
-              </IconButton>
+              </BarButton>
               <BottomSheet
                 open={sheetOpen}
                 onOpenChange={setSheetOpen}
@@ -242,13 +309,15 @@ export function AppBar({
                     <li key={item.label}>
                       <button
                         type="button"
+                        {...pressFeedback()}
                         onClick={() => {
                           pending.current = item.onSelect;
                           setSheetOpen(false);
                         }}
                         className={cn(
-                          "type-body flex min-h-12 w-full items-center rounded-md px-3 text-left active:bg-surface-3",
-                          item.destructive ? "text-destructive" : "text-ink-1",
+                          "t-body flex min-h-12 w-full items-center rounded-md px-3 text-left hover:bg-raised",
+                          PRESS_CLASS,
+                          item.destructive ? "text-danger" : "text-ink",
                         )}
                       >
                         {item.label}

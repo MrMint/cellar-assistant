@@ -6,6 +6,7 @@
  * |---|---|
  * | `recap` | `/recap` and the share images (`/api/recap/...`) |
  * | `stamps` | Me's `MeStamps` slot |
+ * | `periods` | the recap's period picker (MC-recap) |
  *
  * It reads check-ins through its own query (`recap-sql.ts`) into its own row
  * type, never `ItemCheckInDto` (L32, L45), and computes every card and stamp
@@ -22,10 +23,12 @@ import type {
   RecapActorInterface,
   RecapDto,
   RecapInput,
+  RecapPeriodsInput,
 } from "@cellar-assistant/contracts";
 import {
   ForbiddenError,
   formatRecapPeriod,
+  isRecapPeriodKind,
   normaliseRecapTimeZone,
   parseRecapPeriod,
   RecapActorDescriptor,
@@ -35,7 +38,11 @@ import {
 import { ActorBase } from "../lib/actor-base.ts";
 import { requireSignedIn } from "../lib/guards.ts";
 import { computeStamps, selectRecapCards } from "../lib/recap-cards.ts";
-import { readRecapLogs } from "../lib/recap-sql.ts";
+import {
+  readRecapLogs,
+  readRecapPeriods,
+  readRecapTotals,
+} from "../lib/recap-sql.ts";
 import { recipeScope } from "../lib/recipe-visibility.ts";
 
 export class RecapActor extends ActorBase implements RecapActorInterface {
@@ -54,13 +61,19 @@ export class RecapActor extends ActorBase implements RecapActorInterface {
       throw new ValidationError(`not a time zone: ${String(input?.timeZone)}`);
     }
     const scope = await recipeScope(this.db, ctx);
-    const rows = await readRecapLogs(this.db, this.key, scope, {
-      ...recapPeriodBounds(period),
-      timeZone,
-    });
+    const window = { ...recapPeriodBounds(period), timeZone };
+    const [rows, counted] = await Promise.all([
+      readRecapLogs(this.db, this.key, scope, window),
+      readRecapTotals(this.db, this.key, window),
+    ]);
     return {
       period: formatRecapPeriod(period),
       timeZone,
+      totals: {
+        checkIns: rows.filter((row) => row.inPeriod).length,
+        ratings: counted.ratings,
+        bottlesAdded: counted.bottlesAdded,
+      },
       cards: selectRecapCards(rows),
       stamps: computeStamps(rows),
     };
@@ -70,6 +83,24 @@ export class RecapActor extends ActorBase implements RecapActorInterface {
     this.#requireViewerKey(ctx);
     const scope = await recipeScope(this.db, ctx);
     return computeStamps(await readRecapLogs(this.db, this.key, scope, null));
+  }
+
+  async periods(
+    ctx: Ctx,
+    input: RecapPeriodsInput,
+  ): Promise<readonly string[]> {
+    this.#requireViewerKey(ctx);
+    if (!isRecapPeriodKind(input?.kind)) {
+      throw new ValidationError(
+        `not a recap period kind (MONTH or YEAR): ${String(input?.kind)}`,
+      );
+    }
+    const timeZone = normaliseRecapTimeZone(input?.timeZone);
+    if (timeZone === null) {
+      throw new ValidationError(`not a time zone: ${String(input?.timeZone)}`);
+    }
+    const scope = await recipeScope(this.db, ctx);
+    return readRecapPeriods(this.db, this.key, scope, input.kind, timeZone);
   }
 
   #requireViewerKey(ctx: Ctx): void {

@@ -106,7 +106,7 @@
   --ca-ease-standard: cubic-bezier(0.2, 0, 0, 1);
   --ca-ease-enter: cubic-bezier(0, 0, 0, 1);
   --ca-ease-exit: cubic-bezier(0.3, 0, 1, 1);
-  --ca-tabbar-h: 49px;
+  --ca-tabbar-h: 64px;
   /* Loading shells: placeholder blocks appear only after this (X24). */
   --ca-skeleton-delay: 120ms;
   /* shadcn's base radius, used by a few vendored calc()s; = --radius-md. */

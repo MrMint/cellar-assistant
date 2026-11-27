@@ -2,16 +2,23 @@
 
 import { usePathname } from "next/navigation";
 import { type MouseEvent, useEffect, useState } from "react";
+import { feedback, HapticOverlay } from "@/lib/feedback";
 import { cn } from "@/lib/utils";
-import { Link } from "./Link";
+import { Link, type LinkProps } from "./Link";
 import {
   activeTab,
   CAPTURE_HREF,
   CaptureIcon,
-  TABS,
+  LEADING_TABS,
+  ME_TAB,
   type Tab,
   type TabKey,
+  TRAILING_TABS,
 } from "./nav";
+import { isMoreRoute, MoreMenu } from "./overlays/MoreMenu";
+import { PRESS_CLASS, pressFeedback } from "./overlays/press";
+import { badgeCount, meLabel, useShellViewer } from "./overlays/ShellViewer";
+import { UserAvatar } from "./UserAvatar";
 import { useNavigate } from "./useNavigate";
 
 /** The shell's inner scroller (`AppShell`), which re-tap scrolls to the top. */
@@ -84,52 +91,120 @@ function TabLink({
       underline="none"
       aria-current={active ? "page" : undefined}
       data-active={active ? "" : undefined}
+      {...pressFeedback()}
       onClick={(event) => onTap(event, tab)}
       className={cn(
-        "flex min-h-11 flex-1 flex-col items-center justify-center gap-0.5 rounded-md pt-1 font-medium text-[10px] leading-3 transition-colors duration-(--ca-dur-micro)",
-        active ? "text-ink-1" : "text-ink-3",
+        "t-micro relative flex min-h-11 flex-1 flex-col items-center justify-center gap-0.5 rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        PRESS_CLASS,
+        active ? "font-semibold text-ink" : "text-ink-3",
       )}
     >
       <Icon aria-hidden className="size-6" strokeWidth={active ? 2.25 : 1.75} />
       <span>{tab.label}</span>
+      <HapticOverlay />
     </Link>
   );
 }
 
 /**
- * The brass ＋ (design §2): 56 pt, a link straight into the full-screen
- * capture surface (X06) — the camera, on the last mode used. As a link it is
- * prefetched at pointerdown like every tab (X24), so the tap commits into the
- * surface's shell.
+ * Add (KIT § 2): a teal pill in the bar, a teal 48 × 40 on the rail — a link
+ * straight into the full-screen capture surface (X06). As a link it is
+ * prefetched at pointerdown like every tab (X24). It is the screen's one
+ * primary, so it plays the primary press.
  */
-export function CaptureButton({ className }: { className?: string }) {
+export function CaptureButton({
+  className,
+  variant = "tab",
+  ...rest
+}: Omit<LinkProps, "href"> & {
+  variant?: "tab" | "rail";
+}) {
   return (
     <Link
+      {...rest}
       href={CAPTURE_HREF}
       underline="none"
       aria-label="Add"
       data-slot="capture-button"
+      {...pressFeedback("primary")}
+      onClick={() => feedback("tick")}
       className={cn(
-        "flex size-14 items-center justify-center rounded-full bg-primary text-primary-foreground outline-none transition-transform duration-(--ca-dur-micro) ease-standard focus-visible:ring-[3px] focus-visible:ring-ring/50 active:scale-97 motion-reduce:active:scale-100",
+        "relative flex items-center justify-center rounded-md bg-act text-on-act outline-none hover:brightness-110 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+        PRESS_CLASS,
+        variant === "tab" ? "h-11 w-13" : "h-10 w-12",
         className,
       )}
     >
-      <CaptureIcon aria-hidden className="size-7" strokeWidth={2} />
+      <CaptureIcon aria-hidden className="size-6" strokeWidth={2} />
+      <HapticOverlay />
     </Link>
   );
 }
 
 /**
- * Phones (below `sm`): five labelled tabs, Home · Cellar · ＋ · Map · Me (D1).
- * 49 pt plus the home-indicator inset on frosted glass; the brass ＋ is 56 pt
- * and sits 8 pt proud of the bar. `SideRail` is the same set from `sm` up.
- * The capture surface hides the bar (`AppShell`, design §2).
+ * Me (KIT § 2): the viewer's 32 avatar over its label, with the act badge
+ * counting friend requests ("Me, 2 friend requests").
  */
-export function TabBar({ className }: { className?: string }) {
+export function MeTab({
+  active,
+  onTap,
+  variant = "tab",
+}: {
+  active: boolean;
+  onTap: (event: MouseEvent<HTMLAnchorElement>, tab: Tab) => void;
+  variant?: "tab" | "rail";
+}) {
+  const viewer = useShellViewer();
+  const requests = viewer.requests ?? 0;
+  return (
+    <Link
+      href={ME_TAB.href}
+      underline="none"
+      aria-label={meLabel(requests)}
+      aria-current={active ? "page" : undefined}
+      data-active={active ? "" : undefined}
+      data-slot="me-tab"
+      {...pressFeedback()}
+      onClick={(event) => onTap(event, ME_TAB)}
+      className={cn(
+        "t-micro relative flex min-h-11 flex-col items-center justify-center gap-0.5 rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        PRESS_CLASS,
+        variant === "tab" ? "flex-1" : "w-16 py-1.5",
+        active ? "font-semibold text-ink" : "text-ink-3",
+      )}
+    >
+      <span className="relative">
+        <UserAvatar
+          size="sm"
+          displayName={viewer.displayName}
+          avatarUrl={viewer.avatarUrl}
+          aria-hidden
+          className={cn("border", active ? "border-ink" : "border-edge-2")}
+        />
+        {requests > 0 && (
+          <span
+            aria-hidden
+            data-slot="me-badge"
+            className="t-micro absolute -top-1 -right-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-act px-1 font-semibold text-on-act tabular-nums"
+          >
+            {badgeCount(requests)}
+          </span>
+        )}
+      </span>
+      <span aria-hidden>{ME_TAB.label}</span>
+      <HapticOverlay />
+    </Link>
+  );
+}
+
+/** The tap handler a tab bar and the rail share. */
+export function useTabTap(): {
+  active: TabKey | undefined;
+  onTap: (event: MouseEvent<HTMLAnchorElement>, tab: Tab) => void;
+} {
   const pathname = usePathname() ?? "/";
   const navigate = useNavigate();
   const [active, setActive] = useOptimisticTab();
-
   const onTap = (event: MouseEvent<HTMLAnchorElement>, tab: Tab) => {
     if (opensElsewhere(event)) return;
     if (tab.key === active) {
@@ -138,42 +213,47 @@ export function TabBar({ className }: { className?: string }) {
       }
       return;
     }
+    // A tick on change (KIT § 2: "tick on change").
+    feedback("tick");
     setActive(tab.key);
   };
+  return { active, onTap };
+}
 
-  const [left, right] = [TABS.slice(0, 2), TABS.slice(2)];
+/**
+ * Phones (below `md`): 64 tall on glass, Cellars · Search · Map · Add ·
+ * Lists · More · Me (KIT § 2). The current tab is ink and weight, the rest
+ * ink-3; every control presses to .97. It never hides on scroll; only the
+ * capture surface and the full-screen routes take it away (`AppShell`).
+ * `SideRail` is the same set from `md` up.
+ */
+export function TabBar({ className }: { className?: string }) {
+  const pathname = usePathname() ?? "/";
+  const { active, onTap } = useTabTap();
+
+  const tab = (t: Tab) => (
+    <TabLink key={t.key} tab={t} active={t.key === active} onTap={onTap} />
+  );
   return (
     <nav
       aria-label="Main"
       data-slot="tab-bar"
       className={cn(
-        "surface-glass touch-none-select relative z-40 shrink-0 rounded-none",
+        "touch-none-select relative z-40 shrink-0 border-hair border-t bg-glass backdrop-blur-xl",
         // Under the home indicator: AppShell reclaims the safe area the root
         // layout pads, and the bar pads its own content instead.
         "pb-[env(safe-area-inset-bottom)]",
         className,
       )}
     >
-      <div className="grid h-(--ca-tabbar-h) grid-cols-5 items-stretch px-1">
-        {left.map((tab) => (
-          <TabLink
-            key={tab.key}
-            tab={tab}
-            active={tab.key === active}
-            onTap={onTap}
-          />
-        ))}
-        <div className="relative flex justify-center">
-          <CaptureButton className="absolute -top-2 shadow-lg shadow-black/40" />
+      <div className="flex h-16 items-center gap-0.5 px-1">
+        {LEADING_TABS.map(tab)}
+        <div className="flex flex-1 justify-center">
+          <CaptureButton />
         </div>
-        {right.map((tab) => (
-          <TabLink
-            key={tab.key}
-            tab={tab}
-            active={tab.key === active}
-            onTap={onTap}
-          />
-        ))}
+        {TRAILING_TABS.map(tab)}
+        <MoreMenu variant="tab" active={isMoreRoute(pathname)} />
+        <MeTab active={active === "me"} onTap={onTap} />
       </div>
     </nav>
   );

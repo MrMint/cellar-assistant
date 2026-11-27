@@ -23,7 +23,14 @@ import { IconButton } from "./IconButton";
 import * as icons from "./icons";
 import { Link } from "./Link";
 import { MAIN_CONTENT_ID } from "./main-content";
-import { activeTab, CAPTURE_HREF, isCaptureRoute, isUnder, TABS } from "./nav";
+import {
+  activeTab,
+  CAPTURE_HREF,
+  isCaptureRoute,
+  isUnder,
+  MORE_LINKS,
+  TABS,
+} from "./nav";
 import { nextNavStack } from "./nav-history";
 import { HERO_DISC, InsetSection, ListRow, Page, PageHero } from "./Page";
 import { formatScore, Score } from "./Score";
@@ -38,26 +45,33 @@ const classOf = (markup: string, slot: string) =>
   "";
 
 describe("nav: which tab is lit", () => {
-  test("four tabs in bar order; ＋ sits between Cellar and Map", () => {
+  test("five route tabs in bar order (KIT § 2); Add and More sit between", () => {
     assert.deepEqual(
       TABS.map((t) => t.label),
-      ["Home", "Cellar", "Map", "Me"],
+      ["Cellars", "Search", "Map", "Lists", "Me"],
     );
   });
 
   test("a tab is lit for its route and everything under it", () => {
-    assert.equal(activeTab("/"), "home");
-    assert.equal(activeTab("/search"), "home");
-    assert.equal(activeTab("/cellars"), "cellar");
-    assert.equal(activeTab("/cellars/abc/items"), "cellar");
-    assert.equal(activeTab("/recipes/1"), "cellar");
+    assert.equal(activeTab("/"), "search", "the landing is the Search tab");
+    assert.equal(activeTab("/search"), "search");
+    assert.equal(activeTab("/cellars"), "cellars");
+    assert.equal(activeTab("/cellars/abc/items"), "cellars");
+    assert.equal(activeTab("/recipes/1"), "cellars");
     assert.equal(activeTab("/map"), "map");
     assert.equal(activeTab("/map/scans/s1"), "map");
     assert.equal(activeTab("/discoveries"), undefined, "X10 redirects it Home");
     assert.equal(activeTab("/places/9"), "map");
+    assert.equal(activeTab("/tier-lists/3"), "lists");
+    assert.equal(activeTab("/rankings"), "lists");
     assert.equal(activeTab("/me"), "me");
-    assert.equal(activeTab("/tier-lists/3"), "me");
+    assert.equal(activeTab("/favorites"), "me");
     assert.equal(activeTab("/users/edit"), "me");
+  });
+
+  test("More lists routes, every one of them real", () => {
+    assert.ok(MORE_LINKS.length > 0);
+    for (const link of MORE_LINKS) assert.match(link.href, /^\/[a-z-]+$/);
   });
 
   test("a prefix is a path segment, not a string prefix", () => {
@@ -73,9 +87,11 @@ describe("nav: which tab is lit", () => {
     );
     // A query (`/add?mode=bottle`) asks the page something; the route is
     // the path before it.
-    const hrefs = [...TABS.map((t) => t.href), CAPTURE_HREF].map(
-      (href) => href.split("?")[0] ?? href,
-    );
+    const hrefs = [
+      ...TABS.map((t) => t.href),
+      ...MORE_LINKS.map((l) => l.href),
+      CAPTURE_HREF,
+    ].map((href) => href.split("?")[0] ?? href);
     // A page may sit one route group down (`cellars/(list)/page.tsx`, X24's
     // way of scoping a loading shell to one page).
     const hasPage = (dir: string) =>
