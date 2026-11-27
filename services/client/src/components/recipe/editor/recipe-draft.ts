@@ -523,3 +523,10 @@ export const PRIVACY_COPY: Readonly<
     line: "Anyone can see it, and you can share a link to it.",
   },
 };
+
+/** Who sees a recipe, in the rows' and the page's words ("Everyone · 3 ingredients"). */
+export const PRIVACY_WHO: Readonly<Record<RecipePrivacy, string>> = {
+  PRIVATE: "Only you",
+  FRIENDS: "Friends",
+  PUBLIC: "Everyone",
+};

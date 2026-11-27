@@ -215,7 +215,7 @@ export const RecipeVoteButtons = ({
             {glyph("upvote", iconClass)}
           </IconButton>
           {showCounts && !isCompact && (
-            <span className="tabular type-footnote text-success">
+            <span className="tabular t-cap text-ink-3 text-success">
               {optimisticUpvotes}
             </span>
           )}
@@ -226,7 +226,7 @@ export const RecipeVoteButtons = ({
           <span
             className={cn(
               "tabular font-bold",
-              isCompact ? "text-xs" : "type-callout font-bold",
+              isCompact ? "text-xs" : "t-cap font-bold",
               scoreClass(netScore),
             )}
           >
@@ -253,7 +253,7 @@ export const RecipeVoteButtons = ({
             {glyph("downvote", iconClass)}
           </IconButton>
           {showCounts && !isCompact && (
-            <span className="tabular type-footnote text-destructive">
+            <span className="tabular t-cap text-destructive">
               {optimisticDownvotes}
             </span>
           )}
@@ -336,7 +336,7 @@ export const RecipeVoteButtons = ({
       {showCounts && (
         <span
           className={cn(
-            "tabular min-w-[2ch] shrink-0 text-center font-bold type-callout md:min-w-[3ch]",
+            "tabular min-w-[2ch] shrink-0 text-center font-bold t-cap md:min-w-[3ch]",
             scoreClass(netScore),
           )}
         >

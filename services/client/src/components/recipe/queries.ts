@@ -184,9 +184,9 @@ export const RecipeReviewsPageQuery = graphql(
 );
 
 /**
- * `/recipes/groups/[groupId]` — the header, and which version to show:
- * the canonical, or (no votes yet, so none) the first of `recipes`, which is
- * ordered the way the canonical is chosen.
+ * `/recipes/groups/[groupId]` — the group's line, and which version to show:
+ * the community pick (MC-pick), or the original (the oldest of `recipes`)
+ * when there is none. 20 versions × 2 fields is far under the cost cap.
  */
 export const RecipeGroupPageQuery = graphql(
   `
@@ -199,10 +199,12 @@ export const RecipeGroupPageQuery = graphql(
         description
         recipeCount
         canonicalRecipeId
-        recipes(first: 1) {
+        communityPickId
+        recipes(first: 20) {
           edges {
             node {
               id
+              createdAt
             }
           }
         }

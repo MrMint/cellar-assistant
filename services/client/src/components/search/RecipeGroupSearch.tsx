@@ -317,13 +317,13 @@ export const RecipeGroupSearch = ({
 
       {/* Results */}
       {error && (
-        <p className="type-body text-destructive">
+        <p className="t-body text-destructive">
           Couldn't search recipes: {error.message}
         </p>
       )}
 
       {/* Results summary */}
-      <p className="mb-4 px-1 type-footnote" aria-live="polite">
+      <p className="mb-4 px-1 t-cap text-ink-3" aria-live="polite">
         {isLoading && results.length === 0
           ? "Searching…"
           : results.length > 0

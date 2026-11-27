@@ -95,7 +95,7 @@ export const RecipeGroupCard = memo<RecipeGroupCardProps>(
 
         <div className="flex flex-col gap-2 p-4">
           {/* Recipe Group Name: an h3 under /recipes' "All recipes" h2 (X21) */}
-          <h3 className="type-headline">
+          <h3 className="t-head">
             {href ? (
               <Link href={href} overlay underline="none">
                 {recipeGroup.name}
@@ -107,21 +107,19 @@ export const RecipeGroupCard = memo<RecipeGroupCardProps>(
 
           {/* Canonical Recipe Name (if different) */}
           {canonical && canonical.name !== recipeGroup.name && (
-            <p className="type-callout text-ink-2">
-              Featured: {canonical.name}
-            </p>
+            <p className="t-cap text-ink-2">Featured: {canonical.name}</p>
           )}
 
           {/* Description */}
           {(canonical?.description || recipeGroup.description) && (
-            <p className="line-clamp-1 type-footnote text-ink-2 sm:line-clamp-2 sm:type-callout">
+            <p className="line-clamp-1 t-cap text-ink-2 sm:line-clamp-2">
               {canonical?.description || recipeGroup.description}
             </p>
           )}
 
           {/* Recipe Details */}
           {canonical && (
-            <div className="mt-2 flex flex-wrap gap-2 type-footnote sm:gap-4">
+            <div className="mt-2 flex flex-wrap gap-2 t-cap text-ink-3 sm:gap-4">
               {canonical.difficulty_level && (
                 <span className="flex items-center gap-1">
                   <WeakSignal aria-hidden className="size-3.5 sm:size-4" />
@@ -174,7 +172,7 @@ export const RecipeGroupCard = memo<RecipeGroupCardProps>(
                 </Badge>
               ))}
               {recipeGroup.tags.length > tagLimit && (
-                <span className="self-center type-footnote text-ink-2">
+                <span className="self-center t-cap text-ink-2">
                   +{recipeGroup.tags.length - tagLimit} more
                 </span>
               )}

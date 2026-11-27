@@ -21,7 +21,7 @@ export function RecipesShell() {
       <Page wide>
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex min-h-11 items-center">
-            <p className="type-headline truncate">Bar</p>
+            <p className="t-head truncate">Bar</p>
           </div>
           {/* Inert until the page arrives: the sheet lives on the page. */}
           <Button className="sm:ml-auto" disabled>

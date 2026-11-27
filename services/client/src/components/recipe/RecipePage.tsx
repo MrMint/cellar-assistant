@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { cache, type ReactNode } from "react";
+import { ErrorState } from "@/components/app/EmptyState";
 import { readFragment } from "@/lib/api/graphql";
 import { isNotFound, unwrapResult } from "@/lib/api/result";
 import { apiServerQuery } from "@/lib/api/urql-server";
@@ -41,20 +42,30 @@ export async function recipePageMetadata(recipeId: string): Promise<Metadata> {
  *
  * `NotFoundError` covers "no such recipe" and "not yours to see" alike
  * (§1.6), so both are a 404; the old detail page printed "Recipe not found"
- * with a 200. `header` goes above the details (the group page's).
+ * with a 200. The group page passes the line above the name (`eyebrow`) and
+ * its pick card (`aside`).
  */
 export async function RecipePage({
   recipeId,
-  header,
+  eyebrow,
+  aside,
+  parent,
 }: {
   recipeId: string;
-  header?: ReactNode;
+  eyebrow?: ReactNode;
+  aside?: ReactNode;
+  parent?: string;
 }) {
   const data = await loadRecipePage(recipeId);
   const result = unwrapResult(data.recipe, "Recipe");
   if (!result.ok) {
     if (isNotFound(result.error)) notFound();
-    return <p className="type-body text-destructive">{result.error.message}</p>;
+    return (
+      <ErrorState
+        title="Couldn't open this recipe"
+        reason={result.error.message}
+      />
+    );
   }
 
   const group = result.data.recipeGroup ?? null;
@@ -71,22 +82,15 @@ export async function RecipePage({
   };
 
   return (
-    <>
-      {header}
-      <RecipeDetails
-        // The recipe is the page's heading unless a header above it (a
-        // group's name) already is.
-        titleLevel={header === undefined ? "h1" : "h2"}
-        recipe={recipe}
-        viewerId={data.me?.id ?? null}
-        isCanonical={
-          group !== null &&
-          group.recipeCount > 1 &&
-          group.canonicalRecipeId === recipe.id
-        }
-        reviewsEndCursor={result.data.reviews.pageInfo.endCursor ?? null}
-        reviewsHasNextPage={result.data.reviews.pageInfo.hasNextPage}
-      />
-    </>
+    <RecipeDetails
+      titleLevel="h1"
+      eyebrow={eyebrow}
+      aside={aside}
+      parent={parent}
+      recipe={recipe}
+      viewerId={data.me?.id ?? null}
+      reviewsEndCursor={result.data.reviews.pageInfo.endCursor ?? null}
+      reviewsHasNextPage={result.data.reviews.pageInfo.hasNextPage}
+    />
   );
 }

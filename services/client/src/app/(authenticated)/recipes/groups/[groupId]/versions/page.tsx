@@ -56,7 +56,7 @@ export default async function RecipeVersionsPage({
   const result = unwrapResult(data.recipeGroup, "RecipeGroup");
   if (!result.ok) {
     if (isNotFound(result.error)) notFound();
-    return <p className="type-body text-destructive">{result.error.message}</p>;
+    return <p className="t-body text-destructive">{result.error.message}</p>;
   }
 
   const recipeGroup = result.data;
@@ -73,7 +73,7 @@ export default async function RecipeVersionsPage({
     <div className="mx-auto w-full max-w-[1400px]">
       {/* Page Header */}
       <div className="mb-8">
-        <p className="mb-2 type-callout">
+        <p className="mb-2 t-cap">
           <Link href="/recipes" underline="always">
             Recipe Groups
           </Link>
@@ -84,21 +84,19 @@ export default async function RecipeVersionsPage({
           {" > Versions"}
         </p>
 
-        <h1 className="mb-2 type-large-title">
-          {recipeGroup.name} - All Versions
-        </h1>
+        <h1 className="mb-2 t-title">{recipeGroup.name} - All Versions</h1>
 
         {recipeGroup.description && (
-          <p className="mb-4 type-body text-ink-2">{recipeGroup.description}</p>
+          <p className="mb-4 t-body text-ink-2">{recipeGroup.description}</p>
         )}
 
-        <p className="type-body text-ink-2">
+        <p className="t-body text-ink-2">
           Compare all {recipeGroup.recipeCount} versions of this recipe and vote
           for your favorite. The community's preferred version is shown as the
           canonical recipe.
         </p>
         {hidden > 0 && (
-          <p className="mt-2 type-callout text-ink-3">
+          <p className="mt-2 t-cap text-ink-3">
             Showing the top {recipes.length}; {hidden} more are not listed.
           </p>
         )}

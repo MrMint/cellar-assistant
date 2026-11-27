@@ -44,7 +44,7 @@ function RowBody({
       </span>
       <span className="flex min-w-0 flex-1 flex-col">
         {title}
-        <span className="type-footnote">{description}</span>
+        <span className="t-cap text-ink-3">{description}</span>
       </span>
       <ChevronRight
         aria-hidden
@@ -100,7 +100,7 @@ export function NewRecipeSheet({
               title={
                 <label
                   htmlFor={inputId}
-                  className="type-headline text-ink-1 after:absolute after:inset-0 after:content-['']"
+                  className="t-head text-ink-1 after:absolute after:inset-0 after:content-['']"
                 >
                   Photo
                 </label>
@@ -118,7 +118,7 @@ export function NewRecipeSheet({
                   href="/recipes/new?from=paste"
                   overlay
                   underline="none"
-                  className="type-headline text-ink-1"
+                  className="t-head text-ink-1"
                   onClick={() => onOpenChange(false)}
                 >
                   Paste
@@ -136,7 +136,7 @@ export function NewRecipeSheet({
                 href="/recipes/new?from=type"
                 overlay
                 underline="none"
-                className="type-headline text-ink-1"
+                className="t-head text-ink-1"
                 onClick={() => onOpenChange(false)}
               >
                 Type

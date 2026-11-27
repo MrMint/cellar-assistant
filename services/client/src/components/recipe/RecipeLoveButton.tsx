@@ -2,12 +2,10 @@
 
 import { useEffect, useState, useTransition } from "react";
 import { useMutation } from "urql";
-import { IconButton } from "@/components/app/IconButton";
-import { Love } from "@/components/app/icons";
 import { notify } from "@/components/app/notify";
+import { Heart } from "@/components/app/parts/Heart";
 import { SetRecipeLoveMutation } from "@/components/bar/queries";
 import { unwrapResult } from "@/lib/api/result";
-import { cn } from "@/lib/utils";
 
 /**
  * D9: **Love replaces the recipe heart.** The old heart beside the title was
@@ -64,11 +62,14 @@ export function RecipeLoveButton({
     });
   };
 
+  // The kit's Heart (KIT § 2): it fires its own feedback, success on a Love.
   return (
-    <IconButton
-      onClick={toggle}
+    <Heart
+      on={isLoved}
+      onToggle={toggle}
+      size="page"
       disabled={isPending}
-      aria-label={
+      label={
         name === undefined
           ? isLoved
             ? "Loved — tap to remove"
@@ -77,16 +78,7 @@ export function RecipeLoveButton({
             ? `${name}: loved — tap to remove`
             : `Love ${name}`
       }
-      aria-pressed={isLoved}
-      className={cn("shrink-0", className)}
-    >
-      <Love
-        aria-hidden
-        className={cn(
-          "size-6 transition-transform duration-(--ca-dur-short) ease-standard motion-reduce:transition-none",
-          isLoved ? "scale-110 fill-brand text-brand" : "text-ink-2",
-        )}
-      />
-    </IconButton>
+      className={className}
+    />
   );
 }

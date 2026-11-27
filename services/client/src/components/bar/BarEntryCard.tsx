@@ -21,11 +21,11 @@ function BarEntryRow({ summary }: { summary: string }) {
           href="/recipes/bar"
           overlay
           underline="none"
-          className="type-headline text-ink-1"
+          className="t-head text-ink-1"
         >
           What can I make?
         </Link>
-        <span className="truncate type-footnote">{summary}</span>
+        <span className="truncate t-cap text-ink-3">{summary}</span>
       </div>
       <ChevronRight aria-hidden className="size-5 text-ink-3" />
     </div>

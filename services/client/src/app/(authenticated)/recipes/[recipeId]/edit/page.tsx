@@ -26,7 +26,7 @@ export default async function EditRecipePage({
   const result = unwrapResult(data.recipe, "Recipe");
   if (!result.ok) {
     if (isNotFound(result.error)) notFound();
-    return <p className="type-body text-destructive">{result.error.message}</p>;
+    return <p className="t-body text-destructive">{result.error.message}</p>;
   }
   const recipe = result.data;
   const viewer = data.me?.id ?? null;
@@ -38,7 +38,7 @@ export default async function EditRecipePage({
     recipe.instructions.pageInfo.hasNextPage
   ) {
     return (
-      <p className="type-body text-ink-2">
+      <p className="t-body text-ink-2">
         This recipe has more ingredients or steps than the editor can hold, so
         it can't be edited here without losing some of them.
       </p>

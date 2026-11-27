@@ -75,7 +75,7 @@ export default async function RecipesPage({
     <Page wide>
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex min-h-11 items-center">
-          <h1 className="type-headline truncate">Bar</h1>
+          <h1 className="t-head truncate">Bar</h1>
         </div>
         <NewRecipeButton className="sm:ml-auto" />
       </div>
@@ -100,7 +100,7 @@ export default async function RecipesPage({
       </Suspense>
 
       <section aria-labelledby="all-recipes" className="flex flex-col gap-3">
-        <h2 id="all-recipes" className="px-1 type-overline text-ink-3">
+        <h2 id="all-recipes" className="px-1 t-micro text-ink-3">
           All recipes
         </h2>
         {result.ok ? (
@@ -112,7 +112,7 @@ export default async function RecipesPage({
             initialTotalCount={result.data.totalCount ?? null}
           />
         ) : (
-          <p className="type-body text-destructive">
+          <p className="t-body text-destructive">
             Couldn't load recipes: {result.error.message}
           </p>
         )}

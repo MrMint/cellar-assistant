@@ -149,11 +149,11 @@ function ComposerChoices({ aiOffered }: { aiOffered: boolean }) {
                   href={href}
                   overlay
                   underline="none"
-                  className="type-headline text-ink-1"
+                  className="t-head text-ink-1"
                 >
                   {title}
                 </Link>
-                <span className="type-footnote">{line}</span>
+                <span className="t-cap text-ink-3">{line}</span>
               </span>
               <ChevronRight
                 aria-hidden
@@ -165,7 +165,7 @@ function ComposerChoices({ aiOffered }: { aiOffered: boolean }) {
         ))}
       </ul>
       {!aiOffered && (
-        <p className="px-1 type-footnote">
+        <p className="px-1 t-cap text-ink-3">
           Reading a recipe from a photo or pasted text isn't available here.
         </p>
       )}
@@ -280,7 +280,7 @@ function PhotoComposer() {
                 className="size-10 text-ink-2"
                 strokeWidth={ICON_STROKE}
               />
-              <p className="type-body text-ink-2">
+              <p className="t-body text-ink-2">
                 A recipe card, a book page or a screenshot. One recipe per
                 photo.
               </p>
@@ -417,7 +417,7 @@ function ReadingProgress({
       className="flex flex-col gap-2 rounded-lg bg-surface-1 p-4"
       aria-live="polite"
     >
-      <div className="flex items-center justify-between type-callout">
+      <div className="flex items-center justify-between t-cap">
         <span className="flex items-center gap-2">
           <AI aria-hidden className="size-4 text-ai" />
           {label}

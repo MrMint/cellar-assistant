@@ -2,14 +2,8 @@
 
 import { isEmpty, isNotNil, not } from "ramda";
 import { useEffect } from "react";
-import { RatingDisplay } from "@/components/app/RatingInput";
+import { Stars } from "@/components/app/parts/Stars";
 import { UserAvatar } from "@/components/app/UserAvatar";
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from "@/components/ui/accordion";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { readFragment } from "@/lib/api/graphql";
@@ -30,6 +24,8 @@ export type RecipeReviewsProps = {
   recipeId?: string;
   endCursor?: string | null;
   hasNextPage?: boolean;
+  /** The viewer: their own review is drawn by `AddRecipeReview`, not here. */
+  viewerId?: string | null;
 };
 
 /**
@@ -50,6 +46,7 @@ export const RecipeReviews = ({
   recipeId,
   endCursor = null,
   hasNextPage = false,
+  viewerId = null,
 }: RecipeReviewsProps) => {
   const list = usePagedConnection({
     query: RecipeReviewsPageQuery,
@@ -75,67 +72,61 @@ export const RecipeReviews = ({
     replace({ rows: reviews, endCursor, hasNextPage });
   }, [replace, reviews, endCursor, hasNextPage]);
 
-  const all = list.rows;
+  const all = list.rows.filter((review) => review.userId !== viewerId);
   const hasReviews = not(isEmpty(all));
 
+  if (!hasReviews && !list.canLoadMore && list.failure === null) return null;
+
   return (
-    <section className="flex flex-col overflow-hidden rounded-lg bg-surface-1">
-      <p className="px-4 pt-4 type-headline">Reviews:</p>
-      {!hasReviews && (
-        <p className="p-4 text-center type-body">
-          No reviews yet! Want to add one?
-        </p>
-      )}
-      {hasReviews && (
-        <Accordion type="multiple" className="divide-y divide-line">
-          {all.map((x) => (
-            <AccordionItem key={x.id} value={x.id} className="border-b-0">
-              <AccordionTrigger className="min-h-11 items-center px-4 py-3 hover:no-underline hover:bg-accent/50 [&>svg]:translate-y-0">
-                <span className="flex min-w-0 flex-1 items-center gap-3">
-                  <UserAvatar
-                    avatarUrl={x.user.avatarUrl}
-                    displayName={x.user.displayName}
-                  />
-                  <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-                    <span className="truncate type-headline">
-                      {x.user.displayName}
-                    </span>
-                    {/* A text-only review has no score: no stars, rather than five empty ones reading as zero. */}
-                    {x.score !== undefined && (
-                      <RatingDisplay value={x.score} size="md" />
-                    )}
-                  </span>
-                  {/* One line beside the stars: "Oct 8, 2026" wrapped at 390px. */}
-                  <span className="shrink-0 whitespace-nowrap type-callout text-ink-2">
-                    <Timestamp iso={x.created_at} precision="date" />
-                  </span>
-                </span>
-              </AccordionTrigger>
-              {isNotNil(x.text) && (
-                <AccordionContent className="px-4 type-body">
-                  <RichTextDisplay text={x.text} />
-                </AccordionContent>
-              )}
-            </AccordionItem>
-          ))}
-        </Accordion>
-      )}
-      {list.canLoadMore && recipeId !== undefined && (
-        <Button
-          variant="ghost"
-          disabled={list.status === "loadingMore"}
-          aria-busy={list.status === "loadingMore" || undefined}
-          onClick={() => void list.loadMore()}
+    <ul data-slot="recipe-reviews" className="m-0 flex list-none flex-col p-0">
+      {all.map((x) => (
+        <li
+          key={x.id}
+          className="flex flex-col gap-1 border-hair border-b py-3 last:border-b-0"
         >
-          {list.status === "loadingMore" && <Spinner aria-hidden />}
-          Show more reviews
-        </Button>
+          <div className="flex min-h-11 items-center gap-3">
+            <UserAvatar
+              avatarUrl={x.user.avatarUrl}
+              displayName={x.user.displayName}
+            />
+            <span className="flex min-w-0 flex-1 flex-col">
+              <span className="t-head truncate text-ink">
+                {x.user.displayName}
+              </span>
+              <span className="t-cap text-ink-2">
+                <Timestamp iso={x.created_at} precision="date" />
+              </span>
+            </span>
+            {/* A text-only review has no score: no stars, rather than five
+                empty ones reading as zero. Another person's stars are never
+                gold (KIT § 2 Stars). */}
+            {x.score !== undefined && (
+              <Stars value={x.score} tone="other" size="md" />
+            )}
+          </div>
+          {isNotNil(x.text) && (
+            <div className="t-body text-ink-2">
+              <RichTextDisplay text={x.text} />
+            </div>
+          )}
+        </li>
+      ))}
+      {list.canLoadMore && recipeId !== undefined && (
+        <li>
+          <Button
+            variant="ghost"
+            disabled={list.status === "loadingMore"}
+            aria-busy={list.status === "loadingMore" || undefined}
+            onClick={() => void list.loadMore()}
+          >
+            {list.status === "loadingMore" && <Spinner aria-hidden />}
+            Show more reviews
+          </Button>
+        </li>
       )}
       {list.failure !== null && (
-        <p className="px-4 pb-4 type-callout text-destructive">
-          {list.failure.message}
-        </p>
+        <li className="t-cap py-2 text-danger">{list.failure.message}</li>
       )}
-    </section>
+    </ul>
   );
 };

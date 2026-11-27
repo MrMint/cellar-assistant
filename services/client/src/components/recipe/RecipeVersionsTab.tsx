@@ -113,7 +113,7 @@ export const RecipeVersionsTab = ({
         </Alert>
       )}
       {canonicalMoved && (
-        <p className="mb-4 type-callout text-success">
+        <p className="mb-4 t-cap text-success">
           That changed which version the community prefers.
         </p>
       )}
@@ -131,12 +131,12 @@ export const RecipeVersionsTab = ({
               className="h-auto min-h-11 flex-none justify-start px-3 py-2 text-left"
             >
               <span className="flex flex-col items-start gap-0.5">
-                <span className="type-callout font-semibold">
+                <span className="t-cap font-semibold">
                   {recipe.name}
                   {recipe.version && ` v${recipe.version}`}
                 </span>
                 <span className="flex items-center gap-2">
-                  <span className="tabular type-footnote text-ink-2">
+                  <span className="tabular t-cap text-ink-2">
                     Score: {formatNetScore(recipe.netScore)}
                   </span>
                   {recipe.isCanonical && <CanonicalRecipeBadge size="sm" />}
@@ -163,7 +163,7 @@ export const RecipeVersionsTab = ({
                     />
                   ) : (
                     <div className="flex size-full items-center justify-center bg-surface-2 text-ink-3">
-                      <p className="type-body">No Image</p>
+                      <p className="t-body">No Image</p>
                     </div>
                   )}
                 </div>
@@ -172,7 +172,7 @@ export const RecipeVersionsTab = ({
                 <section className="flex flex-col gap-4 rounded-lg bg-surface-1 p-4">
                   {recipe.isCanonical && <CanonicalRecipeBadge size="lg" />}
 
-                  <p className="text-center type-callout font-semibold">
+                  <p className="text-center t-cap font-semibold">
                     Community Vote
                   </p>
 
@@ -191,17 +191,17 @@ export const RecipeVersionsTab = ({
                     onError={setError}
                   />
 
-                  <p className="tabular text-center type-footnote text-ink-2">
+                  <p className="tabular text-center t-cap text-ink-2">
                     Net Score: {formatNetScore(recipe.netScore)}
                   </p>
                 </section>
 
                 {/* Recipe Metadata */}
                 <section className="flex flex-col gap-2 rounded-lg bg-surface-1 p-4">
-                  <p className="type-callout font-semibold">Recipe Info</p>
+                  <p className="t-cap font-semibold">Recipe Info</p>
 
                   {recipe.difficulty_level && (
-                    <div className="flex items-center gap-2 type-callout">
+                    <div className="flex items-center gap-2 t-cap">
                       <span className="font-bold">Difficulty:</span>
                       <span>
                         {getDifficultyDisplay(recipe.difficulty_level)}
@@ -210,20 +210,20 @@ export const RecipeVersionsTab = ({
                   )}
 
                   {recipe.prep_time_minutes && (
-                    <div className="flex items-center gap-2 type-callout">
+                    <div className="flex items-center gap-2 t-cap">
                       <Time aria-hidden className="size-4" />
                       <span>{recipe.prep_time_minutes} minutes</span>
                     </div>
                   )}
 
                   {recipe.serving_size && (
-                    <div className="flex items-center gap-2 type-callout">
+                    <div className="flex items-center gap-2 t-cap">
                       <People aria-hidden className="size-4" />
                       <span>Serves {recipe.serving_size}</span>
                     </div>
                   )}
 
-                  <div className="flex items-center gap-2 type-callout">
+                  <div className="flex items-center gap-2 t-cap">
                     <Person aria-hidden className="size-4" />
                     <span>
                       By {recipe.created_by_user?.displayName || "Unknown"}
@@ -231,7 +231,7 @@ export const RecipeVersionsTab = ({
                   </div>
 
                   {recipe.created_at !== null && (
-                    <p className="type-footnote text-ink-2">
+                    <p className="t-cap text-ink-2">
                       Created{" "}
                       <Timestamp iso={recipe.created_at} precision="date" />
                     </p>
@@ -244,16 +244,14 @@ export const RecipeVersionsTab = ({
                 {/* Recipe Description */}
                 {recipe.description && (
                   <section className="rounded-lg bg-surface-1 p-4">
-                    <p className="mb-2 type-callout font-semibold">
-                      Description
-                    </p>
-                    <p className="type-body">{recipe.description}</p>
+                    <p className="mb-2 t-cap font-semibold">Description</p>
+                    <p className="t-body">{recipe.description}</p>
                   </section>
                 )}
 
                 {/* Ingredients */}
                 <section className="rounded-lg bg-surface-1 p-4">
-                  <p className="mb-4 type-callout font-semibold">Ingredients</p>
+                  <p className="mb-4 t-cap font-semibold">Ingredients</p>
                   <RecipeIngredientList
                     ingredients={recipe.ingredients}
                     showAvailability={false}
@@ -262,25 +260,21 @@ export const RecipeVersionsTab = ({
 
                 {/* Instructions */}
                 <section className="rounded-lg bg-surface-1 p-4">
-                  <p className="mb-4 type-callout font-semibold">
-                    Instructions
-                  </p>
+                  <p className="mb-4 t-cap font-semibold">Instructions</p>
                   <div className="flex flex-col gap-4">
                     {recipe.instructions.map((instruction) => (
                       <div key={instruction.id}>
-                        <p className="mb-1 type-callout font-semibold">
+                        <p className="mb-1 t-cap font-semibold">
                           Step {instruction.step_number}
                           {instruction.time_minutes && (
-                            <span className="ml-2 font-normal type-footnote text-ink-2">
+                            <span className="ml-2 font-normal t-cap text-ink-2">
                               ({instruction.time_minutes}min)
                             </span>
                           )}
                         </p>
-                        <p className="type-body">
-                          {instruction.instruction_text}
-                        </p>
+                        <p className="t-body">{instruction.instruction_text}</p>
                         {instruction.equipment_needed && (
-                          <p className="mt-1 type-footnote text-ink-2">
+                          <p className="mt-1 t-cap text-ink-2">
                             Equipment: {instruction.equipment_needed}
                           </p>
                         )}
