@@ -56,13 +56,15 @@ test("creates a tier list", async ({ api, primary }) => {
 
   await primary.goto("/tier-lists/add");
   await primary.getByLabel("Name").fill(listName);
-  // The old form's default list type is Places; this list ranks wines.
-  await primary.getByRole("combobox", { name: "List Type" }).click();
-  await primary.getByRole("option", { name: "Wines" }).click();
+  // The form's default kind is Places; this list ranks wines.
+  await primary
+    .getByRole("group", { name: "Kind" })
+    .getByRole("button", { name: "Wines" })
+    .click();
   // X16: offered only to an account that has rated a wine; this spec wants
   // its list empty.
   const fromRatings = primary.getByRole("switch", {
-    name: /Start with your ratings/,
+    name: /From my ratings/,
   });
   if (ratedWines > 0) {
     await expect(fromRatings).toBeChecked({ timeout: 15_000 });

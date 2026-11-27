@@ -8,6 +8,7 @@
  * list page's stream owns and which carries none of the strip or the bar.
  */
 
+import type { SectionKey } from "@/components/common/CollectionSection";
 import { ActorErrorFieldsFragment } from "@/lib/api/errors";
 import { graphql, type ResultOf } from "@/lib/api/graphql";
 
@@ -81,14 +82,17 @@ export const ListCardFragment = graphql(`
 
 export type ListCardData = ResultOf<typeof ListCardFragment>;
 
+/**
+ * A section's page of the index. `first` is a literal on purpose: the API
+ * costs a `first: $first` at `MAX_PAGE_SIZE` (100), and each card nests up
+ * to 112 rows (`bands`, `top` and their photos), so a variable page blew the
+ * 10,000-row limit (`row-cost.test.ts`). Yours and From friends read 20 a
+ * page, Discover 6 (`sectionPageSize`).
+ */
 export const ListsIndexQuery = graphql(
   `
-    query ListsIndex(
-      $first: Int!
-      $after: String
-      $section: CollectionSection
-    ) {
-      myTierLists(first: $first, after: $after, section: $section) {
+    query ListsIndex($after: String, $section: CollectionSection) {
+      myTierLists(first: 20, after: $after, section: $section) {
         __typename
         ... on TierListConnection {
           totalCount
@@ -109,6 +113,35 @@ export const ListsIndexQuery = graphql(
   `,
   [ListCardFragment, ActorErrorFieldsFragment],
 );
+
+export const ListsDiscoverQuery = graphql(
+  `
+    query ListsDiscover($after: String, $section: CollectionSection) {
+      myTierLists(first: 6, after: $after, section: $section) {
+        __typename
+        ... on TierListConnection {
+          totalCount
+          pageInfo {
+            hasNextPage
+            endCursor
+          }
+          edges {
+            cursor
+            node {
+              ...ListCard
+            }
+          }
+        }
+        ...ActorErrorFields
+      }
+    }
+  `,
+  [ListCardFragment, ActorErrorFieldsFragment],
+);
+
+/** The index's document for one section. */
+export const listsIndexQueryFor = (section: SectionKey) =>
+  section === "DISCOVER" ? ListsDiscoverQuery : ListsIndexQuery;
 
 /**
  * One list's entries, for a rank: where an entry stands after an add (the
@@ -219,14 +252,16 @@ export const ListShareQuery = graphql(
 /**
  * Every list the viewer owns, a page at a time (`useAllMyTierLists`): the
  * Add to a list sheet's rows ("My beers · 100 beers") and the map's filter.
+ * 50 a page, as a literal: each list nests its first 100 bands, and a
+ * `$first` would be costed at 100 × 101 rows, over the API's 10,000.
  */
 export const MyListOptionsPageQuery = graphql(
   `
-    query MyListOptionsPage($first: Int!, $after: String) {
+    query MyListOptionsPage($after: String) {
       me {
         id
       }
-      myTierLists(first: $first, after: $after, section: MINE) {
+      myTierLists(first: 50, after: $after, section: MINE) {
         __typename
         ... on TierListConnection {
           pageInfo {

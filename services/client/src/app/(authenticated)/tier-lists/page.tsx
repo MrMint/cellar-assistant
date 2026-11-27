@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import type { SectionKey } from "@/components/common/CollectionSection";
-import { listsPageSize } from "@/components/tier-list/lists/model";
-import { ListsIndexQuery } from "@/components/tier-list/lists/queries";
+import { listsIndexQueryFor } from "@/components/tier-list/lists/queries";
 import {
   type TierListSectionSeed,
   TierListsPage,
@@ -22,8 +21,7 @@ export const dynamic = "force-dynamic";
 const SECTIONS: readonly SectionKey[] = ["MINE", "FRIENDS", "DISCOVER"];
 
 async function sectionSeed(section: SectionKey): Promise<TierListSectionSeed> {
-  const data = await apiServerQuery(ListsIndexQuery, {
-    first: listsPageSize(section),
+  const data = await apiServerQuery(listsIndexQueryFor(section), {
     after: null,
     section,
   });
