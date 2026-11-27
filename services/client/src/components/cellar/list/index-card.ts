@@ -5,9 +5,8 @@ import {
 import { type FragmentOf, readFragment } from "@/lib/api/graphql";
 import type { LabelPlateData } from "@/lib/items/label-plate";
 import { canAddToCellar, cellarGroupCell } from "../adapter";
-import { CellarCardFragment } from "../fragments";
-import type { CellarIndexCardFragment } from "./fragments";
-import { KIND_ORDER } from "./model";
+import { CellarCardFragment, type CellarIndexCardFragment } from "../fragments";
+import { bottlesLabel, KIND_ORDER } from "./model";
 
 /** One square of a card's mosaic: the bottle's photo, else its plate. */
 export type MosaicCell = {
@@ -91,7 +90,8 @@ export const indexCardFromNode = (
 
 /** "240 bottles · 20 open"; "Empty" for none; no "0 open". */
 export const cardCountLine = (card: Pick<IndexCard, "bottles" | "open">) => {
-  if (card.bottles === 0) return "Empty";
-  const bottles = `${card.bottles.toLocaleString("en-US")} ${card.bottles === 1 ? "bottle" : "bottles"}`;
-  return card.open > 0 ? `${bottles} · ${card.open} open` : bottles;
+  const bottles = bottlesLabel(card.bottles);
+  return card.bottles > 0 && card.open > 0
+    ? `${bottles} · ${card.open} open`
+    : bottles;
 };

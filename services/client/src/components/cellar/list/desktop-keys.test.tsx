@@ -45,6 +45,13 @@ mock.module("next/image", () => ({
 mock.module("urql", () => ({
   useQuery: () => [{ data: undefined, fetching: false }, () => {}],
   useMutation: () => [{}, async () => ({ data: undefined })],
+  useClient: () => ({}),
+}));
+// C2's pane, as a stand-in: this test is about the list's keys, not its body.
+mock.module("@/components/item/ItemPane", () => ({
+  ItemPane: ({ itemId }: { itemId: string }) => (
+    <div data-testid="item-pane" data-item={itemId} />
+  ),
 }));
 
 // happy-dom's Web Animations reject on cancel: motion jumps to its end.

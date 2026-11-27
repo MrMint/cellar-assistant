@@ -78,9 +78,7 @@ const STRETCHED =
 
 export const BrandCard = ({ brand, href, onClick }: BrandCardProps) => {
   const handleClick = isNotNil(onClick) ? () => onClick(brand.id) : undefined;
-  const title = (
-    <span className="t-title block truncate">{brand.name}</span>
-  );
+  const title = <span className="t-title block truncate">{brand.name}</span>;
 
   return (
     <div
@@ -172,14 +170,10 @@ function CardText({
     <div className="flex flex-col gap-1 p-4">
       {children}
       {isNotNil(brand.description) && (
-        <p className="t-body line-clamp-2 text-ink">
-          {brand.description}
-        </p>
+        <p className="t-body line-clamp-2 text-ink">{brand.description}</p>
       )}
       {isNotNil(brand.parent_brand) && (
-        <p className="t-body text-ink-2">
-          Part of {brand.parent_brand.name}
-        </p>
+        <p className="t-body text-ink-2">Part of {brand.parent_brand.name}</p>
       )}
     </div>
   );

@@ -4,6 +4,7 @@ import { Link } from "@/components/app/Link";
 import { UserAvatar } from "@/components/app/UserAvatar";
 import { feedback } from "@/lib/feedback";
 import { cardCountLine, type IndexCard, type MosaicCell } from "./index-card";
+import { formatCount } from "./model";
 
 const MOSAIC_CELLS = 4;
 
@@ -119,7 +120,7 @@ export function CellarIndexCard({
           >
             {card.kinds.map((kind) => (
               <span key={kind.type} className="tabular">
-                {kind.count.toLocaleString("en-US")} {kind.label}
+                {formatCount(kind.count)} {kind.label}
               </span>
             ))}
           </p>

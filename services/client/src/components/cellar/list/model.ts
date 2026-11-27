@@ -421,6 +421,9 @@ export const shelvesOf = (bottles: readonly ListBottle[]): Shelf[] => {
 
 const COUNT = new Intl.NumberFormat("en-US");
 
+/** "2,000": a count with its thousands grouped, the same on server and client. */
+export const formatCount = (count: number): string => COUNT.format(count);
+
 /**
  * "240 bottles", "1 bottle", "Empty" (lot-cellars-shelves shelf-empty), or
  * "2,000+ bottles" when the read was capped.

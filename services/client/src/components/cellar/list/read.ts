@@ -12,8 +12,8 @@ import { cellarBottleHref, cellarGroupCell } from "../adapter";
 import {
   CellarBottleCardFragment,
   CellarItemGroupCardFragment,
+  CellarListGroupFragment,
 } from "../fragments";
-import { CellarListGroupFragment } from "./fragments";
 import type { ListBottle } from "./model";
 
 /** The owner's note as plain words, or null. */

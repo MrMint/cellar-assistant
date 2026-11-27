@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { type CellarSectionSeed, Cellars } from "@/components/cellar/Cellars";
-import { GetCellarIndexQuery } from "@/components/cellar/list/fragments";
+import { GetCellarIndexQuery } from "@/components/cellar/fragments";
 import { sectionPageSize } from "@/components/cellar-api/pagination";
 import type { SectionKey } from "@/components/common/CollectionSection";
 import { ViewerQuery } from "@/lib/api/cellars";

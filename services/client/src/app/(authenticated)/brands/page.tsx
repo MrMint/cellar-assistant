@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { brandsRedirectHref } from "@/components/brand/redirect";
 
@@ -6,6 +7,8 @@ import { brandsRedirectHref } from "@/components/brand/redirect";
  * through search, so this opens `/search` with the Brands section, carrying
  * the old `?q=` term. A brand's own page stays at `/brands/[brandId]`.
  */
+export const metadata: Metadata = { title: "Brands" };
+
 export const dynamic = "force-dynamic";
 
 export default async function BrandsPage({

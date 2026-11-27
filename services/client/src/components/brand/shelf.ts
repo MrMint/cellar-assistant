@@ -1,3 +1,4 @@
+import { formatCount } from "@/components/cellar/list/model";
 import {
   type ApiItemType,
   itemTypeLabel,
@@ -90,6 +91,6 @@ export const brandSubtitle = (
   const kinds = Array.from(new Set(tiles.map((t) => t.type))).map(
     itemTypeLabel,
   );
-  const drinks = `${total.toLocaleString("en-US")} ${total === 1 ? "drink" : "drinks"}`;
+  const drinks = `${formatCount(total)} ${total === 1 ? "drink" : "drinks"}`;
   return [...kinds.slice(0, 2), drinks].join(" · ");
 };

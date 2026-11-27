@@ -74,7 +74,7 @@ export const EditCellarClient = ({ cellar, viewer }: EditCellarClientProps) => {
           coOwners: cellar.coOwners,
         })}
         onSubmitted={handleSubmitted}
-        onCancel={() => router.back()}
+        onCancel={() => navigate.back()}
       />
       {isCreator && (
         <DeleteCellarButton

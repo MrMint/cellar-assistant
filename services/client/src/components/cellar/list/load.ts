@@ -2,7 +2,7 @@ import type { ResultOf } from "@/lib/api/graphql";
 import { type ApiFailure, unwrapResult } from "@/lib/api/result";
 import { apiServerQuery } from "@/lib/api/urql-server";
 import { CELLAR_STATUSES, type CellarStatus } from "../cellarItemsQuery";
-import { CellarNeedsDetailsCountQuery, GetCellarListQuery } from "./fragments";
+import { CellarNeedsDetailsCountQuery, GetCellarListQuery } from "../fragments";
 import type { ListBottle } from "./model";
 import { listBottleFromNode } from "./read";
 

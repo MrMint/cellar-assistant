@@ -6,6 +6,7 @@ import { useMutation } from "urql";
 import { Delete } from "@/components/app/icons";
 import { notify } from "@/components/app/notify";
 import { useNavigate } from "@/components/app/useNavigate";
+import { formatCount } from "@/components/cellar/list/model";
 import { Button } from "@/components/ui/button";
 import { CreateCellarMutation, DeleteCellarMutation } from "@/lib/api/cellars";
 import { type ApiFailure, unwrapResult } from "@/lib/api/result";
@@ -17,7 +18,7 @@ type Privacy = "FRIENDS" | "PRIVATE" | "PUBLIC";
 export const deleteRefusal = (bottles: number): string | null =>
   bottles <= 0
     ? null
-    : `Holds ${bottles.toLocaleString("en-US")} ${bottles === 1 ? "bottle" : "bottles"}. Empty it first.`;
+    : `Holds ${formatCount(bottles)} ${bottles === 1 ? "bottle" : "bottles"}. Empty it first.`;
 
 /**
  * Delete cellar (lot-cellars-shelves-02, -09). The brief's rule for toast or

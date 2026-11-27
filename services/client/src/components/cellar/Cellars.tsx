@@ -19,11 +19,8 @@ import { type Page, pageOf } from "@/lib/paging/paged-connection";
 import { usePagedConnection } from "@/lib/paging/use-paged-connection";
 import { useScrollPositionRestore } from "@/utilities/hooks";
 import { CellarSegments } from "./CellarSegments";
+import { type CellarIndexCardFragment, GetCellarIndexQuery } from "./fragments";
 import { CellarIndexCard } from "./list/CellarIndexCard";
-import {
-  type CellarIndexCardFragment,
-  GetCellarIndexQuery,
-} from "./list/fragments";
 import { type IndexCard, indexCardFromNode } from "./list/index-card";
 
 type CellarEdge = {
