@@ -24,6 +24,7 @@ import {
   failureFromTransport,
   unwrapResult,
 } from "@/lib/api/result";
+import { feedback } from "@/lib/feedback";
 import { cn } from "@/lib/utils";
 import {
   CreateRecipeMutation,
@@ -74,9 +75,10 @@ const TYPE_OPTIONS = [
  *
  * - **A draft's ingredient matches are proposals.** Each line the search
  *   matched to a catalog item carries the AI mark and two buttons, Keep and
- *   Not this; Save waits until none is left (`pendingMatches`). "Keep all" is
- *   one explicit tap for the lot. Nothing the model chose is published by
- *   the model (D6, D22).
+ *   Not this. Save is never blocked by them (lead's ruling): it keeps its
+ *   verb with an "n to check" chip beside it, and an unchecked match saves
+ *   as the words, never the model's item (`ingredientInputs`). "Keep all" is
+ *   one explicit tap for the lot (D6, D22).
  * - **Private first.** A new recipe starts Private; the control says who
  *   sees it in a sentence, and only Public has a share link.
  * - Saving is three writes in order — the recipe, its ingredients, its
@@ -390,7 +392,7 @@ export function RecipeEditor(props: RecipeEditorProps) {
               <li key={step.key} className="flex items-start gap-2">
                 <span
                   aria-hidden
-                  className="tabular mt-2.5 inline-flex size-6 shrink-0 items-center justify-center rounded-full bg-surface-3 font-semibold text-ink-1 text-xs"
+                  className="tabular mt-2.5 inline-flex size-6 shrink-0 items-center justify-center rounded-full bg-raised t-micro text-ink"
                 >
                   {index + 1}
                 </span>
@@ -415,15 +417,16 @@ export function RecipeEditor(props: RecipeEditorProps) {
                   type="button"
                   variant="ghost"
                   aria-label={`Remove step ${index + 1}`}
-                  onClick={() =>
+                  onClick={() => {
+                    feedback("tick");
                     setForm((current) => ({
                       ...current,
                       steps:
                         current.steps.length === 1
                           ? [emptyStep()]
                           : current.steps.filter((row) => row.key !== step.key),
-                    }))
-                  }
+                    }));
+                  }}
                 >
                   <Delete aria-hidden />
                 </IconButton>
@@ -481,7 +484,7 @@ export function RecipeEditor(props: RecipeEditorProps) {
         {shownProblems.length > 0 && (
           <ul
             aria-live="polite"
-            className="flex flex-col gap-1 t-cap text-destructive"
+            className="flex flex-col gap-1 t-cap text-danger"
           >
             {shownProblems.map((problem) => (
               <li key={problem.message}>{problem.message}</li>
@@ -508,6 +511,17 @@ export function RecipeEditor(props: RecipeEditorProps) {
                 ? "Save recipe"
                 : "Save changes"}
           </Button>
+          {/* Lead's ruling: unchecked AI matches never block Save; the
+              button keeps its verb and this says how many are left. */}
+          {pending > 0 && (
+            <span
+              data-slot="to-check"
+              className="t-cap inline-flex h-8 shrink-0 items-center gap-1 rounded-full bg-ai/15 px-3 text-ai"
+            >
+              <AI aria-hidden className="size-3.5" />
+              {pending} to check
+            </span>
+          )}
         </ActionBar>
       </form>
 
@@ -521,6 +535,7 @@ export function RecipeEditor(props: RecipeEditorProps) {
             : "Its reviews, votes and Loves go with it."
         }
         confirmLabel={isDraft ? "Discard" : "Delete"}
+        cancelLabel="Keep it"
         pending={deleting}
         onConfirm={() => void remove()}
       >
@@ -551,7 +566,7 @@ function IngredientRow({
   const label = line.name.trim() === "" ? `ingredient ${position}` : line.name;
   const suggested = line.match?.state === "suggested";
   return (
-    <li className="flex flex-col gap-2 rounded-lg bg-surface-1 p-3">
+    <li className="flex flex-col gap-2 rounded-lg border border-edge bg-card p-3">
       <div className="flex items-center gap-2">
         <Input
           aria-label={`Amount of ${label}`}
@@ -581,7 +596,10 @@ function IngredientRow({
           type="button"
           variant="ghost"
           aria-label={`Remove ${label}`}
-          onClick={onRemove}
+          onClick={() => {
+            feedback("tick");
+            onRemove();
+          }}
         >
           <Delete aria-hidden />
         </IconButton>

@@ -133,11 +133,11 @@ function ComposerChoices({ aiOffered }: { aiOffered: boolean }) {
   return (
     <Page>
       <AppBar title="New recipe" parent="/recipes" />
-      <ul className="flex flex-col divide-y divide-line overflow-hidden rounded-lg bg-surface-1">
+      <ul className="flex flex-col divide-y divide-rule overflow-hidden rounded-lg border border-edge bg-card">
         {choices.map(({ href, icon: Icon, title, line }) => (
           <li key={href} className="relative">
-            <div className="flex min-h-14 items-center gap-3 px-4 py-3 active:bg-surface-3">
-              <span className="flex size-10 shrink-0 items-center justify-center rounded-md bg-surface-3 text-ink-1">
+            <div className="flex min-h-14 items-center gap-3 px-4 py-3 active:bg-raised">
+              <span className="flex size-10 shrink-0 items-center justify-center rounded-md bg-raised text-ink">
                 <Icon
                   aria-hidden
                   className="size-5"
@@ -149,7 +149,7 @@ function ComposerChoices({ aiOffered }: { aiOffered: boolean }) {
                   href={href}
                   overlay
                   underline="none"
-                  className="t-head text-ink-1"
+                  className="t-head text-ink"
                 >
                   {title}
                 </Link>
@@ -274,7 +274,7 @@ function PhotoComposer() {
               <AlertDescription>{blockers.join(" ")}</AlertDescription>
             </Alert>
           ) : (
-            <div className="flex flex-col items-center gap-4 rounded-lg bg-surface-1 px-4 py-10 text-center">
+            <div className="flex flex-col items-center gap-4 rounded-lg border border-edge bg-card px-4 py-10 text-center">
               <Camera
                 aria-hidden
                 className="size-10 text-ink-2"
@@ -414,7 +414,7 @@ function ReadingProgress({
 }) {
   return (
     <div
-      className="flex flex-col gap-2 rounded-lg bg-surface-1 p-4"
+      className="flex flex-col gap-2 rounded-lg border border-edge bg-card p-4"
       aria-live="polite"
     >
       <div className="flex items-center justify-between t-cap">
@@ -507,7 +507,7 @@ function Reading({
           <p>
             This is taking longer than usual. Nothing was cancelled: your draft
             will be in{" "}
-            <Link href="/recipes" underline="always" className="text-ink-1">
+            <Link href="/recipes" underline="always" className="text-ink">
               Your drafts
             </Link>{" "}
             when it's done.
