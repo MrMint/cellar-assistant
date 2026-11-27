@@ -5,6 +5,7 @@ import { useMutation } from "urql";
 import { notify } from "@/components/app/notify";
 import { Heart } from "@/components/app/parts/Heart";
 import type { ApiItemType } from "@/components/cellar-api/itemTypes";
+import { WantToTryButton } from "@/components/want-to-try/WantToTryButton";
 import { useOptimisticToggle } from "@/hooks/useOptimisticToggle";
 import { SetFavoriteMutation } from "@/lib/api/items";
 import { failureFromTransport, unwrapResult } from "@/lib/api/result";
@@ -23,11 +24,14 @@ export function LoveButton({
   type,
   name,
   isFavorite,
+  wantToTry,
 }: {
   itemId: string;
   type: ApiItemType;
   name: string;
   isFavorite: boolean;
+  /** X08's Want to try (Save), drawn before the heart when given. */
+  wantToTry?: boolean;
 }) {
   const [, setFavorite] = useMutation(SetFavoriteMutation);
   const commit = useCallback(
@@ -57,7 +61,17 @@ export function LoveButton({
   });
 
   return (
-    <span aria-busy={love.pending || undefined} className="-mr-2 shrink-0">
+    <span
+      aria-busy={love.pending || undefined}
+      className="-mr-2 flex shrink-0 items-center"
+    >
+      {wantToTry !== undefined && (
+        <WantToTryButton
+          target={{ kind: "ITEM", itemType: type, itemId }}
+          saved={wantToTry}
+          name={name}
+        />
+      )}
       <Heart
         size="page"
         on={love.on}

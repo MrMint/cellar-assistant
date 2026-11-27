@@ -9,7 +9,7 @@ import { LoveButton } from "./LoveButton";
  * picture — a photo, else the item's label plate — runs the column's width
  * at 300 on a phone, under the bar's glass discs, and fades into the page;
  * the name sits *below* it (never on the photo, so it reads at 4.5:1 on any
- * label), with the heart at its right and the subtitle line under it:
+ * label), with Want to try and the heart at its right and the subtitle line under it:
  * "maker · style · strength", the maker a link to its brand page (D1).
  *
  * From `md` (and in the desktop pane) the picture is a rounded square beside
@@ -20,6 +20,7 @@ export function ItemHero({
   type,
   name,
   isFavorite,
+  isWantToTry,
   producer,
   subtitle,
   picture,
@@ -30,6 +31,8 @@ export function ItemHero({
   type: ApiItemType;
   name: string;
   isFavorite: boolean;
+  /** X08's bookmark (Save), beside the heart. */
+  isWantToTry: boolean;
   producer: { brandId: string; name: string } | null;
   subtitle: readonly (string | null | undefined)[];
   /** `ItemImage` (or the bottle's capture tile), already shaped. */
@@ -81,6 +84,7 @@ export function ItemHero({
             type={type}
             name={name}
             isFavorite={isFavorite}
+            wantToTry={isWantToTry}
           />
         </div>
         {(producer !== null || phrases.length > 0) && (

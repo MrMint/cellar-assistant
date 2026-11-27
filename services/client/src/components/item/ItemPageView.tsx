@@ -200,6 +200,7 @@ export function ItemPageView({
           type={item.type}
           name={item.name}
           isFavorite={item.isFavorite}
+          isWantToTry={item.isWantToTry}
           producer={producer}
           subtitle={item.subTitlePhrases}
           picture={picture}
