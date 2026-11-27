@@ -183,26 +183,131 @@ export const resteepLine = (resteeps: Resteeps | undefined): string | null => {
   return `${count} more ${noun}, add ${add} each.`;
 };
 
+/** KIT § 4: a narrow no-break space before a unit ("93 °C"). */
+const NNBSP = "\u202F";
+
 /** How a fact reads in the grid: `80 °C`, `3:00`, `2.5 g`, `250 ml`. */
 export const formatBrewFact = (fact: Pick<BrewFact, "key" | "value">) => {
   switch (fact.key) {
     case "waterTempC":
-      return `${fact.value} °C`;
+      return `${fact.value}${NNBSP}°C`;
     case "steepSeconds": {
       const m = Math.floor(fact.value / 60);
       const s = Math.round(fact.value % 60);
       return `${m}:${String(s).padStart(2, "0")}`;
     }
     case "doseGrams":
-      return `${fact.value} g`;
+      return `${fact.value}${NNBSP}g`;
     case "waterMl":
-      return `${fact.value} ml`;
+      return `${fact.value}${NNBSP}ml`;
   }
 };
 
 export const BREW_FACT_LABEL: Readonly<Record<BrewFactKey, string>> = {
-  waterTempC: "Water",
+  waterTempC: "Water temp",
   steepSeconds: "Time",
   doseGrams: "Dose",
-  waterMl: "Water amount",
+  waterMl: "Water",
+};
+
+/** A tile's or a field's label: the dose names the leaf ("Coffee", "Tea"). */
+export const brewFactLabel = (key: BrewFactKey, itemType: string): string =>
+  key === "doseGrams"
+    ? itemType === "COFFEE"
+      ? "Coffee"
+      : itemType === "TEA"
+        ? "Tea"
+        : BREW_FACT_LABEL.doseGrams
+    : BREW_FACT_LABEL[key];
+
+/** The unit a field shows inside its box. */
+export const BREW_FIELD_UNIT: Readonly<Record<BrewFactKey, string>> = {
+  waterTempC: "°C",
+  steepSeconds: "m:ss",
+  doseGrams: "g",
+  waterMl: "ml",
+};
+
+export type BrewFieldResult =
+  | { readonly ok: true; readonly value: number | null }
+  | { readonly ok: false; readonly reason: string };
+
+const LIMITS: Readonly<Record<BrewFactKey, number>> = {
+  waterTempC: 100,
+  steepSeconds: 60 * 60,
+  doseGrams: 1000,
+  waterMl: 5000,
+};
+
+/**
+ * One "Your numbers" field, as typed. Empty keeps the typical number
+ * (`null`); time takes m:ss or plain seconds; anything else is a reason the
+ * field shows under its outline, never a silent guess.
+ */
+export const parseBrewField = (
+  key: BrewFactKey,
+  raw: string,
+): BrewFieldResult => {
+  const text = raw.trim();
+  if (text === "") return { ok: true, value: null };
+  if (key === "steepSeconds") {
+    const clock = /^(\d{1,2}):([0-5]\d)$/.exec(text);
+    const seconds = clock
+      ? Number(clock[1]) * 60 + Number(clock[2])
+      : /^\d+$/.test(text)
+        ? Number(text)
+        : Number.NaN;
+    if (!Number.isFinite(seconds) || seconds <= 0) {
+      return { ok: false, reason: "Use m:ss, like 3:20" };
+    }
+    if (seconds > LIMITS.steepSeconds) {
+      return { ok: false, reason: "Up to 60:00" };
+    }
+    return { ok: true, value: seconds };
+  }
+  const n = Number(text.replace(",", "."));
+  if (!Number.isFinite(n) || n <= 0) {
+    return { ok: false, reason: "A number above 0" };
+  }
+  if (n > LIMITS[key]) {
+    return {
+      ok: false,
+      reason: `Up to ${LIMITS[key]}${NNBSP}${BREW_FIELD_UNIT[key]}`,
+    };
+  }
+  return {
+    ok: true,
+    value: key === "waterTempC" ? Math.round(n) : Math.round(n * 10) / 10,
+  };
+};
+
+export type BrewPrefsVariables = {
+  readonly itemType: "TEA" | "COFFEE";
+  readonly itemId: string;
+  readonly waterTempC: number | null;
+  readonly steepSeconds: number | null;
+  readonly doseGrams: number | null;
+  readonly waterMl: number | null;
+};
+
+/**
+ * The one write the brew guide makes, `setBrewPrefs`: the item and the four
+ * numbers, nothing that names a person (the API keeps them on the viewer's
+ * own UserActor). Only a tea or a coffee has brew numbers; anything else is
+ * `null`, and nothing is sent.
+ */
+export const brewPrefsVariables = (
+  itemType: string,
+  itemId: string,
+  numbers: BrewNumbers,
+): BrewPrefsVariables | null => {
+  if (itemType !== "TEA" && itemType !== "COFFEE") return null;
+  return {
+    itemType,
+    itemId,
+    waterTempC: numbers.waterTempC,
+    steepSeconds: numbers.steepSeconds,
+    doseGrams: numbers.doseGrams,
+    waterMl: numbers.waterMl,
+  };
 };

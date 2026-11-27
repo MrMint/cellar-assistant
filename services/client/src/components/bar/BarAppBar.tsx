@@ -1,23 +1,39 @@
 "use client";
 
 import { AppBar } from "@/components/app/AppBar";
-import { Pantry } from "@/components/app/icons";
+import { Link } from "@/components/app/Link";
+import { Button } from "@/components/ui/button";
 
 /**
- * `/recipes/bar`'s AppBar. A client module of its own because an action's
- * `icon` is a component — a function — and a server page cannot pass one
- * across to `AppBar` (a client component): Next refuses the render with
- * "Functions cannot be passed directly to Client Components", and the whole
- * route falls to its error boundary. `ItemAppBar` is the same shape.
+ * Your bar's top bar (Recipes-Make board): Back, "Your bar" over its
+ * readiness line ("1 ready · 5 one away"), and a quiet "Pantry" at the right
+ * — a word, not a bare glyph (KIT § 4 Touch). A client module of its own
+ * because `AppBar` is one, and the page is a server component.
  */
-export function BarAppBar() {
+export function BarAppBar({ line }: { line?: string }) {
   return (
     <AppBar
-      title="What can I make"
       parent="/recipes"
-      actions={[
-        { label: "Bar pantry", icon: Pantry, href: "/recipes/bar/pantry" },
-      ]}
+      title={
+        <div className="flex items-center gap-2">
+          <div className="min-w-0 flex-1">
+            <h1 className="t-title m-0 truncate text-ink">Your bar</h1>
+            {line !== undefined && (
+              <p
+                data-testid="bar-readiness"
+                className="t-cap m-0 text-ink-2 tabular-nums"
+              >
+                {line}
+              </p>
+            )}
+          </div>
+          <Button asChild variant="quiet">
+            <Link href="/recipes/bar/pantry" underline="none">
+              Pantry
+            </Link>
+          </Button>
+        </div>
+      }
     />
   );
 }

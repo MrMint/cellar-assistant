@@ -8,7 +8,8 @@ import assert from "node:assert/strict";
 import { afterEach, beforeEach, describe, test } from "node:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 
-GlobalRegistrator.register({ url: "http://localhost/recipes/r1/make" });
+if (!GlobalRegistrator.isRegistered)
+  GlobalRegistrator.register({ url: "http://localhost/recipes/r1/make" });
 (
   globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
 ).IS_REACT_ACT_ENVIRONMENT = true;
@@ -50,6 +51,7 @@ let root: ReturnType<typeof createRoot>;
 
 beforeEach(() => {
   calls = [];
+  bodies = [];
   window.sessionStorage.clear();
   container = document.createElement("div");
   document.body.appendChild(container);
@@ -61,7 +63,39 @@ afterEach(async () => {
   document.body.innerHTML = "";
 });
 
-const render = async () => {
+let bodies: { query: string; variables: Record<string, unknown> }[] = [];
+
+/** Answers every operation as a successful log, and keeps what was sent. */
+const capturingFetch = async (_url: unknown, init?: RequestInit) => {
+  const body = JSON.parse(String(init?.body));
+  bodies.push(body);
+  return new Response(
+    JSON.stringify({
+      data: {
+        logDrink: {
+          __typename: "LoggedDrinkPayload",
+          drinkerCount: 1,
+          entryIds: ["e1"],
+          entry: { __typename: "ItemCheckIn", id: "e1" },
+        },
+      },
+    }),
+    { headers: { "content-type": "application/json" } },
+  );
+};
+
+type Instruction = {
+  id: string;
+  step_number: number;
+  instruction_text: string;
+};
+
+const render = async (
+  instructions: Instruction[] = [
+    { id: "i1", step_number: 1, instruction_text: "Stir with ice." },
+    { id: "i2", step_number: 2, instruction_text: "Strain." },
+  ],
+) => {
   await act(async () => {
     root.render(
       <Provider
@@ -69,6 +103,7 @@ const render = async () => {
           new Client({
             url: "http://localhost/api/graphql",
             exchanges: [fetchExchange],
+            fetch: capturingFetch as typeof fetch,
           })
         }
       >
@@ -79,15 +114,26 @@ const render = async () => {
             name: "Negroni",
             type: "cocktail",
             serving_size: 1,
-            instructions: [
-              { id: "i1", step_number: 1, instruction_text: "Stir with ice." },
-              { id: "i2", step_number: 2, instruction_text: "Strain." },
-            ],
+            instructions,
             ingredients: [],
           }}
         />
       </Provider>,
     );
+  });
+};
+
+const button = (name: string) => {
+  const found = [...document.querySelectorAll("button")].find(
+    (b) => b.textContent?.trim() === name,
+  );
+  if (found === undefined) throw new Error(`no ${name} button`);
+  return found;
+};
+const click = async (name: string) => {
+  await act(async () => {
+    button(name).click();
+    await new Promise((resolve) => setTimeout(resolve, 10));
   });
 };
 
@@ -131,5 +177,48 @@ describe("Make mode (L08)", () => {
     await render();
     await act(async () => leaveButton().click());
     assert.deepEqual(calls, ["replace /recipes/r1"]);
+  });
+
+  test("opens on the ingredients, then one step at a time (ruling 2)", async () => {
+    await render();
+    assert.match(container.textContent ?? "", /Ingredients/);
+    await click("Start");
+    assert.match(container.textContent ?? "", /Step 1 of 2/);
+    assert.match(container.textContent ?? "", /Stir with ice\./);
+    await click("Next");
+    assert.match(container.textContent ?? "", /Step 2 of 2/);
+    assert.ok(button("Made it"));
+    await click("Back");
+    assert.match(container.textContent ?? "", /Step 1 of 2/);
+  });
+
+  test("a recipe with no steps says so and goes straight to Made it", async () => {
+    await render([]);
+    assert.ok(document.querySelector('[data-testid="no-steps"]'));
+    assert.ok(button("Made it"));
+  });
+
+  test("a step timer keeps running on the next step, shown in the segment bar (ruling 4)", async () => {
+    await render([
+      { id: "i1", step_number: 1, instruction_text: "Shake for 12 seconds." },
+      { id: "i2", step_number: 2, instruction_text: "Strain." },
+    ]);
+    await click("Start");
+    await click("Start");
+    assert.ok(button("Pause"));
+    await click("Next");
+    const chip = document.querySelector('button[aria-label$="left on step 1"]');
+    assert.ok(chip, "the running timer shows beside the segments");
+  });
+
+  test("Made it logs the recipe and nothing else: no bottle, no person (#677)", async () => {
+    await render([]);
+    await click("Made it");
+    assert.equal(bodies.length, 1);
+    assert.match(bodies[0]?.query ?? "", /logDrink/);
+    const input = bodies[0]?.variables.input as Record<string, unknown>;
+    assert.deepEqual(input, { recipeId: "r1" });
+    assert.match(container.textContent ?? "", /Made it/);
+    assert.ok(document.querySelector('[data-slot="made-it"]'));
   });
 });

@@ -1,6 +1,13 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import { brewGuide, formatBrewFact, typicalBrew } from "./brew-table";
+import {
+  brewFactLabel,
+  brewGuide,
+  brewPrefsVariables,
+  formatBrewFact,
+  parseBrewField,
+  typicalBrew,
+} from "./brew-table";
 
 describe("typical brew table (ux-c L08, L3)", () => {
   test("a tea's category picks its row; matcha's form wins over category", () => {
@@ -80,10 +87,17 @@ describe("typical brew table (ux-c L08, L3)", () => {
   });
 
   test("facts read as °C, m:ss, g and ml", () => {
-    assert.equal(formatBrewFact({ key: "waterTempC", value: 94 }), "94 °C");
+    // KIT § 4: a narrow no-break space before a unit.
+    assert.equal(
+      formatBrewFact({ key: "waterTempC", value: 94 }),
+      "94\u202F°C",
+    );
     assert.equal(formatBrewFact({ key: "steepSeconds", value: 50 }), "0:50");
-    assert.equal(formatBrewFact({ key: "doseGrams", value: 2.5 }), "2.5 g");
-    assert.equal(formatBrewFact({ key: "waterMl", value: 250 }), "250 ml");
+    assert.equal(
+      formatBrewFact({ key: "doseGrams", value: 2.5 }),
+      "2.5\u202Fg",
+    );
+    assert.equal(formatBrewFact({ key: "waterMl", value: 250 }), "250\u202Fml");
   });
 });
 
@@ -111,5 +125,62 @@ describe("W-23 · the re-steep line", () => {
       waterMl: null,
     });
     assert.equal(mine?.resteepLine, null);
+  });
+});
+
+describe("Your numbers", () => {
+  test("labels name the leaf: Coffee or Tea, Water temp, Water", () => {
+    assert.equal(brewFactLabel("doseGrams", "COFFEE"), "Coffee");
+    assert.equal(brewFactLabel("doseGrams", "TEA"), "Tea");
+    assert.equal(brewFactLabel("waterTempC", "TEA"), "Water temp");
+    assert.equal(brewFactLabel("waterMl", "COFFEE"), "Water");
+  });
+
+  test("fields parse m:ss, refuse nonsense, and empty keeps the typical", () => {
+    assert.deepEqual(parseBrewField("steepSeconds", "3:20"), {
+      ok: true,
+      value: 200,
+    });
+    assert.deepEqual(parseBrewField("steepSeconds", "45"), {
+      ok: true,
+      value: 45,
+    });
+    assert.deepEqual(parseBrewField("waterTempC", ""), {
+      ok: true,
+      value: null,
+    });
+    assert.equal(parseBrewField("steepSeconds", "3:75").ok, false);
+    assert.equal(parseBrewField("waterTempC", "130").ok, false);
+    assert.equal(parseBrewField("doseGrams", "-2").ok, false);
+    assert.equal(parseBrewField("waterMl", "lots").ok, false);
+  });
+
+  test("the write names only the item and the numbers, never a person", () => {
+    const vars = brewPrefsVariables("COFFEE", "i1", {
+      waterTempC: 91,
+      steepSeconds: 200,
+      doseGrams: null,
+      waterMl: null,
+    });
+    assert.deepEqual(vars, {
+      itemType: "COFFEE",
+      itemId: "i1",
+      waterTempC: 91,
+      steepSeconds: 200,
+      doseGrams: null,
+      waterMl: null,
+    });
+  });
+
+  test("only a tea or a coffee can carry brew numbers", () => {
+    const none = {
+      waterTempC: null,
+      steepSeconds: null,
+      doseGrams: null,
+      waterMl: null,
+    };
+    assert.equal(brewPrefsVariables("BEER", "i1", none), null);
+    assert.equal(brewPrefsVariables("WINE", "i1", none), null);
+    assert.notEqual(brewPrefsVariables("TEA", "i1", none), null);
   });
 });

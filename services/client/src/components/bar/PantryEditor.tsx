@@ -8,6 +8,7 @@ import {
 } from "@cellar-assistant/contracts/bar";
 import { useRef, useState } from "react";
 import { useMutation } from "urql";
+import { AppBar } from "@/components/app/AppBar";
 import { FilterChip } from "@/components/app/FilterChip";
 import { Check } from "@/components/app/icons";
 import { notify } from "@/components/app/notify";
@@ -76,43 +77,59 @@ export function PantryEditor({ initial }: { initial: readonly BarKind[] }) {
   };
 
   return (
-    <div className="flex flex-col gap-6">
-      <p className="px-1 type-callout text-ink-2">
-        Tick what's in your kitchen. Bottles in your cellars already count.
-      </p>
-      {pantrySections().map((section, index) => (
-        <section
-          key={section.title}
-          aria-labelledby={`pantry-section-${index}`}
-          className="flex flex-col gap-3"
-        >
-          <h2
-            id={`pantry-section-${index}`}
-            className="px-1 type-overline text-ink-3"
-          >
-            {section.title}
-          </h2>
-          <div className="flex flex-wrap gap-x-2 gap-y-3">
-            {section.kinds.map((kind) => {
-              const on = have.has(kind);
-              return (
-                <FilterChip
-                  key={kind}
-                  selected={on}
-                  data-pantry-kind={kind}
-                  icon={on ? <Check aria-hidden /> : undefined}
-                  onClick={() => toggle(kind)}
-                >
-                  {BAR_KINDS[kind].label}
-                </FilterChip>
-              );
-            })}
+    <>
+      <AppBar
+        parent="/recipes/bar"
+        title={
+          <div className="flex items-center gap-2">
+            <h1 className="t-title m-0 min-w-0 flex-1 truncate text-ink">
+              Pantry
+            </h1>
+            <output
+              aria-live="polite"
+              data-testid="pantry-count"
+              className="t-cap shrink-0 text-ink-2 tabular-nums"
+            >
+              {have.size} of {PANTRY_KINDS.length}
+            </output>
           </div>
-        </section>
-      ))}
-      <p className="px-1 type-footnote">
-        {have.size} of {PANTRY_KINDS.length} in your pantry.
-      </p>
-    </div>
+        }
+      />
+      <div className="flex flex-col gap-6">
+        <p className="t-cap m-0 px-1 text-ink-2">
+          Bottles in your cellars already count.
+        </p>
+        {pantrySections().map((section, index) => (
+          <section
+            key={section.title}
+            aria-labelledby={`pantry-section-${index}`}
+            className="flex flex-col gap-3"
+          >
+            <h2
+              id={`pantry-section-${index}`}
+              className="t-head m-0 px-1 text-ink"
+            >
+              {section.title}
+            </h2>
+            <div className="flex flex-wrap gap-2">
+              {section.kinds.map((kind) => {
+                const on = have.has(kind);
+                return (
+                  <FilterChip
+                    key={kind}
+                    selected={on}
+                    data-pantry-kind={kind}
+                    icon={on ? <Check aria-hidden /> : undefined}
+                    onClick={() => toggle(kind)}
+                  >
+                    {BAR_KINDS[kind].label}
+                  </FilterChip>
+                );
+              })}
+            </div>
+          </section>
+        ))}
+      </div>
+    </>
   );
 }
