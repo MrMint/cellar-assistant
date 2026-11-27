@@ -189,9 +189,11 @@ const attributesForSave = (
   return out;
 };
 
-/** `ConfirmItemOnboardingInput`, from the restored form. No `cellarId`: the
- * old flow filed the bottle as its own step (`insertCellarItem`), with the
- * display photo, and so does this one. */
+/** `ConfirmItemOnboardingInput`, from the restored form. `cellarId: null`,
+ * never absent: the form files the bottle as its own step
+ * (`insertCellarItem`, with the display photo), and an absent `cellarId`
+ * tells confirm to file one into a saved draft's own cellar as well, so a
+ * draft finished here was filed twice (F-54). `null` files nothing. */
 export const confirmInputFrom = (
   type: ApiItemType,
   values: ItemFormValues,
@@ -206,6 +208,7 @@ export const confirmInputFrom = (
     type,
     attributesForSave(type, values.attributes),
   ),
+  cellarId: null,
 });
 
 /**
