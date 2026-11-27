@@ -1,12 +1,7 @@
 "use client";
 
 import { useEffect, useTransition } from "react";
-import {
-  CloudOff,
-  ErrorIcon,
-  ICON_STROKE,
-  Refresh,
-} from "@/components/app/icons";
+import { CloudOff, ErrorIcon, ICON_STROKE } from "@/components/app/icons";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
@@ -49,15 +44,12 @@ export function BoundaryError({
       footnote={errorReference(error.digest)}
       actions={
         <Button
+          variant="outline"
           disabled={retrying}
           aria-busy={retrying || undefined}
           onClick={() => startRetry(() => retry())}
         >
-          {retrying ? (
-            <Spinner aria-hidden />
-          ) : (
-            <Refresh aria-hidden strokeWidth={ICON_STROKE} />
-          )}
+          {retrying && <Spinner aria-hidden />}
           Try again
         </Button>
       }

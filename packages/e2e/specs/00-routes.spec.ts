@@ -218,7 +218,7 @@ for (const route of REMOVED_TYPE_INDEXES) {
     expect(res?.status()).toBe(404);
     await expect(
       primary.getByRole("heading", {
-        name: "This doesn't exist or isn't shared with you",
+        name: "Can't open this page",
       }),
     ).toBeVisible();
     await expect(primary.getByRole("link", { name: "Go home" })).toBeVisible();
@@ -248,7 +248,7 @@ for (const route of MISSING_ROWS) {
     expect(res?.status()).toBe(404);
     await expect(
       primary.getByRole("heading", {
-        name: "This doesn't exist or isn't shared with you",
+        name: "Can't open this page",
       }),
     ).toBeVisible();
   });

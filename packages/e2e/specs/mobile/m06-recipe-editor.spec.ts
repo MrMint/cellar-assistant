@@ -16,7 +16,7 @@ import { Gql } from "../../fixtures/test.ts";
  */
 test.describe.configure({ mode: "serial" });
 
-const NOT_SHARED = "This doesn't exist or isn't shared with you";
+const NOT_SHARED = "Can't open this page";
 
 let recipeId = "";
 const recipeName = unique("E2 X15 Sour");

@@ -43,7 +43,7 @@ const ENSURE_INVITE = `mutation {
   }
 }`;
 
-const NOT_SHARED = "This doesn't exist or isn't shared with you";
+const NOT_SHARED = "Can't open this page";
 
 let publicId = "";
 let privateId = "";

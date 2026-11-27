@@ -225,11 +225,11 @@ test("a stranger's or nobody's profile is the one not-found; your own is Me", as
 }) => {
   await page.goto("/users/00000000-0000-4000-8000-000000000000");
   await expect(
-    page.getByText(/doesn.t exist or isn.t shared with you/),
+    page.getByText("It's gone, or it isn't shared with you."),
   ).toBeVisible();
   await page.goto("/users/not-an-id");
   await expect(
-    page.getByText(/doesn.t exist or isn.t shared with you/),
+    page.getByText("It's gone, or it isn't shared with you."),
   ).toBeVisible();
 
   await page.goto(`/users/${ACCOUNTS.primary.id}`);

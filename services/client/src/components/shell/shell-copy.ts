@@ -16,8 +16,8 @@ export interface ShellCopy {
  * and neither may any page that renders it.
  */
 export const NOT_FOUND_COPY: ShellCopy = {
-  title: "This doesn't exist or isn't shared with you",
-  body: "The link may be out of date, or whoever owns this hasn't shared it with you.",
+  title: "Can't open this page",
+  body: "It's gone, or it isn't shared with you.",
 };
 
 export const OFFLINE_COPY: ShellCopy = {
@@ -41,12 +41,12 @@ export const describeBoundaryError = ({
 }): ShellCopy =>
   online
     ? {
-        title: "Something went wrong",
-        body: "This page didn't load. Trying again usually fixes it; if it keeps happening, the problem is on our side.",
+        title: "Couldn't load this page",
+        body: "",
       }
     : {
         title: "You're offline",
-        body: "This page needs a connection. Try again once you're back online.",
+        body: "It opens by itself when you're back",
       };
 
 /**
