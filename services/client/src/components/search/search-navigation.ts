@@ -122,6 +122,17 @@ export const textSearchHref = (
   return search === "" ? "/search" : `/search?${search}`;
 };
 
+/**
+ * `?with=`: the sheet a link asks the search page to open — Home's Scan
+ * (`scan`, the barcode sheet) and Photo (`photo`) — or null (F-102, H-45).
+ */
+export const scanModeFromParam = (
+  value: string | string[] | undefined,
+): "barcode" | "photo" | null => {
+  const raw = Array.isArray(value) ? value[0] : value;
+  return raw === "scan" ? "barcode" : raw === "photo" ? "photo" : null;
+};
+
 export type SearchNavigation = {
   method: "push" | "replace";
   href: string;

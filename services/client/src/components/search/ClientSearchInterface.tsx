@@ -33,7 +33,7 @@ import { cn } from "@/lib/utils";
 import { BarcodeScanner, type ScanMode } from "../common/BarcodeScanner";
 import { barcodeSearchHref, imageSearchHref } from "./adapter";
 import { useSearchNavigation } from "./SearchNavigation";
-import type { SearchNavigation } from "./search-navigation";
+import { type SearchNavigation, textSearchHref } from "./search-navigation";
 import { SECTION_LABELS, type SearchSection } from "./universal-search";
 import { useSearchQuery } from "./useSearchQuery";
 
@@ -50,6 +50,11 @@ interface ClientSearchInterfaceProps {
   token?: SearchToken;
   /** `?in=`: the field says what it looks in ("Search places"). */
   scope?: SearchSection | null;
+  /**
+   * `?with=`: Home's Scan or Photo — the sheet opens on arrival, and `with`
+   * leaves the URL so Back or a reload doesn't open it again (F-102).
+   */
+  openWith?: ScanMode | null;
 }
 
 const SEGMENT =
@@ -73,6 +78,7 @@ export const ClientSearchInterface = ({
   urlQuery,
   token = null,
   scope = null,
+  openWith = null,
 }: ClientSearchInterfaceProps) => {
   const nav = useNavigate();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -120,6 +126,14 @@ export const ClientSearchInterface = ({
     if (wasNavigating.current && !isNavigating) setWorking(null);
     wasNavigating.current = isNavigating;
   }, [isNavigating]);
+
+  // Opened once per arrival: the replace below clears `with`, so this does
+  // not run again for the same link.
+  useEffect(() => {
+    if (openWith === null) return;
+    setSheet(openWith);
+    nav.replace(textSearchHref(urlQuery ?? "", scope));
+  }, [openWith, nav, urlQuery, scope]);
 
   const closeSheet = () => {
     uploads.invalidate();
@@ -238,7 +252,7 @@ export const ClientSearchInterface = ({
           // keyboard up. Opened on `?q=`, the results are what you came for.
           // The box never remounts while you type (N01), so this fires once.
           // biome-ignore lint/a11y/noAutofocus: W-12, the search screen's one job is typing.
-          autoFocus={!urlQuery && token === null}
+          autoFocus={!urlQuery && token === null && openWith === null}
           type="search"
           aria-label="Search"
           enterKeyHint="search"

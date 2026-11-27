@@ -16,6 +16,7 @@ import {
   ExpiredImageSearch,
   ServerImageResults,
 } from "@/components/search/ServerImageResults";
+import { scanModeFromParam } from "@/components/search/search-navigation";
 import { LookIn } from "@/components/search/sections/LookIn";
 import { ScopeRail } from "@/components/search/sections/ScopeRail";
 import { UniversalSearchResults } from "@/components/search/UniversalSearchResults";
@@ -67,6 +68,8 @@ export default async function Search({ searchParams }: SearchPageProps) {
   const { query, barcode, imageFileId, legacyImageLink, hasActiveSearch } =
     state;
   const focus = sectionFromParam(resolvedSearchParams.in);
+  // Home's Scan and Photo (F-102): the sheet opens over the landing.
+  const openWith = scanModeFromParam(resolvedSearchParams.with);
   const token =
     barcode !== null
       ? "barcode"
@@ -83,6 +86,7 @@ export default async function Search({ searchParams }: SearchPageProps) {
         landing={null}
         token={query === null ? token : null}
         scope={focus}
+        openWith={openWith}
       >
         {!hasActiveSearch &&
           (focus === null ? <LookIn /> : <ScopeRail query="" focus={focus} />)}

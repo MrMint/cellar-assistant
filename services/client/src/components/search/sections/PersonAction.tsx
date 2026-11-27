@@ -28,8 +28,9 @@ export const STANDING_LINES: Readonly<Record<Standing, string | undefined>> = {
 /**
  * A person's row action (Recipes-Search 25–28): Add friend; Cancel request
  * once one is out (`rejectFriendRequest`, L2 — no new mutation); Accept when
- * they asked first. Each acts at once; Add friend's toast carries Undo, and
- * a failure puts the row back as it was. Outlined, as every action inside a
+ * they asked first. Each acts at once; Add friend's and Cancel's toasts
+ * carry Undo (KIT § 4; F-97), and a failure puts the row back as it was. An
+ * Undo is itself quiet: it raises no second undo toast. Outlined, as every action inside a
  * row is (CROSS-LOT); Cancel is quiet.
  */
 export function PersonAction({
@@ -72,7 +73,7 @@ export function PersonAction({
     notify(words, { tone: "error" });
   };
 
-  const cancel = async (known: string | null) => {
+  const cancel = async (known: string | null, undoable = true) => {
     setBusy(true);
     setStanding("NONE");
     const requestId = known ?? outgoing.id;
@@ -91,9 +92,13 @@ export function PersonAction({
       return;
     }
     setSentId(null);
+    if (undoable)
+      notify(`Request to ${name} canceled`, {
+        undo: () => void add(false),
+      });
   };
 
-  const add = async () => {
+  const add = async (undoable = true) => {
     setBusy(true);
     setStanding("REQUEST_SENT");
     const response = await send({ userId });
@@ -101,7 +106,10 @@ export function PersonAction({
     const sent = response.data?.sendFriendRequest;
     if (sent?.__typename === "FriendRequest") {
       setSentId(sent.id);
-      notify(`Request sent to ${name}`, { undo: () => void cancel(sent.id) });
+      if (undoable)
+        notify(`Request sent to ${name}`, {
+          undo: () => void cancel(sent.id, false),
+        });
       return;
     }
     const outcome = addFriendOutcome({
