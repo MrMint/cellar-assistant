@@ -1,16 +1,8 @@
 import { cookies } from "next/headers";
-import { EmptyState } from "@/components/app/EmptyState";
+import type { ReactNode } from "react";
+import { ICON_STROKE, Ranked } from "@/components/app/icons";
+import { PersonRow } from "@/components/app/parts/PersonRow";
 import {
-  Camera,
-  ChevronRight,
-  ICON_STROKE,
-  Ranked,
-} from "@/components/app/icons";
-import { Link } from "@/components/app/Link";
-import { InsetSection, ListRow } from "@/components/app/Page";
-import { UserAvatar } from "@/components/app/UserAvatar";
-import {
-  collectionStatsLine,
   type NearbyPlace,
   nearbyPlacesFromNodes,
 } from "@/components/search/adapter";
@@ -19,7 +11,6 @@ import {
   SearchCollectionStatsQuery,
   SearchNearbyPlacesQuery,
 } from "@/components/search/queries";
-import { Button } from "@/components/ui/button";
 import { readFragment } from "@/lib/api/graphql";
 import { unwrapResult } from "@/lib/api/result";
 import { apiServerQuery } from "@/lib/api/urql-server";
@@ -29,8 +20,16 @@ import { ContinueSection } from "./ContinueShelf";
 import { openBottlesFromNodes, sealedSoonFromNodes } from "./continue";
 import { FriendsFeed } from "./FriendsFeed";
 import { HomeInbox } from "./HomeInbox";
-import type { IncomingRequest, PendingSuggestion } from "./inbox";
+import { NewPersonHero, SEE_ALL_CLASS, SectionHead } from "./HomeLayout";
+import {
+  type AiQuotaRow,
+  type IncomingRequest,
+  type PendingSuggestion,
+  toCheckFromNodes,
+} from "./inbox";
+import { bottleCountLine, isNewPerson } from "./landing";
 import { NearbySection } from "./NearbySection";
+import { PressLink } from "./PressLink";
 import {
   AiJobFieldsFragment,
   DRINK_SOON_READ,
@@ -42,34 +41,63 @@ import {
   HomeFriendsRankedQuery,
   HomeInboxQuery,
   OPEN_BOTTLES_READ,
+  TO_CHECK_READ,
 } from "./queries";
 import { parseSeenCookie, SEEN_COOKIE_NAME } from "./seen-cookie";
 
 /*
- * Home "Today"'s server halves (X10). Each is its own async component behind
- * its own Suspense boundary on the page, so each streams in, and fails, on
- * its own: a section whose read fails renders nothing rather than an error
- * over the page — Home is a summary, and every row in it has a full page of
- * its own to show the error properly.
+ * Home's server halves. Each is its own async component behind its own
+ * Suspense boundary on the page, so each streams in, and fails, on its own:
+ * a section whose read fails renders nothing rather than an error over the
+ * page — Home is a summary, and every row in it has a full page of its own
+ * to show the error properly.
  */
 
-/** "53 bottles across 4 cellars", under the greeting. */
+/** "240 bottles", beside the greeting; nothing for a new person (CROSS-LOT 3). */
 export async function CollectionLine() {
-  const stats = await apiServerQuery(SearchCollectionStatsQuery)
-    .then((data) => data.me?.collectionStats)
-    .catch(() => undefined);
-  if (stats === undefined) return null;
+  const stats = await readStats();
+  const line = stats === undefined ? null : bottleCountLine(stats);
+  if (line === null) return null;
   return (
-    <p className="type-body animate-in fade-in text-ink-2 duration-(--ca-dur-medium) ease-enter">
-      {collectionStatsLine(stats)}
+    <p className="t-cap tabular m-0 animate-in fade-in text-ink-2 duration-(--ca-dur-medium) ease-enter">
+      {line}
     </p>
   );
 }
 
-/** The job tray and "Waiting on you". */
+const readStats = () =>
+  apiServerQuery(SearchCollectionStatsQuery)
+    .then((data) => data.me?.collectionStats)
+    .catch(() => undefined);
+
+/**
+ * The new-person Home or the full one. Someone with no bottles yet gets the
+ * hero (and still any friend request or AI work waiting on them); a failed
+ * read is not taken for "new" and draws the full Home.
+ */
+export async function NewPersonGate({
+  inbox,
+  full,
+}: {
+  inbox: ReactNode;
+  full: ReactNode;
+}) {
+  const stats = await readStats();
+  if (stats === undefined || !isNewPerson(stats)) return full;
+  return (
+    <>
+      {inbox}
+      <NewPersonHero />
+    </>
+  );
+}
+
+/** The AI tray and "Waiting on you". */
 export async function InboxSection() {
   const [data, jar] = await Promise.all([
-    apiServerQuery(HomeInboxQuery).catch(() => null),
+    apiServerQuery(HomeInboxQuery, { toCheck: TO_CHECK_READ }).catch(
+      () => null,
+    ),
     cookies(),
   ]);
   if (data === null) return null;
@@ -107,28 +135,36 @@ export async function InboxSection() {
         },
       }))
     : [];
+  const quota = unwrapResult(data.myAiQuota, "AiQuotaConnection");
+  const quotas: AiQuotaRow[] = quota.ok
+    ? quota.data.edges.map(({ node }) => ({
+        kind: node.kind,
+        used: node.used,
+        limit: node.limit,
+        resetsAt: node.resetsAt as string,
+      }))
+    : [];
   return (
     <HomeInbox
       initialJobs={jobs}
       suggestions={suggestions}
       requests={requests}
+      needsDetails={data.needsDetailsCount}
+      toCheck={toCheckFromNodes(
+        data.me?.openBottles.edges.map((edge) => edge.node) ?? [],
+      )}
+      quotas={quotas}
       initialSeen={parseSeenCookie(jar.get(SEEN_COOKIE_NAME)?.value)}
     />
   );
 }
 
-/**
- * Continue and Drink soon — or, for someone with no bottles at all yet,
- * N15's first-run line and its one action.
- */
+/** Open (the rail and "Rate the n") and Drink soon (sealed, with Open). */
 export async function ContinueSectionServer() {
-  const [data, stats, soonData] = await Promise.all([
+  const [data, soonData] = await Promise.all([
     apiServerQuery(HomeContinueQuery, { first: OPEN_BOTTLES_READ }).catch(
       () => null,
     ),
-    apiServerQuery(SearchCollectionStatsQuery)
-      .then((answer) => answer.me?.collectionStats)
-      .catch(() => undefined),
     // L02: sealed bottles closing soon. Its failure costs only those rows.
     apiServerQuery(HomeDrinkSoonQuery, { first: DRINK_SOON_READ }).catch(
       () => null,
@@ -140,37 +176,19 @@ export async function ContinueSectionServer() {
   const sealed = sealedSoonFromNodes(
     soonData?.me?.drinkSoon.edges.map((edge) => edge.node) ?? [],
   );
-  if (bottles.length === 0 && sealed.length === 0) {
-    if (stats?.itemCounts.total !== 0) return null;
-    return (
-      <div className="rounded-lg bg-surface-1">
-        <EmptyState
-          illustration={<Camera aria-hidden strokeWidth={1.5} />}
-          title="Your cellar is waiting."
-          description="Snap a label and the app fills in the rest."
-          action={
-            <Button asChild>
-              <Link href="/add?mode=bottle" underline="none">
-                Snap a bottle
-              </Link>
-            </Button>
-          }
-          className="px-2 py-6"
-        />
-      </div>
-    );
-  }
+  if (bottles.length === 0 && sealed.length === 0) return null;
   return (
     <ContinueSection
       bottles={bottles}
       total={data?.me?.openBottles.totalCount ?? bottles.length}
       sealed={sealed}
+      sealedTotal={soonData?.me?.drinkSoon.totalCount ?? sealed.length}
       serverNow={Date.now()}
     />
   );
 }
 
-/** D1: friends' tier lists, the card Home keeps for them. */
+/** D1: friends' tier lists, a card of rows (Shell-Home "Friends ranked"). */
 export async function FriendsRankedSection() {
   const data = await apiServerQuery(HomeFriendsRankedQuery, {
     first: FRIENDS_RANKED_LIMIT,
@@ -178,58 +196,55 @@ export async function FriendsRankedSection() {
   if (data === null) return null;
   const lists = unwrapResult(data.myTierLists, "TierListConnection");
   if (!lists.ok || lists.data.edges.length === 0) return null;
-  const total = lists.data.totalCount ?? lists.data.edges.length;
   return (
-    <InsetSection
-      label="Friends ranked"
-      aria-label="Friends ranked"
-      action={
-        <Link href="/tier-lists" className="type-footnote text-ink-1">
-          {total > FRIENDS_RANKED_LIMIT ? `See all ${total}` : "See all"}
-        </Link>
-      }
-    >
-      {lists.data.edges.map(({ node }) => (
-        <ListRow
-          key={node.id}
-          leading={
-            node.createdBy === null ? (
-              <Ranked
-                aria-hidden
-                strokeWidth={ICON_STROKE}
-                className="size-5"
-              />
+    <section aria-labelledby="friends-ranked" className="flex flex-col gap-2">
+      <SectionHead
+        id="friends-ranked"
+        title="Friends ranked"
+        action={
+          <PressLink href="/tier-lists" className={SEE_ALL_CLASS}>
+            See all
+          </PressLink>
+        }
+      />
+      <ul className="m-0 flex list-none flex-col divide-y divide-rule overflow-hidden rounded-md border border-edge bg-card p-0">
+        {lists.data.edges.map(({ node }) => (
+          <li
+            key={node.id}
+            className="px-3.5 has-[a[data-slot=link]:active]:bg-raised"
+          >
+            {node.createdBy === null ? (
+              <div className="relative flex min-h-14 items-center gap-3">
+                <Ranked
+                  aria-hidden
+                  strokeWidth={ICON_STROKE}
+                  className="size-6 text-glyph"
+                />
+                <PressLink
+                  href={`/tier-lists/${node.id}`}
+                  overlay
+                  className="t-head min-w-0 flex-1 truncate text-ink"
+                >
+                  {node.name}
+                </PressLink>
+              </div>
             ) : (
-              <UserAvatar
-                avatarUrl={node.createdBy.avatarUrl}
+              <PersonRow
                 displayName={node.createdBy.displayName}
-                size="sm"
+                avatarUrl={node.createdBy.avatarUrl}
+                name={
+                  <PressLink href={`/tier-lists/${node.id}`} overlay>
+                    {node.name}
+                  </PressLink>
+                }
+                status={`${node.createdBy.displayName} · ${node.itemCount} ranked`}
+                chevron
               />
-            )
-          }
-          title={
-            <Link
-              href={`/tier-lists/${node.id}`}
-              overlay
-              underline="none"
-              className="text-ink-1"
-            >
-              {node.name}
-            </Link>
-          }
-          description={[node.createdBy?.displayName, `${node.itemCount} ranked`]
-            .filter(Boolean)
-            .join(" · ")}
-          trailing={
-            <ChevronRight
-              aria-hidden
-              strokeWidth={ICON_STROKE}
-              className="size-5"
-            />
-          }
-        />
-      ))}
-    </InsetSection>
+            )}
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 

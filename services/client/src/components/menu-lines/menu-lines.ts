@@ -15,8 +15,8 @@
  * ## Reasons are facts, in words
  *
  * `menuLineReasons` turns `PlaceMenuItem.forYou` (and the matched item's
- * Save state) into chip text: "In Bar Cart", "You ★4.5", "Sam loved it",
- * "Like the Lagavulin 16 you rated ★4.5", "On Want to try". Every one of them
+ * Save state) into chip text: "In Bar Cart", "You rated 4.5", "Sam loved it",
+ * "Like the Lagavulin 16 you rated 4.5", "On Want to try". Every one of them
  * names a row the viewer could go and look at. There is no affinity
  * percentage and nothing here computes one.
  */
@@ -34,14 +34,15 @@ export type MenuGroupKey =
   | "TEA"
   | "OTHER";
 
+/** The kit's kind order (Beer, Wine, Spirit, Coffee, Tea, Sake), cocktails after spirits. */
 export const MENU_GROUP_ORDER: readonly MenuGroupKey[] = [
-  "WINE",
   "BEER",
+  "WINE",
   "SPIRIT",
   "COCKTAIL",
-  "SAKE",
   "COFFEE",
   "TEA",
+  "SAKE",
   "OTHER",
 ];
 
@@ -110,9 +111,8 @@ export type MenuGroup<T> = {
 
 /**
  * Lines grouped by type, in {@link MENU_GROUP_ORDER}, empty groups left out.
- * Within a group, lines with a reason for the viewer come first ("for you
- * here", design §5 moment 6); otherwise the order the lines arrived in is
- * kept — a stable sort, so the menu's own order survives.
+ * Within a group, lines keep the order the menu printed them in
+ * (Places-Menus ruling 4): the reasons ride on the row, not the order.
  */
 export const groupMenuLines = <T extends MenuLineShape>(
   lines: readonly T[],
@@ -125,11 +125,7 @@ export const groupMenuLines = <T extends MenuLineShape>(
   return MENU_GROUP_ORDER.flatMap((key) => {
     const members = byGroup.get(key);
     if (members === undefined) return [];
-    const ranked = members
-      .map((line, index) => ({ line, index, mine: hasReasons(line) ? 0 : 1 }))
-      .sort((a, b) => a.mine - b.mine || a.index - b.index)
-      .map(({ line }) => line);
-    return [{ key, label: MENU_GROUP_LABEL[key], lines: ranked }];
+    return [{ key, label: MENU_GROUP_LABEL[key], lines: members }];
   });
 };
 
@@ -180,7 +176,7 @@ export const menuLineReasons = (line: MenuLineShape): MenuLineReason[] => {
   if (forYou?.your_score != null) {
     reasons.push({
       kind: "yourScore",
-      label: `You ★${starText(forYou.your_score)}`,
+      label: `You rated ${starText(forYou.your_score)}`,
     });
   }
   const friends =
@@ -194,7 +190,7 @@ export const menuLineReasons = (line: MenuLineShape): MenuLineReason[] => {
   if (forYou?.like_you_rated) {
     reasons.push({
       kind: "like",
-      label: `Like the ${forYou.like_you_rated.name} you rated ★${starText(
+      label: `Like the ${forYou.like_you_rated.name} you rated ${starText(
         forYou.like_you_rated.score,
       )}`,
     });
@@ -204,9 +200,6 @@ export const menuLineReasons = (line: MenuLineShape): MenuLineReason[] => {
   }
   return reasons;
 };
-
-const hasReasons = (line: MenuLineShape): boolean =>
-  menuLineReasons(line).length > 0;
 
 /** What the catalog is searched for when a line has no match yet. */
 export const candidateQuery = (line: MenuLineShape): string =>

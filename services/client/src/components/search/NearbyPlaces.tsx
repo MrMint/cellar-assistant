@@ -1,14 +1,20 @@
 "use client";
 
 import { AnimatePresence, motion } from "motion/react";
-import Image from "next/image";
 import { useMemo, useState } from "react";
 import { useQuery } from "urql";
 import { FilterChip } from "@/components/app/FilterChip";
-import { ICON_STROKE, Place, Star } from "@/components/app/icons";
-import { Link } from "@/components/app/Link";
+import { ICON_STROKE, Place } from "@/components/app/icons";
+import { PlaceRow } from "@/components/app/parts/PlaceRow";
 import { itemTypeTokens } from "@/components/app/TypeChip";
 import type { ApiItemType } from "@/components/cellar-api/itemTypes";
+import { SEE_ALL_CLASS, SectionHead } from "@/components/home/HomeLayout";
+import {
+  formatMetres,
+  metresBetween,
+  placeYouAreAt,
+} from "@/components/home/landing";
+import { PressLink } from "@/components/home/PressLink";
 import { mapItemTypesToCategories } from "@/components/map/config/scoring";
 import { useGeolocation } from "@/components/map/hooks/useGeolocation";
 import {
@@ -17,7 +23,6 @@ import {
 } from "@/components/map/places/place-utils";
 import type { ItemType } from "@/components/map/types";
 import type { CachedLocation } from "@/lib/geo-cookie/parse";
-import { distance } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 import { type NearbyPlace, nearbyPlacesFromNodes } from "./adapter";
 import { NEARBY_PLACES_LIMIT, SearchNearbyPlacesQuery } from "./queries";
@@ -62,26 +67,6 @@ const PLACE_TYPE_FILTERS: {
 /** A type toggled in or out, keeping the order the types were picked in. */
 const toggleType = (types: readonly ItemType[], type: ItemType): ItemType[] =>
   types.includes(type) ? types.filter((t) => t !== type) : [...types, type];
-
-function formatDistance(
-  placeLat: number,
-  placeLng: number,
-  userLat: number,
-  userLng: number,
-): string {
-  const R = 6371e3;
-  const dLat = ((placeLat - userLat) * Math.PI) / 180;
-  const dLng = ((placeLng - userLng) * Math.PI) / 180;
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos((userLat * Math.PI) / 180) *
-      Math.cos((placeLat * Math.PI) / 180) *
-      Math.sin(dLng / 2) ** 2;
-  const meters = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-
-  if (meters < 1000) return `${Math.round(meters)}m`;
-  return `${(meters / 1000).toFixed(1)}km`;
-}
 
 // ─── Open status from cached enrichment hours ────────────────────────────────
 
@@ -189,58 +174,63 @@ export function NearbyPlaces({
   const userLat = geo.location?.latitude ?? cachedLocation?.latitude ?? 0;
   const userLng = geo.location?.longitude ?? cachedLocation?.longitude ?? 0;
 
+  const here = { lat: userLat, lng: userLng };
+  const at = placeYouAreAt(places, here);
+  const origin = at === null ? "you" : at.place.name;
+  // The place you are at leads: Home is place-aware (DECISIONS 23).
+  const ordered =
+    at === null
+      ? places
+      : [at.place, ...places.filter((place) => place.id !== at.place.id)];
+
   return (
-    <section aria-label="Nearby Places" className="flex flex-col gap-3">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <Place
-            aria-hidden
-            className="size-5 text-ink-3"
-            strokeWidth={ICON_STROKE}
-          />
-          <h2 className="type-headline text-ink-1">Nearby Places</h2>
-        </div>
+    <section aria-labelledby="nearby-heading" className="flex flex-col gap-2">
+      <SectionHead
+        id="nearby-heading"
+        title={at === null ? "Nearby" : `Near ${at.place.name}`}
+        count={
+          places.length === 0
+            ? null
+            : `${places.length} ${places.length === 1 ? "place" : "places"}`
+        }
+      />
+      <fieldset
+        aria-label="Place type filters"
+        className="-mx-4 m-0 flex min-w-0 gap-2 overflow-x-auto border-0 px-4 py-0 [scrollbar-width:none] md:mx-0 md:flex-wrap md:px-0 [&::-webkit-scrollbar]:hidden"
+      >
+        {PLACE_TYPE_FILTERS.map(({ id, label, glyph }) => {
+          // The type's own glyph, in the chip's ink: a filter is state,
+          // so it takes the chip's colour rather than the type's hue.
+          const Glyph = itemTypeTokens[glyph].glyph;
+          return (
+            <FilterChip
+              key={id}
+              aria-label={label}
+              selected={selectedTypes.includes(id)}
+              icon={<Glyph aria-hidden strokeWidth={ICON_STROKE} />}
+              onClick={() => setSelectedTypes(toggleType(selectedTypes, id))}
+            >
+              {label}
+            </FilterChip>
+          );
+        })}
+      </fieldset>
 
-        <fieldset
-          aria-label="Place type filters"
-          className="flex min-w-0 flex-wrap gap-1.5"
-        >
-          {PLACE_TYPE_FILTERS.map(({ id, label, glyph }) => {
-            // The type's own glyph, in the chip's ink: a filter is state,
-            // so it takes the chip's colour rather than the type's hue.
-            const Glyph = itemTypeTokens[glyph].glyph;
-            return (
-              <FilterChip
-                key={id}
-                aria-label={label}
-                selected={selectedTypes.includes(id)}
-                icon={<Glyph aria-hidden strokeWidth={ICON_STROKE} />}
-                onClick={() => setSelectedTypes(toggleType(selectedTypes, id))}
-              >
-                {label}
-              </FilterChip>
-            );
-          })}
-        </fieldset>
-      </div>
-
-      {/* Cards: AnimatePresence handles smooth exit/enter between filter changes */}
       <AnimatePresence mode="wait">
         {initialLoading ? null : places.length === 0 ? (
-          <motion.div
+          <motion.p
             key="empty"
             initial={animateEntrance ? { opacity: 0 } : false}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={fadeShort}
+            className="t-cap m-0 py-4 text-ink-3"
           >
-            <p className="type-footnote py-4">
-              No nearby places found
-              {selectedTypes.length > 0 && " for the selected types"}
-            </p>
-          </motion.div>
+            No nearby places found
+            {selectedTypes.length > 0 && " for the selected types"}
+          </motion.p>
         ) : (
-          <motion.div
+          <motion.ul
             key={selectedTypes.join(",")}
             variants={prefersReducedMotion ? undefined : staggerContainerFast}
             initial={
@@ -248,105 +238,52 @@ export function NearbyPlaces({
             }
             animate="show"
             exit="exit"
-            className="grid grid-cols-1 gap-2 md:grid-cols-2"
+            className="m-0 grid list-none grid-cols-1 gap-2 p-0 md:grid-cols-2"
           >
-            {places.map((place) => {
+            {ordered.map((place) => {
               const [lng, lat] = place.coordinates;
-              const dist = formatDistance(lat, lng, userLat, userLng);
-              const photoUrl = place.photoUrl;
-              const rating = place.rating;
-              const priceLevelText = getPriceLevelText(place.priceLevel);
+              const isHere = at !== null && at.place.id === place.id;
               const openStatus = place.openingHours
                 ? getOpenStatus(place.openingHours)
                 : null;
-
+              const where = [
+                formatCategoryName(place.primaryCategory),
+                getPriceLevelText(place.priceLevel) || null,
+                openStatus?.text ?? null,
+                // CROSS-LOT: always name the origin; "At X" within 25 m.
+                isHere
+                  ? `At ${place.name}`
+                  : `${formatMetres(metresBetween(here, { lat, lng }))} from ${origin}`,
+              ]
+                .filter((part): part is string => Boolean(part))
+                .join(" · ");
               return (
-                <motion.div
+                <motion.li
                   key={place.id}
+                  data-here={isHere || undefined}
                   variants={prefersReducedMotion ? undefined : fadeInLeft}
-                  whileHover={prefersReducedMotion ? undefined : { y: -2 }}
-                  whileTap={
-                    prefersReducedMotion ? undefined : { scale: distance.press }
-                  }
                   transition={fadeShort}
                 >
-                  <Link
-                    href={`/map?placeId=${place.id}`}
-                    underline="none"
-                    className="flex h-full items-center gap-3 rounded-md bg-surface-1 p-2.5 text-ink-1 transition-colors duration-(--ca-dur-short) ease-standard hover:bg-surface-2"
-                  >
-                    {/* Place thumbnail */}
-                    <div className="relative size-11 shrink-0 overflow-hidden rounded-sm">
-                      {photoUrl ? (
-                        <Image
-                          src={photoUrl}
-                          alt={place.name}
-                          fill
-                          className="object-cover"
-                          sizes="44px"
-                        />
-                      ) : (
-                        <span className="flex size-full items-center justify-center bg-surface-2 font-semibold text-ink-2">
-                          {place.name.charAt(0)}
-                        </span>
-                      )}
-                    </div>
-
-                    <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-                      <p className="type-callout truncate font-semibold">
+                  <PlaceRow
+                    glyph={Place}
+                    photoUrl={place.photoUrl}
+                    name={
+                      <PressLink href={`/map?placeId=${place.id}`} overlay>
                         {place.name}
-                      </p>
-
-                      {/* Info line: category · rating · price · distance */}
-                      <p className="type-footnote truncate">
-                        {formatCategoryName(place.primaryCategory)}
-                        {rating != null && (
-                          <>
-                            {" \u00B7 "}
-                            <Star
-                              aria-hidden
-                              strokeWidth={0}
-                              className="inline size-[0.85em] fill-current align-[-0.1em]"
-                            />{" "}
-                            {rating.toFixed(1)}
-                          </>
-                        )}
-                        {priceLevelText && (
-                          <>
-                            {" \u00B7 "}
-                            {priceLevelText}
-                          </>
-                        )}
-                        {" \u00B7 "}
-                        {dist}
-                      </p>
-
-                      {/* Open/closed status when available */}
-                      {openStatus && (
-                        <p
-                          className={cn(
-                            "type-footnote font-medium",
-                            openStatus.isOpen
-                              ? "text-success"
-                              : "text-destructive",
-                          )}
-                        >
-                          {openStatus.text}
-                        </p>
-                      )}
-                    </div>
-                  </Link>
-                </motion.div>
+                      </PressLink>
+                    }
+                    where={where}
+                    rating={place.rating}
+                  />
+                </motion.li>
               );
             })}
-          </motion.div>
+          </motion.ul>
         )}
       </AnimatePresence>
-      <div className="text-center">
-        <Link href="/map" className="type-callout text-primary">
-          View all on map
-        </Link>
-      </div>
+      <PressLink href="/map" className={cn(SEE_ALL_CLASS, "mr-0 self-center")}>
+        View all on map
+      </PressLink>
     </section>
   );
 }

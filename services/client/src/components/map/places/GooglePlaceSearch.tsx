@@ -157,11 +157,11 @@ export function GooglePlaceSearch({
                 onSelect={() => select(option)}
                 className="min-h-11 flex-col items-start gap-0"
               >
-                <span className="type-callout font-semibold text-ink-1">
+                <span className="t-body font-semibold text-ink">
                   {option.name}
                 </span>
                 {option.secondaryText && (
-                  <span className="type-footnote">{option.secondaryText}</span>
+                  <span className="t-cap">{option.secondaryText}</span>
                 )}
               </CommandItem>
             ))}

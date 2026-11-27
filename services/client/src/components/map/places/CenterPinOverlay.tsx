@@ -50,7 +50,7 @@ export function CenterPinOverlay({
           under. */}
       <div className="absolute right-4 bottom-10 left-4 z-[1250] max-w-[400px] md:right-auto md:bottom-6 md:left-1/2 md:-translate-x-1/2">
         <div className="surface-glass flex flex-col items-center gap-3 rounded-lg p-4">
-          <p className="type-callout text-center">
+          <p className="t-body text-center">
             Move the map to position the pin on the place
           </p>
           <div className="flex w-full gap-2">

@@ -313,7 +313,7 @@ export const PlaceDetailsDrawer = forwardRef<
       <div className="p-4">
         <p
           role="alert"
-          className="type-callout rounded-md border border-destructive/60 px-4 py-3 text-destructive"
+          className="t-body rounded-md border border-destructive/60 px-4 py-3 text-danger"
         >
           Failed to load place details: {error.message}
         </p>
@@ -363,7 +363,7 @@ export const PlaceDetailsDrawer = forwardRef<
             animate={{ x: 0, opacity: 1 }}
             exit={{ x: -400, opacity: 0 }}
             transition={{ ...spring.sheet, opacity: tween("short") }}
-            className="fixed top-0 z-[950] h-dvh w-[400px] cursor-default overflow-y-auto overscroll-contain border-line border-r bg-background shadow-xl"
+            className="fixed top-0 z-[950] h-dvh w-[400px] cursor-default overflow-y-auto overscroll-contain border-rule border-r bg-background shadow-xl"
             style={{ left: leftInset }}
             onClick={(e) => e.stopPropagation()}
             onMouseDown={(e) => e.stopPropagation()}

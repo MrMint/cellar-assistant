@@ -13,7 +13,7 @@ export type ScanTone = "success" | "working" | "danger" | "neutral";
 const TONE_CLASS: Record<ScanTone, string> = {
   success: "bg-success/15 text-success",
   working: "bg-ai/15 text-ai",
-  danger: "border-destructive/60 bg-transparent text-destructive",
+  danger: "border-destructive/60 bg-transparent text-danger",
   neutral: "bg-surface-3 text-ink-2",
 };
 

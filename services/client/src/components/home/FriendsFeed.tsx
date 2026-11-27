@@ -4,10 +4,10 @@ import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
 import { EmptyState } from "@/components/app/EmptyState";
+import { FilterChip } from "@/components/app/FilterChip";
 import { ICON_STROKE, People, Place, Recipe } from "@/components/app/icons";
-import { Link } from "@/components/app/Link";
-import { itemTypeTokens, TypeGlyph } from "@/components/app/TypeChip";
-import { UserAvatar } from "@/components/app/UserAvatar";
+import { ActivityItem } from "@/components/app/parts/ActivityItem";
+import { itemTypeTokens } from "@/components/app/TypeChip";
 import type { ApiItemType } from "@/components/cellar-api/itemTypes";
 import { InviteFriendButton } from "@/components/friend/InviteFriendButton";
 import { Button } from "@/components/ui/button";
@@ -20,12 +20,16 @@ import type { Page } from "@/lib/paging/paged-connection";
 import { usePagedConnection } from "@/lib/paging/use-paged-connection";
 import { cn } from "@/lib/utils";
 import {
+  FEED_FILTERS,
   type FeedBurst,
+  type FeedFilter,
   type FeedNode,
   feedEntriesFromNodes,
+  filterBursts,
   groupBursts,
-  sentenceText,
 } from "./feed";
+import { SectionHead } from "./HomeLayout";
+import { PressLink } from "./PressLink";
 import { FEED_PAGE_SIZE, HomeFriendsFeedQuery } from "./queries";
 
 /** A page with no `me` — signed out mid-session, or a resolver that threw. */
@@ -52,12 +56,14 @@ const useAgo = () => {
 };
 
 /**
- * Home's Friends section (X10): what friends did, in sentences, bursts
- * folded into one line (`feed.ts`), a page at a time — "Show more" reads the
- * next page of `me.friendsFeed` and the bursts regroup over everything
- * loaded, so a burst a page cut in two joins up.
+ * Home's Friends section (X10, Shell-Home "Friends"): what friends did, as
+ * kit activity cards, bursts folded into one (`feed.ts`), a page at a time —
+ * "Show more" reads the next page of `me.friendsFeed` and the bursts regroup
+ * over everything loaded, so a burst a page cut in two joins up. The chips
+ * (All, Rated, Ranked, Added) narrow what is loaded.
  *
- * With no friends at all it is N15's empty state: one line and Invite.
+ * With no friends at all it is the kit's empty state: glyph, one line,
+ * Invite.
  */
 export function FriendsFeed({
   initialNodes,
@@ -98,11 +104,13 @@ export function FriendsFeed({
   const loading = feed.status === "loadingMore";
   const ago = useAgo();
   const reduced = useReducedMotion();
+  const [filter, setFilter] = useState<FeedFilter>("All");
 
   const bursts = useMemo(
     () => groupBursts(feedEntriesFromNodes(feed.rows, viewerId)),
     [feed.rows, viewerId],
   );
+  const shown = filterBursts(bursts, filter);
 
   if (bursts.length === 0) {
     if (friendCount !== 0) return null;
@@ -111,14 +119,12 @@ export function FriendsFeed({
         aria-labelledby="friends-heading"
         className="flex flex-col gap-2"
       >
-        <h2 id="friends-heading" className="type-overline px-4 text-ink-3">
-          Friends
-        </h2>
-        <div className="rounded-lg bg-surface-1">
+        <SectionHead id="friends-heading" title="Friends" />
+        <div className="rounded-md border border-edge bg-card">
           <EmptyState
-            illustration={<People aria-hidden strokeWidth={1.5} />}
-            title="Taste is better compared."
-            description="Friends see what you rate and rank, and you see theirs."
+            illustration={<People aria-hidden strokeWidth={ICON_STROKE} />}
+            title="Taste is better compared"
+            description="Friends see what you rate and rank, and you see theirs"
             action={<InviteFriendButton />}
             className="px-2 py-6"
           />
@@ -129,32 +135,48 @@ export function FriendsFeed({
 
   return (
     <section aria-labelledby="friends-heading" className="flex flex-col gap-2">
-      <h2 id="friends-heading" className="type-overline px-4 text-ink-3">
-        Friends
-      </h2>
-      <ul className="flex flex-col divide-y divide-line overflow-hidden rounded-lg bg-surface-1">
-        <AnimatePresence initial={false}>
-          {bursts.map((burst) => (
-            <motion.li
-              key={burst.id}
-              initial={reduced ? false : { opacity: 0, y: distance.list }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={tween("short", "enter")}
-            >
-              <BurstRow burst={burst} ago={ago(burst.timestamp)} />
-            </motion.li>
-          ))}
-        </AnimatePresence>
-      </ul>
+      <SectionHead id="friends-heading" title="Friends" />
+      <fieldset className="-mx-4 m-0 flex min-w-0 gap-2 border-0 py-0 overflow-x-auto px-4 [scrollbar-width:none] md:mx-0 md:flex-wrap md:px-0 [&::-webkit-scrollbar]:hidden">
+        <legend className="sr-only">Show</legend>
+        {FEED_FILTERS.map((name) => (
+          <FilterChip
+            key={name}
+            selected={filter === name}
+            onClick={() => setFilter(name)}
+          >
+            {name}
+          </FilterChip>
+        ))}
+      </fieldset>
+      {shown.length === 0 ? (
+        <p className="t-cap m-0 py-4 text-center text-ink-3">
+          Nothing like that from friends yet
+        </p>
+      ) : (
+        <ul className="m-0 flex list-none flex-col gap-2 p-0">
+          <AnimatePresence initial={false}>
+            {shown.map((burst) => (
+              <motion.li
+                key={burst.id}
+                initial={reduced ? false : { opacity: 0, y: distance.list }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={tween("short", "enter")}
+              >
+                <BurstItem burst={burst} ago={ago(burst.timestamp)} />
+              </motion.li>
+            ))}
+          </AnimatePresence>
+        </ul>
+      )}
       {feed.failure !== null && (
-        <p role="alert" className="type-footnote px-4 text-destructive">
+        <p role="alert" className="t-cap m-0 text-danger">
           More couldn't be loaded. Try again.
         </p>
       )}
       {feed.hasNextPage && (
         <Button
-          variant="ghost"
-          className="self-center text-ink-1"
+          variant="quiet"
+          className="self-center"
           disabled={!feed.canLoadMore}
           aria-busy={loading || undefined}
           onClick={() => void feed.loadMore()}
@@ -167,11 +189,25 @@ export function FriendsFeed({
   );
 }
 
+/** A 44 thumb: the thing's photo, else its kind's glyph flat on raised. */
 function Thumb({ burst }: { burst: FeedBurst }) {
   const [first] = burst.entries;
   if (first === undefined) return null;
+  const Glyph = isItemType(first.itemType)
+    ? itemTypeTokens[first.itemType].glyph
+    : first.itemType === "RECIPE"
+      ? Recipe
+      : Place;
+  const kind = isItemType(first.itemType)
+    ? first.itemType
+    : first.itemType === "RECIPE"
+      ? "recipe"
+      : "place";
   return (
-    <span className="relative size-11 shrink-0 overflow-hidden rounded-sm">
+    <span
+      data-thumb={first.itemImageUrl ? undefined : kind}
+      className="relative flex size-11 shrink-0 items-center justify-center overflow-hidden rounded-sm bg-raised"
+    >
       {first.itemImageUrl ? (
         <Image
           src={first.itemImageUrl}
@@ -180,34 +216,16 @@ function Thumb({ burst }: { burst: FeedBurst }) {
           sizes="44px"
           className="object-cover"
         />
-      ) : isItemType(first.itemType) ? (
-        <span
-          data-thumb={first.itemType}
-          className={cn(
-            "flex size-full items-center justify-center",
-            itemTypeTokens[first.itemType].tintClass,
-          )}
-        >
-          <TypeGlyph type={first.itemType} className="size-5" />
-        </span>
-      ) : first.itemType === "RECIPE" ? (
-        // A Made-it log (L08): the recipe stands for the item (H-13).
-        <span
-          data-thumb="recipe"
-          className="flex size-full items-center justify-center bg-surface-2 text-ink-2"
-        >
-          <Recipe aria-hidden strokeWidth={ICON_STROKE} className="size-5" />
-        </span>
       ) : (
-        <span
-          data-thumb="place"
-          className="flex size-full items-center justify-center bg-surface-2 text-ink-2"
-        >
-          <Place aria-hidden strokeWidth={ICON_STROKE} className="size-5" />
-        </span>
+        // A Made-it log (L08): the recipe stands for the item (H-13).
+        <Glyph
+          aria-hidden
+          strokeWidth={ICON_STROKE}
+          className="size-5 text-glyph"
+        />
       )}
       {burst.entries.length > 1 && (
-        <span className="type-footnote tabular absolute right-0.5 bottom-0.5 rounded-sm bg-background/80 px-1 font-semibold text-ink-1">
+        <span className="t-micro tabular absolute right-0.5 bottom-0.5 rounded-sm bg-card px-1 text-ink">
           {burst.entries.length}
         </span>
       )}
@@ -215,68 +233,62 @@ function Thumb({ burst }: { burst: FeedBurst }) {
   );
 }
 
-function BurstRow({ burst, ago }: { burst: FeedBurst; ago: string | null }) {
+function BurstItem({ burst, ago }: { burst: FeedBurst; ago: string | null }) {
   const [first] = burst.entries;
   const single = burst.entries.length === 1 ? first : undefined;
-  // The token that goes where the row goes stretches over the row (the
+  // The token that goes where the row goes stretches over the card (the
   // stretched-link pattern); any other link sits above it.
   const overlayAt = burst.sentence.findIndex(
     (token) => token.href === burst.href,
   );
   return (
-    <article
-      aria-label={sentenceText(burst.sentence)}
-      className="relative flex items-start gap-3 px-4 py-3 has-[a[data-slot=link]:active]:bg-surface-3"
-    >
-      <UserAvatar
-        avatarUrl={burst.userAvatar}
-        displayName={burst.userName}
-        size="sm"
-        className="mt-0.5 shrink-0"
-      />
-      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <p className="type-callout text-ink-2">
-          {burst.sentence.map((token, index) =>
-            token.href !== undefined ? (
-              <Link
-                // biome-ignore lint/suspicious/noArrayIndexKey: tokens are positional and never reorder.
-                key={index}
-                href={token.href}
-                overlay={index === overlayAt}
-                underline="hover"
-                className={cn(
-                  "font-semibold text-ink-1",
-                  index !== overlayAt && "relative z-10",
-                )}
-              >
-                {token.text}
-              </Link>
-            ) : (
-              <span
-                // biome-ignore lint/suspicious/noArrayIndexKey: as above.
-                key={index}
-                className={cn(token.strong && "font-semibold text-ink-1")}
-              >
-                {token.text}
-              </span>
-            ),
-          )}
-        </p>
-        {burst.detail !== null && (
-          <p className="type-footnote line-clamp-2 italic">{burst.detail}</p>
-        )}
-        <p className="type-footnote min-h-4 text-ink-3">{ago}</p>
-      </div>
-      <Thumb burst={burst} />
-      {single?.save != null && (
-        <WantToTryButton
-          target={single.save.target}
-          saved={single.save.saved}
-          name={single.itemName}
-          size="sm"
-          className="relative z-10 -my-1 -mr-2 self-center"
-        />
+    <ActivityItem
+      who={burst.userName}
+      avatarUrl={burst.userAvatar}
+      time={ago ?? ""}
+      sentence={burst.sentence.map((token, index) =>
+        token.href !== undefined ? (
+          <PressLink
+            // biome-ignore lint/suspicious/noArrayIndexKey: tokens are positional and never reorder.
+            key={index}
+            href={token.href}
+            overlay={index === overlayAt}
+            className={cn(
+              "t-head text-ink",
+              index !== overlayAt && "relative z-10",
+            )}
+          >
+            {token.text}
+          </PressLink>
+        ) : (
+          <span
+            // biome-ignore lint/suspicious/noArrayIndexKey: as above.
+            key={index}
+            className={cn(token.strong && "t-head text-ink")}
+          >
+            {token.text}
+          </span>
+        ),
       )}
-    </article>
+      detail={
+        <>
+          <Thumb burst={burst} />
+          {burst.detail !== null && (
+            <span className="t-cap line-clamp-2 min-w-0 flex-1 text-ink-2">
+              {burst.detail}
+            </span>
+          )}
+          {single?.save != null && (
+            <WantToTryButton
+              target={single.save.target}
+              saved={single.save.saved}
+              name={single.itemName}
+              size="sm"
+              className="relative z-10 ml-auto"
+            />
+          )}
+        </>
+      }
+    />
   );
 }

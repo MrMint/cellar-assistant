@@ -61,16 +61,16 @@ export function HeaderRenameOffer({
     <section
       data-slot="header-rename"
       aria-label="Rename the place"
-      className="flex flex-col gap-3 rounded-xl bg-surface-1 p-4"
+      className="flex flex-col gap-3 rounded-lg border border-edge p-4"
     >
-      <p className="type-body text-ink-1">
+      <p className="t-body text-ink">
         This menu says &ldquo;{proposal}&rdquo;. Rename the place?
       </p>
-      <p className="type-footnote text-ink-3">
+      <p className="t-cap text-ink-2">
         It&rsquo;s still Under review, so only you see the name for now.
       </p>
       {error !== null && (
-        <p role="alert" className="type-footnote text-destructive">
+        <p role="alert" className="t-cap text-danger">
           {error}
         </p>
       )}
@@ -79,7 +79,7 @@ export function HeaderRenameOffer({
           Rename
         </Button>
         <Button
-          variant="ghost"
+          variant="quiet-muted"
           onClick={() => setDismissed(true)}
           disabled={saving}
         >

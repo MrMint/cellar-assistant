@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Check, ChevronDown, ICON_STROKE } from "@/components/app/icons";
+import { pressFeedback } from "@/components/app/overlays/press";
 import { Badge } from "@/components/ui/badge";
 import {
   Command,
@@ -87,6 +88,7 @@ export function CategoryMultiSelect<V extends string>({
         <button
           id={id}
           type="button"
+          {...pressFeedback()}
           role="combobox"
           aria-expanded={open}
           aria-controls={listId}
@@ -100,7 +102,7 @@ export function CategoryMultiSelect<V extends string>({
           )}
         >
           {value.length === 0 ? (
-            <span className="text-muted-foreground">{placeholder}</span>
+            <span className="text-ink-2">{placeholder}</span>
           ) : (
             <span id={valueId} className="contents">
               {value.map((option, index) => (
@@ -148,7 +150,7 @@ export function CategoryMultiSelect<V extends string>({
                           aria-hidden
                           strokeWidth={ICON_STROKE}
                           className={cn(
-                            "text-ink-1",
+                            "text-ink",
                             on ? "opacity-100" : "opacity-0",
                           )}
                         />

@@ -45,7 +45,7 @@ export function LocationPrePrompt({
           strokeWidth={ICON_STROKE}
           className="size-4 shrink-0 text-ink-2"
         />
-        <p className="type-callout">{copy}</p>
+        <p className="t-cap">{copy}</p>
       </div>
       <div className="flex justify-end gap-2">
         <Button variant="ghost" onClick={onDismiss} disabled={disabled}>

@@ -65,7 +65,7 @@ describe("menuGroupOf", () => {
 });
 
 describe("groupMenuLines", () => {
-  test("groups in the app's type order, cocktails beside spirits, Other last", () => {
+  test("groups in the kit's kind order (Beer, Wine, Spirit, Coffee, Tea, Sake), cocktails after spirits, Other last", () => {
     const groups = groupMenuLines([
       line("tea", "tea"),
       line("other", null),
@@ -79,19 +79,19 @@ describe("groupMenuLines", () => {
     assert.deepEqual(
       groups.map((group) => group.label),
       [
-        "Wine",
         "Beer",
+        "Wine",
         "Spirits",
         "Cocktails",
-        "Sake",
         "Coffee",
         "Tea",
+        "Sake",
         "Other",
       ],
     );
   });
 
-  test("lines with a reason for you lead their group; the rest keep the menu's order", () => {
+  test("lines keep the menu's printed order within a group (Places-Menus ruling 4)", () => {
     const [wine] = groupMenuLines([
       line("first", "wine"),
       line("second", "wine"),
@@ -102,7 +102,7 @@ describe("groupMenuLines", () => {
     ]);
     assert.deepEqual(
       wine?.lines.map((l) => l.id),
-      ["loved", "first", "second", "third"],
+      ["first", "second", "loved", "third"],
     );
   });
 });
@@ -130,9 +130,9 @@ describe("menuLineReasons", () => {
       reasons.map((r) => r.label),
       [
         "In Bar Cart",
-        "You ★4.5",
+        "You rated 4.5",
         "Sam loved it",
-        "Like the Lagavulin 16 you rated ★4",
+        "Like the Lagavulin 16 you rated 4",
         "On Want to try",
       ],
     );

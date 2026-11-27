@@ -53,7 +53,7 @@ export function PlaceMenuItems({
   if (menuItems.length === 0) {
     return (
       <div className="rounded-lg bg-surface-1 px-4 py-8 text-center">
-        <p className="type-body text-ink-2">No menu items available</p>
+        <p className="t-body text-ink-2">No menu items available</p>
       </div>
     );
   }

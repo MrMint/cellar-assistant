@@ -28,9 +28,7 @@ export function GooglePlaceSuggestions({
     return (
       <div className="mb-4 flex items-center gap-2">
         <Spinner className="text-ink-2" />
-        <p className="type-callout text-ink-2">
-          Checking for known places nearby...
-        </p>
+        <p className="t-body text-ink-2">Checking for known places nearby...</p>
       </div>
     );
   }
@@ -39,7 +37,7 @@ export function GooglePlaceSuggestions({
 
   return (
     <div className="mb-4">
-      <p className="type-callout mb-2 font-semibold text-ink-1">
+      <p className="t-body mb-2 font-semibold text-ink">
         We found these places nearby. Is yours one of them?
       </p>
       <ul className="flex flex-col gap-2">
@@ -55,7 +53,7 @@ export function GooglePlaceSuggestions({
                   strokeWidth={ICON_STROKE}
                   className="size-5 shrink-0 text-ink-2"
                 />
-                <p className="type-callout truncate font-semibold text-ink-1">
+                <p className="t-body truncate font-semibold text-ink">
                   {place.name}
                 </p>
               </div>
@@ -67,7 +65,7 @@ export function GooglePlaceSuggestions({
                 ))}
               </div>
               {place.address && (
-                <p className="type-footnote mt-1 truncate">{place.address}</p>
+                <p className="t-cap mt-1 truncate">{place.address}</p>
               )}
             </div>
             <Button variant="outline" onClick={() => onSelect(place)}>

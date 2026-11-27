@@ -197,8 +197,10 @@ test("creates a place through the form", async ({ primary }) => {
     primary.getByRole("heading", { name: placeName }),
     `the place page never showed the name (body: ${(await bodyText(primary)).slice(0, 200)})`,
   ).toBeVisible({ timeout: 20_000 });
-  await expect(primary.getByRole("tab", { name: /Menu/ })).toBeVisible();
-  await expect(primary.getByRole("tab", { name: "Scan menu" })).toBeVisible();
+  await expect(primary.locator('[data-slot="place-menu"]')).toBeVisible();
+  await expect(
+    primary.getByRole("button", { name: "Scan a menu" }),
+  ).toBeVisible();
   expect(noise.pageErrors, "the place page threw").toEqual([]);
 });
 
@@ -324,6 +326,13 @@ test("the map page renders and asks the server for a viewport", async ({
 
   await primary.goto("/map");
   await settleNetwork(primary);
+
+  // The redesign's list (Map board, desktop/Places): the search sits in the
+  // dock on a phone and in the list column from md, one field either way.
+  await expect(
+    primary.getByPlaceholder("Search places", { exact: true }),
+    "the map's place search never rendered",
+  ).toBeVisible();
 
   expect(noise.pageErrors, "the map page threw").toEqual([]);
   expect(

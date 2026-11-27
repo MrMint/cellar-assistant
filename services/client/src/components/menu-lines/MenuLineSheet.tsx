@@ -7,14 +7,13 @@ import {
   Add,
   Cellar,
   ChevronRight,
-  Close,
   ICON_STROKE,
-  Ranked,
+  Lists,
   Recipe,
 } from "@/components/app/icons";
 import { Link } from "@/components/app/Link";
 import { notify } from "@/components/app/notify";
-import { TypeChip, TypeGlyph } from "@/components/app/TypeChip";
+import { TypeGlyph } from "@/components/app/TypeChip";
 import type { ApiItemType } from "@/components/cellar-api/itemTypes";
 import { type MenuItemView, matchedItemHref } from "@/components/map/adapter";
 import { Button } from "@/components/ui/button";
@@ -156,12 +155,11 @@ function Candidates({
   if (failure !== null) {
     return (
       <div role="alert" className="flex flex-col items-start gap-2">
-        <p className="type-callout text-ink-2">
+        <p className="t-body text-ink-2">
           Couldn&apos;t look this up in the catalog just now.
         </p>
         <Button
-          size="sm"
-          variant="secondary"
+          variant="outline"
           onClick={() => retry({ requestPolicy: "network-only" })}
         >
           Try again
@@ -171,7 +169,7 @@ function Candidates({
   }
   if (candidates.length === 0) {
     return (
-      <p className="type-callout text-ink-2">
+      <p className="t-body text-ink-2">
         Nothing in the catalog looks like this yet.
       </p>
     );
@@ -181,10 +179,10 @@ function Candidates({
       aria-labelledby={`candidates-${line.id}`}
       className="flex flex-col gap-2"
     >
-      <h3 id={`candidates-${line.id}`} className="type-overline text-ink-3">
+      <h3 id={`candidates-${line.id}`} className="t-micro text-ink-2">
         Is it one of these?
       </h3>
-      <ul className="flex flex-col divide-y divide-line overflow-hidden rounded-lg bg-surface-2">
+      <ul className="flex flex-col divide-y divide-rule overflow-hidden rounded-lg border border-edge">
         {candidates.map((candidate) => {
           const href = matchedItemHref({
             id: candidate.id,
@@ -196,7 +194,7 @@ function Candidates({
               className="relative flex min-h-11 items-center gap-3 px-4 py-2"
             >
               <TypeGlyph type={candidate.type as ApiItemType} />
-              <span className="type-body min-w-0 flex-1 truncate text-ink-1">
+              <span className="t-body min-w-0 flex-1 truncate text-ink">
                 {href !== null && !canCorrect ? (
                   <Link href={href} overlay underline="none">
                     {candidate.name}
@@ -207,8 +205,7 @@ function Candidates({
               </span>
               {canCorrect ? (
                 <Button
-                  size="sm"
-                  variant="secondary"
+                  variant="outline"
                   disabled={pending}
                   aria-label={`That's it: ${candidate.name}`}
                   onClick={() =>
@@ -221,14 +218,14 @@ function Candidates({
                   That&apos;s it
                 </Button>
               ) : (
-                <ChevronRight aria-hidden className="size-4 text-ink-3" />
+                <ChevronRight aria-hidden className="size-4 text-glyph" />
               )}
             </li>
           );
         })}
       </ul>
       {!canCorrect && (
-        <p className="type-footnote">
+        <p className="t-cap text-ink-2">
           Only the person who scanned this menu can set its match — but you can
           open any of these.
         </p>
@@ -253,7 +250,7 @@ export type MenuLineSheetProps = {
  * Everything a menu line can do (X07), in one thumb-reachable sheet.
  *
  * A matched line: **I'm having this** (a drink log at this place, X02),
- * **Want to try**, **Add to tier list**, **Add to cellar** — and, for the
+ * **Want to try**, **Add to a list**, **Add to cellar** — and, for the
  * person who scanned the menu, **Not this**, which unlinks a wrong match.
  * An unmatched line: the catalog's nearest rows as a question ("Is it one of
  * these?") and **Add to catalog**, a draft the person confirms. A cocktail
@@ -284,52 +281,76 @@ export function MenuLineSheet({
   const matched = current.matched_item;
   const href = matched ? matchedItemHref(matched) : null;
 
+  const meta = [
+    type === null ? MENU_GROUP_LABEL[group] : null,
+    current.menu_item_description,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
   return (
     <BottomSheet
       open={open}
       onOpenChange={onOpenChange}
       title={name}
-      description={
-        [
-          type === null ? MENU_GROUP_LABEL[group] : null,
-          current.menu_item_price == null
-            ? null
-            : formatMenuPrice(current.menu_item_price),
-          `at ${place.name}`,
-        ]
-          .filter(Boolean)
-          .join(" · ") || undefined
-      }
+      hideTitle
+      description={`at ${place.name}`}
     >
-      <div className="flex flex-col gap-5 pb-4">
-        <div className="flex items-start gap-3">
-          <MenuLineGlyph line={current} />
-          <div className="flex min-w-0 flex-1 flex-col gap-2">
-            {type !== null && <TypeChip type={type} />}
-            {current.menu_item_description && (
-              <p className="type-callout text-ink-2">
-                {current.menu_item_description}
+      <div className="flex flex-col gap-4 pb-4">
+        <div className="flex flex-col gap-1">
+          <div className="flex items-start justify-between gap-3">
+            <p aria-hidden className="t-title min-w-0 break-words text-ink">
+              {name}
+            </p>
+            {current.menu_item_price != null && (
+              <p className="t-head tabular shrink-0 pt-1 text-ink">
+                {formatMenuPrice(current.menu_item_price)}
               </p>
             )}
           </div>
+          {meta && <p className="t-cap text-ink-2">{meta}</p>}
         </div>
 
         {matched && (
-          <div className="relative flex min-h-11 items-center gap-3 rounded-lg bg-surface-2 px-4 py-2">
-            <span className="flex min-w-0 flex-1 flex-col">
-              <span className="type-footnote text-ink-3">Matched to</span>
-              <span className="type-body truncate text-ink-1">
-                {href ? (
-                  <Link href={href} overlay underline="none">
-                    {matched.name}
-                  </Link>
-                ) : (
-                  matched.name
+          <section aria-label="Matched to" className="flex flex-col gap-2">
+            <div className="flex min-h-11 items-center justify-between gap-3">
+              <h3 className="t-micro text-ink-2">Matched to</h3>
+              {current.can_correct_match && (
+                <Button
+                  variant="quiet-muted"
+                  className="min-w-11 px-0"
+                  disabled={pending}
+                  aria-busy={pending || undefined}
+                  onClick={() => void change(null, `Unlinked ${matched.name}`)}
+                >
+                  {pending && <Spinner aria-hidden />}
+                  Not this
+                </Button>
+              )}
+            </div>
+            <div className="relative flex min-h-14 items-center gap-3">
+              <MenuLineGlyph line={current} className="size-14 rounded-lg" />
+              <span className="flex min-w-0 flex-1 flex-col">
+                <span className="t-head truncate text-ink">
+                  {href ? (
+                    <Link href={href} overlay underline="none">
+                      {matched.name}
+                    </Link>
+                  ) : (
+                    matched.name
+                  )}
+                </span>
+                {type !== null && (
+                  <span className="t-cap text-ink-2">
+                    {MENU_GROUP_LABEL[group]}
+                  </span>
                 )}
               </span>
-            </span>
-            {href && <ChevronRight aria-hidden className="size-4 text-ink-3" />}
-          </div>
+              {href && (
+                <ChevronRight aria-hidden className="size-5 text-glyph" />
+              )}
+            </div>
+          </section>
         )}
 
         <MenuLineReasons line={current} />
@@ -339,16 +360,18 @@ export function MenuLineSheet({
             <Button size="lg" onClick={() => onAction("log", current)}>
               I&apos;m having this
             </Button>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-3 gap-2">
               <WantToTryButton
                 variant="button"
                 target={{ kind: "ITEM", itemType: type, itemId: matched.id }}
                 saved={matched.is_want_to_try}
                 name={matched.name}
+                className="h-auto min-h-16 flex-col gap-1 px-1 py-2"
                 onChange={() => onChanged?.()}
               />
               <Button
                 variant="outline"
+                className="h-auto min-h-16 flex-col gap-1 px-1 py-2"
                 onClick={() => onAction("cellar", current)}
               >
                 <Cellar aria-hidden strokeWidth={ICON_STROKE} />
@@ -356,27 +379,13 @@ export function MenuLineSheet({
               </Button>
               <Button
                 variant="outline"
-                className="col-span-2"
+                className="h-auto min-h-16 flex-col gap-1 px-1 py-2"
                 onClick={() => onAction("tierList", current)}
               >
-                <Ranked aria-hidden strokeWidth={ICON_STROKE} />
-                Add to tier list
+                <Lists aria-hidden strokeWidth={ICON_STROKE} />
+                Add to a list
               </Button>
             </div>
-            {current.can_correct_match && (
-              <Button
-                variant="ghost"
-                className="self-start text-ink-2"
-                disabled={pending}
-                aria-busy={pending || undefined}
-                onClick={() =>
-                  void change(null, `Unlinked ${matched.name} from this line`)
-                }
-              >
-                {pending ? <Spinner aria-hidden /> : <Close aria-hidden />}
-                Not this
-              </Button>
-            )}
           </div>
         )}
 
@@ -401,7 +410,7 @@ export function MenuLineSheet({
 
         {!matched && type === null && group === "COCKTAIL" && (
           <div className="flex flex-col gap-2">
-            <p className="type-callout text-ink-2">
+            <p className="t-body text-ink-2">
               A cocktail is made, not bottled — find it among the recipes.
             </p>
             <Button variant="outline" asChild>
@@ -418,7 +427,7 @@ export function MenuLineSheet({
 
         {!matched && type === null && group === "OTHER" && (
           <div className="flex flex-col gap-2">
-            <p className="type-callout text-ink-2">
+            <p className="t-body text-ink-2">
               The menu didn&apos;t say what kind of drink this is.
             </p>
             <Button

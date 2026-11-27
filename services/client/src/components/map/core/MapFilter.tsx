@@ -127,7 +127,7 @@ function FilterSection({
 }) {
   return (
     <div className="flex flex-col gap-2">
-      <p className="type-callout font-medium text-ink-1">{label}</p>
+      <p className="t-cap font-medium text-ink-1">{label}</p>
       {children}
     </div>
   );
@@ -403,7 +403,7 @@ export const MapFilter: FC<MapFilterProps> = ({
                 </Command>
               </PopoverContent>
             </Popover>
-            <p className="type-footnote">
+            <p className="t-cap text-ink-3">
               Leave empty to include all tier lists.
             </p>
           </FilterSection>

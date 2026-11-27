@@ -5,16 +5,18 @@ import type * as GeoJSON from "geojson";
 import { useMemo } from "react";
 import type { SymbolLayerSpecification } from "react-map-gl/maplibre";
 import { Layer, Source } from "react-map-gl/maplibre";
+import { placeKind } from "../core/map-places";
 import type { PlaceResult } from "../types";
 import { LAYER_IDS, SOURCE_IDS } from "./constants";
-import { categoryToIcon, getDominantItemType } from "./utils/geoJsonTransform";
+import type { MapPalette } from "./palette";
+import { categoryToIcon } from "./utils/geoJsonTransform";
 import { pinImageName as pinName } from "./utils/iconLoader";
 
 interface SelectedPlaceLayerProps {
   selectedPlace: PlaceResult | null;
   /** X08: the selected pin keeps its want-to-go badge. */
   wantToGo?: ReadonlySet<string>;
-  isDarkMode?: boolean;
+  palette: MapPalette;
 }
 
 const EMPTY_GEOJSON: GeoJSON.FeatureCollection = {
@@ -25,13 +27,12 @@ const EMPTY_GEOJSON: GeoJSON.FeatureCollection = {
 export function SelectedPlaceLayer({
   selectedPlace,
   wantToGo,
-  isDarkMode,
+  palette,
 }: SelectedPlaceLayerProps) {
   const geoJson = useMemo(() => {
     if (!selectedPlace) return EMPTY_GEOJSON;
 
-    const dominant = getDominantItemType(selectedPlace.itemTypeScores);
-    const colorKey = dominant ?? "default";
+    const colorKey = placeKind(selectedPlace);
     const iconName = categoryToIcon(selectedPlace.primary_category);
     const pinImageName = pinName(
       colorKey,
@@ -79,13 +80,13 @@ export function SelectedPlaceLayer({
         "text-allow-overlap": true,
       },
       paint: {
-        "text-color": isDarkMode ? "#e0e0e0" : "#1a1a1a",
-        "text-halo-color": isDarkMode ? "rgba(0, 0, 0, 0.8)" : "#fff",
+        "text-color": palette.label,
+        "text-halo-color": palette.halo,
         "text-halo-width": 2,
         "text-translate": [0, -23],
       },
     }),
-    [isDarkMode],
+    [palette],
   );
 
   return (

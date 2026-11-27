@@ -32,6 +32,7 @@ import {
 } from "@/components/app/icons";
 import { Link } from "@/components/app/Link";
 import { notify } from "@/components/app/notify";
+import { pressFeedback } from "@/components/app/overlays/press";
 import { TogglePop } from "@/components/app/TogglePop";
 import { AddToTierListModal } from "@/components/tier-list/AddToTierListModal";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -336,12 +337,7 @@ export function PlaceDetailsContent({
         />
 
         <div className="min-w-0 flex-1">
-          <h2
-            className={cn(
-              "mb-1 text-ink-1",
-              isDesktop ? "type-title-2" : "type-headline",
-            )}
-          >
+          <h2 className={cn("mb-1 text-ink", isDesktop ? "t-title" : "t-head")}>
             <Link href={`/places/${place.id}`} underline="hover">
               {place.name}
             </Link>
@@ -350,7 +346,7 @@ export function PlaceDetailsContent({
 
           <div className="mb-2 flex flex-row flex-wrap items-center gap-x-4 gap-y-1">
             {mergedPlace.rating && (
-              <span className="type-callout tabular flex flex-row items-center gap-1 font-medium text-ink-1">
+              <span className="t-body tabular flex flex-row items-center gap-1 font-medium text-ink">
                 <Star
                   aria-hidden
                   strokeWidth={0}
@@ -361,15 +357,15 @@ export function PlaceDetailsContent({
               </span>
             )}
             {mergedPlace.price_level && (
-              <span className="type-callout font-medium text-success">
+              <span className="t-body font-medium text-success">
                 {getPriceLevelText(mergedPlace.price_level)}
               </span>
             )}
             {openStatus && (
               <span
                 className={cn(
-                  "type-callout font-medium",
-                  openStatus.isOpen ? "text-success" : "text-destructive",
+                  "t-body font-medium",
+                  openStatus.isOpen ? "text-success" : "text-danger",
                 )}
               >
                 {openStatus.text}
@@ -378,7 +374,7 @@ export function PlaceDetailsContent({
           </div>
 
           {place.street_address && (
-            <p className="type-callout text-ink-2">
+            <p className="t-body text-ink-2">
               {place.street_address}
               {place.locality && `, ${place.locality}`}
             </p>
@@ -402,7 +398,7 @@ export function PlaceDetailsContent({
       {/* X27: what "Under review" means, and where the controls are */}
       {!isCompact && isUnshared(place.review_status) && (
         <p
-          className={cn("type-footnote pb-4 text-ink-2", gutter)}
+          className={cn("t-cap pb-4 text-ink-2", gutter)}
           data-testid="drawer-review-note"
         >
           {place.review_status === "PENDING"
@@ -510,8 +506,8 @@ export function PlaceDetailsContent({
 
       {/* Editorial Summary — from Google enrichment */}
       {!isCompact && editorialSummary && (
-        <div className={cn("border-line border-t py-4", gutter)}>
-          <p className="type-callout text-ink-2 italic">{editorialSummary}</p>
+        <div className={cn("border-rule border-t py-4", gutter)}>
+          <p className="t-body text-ink-2 italic">{editorialSummary}</p>
         </div>
       )}
 
@@ -528,12 +524,12 @@ export function PlaceDetailsContent({
         </div>
       )}
       {!isEnriching && detailsPending && (
-        <p className={cn("type-footnote pb-2", gutter)}>Details pending</p>
+        <p className={cn("t-cap pb-2", gutter)}>Details pending</p>
       )}
 
       {/* Contact Info — hidden when collapsed */}
       {!isCompact && (mergedPlace.phone || mergedPlace.website) && (
-        <div className={cn("border-line border-t py-4", gutter)}>
+        <div className={cn("border-rule border-t py-4", gutter)}>
           <div className="flex flex-col gap-2">
             {mergedPlace.phone && (
               <ContactRow icon={Phone} onClick={handleCall}>
@@ -553,7 +549,7 @@ export function PlaceDetailsContent({
       {isFullyExpanded && (
         <div
           className={cn(
-            "flex flex-[1_1_0] flex-col overflow-hidden border-line border-t",
+            "flex flex-[1_1_0] flex-col overflow-hidden border-rule border-t",
             isDesktop ? "pt-6 pb-4" : "pt-4 pb-3",
             hasMenuItems && (isDesktop ? "min-h-[250px]" : "min-h-[200px]"),
             gutter,
@@ -565,7 +561,7 @@ export function PlaceDetailsContent({
               strokeWidth={ICON_STROKE}
               className="size-5 text-ink-2"
             />
-            <h3 className="type-headline text-ink-1">Menu Items</h3>
+            <h3 className="t-head text-ink">Menu Items</h3>
             {hasMenuItems && (
               <Badge variant="secondary" className="tabular">
                 {menuItemCount ?? menuItems.length}
@@ -595,12 +591,12 @@ export function PlaceDetailsContent({
               />
             </div>
           ) : (
-            <p className="type-callout flex flex-row flex-wrap gap-1 rounded-md bg-surface-1 px-4 py-3 text-ink-1">
+            <p className="t-body flex flex-row flex-wrap gap-1 rounded-md bg-surface-1 px-4 py-3 text-ink">
               <span>No menu discovered yet.</span>
               <Link
                 href={`/places/${place.id}`}
                 underline="always"
-                className="text-primary"
+                className="text-act-ink"
               >
                 Scan a menu
               </Link>
@@ -646,8 +642,9 @@ function ContactRow({
   return (
     <button
       type="button"
+      {...pressFeedback()}
       onClick={onClick}
-      className="type-callout flex min-h-11 flex-row items-center gap-4 rounded-sm text-left text-primary outline-none hover:underline focus-visible:ring-[3px] focus-visible:ring-ring/50"
+      className="t-body flex min-h-11 flex-row items-center gap-4 rounded-sm text-left text-act-ink outline-none hover:underline focus-visible:ring-[3px] focus-visible:ring-ring/50"
     >
       <Icon
         aria-hidden

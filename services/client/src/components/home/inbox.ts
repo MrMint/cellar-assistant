@@ -5,6 +5,8 @@
  * | row                         | from                                  | goes to                  |
  * |-----------------------------|---------------------------------------|--------------------------|
  * | menu matches to confirm     | `myDiscoveries`, grouped by scan      | the scan's results       |
+ * | Needs details · n bottles   | `needsDetailsCount` (MC-drafts, L41)  | `/needs-details` (K2)    |
+ * | n to check                  | open bottles' `unconfirmedFields`     | the first one's page     |
  * | a capture draft to check    | `aiJobs` LABEL_READ, READY            | `/add?draft=…`           |
  * | a friend request            | `myFriendRequests(INCOMING)`          | `/friends` (or Accept)   |
  * | finished insights           | `aiJobs` TIER_LIST_INSIGHTS, READY    | the tier list            |
@@ -19,6 +21,13 @@
  *
  * Pure — `ai-jobs.test.ts` ("buildInbox").
  */
+import {
+  type ApiItemType,
+  cellarItemHref,
+  ITEM_TYPES,
+} from "@/components/cellar-api/itemTypes";
+import { retryPhrase } from "@/lib/ai/outcome";
+import { displayItemName } from "@/utilities/smart-title-case";
 import type { AiJob } from "./ai-jobs";
 import { aiJobHref } from "./ai-jobs";
 import { seenHash } from "./seen-cookie";
@@ -43,7 +52,99 @@ export type IncomingRequest = {
   };
 };
 
+/** One row of `myAiQuota` (MC-quota). */
+export type AiQuotaRow = {
+  readonly kind: string;
+  readonly used: number;
+  readonly limit: number;
+  readonly resetsAt: string;
+};
+
+/**
+ * "Limit reached · resets tomorrow after 9:00 AM": the reset a USER_CAP
+ * refusal carries (`retryAt`), or else the soonest reset of an allowance
+ * that is used up (MC-quota: the two are the same instant). Null when
+ * neither says when — then the caller keeps the plain wording.
+ */
+export const limitResetLine = (
+  retryAt: string | null,
+  quotas: readonly AiQuotaRow[],
+  options: { now?: Date; timeZone?: string; locale?: string } = {},
+): string | null => {
+  const spent = quotas
+    .filter((quota) => quota.used >= quota.limit)
+    .map((quota) => quota.resetsAt)
+    .sort();
+  for (const at of [retryAt, ...spent]) {
+    const phrase = retryPhrase(at, options);
+    if (phrase !== null) return `Limit reached · resets ${phrase}`;
+  }
+  return null;
+};
+
+/** "n to check": open bottles with a guessed field nobody checked (MC-drafts). */
+export type ToCheck = {
+  readonly count: number;
+  /** The first one, named on the row. */
+  readonly name: string;
+  /** "country, from the label". */
+  readonly fields: string;
+  readonly href: string;
+};
+
+type ToCheckNode = {
+  readonly id: string;
+  readonly cellarId: string;
+  readonly item: {
+    readonly id: string;
+    readonly type: string;
+    readonly name: string;
+    readonly unconfirmedFields: readonly string[];
+  } | null;
+};
+
+const fieldWords = (field: string): string =>
+  field
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .replace(/_/g, " ")
+    .toLowerCase();
+
+/** The open bottles whose item still has guessed fields, one per item. */
+export const toCheckFromNodes = (
+  nodes: readonly ToCheckNode[],
+): ToCheck | null => {
+  const seen = new Set<string>();
+  const rows: { node: ToCheckNode; type: ApiItemType }[] = [];
+  for (const node of nodes) {
+    const item = node.item;
+    if (item === null || item.unconfirmedFields.length === 0) continue;
+    if (!(ITEM_TYPES as readonly string[]).includes(item.type)) continue;
+    if (seen.has(item.id)) continue;
+    seen.add(item.id);
+    rows.push({ node, type: item.type as ApiItemType });
+  }
+  const first = rows[0];
+  if (first === undefined || first.node.item === null) return null;
+  return {
+    count: rows.length,
+    name: displayItemName(first.node.item.name),
+    fields: `${first.node.item.unconfirmedFields.map(fieldWords).join(", ")}, from the label`,
+    href: cellarItemHref(first.node.cellarId, first.type, first.node.id),
+  };
+};
+
 export type InboxItem =
+  | {
+      readonly kind: "needs-details";
+      readonly id: "needs-details";
+      readonly count: number;
+      readonly href: string;
+    }
+  | {
+      readonly kind: "to-check";
+      readonly id: "to-check";
+      readonly check: ToCheck;
+    }
   | {
       readonly kind: "matches";
       readonly id: string;
@@ -82,22 +183,37 @@ const JOB_ORDER: Readonly<Record<AiJob["kind"], number>> = {
   TIER_LIST_INSIGHTS: 3,
 };
 
-const rankOf = (item: InboxItem): number =>
-  item.kind === "matches"
-    ? 0
-    : item.kind === "request"
-      ? 2
-      : JOB_ORDER[item.job.kind];
+const rankOf = (item: InboxItem): number => {
+  switch (item.kind) {
+    case "matches":
+      return 0;
+    case "needs-details":
+    case "to-check":
+      return 1;
+    case "request":
+      return 2;
+    case "job":
+      return JOB_ORDER[item.job.kind];
+  }
+};
+
+/** Where "Needs details" goes: K2's page (wave 5), linked as it is. */
+export const NEEDS_DETAILS_HREF = "/needs-details";
 
 export const buildInbox = ({
   jobs,
   suggestions,
   requests,
+  needsDetails = 0,
+  toCheck = null,
   seen,
 }: {
   readonly jobs: readonly AiJob[];
   readonly suggestions: readonly PendingSuggestion[];
   readonly requests: readonly IncomingRequest[];
+  /** `needsDetailsCount`: the viewer's own saved drafts. */
+  readonly needsDetails?: number;
+  readonly toCheck?: ToCheck | null;
   /** Hashes of seen keys (`seenHash(seenKeyOf(job))`). */
   readonly seen: ReadonlySet<string>;
 }): InboxItem[] => {
@@ -144,7 +260,23 @@ export const buildInbox = ({
     return [{ kind: "job", id: job.id, job, seenKey: key, href }];
   });
 
-  return [...matches, ...asks, ...finished]
+  const drafts: InboxItem[] = [
+    ...(needsDetails > 0
+      ? [
+          {
+            kind: "needs-details",
+            id: "needs-details",
+            count: needsDetails,
+            href: NEEDS_DETAILS_HREF,
+          } as const,
+        ]
+      : []),
+    ...(toCheck === null
+      ? []
+      : [{ kind: "to-check", id: "to-check", check: toCheck } as const]),
+  ];
+
+  return [...matches, ...drafts, ...asks, ...finished]
     .map((item, index) => ({ item, index }))
     .sort((a, b) => rankOf(a.item) - rankOf(b.item) || a.index - b.index)
     .map(({ item }) => item);

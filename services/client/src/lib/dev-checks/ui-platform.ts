@@ -71,7 +71,6 @@ export type Finding = {
  */
 export const COLOUR_ALLOWLIST: readonly RegExp[] = [
   /^src\/lib\/tokens\.ts$/,
-  /^src\/components\/map\/constants\/colors\.ts$/,
   /^src\/components\/map\/maplibre\//, // MapLibre paint
   /^src\/components\/tier-list\/insights\/CountryHeatmap\.tsx$/, // MapLibre paint
   /^src\/app\/~offline\/page\.tsx$/, // renders without the app's CSS

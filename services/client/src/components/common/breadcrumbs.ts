@@ -28,9 +28,23 @@ export function generateBreadcrumbs(
   recipeName?: string,
 ): BreadcrumbSegment[] {
   const segments = pathname.split("/").filter(Boolean);
-  const breadcrumbs: BreadcrumbSegment[] = [{ label: "Home", href: "/" }];
+  const root = rootCrumb(pathname);
+  const rootHref = root.href ?? pathname;
+  const crumbs: BreadcrumbSegment[] = [root];
+  // A segment that is the rail item itself ("Cellars" under Cellars, "Tier
+  // lists" under Lists) is already the first crumb.
+  const breadcrumbs = {
+    push: (crumb: BreadcrumbSegment) => {
+      if (
+        crumbs.length === 1 &&
+        (crumb.label === root.label || crumb.label === TAB_SEGMENT[rootHref])
+      )
+        return;
+      crumbs.push(crumb);
+    },
+  };
 
-  if (segments.length === 0) return breadcrumbs;
+  if (segments.length === 0) return crumbs;
 
   // Handle authenticated routes (skip the "(authenticated)" segment)
   let segmentIndex = 0;
@@ -133,8 +147,31 @@ export function generateBreadcrumbs(
     }
   }
 
-  return breadcrumbs;
+  return crumbs;
 }
+
+/** The crumb a rail item's own route segment would push. */
+const TAB_SEGMENT: Readonly<Record<string, string>> = {
+  "/cellars": "Cellars",
+  "/tier-lists": "Tier lists",
+  "/map": "Map",
+  "/me": "Me",
+};
+
+/**
+ * The trail's first crumb names the rail item the page sits under (CROSS-LOT
+ * "Breadcrumbs"): "Cellars" for a cellar's bottle, "Search" for Home (`/`)
+ * and for any page under no rail item.
+ */
+const rootCrumb = (pathname: string): BreadcrumbSegment => {
+  const path = pathname.replace(/^\/\(authenticated\)(?=\/|$)/, "") || "/";
+  const key = activeTab(path) ?? "search";
+  const tab = TABS.find((t) => t.key === key);
+  const href = tab?.href ?? "/";
+  const label = tab?.label ?? "Search";
+  // On the rail item's own page the crumb is that page: no link.
+  return path === href ? { label } : { label, href };
+};
 
 /**
  * Pages that *are* a tab root: the four tabs' own hrefs, plus `/search`, the

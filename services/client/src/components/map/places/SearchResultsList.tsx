@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { useCallback, useRef, useState } from "react";
 import { IconButton } from "@/components/app/IconButton";
 import { Close, ICON_STROKE, Place } from "@/components/app/icons";
+import { pressFeedback } from "@/components/app/overlays/press";
 import { Score } from "@/components/app/Score";
 import { itemTypeTokens } from "@/components/app/TypeChip";
 import { Badge } from "@/components/ui/badge";
@@ -79,7 +80,7 @@ function ResultsHeader({
         <h2
           className={cn(
             "min-w-0 flex-1 truncate",
-            desktop ? "type-title-2" : "type-headline",
+            desktop ? "t-title" : "t-head",
           )}
         >
           {searchQuery}
@@ -162,7 +163,7 @@ export function SearchResultsList({
           exit={{ x: -400, opacity: 0 }}
           transition={transition}
           className={cn(
-            "fixed top-0 z-[949] flex h-dvh w-[400px] flex-col border-line border-r bg-background shadow-xl",
+            "fixed top-0 z-[949] flex h-dvh w-[400px] flex-col border-rule border-r bg-background shadow-xl",
             isDetailOpen ? "pointer-events-none" : "pointer-events-auto",
           )}
           style={{ left: leftInset }}
@@ -171,7 +172,7 @@ export function SearchResultsList({
           onTouchStart={(e) => e.stopPropagation()}
         >
           {/* Header */}
-          <div className="shrink-0 border-line border-b px-6 pt-20 pb-4">
+          <div className="shrink-0 border-rule border-b px-6 pt-20 pb-4">
             <ResultsHeader
               searchQuery={searchQuery}
               count={results.length}
@@ -235,7 +236,7 @@ export function SearchResultsList({
         </div>
 
         {/* Header */}
-        <div className="shrink-0 border-line border-b px-4 pb-3">
+        <div className="shrink-0 border-rule border-b px-4 pb-3">
           <ResultsHeader
             searchQuery={searchQuery}
             count={results.length}
@@ -279,6 +280,7 @@ function ResultCard({
   return (
     <button
       type="button"
+      {...pressFeedback()}
       onClick={onClick}
       className={cn(
         "flex w-full items-start gap-3 rounded-md bg-surface-1 text-left outline-none transition-colors duration-(--ca-dur-short) ease-standard hover:bg-surface-2 focus-visible:ring-[3px] focus-visible:ring-ring/50",
@@ -304,8 +306,8 @@ function ResultCard({
       <span className="flex min-w-0 flex-1 flex-col">
         <span
           className={cn(
-            "mb-0.5 truncate text-ink-1",
-            compact ? "type-callout font-semibold" : "type-headline",
+            "mb-0.5 truncate text-ink",
+            compact ? "t-body font-semibold" : "t-head",
           )}
         >
           {place.name}
@@ -316,9 +318,9 @@ function ResultCard({
 
         <span className="mb-1 flex items-center gap-2">
           {place.rating ? (
-            <Score value={place.rating} className="type-footnote" />
+            <Score value={place.rating} className="t-cap" />
           ) : null}
-          <span className="type-footnote truncate">
+          <span className="t-cap truncate">
             {formatCategoryName(
               place.primary_category || place.categories?.[0] || "",
             )}
@@ -326,7 +328,7 @@ function ResultCard({
         </span>
 
         {place.street_address && (
-          <span className="type-footnote truncate text-ink-2">
+          <span className="t-cap truncate text-ink-2">
             {place.street_address}
             {place.locality && `, ${place.locality}`}
           </span>

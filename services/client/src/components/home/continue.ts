@@ -44,6 +44,10 @@ export type OpenBottle = {
   /** The field the drink-soon table reads (D29), per type. */
   readonly style: string | null;
   readonly form: string | null;
+  /** The owner's own score (`myReview`), or null when not rated yet. */
+  readonly rating: number | null;
+  /** The primary brand, the tile's maker line. */
+  readonly maker: string | null;
 };
 
 const isApiItemType = (value: string): value is ApiItemType =>
@@ -127,8 +131,20 @@ export const openBottleFromNode = (node: BottleNode): OpenBottle | null => {
     percentageRemaining: node.percentageRemaining,
     style: style ?? null,
     form: item.__typename === "Tea" ? (item.form ?? null) : null,
+    rating: item.myReview?.score ?? null,
+    maker: makerOf(item.brands?.edges.map((edge) => edge.node) ?? []),
   };
 };
+
+/** The primary brand's name, else the first one's. */
+const makerOf = (
+  links: readonly {
+    readonly isPrimary: boolean | null;
+    readonly brand: { readonly name: string } | null;
+  }[],
+): string | null =>
+  (links.find((link) => link.isPrimary === true) ?? links[0])?.brand?.name ??
+  null;
 
 export const openBottlesFromNodes = (
   nodes: readonly BottleNode[],
@@ -149,9 +165,13 @@ export type SealedSoon = {
   readonly type: ApiItemType;
   readonly title: string;
   readonly name: string;
+  readonly cellarId: string;
+  readonly photoUrl: string | null;
   readonly past: boolean;
-  /** "Sealed · window ends Jan 2027 · typical for IPA". */
+  /** "Sealed · ended Jun 2026", or "Sealed · your date: drink by …". */
   readonly line: string;
+  /** "Typical for IPA", or null for a date the owner set. */
+  readonly typical: string | null;
 };
 
 const MONTHS = "Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec".split(" ");
@@ -180,22 +200,40 @@ export const sealedSoonFromNodes = (
       item.__typename === "Wine"
         ? formatItemVintage("WINE", item.vintage)
         : undefined;
-    const ends = node.urgency === "PAST" ? "window ended" : "window ends";
-    const line =
-      node.window?.untilSource === "USER"
-        ? `Sealed · your date: drink by ${monthYear(until)}`
-        : `Sealed · ${ends} ${monthYear(until)}${
-            node.typicalFor === null ? "" : ` · typical for ${node.typicalFor}`
-          }`;
+    const ends = node.urgency === "PAST" ? "ended" : "ends";
+    const own = node.window?.untilSource === "USER";
+    const line = own
+      ? `Sealed · your date: drink by ${monthYear(until)}`
+      : `Sealed · ${ends} ${monthYear(until)}`;
+    const typical =
+      own || node.typicalFor === null ? null : `Typical for ${node.typicalFor}`;
     return [
       {
         id: node.bottle.id,
         href: cellarItemHref(node.bottle.cellarId, item.type, node.bottle.id),
+        cellarId: node.bottle.cellarId,
         type: item.type,
         title: vintage === undefined ? name : `${vintage} ${name}`,
         name,
+        photoUrl: node.bottle.displayImage?.file.url ?? null,
         past: node.urgency === "PAST",
         line,
+        typical,
       },
     ];
   });
+
+/**
+ * What Drink soon's Open sends: the bottle and its cellar, looked up by id in
+ * the viewer's own rows (`me.drinkSoon`) — never taken from anywhere else, so
+ * a row id that isn't one of theirs opens nothing.
+ */
+export const openVariables = (
+  id: string,
+  rows: readonly SealedSoon[],
+): { cellarId: string; cellarItemId: string } | null => {
+  const row = rows.find((candidate) => candidate.id === id);
+  return row === undefined
+    ? null
+    : { cellarId: row.cellarId, cellarItemId: row.id };
+};
