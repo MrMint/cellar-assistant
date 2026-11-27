@@ -14,6 +14,8 @@
  */
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
+import { authSchema } from "@cellar-assistant/db";
+import { getTableColumns, getTableName } from "@cellar-assistant/db/orm";
 import { Client } from "pg";
 import { createAuth } from "./auth.ts";
 import type { AuthConfig } from "./config.ts";
@@ -94,10 +96,41 @@ export const resetScratchDatabase = async (base: string): Promise<string> => {
     // simple query protocol takes the lot and runs it in one implicit
     // transaction, which is what psql does with them too.
     await client.query(await readFile(MIGRATION, "utf8"));
+    // Mirrors migration 20261127041745_sv_d_avatar (no FK: no `files` here).
+    await client.query(
+      `alter table "user" add column if not exists avatar_file_id uuid`,
+    );
+    await requireColumnsMatchSchema(client);
   } finally {
     await client.end();
   }
   return url;
+};
+
+/**
+ * better-auth's Drizzle adapter selects every column `tables.ts` declares, so
+ * a column a later migration adds to one of its tables and this scratch
+ * database lacks fails every auth suite with `errorMissingColumn`. Fail here
+ * instead, once, naming the column and the fix.
+ */
+const requireColumnsMatchSchema = async (client: Client): Promise<void> => {
+  const { rows } = await client.query<{ table: string; column: string }>(
+    `select table_name as table, column_name as column
+       from information_schema.columns where table_schema = 'public'`,
+  );
+  const present = new Set(rows.map((r) => `${r.table}.${r.column}`));
+  const missing = Object.values(authSchema).flatMap((table) =>
+    Object.values(getTableColumns(table))
+      .map((column) => `${getTableName(table)}.${column.name}`)
+      .filter((key) => !present.has(key)),
+  );
+  if (missing.length > 0) {
+    throw new Error(
+      `the auth scratch database lacks ${missing.join(", ")}, which ` +
+        "packages/db/src/schema/tables.ts declares: mirror the migration " +
+        "that added it in resetScratchDatabase (src/auth/testing.ts)",
+    );
+  }
 };
 
 export const testConfig = (
