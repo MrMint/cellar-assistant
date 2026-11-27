@@ -41,16 +41,20 @@ import type {
   TasteActorInterface,
   TasteAgreementDto,
   TasteArchetypeDto,
+  TasteCompareInput,
+  TasteCompareRowDto,
   TasteProfileDto,
   TasteTypeCountDto,
 } from "@cellar-assistant/contracts";
 import {
+  AGREEMENT_MIN_SHARED,
   ConflictError,
   ForbiddenError,
   isItemType,
   NotFoundError,
   PROFILE_NOT_SHARED,
   TasteActorDescriptor,
+  ValidationError,
 } from "@cellar-assistant/contracts";
 import { type SQL, sql } from "@cellar-assistant/db/orm";
 import { bypassesPolicy, canSeeProfile } from "@cellar-assistant/policy";
@@ -323,6 +327,54 @@ const agreementRow = (
   };
 };
 
+/** Each item's name, keyed `TYPE:id`, in one read over the six tables. */
+const NAME_TABLE: Readonly<Record<ItemType, string>> = {
+  WINE: "wines",
+  BEER: "beers",
+  SPIRIT: "spirits",
+  COFFEE: "coffees",
+  SAKE: "sakes",
+  TEA: "teas",
+};
+
+const ratingKey = (type: ItemType, itemId: string): string =>
+  `${type}:${itemId}`;
+
+/**
+ * MC-compare rows from two people's ratings: the items both rated, the
+ * biggest difference first, then by name, then by id so the order is total.
+ */
+export const compareRows = (
+  mine: readonly TasteRating[],
+  theirs: readonly TasteRating[],
+  names: ReadonlyMap<string, string>,
+  itemType: ItemType | null,
+): TasteCompareRowDto[] => {
+  const theirScore = new Map(
+    theirs.map((rating) => [ratingKey(rating.type, rating.itemId), rating]),
+  );
+  const rows: TasteCompareRowDto[] = [];
+  for (const rating of mine) {
+    if (itemType !== null && rating.type !== itemType) continue;
+    const key = ratingKey(rating.type, rating.itemId);
+    const other = theirScore.get(key);
+    const name = names.get(key);
+    if (other === undefined || name === undefined) continue;
+    rows.push({
+      item: { type: rating.type, id: rating.itemId },
+      name,
+      myScore: rating.score,
+      theirScore: other.score,
+    });
+  }
+  return rows.sort(
+    (a, b) =>
+      Math.abs(b.myScore - b.theirScore) - Math.abs(a.myScore - a.theirScore) ||
+      a.name.localeCompare(b.name) ||
+      a.item.id.localeCompare(b.item.id),
+  );
+};
+
 /* -------------------------------------------------------------------------- */
 /* The actor                                                                   */
 /* -------------------------------------------------------------------------- */
@@ -432,6 +484,78 @@ export class TasteActor extends ActorBase implements TasteActorInterface {
     return rows.sort(
       (a, b) => b.shared - a.shared || a.name.localeCompare(b.name),
     );
+  }
+
+  async compare(
+    ctx: Ctx,
+    input: TasteCompareInput,
+  ): Promise<readonly TasteCompareRowDto[]> {
+    const viewer = this.#requireKey(ctx, "compare tastes");
+    const itemType = input?.itemType ?? null;
+    if (itemType !== null && !isItemType(itemType)) {
+      throw new ValidationError(`not an item type: ${String(itemType)}`);
+    }
+    const userId = input?.userId;
+    if (typeof userId !== "string" || !isUuid(userId) || userId === viewer) {
+      return [];
+    }
+    const [other] = await this.#users([userId]);
+    if (other === undefined || !canSeeProfile(ctx, { userId })) return [];
+    const scope = await visibilityScope(this.db, ctx);
+    // L11: a compare is between friends. Anyone else gets nothing: not their
+    // reviews, which every signed-in viewer could otherwise read, and not an
+    // error that would say the id exists.
+    if (scope.kind !== "everything") {
+      if (scope.kind === "nothing" || !scope.friendIds.includes(other.id)) {
+        return [];
+      }
+    }
+    const ratings = await ratingsOfMany(this.db, scope, [viewer, other.id]);
+    const mine = ratings.get(viewer) ?? [];
+    const theirs = ratings.get(other.id) ?? [];
+    // The same gate as `agreement`, over every type: the chips filter rows,
+    // they do not reopen a comparison too thin to show.
+    if (agreementOf(mine, theirs).shared < AGREEMENT_MIN_SHARED) return [];
+    const wanted = new Set(
+      theirs.map((rating) => ratingKey(rating.type, rating.itemId)),
+    );
+    const both = mine.filter(
+      (rating) =>
+        wanted.has(ratingKey(rating.type, rating.itemId)) &&
+        (itemType === null || rating.type === itemType),
+    );
+    return compareRows(mine, theirs, await this.#names(both), itemType);
+  }
+
+  async #names(
+    refs: readonly { readonly type: ItemType; readonly itemId: string }[],
+  ): Promise<Map<string, string>> {
+    const names = new Map<string, string>();
+    const byType = new Map<ItemType, string[]>();
+    for (const ref of refs) {
+      byType.set(ref.type, [...(byType.get(ref.type) ?? []), ref.itemId]);
+    }
+    if (byType.size === 0) return names;
+    const { rows } = await this.db.execute<{
+      readonly type: string;
+      readonly id: string;
+      readonly name: string;
+    }>(
+      sql`${sql.join(
+        [...byType].map(
+          ([type, ids]) => sql`
+          select ${type}::text as type, x.id::text as id, x.name
+          from public.${sql.identifier(NAME_TABLE[type])} x
+          where x.id = any(${uuidArray(ids, "itemId")})`,
+        ),
+        sql` union all `,
+      )}`,
+    );
+    for (const row of rows) {
+      if (isItemType(row.type))
+        names.set(ratingKey(row.type, row.id), row.name);
+    }
+    return names;
   }
 
   async #users(ids: readonly string[]): Promise<UserRow[]> {

@@ -5,6 +5,7 @@
  * |---|---|
  * | `Query.recap(period, timeZone)` | `RecapActor.recap` |
  * | `Query.breadthStamps` | `RecapActor.stamps` |
+ * | `Query.recapPeriods(kind, timeZone)` | `RecapActor.periods` |
  *
  * Both read the **signed-in viewer's own** drink log: there is no argument
  * naming whose recap, so another user's cannot be addressed at all (L16), and
@@ -16,11 +17,13 @@ import type {
   BreadthStampKind,
   RecapCardDto,
   RecapDto,
+  RecapTotalsDto,
 } from "@cellar-assistant/contracts";
 import {
   BREADTH_STAMP_KINDS,
   ForbiddenError,
   RECAP_CARD_KINDS,
+  RECAP_PERIOD_KINDS,
   RecapActorDescriptor,
   recapActorId,
 } from "@cellar-assistant/contracts";
@@ -170,12 +173,38 @@ const RecapCardsType = builder.objectRef<CardSet>("RecapCards").implement({
   }),
 });
 
+const RecapPeriodKindEnum = builder.enumType("RecapPeriodKind", {
+  description: "The granularity of a recap period: `YYYY-MM` or `YYYY`.",
+  values: RECAP_PERIOD_KINDS,
+});
+
+const RecapTotalsType = builder
+  .objectRef<RecapTotalsDto>("RecapTotals")
+  .implement({
+    description:
+      "MC-recap / L4: what the viewer did in the period. Their own rows only.",
+    fields: (t) => ({
+      checkIns: t.exposeInt("checkIns", {
+        description: "Drink-log entries about the viewer, dated in the period.",
+      }),
+      ratings: t.exposeInt("ratings", {
+        description:
+          "The viewer's item ratings (stars) created or changed in the period.",
+      }),
+      bottlesAdded: t.exposeInt("bottlesAdded", {
+        description:
+          "Bottles the viewer added, in any cellar; never a co-owner's.",
+      }),
+    }),
+  });
+
 const RecapType = builder.objectRef<RecapDto>("Recap").implement({
   fields: (t) => ({
     period: t.exposeString("period", {
       description: "`YYYY-MM` or `YYYY`.",
     }),
     timeZone: t.exposeString("timeZone"),
+    totals: t.field({ type: RecapTotalsType, resolve: (r) => r.totals }),
     cards: t.field({ type: RecapCardsType, resolve: (r) => r.cards }),
     stamps: t.field({
       type: BreadthStampsType,
@@ -218,6 +247,31 @@ builder.queryField("breadthStamps", (t) =>
       return context
         .actor(RecapActorDescriptor, recapActorId(viewerId))
         .stamps();
+    },
+  }),
+);
+
+builder.queryField("recapPeriods", (t) =>
+  t.field({
+    type: ["String"],
+    description:
+      "MC-recap: the viewer's periods with any activity, newest first, in " +
+      "`recap(period)`'s format (`YYYY-MM` or `YYYY`). Signed-in only.",
+    errors: {},
+    args: {
+      kind: t.arg({ type: RecapPeriodKindEnum, required: true }),
+      timeZone: t.arg.string({
+        required: true,
+        description: "IANA zone the periods are read in.",
+      }),
+    },
+    resolve: async (_root, args, context) => {
+      const viewerId = requireViewer(context, "see your recaps");
+      return [
+        ...(await context
+          .actor(RecapActorDescriptor, recapActorId(viewerId))
+          .periods({ kind: args.kind, timeZone: args.timeZone })),
+      ];
     },
   }),
 );
