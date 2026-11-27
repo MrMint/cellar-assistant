@@ -586,11 +586,37 @@ describe("the real ending (N21's success sheet)", () => {
     actor.send({ type: "CREATED", itemId: "new" });
     const filed = await waitFor(actor, (s) => s.value === "finalPrompt");
     actor.send({ type: "OPEN_NOW" });
-    assert.equal(actor.getSnapshot().status, "done");
     assert.equal(
       pushed[0],
       `/cellars/cellar-1/wines/${filed.context.cellarItemId}`,
     );
+  });
+
+  test("F-36: Open it now keeps the success sheet up until the page changes", async () => {
+    // The sheet holds a history entry (overlays/layers.ts). Closing it in the
+    // same commit as the push takes that entry back off with history.back(),
+    // which lands before Next's pushState and undoes the navigation: the URL
+    // stayed on /add and the page emptied. Leaving keeps the sheet mounted.
+    const { actor, pushed } = run({ confidence: 0.5 });
+    await settled(actor);
+    actor.send({ type: "CREATED", itemId: "new" });
+    await waitFor(actor, (s) => s.value === "finalPrompt");
+    actor.send({ type: "OPEN_NOW" });
+    assert.equal(actor.getSnapshot().value, "leaving");
+    assert.equal(actor.getSnapshot().status, "active");
+    assert.equal(pushed.length, 1);
+  });
+
+  test("F-36: Done leaves the same way, and nothing sends twice", async () => {
+    const { actor, pushed } = run({ confidence: 0.5 });
+    await settled(actor);
+    actor.send({ type: "CREATED", itemId: "new" });
+    await waitFor(actor, (s) => s.value === "finalPrompt");
+    actor.send({ type: "DONE" });
+    actor.send({ type: "DONE" });
+    actor.send({ type: "OPEN_NOW" });
+    assert.equal(actor.getSnapshot().value, "leaving");
+    assert.equal(pushed.length, 1);
   });
 
   test("no Open it now without a cellar", async () => {

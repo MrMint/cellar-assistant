@@ -837,7 +837,10 @@ const ItemOnboardingRun = ({
       )}
 
       <SuccessSheet
-        open={state.value === "finalPrompt" && !shotFromCamera}
+        open={
+          (state.value === "finalPrompt" || state.value === "leaving") &&
+          !shotFromCamera
+        }
         itemType={itemType}
         itemName={context.itemName}
         cellarName={inCellar ? (cellarName ?? "your cellar") : undefined}

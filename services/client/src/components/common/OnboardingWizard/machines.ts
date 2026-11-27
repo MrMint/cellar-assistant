@@ -813,14 +813,20 @@ export const OnboardingMachine = createMachine(
             guard: ({ context }) =>
               isNotNil(context.cellarId) && isNotNil(context.cellarItemId),
             actions: "goToResult",
-            target: "done",
+            target: "leaving",
           },
           DONE: {
             actions: "goToResult",
-            target: "done",
+            target: "leaving",
           },
         },
       },
+      // F-36: on the way to the result, with the success sheet still up.
+      // The sheet holds a history entry (`overlays/layers.ts`); unmounting it
+      // in the same commit as the push runs `history.back()` ahead of Next's
+      // own `pushState` and undoes the navigation. Held open here, the sheet
+      // goes when the page does, and its entry is no longer the current one.
+      leaving: {},
       done: {
         type: "final",
       },
