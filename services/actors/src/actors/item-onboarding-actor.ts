@@ -90,21 +90,28 @@ import type {
   OpenDraftInput,
   ReprocessResult,
   RereadLabelInput,
+  SaveDraftFields,
+  SaveDraftInput,
   StartOnboardingInput,
   SuggestItemDetailsInput,
   SuggestNewItemDetailsInput,
+  VintageAnswer,
 } from "@cellar-assistant/contracts";
 import {
   BarcodeActorDescriptor,
   BrandRegistryActorDescriptor,
   barcodeActorId,
+  CONFIRMED_FIELDS_MAX,
+  ConflictError,
   ForbiddenError,
   ITEM_ATTRIBUTE_KEY,
   ITEM_TYPE_SPECS,
   ItemOnboardingActorDescriptor,
   isItemType,
   isOnboardingStatus,
+  isVintageAnswer,
   itemActorId,
+  itemAttributeEntries,
   itemAttributeKeys,
   normalizeBrandName,
   requireItemAttributes,
@@ -201,6 +208,124 @@ const jsonOrNull = (value: unknown): string | null =>
 const statusOf = (value: string): OnboardingStatus =>
   isOnboardingStatus(value) ? value : "START";
 
+const vintageAnswerOf = (value: string): VintageAnswer =>
+  isVintageAnswer(value) ? value : "UNANSWERED";
+
+/* -------------------------------------------------------------------------- */
+/* SV-B · saved drafts                                                         */
+/* -------------------------------------------------------------------------- */
+
+/** A draft's text fields: a name or a brand, never an essay. */
+const DRAFT_TEXT_MAX = 500;
+/** `draft_fields` as JSON. A draft is a form's worth of values. */
+const DRAFT_JSON_MAX = 16_384;
+const CONFIRMED_FIELD_MAX_CHARS = 64;
+
+const isPlainObject = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+const draftText = (value: unknown, field: string): string | null => {
+  if (value === undefined || value === null) return null;
+  if (typeof value !== "string") {
+    throw new ValidationError(`fields.${field} must be a string`);
+  }
+  const text = value.trim();
+  if (text.length > DRAFT_TEXT_MAX) {
+    throw new ValidationError(
+      `fields.${field} must be at most ${DRAFT_TEXT_MAX} characters`,
+    );
+  }
+  return text === "" ? null : text;
+};
+
+/** The shape checks `saveDraft` makes; everything else is the form's. */
+export const draftFieldsOf = (value: unknown): SaveDraftFields => {
+  if (!isPlainObject(value)) {
+    throw new ValidationError("fields must be an object");
+  }
+  const attributes = value.attributes;
+  if (
+    attributes !== undefined &&
+    attributes !== null &&
+    !isPlainObject(attributes)
+  ) {
+    throw new ValidationError("fields.attributes must be an object");
+  }
+  const fields: SaveDraftFields = {
+    name: draftText(value.name, "name"),
+    description: draftText(value.description, "description"),
+    country: draftText(value.country, "country"),
+    brandName: draftText(value.brandName, "brandName"),
+    attributes: attributes ?? null,
+  };
+  if (JSON.stringify(fields).length > DRAFT_JSON_MAX) {
+    throw new ValidationError(
+      `fields must be at most ${DRAFT_JSON_MAX} characters as JSON`,
+    );
+  }
+  return fields;
+};
+
+/** Trimmed, de-duplicated, in the order given; bounded in count and length. */
+export const confirmedFieldsOf = (value: unknown): string[] => {
+  if (!Array.isArray(value)) {
+    throw new ValidationError("confirmedFields must be a list of field names");
+  }
+  const out: string[] = [];
+  for (const entry of value) {
+    if (typeof entry !== "string") {
+      throw new ValidationError("confirmedFields must be a list of strings");
+    }
+    const name = entry.trim();
+    if (name === "" || out.includes(name)) continue;
+    if (name.length > CONFIRMED_FIELD_MAX_CHARS) {
+      throw new ValidationError(
+        `a confirmed field name is at most ${CONFIRMED_FIELD_MAX_CHARS} characters`,
+      );
+    }
+    out.push(name);
+  }
+  if (out.length > CONFIRMED_FIELDS_MAX) {
+    throw new ValidationError(
+      `at most ${CONFIRMED_FIELDS_MAX} confirmed fields`,
+    );
+  }
+  return out;
+};
+
+/**
+ * Whether a draft meets the floor `confirm` demands: a name, and every
+ * attribute `requireItemAttributes` requires. The vintage answer is folded in
+ * the way `confirm`'s payload carries it — `NON_VINTAGE` is an explicit
+ * `null`, `UNANSWERED` an absent key (which the floor refuses), and `VINTAGE`
+ * needs the year itself.
+ */
+export const draftMeetsFloor = (
+  itemType: ItemType,
+  fields: SaveDraftFields,
+  vintageAnswer: VintageAnswer,
+): boolean => {
+  if ((fields.name ?? "") === "") return false;
+  const bag: Record<string, unknown> = { ...(fields.attributes ?? {}) };
+  for (const [field, attribute] of itemAttributeEntries(itemType)) {
+    if (attribute.nonVintage !== true) continue;
+    if (vintageAnswer === "NON_VINTAGE") bag[field] = null;
+    else if (vintageAnswer === "UNANSWERED" || bag[field] === null) {
+      delete bag[field];
+    }
+  }
+  try {
+    requireItemAttributes(itemType, {
+      name: fields.name ?? "",
+      [ITEM_ATTRIBUTE_KEY[itemType]]: bag,
+    });
+    return true;
+  } catch (error) {
+    if (error instanceof ValidationError) return false;
+    throw error;
+  }
+};
+
 export const onboardingRowToDto = (row: OnboardingRow): ItemOnboardingDto => ({
   id: row.id,
   userId: row.userId,
@@ -219,6 +344,13 @@ export const onboardingRowToDto = (row: OnboardingRow): ItemOnboardingDto => ({
   lastReprocessResult: jsonOrNull(row.lastReprocessResult),
   createdAt: iso(row.createdAt),
   updatedAt: iso(row.updatedAt),
+  cellarId: row.cellarId,
+  confirmedFields: row.confirmedFields,
+  vintageAnswer: vintageAnswerOf(row.vintageAnswer),
+  displayName: row.displayName,
+  displayMaker: row.displayMaker,
+  imageId: row.imageId,
+  draftFields: jsonOrNull(row.draftFields),
 });
 
 /* -------------------------------------------------------------------------- */
@@ -442,9 +574,12 @@ export class ItemOnboardingActor
       // spend a model call and then write `COMPLETED` (or `FAILED`) over
       // `CONFIRMED`, reopening the session `confirm` short-circuits on.
       // `closeAsMatched` and `reprocess` keep a closed status the same way.
+      // SV-B: so is a saved "Needs details" draft — resuming it must not
+      // spend a model call or write `COMPLETED` over the person's save.
       if (
         existing.row.status === "CONFIRMED" ||
-        existing.row.status === "MATCHED"
+        existing.row.status === "MATCHED" ||
+        existing.row.status === "NEEDS_DETAILS"
       ) {
         return onboardingRowToDto(existing.row);
       }
@@ -594,6 +729,69 @@ export class ItemOnboardingActor
     return dto;
   }
 
+  /**
+   * SV-B · MC-drafts (L6): keep an unfinished bottle on the account.
+   *
+   * Owner only (`requireVisible`: someone else's draft is absent). The cellar
+   * it is aimed at is authorized like `confirm`'s, against the onboarding's
+   * owner, because `confirm` from this row later falls back to it. A draft
+   * missing a floor field becomes `NEEDS_DETAILS`; one whose floor is met
+   * keeps its status (a `NEEDS_DETAILS` draft stays listed until `confirm`).
+   * A closed session — `CONFIRMED`, `MATCHED` — is refused: its bottle is
+   * filed already. Writes no outbox row: nothing downstream exists yet.
+   */
+  async saveDraft(ctx: Ctx, input: SaveDraftInput): Promise<ItemOnboardingDto> {
+    const aggregate = this.requireAggregate();
+    await this.requireVisible(ctx, aggregate);
+    const { row } = aggregate;
+    if (row.status === "CONFIRMED" || row.status === "MATCHED") {
+      throw new ConflictError(
+        `onboarding ${this.key} is closed (${row.status}): its bottle is filed already`,
+      );
+    }
+    if (!isVintageAnswer(input.vintageAnswer)) {
+      throw new ValidationError(
+        "vintageAnswer must be VINTAGE, NON_VINTAGE or UNANSWERED",
+      );
+    }
+    const cellarId =
+      input.cellarId === undefined || input.cellarId === null
+        ? null
+        : requireUuid(input.cellarId, "cellarId");
+    if (cellarId !== null) {
+      await this.#requireCellarWriteAccess(cellarId, row.userId);
+    }
+    const fields = draftFieldsOf(input.fields);
+    const confirmedFields = confirmedFieldsOf(input.confirmedFields);
+    const itemType = onboardingRowToDto(row).itemType;
+    const status: OnboardingStatus = draftMeetsFloor(
+      itemType,
+      fields,
+      input.vintageAnswer,
+    )
+      ? statusOf(row.status)
+      : "NEEDS_DETAILS";
+
+    await this.tx(async (tx) => {
+      await tx
+        .update(itemOnboardings)
+        .set({
+          status,
+          cellarId,
+          confirmedFields,
+          vintageAnswer: input.vintageAnswer,
+          draftFields: fields,
+          displayName: fields.name ?? null,
+          displayMaker: fields.brandName ?? null,
+          imageId: row.frontLabelImageId,
+          updatedAt: new Date(),
+        })
+        .where(eq(itemOnboardings.id, this.key));
+    });
+    await this.reload();
+    return onboardingRowToDto(this.requireAggregate().row);
+  }
+
   /** The stored proposal. Never calls the model — that is `start`'s job. */
   async defaults(ctx: Ctx): Promise<ItemOnboardingDto> {
     const aggregate = this.requireAggregate();
@@ -628,10 +826,16 @@ export class ItemOnboardingActor
       "itemId",
     );
     const item: ItemRef = { type: itemType, id: itemId };
+    // SV-B: a saved draft remembers where it was going; an explicit `null`
+    // still means "no cellar".
+    const wantedCellar =
+      input.cellarId === undefined ? aggregate.row.cellarId : input.cellarId;
     const cellarId =
-      input.cellarId === undefined || input.cellarId === null
+      wantedCellar === null ? null : requireUuid(wantedCellar, "cellarId");
+    const confirmedFields =
+      input.confirmedFields === undefined || input.confirmedFields === null
         ? null
-        : requireUuid(input.cellarId, "cellarId");
+        : confirmedFieldsOf(input.confirmedFields);
     const cellarItemId =
       cellarId === null
         ? null
@@ -725,7 +929,11 @@ export class ItemOnboardingActor
     await this.tx(async (tx) => {
       await tx
         .update(itemOnboardings)
-        .set({ status: "CONFIRMED", updatedAt: new Date() })
+        .set({
+          status: "CONFIRMED",
+          ...(confirmedFields === null ? {} : { confirmedFields }),
+          updatedAt: new Date(),
+        })
         .where(eq(itemOnboardings.id, this.key));
 
       // §1.4: the status change and every follow-up commit together. Order is
@@ -1067,9 +1275,11 @@ export class ItemOnboardingActor
     // A re-read refreshes the proposal; it does not reopen a session that
     // has already ended in an item (`CONFIRMED`) or in an existing one
     // (`MATCHED`).
+    // SV-B: a saved draft keeps its `NEEDS_DETAILS` through a re-read too.
     const closed =
       aggregate.row.status === "CONFIRMED" ||
-      aggregate.row.status === "MATCHED";
+      aggregate.row.status === "MATCHED" ||
+      aggregate.row.status === "NEEDS_DETAILS";
     await this.tx(async (tx) => {
       await tx
         .update(itemOnboardings)

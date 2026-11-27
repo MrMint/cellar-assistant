@@ -1574,3 +1574,282 @@ describe.skipIf(skip)("ItemOnboardingActor concealment", () => {
     });
   });
 });
+
+/* -------------------------------------------------------------------------- */
+/* SV-B · MC-drafts — saved "Needs details" drafts (L6)                         */
+/* -------------------------------------------------------------------------- */
+
+describe.skipIf(skip)("ItemOnboardingActor.saveDraft (SV-B, MC-drafts)", () => {
+  afterAll(closeTestDb);
+
+  const draftRow = async (db: DbOrTx, id: string) =>
+    (
+      await db.execute<Record<string, unknown>>(sql`
+        select status, cellar_id::text as "cellarId", confirmed_fields as "confirmedFields",
+               vintage_answer as "vintageAnswer", display_name as "displayName",
+               draft_fields as "draftFields"
+        from public.item_onboardings where id = ${id}::uuid
+      `)
+    ).rows[0];
+
+  /** An owner, a cellar of theirs, and an open wine draft. */
+  const openWineDraft = async (db: DbOrTx) => {
+    const owner = await seedUser(db);
+    await seedReferenceValues(db);
+    const cellarId = await seedCellar(db, owner);
+    const onboardingId = randomUUID();
+    const actor = await activate(
+      newOnboardingActor(
+        onboardingId,
+        db,
+        provider(),
+        undefined,
+        brandRegistry(db),
+      ),
+    );
+    await actor.openDraft(userCtx(owner, "r"), { itemType: "WINE" });
+    return { owner, cellarId, onboardingId, actor };
+  };
+
+  it("keeps a draft missing a floor field as NEEDS_DETAILS, with everything it was told", async () => {
+    await withOnboardingDb(async (db) => {
+      const { owner, cellarId, actor } = await openWineDraft(db);
+      const saved = await actor.saveDraft(userCtx(owner, "r"), {
+        cellarId,
+        fields: { name: " Demo Rioja ", brandName: "Demo Bodega" },
+        confirmedFields: ["name", "name", " brandName "],
+        vintageAnswer: "UNANSWERED",
+      });
+      expect(saved).toMatchObject({
+        status: "NEEDS_DETAILS",
+        cellarId,
+        confirmedFields: ["name", "brandName"],
+        vintageAnswer: "UNANSWERED",
+        displayName: "Demo Rioja",
+        displayMaker: "Demo Bodega",
+        imageId: null,
+      });
+      expect(JSON.parse(saved.draftFields ?? "null")).toMatchObject({
+        name: "Demo Rioja",
+        brandName: "Demo Bodega",
+      });
+    });
+  });
+
+  it("stores No vintage as an answer, distinct from unanswered", async () => {
+    await withOnboardingDb(async (db) => {
+      const { owner, actor } = await openWineDraft(db);
+      const ctx = userCtx(owner, "r");
+      const fields = { name: "Demo Cava", attributes: { style: "RED" } };
+      const unanswered = await actor.saveDraft(ctx, {
+        fields,
+        confirmedFields: [],
+        vintageAnswer: "UNANSWERED",
+      });
+      // The floor wants the vintage answered: unanswered still needs details.
+      expect(unanswered.status).toBe("NEEDS_DETAILS");
+      const nv = await actor.saveDraft(ctx, {
+        fields,
+        confirmedFields: [],
+        vintageAnswer: "NON_VINTAGE",
+      });
+      expect(nv.vintageAnswer).toBe("NON_VINTAGE");
+      // Floor met: it stays listed (still NEEDS_DETAILS) until confirm.
+      expect(nv.status).toBe("NEEDS_DETAILS");
+    });
+  });
+
+  it("a draft whose floor is met when first saved keeps its status", async () => {
+    await withOnboardingDb(async (db) => {
+      const { owner, actor } = await openWineDraft(db);
+      const saved = await actor.saveDraft(userCtx(owner, "r"), {
+        fields: { name: "Demo Red", attributes: { style: "RED" } },
+        confirmedFields: [],
+        vintageAnswer: "NON_VINTAGE",
+      });
+      expect(saved.status).toBe("START");
+    });
+  });
+
+  it("refuses another person's draft, as absent, and writes nothing", async () => {
+    await withOnboardingDb(async (db) => {
+      const { onboardingId, actor } = await openWineDraft(db);
+      const stranger = await seedUser(db);
+      await expect(
+        actor.saveDraft(userCtx(stranger, "r"), {
+          fields: { name: "Mine now" },
+          confirmedFields: [],
+          vintageAnswer: "UNANSWERED",
+        }),
+      ).rejects.toBeInstanceOf(NotFoundError);
+      expect(await draftRow(db, onboardingId)).toMatchObject({
+        status: "START",
+        displayName: null,
+        draftFields: null,
+      });
+    });
+  });
+
+  it("refuses a cellar the owner cannot write, as absent, and writes nothing", async () => {
+    await withOnboardingDb(async (db) => {
+      const { owner, onboardingId, actor } = await openWineDraft(db);
+      const other = await seedUser(db);
+      const theirs = await seedCellar(db, other);
+      await expect(
+        actor.saveDraft(userCtx(owner, "r"), {
+          cellarId: theirs,
+          fields: { name: "Demo" },
+          confirmedFields: [],
+          vintageAnswer: "UNANSWERED",
+        }),
+      ).rejects.toBeInstanceOf(NotFoundError);
+      expect(await draftRow(db, onboardingId)).toMatchObject({
+        status: "START",
+        cellarId: null,
+      });
+    });
+  });
+
+  it("refuses bad shapes before writing", async () => {
+    await withOnboardingDb(async (db) => {
+      const { owner, actor } = await openWineDraft(db);
+      const ctx = userCtx(owner, "r");
+      const bad = [
+        { fields: [], confirmedFields: [], vintageAnswer: "UNANSWERED" },
+        {
+          fields: { name: 3 },
+          confirmedFields: [],
+          vintageAnswer: "UNANSWERED",
+        },
+        { fields: {}, confirmedFields: "name", vintageAnswer: "UNANSWERED" },
+        { fields: {}, confirmedFields: [], vintageAnswer: "MAYBE" },
+        {
+          fields: { attributes: [] },
+          confirmedFields: [],
+          vintageAnswer: "VINTAGE",
+        },
+        {
+          cellarId: "nope",
+          fields: {},
+          confirmedFields: [],
+          vintageAnswer: "VINTAGE",
+        },
+      ];
+      for (const input of bad) {
+        await expect(
+          actor.saveDraft(ctx, input as never),
+        ).rejects.toBeInstanceOf(ValidationError);
+      }
+    });
+  });
+
+  it("refuses a closed session: its bottle is filed already", async () => {
+    await withOnboardingDb(async (db) => {
+      const { owner, actor } = await openWineDraft(db);
+      const ctx = userCtx(owner, "r");
+      await actor.closeAsMatched(ctx);
+      await expect(
+        actor.saveDraft(ctx, {
+          fields: { name: "Demo" },
+          confirmedFields: [],
+          vintageAnswer: "UNANSWERED",
+        }),
+      ).rejects.toBeInstanceOf(ConflictError);
+    });
+  });
+
+  it("start on a saved draft answers it as it stands, without a model call", async () => {
+    await withOnboardingDb(async (db) => {
+      const owner = await seedUser(db);
+      const onboardingId = randomUUID();
+      const model = provider();
+      const actor = await activate(newOnboardingActor(onboardingId, db, model));
+      const ctx = userCtx(owner, "r");
+      await actor.openDraft(ctx, { itemType: "WINE" });
+      await actor.saveDraft(ctx, {
+        fields: { name: "Demo" },
+        confirmedFields: [],
+        vintageAnswer: "UNANSWERED",
+      });
+      const again = await actor.start(ctx, { itemType: "WINE" });
+      expect(again.status).toBe("NEEDS_DETAILS");
+      expect((model as unknown as { calls: number }).calls).toBe(0);
+    });
+  });
+
+  it("confirm from NEEDS_DETAILS follows the normal path into the draft's cellar, and keeps its link", async () => {
+    await withOnboardingDb(async (db) => {
+      const { owner, cellarId, onboardingId, actor } = await openWineDraft(db);
+      const ctx = userCtx(owner, "r");
+      await actor.saveDraft(ctx, {
+        cellarId,
+        fields: { name: "Demo Rioja" },
+        confirmedFields: ["name"],
+        vintageAnswer: "UNANSWERED",
+      });
+      const result = await actor.confirm(ctx, {
+        name: "Demo Rioja",
+        attributes: { vintage: null, style: "RED" },
+        confirmedFields: ["name", "style"],
+      });
+      expect(result.cellarItemId).not.toBeNull();
+      await drain(db);
+      expect(await draftRow(db, onboardingId)).toMatchObject({
+        status: "CONFIRMED",
+        confirmedFields: ["name", "style"],
+      });
+      expect(
+        await countOf(
+          db,
+          sql`select count(*) as count from public.wines where item_onboarding_id = ${onboardingId}::uuid`,
+        ),
+      ).toBe(1);
+      expect(
+        await countOf(
+          db,
+          sql`select count(*) as count from public.cellar_items where cellar_id = ${cellarId}::uuid`,
+        ),
+      ).toBe(1);
+      // A closed draft cannot be saved over.
+      await expect(
+        actor.saveDraft(ctx, {
+          fields: {},
+          confirmedFields: [],
+          vintageAnswer: "UNANSWERED",
+        }),
+      ).rejects.toBeInstanceOf(ConflictError);
+    });
+  });
+
+  it("confirm re-checks the draft's cellar: one the owner lost access to is refused", async () => {
+    await withOnboardingDb(async (db) => {
+      const owner = await seedUser(db);
+      const other = await seedUser(db);
+      await seedReferenceValues(db);
+      // Shared with the owner as a co-owner, then unshared.
+      const shared = await seedCellar(db, other);
+      await db.execute(sql`
+        insert into public.cellar_owners (cellar_id, user_id) values (${shared}::uuid, ${owner}::uuid)
+      `);
+      const onboardingId = randomUUID();
+      const actor = await activate(newOnboardingActor(onboardingId, db));
+      const ctx = userCtx(owner, "r");
+      await actor.openDraft(ctx, { itemType: "WINE" });
+      await actor.saveDraft(ctx, {
+        cellarId: shared,
+        fields: { name: "Demo" },
+        confirmedFields: [],
+        vintageAnswer: "UNANSWERED",
+      });
+      await db.execute(
+        sql`delete from public.cellar_owners where cellar_id = ${shared}::uuid`,
+      );
+      await expect(
+        actor.confirm(ctx, {
+          name: "Demo",
+          attributes: { vintage: null, style: "RED" },
+        }),
+      ).rejects.toBeInstanceOf(NotFoundError);
+    });
+  });
+});
