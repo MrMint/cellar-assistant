@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
 import { AppBar } from "@/components/app/AppBar";
 import { ICON_STROKE, Warning } from "@/components/app/icons";
+import { Page } from "@/components/app/Page";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { EditProfileClient } from "@/components/user/EditProfileClient";
 import { MyProfileQuery } from "@/components/user/fragments";
+import { ProfileEditor } from "@/components/user/ProfileEditor";
 import { apiServerQuery } from "@/lib/api/urql-server";
 
 export const metadata: Metadata = { title: "Edit profile" };
@@ -22,15 +23,20 @@ export default async function EditProfile() {
   const data = await apiServerQuery(MyProfileQuery);
 
   return (
-    <div className="flex flex-col gap-4">
-      {/* Reached from the Me hub (D1): Back goes there on a cold open. */}
-      <AppBar title="Edit profile" parent="/me" />
+    <Page className="max-w-[480px]">
+      {/* Reached from Settings: Back goes there on a cold open. */}
+      <AppBar title="Edit profile" parent="/me/settings" />
       {data.me === null ? (
         <SessionEnded />
       ) : (
-        <EditProfileClient profile={data.me.profile} />
+        <ProfileEditor
+          profile={{
+            displayName: data.me.profile.displayName,
+            avatarUrl: data.me.profile.avatarUrl ?? null,
+          }}
+        />
       )}
-    </div>
+    </Page>
   );
 }
 
@@ -38,9 +44,8 @@ function SessionEnded() {
   return (
     <Alert>
       <Warning aria-hidden strokeWidth={ICON_STROKE} />
-      <AlertDescription className="type-body text-ink-1">
-        Your session ended while this page was loading. Sign in again to edit
-        your profile.
+      <AlertDescription className="t-body text-ink">
+        Your session ended. Sign in again to edit your profile.
       </AlertDescription>
     </Alert>
   );

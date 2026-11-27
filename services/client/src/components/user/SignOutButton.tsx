@@ -7,12 +7,13 @@ import { useNavigate } from "@/components/app/useNavigate";
 import { Spinner } from "@/components/ui/spinner";
 import { authClient } from "@/lib/api/auth-client";
 import { completeSignOut } from "@/lib/auth/sign-out";
+import { feedback } from "@/lib/feedback";
 import { purgeUserCaches } from "@/lib/pwa/purge-caches";
 import { cn } from "@/lib/utils";
 
 /**
- * Sign out, as the last row of the `/me` hub (it lived in the old side bar's
- * avatar menu until D1 moved it here).
+ * Sign out, as the last row of Settings (Shell-Me ruling 2; it was the last
+ * row of the `/me` hub, and before D1 the old side bar's avatar menu).
  *
  * Sign out of **better-auth**, which is the system `/sign-in` signs viewers
  * into. It has to be a browser `fetch` rather than a server action, for the
@@ -74,9 +75,13 @@ export function SignOutButton({ className }: { className?: string }) {
     <button
       type="button"
       disabled={pending}
+      onPointerDown={() => feedback("press", { phase: "down" })}
+      onPointerUp={() => feedback("press", { phase: "up" })}
       onClick={() => void handleSignOut()}
       className={cn(
-        "type-body flex min-h-11 w-full items-center gap-3 px-4 py-2.5 text-left text-destructive outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 active:bg-surface-3 disabled:opacity-60",
+        // Plain ink, last in Settings (Shell-Me): destructive red is kept for
+        // confirms (KIT § 4), and signing out loses nothing.
+        "t-body flex min-h-14 w-full items-center gap-3 px-3.5 py-2 text-left text-ink outline-none focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-act-ink active:bg-raised disabled:opacity-40",
         className,
       )}
     >

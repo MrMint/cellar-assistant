@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect } from "react";
-import { ICON_STROKE, Offline, Refresh } from "@/components/app/icons";
+import { ICON_STROKE, Offline } from "@/components/app/icons";
 import { MainContent } from "@/components/app/main-content";
 import { ShellMessage } from "@/components/shell/ShellMessage";
-import { OFFLINE_COPY } from "@/components/shell/shell-copy";
+import { describeBoundaryError } from "@/components/shell/shell-copy";
 import { Button } from "@/components/ui/button";
 import { onceBackOnline } from "@/lib/pwa/connectivity";
 
@@ -22,11 +22,11 @@ export default function OfflinePage() {
   return (
     <MainContent className="flex min-h-full flex-1">
       <ShellMessage
-        copy={OFFLINE_COPY}
+        // The same words as a page that failed offline (Shell-Entry, offline).
+        copy={describeBoundaryError({ online: false })}
         icon={<Offline strokeWidth={ICON_STROKE} />}
         actions={
-          <Button onClick={() => window.location.reload()}>
-            <Refresh aria-hidden strokeWidth={ICON_STROKE} />
+          <Button variant="outline" onClick={() => window.location.reload()}>
             Try again
           </Button>
         }
