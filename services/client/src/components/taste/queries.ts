@@ -21,8 +21,9 @@ export const TasteAgreementFieldsFragment = graphql(`
   }
 `);
 
-/** `/taste-profile`: your archetype, what it is built from, your friends
- * (on the profile, each list a connection: §1.5). */
+/** `/taste-profile`: your archetype and the styles you rate highest, what it
+ * is built from, your friends (on the profile, each list a connection: §1.5).
+ * Under the API's row cost: 20 friends × 20 types is the widest nesting. */
 export const TasteProfileQuery = graphql(
   `
     query TasteProfile {
@@ -43,11 +44,13 @@ export const TasteProfileQuery = graphql(
           archetype {
             key
             title
-            loves {
+            loves(first: 4) {
               edges {
                 node {
                   itemType
                   label
+                  average
+                  count
                 }
               }
             }
