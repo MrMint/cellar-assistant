@@ -43,7 +43,7 @@ export function BrandPlate({
         className,
       )}
     >
-      <span className="font-display font-semibold text-[length:clamp(24px,40cqmin,96px)] leading-none">
+      <span className="font-semibold font-sans text-[length:clamp(24px,40cqmin,96px)] leading-none">
         {initial}
       </span>
     </span>
@@ -79,7 +79,7 @@ const STRETCHED =
 export const BrandCard = ({ brand, href, onClick }: BrandCardProps) => {
   const handleClick = isNotNil(onClick) ? () => onClick(brand.id) : undefined;
   const title = (
-    <span className="type-headline block truncate">{brand.name}</span>
+    <span className="t-title block truncate">{brand.name}</span>
   );
 
   return (
@@ -172,12 +172,12 @@ function CardText({
     <div className="flex flex-col gap-1 p-4">
       {children}
       {isNotNil(brand.description) && (
-        <p className="type-callout line-clamp-2 text-ink-1">
+        <p className="t-body line-clamp-2 text-ink">
           {brand.description}
         </p>
       )}
       {isNotNil(brand.parent_brand) && (
-        <p className="type-callout text-ink-2">
+        <p className="t-body text-ink-2">
           Part of {brand.parent_brand.name}
         </p>
       )}
@@ -188,7 +188,7 @@ function CardText({
 /** One count in the foot: the number, then its glyph. */
 function Count({ icon, children }: { icon: ReactNode; children: ReactNode }) {
   return (
-    <p className="type-callout tabular flex flex-1 items-center justify-center gap-1.5 py-2 text-center text-ink-2 [&_svg]:size-4">
+    <p className="t-cap tabular flex flex-1 items-center justify-center gap-1.5 py-2 text-center text-ink-2 [&_svg]:size-4">
       <span>{children}</span>
       {icon}
     </p>

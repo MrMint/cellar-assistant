@@ -6,7 +6,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { CellarSegments } from "./CellarSegments";
 
 /** As many cellar cards as a phone's first screen shows. */
-const CARDS = [1, 2, 3];
+const CARDS = [1, 2, 3, 4, 5];
 
 /**
  * `/cellars` while it loads (X24): the page's bar — its title and the
@@ -20,36 +20,39 @@ const CARDS = [1, 2, 3];
 export function CellarsShell() {
   return (
     <LoadingShell label="cellars" className="flex flex-col gap-6">
-      <div className="flex min-h-11 items-center justify-between gap-3">
-        <p className="t-display m-0 text-ink">Cellars</p>
-        <Button asChild variant="outline">
-          <Link href="/cellars/add" underline="none">
-            <Add aria-hidden />
-            New cellar
-          </Link>
-        </Button>
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex min-h-11 items-center">
+          <p className="type-headline truncate">Cellars</p>
+        </div>
+        <div className="flex flex-col gap-2 sm:ml-auto sm:flex-row">
+          <Button asChild>
+            <Link href="/cellars/add" underline="none">
+              <Add />
+              Add cellar
+            </Link>
+          </Button>
+        </div>
       </div>
       <CellarSegments current="cellars" />
       <div className="flex flex-col gap-3">
         {/* `SECTION_TITLES.MINE`, written out: that module is a client one. */}
-        <div className="flex min-h-11 items-center">
-          <p className="t-title m-0 text-ink">Yours</p>
+        <div className="flex min-h-6 items-end px-1">
+          <p className="type-overline text-ink-3">Yours</p>
         </div>
-        <ShellBlocks className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <ShellBlocks className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
           {CARDS.map((i) => (
             <div
               key={i}
-              className="flex flex-col overflow-hidden rounded-lg border border-line bg-card"
+              className="flex flex-col gap-4 rounded-lg bg-surface-1 p-4"
             >
-              <div className="grid grid-cols-4 gap-px">
-                {[1, 2, 3, 4].map((j) => (
-                  <Skeleton key={j} className="aspect-square rounded-none" />
-                ))}
+              <div className="flex items-center justify-between gap-2">
+                <Skeleton className="h-5 w-[55%]" />
+                <Skeleton className="size-8 rounded-full" />
               </div>
-              <div className="flex flex-col gap-2 px-4 pt-3 pb-4">
-                <Skeleton className="h-6 w-[55%]" />
-                <Skeleton className="h-5 w-[40%]" />
-                <Skeleton className="h-5 w-[70%]" />
+              <div className="flex gap-4">
+                {[1, 2, 3, 4, 5, 6].map((j) => (
+                  <Skeleton key={j} className="h-5 w-8" />
+                ))}
               </div>
             </div>
           ))}

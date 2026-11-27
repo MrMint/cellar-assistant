@@ -74,18 +74,37 @@ describe("brandItemFromLink (ItemBrand → the old item_brands row)", () => {
     );
   });
   test("reads a BrandItemLink node", () => {
-    assert.deepEqual(
-      itemLinkFromFragment({
-        __typename: "ItemBrand",
-        id: "l3",
-        isPrimary: false,
-        item: { __typename: "Beer", id: "be1", type: "BEER", name: "Pils" },
-      } as never),
-      {
-        id: "l3",
-        isPrimary: false,
-        item: { id: "be1", type: "BEER", name: "Pils", vintage: null },
+    const { tile, ...row } = itemLinkFromFragment({
+      __typename: "ItemBrand",
+      id: "l3",
+      isPrimary: false,
+      item: {
+        __typename: "Beer",
+        id: "be1",
+        type: "BEER",
+        name: "Pils",
+        isFavorite: true,
+        myBottles: {
+          totalCount: 3,
+          edges: [
+            { node: { id: "x1", cellar: { id: "c1", name: "Home" } } },
+            { node: { id: "x2", cellar: { id: "c1", name: "Home" } } },
+            { node: { id: "x3", cellar: { id: "c2", name: "Lake" } } },
+          ],
+        },
       },
+    } as never);
+    assert.deepEqual(row, {
+      id: "l3",
+      isPrimary: false,
+      item: { id: "be1", type: "BEER", name: "Pils", vintage: null },
+    });
+    // C1's tile: the item page, the heart, your cellars once each.
+    assert.equal(tile?.href, "/beers/be1");
+    assert.equal(tile?.favorite, true);
+    assert.deepEqual(
+      tile?.cellars.map((c) => c.name),
+      ["Home", "Lake"],
     );
   });
 });

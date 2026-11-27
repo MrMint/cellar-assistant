@@ -127,7 +127,7 @@ function CellarSectionList({
       className="flex flex-col gap-3"
     >
       <div className="flex min-h-11 items-center justify-between gap-2">
-        <h2 id={headingId} className="t-title m-0 text-ink">
+        <h2 id={headingId} className="t-head m-0 text-ink">
           {title}
         </h2>
         {count > 0 && <span className="t-cap tabular text-ink-3">{count}</span>}
@@ -174,7 +174,7 @@ export function Cellars({ userId, sections }: CellarsProps) {
     <div className="flex flex-col gap-6">
       <div ref={sentinelRef} hidden />
       <header className="flex min-h-11 items-center justify-between gap-3">
-        <h1 className="t-display m-0 text-ink">Cellars</h1>
+        <h1 className="t-title m-0 text-ink">Cellars</h1>
         <Button asChild variant="outline">
           <NewCellarLink>New cellar</NewCellarLink>
         </Button>

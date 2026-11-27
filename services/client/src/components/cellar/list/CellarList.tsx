@@ -333,7 +333,7 @@ export function CellarList({
               <ChevronLeft aria-hidden className="size-6" />
             </Link>
             <div className="flex min-w-0 flex-1 flex-col md:flex-row md:items-baseline md:gap-2">
-              <h1 className="t-display m-0 truncate text-ink">{cellarName}</h1>
+              <h1 className="t-title m-0 truncate text-ink">{cellarName}</h1>
               <span
                 className="t-cap tabular text-ink-2"
                 data-slot="cellar-list-count"

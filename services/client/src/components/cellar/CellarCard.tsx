@@ -88,13 +88,13 @@ export const CellarCard = ({
               onClick={onNavigate}
               className="min-w-0"
             >
-              <span className="type-headline block truncate">
+              <span className="t-head block truncate">
                 {cellar.name}
               </span>
             </Link>
           )}
           {isNotNil(onClick) && (
-            <span className="type-headline min-w-0 truncate">
+            <span className="t-head min-w-0 truncate">
               {cellar.name}
             </span>
           )}
@@ -146,7 +146,7 @@ export const CellarCard = ({
                 strokeWidth={ICON_STROKE}
                 className={cn("size-[18px] shrink-0", textClass)}
               />
-              <span className="type-body tabular">{count}</span>
+              <span className="t-body tabular">{count}</span>
             </span>
           );
         })}
