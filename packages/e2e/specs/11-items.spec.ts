@@ -6,8 +6,10 @@ import { bodyText, expect, test, watch } from "../fixtures/test.ts";
 /**
  * X09's one item page: the item URL, the edit form, and the **bottle** URL —
  * which is the same page with that bottle selected ("Your bottles" marks it
- * and carries its level; Pour, X03's, is the ActionBar's primary there;
- * Delete bottle is in `⋯`).
+ * and carries its level). There is no bottom bar any more (Cellars-Bottles
+ * 01): the open row holds Check in, Pour and Log, Want to try sits beside the
+ * heart, and the bar's `⋯` menu holds Add to a list, the add, Share, Edit
+ * details and, for your own bottle, Delete this bottle (last).
  *
  * A tea, because sake and tea are the two types `createItem` can write
  * without the onboarding flow (`item_onboarding_id NOT NULL` on the other
@@ -98,7 +100,7 @@ test("fixtures: a cellar, a tea with attributes, a bottle of it", async ({
   expect(review.addItemReview.__typename).toBe("ItemReview");
 });
 
-test("the item page: hero, taste header, fact sheet, Your bottles, ActionBar", async ({
+test("the item page: hero, taste header, fact sheet, Your bottles, the ⋯ menu", async ({
   primary,
 }) => {
   const noise = watch(primary);
@@ -150,33 +152,49 @@ test("the item page: hero, taste header, fact sheet, Your bottles, ActionBar", a
     .first()
     .click();
   await expect(primary.getByText("E2 lovely")).toBeVisible();
-  // One review per viewer: the form opens on the viewer's own review.
-  await expect(primary.getByPlaceholder("Edit your Review...")).toBeVisible();
+  // One review per viewer: the rating block opens on the viewer's own.
+  await expect(
+    primary
+      .getByTestId("your-rating")
+      .getByRole("button", { name: "Change your rating" }),
+  ).toBeVisible();
 
-  const bar = primary.getByRole("toolbar", { name: "Item actions" });
-  await expect(bar.getByRole("button", { name: "Log a drink" })).toBeVisible();
+  // No bottom bar: Want to try and the heart sit by the name, the rest in ⋯.
   await expect(
-    bar.getByRole("button", { name: "Add to cellar" }),
+    primary.getByRole("toolbar", { name: "Item actions" }),
+  ).toHaveCount(0);
+  await expect(
+    primary.getByRole("button", { name: `Want to try ${teaName}` }),
   ).toBeVisible();
   await expect(
-    bar.getByRole("button", { name: `Want to try ${teaName}` }),
+    primary.getByRole("button", { name: `Love ${teaName}` }),
   ).toBeVisible();
-  await expect(bar.getByRole("button", { name: "More actions" })).toBeVisible();
-  await expect(primary.getByRole("button", { name: "Share" })).toBeVisible();
+  await primary
+    .getByRole("button", { name: "More actions", exact: true })
+    .click();
+  const menu = primary.getByTestId("item-menu");
+  for (const name of ["Add to a list", "Share"]) {
+    await expect(menu.getByRole("button", { name, exact: true })).toBeVisible();
+  }
+  await expect(
+    menu.getByRole("button", { name: /^Add (to|another)/ }),
+  ).toBeVisible();
+  // On the item URL no bottle is named, so there is nothing to delete.
+  await expect(
+    menu.getByRole("button", { name: "Delete this bottle" }),
+  ).toHaveCount(0);
+  await primary.keyboard.press("Escape");
   expect(noise.pageErrors).toEqual([]);
 });
 
 /**
- * Edit, Share, Add to tier list and Delete bottle live behind the
- * ActionBar's ⋯ (X09): a sheet of buttons.
+ * Edit details, Share, Add to a list and Delete this bottle live behind the
+ * bar's ⋯ disc: a sheet of buttons (`parts/ItemMenu`).
  */
 async function overflowAction(page: Page, name: string) {
+  await page.getByRole("button", { name: "More actions", exact: true }).click();
   await page
-    .getByRole("toolbar", { name: "Item actions" })
-    .getByRole("button", { name: "More actions" })
-    .click();
-  await page
-    .getByRole("dialog")
+    .getByTestId("item-menu")
     .getByRole("button", { name, exact: true })
     .click();
 }
@@ -185,7 +203,7 @@ test("the edit form saves an attribute and returns to the item", async ({
   primary,
 }) => {
   await primary.goto(`/teas/${teaId}`);
-  await overflowAction(primary, "Edit item");
+  await overflowAction(primary, "Edit details");
   await expect(primary).toHaveURL(new RegExp(`/teas/${teaId}/edit$`));
 
   const temperature = primary.getByLabel("Steeping Temperature");
@@ -210,7 +228,7 @@ test("an item id at the cellar URL redirects to its one bottle (decision 1)", as
   );
 });
 
-test("the bottle URL is the item page with that bottle selected: pour it (which opens it), log from it, delete it", async ({
+test("the bottle URL is the item page with that bottle selected: pour it (which opens it), log and check in from it, delete it", async ({
   primary,
 }) => {
   const noise = watch(primary);
@@ -229,13 +247,16 @@ test("the bottle URL is the item page with that bottle selected: pour it (which 
   const bottles = primary.locator("section", {
     has: primary.getByRole("heading", { name: "Your tins" }),
   });
-  // The selected bottle is marked.
-  await expect(bottles.locator('[aria-current="page"]')).toHaveText(cellarName);
+  // The selected bottle is marked; its link names its state and cellar.
+  await expect(bottles.locator('[aria-current="page"]')).toHaveAccessibleName(
+    `Sealed, ${cellarName}`,
+  );
 
-  // X03: on a bottle of yours, Pour is the ActionBar's primary — there
-  // before the bottle is opened, since the first pour opens it.
-  const bar = primary.getByRole("toolbar", { name: "Item actions" });
-  await bar.getByRole("button", { name: "Steep", exact: true }).click();
+  // X03: the open row's Pour — there before the bottle is opened, since the
+  // first pour opens it.
+  await bottles
+    .getByRole("button", { name: `Steep from ${cellarName}` })
+    .click();
   const sheet = primary.getByRole("dialog", { name: "Pour" });
   await sheet.getByRole("button", { name: /^Cup/ }).click();
   await sheet.getByRole("button", { name: "Pour 3 g" }).click();
@@ -258,8 +279,17 @@ test("the bottle URL is the item page with that bottle selected: pour it (which 
     log.locator('[data-slot="drink-log-entry"]').first(),
   ).toBeVisible({ timeout: 20_000 });
 
-  await overflowAction(primary, "Delete bottle");
-  await primary.getByRole("button", { name: "Delete Tea" }).click();
+  // Check in, the row's primary: a check-in with an Undo.
+  await bottles.getByRole("button", { name: "Check in", exact: true }).click();
+  await expect(primary.getByText("Checked in", { exact: true })).toBeVisible({
+    timeout: 20_000,
+  });
+
+  await overflowAction(primary, "Delete this bottle");
+  await primary
+    .getByRole("dialog", { name: /^Delete this/ })
+    .getByRole("button", { name: "Delete", exact: true })
+    .click();
   await expect(primary).toHaveURL(new RegExp(`/cellars/${cellarId}/items$`), {
     timeout: 20_000,
   });
