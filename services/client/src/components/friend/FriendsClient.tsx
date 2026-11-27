@@ -1,217 +1,48 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import { useMutation, useQuery } from "urql";
-import { ConfirmSheet } from "@/components/app/ConfirmSheet";
-import { EmptyState } from "@/components/app/EmptyState";
-import {
-  Delete,
-  ErrorIcon,
-  ICON_STROKE,
-  People,
-  Warning,
-} from "@/components/app/icons";
+import { AppBar } from "@/components/app/AppBar";
+import { EmptyState, ErrorState } from "@/components/app/EmptyState";
+import { NoResults, People } from "@/components/app/icons";
 import { Link } from "@/components/app/Link";
 import { notify } from "@/components/app/notify";
-import { UserAvatar } from "@/components/app/UserAvatar";
+import { useAppKey } from "@/components/app/overlays/app-keys";
+import { PersonRow } from "@/components/app/parts/PersonRow";
+import { useNavigate } from "@/components/app/useNavigate";
+import { friendsSinceLine } from "@/components/profile/adapter";
 import { SearchField } from "@/components/shell/SearchField";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { Spinner } from "@/components/ui/spinner";
+import { breakpointUp, useMediaQuery } from "@/hooks/useMediaQuery";
 import type { ActorErrorReason } from "@/lib/api/errors";
 import type { ResultOf } from "@/lib/api/graphql";
-import { type ApiFailure, unwrapResult } from "@/lib/api/result";
-import { pageOf } from "@/lib/paging/paged-connection";
-import { useWholeConnection } from "@/lib/paging/use-whole-connection";
+import type { ApiFailure } from "@/lib/api/result";
+import { feedback } from "@/lib/feedback";
+import { cn } from "@/lib/utils";
+import { FriendPane } from "./FriendPane";
 import {
   AcceptFriendRequestMutation,
-  MyFriendRequestsQuery,
-  MyFriendsQuery,
   RejectFriendRequestMutation,
-  RemoveFriendMutation,
   SendFriendRequestMutation,
   UserSearchQuery,
 } from "./fragments";
+import { useAllFriendRequests, useAllFriends } from "./friend-lists";
 import { InviteFriendButton } from "./InviteFriendButton";
 import { openIncomingRequests } from "./open-requests";
 
-/** How often the friends and requests lists refresh in the background — there
- * is no subscription in the new stack (plan §6 D8: "polling replaces the
- * subscription"). A mutation also forces an immediate refresh, so this is
- * only for the other side's actions (a friend accepting, say). */
+/** How often the lists refresh in the background — there is no subscription
+ * in the new stack (plan §6 D8). A write refreshes at once; this is for the
+ * other side's actions (a friend accepting, say). */
 const POLL_INTERVAL_MS = 15_000;
-/**
- * The API's page cap. Each list is walked to its end — the old page read all
- * three unbounded off one subscription, so a page here is a request size, not
- * a limit on what shows.
- */
-const PAGE_SIZE = 100;
 
 type SearchResult = ResultOf<typeof UserSearchQuery>;
 
-/** Every friend, walked page by page to the end. */
-const useAllFriends = () =>
-  useWholeConnection({
-    query: MyFriendsQuery,
-    variables: (after) => ({ first: PAGE_SIZE, after }),
-    select: (data) =>
-      pageOf(unwrapResult(data?.myFriends, "FriendConnection"), (edge) => ({
-        since: edge.node.since,
-        user: edge.node.user,
-      })),
-    pageSize: PAGE_SIZE,
-  });
-
-/** Every request in one direction, walked page by page to the end. */
-const useAllFriendRequests = (direction: "INCOMING" | "OUTGOING") =>
-  useWholeConnection({
-    query: MyFriendRequestsQuery,
-    variables: (after) => ({ direction, first: PAGE_SIZE, after }),
-    select: (data) =>
-      pageOf(
-        unwrapResult(data?.myFriendRequests, "FriendRequestConnection"),
-        (edge) => edge.node,
-      ),
-    pageSize: PAGE_SIZE,
-  });
-
 /**
- * A list's read failed — the first page, or one partway through the walk
- * (the rows read so far stay above it). The next poll re-reads anyway; Retry
- * is for not waiting.
+ * `sendFriendRequest`'s refusals, told apart by `reason` (B4b), never by the
+ * English `message`. An unknown or absent reason is "other": the enum is
+ * additive.
  */
-const ListFailure = ({
-  failure,
-  onRetry,
-}: {
-  failure: ApiFailure | null;
-  onRetry: () => void;
-}) =>
-  failure === null ? null : (
-    <Alert
-      variant="destructive"
-      className="flex items-center gap-3 border-destructive/40"
-    >
-      <ErrorIcon
-        aria-hidden
-        strokeWidth={ICON_STROKE}
-        className="size-4 shrink-0"
-      />
-      <span className="type-callout flex-1">{failure.message}</span>
-      <Button
-        size="sm"
-        variant="ghost"
-        className="text-destructive"
-        onClick={onRetry}
-      >
-        Retry
-      </Button>
-    </Alert>
-  );
-
-/** A pending-aware button: disabled with a spinner while its row's call runs. */
-const RowButton = ({
-  pending,
-  variant,
-  onClick,
-  icon,
-  children,
-}: {
-  pending: boolean;
-  variant?: "default" | "destructive";
-  onClick: () => void;
-  icon?: React.ReactNode;
-  children: React.ReactNode;
-}) => (
-  <Button
-    variant={variant}
-    disabled={pending}
-    aria-busy={pending || undefined}
-    onClick={onClick}
-  >
-    {pending ? <Spinner aria-hidden /> : icon}
-    {children}
-  </Button>
-);
-
-/** A titled panel: one of the three columns from `lg` up. */
-const Panel = ({
-  title,
-  children,
-}: {
-  title: string;
-  children: React.ReactNode;
-}) => (
-  <section className="flex flex-col gap-3 rounded-lg bg-surface-1 p-4">
-    <h2 className="type-headline">{title}</h2>
-    {children}
-  </section>
-);
-
-/**
- * A person row: avatar, name, then the row's actions. With `href` (a friend,
- * X18) the avatar and name are one link into their profile; the actions stay
- * buttons beside it, outside the link.
- */
-const PersonRow = ({
-  avatarUrl,
-  displayName,
-  href,
-  children,
-}: {
-  avatarUrl?: string | null;
-  displayName: string;
-  href?: string;
-  children: React.ReactNode;
-}) => (
-  <li className="flex min-h-14 items-center gap-3 rounded-md bg-surface-2 px-3 py-2">
-    {href === undefined ? (
-      <>
-        <UserAvatar avatarUrl={avatarUrl} displayName={displayName} />
-        <span className="type-headline min-w-0 flex-1 truncate">
-          {displayName}
-        </span>
-      </>
-    ) : (
-      <Link
-        href={href}
-        underline="none"
-        data-slot="friend-profile-link"
-        className="-my-2 flex min-h-14 min-w-0 flex-1 items-center gap-3 text-ink-1"
-      >
-        <UserAvatar
-          aria-hidden
-          avatarUrl={avatarUrl}
-          displayName={displayName}
-        />
-        <span className="type-headline min-w-0 flex-1 truncate">
-          {displayName}
-        </span>
-      </Link>
-    )}
-    <div className="flex shrink-0 gap-2">{children}</div>
-  </li>
-);
-
-const EmptyRow = ({ children }: { children: React.ReactNode }) => (
-  <li className="type-callout px-1 py-2 text-ink-3">{children}</li>
-);
-
-/**
- * `sendFriendRequest` rejects four cases (plan's D8 brief): to yourself
- * (`ValidationError`), an existing friend, a request you already sent, and a
- * request already sent to you — the last three are all `ConflictError`, so
- * `code` cannot tell them apart and `reason` (B4b) does. The fourth gets
- * special handling: it should offer the accept action rather than read as a
- * dead end.
- *
- * This used to substring-match the actor's English `message`, which is the
- * exact bug `reason` was added to the contract to fix — a reworded sentence in
- * `user-actor.ts` would silently have turned "Accept their request" into a
- * dead-end error. An unrecognised or absent `reason` is "other": the enum is
- * additive, so a newer API may send one this build does not know.
- */
-const classifySendFriendRequestError = (
+export const classifySendFriendRequestError = (
   reason: ActorErrorReason | null,
 ):
   | "self"
@@ -233,53 +64,88 @@ const classifySendFriendRequestError = (
   }
 };
 
-/**
- * Polls both list queries on an interval, forcing a network fetch each time —
- * there is no subscription transport in the new stack, and a mutation on
- * *this* viewer's own actions already triggers an immediate refresh via
- * `refreshLists`. This is for the other side: a friend accepting or removing
- * you shows up within one interval instead of only on next page load.
- */
 const usePolledRefresh = (refresh: () => void) => {
-  const savedRefresh = useRef(refresh);
-  savedRefresh.current = refresh;
-
+  const saved = useRef(refresh);
+  saved.current = refresh;
   useEffect(() => {
-    const id = window.setInterval(() => {
-      savedRefresh.current();
-    }, POLL_INTERVAL_MS);
+    const id = window.setInterval(() => saved.current(), POLL_INTERVAL_MS);
     return () => window.clearInterval(id);
   }, []);
 };
 
+/** A section: its heading and count, then its rows (Social-Friends 01). */
+function Section({
+  label,
+  count,
+  children,
+}: {
+  label: string;
+  count: number;
+  children: ReactNode;
+}) {
+  const id = `friends-${label.toLowerCase()}`;
+  return (
+    <section aria-labelledby={id} className="flex flex-col gap-1">
+      <div className="flex items-baseline justify-between gap-3 py-2">
+        <h2 id={id} className="t-head text-ink">
+          {label}
+        </h2>
+        <span className="t-cap tabular-nums text-ink-2">{count}</span>
+      </div>
+      <ul className="flex flex-col divide-y divide-hair">{children}</ul>
+    </section>
+  );
+}
+
+/** A list's read failed: what happened and the one way out. */
+function ListFailure({
+  failure,
+  what,
+  onRetry,
+}: {
+  failure: ApiFailure | null;
+  what: string;
+  onRetry: () => void;
+}) {
+  if (failure === null) return null;
+  return (
+    <ErrorState
+      title={`Couldn't load your ${what}`}
+      action={
+        <Button variant="ghost" onClick={onRetry}>
+          Try again
+        </Button>
+      }
+    />
+  );
+}
+
+/**
+ * `/friends` (Social-Friends 01 to 19, desktop 01 to 12): Invite in the
+ * header, Search people, then Requests (outlined Accept, quiet Decline),
+ * Friends (each into their profile) and Sent (quiet Cancel). Remove friend
+ * lives on the profile now (lead's ruling 2). With nobody at all, one
+ * solid Invite.
+ *
+ * From `md` up the list is a column and the chosen friend's profile and
+ * compare open beside it; J/K or the arrows move the cursor ring through the
+ * friends, Enter opens the full page.
+ */
 export const FriendsClient = () => {
+  const navigate = useNavigate();
+  const desktop = useMediaQuery(breakpointUp("md"));
   const [pendingIds, setPendingIds] = useState<Set<string>>(new Set());
-  /**
-   * X23: Remove asks first. Unfriending cannot be undone from this side —
-   * being friends again takes a new request the other person must accept —
-   * so it is the one person-level action here that confirms (design §4.7:
-   * reversible actions toast with Undo, irreversible ones confirm). Open is
-   * its own flag so the name outlives the sheet's closing animation.
-   */
-  const [removeTarget, setRemoveTarget] = useState<{
-    id: string;
-    name: string;
-  } | null>(null);
-  const [removeOpen, setRemoveOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
-  const [banner, setBanner] = useState<{
-    color: "danger" | "warning";
-    message: string;
-    action?: { label: string; onClick: () => void };
-  } | null>(null);
+  const [chosen, setChosen] = useState<string | null>(null);
 
   const friendsList = useAllFriends();
   const incomingList = useAllFriendRequests("INCOMING");
   const outgoingList = useAllFriendRequests("OUTGOING");
+  const searching = searchTerm.trim().length > 0;
   const [searchResult, reexecuteSearch] = useQuery({
     query: UserSearchQuery,
     variables: { term: searchTerm },
-    pause: searchTerm.trim().length === 0,
+    pause: !searching,
   });
 
   const refreshLists = () => {
@@ -287,13 +153,11 @@ export const FriendsClient = () => {
     incomingList.refresh();
     outgoingList.refresh();
   };
-
   usePolledRefresh(refreshLists);
 
   const [, sendFriendRequest] = useMutation(SendFriendRequestMutation);
   const [, acceptFriendRequest] = useMutation(AcceptFriendRequestMutation);
   const [, rejectFriendRequest] = useMutation(RejectFriendRequestMutation);
-  const [, removeFriend] = useMutation(RemoveFriendMutation);
 
   const withPending = async (id: string, action: () => Promise<void>) => {
     setPendingIds((prev) => new Set(prev).add(id));
@@ -309,7 +173,7 @@ export const FriendsClient = () => {
   };
 
   const friendRows = friendsList.rows;
-  // W-13: an accepted request stays in the list until the requester's actor
+  // W-13: an accepted request stays listed until the requester's actor
   // deletes it; the friendship is already written, so it is closed here.
   const incoming = openIncomingRequests(
     incomingList.rows,
@@ -317,308 +181,320 @@ export const FriendsClient = () => {
   );
   const outgoing = outgoingList.rows;
 
-  const handleSendRequest = (userId: string, displayName: string) => {
-    void withPending(userId, async () => {
+  const selected =
+    friendRows.find((row) => row.user.id === chosen) ?? friendRows[0];
+  const selectedId = selected?.user.id ?? null;
+
+  const handleReject = (requestId: string, failureLine: string) =>
+    withPending(requestId, async () => {
+      const result = await rejectFriendRequest({ requestId });
+      if (
+        result.data?.rejectFriendRequest.__typename ===
+        "RejectFriendRequestPayload"
+      ) {
+        refreshLists();
+        return;
+      }
+      notify(failureLine, { tone: "error" });
+    });
+
+  const handleAccept = (requestId: string, name: string) =>
+    withPending(requestId, async () => {
+      const result = await acceptFriendRequest({ requestId });
+      if (
+        result.data?.acceptFriendRequest.__typename ===
+        "AcceptFriendRequestPayload"
+      ) {
+        refreshLists();
+        notify(`${name} is your friend`, { tone: "success" });
+        return;
+      }
+      notify("Couldn't accept that request", { tone: "error" });
+    });
+
+  const handleSendRequest = (userId: string, name: string) =>
+    withPending(userId, async () => {
       const result = await sendFriendRequest({ userId });
       const payload = result.data?.sendFriendRequest;
-
       if (payload?.__typename === "FriendRequest") {
-        setBanner(null);
+        const requestId = payload.id;
         refreshLists();
         reexecuteSearch({ requestPolicy: "network-only" });
-        // W-13: the row only moves to Outgoing on the re-read; say it went.
-        notify(`Friend request sent to ${displayName}`);
+        notify(`Request sent to ${name}`, {
+          undo: () =>
+            void handleReject(requestId, "Couldn't cancel the request"),
+        });
         return;
       }
       if (payload !== undefined && "code" in payload) {
         const kind = classifySendFriendRequestError(payload.reason);
-        if (kind === "pending-incoming") {
-          const existing = incoming.find((row) => row.user.id === userId);
-          setBanner({
-            color: "warning",
-            message: payload.message,
-            action:
-              existing === undefined
-                ? undefined
-                : {
-                    label: "Accept their request",
-                    onClick: () => handleAccept(existing.id),
-                  },
+        const existing = incoming.find((row) => row.user.id === userId);
+        if (kind === "pending-incoming" && existing !== undefined) {
+          notify(`${name} already asked you`, {
+            actionLabel: "Accept",
+            undo: () => void handleAccept(existing.id, name),
           });
-        } else {
-          setBanner({ color: "danger", message: payload.message });
+          return;
         }
-        return;
-      }
-      setBanner({
-        color: "danger",
-        message: result.error?.message ?? "Something went wrong.",
-      });
-    });
-  };
-
-  const handleAccept = (requestId: string) => {
-    void withPending(requestId, async () => {
-      const result = await acceptFriendRequest({ requestId });
-      const payload = result.data?.acceptFriendRequest;
-      if (payload?.__typename === "AcceptFriendRequestPayload") {
-        setBanner(null);
         refreshLists();
+        notify(payload.message, { tone: "error" });
         return;
       }
-      setBanner({
-        color: "danger",
-        message:
-          (payload !== undefined && "message" in payload
-            ? payload.message
-            : undefined) ??
-          result.error?.message ??
-          "Couldn't accept that request.",
-      });
+      notify("Couldn't send the request", { tone: "error" });
     });
-  };
 
-  const handleReject = (requestId: string) => {
-    void withPending(requestId, async () => {
-      const result = await rejectFriendRequest({ requestId });
-      const payload = result.data?.rejectFriendRequest;
-      if (payload?.__typename === "RejectFriendRequestPayload") {
-        setBanner(null);
-        refreshLists();
-        return;
-      }
-      setBanner({
-        color: "danger",
-        message:
-          (payload !== undefined && "message" in payload
-            ? payload.message
-            : undefined) ??
-          result.error?.message ??
-          "Couldn't update that request.",
-      });
-    });
+  // Desktop keys (KIT § 3): J/K and the arrows move the cursor through the
+  // friends; Enter opens the chosen one's page.
+  const move = (step: 1 | -1) => {
+    if (!desktop || friendRows.length === 0) return;
+    const at = friendRows.findIndex((row) => row.user.id === selectedId);
+    const next =
+      friendRows[Math.min(friendRows.length - 1, Math.max(0, at + step))];
+    if (next !== undefined && next.user.id !== selectedId) {
+      feedback("tick");
+      setChosen(next.user.id);
+    }
   };
+  useAppKey("ArrowDown", () => move(1));
+  useAppKey("j", () => move(1));
+  useAppKey("ArrowUp", () => move(-1));
+  useAppKey("k", () => move(-1));
+  useAppKey("Enter", () => {
+    if (desktop && selectedId !== null) navigate.push(`/users/${selectedId}`);
+  });
 
-  const handleRemove = (userId: string, displayName: string) => {
-    void withPending(userId, async () => {
-      const result = await removeFriend({ userId });
-      const payload = result.data?.removeFriend;
-      if (payload?.__typename === "RemoveFriendPayload") {
-        setBanner(null);
-        refreshLists();
-        notify(`You and ${displayName} are no longer friends`);
-        return;
-      }
-      setBanner({
-        color: "danger",
-        message:
-          (payload !== undefined && "message" in payload
-            ? payload.message
-            : undefined) ??
-          result.error?.message ??
-          "Couldn't remove that friend.",
-      });
-    });
-  };
-
-  // A7e made `userSearch` a result union; narrowed the same way `myFriends`
-  // above already is, so a refusal shows an empty list rather than crashing.
   const searchData: SearchResult | undefined = searchResult.data;
   const searchRows =
     searchData?.userSearch.__typename === "UserSearchConnection"
-      ? searchData.userSearch.edges
+      ? searchData.userSearch.edges.map((edge) => edge.node)
       : [];
-  const alreadyRequestedOrFriends = new Set([
-    ...friendRows.map((row) => row.user.id),
-    ...incoming.map((row) => row.user.id),
-    ...outgoing.map((row) => row.user.id),
-  ]);
+
+  const loaded =
+    !friendsList.loading && !incomingList.loading && !outgoingList.loading;
+  const nobody =
+    loaded &&
+    friendRows.length === 0 &&
+    incoming.length === 0 &&
+    outgoing.length === 0 &&
+    friendsList.failure === null;
+
+  const list = (
+    <div className="flex min-w-0 flex-col gap-4">
+      <SearchField
+        placeholder="Search people"
+        aria-label="Search people"
+        debounceTimeout={400}
+        onDebounced={setSearchTerm}
+        searching={searching && searchResult.fetching}
+      />
+
+      {searching ? (
+        <Section label="People" count={searchRows.length}>
+          {searchRows.map((person) => (
+            <li key={person.userId}>
+              <PersonRow
+                name={person.displayName}
+                displayName={person.displayName}
+                avatarUrl={person.avatarUrl}
+                actions={
+                  <Button
+                    variant="outline"
+                    disabled={pendingIds.has(person.userId)}
+                    aria-busy={pendingIds.has(person.userId) || undefined}
+                    aria-label={`Add ${person.displayName}`}
+                    onClick={() =>
+                      void handleSendRequest(person.userId, person.displayName)
+                    }
+                  >
+                    Add
+                  </Button>
+                }
+              />
+            </li>
+          ))}
+          {!searchResult.fetching && searchRows.length === 0 && (
+            <li className="list-none">
+              <EmptyState
+                illustration={<NoResults aria-hidden strokeWidth={1.5} />}
+                title={`No one matches “${searchTerm.trim()}”`}
+              />
+            </li>
+          )}
+        </Section>
+      ) : nobody ? (
+        <EmptyState
+          illustration={<People aria-hidden strokeWidth={1.5} />}
+          title="No friends yet"
+          action={<InviteFriendButton />}
+          className="py-10"
+        />
+      ) : (
+        <>
+          {incoming.length > 0 && (
+            <Section label="Requests" count={incoming.length}>
+              {incoming.map((row) => (
+                <li key={row.id}>
+                  <PersonRow
+                    name={row.user.displayName}
+                    displayName={row.user.displayName}
+                    avatarUrl={row.user.avatarUrl}
+                    status="Wants to be friends"
+                    actions={
+                      <>
+                        <Button
+                          variant="quiet-muted"
+                          disabled={pendingIds.has(row.id)}
+                          aria-label={`Decline ${row.user.displayName}`}
+                          onClick={() =>
+                            void handleReject(
+                              row.id,
+                              "Couldn't decline that request",
+                            )
+                          }
+                        >
+                          Decline
+                        </Button>
+                        <Button
+                          variant="outline"
+                          disabled={pendingIds.has(row.id)}
+                          aria-busy={pendingIds.has(row.id) || undefined}
+                          aria-label={`Accept ${row.user.displayName}`}
+                          onClick={() =>
+                            void handleAccept(row.id, row.user.displayName)
+                          }
+                        >
+                          Accept
+                        </Button>
+                      </>
+                    }
+                  />
+                </li>
+              ))}
+            </Section>
+          )}
+          <ListFailure
+            failure={incomingList.failure}
+            what="requests"
+            onRetry={incomingList.retry}
+          />
+
+          {friendRows.length > 0 && (
+            <Section label="Friends" count={friendRows.length}>
+              {friendRows.map((row) => {
+                const current = desktop && row.user.id === selectedId;
+                return (
+                  <li
+                    key={row.user.id}
+                    data-slot="friend-row"
+                    aria-current={current || undefined}
+                    className={cn(
+                      "rounded-md md:px-2",
+                      current && "ring-2 ring-ring-select",
+                    )}
+                  >
+                    <PersonRow
+                      name={
+                        <Link
+                          href={`/users/${row.user.id}`}
+                          overlay
+                          underline="none"
+                          data-slot="friend-profile-link"
+                          className="text-ink"
+                          onClick={(event) => {
+                            if (!desktop) return;
+                            event.preventDefault();
+                            setChosen(row.user.id);
+                          }}
+                        >
+                          {row.user.displayName}
+                        </Link>
+                      }
+                      displayName={row.user.displayName}
+                      avatarUrl={row.user.avatarUrl}
+                      status={friendsSinceLine(row.since as string)}
+                      chevron
+                    />
+                  </li>
+                );
+              })}
+            </Section>
+          )}
+          <ListFailure
+            failure={friendsList.failure}
+            what="friends"
+            onRetry={friendsList.retry}
+          />
+
+          {outgoing.length > 0 && (
+            <Section label="Sent" count={outgoing.length}>
+              {outgoing.map((row) => (
+                <li key={row.id}>
+                  <PersonRow
+                    name={row.user.displayName}
+                    displayName={row.user.displayName}
+                    avatarUrl={row.user.avatarUrl}
+                    status="Request sent"
+                    actions={
+                      <Button
+                        variant="quiet-muted"
+                        disabled={pendingIds.has(row.id)}
+                        aria-busy={pendingIds.has(row.id) || undefined}
+                        aria-label={`Cancel request to ${row.user.displayName}`}
+                        onClick={() =>
+                          void handleReject(
+                            row.id,
+                            "Couldn't cancel the request",
+                          )
+                        }
+                      >
+                        Cancel
+                      </Button>
+                    }
+                  />
+                </li>
+              ))}
+            </Section>
+          )}
+          <ListFailure
+            failure={outgoingList.failure}
+            what="sent requests"
+            onRetry={outgoingList.retry}
+          />
+        </>
+      )}
+    </div>
+  );
 
   return (
-    <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-      {banner !== null && (
-        <Alert
-          variant={banner.color === "danger" ? "destructive" : "default"}
-          className="flex items-center gap-3 lg:col-span-3"
-        >
-          {banner.color === "danger" ? (
-            <ErrorIcon
-              aria-hidden
-              strokeWidth={ICON_STROKE}
-              className="size-4 shrink-0"
-            />
-          ) : (
-            <Warning
-              aria-hidden
-              strokeWidth={ICON_STROKE}
-              className="size-4 shrink-0"
-            />
-          )}
-          <AlertDescription className="type-callout flex-1 text-current">
-            {banner.message}
-          </AlertDescription>
-          {banner.action !== undefined && (
-            <Button size="sm" onClick={banner.action.onClick}>
-              {banner.action.label}
-            </Button>
-          )}
-        </Alert>
-      )}
-
-      <Panel title="Friends">
-        <ListFailure
-          failure={friendsList.failure}
-          onRetry={friendsList.retry}
+    <div className="flex flex-col gap-4">
+      <div className="flex items-start gap-3">
+        <AppBar
+          title="Friends"
+          parent="/me"
+          breadcrumbs={[{ label: "Me", href: "/me" }, { label: "Friends" }]}
+          className="min-w-0 flex-1"
         />
-        <ul className="flex flex-col gap-2">
-          {friendRows.length === 0 &&
-            !friendsList.loading &&
-            friendsList.failure === null && (
-              // N15 (design §3.6): one line and one action. The search
-              // beside it is the other way in, for someone already here.
-              <li className="list-none">
-                <EmptyState
-                  illustration={<People aria-hidden strokeWidth={1.5} />}
-                  title="Taste is better compared."
-                  description="Friends see what you rate and rank, and you see theirs. Find someone below, or invite them."
-                  action={<InviteFriendButton />}
-                  className="px-2 py-6"
-                />
-              </li>
-            )}
-          {friendRows.map((row) => (
-            <PersonRow
-              key={row.user.id}
-              avatarUrl={row.user.avatarUrl}
-              displayName={row.user.displayName}
-              href={`/users/${row.user.id}`}
-            >
-              <RowButton
-                variant="destructive"
-                icon={<Delete aria-hidden strokeWidth={ICON_STROKE} />}
-                pending={pendingIds.has(row.user.id)}
-                onClick={() => {
-                  setRemoveTarget({
-                    id: row.user.id,
-                    name: row.user.displayName,
-                  });
-                  setRemoveOpen(true);
+        <InviteFriendButton variant="outline" className="shrink-0" />
+      </div>
+      {desktop ? (
+        <div className="grid grid-cols-[minmax(0,340px)_minmax(0,1fr)] items-start gap-6">
+          {list}
+          {selectedId !== null && !searching && (
+            <div data-slot="friend-pane" className="min-w-0">
+              <FriendPane
+                key={selectedId}
+                userId={selectedId}
+                onRemoved={() => {
+                  setChosen(null);
+                  refreshLists();
                 }}
-              >
-                Remove
-              </RowButton>
-            </PersonRow>
-          ))}
-        </ul>
-      </Panel>
-
-      <Panel title="Add Friends">
-        <SearchField
-          placeholder="Search for users by name..."
-          aria-label="Find people to add as friends"
-          debounceTimeout={500}
-          onDebounced={setSearchTerm}
-        />
-        <ul className="flex flex-col gap-2">
-          {searchRows
-            .filter((edge) => !alreadyRequestedOrFriends.has(edge.node.userId))
-            .map((edge) => (
-              <PersonRow
-                key={edge.node.userId}
-                avatarUrl={edge.node.avatarUrl}
-                displayName={edge.node.displayName}
-              >
-                <RowButton
-                  pending={
-                    pendingIds.has(edge.node.userId) || searchResult.fetching
-                  }
-                  onClick={() =>
-                    handleSendRequest(edge.node.userId, edge.node.displayName)
-                  }
-                >
-                  Request
-                </RowButton>
-              </PersonRow>
-            ))}
-        </ul>
-      </Panel>
-
-      <Panel title="Incoming Requests">
-        <ListFailure
-          failure={incomingList.failure}
-          onRetry={incomingList.retry}
-        />
-        <ul className="flex flex-col gap-2">
-          {incoming.length === 0 && !incomingList.loading && (
-            <EmptyRow>No incoming requests.</EmptyRow>
+              />
+            </div>
           )}
-          {incoming.map((row) => (
-            <PersonRow
-              key={row.id}
-              avatarUrl={row.user.avatarUrl}
-              displayName={row.user.displayName}
-            >
-              <RowButton
-                variant="destructive"
-                pending={pendingIds.has(row.id)}
-                onClick={() => handleReject(row.id)}
-              >
-                Reject
-              </RowButton>
-              <RowButton
-                pending={pendingIds.has(row.id)}
-                onClick={() => handleAccept(row.id)}
-              >
-                Accept
-              </RowButton>
-            </PersonRow>
-          ))}
-        </ul>
-        <h2 className="type-headline">Outgoing Requests</h2>
-        <ListFailure
-          failure={outgoingList.failure}
-          onRetry={outgoingList.retry}
-        />
-        <ul className="flex flex-col gap-2">
-          {outgoing.length === 0 && !outgoingList.loading && (
-            <EmptyRow>No outgoing requests.</EmptyRow>
-          )}
-          {outgoing.map((row) => (
-            <PersonRow
-              key={row.id}
-              avatarUrl={row.user.avatarUrl}
-              displayName={row.user.displayName}
-            >
-              <RowButton
-                variant="destructive"
-                pending={pendingIds.has(row.id)}
-                onClick={() => handleReject(row.id)}
-              >
-                Cancel
-              </RowButton>
-            </PersonRow>
-          ))}
-        </ul>
-      </Panel>
-
-      <ConfirmSheet
-        open={removeOpen}
-        onOpenChange={setRemoveOpen}
-        title={`Remove ${removeTarget?.name ?? "this friend"}?`}
-        description={
-          <>
-            You&apos;ll stop seeing each other&apos;s friends-only cellars and
-            lists. To be friends again, one of you sends a new request.
-          </>
-        }
-        confirmLabel="Remove friend"
-        onConfirm={() => {
-          setRemoveOpen(false);
-          if (removeTarget !== null) {
-            handleRemove(removeTarget.id, removeTarget.name);
-          }
-        }}
-      />
+        </div>
+      ) : (
+        list
+      )}
     </div>
   );
 };

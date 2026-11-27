@@ -243,3 +243,26 @@ export const FriendCellarsPageQuery = graphql(
 `,
   [ActorErrorFieldsFragment, FriendCellarRowFragment],
 );
+
+/**
+ * Who someone is, for a profile you may not open (Social-Friends 17, 18): the
+ * name and picture any signed-in viewer may see (`user(id:)`), so a
+ * non-friend's page can offer Add friend. One `NotFoundError` for an id that
+ * names nobody, so the page cannot say more than that.
+ */
+export const PersonQuery = graphql(
+  `
+  query Person($userId: ID!) {
+    user(id: $userId) {
+      __typename
+      ... on UserProfile {
+        id
+        displayName
+        avatarUrl
+      }
+      ...ActorErrorFields
+    }
+  }
+`,
+  [ActorErrorFieldsFragment],
+);

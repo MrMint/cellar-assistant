@@ -1,64 +1,57 @@
 "use client";
 
 import { useQuery } from "urql";
-import { InsetSection, ListRow } from "@/components/app/Page";
-import { ApiError } from "@/components/cellar-api/ApiError";
-import {
-  listPageResult,
-  type ProfileListRow,
-} from "@/components/profile/adapter";
-import {
-  FriendTierListsPageQuery,
-  PROFILE_SECTION_SIZE,
-} from "@/components/profile/queries";
-import { Button } from "@/components/ui/button";
+import { ChevronRight, ICON_STROKE } from "@/components/app/icons";
+import { Link } from "@/components/app/Link";
+import { PRESS_CLASS, pressFeedback } from "@/components/app/overlays/press";
 import { Skeleton } from "@/components/ui/skeleton";
 import { readFragment } from "@/lib/api/graphql";
 import { unwrapResult } from "@/lib/api/result";
-import type { Page } from "@/lib/paging/paged-connection";
-import { usePagedConnection } from "@/lib/paging/use-paged-connection";
 import { cn } from "@/lib/utils";
-import { CloneTierListButton } from "./CloneTierListButton";
+import { agreementCard } from "./compare/compare-lines";
 import { TasteAgreementFieldsFragment, TasteAgreementQuery } from "./queries";
-import { agreementCounts, agreementLine, agreementShown } from "./taste-lines";
+import { agreementCounts } from "./taste-lines";
+
+/** The card's bar: one segment per shared drink (20 at most), agreed filled. */
+function AgreementBar({
+  segments,
+  filled,
+}: {
+  segments: number;
+  filled: number;
+}) {
+  if (segments === 0) return null;
+  return (
+    <span aria-hidden className="flex gap-1" data-slot="agreement-bar">
+      {Array.from({ length: segments }, (_, index) => (
+        <span
+          // biome-ignore lint/suspicious/noArrayIndexKey: fixed positions
+          key={index}
+          className={cn(
+            "h-2 flex-1 rounded-full",
+            index < filled ? "bg-ink-2" : "bg-raised",
+          )}
+        />
+      ))}
+    </span>
+  );
+}
 
 /**
- * FriendProfile's "Compare" (L03, L30): where you and this person agree, as
- * a count, and their lists you may copy into a private one of your own.
+ * The profile's agreement card (Social-Friends 03): "You agree on 12 of 13"
+ * over a bar, "shared drinks, within half a star". It opens the compare
+ * screen; from `md` up that screen is also the profile's right column.
  *
  * The section — and its `#compare` anchor, which /taste-profile's "Compare"
  * links to — is on the page from first paint, so the browser can scroll to
- * it; only the agreement line waits for its own query (a placeholder until
+ * it; only the card's words wait for the agreement query (a placeholder until
  * then). If the server refuses the agreement, the section goes: a profile
- * you may not see answers like a missing one, and this section has nothing
- * to add to the page's own answer.
- *
- * The lists are the ones the profile already shows (the API decided which
- * of them you may see), and they page on like the profile's own Tier lists
- * section, so a friend's 21st list can be copied too; want-to-try is never
- * one of them (L42).
+ * you may not see answers like a missing one.
  */
-export function TasteCompareSection({
-  userId,
-  lists,
-}: {
-  userId: string;
-  lists: Page<ProfileListRow>;
-}) {
+export function TasteCompareSection({ userId }: { userId: string }) {
   const [{ data }] = useQuery({
     query: TasteAgreementQuery,
     variables: { userId },
-  });
-  const paged = usePagedConnection({
-    query: FriendTierListsPageQuery,
-    variables: (_args: string, after) => ({
-      userId,
-      first: PROFILE_SECTION_SIZE,
-      after,
-    }),
-    select: (answer) => listPageResult(answer?.friendProfile),
-    initial: lists,
-    initialArgs: userId,
   });
 
   const result =
@@ -66,69 +59,55 @@ export function TasteCompareSection({
       ? undefined
       : unwrapResult(data.tasteAgreement, "TasteAgreement");
   if (result !== undefined && !result.ok) return null;
-  const agreement =
+  const card =
     result === undefined
       ? undefined
-      : agreementCounts(
-          readFragment(TasteAgreementFieldsFragment, result.data),
+      : agreementCard(
+          agreementCounts(
+            readFragment(TasteAgreementFieldsFragment, result.data),
+          ),
         );
-  const loading = paged.status === "loadingMore";
 
   return (
-    <InsetSection
-      label="Compare"
+    <section
       id="compare"
+      aria-label="Compare taste"
       data-slot="taste-compare"
       className="scroll-mt-4"
-      aria-busy={agreement === undefined || loading || undefined}
+      aria-busy={card === undefined || undefined}
     >
-      <ListRow
-        title={
-          agreement === undefined ? (
-            <Skeleton
-              data-slot="taste-compare-pending"
-              className="h-5 w-[60%]"
-            />
+      <Link
+        href={`/users/${userId}/compare`}
+        underline="none"
+        {...pressFeedback()}
+        className={cn(
+          "relative flex min-h-24 items-center gap-3 rounded-lg border border-edge bg-surface-1 p-4 text-ink hover:bg-raised",
+          PRESS_CLASS,
+        )}
+      >
+        <span className="flex min-w-0 flex-1 flex-col gap-2">
+          {card === undefined ? (
+            <>
+              <Skeleton
+                data-slot="taste-compare-pending"
+                className="h-6 w-[60%]"
+              />
+              <Skeleton className="h-2 w-full" />
+            </>
           ) : (
-            <span
-              className={cn(
-                "type-callout",
-                agreementShown(agreement) ? "text-ink-1" : "text-ink-2",
-              )}
-            >
-              {agreementLine(agreement)}
-            </span>
-          )
-        }
-        description="Only items they share with you count. Never a percentage."
-      />
-      {paged.rows.map((list) => (
-        <ListRow
-          key={list.id}
-          title={list.name}
-          trailing={
-            <CloneTierListButton tierListId={list.id} name={list.name} />
-          }
+            <>
+              <span className="t-head">{card.title}</span>
+              <AgreementBar segments={card.segments} filled={card.filled} />
+              <span className="t-cap text-ink-2">{card.line}</span>
+            </>
+          )}
+        </span>
+        <ChevronRight
+          aria-hidden
+          strokeWidth={ICON_STROKE}
+          className="size-5 shrink-0 text-ink-3"
         />
-      ))}
-      {paged.failure !== null && (
-        <div className="p-4">
-          <ApiError error={paged.failure} />
-        </div>
-      )}
-      {paged.canLoadMore && (
-        <div className="p-3">
-          <Button
-            variant="secondary"
-            className="w-full"
-            onClick={() => void paged.loadMore()}
-            disabled={loading}
-            aria-busy={loading || undefined}
-          >
-            {loading ? "Loading…" : "Show more lists"}
-          </Button>
-        </div>
-      )}
-    </InsetSection>
+      </Link>
+    </section>
   );
 }

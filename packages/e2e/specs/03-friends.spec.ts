@@ -74,39 +74,46 @@ test.describe("friend request and acceptance", () => {
   }) => {
     await secondary.goto("/friends");
     // Search by **display name**: `userSearch(term:)` matches the display
-    // name only, and the placeholder now says so (it used to promise email
-    // too, which returned zero rows).
+    // name only ("Search people", Social-Friends 16).
     await secondary
-      .getByPlaceholder("Search for users by name...")
+      .getByRole("searchbox", { name: "Search people" })
       .fill(ACCOUNTS.primary.displayName);
 
-    const row = secondary
-      .locator("li")
-      .filter({ hasText: ACCOUNTS.primary.displayName });
+    const add = secondary.getByRole("button", {
+      name: `Add ${ACCOUNTS.primary.displayName}`,
+      exact: true,
+    });
     await expect(
-      row.first(),
+      add,
       "user search did not return the other test account",
     ).toBeVisible({ timeout: 20_000 });
-    await row.getByRole("button", { name: "Request" }).first().click();
+    await add.click();
 
-    // The outgoing-request row is the only one carrying a "Cancel" button.
+    // The search clears back to the lists, where the request is under Sent
+    // with its quiet Cancel (Social-Friends 19).
+    await secondary.getByRole("searchbox", { name: "Search people" }).fill("");
     await expect(
-      secondary.getByRole("button", { name: "Cancel" }).first(),
-      "the request did not appear under Outgoing Requests",
+      secondary.getByRole("button", {
+        name: `Cancel request to ${ACCOUNTS.primary.displayName}`,
+      }),
+      "the request did not appear under Sent",
     ).toBeVisible({ timeout: 20_000 });
   });
 
   test("the first account accepts it", async ({ primary }) => {
     await primary.goto("/friends");
 
-    const accept = primary.getByRole("button", { name: "Accept" });
-    await expect(accept.first(), "no incoming request to accept").toBeVisible({
+    const accept = primary.getByRole("button", {
+      name: `Accept ${ACCOUNTS.secondary.displayName}`,
+    });
+    await expect(accept, "no incoming request to accept").toBeVisible({
       timeout: 20_000,
     });
-    await accept.first().click();
+    await accept.click();
 
+    // Friends rows open the profile (Remove friend lives there now).
     await expect(
-      primary.getByRole("button", { name: "Remove" }).first(),
+      primary.locator(`a[href="/users/${ACCOUNTS.secondary.id}"]`).first(),
       "the accepted friend did not appear in the friends list",
     ).toBeVisible({ timeout: 20_000 });
   });
