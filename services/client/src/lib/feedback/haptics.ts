@@ -307,22 +307,20 @@ const CALMED: ReadonlySet<HapticKind> = new Set<HapticKind>([
   "big",
 ]);
 
-function prefersReducedMotion(): boolean {
-  try {
-    return (
-      typeof window !== "undefined" &&
-      typeof window.matchMedia === "function" &&
-      window.matchMedia("(prefers-reduced-motion: reduce)").matches
-    );
-  } catch {
-    return false;
-  }
+/**
+ * The person's reduced-motion preference, handed in by `FeedbackProvider`
+ * from motion's `useReducedMotion` (the app reads the preference in one
+ * place; the `ui-platform` guard refuses a hand-rolled media query).
+ */
+let reducedMotion = false;
+export function setReducedMotion(on: boolean): void {
+  reducedMotion = on;
 }
 
 /** A kind's pattern as played now: a celebration collapses to its strongest pulse under reduced motion. */
 export function calmed(
   kind: HapticKind,
-  reduced: boolean = prefersReducedMotion(),
+  reduced: boolean = reducedMotion,
 ): readonly number[] {
   const pattern = HAPTIC[kind];
   if (!reduced || !CALMED.has(kind)) return pattern;

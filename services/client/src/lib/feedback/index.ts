@@ -148,6 +148,7 @@ export {
   hapticOverlayLive,
   inGesture,
   pulseOffsets,
+  setReducedMotion,
 } from "./haptics";
 export {
   type FeedbackSettings,

@@ -34,6 +34,7 @@ const {
   inGesture,
   pulseOffsets,
   registerHapticSwitch,
+  setReducedMotion,
   subscribeHaptics,
 } = await import("./haptics");
 const { HAPTICS_KEY, setHapticsEnabled } = await import("./settings");
@@ -54,8 +55,8 @@ let current: Event | null;
 const proto = Object.getPrototypeOf(navigator) as object;
 const vibrate = Object.getOwnPropertyDescriptor(proto, "vibrate");
 const touch = Object.getOwnPropertyDescriptor(proto, "maxTouchPoints");
+/** Reduced motion, as `FeedbackProvider` hands it in from `useReducedMotion`. */
 let reduced = false;
-const realMatchMedia = window.matchMedia;
 
 function setVibrate(value: unknown): void {
   Object.defineProperty(proto, "vibrate", { value, configurable: true });
@@ -108,10 +109,7 @@ beforeEach(() => {
   setVibrate(undefined);
   window.localStorage.removeItem(HAPTICS_KEY);
   reduced = false;
-  window.matchMedia = ((q: string) =>
-    ({
-      matches: reduced && q.includes("reduce"),
-    }) as MediaQueryList) as typeof window.matchMedia;
+  setReducedMotion(false);
   current = null;
   mount();
 });
@@ -122,7 +120,7 @@ afterEach(() => {
   if (vibrate) Object.defineProperty(proto, "vibrate", vibrate);
   else Reflect.deleteProperty(proto, "vibrate");
   if (touch) Object.defineProperty(proto, "maxTouchPoints", touch);
-  window.matchMedia = realMatchMedia;
+  setReducedMotion(false);
   jest.useRealTimers();
 });
 
@@ -252,6 +250,7 @@ describe("haptics on an iPhone: the hidden switch", () => {
 
   test("still fires under reduced motion: a vibration is not on-screen movement", () => {
     reduced = true;
+    setReducedMotion(reduced);
     button("tick").click();
     assert.equal(clicks.length, 1);
   });
@@ -264,6 +263,7 @@ describe("haptics on an iPhone: the hidden switch", () => {
     assert.deepEqual(calmed("refuse", true), HAPTIC.refuse);
     assert.deepEqual(calmed("medium", false), HAPTIC.medium);
     reduced = true;
+    setReducedMotion(reduced);
     button("medium").click();
     jest.advanceTimersByTime(500);
     assert.equal(clicks.length, 1);
@@ -332,6 +332,7 @@ describe("haptics on Android: vibrate takes the whole pattern", () => {
       return true;
     });
     reduced = true;
+    setReducedMotion(reduced);
     haptic("success");
     haptic("undo");
     assert.deepEqual(calls, [[18], [8, 30, 8]]);
