@@ -23,7 +23,7 @@ export const CELLAR_SEGMENTS: readonly {
   href: string;
 }[] = [
   { key: "cellars", label: "Cellars", href: "/cellars" },
-  { key: "bar", label: "Bar", href: "/recipes" },
+  { key: "bar", label: "Your bar", href: "/recipes" },
 ];
 
 export function CellarSegments({

@@ -1,6 +1,6 @@
 import { ActorErrorFieldsFragment } from "@/lib/api/errors";
 import { graphql } from "@/lib/api/graphql";
-import { CellarItemGroupCardFragment } from "../fragments";
+import { CellarCardFragment, CellarItemGroupCardFragment } from "../fragments";
 
 /**
  * One tile of the cellar list: the grid cell (`CellarItemGroupCard`) plus
@@ -86,3 +86,58 @@ export const CellarNeedsDetailsCountQuery = graphql(`
     needsDetailsCount(cellarId: $cellarId)
   }
 `);
+
+/**
+ * One card of the cellars index (lot-cellars-shelves-01): the old grid card
+ * (name, owners, per-kind counts), how many bottles are open, and the four
+ * newest bottles for the card's mosaic (a photo, else the label plate).
+ */
+export const CellarIndexCardFragment = graphql(
+  `
+  fragment CellarIndexCard on Cellar {
+    __typename
+    ...CellarGridCard
+    open: itemGroups(first: 1, status: OPEN) {
+      bottleCount
+    }
+    recent: itemGroups(first: 4, sort: ADDED_DESC) {
+      edges {
+        node {
+          ...CellarItemGroupCard
+        }
+      }
+    }
+  }
+`,
+  [CellarCardFragment, CellarItemGroupCardFragment],
+);
+
+/** `/cellars`: one page of one section (Yours, From friends, Discover). */
+export const GetCellarIndexQuery = graphql(
+  `
+  query GetCellarIndex(
+    $first: Int!
+    $after: String
+    $section: CollectionSection
+  ) {
+    myCellars(first: $first, after: $after, section: $section) {
+      __typename
+      ... on CellarConnection {
+        totalCount
+        pageInfo {
+          hasNextPage
+          endCursor
+        }
+        edges {
+          cursor
+          node {
+            ...CellarIndexCard
+          }
+        }
+      }
+      ...ActorErrorFields
+    }
+  }
+`,
+  [CellarIndexCardFragment, ActorErrorFieldsFragment],
+);

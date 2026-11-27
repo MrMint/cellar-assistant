@@ -7,7 +7,8 @@ import { bodyText, expect, test } from "../fixtures/test.ts";
  * Asserts the restored production UI (`82450ad1`, UI parity wave 2): the old
  * `CellarForm` has no heading, labels privacy "Privacy" (default FRIENDS),
  * submits with "Add", and lands on the new cellar's items page; `/cellars` is
- * the old card grid under a "Home / Cellars" breadcrumb.
+ * C1's index (lot-cellars-shelves-01): "Cellars" with New cellar, then
+ * Yours with a card per cellar, its name the card's link.
  *
  * Two halves on purpose. The form proves `createCellar` and the redirect; the
  * index proves `CellarsCollectionActor` sees the row a *different* actor wrote,
@@ -49,9 +50,10 @@ test("creates a cellar and shows it on the index", async ({ api, primary }) => {
   // The breadcrumb carries the cellar's name; an empty cellar is the
   // first-run state with its one action (N15), not an empty grid.
   await expect(primary.getByText(name).first()).toBeVisible();
-  await expect(primary.getByText("Your cellar is waiting.")).toBeVisible();
+  // C1's empty shelf (lot-cellars-shelves-07): one dashed "Add a bottle".
+  await expect(primary.getByText(`Nothing in ${name} yet`)).toBeVisible();
   await expect(
-    primary.getByRole("main").getByRole("link", { name: "Snap a bottle" }),
+    primary.getByRole("main").getByRole("link", { name: /Add a bottle/ }),
   ).toHaveAttribute("href", `/cellars/${cellarId}/items/add`);
 
   // The old form's default privacy is FRIENDS; read back what the server
@@ -77,10 +79,11 @@ test("creates a cellar and shows it on the index", async ({ api, primary }) => {
   expect(index?.status(), "/cellars did not render").toBeLessThan(400);
   // The breadcrumb's Home, not the SideRail's (both are links named "Home").
   await expect(
-    primary
-      .getByRole("navigation", { name: "breadcrumb" })
-      .getByRole("link", { name: "Home" }),
+    primary.getByRole("heading", { name: "Cellars", level: 1 }),
   ).toBeVisible();
+  await expect(
+    primary.getByRole("main").getByRole("link", { name: "New cellar" }),
+  ).toHaveAttribute("href", "/cellars/add");
   // `myCellars` puts your own cellars first, by most recent activity (D13); a
   // cellar created a moment ago is the newest, so it is in the first rows.
   const card = primary.getByRole("link", { name, exact: true });

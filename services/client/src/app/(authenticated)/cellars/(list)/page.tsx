@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { type CellarSectionSeed, Cellars } from "@/components/cellar/Cellars";
-import { GetCellarsQuery } from "@/components/cellar/fragments";
+import { GetCellarIndexQuery } from "@/components/cellar/list/fragments";
 import { sectionPageSize } from "@/components/cellar-api/pagination";
 import type { SectionKey } from "@/components/common/CollectionSection";
 import { ViewerQuery } from "@/lib/api/cellars";
@@ -25,7 +25,7 @@ const SECTIONS: readonly SectionKey[] = ["MINE", "FRIENDS", "DISCOVER"];
 const EMPTY_PAGE = { rows: [], endCursor: null, hasNextPage: false };
 
 async function sectionSeed(section: SectionKey): Promise<CellarSectionSeed> {
-  const data = await apiServerQuery(GetCellarsQuery, {
+  const data = await apiServerQuery(GetCellarIndexQuery, {
     first: sectionPageSize(section),
     after: null,
     section,
