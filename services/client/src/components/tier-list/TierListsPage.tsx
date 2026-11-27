@@ -17,8 +17,7 @@ import { cn } from "@/lib/utils";
 import { useScrollPositionRestore } from "@/utilities/hooks";
 import { ListCard } from "./lists/ListCard";
 import { NewListSheet } from "./lists/ListSheets";
-import { listsPageSize } from "./lists/model";
-import { type ListCardData, ListsIndexQuery } from "./lists/queries";
+import { type ListCardData, listsIndexQueryFor } from "./lists/queries";
 
 /** One section's server-rendered first page, or why there is none. */
 export type TierListSectionSeed = {
@@ -98,9 +97,8 @@ function ListsSection({
 }) {
   const headingId = useId();
   const list = usePagedConnection({
-    query: ListsIndexQuery,
+    query: listsIndexQueryFor(section),
     variables: (args: SectionKey, after) => ({
-      first: listsPageSize(args),
       after,
       section: args,
     }),

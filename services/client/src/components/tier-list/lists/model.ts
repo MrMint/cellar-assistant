@@ -4,8 +4,6 @@
  */
 
 import type { Band } from "@/components/app/parts/Rank";
-import { sectionPageSize } from "@/components/cellar-api/pagination";
-import type { SectionKey } from "@/components/common/CollectionSection";
 import { groupByBand } from "@/lib/share/tier-bands";
 
 /** The kinds a list can hold, in the order the New list sheet offers them. */
@@ -171,11 +169,3 @@ export const rankOnAppend = (
   if (landed < 1 || bands.length < itemCount) return null;
   return bands.filter((band) => band >= landed).length + 1;
 };
-
-/**
- * The index's page size per section, read by the server page (first page)
- * and the client page (the rest): a plain module, so the server reads a
- * value, not a client reference.
- */
-export const listsPageSize = (section: SectionKey): number =>
-  sectionPageSize(section, 20);

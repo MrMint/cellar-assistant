@@ -5,7 +5,6 @@ import { unwrapResult } from "@/lib/api/result";
 import { type Page, toPage } from "@/lib/paging/paged-connection";
 import { usePagedConnection } from "@/lib/paging/use-paged-connection";
 import { MyListOptionsPageQuery } from "./lists/queries";
-import { TIER_LISTS_PAGE_SIZE } from "./queries";
 
 /**
  * Every tier list the viewer owns, walked to the last page — for the two
@@ -33,7 +32,10 @@ export type TierListOptionNode = {
   bands: readonly number[];
 };
 
-/** A runaway guard, not a product limit: 50 pages is 5,000 visible lists. */
+/** `MyListOptionsPage`'s literal `first`. */
+const OPTIONS_PAGE_SIZE = 50;
+
+/** A runaway guard, not a product limit: 50 pages of 50 is 2,500 lists. */
 const MAX_PAGES = 50;
 
 const EMPTY: Page<TierListOptionNode, string | null> = {
@@ -57,7 +59,7 @@ export function useAllMyTierLists({
 } {
   const paged = usePagedConnection({
     query: MyListOptionsPageQuery,
-    variables: (_args: null, after) => ({ first: TIER_LISTS_PAGE_SIZE, after }),
+    variables: (_args: null, after) => ({ after }),
     select: (data) => {
       const result = unwrapResult(data?.myTierLists, "TierListConnection");
       if (!result.ok) return result;
@@ -86,7 +88,7 @@ export function useAllMyTierLists({
     if (active) void reset(null, { fresh });
   }, [active, fresh, reset]);
 
-  const pages = Math.ceil(rows.length / TIER_LISTS_PAGE_SIZE);
+  const pages = Math.ceil(rows.length / OPTIONS_PAGE_SIZE);
   // A failed page stops the walk (no retry loop); the error is surfaced.
   const walking =
     active &&

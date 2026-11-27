@@ -190,14 +190,16 @@ test("a list started from your ratings lands pre-banded", async ({ page }) => {
     const label = OPTION_LABEL[template.listType] ?? "Wines";
 
     await page.goto("/tier-lists/add");
-    await page.getByRole("combobox", { name: "List Type" }).tap();
-    await page.getByRole("option", { name: label }).tap();
+    await page
+      .getByRole("group", { name: "Kind" })
+      .getByRole("button", { name: label })
+      .tap();
     // An unnamed list takes the type's name.
     await expect(page.getByLabel("Name")).toHaveValue(
       `My ${label.toLowerCase()}`,
     );
     await page.getByLabel("Name").fill(unique("E2 From Ratings"));
-    const start = page.getByRole("switch", { name: /Start with your ratings/ });
+    const start = page.getByRole("switch", { name: /From my ratings/ });
     await expect(start, "no Start with your ratings").toBeChecked({
       timeout: 15_000,
     });

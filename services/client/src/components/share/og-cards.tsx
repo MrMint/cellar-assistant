@@ -1,4 +1,3 @@
-import { BookOpen, List, MapPin, Martini } from "lucide-react";
 import type { ReactNode } from "react";
 import type { ApiItemType } from "@/components/cellar-api/itemTypes";
 import { kindNoun, rankedKind } from "@/components/tier-list/lists/model";
@@ -62,7 +61,56 @@ function Plate({ glyph, label }: { glyph: ReactNode; label?: string }) {
   );
 }
 
-const glyphStyle = (size: number) => ({ width: size, height: size });
+/**
+ * Lucide's outlines (ISC), drawn as plain SVG: satori calls each component
+ * as a function on the server, and lucide-react's are client modules, so a
+ * `<MapPin />` here 500s the whole card.
+ */
+const GLYPHS = {
+  list: [
+    "M3 12h.01",
+    "M3 18h.01",
+    "M3 6h.01",
+    "M8 12h13",
+    "M8 18h13",
+    "M8 6h13",
+  ],
+  place: [
+    "M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0",
+    "M12 13a3 3 0 1 0 0-6 3 3 0 0 0 0 6",
+  ],
+  drink: ["M8 22h8", "M12 11v11", "M19 3l-7 8-7-8Z"],
+  recipe: [
+    "M12 7v14",
+    "M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z",
+  ],
+} as const;
+
+export function OgGlyph({
+  name,
+  size,
+}: {
+  name: keyof typeof GLYPHS;
+  size: number;
+}) {
+  return (
+    <svg
+      aria-hidden="true"
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke={color.glyph}
+      strokeWidth={1.25}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      {GLYPHS[name].map((d) => (
+        <path key={d} d={d} />
+      ))}
+    </svg>
+  );
+}
 
 function Frame({
   overline,
@@ -224,7 +272,6 @@ export function TierListCard({
   top: readonly { rank: number | null; band: number; name: string | null }[];
 }) {
   const count = kindNoun(listType, itemCount);
-  const Glyph = listType.toLowerCase() === "place" ? MapPin : List;
   return (
     <Frame
       overline={rankedKind(listType)}
@@ -239,10 +286,9 @@ export function TierListCard({
       plate={
         <Plate
           glyph={
-            <Glyph
-              color={color.glyph}
-              strokeWidth={1.25}
-              style={glyphStyle(190)}
+            <OgGlyph
+              name={listType.toLowerCase() === "place" ? "place" : "list"}
+              size={190}
             />
           }
         />
@@ -284,18 +330,7 @@ export function ItemCard({
       byline={subtitle}
       lines={lines}
       image={image}
-      plate={
-        <Plate
-          label={name}
-          glyph={
-            <Martini
-              color={color.glyph}
-              strokeWidth={1.25}
-              style={glyphStyle(96)}
-            />
-          }
-        />
-      }
+      plate={<Plate label={name} glyph={<OgGlyph name="drink" size={96} />} />}
     />
   );
 }
@@ -321,18 +356,7 @@ export function RecipeCard({
       lines={
         blurb === null || blurb.trim() === "" ? [] : [{ text: blurb.trim() }]
       }
-      plate={
-        <Plate
-          label={name}
-          glyph={
-            <BookOpen
-              color={color.glyph}
-              strokeWidth={1.25}
-              style={glyphStyle(96)}
-            />
-          }
-        />
-      }
+      plate={<Plate label={name} glyph={<OgGlyph name="recipe" size={96} />} />}
     />
   );
 }
@@ -344,17 +368,7 @@ export function BrandCard() {
       overline="Shared from"
       title="Cellar Assistant"
       byline="Your cellar, your rankings, your friends' picks."
-      plate={
-        <Plate
-          glyph={
-            <List
-              color={color.glyph}
-              strokeWidth={1.25}
-              style={glyphStyle(190)}
-            />
-          }
-        />
-      }
+      plate={<Plate glyph={<OgGlyph name="list" size={190} />} />}
     />
   );
 }
