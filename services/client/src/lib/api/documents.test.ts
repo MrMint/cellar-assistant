@@ -73,6 +73,7 @@ import * as itemFragments from "@/components/item/fragments";
 import * as itemCardFragments from "@/components/item/ItemCard/fragments";
 import * as itemSeenAt from "@/components/item/seen-at";
 import * as makeBrewQueries from "@/components/make/brew-queries";
+import * as placeListOwners from "@/components/map/places/own-list-entries";
 import * as mapQueries from "@/components/map/queries";
 import * as scanHeaderRename from "@/components/map/scanning/header-rename";
 import * as menuLinesQueries from "@/components/menu-lines/queries";
@@ -125,6 +126,7 @@ const MODULES: Readonly<Record<string, Record<string, unknown>>> = {
   "components/item/seen-at.ts": itemSeenAt,
   "components/make/brew-queries.ts": makeBrewQueries,
   "components/map/queries.ts": mapQueries,
+  "components/map/places/own-list-entries.ts": placeListOwners,
   "components/map/scanning/header-rename.ts": scanHeaderRename,
   "components/menu-lines/queries.ts": menuLinesQueries,
   "components/pour/queries.ts": pourQueries,
