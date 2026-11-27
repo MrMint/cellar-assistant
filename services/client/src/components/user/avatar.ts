@@ -14,7 +14,7 @@ import type { SetAvatarMutation } from "./fragments";
  * file against this one; `UploadKind` in `lib/api/files.ts` does not list it
  * yet (hand-off), so it is named here once.
  */
-const AVATAR_KIND = "avatar" as UploadKind;
+const AVATAR_KIND: UploadKind = "avatar";
 
 export type AvatarDeps = {
   upload: (

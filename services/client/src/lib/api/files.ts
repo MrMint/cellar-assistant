@@ -94,7 +94,8 @@ export type UploadKind =
   | "label-back"
   | "menu-scan"
   | "recipe-photo"
-  | "image-search";
+  | "image-search"
+  | "avatar";
 
 export class UploadUnavailableError extends Error {
   readonly blockers: readonly string[];
