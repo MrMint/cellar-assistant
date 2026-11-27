@@ -51,7 +51,7 @@ export function ItemSection({
       <div className="flex min-h-6 items-end justify-between gap-2 px-4">
         <div className="flex min-w-0 items-center gap-1.5">
           {icon}
-          <h2 className="type-overline truncate text-ink-3">{title}</h2>
+          <h2 className="t-micro truncate text-ink-3">{title}</h2>
         </div>
         {action}
       </div>

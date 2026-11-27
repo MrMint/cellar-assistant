@@ -64,7 +64,7 @@ export async function CellarItemPage({
   if (!cellarResult.ok) {
     if (isNotFound(cellarResult.error)) notFound();
     return (
-      <p role="alert" className="type-body text-destructive">
+      <p role="alert" className="t-body text-destructive">
         {cellarResult.error.message}
       </p>
     );

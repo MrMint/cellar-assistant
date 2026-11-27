@@ -117,7 +117,7 @@ export function BottleCard({ cell, href, now, onClick }: BottleCardProps) {
           <span
             data-slot="bottle-card-count"
             aria-hidden
-            className="surface-glass type-footnote absolute top-2 left-2 rounded-full px-2 py-0.5 font-semibold text-ink-1 tabular"
+            className="surface-glass t-cap absolute top-2 left-2 rounded-full px-2 py-0.5 font-semibold text-ink-1 tabular"
           >
             ×{count}
           </span>
@@ -145,14 +145,14 @@ export function BottleCard({ cell, href, now, onClick }: BottleCardProps) {
             underline="none"
             href={href}
             onClick={onClick}
-            className="type-callout line-clamp-2 min-h-10 font-semibold text-ink-1 focus-visible:after:rounded-md focus-visible:after:ring-inset"
+            className="t-cap line-clamp-2 min-h-10 font-semibold text-ink-1 focus-visible:after:rounded-md focus-visible:after:ring-inset"
           >
             {title}
           </Link>
         </MorphTitle>
         <p
           data-slot="bottle-state"
-          className="type-footnote flex items-center justify-between gap-2"
+          className="t-cap text-ink-3 flex items-center justify-between gap-2"
         >
           <span aria-hidden className="min-w-0 truncate">
             {state.label}
@@ -167,7 +167,7 @@ export function BottleCard({ cell, href, now, onClick }: BottleCardProps) {
           </span>
         </p>
         {similar && (
-          <p data-slot="bottle-card-match" className="type-footnote text-ink-3">
+          <p data-slot="bottle-card-match" className="t-cap text-ink-3">
             Similar to your search
           </p>
         )}

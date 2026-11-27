@@ -44,7 +44,7 @@ export const ItemCellars = ({ cellars, total }: ItemCellarsProps) => {
                 underline="none"
                 className="flex min-h-12 items-center gap-3 px-4 py-2 active:bg-surface-3"
               >
-                <span className="type-headline min-w-0 flex-1 truncate text-ink-1">
+                <span className="t-head min-w-0 flex-1 truncate text-ink-1">
                   {cellar.name}
                 </span>
                 <span aria-hidden="true" className="flex -space-x-2">
@@ -65,9 +65,7 @@ export const ItemCellars = ({ cellars, total }: ItemCellarsProps) => {
         </ul>
       )}
       {cellars.length === 0 && (
-        <p className="type-callout text-ink-2">
-          Not in any cellar you can see.
-        </p>
+        <p className="t-cap text-ink-2">Not in any cellar you can see.</p>
       )}
       <HeldBackNote shown={cellars.length} total={total} noun="cellars" />
     </ItemSection>

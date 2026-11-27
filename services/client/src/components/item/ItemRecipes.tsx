@@ -95,7 +95,7 @@ export const ItemRecipes = ({
                   <Link
                     href={`/recipes/${recipe.id}`}
                     underline="always"
-                    className="type-body font-medium text-ink-1"
+                    className="t-body font-medium text-ink-1"
                   >
                     {recipe.name}
                   </Link>
@@ -113,7 +113,7 @@ export const ItemRecipes = ({
                     <Badge variant="outline">Optional</Badge>
                   )}
                 </div>
-                <p className="type-callout text-ink-2">
+                <p className="t-cap text-ink-2">
                   {quantityText
                     ? `${quantityText} of ${itemName}`
                     : `Uses ${itemName}`}

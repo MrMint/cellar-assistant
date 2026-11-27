@@ -5,16 +5,10 @@ import { itemTypeTokens } from "@/components/app/TypeChip";
 import type { ApiItemType } from "@/components/cellar-api/itemTypes";
 import { isNotFound, unwrapResult } from "@/lib/api/result";
 import { apiServerQuery } from "@/lib/api/urql-server";
-import {
-  itemPageHref,
-  itemRecipesFromFragment,
-  itemRelationsFromFragment,
-  itemViewFromFragment,
-  yourBottlesFromFragment,
-} from "./adapter";
+import { itemViewFromFragment } from "./adapter";
 import { ItemPageQuery } from "./fragments";
 import { ItemPageView, type SelectedBottle } from "./ItemPageView";
-import { allAddableCellars, allItemBrands, allItemCellars } from "./page-lists";
+import { loadItemPageData } from "./parts/load-item-page";
 
 /**
  * The page's one `ItemPageQuery`, per request: `generateMetadata` and the
@@ -62,50 +56,19 @@ export async function ItemPage({
   /** Back's target on a cold deep link: Home, or the bottle's cellar. */
   parent?: string;
 }) {
-  const data = await loadItemPage(type, itemId);
-  const result = unwrapResult(data.item, "QueryItemSuccess");
-  if (!result.ok) {
-    if (isNotFound(result.error)) notFound();
+  const loaded = await loadItemPageData(
+    apiServerQuery,
+    type,
+    itemId,
+    await loadItemPage(type, itemId),
+  );
+  if (!loaded.ok) {
+    if (isNotFound(loaded.error)) notFound();
     return (
-      <p role="alert" className="type-body text-destructive">
-        {result.error.message}
+      <p role="alert" className="t-body text-destructive">
+        {loaded.error.message}
       </p>
     );
   }
-
-  const viewerId = data.me?.id ?? null;
-  const node = result.data.data;
-  const relations = itemRelationsFromFragment(node);
-  const myCellars = unwrapResult(data.myCellars, "CellarConnection");
-  // The old page read every list unbounded: read the rest before rendering.
-  const [brands, located, addable] = await Promise.all([
-    allItemBrands(apiServerQuery, node, { itemId, type }),
-    allItemCellars(apiServerQuery, node),
-    myCellars.ok
-      ? allAddableCellars(apiServerQuery, myCellars.data, viewerId)
-      : Promise.resolve([]),
-  ]);
-  const item = { ...itemViewFromFragment(node), brands };
-  const { bottles, total } = yourBottlesFromFragment(node);
-
-  return (
-    <ItemPageView
-      item={item}
-      bottles={bottles}
-      bottlesTotal={total}
-      selected={selected}
-      parent={parent}
-      cellars={located.cellars}
-      cellarsTotal={located.total}
-      tierLists={relations.tierLists}
-      tierListsTotal={relations.tierListsTotal}
-      recipes={itemRecipesFromFragment(node)}
-      addableCellars={addable}
-      editHref={
-        viewerId !== null && item.createdById === viewerId
-          ? `${itemPageHref(type, itemId)}/edit`
-          : null
-      }
-    />
-  );
+  return <ItemPageView {...loaded.data} selected={selected} parent={parent} />;
 }

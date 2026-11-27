@@ -33,8 +33,8 @@ export function ItemFacts({
               key={fact.label}
               className="flex min-h-11 items-baseline justify-between gap-4 px-4 py-2.5"
             >
-              <dt className="type-callout shrink-0 text-ink-2">{fact.label}</dt>
-              <dd className="type-callout min-w-0 text-right text-ink-1 tabular">
+              <dt className="t-cap shrink-0 text-ink-2">{fact.label}</dt>
+              <dd className="t-cap min-w-0 text-right text-ink-1 tabular">
                 {fact.value}
               </dd>
             </div>
@@ -43,12 +43,12 @@ export function ItemFacts({
       )}
       {notes.map((note) => (
         <div key={note.label} className="flex flex-col gap-1 px-4 py-3">
-          <h3 className="type-callout text-ink-2">{note.label}</h3>
-          <p className="type-body text-ink-1">{note.text}</p>
+          <h3 className="t-cap text-ink-2">{note.label}</h3>
+          <p className="t-body text-ink-1">{note.text}</p>
         </div>
       ))}
       {description && (
-        <p className="type-body px-4 py-3 text-ink-2">{description}</p>
+        <p className="t-body px-4 py-3 text-ink-2">{description}</p>
       )}
     </InsetSection>
   );

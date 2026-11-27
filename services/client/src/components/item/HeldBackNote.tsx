@@ -18,5 +18,5 @@ export function HeldBackNote({
 }) {
   const note = heldBackNote(shown, total, noun, order);
   if (note === null) return null;
-  return <p className="type-footnote">{note}</p>;
+  return <p className="t-cap text-ink-3">{note}</p>;
 }

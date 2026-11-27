@@ -93,7 +93,7 @@ export const ItemReviews = ({
   return (
     <ItemSection id="reviews" title="Reviews">
       {!hasReviews && (
-        <p className="type-body p-4 text-center text-ink-2">
+        <p className="t-body p-4 text-center text-ink-2">
           No reviews yet! Want to add one?
         </p>
       )}
@@ -112,13 +112,13 @@ export const ItemReviews = ({
                     displayName={x.user.displayName}
                   />
                   <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-                    <span className="type-headline truncate text-ink-1">
+                    <span className="t-head truncate text-ink-1">
                       {x.user.displayName}
                     </span>
                     <RatingDisplay value={x.score} size="md" />
                   </span>
                   {/* One line beside the stars: "Oct 8, 2026" wrapped at 390px. */}
-                  <span className="type-callout shrink-0 whitespace-nowrap text-ink-2">
+                  <span className="t-cap shrink-0 whitespace-nowrap text-ink-2">
                     <Timestamp iso={x.createdAt} precision="date" />
                   </span>
                 </span>
@@ -142,7 +142,7 @@ export const ItemReviews = ({
         </LoadingButton>
       )}
       {list.failure !== null && (
-        <p role="alert" className="type-callout text-destructive">
+        <p role="alert" className="t-cap text-destructive">
           {list.failure.message}
         </p>
       )}
