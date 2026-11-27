@@ -1,9 +1,9 @@
 /**
  * The basemap (N22).
  *
- * Dark by default (D21: the app is dark, and the light CARTO "voyager" map was
- * the one bright surface in it). The map machine's `isDarkMode` starts true;
- * the map controls still switch to the light style.
+ * The style follows the app's theme (L23): CARTO "dark-matter" in dark and
+ * CARTO "positron" in light (LIGHT-places: a quiet grey map the pins read
+ * against, not the busier "voyager"). Map options can override it.
  *
  * Before a style's first frame the WebGL canvas is transparent, so whatever
  * sits behind it shows — which was the cream flash on opening the map. The
@@ -12,7 +12,7 @@
  */
 
 export const CARTO_LIGHT_STYLE =
-  "https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json";
+  "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json";
 export const CARTO_DARK_STYLE =
   "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json";
 

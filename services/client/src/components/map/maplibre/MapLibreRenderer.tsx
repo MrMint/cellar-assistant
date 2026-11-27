@@ -6,6 +6,7 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  AttributionControl,
   Map as MapGL,
   type MapLayerMouseEvent,
   type MapRef,
@@ -590,6 +591,7 @@ export function MapLibreRenderer({
           onClick={handleClick}
           interactiveLayerIds={INTERACTIVE_LAYER_IDS as unknown as string[]}
           maxZoom={22}
+          attributionControl={false}
           style={{
             width: "100%",
             height: "100%",
@@ -617,6 +619,14 @@ export function MapLibreRenderer({
           {userLocation && (
             <UserLocationLayer location={userLocation} palette={palette} />
           )}
+
+          {/* N20/N22: the attribution is a licensing obligation. On a phone
+              the dock covers the map's foot, so it sits at the top corner,
+              clear of the dock and the tab bar; from md at the foot. */}
+          <AttributionControl
+            compact
+            position={isDesktop ? "bottom-right" : "top-right"}
+          />
         </MapGL>
 
         {isDesktop ? (

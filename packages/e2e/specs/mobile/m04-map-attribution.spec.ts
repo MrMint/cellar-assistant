@@ -9,9 +9,12 @@ import { sitsAbove } from "../../fixtures/mobile-rules.ts";
  * is hidden, and so is the bottom ~50 px of map. Attribution is a licensing
  * obligation, not polish (N22). This reads only — no place is created.
  *
+ * Since the redesign (p1) the phone's places dock rests over the map's foot,
+ * so the attribution moved to the map's top corner; the checks are the same.
+ *
  * Two checks, because either can fail alone: the attribution's box ends above
  * the nav's top edge, and the attribution is what a tap at its centre
- * actually hits (nothing — the nav, a sheet, a FAB — is painted over it).
+ * actually hits (nothing — the nav, the dock, a sheet — is painted over it).
  */
 
 test("the map attribution is visible above the tab bar", async ({ page }) => {

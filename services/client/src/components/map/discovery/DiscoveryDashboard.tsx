@@ -259,7 +259,7 @@ export function DiscoveryDashboard(_props: DiscoveryDashboardProps) {
               <>
                 <Alert>
                   <Info aria-hidden />
-                  <AlertDescription className="type-callout text-ink-2">
+                  <AlertDescription className="t-cap text-ink-2">
                     Review these AI-suggested matches for menu items. Accept
                     good matches to link items to your database, or reject to
                     keep them as standalone discoveries.
@@ -287,10 +287,10 @@ export function DiscoveryDashboard(_props: DiscoveryDashboardProps) {
                         <div className="flex flex-row items-start gap-4">
                           <ItemGlyph type={menuItem.detected_item_type} />
                           <div className="min-w-0 flex-1">
-                            <p className="type-headline text-ink-1">
+                            <p className="t-head text-ink-1">
                               {menuItem.menu_item_name}
                             </p>
-                            <p className="type-callout mt-1 flex flex-row items-center gap-2 text-ink-2">
+                            <p className="t-cap mt-1 flex flex-row items-center gap-2 text-ink-2">
                               <Place
                                 aria-hidden
                                 strokeWidth={ICON_STROKE}
@@ -299,7 +299,7 @@ export function DiscoveryDashboard(_props: DiscoveryDashboardProps) {
                               {menuItem.place.name}
                             </p>
                             {menuItem.menu_item_description && (
-                              <p className="type-callout mt-2 text-ink-2">
+                              <p className="t-cap mt-2 text-ink-2">
                                 {menuItem.menu_item_description}
                               </p>
                             )}
@@ -311,7 +311,7 @@ export function DiscoveryDashboard(_props: DiscoveryDashboardProps) {
                           </Badge>
                         </div>
 
-                        <p className="type-callout rounded-sm bg-surface-2 px-3 py-2 text-ink-1">
+                        <p className="t-cap rounded-sm bg-surface-2 px-3 py-2 text-ink-1">
                           <strong>Suggested match:</strong> {suggestedItem.name}
                           {suggestion.match_reasoning && (
                             <>
@@ -382,9 +382,7 @@ export function DiscoveryDashboard(_props: DiscoveryDashboardProps) {
                     >
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-row items-center gap-2">
-                          <p className="type-headline text-ink-1">
-                            {place.name}
-                          </p>
+                          <p className="t-head text-ink-1">{place.name}</p>
                           {interaction.is_favorite && (
                             <Love
                               role="img"
@@ -403,7 +401,7 @@ export function DiscoveryDashboard(_props: DiscoveryDashboardProps) {
                           )}
                         </div>
 
-                        <p className="type-callout mt-1 flex flex-row items-center gap-2 text-ink-2">
+                        <p className="t-cap mt-1 flex flex-row items-center gap-2 text-ink-2">
                           <Place
                             aria-hidden
                             strokeWidth={ICON_STROKE}
@@ -424,12 +422,12 @@ export function DiscoveryDashboard(_props: DiscoveryDashboardProps) {
 
                         <div className="mt-2 flex flex-row flex-wrap gap-4">
                           {menuItemsCount > 0 && (
-                            <span className="type-footnote text-success">
+                            <span className="t-cap text-ink-3 text-success">
                               {menuItemsCount} menu items discovered
                             </span>
                           )}
                           {interaction.last_visited_at && (
-                            <span className="type-footnote text-ink-2">
+                            <span className="t-cap text-ink-2">
                               Visited{" "}
                               <Timestamp
                                 iso={interaction.last_visited_at}
