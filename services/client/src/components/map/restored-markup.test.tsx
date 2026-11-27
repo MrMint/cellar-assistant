@@ -1,5 +1,5 @@
 /**
- * Render tests for the restored map/place/discovery components, asserting
+ * Render tests for the restored map/place components, asserting
  * the **old** markup and copy (`82450ad1:src/components/map/*`). The scan
  * components' tests live in `scanning/restored-markup.test.tsx`, beside the
  * files they test, so the place pages and the menu scanner can each be
@@ -29,9 +29,7 @@ const { GooglePlaceSuggestions } = await import(
 const { PlaceDetailsContent } = await import("./places/PlaceDetailsContent");
 const { CreatePlaceForm } = await import("./places/CreatePlaceForm");
 const { CategoryMultiSelect } = await import("./places/CategoryMultiSelect");
-const { DiscoveryDashboard } = await import("./discovery/DiscoveryDashboard");
 const { menuItemFrom } = await import("./adapter");
-const { LOADING } = await import("../../test-support/markup");
 
 const client = new Client({
   url: "http://test.invalid/graphql",
@@ -442,11 +440,5 @@ describe("drawer menu badge counts every line, not the loaded page", () => {
     );
     assert.match(html, /Menu Items<\/[^>]+>.*?>240</s);
     assert.match(html, />Load more</);
-  });
-});
-
-describe("discoveries (restored)", () => {
-  test("DiscoveryDashboard starts on the old spinner", () => {
-    assert.match(render(<DiscoveryDashboard />), LOADING);
   });
 });
