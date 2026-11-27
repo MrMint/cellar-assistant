@@ -599,3 +599,56 @@ describe("cloneTierList (L03)", () => {
     });
   });
 });
+
+describe("requestTierListInsights (SV-A, L12)", () => {
+  const ask = (id: string) =>
+    `mutation { requestTierListInsights(tierListId: "${id}") {
+      __typename
+      ... on TierList { id insightsStatus }
+    } }`;
+
+  it("asks the list's own actor and answers the TierList with its status", async () => {
+    const { invoke, calls } = stubSidecar({
+      "TierListActor.requestInsights": () => tierListDto,
+    });
+    const result = await run(ask(tierListDto.id), testContext(invoke, viewer));
+    expect(result.errors).toBeUndefined();
+    expect(result.data?.requestTierListInsights).toEqual({
+      __typename: "TierList",
+      id: tierListDto.id,
+      insightsStatus: "PENDING",
+    });
+    expect(calls).toMatchObject([
+      {
+        actorType: "TierListActor",
+        actorId: tierListDto.id,
+        method: "requestInsights",
+        // The ctx alone: the list is the actor's key, and nothing else.
+        args: [{ viewerId: viewer.id }],
+      },
+    ]);
+  });
+
+  it("puts another person's list on the union as the actor refused it", async () => {
+    const PUBLIC = "33333333-3333-4333-8333-000000000003";
+    const { invoke } = stubSidecar({
+      "TierListActor.requestInsights": (actorId) => {
+        if (actorId === PUBLIC) {
+          throw new ForbiddenError(`tier list ${PUBLIC} is not yours`);
+        }
+        throw new NotFoundError(`TierListActor(${String(actorId)}) not found`);
+      },
+    });
+    const theirs = await run(ask(PUBLIC), testContext(invoke, viewer));
+    expect(theirs.data?.requestTierListInsights).toEqual({
+      __typename: "ForbiddenError",
+    });
+    const hidden = await run(
+      ask("33333333-3333-4333-8333-000000000004"),
+      testContext(invoke, viewer),
+    );
+    expect(hidden.data?.requestTierListInsights).toEqual({
+      __typename: "NotFoundError",
+    });
+  });
+});

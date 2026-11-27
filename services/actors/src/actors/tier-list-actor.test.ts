@@ -1507,6 +1507,129 @@ describe.skipIf(skip)("TierListActor (B7)", () => {
     });
   });
 
+  /* ------------------------------------------------------------------ */
+  /* SV-A (L12): requestInsights — the open-time trigger                 */
+  /* ------------------------------------------------------------------ */
+
+  describe("requestInsights (SV-A, L12)", () => {
+    const withInsights = async <T>(run: () => Promise<T>): Promise<T> => {
+      setAiCapabilities({ ...NO_AI_CAPABILITIES, tierListInsights: true });
+      try {
+        return await run();
+      } finally {
+        setAiCapabilities(NO_AI_CAPABILITIES);
+      }
+    };
+
+    /**
+     * A list of `n` entries that was never asked for insights — what a list
+     * created before the auto-write existed looks like: IDLE.
+     */
+    const seedIdleList = async (
+      db: DbOrTx,
+      owner: string,
+      n: number,
+      privacy: PermissionType = "PRIVATE",
+    ): Promise<{ id: string; actor: TierListActor }> => {
+      const id = await seedTierList(db, { createdById: owner, privacy });
+      const seeder = await activate(newTierListActor(id, db));
+      for (let i = 0; i < n; i += 1) {
+        const wineId = await seedWine(db, owner, `W${i}`);
+        await seeder.addItem(userCtx(owner, `add-${wineId}`), {
+          entry: { type: "WINE", id: wineId },
+        });
+      }
+      await db.delete(outbox).where(eq(outbox.targetId, id));
+      await db
+        .update(tierLists)
+        .set({ insightsRequestedAt: null })
+        .where(eq(tierLists.id, id));
+      return { id, actor: await activate(newTierListActor(id, db)) };
+    };
+
+    const attributionOf = async (db: DbOrTx, id: string) =>
+      db
+        .select({ attributedTo: outbox.attributedTo, method: outbox.method })
+        .from(outbox)
+        .where(and(eq(outbox.targetId, id), eq(outbox.status, "pending")));
+
+    it("asks once from IDLE, attributed to the owner, and is a no-op when asked again", async () => {
+      await withInsights(() =>
+        withTestDb(async (db) => {
+          const owner = await seedUser(db);
+          const { id, actor } = await seedIdleList(db, owner, 3);
+          const me = userCtx(owner, "open");
+          expect((await actor.get(me)).insightsStatus).toBe("IDLE");
+
+          const first = await actor.requestInsights(me);
+          expect(first.insightsStatus).toBe("PENDING");
+          // Attributed to the owner: the delivery's reservation is booked to
+          // them, which is how it counts against their allowance.
+          expect(await attributionOf(db, id)).toEqual([
+            { attributedTo: owner, method: "generateInsights" },
+          ]);
+
+          const again = await actor.requestInsights(me);
+          expect(again.insightsStatus).toBe("PENDING");
+          expect(await liveOutboxRowsFor(db, id)).toHaveLength(1);
+        }),
+      );
+    });
+
+    it("is a no-op under three entries and once insights exist", async () => {
+      await withInsights(() =>
+        withTestDb(async (db) => {
+          const owner = await seedUser(db);
+          const me = userCtx(owner, "open");
+          const short = await seedIdleList(db, owner, 2);
+          expect((await short.actor.requestInsights(me)).insightsStatus).toBe(
+            "NOT_ENOUGH_ENTRIES",
+          );
+          expect(await outboxRowsFor(db, short.id)).toEqual([]);
+
+          const done = await seedIdleList(db, owner, 3);
+          await db
+            .update(tierLists)
+            .set({
+              aiInsights: { summary: "ok" },
+              insightsGeneratedAt: new Date(),
+            })
+            .where(eq(tierLists.id, done.id));
+          const ready = await activate(newTierListActor(done.id, db));
+          expect((await ready.requestInsights(me)).insightsStatus).toBe(
+            "READY",
+          );
+          expect(await outboxRowsFor(db, done.id)).toEqual([]);
+        }),
+      );
+    });
+
+    it("refuses anybody but the owner, and writes nothing for them", async () => {
+      await withInsights(() =>
+        withTestDb(async (db) => {
+          const owner = await seedUser(db);
+          const stranger = await seedUser(db);
+          const visible = await seedIdleList(db, owner, 3, "PUBLIC");
+          await expect(
+            visible.actor.requestInsights(userCtx(stranger, "open")),
+          ).rejects.toBeInstanceOf(ForbiddenError);
+          const hidden = await seedIdleList(db, owner, 3, "PRIVATE");
+          await expect(
+            hidden.actor.requestInsights(userCtx(stranger, "open")),
+          ).rejects.toBeInstanceOf(NotFoundError);
+          await expect(
+            visible.actor.requestInsights(anonymousCtx("anon")),
+          ).rejects.toThrow();
+          expect(await outboxRowsFor(db, visible.id)).toEqual([]);
+          expect(await outboxRowsFor(db, hidden.id)).toEqual([]);
+          expect(
+            (await visible.actor.get(userCtx(owner, "r"))).insightsStatus,
+          ).toBe("IDLE");
+        }),
+      );
+    });
+  });
+
   describe("insights enqueue on content change only (§6 B7)", () => {
     it("addItem and removeItem enqueue generateInsights; update does not", async () => {
       await withTestDb(async (db) => {
