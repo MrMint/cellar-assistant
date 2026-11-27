@@ -727,7 +727,7 @@ describe("TabBar", () => {
     );
     assert.equal(
       container.querySelector('[data-slot="user-avatar"]')?.textContent,
-      "T",
+      "TU",
     );
   });
 
