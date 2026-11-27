@@ -221,12 +221,7 @@ export function PlaceDetails({
         )}
       />
       {!pane && !desktop && (
-        <AppBar
-          tone="photo"
-          parent="/map"
-          title={placeData.name}
-          overflow={overflow}
-        />
+        <AppBar tone="photo" parent="/map" overflow={overflow} />
       )}
     </div>
   );
@@ -425,7 +420,6 @@ export function PlaceDetails({
       {/* Desktop 01: the page's own bar — Map crumbs, Share, ⋯. */}
       <AppBar
         parent="/map"
-        title={<span className="sr-only">{placeData.name}</span>}
         breadcrumbs={[
           { label: "Map", href: "/map" },
           { label: placeData.name },

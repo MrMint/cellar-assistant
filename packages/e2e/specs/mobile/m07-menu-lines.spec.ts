@@ -13,7 +13,7 @@ import { Gql } from "../../fixtures/test.ts";
  *
  * - Lines are grouped by type even with `menu_category` null (they all used
  *   to land under "Other"), shouted text is cased for reading, and a matched
- *   line carries the viewer's own grounded reason ("You ★4.5") — never a
+ *   line carries the viewer's own grounded reason ("You rated 4.5") — never a
  *   percentage.
  * - A line opens one sheet of actions; **I'm having this** is an X02 log at
  *   this place, with the place already filled in.
@@ -147,7 +147,8 @@ test("lines are grouped by type, cased, and carry your own reason", async ({
   await expect(page.getByRole("heading", { name: placeName })).toBeVisible({
     timeout: 20_000,
   });
-  const menu = page.getByRole("tabpanel");
+  // One scrolling page now (Places-Place): the lines sit in its Menu card.
+  const menu = page.locator('[data-slot="place-menu"]');
   for (const group of ["Tea", "Cocktails", "Wine"]) {
     await expect(
       menu.getByRole("heading", { name: new RegExp(`^${group}`) }),
@@ -161,7 +162,7 @@ test("lines are grouped by type, cased, and carry your own reason", async ({
   await expect(menu.getByText("House Red")).toBeVisible();
   // The tea is yours at 4.5 — said as a fact, never as a percentage.
   const tea = menu.locator('[data-slot="menu-line"][data-group="TEA"]');
-  await expect(tea.getByText("You ★4.5")).toBeVisible();
+  await expect(tea.getByText("You rated 4.5")).toBeVisible();
   await expect(menu).not.toContainText("%");
   // The price is the menu's number; no currency the read never saw.
   await expect(tea).toContainText("6.50");
@@ -184,7 +185,7 @@ test("I'm having this logs the drink at this place", async ({ page }) => {
   for (const name of [
     "Want to try",
     "Add to cellar",
-    "Add to tier list",
+    "Add to a list",
     "Not this",
   ]) {
     await expect(sheet.getByRole("button", { name })).toBeVisible();
@@ -234,7 +235,7 @@ test("Not this unlinks a wrong match, and Undo puts it back", async ({
   await expect(
     page
       .locator('[data-slot="menu-line"][data-group="TEA"]')
-      .getByText("You ★4.5"),
+      .getByText("You rated 4.5"),
   ).toBeVisible({ timeout: 20_000 });
 });
 
