@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/drawer";
 import { distance, spring } from "@/lib/motion";
 import { cn } from "@/lib/utils";
+import { useOverlayLayer } from "./overlays/layers";
 import { tapOrigin, watchTaps } from "./overlays/tap-origin";
 import { type SnapDecision, settleMs, VAUL_SETTLE_MS } from "./sheet-physics";
 import { keepOpenForToasts } from "./toastLayer";
@@ -233,6 +234,10 @@ export function BottomSheet({
   const settleAfterMs = settleMs(reducedMotion);
   useOpenSheetSignal(open, contentRef, snap, settleAfterMs);
   useEffect(watchTaps, []);
+  // KIT § 4: back closes the sheet on top (vaul answers its own Escape).
+  useOverlayLayer(open, () => {
+    if (dismissible) onOpenChange(false);
+  });
   // SPEC movement 9: the sheet rises from .94 at the tap's x. vaul owns the
   // rise from 100 %; the scale is the content's, read once per open.
   const [origin, setOrigin] = useState("50% 100%");

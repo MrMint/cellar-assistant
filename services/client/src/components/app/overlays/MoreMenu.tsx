@@ -2,12 +2,14 @@
 
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
+import { breakpointUp, useMediaQuery } from "@/hooks/useMediaQuery";
 import { feedback, HapticOverlay } from "@/lib/feedback";
 import { cn } from "@/lib/utils";
 import { ChevronRight } from "../icons";
 import { Link } from "../Link";
 import { isUnder, MORE, MORE_LINKS } from "../nav";
 import { AnchoredSheet } from "./AnchoredSheet";
+import { OPEN_MORE_EVENT } from "./app-keys";
 import { PRESS_CLASS, pressFeedback } from "./press";
 
 /** Whether a route is one of More's own destinations. */
@@ -31,6 +33,15 @@ export function MoreMenu({
   // A route change (one of the rows) closes it.
   // biome-ignore lint/correctness/useExhaustiveDependencies: pathname is the trigger.
   useEffect(() => setOpen(false), [pathname]);
+  // `G O` (app-keys): only the menu that is showing answers.
+  const desktop = useMediaQuery(breakpointUp("md"));
+  const showing = desktop ? variant === "rail" : variant === "tab";
+  useEffect(() => {
+    if (!showing) return;
+    const openMenu = () => setOpen(true);
+    window.addEventListener(OPEN_MORE_EVENT, openMenu);
+    return () => window.removeEventListener(OPEN_MORE_EVENT, openMenu);
+  }, [showing]);
   const lit = active || open;
   const Icon = MORE.icon;
 

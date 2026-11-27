@@ -64,6 +64,9 @@ const inDialog = (target: EventTarget | null): boolean =>
   target instanceof Element &&
   target.closest('[role="dialog"], [role="alertdialog"]') !== null;
 
+/** Asks the More menu that is showing (rail or tab bar) to open: `G O`. */
+export const OPEN_MORE_EVENT = "ca:open-more";
+
 export type ShellKeyActions = {
   navigate: (href: string) => void;
   openKeys: () => void;

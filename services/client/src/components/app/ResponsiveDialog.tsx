@@ -11,6 +11,7 @@ import {
 import { breakpointUp, useMediaQuery } from "@/hooks/useMediaQuery";
 import { cn } from "@/lib/utils";
 import { BottomSheet, type BottomSheetProps } from "./BottomSheet";
+import { useOverlayLayer } from "./overlays/layers";
 import { keepOpenForToasts } from "./toastLayer";
 import { useReturnFocus } from "./useReturnFocus";
 
@@ -49,6 +50,11 @@ export function ResponsiveDialog({
 }: ResponsiveDialogProps) {
   const desktop = useMediaQuery(breakpointUp("md"));
   const returnFocus = useReturnFocus(open && desktop);
+  // KIT § 4: back closes the dialog on top (Radix answers its own Escape).
+  // Below md the BottomSheet registers itself.
+  useOverlayLayer(open && desktop, () => {
+    if (dismissible) onOpenChange(false);
+  });
 
   if (!desktop) {
     return (

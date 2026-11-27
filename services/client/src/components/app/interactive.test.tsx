@@ -145,6 +145,68 @@ describe("BottomSheet", () => {
     assert.deepEqual(changes, [false]);
   });
 
+  test("back closes the sheet on top, and focus returns to its opener (KIT § 4)", async () => {
+    function Opener() {
+      const [open, setOpen] = useState(false);
+      return (
+        <>
+          <button type="button" onClick={() => setOpen(true)}>
+            Open
+          </button>
+          <BottomSheet open={open} onOpenChange={setOpen} title="Actions">
+            <p>rows</p>
+          </BottomSheet>
+        </>
+      );
+    }
+    await render(<Opener />);
+    const opener = byText("Open");
+    assert.ok(opener);
+    opener.focus();
+    await click(opener);
+    await flush(10);
+    assert.ok(document.querySelector('[role="dialog"]'), "the sheet is open");
+    await act(async () => {
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    });
+    assert.equal(
+      document.querySelector('[role="dialog"]')?.getAttribute("data-state"),
+      "closed",
+      "back asked the sheet to close",
+    );
+  });
+
+  test("on desktop, back closes the dialog on top and focus returns to its opener", async () => {
+    viewportWidth = 1280;
+    function Opener() {
+      const [open, setOpen] = useState(false);
+      return (
+        <>
+          <button type="button" onClick={() => setOpen(true)}>
+            Open
+          </button>
+          <ResponsiveDialog open={open} onOpenChange={setOpen} title="Rename">
+            <p>field</p>
+          </ResponsiveDialog>
+        </>
+      );
+    }
+    await render(<Opener />);
+    const opener = byText("Open");
+    assert.ok(opener);
+    opener.focus();
+    await click(opener);
+    await flush(10);
+    assert.ok(document.querySelector('[role="dialog"]'));
+    assert.notEqual(document.activeElement, opener, "focus moved into it");
+    await act(async () => {
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    });
+    await flush(50);
+    assert.equal(document.querySelector('[role="dialog"]'), null);
+    assert.equal(document.activeElement, opener, "focus is back on Open");
+  });
+
   test("closed: nothing rendered", async () => {
     await render(
       <BottomSheet open={false} onOpenChange={() => {}} title="Hidden">
@@ -799,6 +861,53 @@ describe("TabBar", () => {
 });
 
 describe("AppShell", () => {
+  const press = async (target: Element, key: string) => {
+    await act(async () => {
+      target.dispatchEvent(
+        new KeyboardEvent("keydown", { key, bubbles: true }),
+      );
+    });
+  };
+
+  test("keys go to the app element: ? opens Keys, G L goes to Lists, a field keeps its N", async () => {
+    pathname = "/cellars";
+    await render(
+      <AppShell>
+        <input aria-label="Name" />
+      </AppShell>,
+    );
+    const main = container.querySelector("main");
+    assert.ok(main);
+    await press(main, "g");
+    await press(main, "l");
+    assert.deepEqual(pushes, ["/tier-lists"]);
+    const input = container.querySelector("input");
+    assert.ok(input);
+    await press(input, "n");
+    assert.deepEqual(pushes, ["/tier-lists"], "typing is not a key");
+    // A key on the document, outside the app element, is not ours.
+    await press(document.body, "?");
+    assert.equal(document.querySelector('[role="dialog"]'), null);
+    await press(main, "?");
+    await flush(10);
+    const dialog = document.querySelector('[role="dialog"]');
+    assert.ok(dialog);
+    assert.ok(byText("Keys", dialog));
+  });
+
+  test("G O opens the More that is showing", async () => {
+    pathname = "/cellars";
+    await render(<AppShell>page</AppShell>);
+    const main = container.querySelector("main");
+    assert.ok(main);
+    await press(main, "g");
+    await press(main, "o");
+    await flush(10);
+    const dialog = document.querySelector('[role="dialog"]');
+    assert.ok(dialog);
+    assert.ok(byText("Recipes", dialog));
+  });
+
   test("rail, scroller and tab bar; the scroller is the one main", async () => {
     pathname = "/cellars";
     await render(

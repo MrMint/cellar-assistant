@@ -6,6 +6,8 @@ import { cn } from "@/lib/utils";
 import { mainContentProps } from "./main-content";
 import { isCaptureRoute } from "./nav";
 import { useNavHistoryTracker } from "./nav-history";
+import { KeysDialog, useShellKeys } from "./overlays/KeysDialog";
+import { OfflineStrip } from "./overlays/OfflineStrip";
 import { usePointerDownPrefetch } from "./prefetch";
 import { RouteTransition } from "./RouteTransition";
 import { SideRail } from "./SideRail";
@@ -74,10 +76,13 @@ export function AppShell({ children }: { children: ReactNode }) {
   usePointerDownPrefetch();
   const { padded, scrolls, tabBar } = contentLayout(pathname);
   const rail = !isFullScreenRoute(pathname);
+  const { onKeyDown, keysOpen, setKeysOpen } = useShellKeys();
 
   return (
+    // biome-ignore lint/a11y/noStaticElementInteractions: the app element hears the keys bubbling from inside it (KIT § 3); it is not a control.
     <div
       data-slot="app-shell"
+      onKeyDown={onKeyDown}
       className={cn(
         "flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden md:flex-row",
         // Phones: reclaim the bottom safe area the root layout pads, so the
@@ -101,10 +106,12 @@ export function AppShell({ children }: { children: ReactNode }) {
             scrolls ? "overflow-y-auto" : "flex flex-col overflow-y-hidden",
           )}
         >
+          <OfflineStrip />
           {children}
         </main>
       </RouteTransition>
       {tabBar && <TabBar className="md:hidden" />}
+      <KeysDialog open={keysOpen} onOpenChange={setKeysOpen} />
     </div>
   );
 }

@@ -11,6 +11,7 @@ import { breakpointUp, useMediaQuery } from "@/hooks/useMediaQuery";
 import { cn } from "@/lib/utils";
 import { BottomSheet } from "../BottomSheet";
 import { KeyTooltip } from "./Kbd";
+import { useOverlayLayer } from "./layers";
 
 export type AnchoredSheetProps = {
   open: boolean;
@@ -46,6 +47,8 @@ export function AnchoredSheet({
   children,
 }: AnchoredSheetProps) {
   const desktop = useMediaQuery(breakpointUp("md"));
+  // Back closes the popover (the sheet below md registers itself).
+  useOverlayLayer(open && desktop, () => onOpenChange(false));
 
   if (!desktop) {
     return (
