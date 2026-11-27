@@ -4,9 +4,9 @@ import { bodyText, expect, test } from "../fixtures/test.ts";
 /**
  * Create a cellar through the form, then find it on the index.
  *
- * Asserts the restored production UI (`82450ad1`, UI parity wave 2): the old
- * `CellarForm` has no heading, labels privacy "Privacy" (default FRIENDS),
- * submits with "Add", and lands on the new cellar's items page; `/cellars` is
+ * Asserts C1's form (lot-cellars-shelves-03): Name, "Who sees it" (Private ·
+ * Friends · Public, Friends by default), Co-owners, and "Make cellar", which
+ * lands on the new cellar's items page; `/cellars` is
  * C1's index (lot-cellars-shelves-01): "Cellars" with New cellar, then
  * Yours with a card per cellar, its name the card's link.
  *
@@ -28,16 +28,17 @@ test("creates a cellar and shows it on the index", async ({ api, primary }) => {
 
   await primary.goto("/cellars/add");
   await expect(primary.getByLabel("Name")).toBeVisible();
-  await expect(primary.getByText("Privacy")).toBeVisible();
+  const whoSees = primary.getByRole("radiogroup", { name: "Who sees it" });
+  await expect(whoSees).toBeVisible();
   await expect(
-    primary.getByText("These users will be treated as owners of the cellar."),
-  ).toBeVisible();
+    whoSees.getByRole("radio", { name: "Friends" }),
+    "the default privacy is Friends",
+  ).toHaveAttribute("aria-checked", "true");
 
   await primary.getByLabel("Name").fill(name);
-  // Inside <main>: the shell's ＋ (TabBar / SideRail) is a button named "Add" too.
   await primary
     .getByRole("main")
-    .getByRole("button", { name: "Add", exact: true })
+    .getByRole("button", { name: "Make cellar", exact: true })
     .click();
 
   // The old destination: the new cellar's items page.
@@ -101,13 +102,15 @@ test("a cellar's privacy can be changed to PRIVATE", async ({
   await primary.goto("/cellars/add");
   await primary.getByLabel("Name").fill(name);
 
-  // The Privacy select is a listbox (Radix Select), not a native <select>.
-  await primary.getByRole("combobox", { name: "Privacy" }).click();
-  await primary.getByRole("option", { name: /^private$/i }).click();
+  // Who sees it is a segmented radiogroup.
+  await primary
+    .getByRole("radiogroup", { name: "Who sees it" })
+    .getByRole("radio", { name: "Private" })
+    .click();
 
   await primary
     .getByRole("main")
-    .getByRole("button", { name: "Add", exact: true })
+    .getByRole("button", { name: "Make cellar", exact: true })
     .click();
   await expect(primary).toHaveURL(/\/cellars\/[0-9a-f-]{36}\/items/, {
     timeout: 30_000,

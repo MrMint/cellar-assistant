@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { cache } from "react";
 import { AppBar } from "@/components/app/AppBar";
+import { ErrorState } from "@/components/app/EmptyState";
 import { canAddToCellar } from "@/components/cellar/adapter";
 import { EditCellarClient } from "@/components/cellar/EditCellarClient";
 import { GetCellarEditQuery } from "@/components/cellar/fragments";
@@ -52,9 +53,10 @@ export default async function EditCellar({
     // §1.6: "no such cellar" and "not yours to see" are the same answer.
     if (isNotFound(result.error)) notFound();
     return (
-      <p role="alert" className="type-body text-destructive">
-        {result.error.message}
-      </p>
+      <ErrorState
+        title="Can't open this cellar"
+        reason={result.error.message}
+      />
     );
   }
 
@@ -63,17 +65,14 @@ export default async function EditCellar({
   // X21: the page's h1 (the generateMetadata title's words), and Back to
   // the cellar on a cold open.
   const bar = (
-    <AppBar
-      title={`Edit ${cellar.name}`}
-      parent={`/cellars/${cellar.id}/items`}
-    />
+    <AppBar title={cellar.name} parent={`/cellars/${cellar.id}/items`} />
   );
   if (!canAddToCellar(cellar, me?.id ?? null)) {
     return (
       <div className="flex flex-col gap-4">
         {bar}
-        <p className="type-body">
-          You do not have permission to edit this cellar.
+        <p className="t-body m-0 text-ink-2">
+          Only its owners can edit this cellar.
         </p>
       </div>
     );

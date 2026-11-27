@@ -58,7 +58,7 @@ export const EditCellarClient = ({ cellar, viewer }: EditCellarClientProps) => {
   const isCreator = viewer !== null && viewer.id === cellar.createdById;
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-6">
       {friends.failure !== null && <ApiError error={friends.failure} />}
       <CellarForm
         id={cellar.id}
@@ -74,15 +74,16 @@ export const EditCellarClient = ({ cellar, viewer }: EditCellarClientProps) => {
           coOwners: cellar.coOwners,
         })}
         onSubmitted={handleSubmitted}
+        onCancel={() => router.back()}
       />
       {isCreator && (
-        <div className="flex flex-row items-center">
-          <DeleteCellarButton
-            cellarId={cellar.id}
-            cellarName={cellar.name}
-            itemCount={cellar.itemCount}
-          />
-        </div>
+        <DeleteCellarButton
+          cellarId={cellar.id}
+          cellarName={cellar.name}
+          itemCount={cellar.itemCount}
+          privacy={cellar.privacy}
+          coOwnerIds={cellar.coOwnerIds}
+        />
       )}
     </div>
   );

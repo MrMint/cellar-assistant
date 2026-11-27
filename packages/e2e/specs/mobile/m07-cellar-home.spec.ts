@@ -5,8 +5,9 @@ import { expect, test } from "../../fixtures/mobile.ts";
 import { Gql, settleNetwork } from "../../fixtures/test.ts";
 
 /**
- * X04 + D3 · the cellar home, at 390x844: the overview merged into the
- * cellar page, with a dashboard on top of the collection.
+ * The cellar home at 390x844, as C1 redrew it (combined-01, -05; Shelves):
+ * the overview merged into the cellar list, no dashboard (Pour trend moved
+ * to Me), the count strip, tiles, Arrange, the Finished diary.
  *
  * Two cellars, five bottles of three teas:
  *
@@ -15,10 +16,9 @@ import { Gql, settleNetwork } from "../../fixtures/test.ts";
  *   finished;
  * - **Cart** — a third bottle of the same Lapsang, for the fan-out.
  *
- * Read the way a thumb would: the dashboard (Open now with Pour, the four
- * tiles, the pours trend), the grid's ×2, the Finished diary with your log,
- * then a search that narrows and says where else the Lapsang is. Pouring
- * from the shelf moves the trend.
+ * Read the way a thumb would: the count strip and Open only, the tile's ×2
+ * and Arrange's least-left sort, the Finished diary with your log, then a
+ * search that narrows and says where else the Lapsang is.
  *
  * Teas, because `createItem` writes one without the onboarding flow; items
  * have no delete, so the three teas outlive the run, the cellars and their
@@ -177,45 +177,36 @@ test.afterAll(() => {
   }
 });
 
-const gridCards = (page: Page) =>
-  page.locator('[data-slot="cellar-grid"] [data-slot="bottle-card"]');
-const tile = (page: Page, key: string) =>
-  page.locator(`[data-slot="stat-tile"][data-stat="${key}"]`);
-const readout = (page: Page) =>
-  page.locator('[data-slot="pour-trend-readout"]');
+const tiles = (page: Page) =>
+  page.locator('[data-slot="cellar-grid"] [data-slot="cellar-list-tile"]');
+const openArrange = async (page: Page) => {
+  await page.getByRole("button", { name: /^Arrange: / }).click();
+  return page.getByRole("dialog", { name: "Arrange" });
+};
 
-test("the old overview lands on the cellar home, and its top is a dashboard", async ({
+test("the old overview lands on the cellar list: name, count, strip, tiles", async ({
   page,
   noise,
 }) => {
   await page.goto(`/cellars/${homeId}`);
   await expect(page).toHaveURL(new RegExp(`/cellars/${homeId}/items$`));
 
-  // Open now: the open Lapsang, with Pour.
-  const shelf = page.locator('[data-slot="open-now-shelf"]');
-  await expect(shelf.getByRole("heading", { name: "Open now" })).toBeVisible({
-    timeout: 30_000,
-  });
-  await expect(shelf.locator('[data-slot="bottle-card"]')).toHaveCount(1);
-  await expect(shelf).toContainText(names.lapsang);
-  await expect(shelf.getByRole("button", { name: "Pour" })).toBeVisible();
+  // C1 (combined-01): no dashboard; the count strip leads with Open.
+  await expect(tiles(page)).toHaveCount(2, { timeout: 30_000 });
+  await expect(page.locator('[data-slot="cellar-dashboard"]')).toHaveCount(0);
+  await expect(page.getByText("3 bottles").first()).toBeVisible();
+  const strip = page.getByRole("group", { name: "Show only" });
+  await expect(strip.getByRole("button", { name: /Open/ })).toContainText("1");
+  await expect(strip.getByRole("button", { name: /Tea/ })).toContainText("3");
 
-  // The tiles count bottles still in the cellar (D13): two Lapsangs and the
-  // Jasmine; the finished Sencha is this month's.
-  await expect(tile(page, "in-cellar")).toContainText("3");
-  await expect(tile(page, "in-cellar")).toContainText("3 tea");
-  await expect(tile(page, "open")).toContainText("1");
-  await expect(tile(page, "open")).toContainText("2 sealed");
-  await expect(tile(page, "almost-empty")).toContainText("1");
-  await expect(tile(page, "finished")).toContainText("1");
+  // Open only: the open Lapsang, badged with what is left.
+  await strip.getByRole("button", { name: /Open/ }).click();
+  await expect(page).toHaveURL(/[?&]open=1/);
+  await expect(tiles(page)).toHaveCount(1);
+  await expect(tiles(page).first()).toContainText(names.lapsang);
+  await expect(tiles(page).first()).toContainText(/Open · \d+%/);
 
-  // Two logs this month, one series, a table for screen readers.
-  await expect(readout(page)).toContainText(/^2\s*pours in this month/);
-  await expect(
-    page.locator('[data-slot="cellar-pour-trend"] table caption'),
-  ).toHaveText(/2 pours in the last 12 months/);
-
-  // Nothing scrolls sideways (the shelf scrolls inside itself).
+  // Nothing scrolls sideways.
   expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth - window.innerWidth,
@@ -224,34 +215,38 @@ test("the old overview lands on the cellar home, and its top is a dashboard", as
   expect(noise.pageErrors, noise.pageErrors.join("\n")).toEqual([]);
 });
 
-test("identical bottles are one card with ×2; the tile opens the collection sorted", async ({
+test("identical bottles are one tile with ×2; Arrange sorts least left first", async ({
   page,
 }) => {
   await page.goto(`/cellars/${homeId}/items`);
-  await expect(gridCards(page)).toHaveCount(2, { timeout: 30_000 });
-  const lapsang = gridCards(page).filter({ hasText: names.lapsang });
-  await expect(lapsang.locator('[data-slot="bottle-card-count"]')).toHaveText(
+  await expect(tiles(page)).toHaveCount(2, { timeout: 30_000 });
+  const lapsang = tiles(page).filter({ hasText: names.lapsang });
+  await expect(lapsang.locator('[data-slot="cellar-list-count"]')).toHaveText(
     "×2",
   );
-  await expect(lapsang).toContainText(/2 bottles, 1 open/);
 
-  await tile(page, "almost-empty").click();
-  await expect(page).toHaveURL(/[?&]sort=almost-empty/);
+  const sheet = await openArrange(page);
+  await sheet.getByRole("menuitemradio", { name: "Least left first" }).click();
+  await expect(page).toHaveURL(/[?&]sort=least-left/);
   await expect(
-    page.getByRole("button", { name: "Sort by: Almost empty" }),
+    page.getByRole("button", { name: "Arrange: Least left first" }),
   ).toBeVisible({ timeout: 20_000 });
+  // The Lapsang at 20 % leads the Jasmine at 100 %.
+  await expect(tiles(page).first()).toContainText(names.lapsang);
 });
 
 test("Finished is a diary: the date, how long, your log and your note", async ({
   page,
 }) => {
   await page.goto(`/cellars/${homeId}/items`);
-  const finished = page
+  const sheet = await openArrange(page);
+  const finished = sheet
     .getByRole("radiogroup", { name: "Show" })
     .getByRole("radio", { name: /^Finished/ });
   await expect(finished).toHaveText(/Finished\s*1/, { timeout: 30_000 });
   await finished.click();
   await expect(page).toHaveURL(/[?&]status=finished/);
+  await page.keyboard.press("Escape");
 
   const entry = page.locator('[data-slot="diary-entry"]');
   await expect(entry).toHaveCount(1, { timeout: 20_000 });
@@ -269,7 +264,7 @@ test("search narrows to the bottle, and says where else it is", async ({
   page,
 }) => {
   await page.goto(`/cellars/${homeId}/items`);
-  await expect(gridCards(page)).toHaveCount(2, { timeout: 30_000 });
+  await expect(tiles(page)).toHaveCount(2, { timeout: 30_000 });
 
   await page
     .getByRole("searchbox", { name: "Search this cellar" })
@@ -277,24 +272,14 @@ test("search narrows to the bottle, and says where else it is", async ({
   await expect(page).toHaveURL(/[?&]search=lapsang/, { timeout: 20_000 });
   await settleNetwork(page);
 
-  // The dashboard steps aside for the results.
-  await expect(page.locator('[data-slot="cellar-dashboard"]')).toHaveCount(0);
-  // The name match leads; anything after it is marked as only similar.
-  await expect(gridCards(page).first()).toContainText(names.lapsang, {
+  // The name match leads; anything found by meaning sits under "Similar".
+  await expect(tiles(page).first()).toContainText(names.lapsang, {
     timeout: 20_000,
   });
   await expect(
-    gridCards(page).first().locator('[data-slot="bottle-card-match"]'),
-  ).toHaveCount(0);
-  const rest = await gridCards(page).count();
-  for (let index = 1; index < rest; index += 1) {
-    await expect(
-      gridCards(page).nth(index).locator('[data-slot="bottle-card-match"]'),
-    ).toHaveText("Similar to your search");
-  }
-  await expect(
-    page.locator('[data-slot="cellar-search-summary"]'),
-  ).toContainText(/bottles? match/);
+    page.getByRole("button", { name: /^Arrange: / }),
+    "a search orders by match",
+  ).toContainText("Match");
 
   // "Lapsang is in Cart": the other cellar's bottle, by name.
   const elsewhere = page.locator('[data-slot="cellar-search-elsewhere"]');
@@ -307,28 +292,4 @@ test("search narrows to the bottle, and says where else it is", async ({
   await expect(page).toHaveURL(
     new RegExp(`/cellars/${cartId}/teas/[0-9a-f-]{36}`),
   );
-});
-
-test("Pour from the shelf logs a glass, and the trend counts it", async ({
-  page,
-}) => {
-  await page.goto(`/cellars/${homeId}/items`);
-  await expect(readout(page)).toContainText(/^2\s*pours/, { timeout: 30_000 });
-
-  // The owner's Pour is X03's sheet: its default glass logs and levels the
-  // open Lapsang in one tap.
-  await page
-    .locator('[data-slot="open-now-shelf"]')
-    .getByRole("button", { name: `Pour ${names.lapsang}` })
-    .click();
-  await page
-    .getByRole("dialog", { name: "Pour" })
-    .getByRole("button", { name: /^Pour (\d+ g|the last of it)$/ })
-    .click();
-  await expect(page.getByText(/^Poured /).first()).toBeVisible({
-    timeout: 20_000,
-  });
-  await expect(readout(page)).toContainText(/^3\s*pours in this month/, {
-    timeout: 20_000,
-  });
 });

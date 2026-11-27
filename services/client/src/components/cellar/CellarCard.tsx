@@ -88,15 +88,11 @@ export const CellarCard = ({
               onClick={onNavigate}
               className="min-w-0"
             >
-              <span className="t-head block truncate">
-                {cellar.name}
-              </span>
+              <span className="t-head block truncate">{cellar.name}</span>
             </Link>
           )}
           {isNotNil(onClick) && (
-            <span className="t-head min-w-0 truncate">
-              {cellar.name}
-            </span>
+            <span className="t-head min-w-0 truncate">{cellar.name}</span>
           )}
           {canEdit(userId, cellar) && (
             <IconButton
