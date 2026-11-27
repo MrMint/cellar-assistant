@@ -1,6 +1,24 @@
 # Cellar Assistant design and motion direction
 
-> **Platform superseded by [`decisions.md`](decisions.md) D20:** the app migrates to shadcn/ui (Tailwind) with `motion`, not "Joy behind app primitives". The palette, type, imagery, motion tokens and signature moments below still apply.
+> **The stack and the look as they are (2026-11 redesign).** This brief was written in 2026-10.
+> Where it disagrees with this box, the box wins; §1, §3.1, §3.2, §3.8, §4.2, §4.5 and §4.11 are
+> rewritten to match, and elsewhere a mention of Fraunces reads as Inter and of brass as the
+> action teal. Values live in `docs/design/2026-11/KIT.md` and `services/client/src/app/globals.css`;
+> the decisions are D20 ([`decisions.md`](decisions.md)) and the redesign's DECISIONS 40a, 43 and 46
+> (`docs/design/2026-11/DECISIONS.md`).
+>
+> - **Platform:** Tailwind CSS v4 + shadcn-derived primitives on Radix + `motion`. App primitives
+>   in `components/app`, vendored shadcn in `components/ui`. Joy, Emotion and `framer-motion` are gone.
+> - **Colour:** teal is the action colour (fills, links, focus, Undo). The AI is marked by the
+>   sparkle glyph and its words ("Read from the label"), never by a colour. Gold is only the
+>   owner's own verdict (their stars, the crown on their #1). Brass is retired.
+> - **Type:** Inter only. Fraunces is dropped.
+> - **Themes:** dark (the default) and light are both designed, and Settings offers Dark / Light /
+>   Phone. This replaces D21's "light mode only on evidence".
+> - **Motion:** `lib/motion.ts` holds motion/SPEC.md's tokens; route transitions are
+>   `app/view-transitions.css`.
+> - **Feedback:** `lib/feedback` fires a haptic and a quiet sound by one name, under one "Sound and
+>   haptics" setting.
 
 **Brief:** "a candlelit cellar, a sommelier's notebook, and a little magic."
 
@@ -19,37 +37,28 @@ Contrast ratios here are computed (WCAG 2.x relative luminance), not estimated.
 - **N11:** contrast and fonts.
 - **N27:** the sheet and toast APIs.
 - **N28:** LabelPlate v0, on today's type colours.
-- **The one-PR brass flip (§3.1).** Without it, teal would mean "action" and "AI" at the same time.
+- **The one-PR brass flip (§3.1).** Without it, teal would have meant "action" and "AI" at the same time. (Superseded in 2026-11: teal is action again, and the AI has no colour; see the box above.)
 
 ---
 
-## 1. Platform recommendation
+## 1. Platform
 
-**Stay on Joy for now, behind an app-owned primitive layer and CSS-variable tokens. Treat Joy, not its successors, as the at-risk dependency.**
+**Tailwind CSS v4, shadcn-derived primitives on Radix, and `motion`** (D20). The 2026-10 brief
+recommended staying on Joy behind a primitive layer; D20 replaced that, and the migration is done:
+`@mui/joy`, Emotion, `sx`, `react-icons` and `framer-motion` are gone, and
+`src/lib/dev-checks/ui-platform.test.ts` fails on any use of them.
 
-`@mui/joy` is `5.0.0-beta.52`, and MUI has paused Joy development. It works today on React 19.2.7 and Next 16.3.4. It will not get fixes for the next React or Next major. The plan is shaped so that the day Joy breaks costs as little as possible.
-
-| Option | Verdict | Reasoning |
+| Layer | Where | What it holds |
 |---|---|---|
-| A. Joy, themed only | Not enough | It gives no place to enforce hierarchy. 172 files import Joy and there are 722 `sx=` props, so every page invents its own header, inset and score format (visual-1, visual-4). |
-| **A+. Joy behind primitives plus tokens** | **Recommended** | `extendTheme` already emits `--joy-*` variables. The design lives in primitives, and users never see the library. Pages migrate one route at a time. |
-| B. MUI Material 7 | No | It is a rewrite in practice (`level`→`variant`, no soft or plain variants). It keeps Emotion, and the overhaul would spend its time fighting Material's visual DNA. |
-| C. A headless library (e.g. Base UI) plus zero-runtime CSS | Conditional (D20) | It is the end state if Joy breaks on a React or Next major. Pages only talk to primitives, so the swap touches primitive internals only. Pick the library when that day comes, not now. |
-| D. Mantine, or Radix plus Tailwind | No | It means a second styling paradigm, or another house look to unlearn. |
+| Tokens | `src/app/globals.css` (`--ca-*`, both themes), `src/lib/tokens.ts` | colour, type, spacing; `tokens-parity.test.ts` keeps the two equal |
+| Vendored shadcn | `src/components/ui/*` | Radix-backed parts (dialog, sheet, select, …), not edited in feature work |
+| App primitives | `src/components/app/*` | AppShell, TabBar, AppBar, Page, ListRow, BottomSheet, Toast, Score, RatingInput, … (its README) |
+| Motion | `src/lib/motion.ts`, `src/app/view-transitions.css` | every duration, curve, spring, distance and gesture threshold (§4.2) |
+| Feedback | `src/lib/feedback` | haptics and sound by one name (§4.11) |
 
-**The Joy-free rule.** Some primitives have no Joy counterpart. These are built **without Joy from day one**, on the CSS-variable tokens plus `framer-motion` 14.0.0 (already in `services/client/package.json`):
-- BottomSheet (logic and physics)
-- Toast
-- SegmentedControl
-- LabelPlate
-- Score
-- ActionBar
-- TypeChip
-- ItemTile
+Pages use app primitives first, then `ui/*`, then Tailwind on plain elements.
 
-Only inputs, Select, Menu and the Modal-backed dialogs stay Joy-wrapped. A future library swap then touches those files and nothing else. BottomSheet v0 (N27) borrows Joy Modal internally for its portal and focus trap. That borrowing is confined to one file and is removed in B04.
-
-**The primitive set.** Each primitive owns its tokens, states, accessibility and reduced-motion behaviour. "Ships in" is the first roadmap item that introduces it. B02 restyles everything.
+**The primitive set (2026-10 plan, kept for its history).** Each primitive owns its tokens, states, accessibility and reduced-motion behaviour. "Ships in" is the first roadmap item that introduces it.
 
 | Primitive | Ships in | Replaces | Notes |
 |---|---|---|---|
@@ -74,7 +83,7 @@ Only inputs, Select, Menu and the Modal-backed dialogs stay Joy-wrapped. A futur
 
 **Targets:**
 - Viewports: 390×844 first, 375×667 second, desktop third.
-- Platform: an iOS standalone PWA, so no browser chrome, no swipe-back and no haptics.
+- Platform: an installed PWA (standalone) on iPhone and Android, so no browser chrome; the edge swipe back and pull to refresh are the app's. Haptics: Android vibrates; iPhone ticks only inside a real tap (§4.11).
 - Grip: one-handed, within thumb reach.
 
 ```
@@ -96,7 +105,7 @@ Only inputs, Select, Menu and the Modal-backed dialogs stay Joy-wrapped. A futur
 - Re-tapping a tab scrolls to the top, then pops to its root.
 - The bar is 49 pt plus the safe area, on a frosted `surface-glass`.
 
-**Centre ＋ is the brass capture button.** It is 56 pt and sits 8 pt proud of the bar.
+**Centre ＋ is the capture button, in the action teal.** It is 56 pt and sits 8 pt proud of the bar.
 - **X01:** it opens a chooser sheet (Bottle · Menu · Recipe · Place) that leads into today's flows, so there is a single capture entry right away.
 - **X06:** it opens the full-screen capture surface instead.
   - The shutter is bottom-centre, with Library on the left and Torch on the right.
@@ -128,48 +137,34 @@ Only inputs, Select, Menu and the Modal-backed dialogs stay Joy-wrapped. A futur
 
 ## 3. Visual language
 
-### 3.1 Palette: dark is the brand default, built as roles so that "Daylight" is a swap
+### 3.1 Palette: two designed themes, built as roles
 
-- **Base:** moves from today's cool blue-purple `#111015` to a warm near-black.
-- **Action accent:** moves from teal (2.80:1 with white) to **the brass already in the app icon** (`public/icon.svg` `#c4a265`).
-- **Teal:** re-assigned to mean **"the AI did this / is working"**. It is already the colour of the particle bottle.
+Dark is the default and light is designed alongside it (DECISIONS 46). Every value is a role
+token in `globals.css`, so the theme is a swap of values, never of names. The full table, with the
+overlays, is `docs/design/2026-11/KIT.md` § 1.
 
-**Migration rule (D21).**
-- The brass flip is **one global PR**: Joy `palette.primary` changes to the brass ramp, with `--ca-on-accent` ink. It lands either in N11, if the palette is signed off by then, or as B01's first PR.
-- N11's contrast unit test covers brass with `#1A1408` (7.61:1).
-- From that PR on, nothing that acts is teal.
-- Teal comes back only as `--ca-ai`, introduced together with `AIDraftField` (N19's styles in B02).
-- Users never spend weeks learning that teal means both "button" and "AI".
-
-**Dark (default)**
-
-| Role | Token | Hex | Contrast and use |
+| Role | Dark | Light | Use |
 |---|---|---|---|
-| Background | `--ca-bg` | `#0E0C0F` | also `themeColor` and the status bar |
-| Surface 1 (sections) | `--ca-surface-1` | `#171418` | |
-| Surface 2 (raised, sheets) | `--ca-surface-2` | `#1F1B21` | |
-| Surface 3 (pressed, inputs) | `--ca-surface-3` | `#29242B` | ink-1 on it is 13.06:1 |
-| Hairline | `--ca-line` | `rgba(255,240,225,0.08)` | separators instead of borders |
-| Ink 1 | `--ca-ink-1` | `#F3EDE4` parchment | 16.74:1 on bg |
-| Ink 2 | `--ca-ink-2` | `#BDB3A7` | 8.85:1 on surface-1 |
-| Ink 3 (metadata) | `--ca-ink-3` | `#9C9287` | 5.56:1 on surface-2; replaces Joy's 3.42:1 tertiary |
-| Accent (action) | `--ca-accent` | `#C9A15B` brass | text or icon on bg is 8.10:1 |
-| On-accent | `--ca-on-accent` | `#1A1408` | 7.61:1 on brass. **Never put white on brass.** |
-| Brand | `--ca-brand` | `#7B2233` claret | heart fill, the #1 crown, hero washes; parchment on it is 8.52:1 |
-| Brand text | `--ca-brand-ink` | `#D06A7C` | 5.25:1 |
-| AI | `--ca-ai` | `#7FB3B9` | 7.87:1. **Only for AI-drafted or AI-working states.** |
-| Success | `--ca-success` | `#6FAF7B` | 7.04:1; never a solid slab |
-| Danger | `--ca-danger` | `#E07A6A` | 6.23:1; text and outline only, solid only in confirm sheets |
+| Background | `#111015` | `#f5f4f8` | page; also `themeColor` |
+| Card | `#221f2a` | `#ffffff` | sections, tiles |
+| Raised | `#332f3e` | `#ebe9f0` | sheets, the no-photo well |
+| Selected | `#443f53` | `#dedbe7` | pressed and selected |
+| Edge | `#433f4d` | `#d6d3de` | fields, tiles, chips, buttons |
+| Ink 1 / 2 / 3 | `#ffffff` / `#b8b5c0` / `#aea9bd` | `#17151c` / `#4a4656` / `#5c576b` | text |
+| Action | `#70a2a9` with ink `#111015` | `#5f949b` with ink `#0e0d12` | primary, Add, a switch that is on |
+| Action text | `#8cc0c6` | `#2d6a71` | links, focus ring, Undo |
+| Gold | `#d59d24` | `#b07a10` | the owner's own verdict only, never text alone |
+| Heart | `#fe0000` | `#e0001b` | hearts only |
+| Danger | `#f0c5c8` | `#b3261e` | text and outline only, never solid |
 
-**Daylight.** Tokens are defined now, and the scheme is built only when there is evidence it is needed (D21).
-
-| Role | Hex | Notes |
-|---|---|---|
-| bg / surface-1 / 2 / 3 | `#F6F1E8` / `#FBF8F2` / `#EFE8DC` / `#E6DDCD` | parchment |
-| ink-1 / 2 / 3 | `#2A2420` / `#5E5449` / `#6F6357` | 13.61 / 6.57 / 5.19:1 |
-| accent text / fill | `#7A5C24` (5.52:1) / `#8A6A2E` with white (5.02:1) | |
-| ai | `#2F6B70` | 5.4:1 |
-| brand | `#9C2F43` | 6.43:1 |
+Rules:
+- **Teal means action** (DECISIONS 40a, 46). Nothing decorative is teal.
+- **The AI has no colour.** It is marked by the sparkle glyph and its words ("Read from the
+  label"), so a drafted value looks like any other value with a mark beside it.
+- **Gold is the owner's own verdict:** their stars, the crown on their #1, their own trophies.
+  Never another person's rating, never the public rating.
+- **Contrast:** text 4.5:1, glyphs and boundaries 3:1, on every surface, in both themes
+  (`palette-contrast.test.ts`).
 
 **Six beverage-type hues.** These live in `itemTypeTokens`, which ships with N28. Each type has three values:
 - **deep:** pins and rules;
@@ -187,37 +182,31 @@ Only inputs, Select, Menu and the Modal-backed dialogs stay Joy-wrapped. A futur
 
 The canonical order is the same everywhere: **wine, beer, spirit, sake, coffee, tea**.
 
-**Tier bands** use one claret→brass ordinal ramp: Outstanding `#7B2233` → Very Good `#9A4A3A` → Good `#B8783F` → Mediocre `#8C7A62` → Bad `#5E5650`, with Unrated on surface-3. The band word is always printed, so the hue never carries meaning on its own.
+**Tier bands** are the same in both themes: 5 `#4fb469`, 4 `#9cc25a`, 3 `#e5c84a`, 2 `#ec8f3e`, 1 `#e8615a`, with ink `#111015` on every band. The band word is always printed, so the hue never carries meaning on its own.
 
 **Banned:**
-- pure `red` hearts;
 - solid red or green toggle slabs;
 - Material default chart hues;
 - any hex outside the token file. The B01 vitest guard enforces this, with an allowlist for MapLibre paint and the offline page.
 
 ### 3.2 Typography
 
-Two families, each loaded once through `next/font` and exposed as CSS variables for Joy's `fontFamily`. This fixes visual-13: Joy's literal "Inter" matched only @fontsource's weight-400 faces, so bold text was faux-bold. N11 delivers the Inter half now.
+**Inter only** (DECISIONS 43, 46; Fraunces is dropped), loaded once through `next/font`. Numbers
+are always tabular (`tabular`). The `t-*` utilities replace the `type-*` ones.
 
-- **Display: Fraunces** (variable, `opsz`, SOFT 50). For names on heroes, vintages, rank numerals, headlines and empty states. Newsreader is the alternative.
-- **UI: Inter** (variable, 400–700). Always use `font-variant-numeric: tabular-nums lining-nums` for numbers.
+| Style | Size/line, weight | Use |
+|---|---|---|
+| `t-score` | 40/44 700, -.02em | rank numerals, a big score |
+| `t-title` | 24/28 700, -.01em | page and hero names, section heads |
+| `t-quote` | 20/28 400 | the owner's note |
+| `t-head` | 16/20 600 | row titles, buttons |
+| `t-body` | 16/22 400 | body, field values (16 or more, so iOS never zooms) |
+| `t-cap` | 13/17 400 | meta, toast, subtitles |
+| `t-micro` | 11/14 600, +.01em | tab labels, tags, in sentence case |
+| `t-pin` | 12/15 600 | map pins and their badges |
 
-| Style | Family | Size/line | Weight | Use |
-|---|---|---|---|---|
-| Large title | Fraunces | 34/40 | 600 | AppBar expanded, Home |
-| Title 1 | Fraunces | 28/34 | 600 | detail hero name |
-| Title 2 | Inter | 22/28 | 600 | sheet titles |
-| Headline | Inter | 17/22 | 600 | row titles |
-| Body | Inter | 16/24 | 400 | reading text; inputs at least 16 to avoid iOS zoom |
-| Callout | Inter | 15/20 | 400 | secondary rows |
-| Footnote | Inter | 13/18 | 400 | metadata (ink-3) |
-| Overline | Inter | 11/14 | 600, +6% tracking, uppercase | InsetSection labels, without a colon |
-| Numeral XL | Fraunces | 44/44 | 500 | ranks #1–#3, recap stats |
-
-Three rules:
-- Vintages are always set in Fraunces.
-- Names are stored as transcribed and displayed in smart title case (N17).
-- No ALL-CAPS anywhere except overlines.
+Rules: sentence case everywhere, no ALL CAPS; names are stored as transcribed and shown in smart
+title case (N17).
 
 ### 3.3 Shape, spacing and elevation
 
@@ -249,7 +238,7 @@ Containers have no borders. This ends the "box soup": the bottle page currently 
 - **Beverage glyphs:** six custom glyphs on the same grid, with the spirit and sake glyphs corrected (visual-7).
 - **No bare glyphs:** a glyph is never a control's only label on touch.
 - **Accessible names:** every IconButton gets an `aria-label`. Today 25 of 47 have none.
-- **Medals:** a claret crown for #1, a brass numeral for #2–#3, plain numerals after that.
+- **Medals:** a gold crown on the owner's #1 alone; every rank is a filled band chip.
 
 ### 3.5 Imagery for items with no photo: the biggest visual lever
 
@@ -261,7 +250,7 @@ Images are chosen in this order:
 2. **A typographic LabelPlate.** It is a deterministic SVG, with zero AI and zero runtime cost.
    - Type tint background, shaded by style, with faint paper grain.
    - An inner paper rect holding:
-     - the **producer** in Fraunces small caps;
+     - the **producer** in Inter, `t-cap`;
      - the name;
      - **a big vintage** (or "NV");
      - region · ABV.
@@ -275,7 +264,7 @@ The existing illustrations move to EmptyStates and first run. Delete the unused 
 
 ### 3.6 Empty, error and first-run states
 
-`EmptyState` is one illustration, one Fraunces line, one Inter line and **exactly one** action. v0 ships with N15.
+`EmptyState` is one illustration, one `t-head` line, one `t-cap` line and **exactly one** action. v0 ships with N15.
 
 | Surface | Line | Action |
 |---|---|---|
@@ -315,13 +304,13 @@ Each source gets its own mark:
 - **`pin`:** today's "Auto-filled from pin" chip, migrated onto this component.
 - **`barcode`:** a barcode glyph.
 
-In B02 it takes on the AI colour:
-- A 2 px `--ca-ai` left rule.
+It is marked by the sparkle glyph and its source in words, never by a colour (DECISIONS 40a):
+- The sparkle beside the value, and the source as words ("Read from the label").
 - Confidence in words: **Sure · Likely · Check this**. "Check this" fields are pre-focused.
 
 Outside the field itself:
 - **One Accept / Edit / Not this row** is used everywhere: menu matches, drafts, "try this next".
-- **Working state:** a teal shimmer plus a named stage line. Never an unexplained spinner.
+- **Working state:** the skeleton's shimmer plus the sparkle and a named stage line. Never an unexplained spinner.
 
 ---
 
@@ -329,32 +318,36 @@ Outside the field itself:
 
 ### 4.1 Principles
 
-1. **Acknowledge every tap within a frame.** A 90 ms press state. A 2 px brass hairline if navigation is still pending after 120 ms. iOS has no haptics, so visual haptics stand in for them.
+1. **Acknowledge every tap within a frame.** A 90 ms press state. A 2 px action-teal hairline if navigation is still pending after 120 ms. The press is also felt and heard (§4.11) where the device allows.
 2. **Motion explains place and cause.** Depth for push and pop, continuity from card to hero, cause and effect for pour→level. Be optimistic first, then animate the reconciliation.
 3. **Set a latency floor before choreography.** Route animation ships only after N12 (press) and X24 (loading shells). Otherwise a 400 ms slide after a 500 ms freeze makes the app feel slower.
 4. **Visible at rest** (AnimateIn's rule). Nothing waits for a JS entrance on first paint.
 5. **Animate transform and opacity only.** 60 fps on an iPhone 12-class device. Every animation can be interrupted.
 6. **Delight is earned and short.** Only for moments the user owns. Each is 700 ms or less and can be skipped.
 
-### 4.2 Tokens (`src/lib/motion.ts`, mirrored as `--ca-dur-*` / `--ca-ease-*`, shipped in B01)
+### 4.2 Tokens (`src/lib/motion.ts`, from motion/SPEC.md; durations and curves mirrored as `--ca-dur-*` / `--ca-ease-*`)
 
 | Token | Value | Use |
 |---|---|---|
-| `dur.micro` | 90 ms | press, toggle colour |
+| `dur.micro` | 90 ms | press, toggle colour, reduced motion's cross-fade |
 | `dur.short` | 160 ms | tab crossfade, menu, list insert |
 | `dur.medium` | 240 ms | skeleton→content, sheet fade, toast |
 | `dur.long` | 400 ms | route slide, shared-element morph |
 | `dur.celebrate` | ≤700 ms total | success moments |
-| Exit rule | about ⅔ of the enter | |
-| `ease.standard` | `cubic-bezier(.2,0,0,1)` | default |
-| `ease.enter` | `cubic-bezier(0,0,0,1)` | arrivals |
-| `ease.exit` | `cubic-bezier(.3,0,1,1)` | departures |
-| `spring.snappy` | 520 / 42 | reflow, toggles, drop |
-| `spring.sheet` | 380 / 36, with release velocity | sheets |
-| `spring.celebrate` | 300 / 18 | pops, stamps, heart |
-| Distances | route 60 px · list 8 px · press .97 · lift 1.03 | |
+| `exitOf` / `tweenOut` | ⅔ of the enter, on `ease.exit` | every exit (a back is 267 ms) |
+| `ease.standard` / `enter` / `exit` | `(.2,0,0,1)` / `(0,0,0,1)` / `(.3,0,1,1)` | default / arrivals / departures |
+| `spring.snappy` | 520 / 42 (settles ~302 ms) | reflow, toggles, drop |
+| `spring.sheet` | 380 / 36 (~350 ms), with release velocity | sheets, the dock |
+| `spring.celebrate` | 300 / 18 (~597 ms) | pops, stamps, heart |
+| `distance` | route 60 px · list 8 px · press .97 · lift 1.03 · sheetFrom .94 · fan 56 px | |
+| `calm` | fade 150 ms · sheet 120 ms | reduced motion's replacements, where SPEC names one |
+| `reduced` | cross-fade at micro, opacity only | every other movement under reduced motion |
+| `gesture` | claim 6 px · slop 10 px · edge 20 px, commit at 35 % · fling .5 px/ms (cap 5) · project 200 ms · rubber .2 · lift 150 ms · hold 400 ms · arm 250 ms · pull 64 px at .5 · swipe/dismiss at 30 % · decay τ 325 ms | gesture code |
+| `stagger` / `staggerDelay` | 30 ms apart, at most 6 | list arrivals |
+| `skeleton` | after 120 ms, held 300 ms | loading |
+| `toastMs` · `refreshMs` | 5000 ms · 900 ms | toast, pull to refresh |
 
-These replace today's five springs and the 16 or so transition strings (motion-1).
+No literal spring, duration, curve or threshold anywhere else (`ui-platform.test.ts`).
 
 ### 4.3 Route and tab transitions: View Transitions on Next 16.3.4 (B05)
 
@@ -401,7 +394,7 @@ These replace today's five springs and the 16 or so transition strings (motion-1
 | Rating | the N30 half-star radio group: 44 pt stars, tap to set, arrow keys, VoiceOver-named, no commit on pointer-leave |
 | Slider detents | the thumb pulses at 25%, 50% and 75%; the fill warms below 25% |
 | Error | a 3 × 4 px shake over 240 ms, plus an inline message |
-| Real haptics (B06 spike) | a hidden, label-wrapped `<input type=checkbox switch>` may trigger the iOS 18 haptic. Feature-detect it, and never let it carry meaning. |
+| Haptics and sound | `feedback(name)` from `lib/feedback` at the press (§4.11). Never carries meaning on its own: the visual change always does. |
 
 ### 4.6 Sheets: one `BottomSheet`, two implementations behind the same props
 
@@ -410,17 +403,16 @@ These replace today's five springs and the 16 or so transition strings (motion-1
              onClose dismissible title>
 ```
 
-- **v0 (N27, Now).** Bottom-anchored. Snaps are layout positions only, with a 160 ms fade and slide. It borrows Joy Modal for the portal, focus trap and Escape.
+- **v0 (N27, Now).** Bottom-anchored. Snaps are layout positions only, with a 160 ms fade and slide. Its portal, focus trap and Escape come from the vendored Radix/vaul parts.
   - Used by: the Finished-it sheet (N13a), the install prompt (N15), the add/success sheets (N21), the AppBar overflow (N26), the X01 chooser.
-- **v1 (B04).** The same props, with framer-motion physics:
+- **v1 (B04).** The same props, with `motion` physics (`spring.sheet`, `gesture.rubber`, `gesture.projectMs`, `gesture.dismissAt`):
   - Height fixed at the full snap; only `y` moves.
-  - Release snaps to the nearest point using `y + v·0.2`, on `spring.sheet` with the release velocity.
+  - Release snaps to the point nearest the position 200 ms ahead (`y + v·0.2`), on `spring.sheet` with the release velocity; past 30 % of the height it dismisses.
   - A 0.2× rubber-band at the ends.
   - Scroll-to-drag handoff at `scrollTop` 0.
   - The whole header drags, through a native `{passive:false}` listener on the header only.
   - Backdrop opacity tied to `y`.
-  - The Joy borrowing goes away.
-- **Toast.** Sits above the tab bar, with an Undo slot and a 5 s life. It is never on top of the nav.
+- **Toast.** Sits above the tab bar, with an Undo slot and a 5 s life (`toastMs`). It is never on top of the nav.
 - **Desktop menus.** Scale .97→1 from their trigger.
 
 ### 4.7 Lists, skeletons, AI progress
@@ -456,15 +448,12 @@ These replace today's five springs and the 16 or so transition strings (motion-1
 
 ### 4.9 Reduced motion (one place)
 
-Wrap the authenticated layout in `<MotionConfig reducedMotion="user">`, then add one CSS block:
-
-```css
-@media (prefers-reduced-motion: reduce) {
-  ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation-duration: 0s !important; }
-  ::view-transition-old(root), ::view-transition-new(root) { animation: ca-fade 150ms both; }
-  * { scroll-behavior: auto !important; }
-}
-```
+`<MotionConfig reducedMotion="user">` wraps the app (`AppClientProviders`); a component that
+must branch reads motion's `useReducedMotion` and takes its replacement from `lib/motion.ts`
+(`reduced`: a cross-fade at micro; `calm.fade` 150 ms and `calm.sheet` 120 ms where SPEC names
+them). Route transitions do the same in CSS: the `prefers-reduced-motion` block at the end of
+`app/view-transitions.css` zeroes every route animation, then gives a push a 150 ms crossfade
+and a back a 120 ms fade; a tab switch is instant.
 
 - **Removed:** translation, scale, morphs, springs and particles.
 - **Kept:** crossfades of 150 ms or less, and colour changes.
@@ -483,12 +472,47 @@ Wrap the authenticated layout in `<MotionConfig reducedMotion="user">`, then add
 
 ---
 
+
+### 4.11 Haptics and sound (`src/lib/feedback`; DECISIONS 35, 36, 42)
+
+One call, `feedback(name, { phase? })`, fires the haptic and the sound that share a name, and
+honours the person's one "Sound and haptics" setting (Sounds on/off, on by default; Haptics
+On/Off). Only for what the person touches or holds; never for scroll, loading, data arriving or
+anything the app does on its own. It never throws.
+
+| Name | Haptic (ms) | Sound (Asus-KBD) | When |
+|---|---|---|---|
+| `press` | none | soft, down on press, up on release | every button, tab, chip, row |
+| `primary` | none | medium, down and up | Add, Check in, Save |
+| `toggle` | tick | space, down | a switch |
+| `tick` | [10] | soft, down | rate, favourite, quick-look step, fan |
+| `detent` | [8] | soft, down, ×0.6 | a band boundary, pull arming, snaps |
+| `hold` | [14] | medium, down | quick look opens, tier drag arms |
+| `undo` | [8,30,8] | soft, up | Undo |
+| `success` | [12,40,18] | space, down then up 60 ms later | a commit |
+| `medium` | [14,50,14,50,20] | as success | a new #1 |
+| `big` | [18,60,18,60,30,90,40] | as success | the biggest moments |
+| `refuse` | [30,40,30] | none | an optimistic change refused |
+
+- **Haptics** are Fettle's: pulses at most 40 ms, patterns at most 400 ms. Android uses
+  `navigator.vibrate` from anywhere. iPhone has no vibrate: `<HapticOverlay>` lays an invisible
+  switch under the finger (iOS 26.5+ ticks once per real tap), and a hidden switch plays the
+  pattern on iOS 18 to 26.4. So on iPhone only haptics inside the tap itself play; a hold, a pull
+  arming or anything after a network round trip is Android's alone. Reduced motion keeps haptics
+  and plays `success`, `medium` and `big` as their one strongest beat.
+- **Sound** is Josh Comeau's MIT `button-sounds`, self-hosted in `public/sounds/` with its licence
+  and cached by the service worker, played from its sprite layout with Web Audio at volume 0.3,
+  pitch ±0.05, a different sample each press. iPhone gets the `ambient` audio session, so sound
+  follows the silent switch and never stops the person's music; once the first tap unlocks audio,
+  sound can carry the hold, pull and boundary moments iPhone haptics cannot. Reduced motion does
+  not change sound. Nothing loops.
+
 ## 5. Signature moments
 
 Each moment lists its trigger, its choreography, its reduced-motion version, its dependencies, and **what ships earlier on existing parts**.
 
 1. **"Uncorked": launch and sign-in.**
-   - The particle system morphs through the six vessels and condenses into the brass Fraunces wordmark.
+   - The particle system morphs through the six vessels and condenses into the wordmark.
    - Shown on first launch and sign-in only.
    - It replaces the beer-only LiquidBackground's signal.
    - *Reduced:* a static wordmark that fades in.
@@ -496,7 +520,7 @@ Each moment lists its trigger, its choreography, its reduced-motion version, its
    - *Earlier:* none needed; the AuthLayout fixes in B06 are cheap.
 
 2. **"The label reads itself": capture → draft.**
-   - The photo dissolves into teal particles locked to the vessel.
+   - The photo dissolves into particles locked to the vessel.
    - Each read field's chip (Name, 2019, Sangiovese, Toscana) flies into its `AIDraftField`.
    - The one field the AI couldn't read waits for you, focused.
    - *Reduced:* the photo, then a stage list, then the card.
@@ -506,7 +530,7 @@ Each moment lists its trigger, its choreography, its reduced-motion version, its
 3. **"Into the cellar": bottle added.**
    - The new LabelPlate arcs into the Cellar tab, and the count rolls +1.
    - A toast offers "+1 bottle · Snap another · Open it now".
-   - The card gets a one-time brass glow in the grid.
+   - The card gets a one-time glow in the grid.
    - *Reduced:* the toast and the count only.
    - *Deps:* B03, B05.
    - *Earlier:* N21's success sheet, and N28 plates in the grid.
@@ -541,7 +565,7 @@ Each moment lists its trigger, its choreography, its reduced-motion version, its
    - *Deps:* B05, plus N28/B03 for the image.
 
 8. **"Year in Bottles": recap (later).**
-   - A deck of Fraunces cards, each exportable as a share image.
+   - A deck of cards, each exportable as a share image.
    - *Deps:* L04, X17.
 
 ---
@@ -550,12 +574,12 @@ Each moment lists its trigger, its choreography, its reduced-motion version, its
 
 1. **Now:**
    - N11 (contrast, fonts, the contrast test).
-   - The brass flip in a single PR (N11 or B01).
+   - The brass flip in a single PR (N11 or B01). (Done, then reversed by the 2026-11 redesign: teal is action.)
    - N27 (sheet and toast APIs).
    - N19 (AIDraftField on today's styles).
    - N28 (LabelPlate v0 and `itemTypeTokens`).
    - B01 (tokens, motion tokens, the vitest guard).
-2. **B02 primitives.** Joy-free where Joy has no counterpart. Migrate the bottle and cellar pages first. Order: Page/AppBar restyle → InsetSection → Score → TypeChip → ActionBar → EmptyState → ItemTile → AIDraftField restyle, which is where teal `--ca-ai` arrives.
+2. **B02 primitives.** Migrate the bottle and cellar pages first. Order: Page/AppBar restyle → InsetSection → Score → TypeChip → ActionBar → EmptyState → ItemTile → AIDraftField restyle, which is where teal `--ca-ai` arrives.
 3. **B03:** the full LabelPlate set, recipe glasses, place heroes.
 4. **B04:** BottomSheet physics, then the map and place rebuild (X20).
 5. **B05:** route motion, only after N12 and X24.
