@@ -141,6 +141,7 @@ const data = {
   privacy: "PRIVATE",
   listType: "wine",
   isOwner: true,
+  createdById: "me",
   itemCount: items.length,
   items,
   history: { canUndo: true, canRedo: false, undo: edit, redo: null },
@@ -388,6 +389,39 @@ describe("Arrange (X23 / D4)", () => {
     await render({ ...data, isOwner: false, history: null });
     assert.throws(() => button("Edit order"));
     assert.throws(() => button("Add a wine"));
+  });
+});
+
+describe("Share and Details open L2's sheets (F-22 / H-33)", () => {
+  const dialogTitled = (title: string) =>
+    [...document.querySelectorAll('[role="dialog"]')].find((el) =>
+      [...el.querySelectorAll("h2")].some((h) => h.textContent === title),
+    );
+
+  test("Share opens the share sheet, not a copied link", async () => {
+    await render({ ...data, privacy: "FRIENDS" });
+    await click(button("Share"));
+    assert.ok(dialogTitled("Share"), "no Share sheet");
+    assert.equal(
+      toasts.length,
+      0,
+      "a toast instead of the sheet: the link was copied",
+    );
+  });
+
+  test("Details opens the details sheet on the page, with the list's values", async () => {
+    await render();
+    await click(button("Details"));
+    const sheet = dialogTitled("List details");
+    assert.ok(sheet, "no List details sheet");
+    const name = sheet.querySelector("input");
+    assert.equal(name?.value, "Reds");
+  });
+
+  test("a friend's list has Share but never Details", async () => {
+    await render({ ...data, privacy: "FRIENDS", isOwner: false, history: null });
+    assert.ok(button("Share"));
+    assert.throws(() => button("Details"));
   });
 });
 

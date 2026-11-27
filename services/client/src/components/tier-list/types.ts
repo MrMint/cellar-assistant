@@ -39,6 +39,8 @@ export interface TierListData {
   privacy: string;
   listType: string;
   isOwner: boolean;
+  /** The maker: L2's details sheet guards on it (`canEditList`). */
+  createdById: string;
   itemCount: number;
   items: TierListItemDisplay[];
   /** D4: where Undo / Redo stand; null when the viewer is not the owner. */

@@ -315,6 +315,7 @@ export function tierListDataFrom(
       privacy: core.privacy,
       listType: core.listType,
       isOwner,
+      createdById: core.createdById,
       itemCount: items.length,
       items,
       history: isOwner ? history : null,
