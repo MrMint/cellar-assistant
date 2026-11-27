@@ -52,6 +52,14 @@ const fakeProfiles = (): ProfileStore & { put(f: ProfileFields): void } => {
           .filter((row): row is ProfileFields => row !== undefined)
           .map((row) => [row.id, row]),
       ),
+    count: async ({ term, excludeIds }) => {
+      const excluded = new Set(excludeIds);
+      return [...rows.values()].filter(
+        (row) =>
+          !excluded.has(row.id) &&
+          row.displayName.toLowerCase().includes(term.toLowerCase()),
+      ).length;
+    },
     update: async () => null,
     search: async ({ term, excludeIds, limit }) => {
       const excluded = new Set(excludeIds);
@@ -260,6 +268,39 @@ describe.skipIf(skip)("UserSearchActor (§2.3, §1.5)", () => {
         input,
       );
       expect(hits.map((h) => h.displayName)).toEqual(["Alberta"]);
+    });
+  });
+
+  it("MC-search: a people section's total is exact past the cap, in both modes", async () => {
+    await withTestDb(async (db) => {
+      const s = await scenario(db);
+      const ctx = userCtx(s.stranger);
+      const plain: UserSearchInput = { term: "al" };
+      const full = await newActor(plain, db, s.stranger, s.profiles).results(
+        ctx,
+        plain,
+        { first: 100, after: null },
+      );
+      const matches = full.entries.length;
+      expect(full.totalCount).toBe(matches);
+      expect(full.totalIsLowerBound).toBe(false);
+
+      for (const includeConnected of [false, true]) {
+        const capped: UserSearchInput = {
+          term: "al",
+          limit: 1,
+          ...(includeConnected ? { includeConnected } : {}),
+        };
+        const page = await newActor(capped, db, s.stranger, s.profiles).results(
+          ctx,
+          capped,
+          { first: 10, after: null },
+        );
+        expect(page.entries).toHaveLength(1);
+        // Lexical: counted before the cap, so the whole count, not 1.
+        expect(page.totalCount).toBe(matches);
+        expect(page.totalIsLowerBound).toBe(false);
+      }
     });
   });
 

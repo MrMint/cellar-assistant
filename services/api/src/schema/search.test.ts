@@ -572,6 +572,64 @@ const unionDocument = (
   }
 }`;
 
+describe("search section totals (MC-search, L3)", () => {
+  const SECTIONS = [
+    ["itemSearch", 'text: "pinot"', "ItemSearchActor", "ItemSearchConnection"],
+    [
+      "brandSearch",
+      'term: "krug"',
+      "BrandSearchActor",
+      "BrandSearchConnection",
+    ],
+    [
+      "recipeSearch",
+      'term: "negroni"',
+      "RecipeSearchActor",
+      "RecipeSearchConnection",
+    ],
+    ["userSearch", 'term: "al"', "UserSearchActor", "UserSearchConnection"],
+    [
+      "placeSearch",
+      'query: "vino"',
+      "PlaceSearchActor",
+      "PlaceSearchConnection",
+    ],
+  ] as const;
+
+  for (const [field, args, actor, connection] of SECTIONS) {
+    it(`${field} relays the actor's pre-cap total and whether it is a lower bound`, async () => {
+      for (const totalIsLowerBound of [true, false]) {
+        const { invoke } = stubSidecar({
+          ...allSearchStubs(),
+          [`${actor}.results`]: () => ({
+            ...emptyPage(),
+            totalCount: 200,
+            totalIsLowerBound,
+          }),
+        });
+        const result = await run(
+          `{ ${field}(${args}, first: 1) { ... on ${connection} { totalCount totalIsLowerBound } } }`,
+          testContext(invoke, viewer),
+        );
+        expect(result.errors).toBeUndefined();
+        expect(result.data?.[field]).toEqual({
+          totalCount: 200,
+          totalIsLowerBound,
+        });
+      }
+    });
+  }
+
+  it("a page without the flag is a server error, never a silent `false`", async () => {
+    const { invoke } = stubSidecar(allSearchStubs());
+    const result = await run(
+      `{ brandSearch(term: "krug", first: 1) { ... on BrandSearchConnection { totalIsLowerBound } } }`,
+      testContext(invoke, viewer),
+    );
+    expect(result.errors?.[0]?.message).toMatch(/searchConnectionFromPage/);
+  });
+});
+
 describe("every paging root field degrades per field, not per document (A7e)", () => {
   for (const field of PAGING_ROOT_FIELDS) {
     describe(field.field, () => {

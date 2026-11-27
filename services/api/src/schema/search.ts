@@ -42,6 +42,7 @@ import type {
   CellarItemSearchHit,
   ItemSearchHit,
   RecipeSearchHit,
+  SearchPage,
   UserSearchHit,
 } from "@cellar-assistant/contracts";
 import {
@@ -72,6 +73,41 @@ import { builder } from "./builder.ts";
 import { ItemInterface, ItemTypeEnum } from "./item.ts";
 import { connectionFromPage, toPageArgs } from "./pagination.ts";
 import { RecipeType_ } from "./recipe.ts";
+
+/* -------------------------------------------------------------------------- */
+/* Section totals (MC-search, L3)                                              */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * A search section's connection: `totalCount` is the actor's pre-cap total,
+ * and `totalIsLowerBound` says whether it is the cap of a semantic section
+ * (shown "200+") rather than the count. Bottles are exempt (L31).
+ */
+export const searchConnectionFromPage = <T>(page: SearchPage<T>) => ({
+  ...connectionFromPage(page),
+  totalIsLowerBound: page.totalIsLowerBound,
+});
+
+/**
+ * Read back off the parent Pothos hands the connection's own fields. A
+ * connection built any other way is a server bug, never a `false`.
+ */
+export const lowerBoundOf = (parent: object): boolean => {
+  if (
+    "totalIsLowerBound" in parent &&
+    typeof parent.totalIsLowerBound === "boolean"
+  ) {
+    return parent.totalIsLowerBound;
+  }
+  throw new Error(
+    "a search section's connection was built without searchConnectionFromPage",
+  );
+};
+
+export const SEARCH_LOWER_BOUND_DESCRIPTION =
+  "True when `totalCount` is this semantic section's cap rather than its " +
+  'count: there are at least that many matches, so show it as "N+", never ' +
+  "as a total. Lexical sections are exact and say false.";
 
 /* -------------------------------------------------------------------------- */
 /* Item search                                                                 */
@@ -105,7 +141,16 @@ const ItemSearchResult = builder
   });
 
 const ItemSearchConnection = builder.connectionObject(
-  { type: ItemSearchResult, name: "ItemSearchConnection" },
+  {
+    type: ItemSearchResult,
+    name: "ItemSearchConnection",
+    fields: (t) => ({
+      totalIsLowerBound: t.boolean({
+        description: SEARCH_LOWER_BOUND_DESCRIPTION,
+        resolve: lowerBoundOf,
+      }),
+    }),
+  },
   { name: "ItemSearchEdge" },
 );
 
@@ -183,7 +228,7 @@ builder.queryField("itemSearch", (t) =>
           (imageFileId === null ? null : IMAGE_SEARCH_RESULT_LIMIT),
         ...(args.narrow === true ? { narrow: true } : {}),
       };
-      return connectionFromPage(
+      return searchConnectionFromPage(
         await context
           .actor(
             ItemSearchActorDescriptor,
@@ -282,7 +327,16 @@ const BrandSearchResult = builder
   });
 
 const BrandSearchConnection = builder.connectionObject(
-  { type: BrandSearchResult, name: "BrandSearchConnection" },
+  {
+    type: BrandSearchResult,
+    name: "BrandSearchConnection",
+    fields: (t) => ({
+      totalIsLowerBound: t.boolean({
+        description: SEARCH_LOWER_BOUND_DESCRIPTION,
+        resolve: lowerBoundOf,
+      }),
+    }),
+  },
   { name: "BrandSearchEdge" },
 );
 
@@ -308,7 +362,7 @@ builder.queryField("brandSearch", (t) =>
     },
     resolve: async (_root, args, context) => {
       const input = { term: args.term ?? null, limit: args.limit ?? null };
-      return connectionFromPage(
+      return searchConnectionFromPage(
         await context
           .actor(
             BrandSearchActorDescriptor,
@@ -367,7 +421,16 @@ const RecipeSearchResult = builder
   });
 
 const RecipeSearchConnection = builder.connectionObject(
-  { type: RecipeSearchResult, name: "RecipeSearchConnection" },
+  {
+    type: RecipeSearchResult,
+    name: "RecipeSearchConnection",
+    fields: (t) => ({
+      totalIsLowerBound: t.boolean({
+        description: SEARCH_LOWER_BOUND_DESCRIPTION,
+        resolve: lowerBoundOf,
+      }),
+    }),
+  },
   { name: "RecipeSearchEdge" },
 );
 
@@ -414,7 +477,7 @@ builder.queryField("recipeSearch", (t) =>
         limit: args.limit ?? null,
         ...(args.hybrid === true ? { hybrid: true } : {}),
       };
-      return connectionFromPage(
+      return searchConnectionFromPage(
         await context
           .actor(
             RecipeSearchActorDescriptor,
@@ -462,7 +525,16 @@ const UserSearchResult = builder
   });
 
 const UserSearchConnection = builder.connectionObject(
-  { type: UserSearchResult, name: "UserSearchConnection" },
+  {
+    type: UserSearchResult,
+    name: "UserSearchConnection",
+    fields: (t) => ({
+      totalIsLowerBound: t.boolean({
+        description: SEARCH_LOWER_BOUND_DESCRIPTION,
+        resolve: lowerBoundOf,
+      }),
+    }),
+  },
   { name: "UserSearchEdge" },
 );
 
@@ -498,7 +570,7 @@ builder.queryField("userSearch", (t) =>
         limit: args.limit ?? null,
         ...(args.includeConnected === true ? { includeConnected: true } : {}),
       };
-      return connectionFromPage(
+      return searchConnectionFromPage(
         await context
           .actor(
             UserSearchActorDescriptor,

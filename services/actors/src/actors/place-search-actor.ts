@@ -60,11 +60,11 @@
 import type {
   ActorCategory,
   Ctx,
-  Page,
   PageArgs,
   PlaceSearchActorInterface,
   PlaceSearchHit,
   PlaceSearchInput,
+  SearchPage,
 } from "@cellar-assistant/contracts";
 import {
   CATEGORY_VECTOR_LIMIT,
@@ -89,7 +89,11 @@ import {
   searchCategoryVectors,
   searchPlacesHybrid,
 } from "../lib/place-search-sql.ts";
-import { SearchActorBase } from "../lib/search-actor-base.ts";
+import {
+  type CountedHits,
+  cappedTotal,
+  SearchActorBase,
+} from "../lib/search-actor-base.ts";
 import { resolveTierListFilter } from "../lib/tier-list-visibility.ts";
 import { ownUnsharedMatching } from "../lib/unshared-places.ts";
 import { toVectorLiteral } from "../lib/vectors.ts";
@@ -126,7 +130,7 @@ export class PlaceSearchActor
     ctx: Ctx,
     input: PlaceSearchInput,
     page: PageArgs,
-  ): Promise<Page<PlaceSearchHit>> {
+  ): Promise<SearchPage<PlaceSearchHit>> {
     return this.pageOf(ctx, input, page);
   }
 
@@ -167,7 +171,7 @@ export class PlaceSearchActor
   protected async runSearch(
     ctx: Ctx,
     input: PlaceSearchInput,
-  ): Promise<readonly PlaceSearchHit[]> {
+  ): Promise<CountedHits<PlaceSearchHit>> {
     const query = input.query.trim();
     const limit = requireLimit(input.limit ?? PLACE_SEARCH_RESULT_CAP);
 
@@ -178,7 +182,7 @@ export class PlaceSearchActor
       ctx,
       input.tierListIds,
     );
-    if (tierListFilter.kind === "empty") return [];
+    if (tierListFilter.kind === "empty") return cappedTotal([], limit);
 
     const { matchedCategories, categoryScores } = await this.#categories(
       ctx,
@@ -191,7 +195,8 @@ export class PlaceSearchActor
       categoryScores,
       bounds: input.bounds ?? null,
       minRating: input.minRating ?? null,
-      resultLimit: limit,
+      // Semantic (L3): one row past the limit is the proof of "more".
+      resultLimit: limit + 1,
       tierListFilter,
       filterCategories: input.filterCategories ?? [],
     });
@@ -232,7 +237,7 @@ export class PlaceSearchActor
             minRating: input.minRating ?? null,
             tierListIds:
               tierListFilter.kind === "filter" ? tierListFilter.ids : null,
-            limit,
+            limit: limit + 1,
           });
     const ownHits = own.map(
       (row): PlaceSearchHit => ({
@@ -256,9 +261,18 @@ export class PlaceSearchActor
     );
     const merged = [...ownHits, ...hits]
       .sort((a, b) => b.combinedScore - a.combinedScore)
-      .slice(0, limit);
+      .slice(0, limit + 1);
 
-    return this.#applyVisitFilter(ctx, input, cutWeakMatches(merged));
+    // The cut keeps a prefix (its threshold comes from the top score, which
+    // the extra row never is), so past it, more than `limit` means more.
+    const strong = cutWeakMatches(merged);
+    const shown = await this.#applyVisitFilter(ctx, input, strong);
+    // The visit filter runs over the read rows only: when they were capped,
+    // what survives it is at least the count, not the count.
+    const counted = cappedTotal(shown, limit);
+    return strong.length > limit
+      ? { ...counted, totalIsLowerBound: true }
+      : counted;
   }
 
   /**

@@ -45,7 +45,14 @@
 // screen-long structural type error. The table now lives in `packages/db` with
 // everything else, so the exception is retired along with the second database.
 import { user } from "@cellar-assistant/db";
-import { and, eq, inArray, notInArray, sql } from "@cellar-assistant/db/orm";
+import {
+  and,
+  count,
+  eq,
+  inArray,
+  notInArray,
+  sql,
+} from "@cellar-assistant/db/orm";
 import { actorDb } from "./db.ts";
 
 /** The columns `UserProfileDto` is built from. */
@@ -94,6 +101,22 @@ export type ProfileStore = {
    * with many friends from getting a short page or an empty one.
    */
   search(input: ProfileSearch): Promise<readonly ProfileFields[]>;
+  /**
+   * How many rows `search` would match with no `limit` — a people section's
+   * exact total (MC-search, L3: lexical sections are exact).
+   */
+  count(input: Omit<ProfileSearch, "limit">): Promise<number>;
+};
+
+const searchWhere = ({ term, excludeIds }: Omit<ProfileSearch, "limit">) => {
+  const pattern = `%${term.replace(/[\\%_]/g, (m) => `\\${m}`)}%`;
+  return and(
+    sql`${user.name} ilike ${pattern} escape '\\'`,
+    eq(user.disabled, false),
+    excludeIds.length === 0
+      ? sql`true`
+      : notInArray(user.id, [...new Set(excludeIds)]),
+  );
 };
 
 const toFields = (row: {
@@ -135,19 +158,10 @@ export const betterAuthProfileStore = (): ProfileStore => ({
   },
 
   search: async ({ term, excludeIds, limit }) => {
-    const pattern = `%${term.replace(/[\\%_]/g, (m) => `\\${m}`)}%`;
     const rows = await actorDb()
       .select(SELECTION)
       .from(user)
-      .where(
-        and(
-          sql`${user.name} ilike ${pattern} escape '\\'`,
-          eq(user.disabled, false),
-          excludeIds.length === 0
-            ? sql`true`
-            : notInArray(user.id, [...new Set(excludeIds)]),
-        ),
-      )
+      .where(searchWhere({ term, excludeIds }))
       // A total order, so an offset cursor over the held result set is stable:
       // exact match, then shortest, then alphabetical, then id.
       .orderBy(
@@ -158,6 +172,14 @@ export const betterAuthProfileStore = (): ProfileStore => ({
       )
       .limit(limit);
     return rows.map(toFields);
+  },
+
+  count: async (input) => {
+    const [row] = await actorDb()
+      .select({ n: count() })
+      .from(user)
+      .where(searchWhere(input));
+    return row?.n ?? 0;
   },
 
   update: async (userId, patch) => {

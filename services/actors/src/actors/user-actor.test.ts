@@ -101,6 +101,14 @@ const fakeProfiles = (): ProfileStore & {
         .sort((a, b) => a.displayName.localeCompare(b.displayName))
         .slice(0, limit);
     },
+    count: async ({ term, excludeIds }) => {
+      const excluded = new Set(excludeIds);
+      return [...rows.values()].filter(
+        (row) =>
+          !excluded.has(row.id) &&
+          row.displayName.toLowerCase().includes(term.toLowerCase()),
+      ).length;
+    },
     update: async (id, patch) => {
       const current = rows.get(id);
       if (current === undefined) return null;

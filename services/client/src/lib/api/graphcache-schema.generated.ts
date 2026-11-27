@@ -1168,6 +1168,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
             },
           },
           { name: "totalCount", type: { kind: "SCALAR", name: "Int" } },
+          {
+            name: "totalIsLowerBound",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "Boolean" },
+            },
+          },
         ],
         interfaces: [],
       },
@@ -4650,6 +4657,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
             },
           },
           { name: "totalCount", type: { kind: "SCALAR", name: "Int" } },
+          {
+            name: "totalIsLowerBound",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "Boolean" },
+            },
+          },
         ],
         interfaces: [],
       },
@@ -7054,6 +7068,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
             },
           },
           { name: "totalCount", type: { kind: "SCALAR", name: "Int" } },
+          {
+            name: "totalIsLowerBound",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "Boolean" },
+            },
+          },
         ],
         interfaces: [],
       },
@@ -9169,6 +9190,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
             },
           },
           { name: "totalCount", type: { kind: "SCALAR", name: "Int" } },
+          {
+            name: "totalIsLowerBound",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "Boolean" },
+            },
+          },
         ],
         interfaces: [],
       },
@@ -12329,6 +12357,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
             },
           },
           { name: "totalCount", type: { kind: "SCALAR", name: "Int" } },
+          {
+            name: "totalIsLowerBound",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "Boolean" },
+            },
+          },
         ],
         interfaces: [],
       },

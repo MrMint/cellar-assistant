@@ -953,6 +953,11 @@ type BrandSearchConnection {
 
   """Total rows matching the query, or null when counting is not cheap."""
   totalCount: Int
+
+  """
+  True when `totalCount` is this semantic section's cap rather than its count: there are at least that many matches, so show it as "N+", never as a total. Lexical sections are exact and say false.
+  """
+  totalIsLowerBound: Boolean!
 }
 
 type BrandSearchEdge {
@@ -3556,6 +3561,11 @@ type ItemSearchConnection {
 
   """Total rows matching the query, or null when counting is not cheap."""
   totalCount: Int
+
+  """
+  True when `totalCount` is this semantic section's cap rather than its count: there are at least that many matches, so show it as "N+", never as a total. Lexical sections are exact and say false.
+  """
+  totalIsLowerBound: Boolean!
 }
 
 type ItemSearchEdge {
@@ -5147,6 +5157,11 @@ type PlaceSearchConnection {
 
   """Total rows matching the query, or null when counting is not cheap."""
   totalCount: Int
+
+  """
+  True when `totalCount` is this semantic section's cap rather than its count: there are at least that many matches, so show it as "N+", never as a total. Lexical sections are exact and say false.
+  """
+  totalIsLowerBound: Boolean!
 }
 
 type PlaceSearchEdge {
@@ -6801,6 +6816,11 @@ type RecipeSearchConnection {
 
   """Total rows matching the query, or null when counting is not cheap."""
   totalCount: Int
+
+  """
+  True when `totalCount` is this semantic section's cap rather than its count: there are at least that many matches, so show it as "N+", never as a total. Lexical sections are exact and say false.
+  """
+  totalIsLowerBound: Boolean!
 }
 
 type RecipeSearchEdge {
@@ -9192,6 +9212,11 @@ type UserSearchConnection {
 
   """Total rows matching the query, or null when counting is not cheap."""
   totalCount: Int
+
+  """
+  True when `totalCount` is this semantic section's cap rather than its count: there are at least that many matches, so show it as "N+", never as a total. Lexical sections are exact and say false.
+  """
+  totalIsLowerBound: Boolean!
 }
 
 type UserSearchEdge {

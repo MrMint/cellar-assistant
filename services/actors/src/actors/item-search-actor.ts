@@ -69,8 +69,8 @@ import type {
   ItemSearchHit,
   ItemSearchInput,
   ItemType,
-  Page,
   PageArgs,
+  SearchPage,
 } from "@cellar-assistant/contracts";
 import {
   ConflictError,
@@ -101,7 +101,11 @@ import { withHnswScan } from "../lib/hnsw.ts";
 import { reciprocalRankFusion, tiedRanks } from "../lib/hybrid-rank.ts";
 import { ARCS } from "../lib/item-arcs.ts";
 import { ITEM_TABLES } from "../lib/item-bindings.ts";
-import { SearchActorBase } from "../lib/search-actor-base.ts";
+import {
+  type CountedHits,
+  cappedTotal,
+  SearchActorBase,
+} from "../lib/search-actor-base.ts";
 import {
   type DiscardSearchPhoto,
   daprDiscardSearchPhoto,
@@ -169,7 +173,7 @@ export class ItemSearchActor
     ctx: Ctx,
     input: ItemSearchInput,
     page: PageArgs,
-  ): Promise<Page<ItemSearchHit>> {
+  ): Promise<SearchPage<ItemSearchHit>> {
     return this.pageOf(ctx, input, page);
   }
 
@@ -183,10 +187,10 @@ export class ItemSearchActor
   protected async runSearch(
     ctx: Ctx,
     input: ItemSearchInput,
-  ): Promise<readonly ItemSearchHit[]> {
+  ): Promise<CountedHits<ItemSearchHit>> {
     const imageFileId = input.imageFileId?.trim().toLowerCase() ?? "";
     if (imageFileId === "") return this.#search(ctx, input);
-    let hits: readonly ItemSearchHit[];
+    let hits: CountedHits<ItemSearchHit>;
     try {
       hits = await this.#search(ctx, input);
     } catch (error) {
@@ -230,10 +234,16 @@ export class ItemSearchActor
     }
   }
 
+  /**
+   * Every arm reads one row past `limit` (MC-search, L3): item search is
+   * semantic, so its total is the full count under the cap and the cap with
+   * `totalIsLowerBound` past it. Each arm is nearest- or best-first, so an
+   * arm that came back at or under `limit` held every match it had.
+   */
   async #search(
     ctx: Ctx,
     input: ItemSearchInput,
-  ): Promise<readonly ItemSearchHit[]> {
+  ): Promise<CountedHits<ItemSearchHit>> {
     const query = await this.#queryFor(ctx, input);
     const types = normaliseTypes(input.itemTypes);
     if (query.kind === "name") {
@@ -246,25 +256,33 @@ export class ItemSearchActor
           text: query.text,
           literal: null,
           types,
-          limit: requireLimit(input.limit ?? ITEM_SEARCH_RESULT_CAP),
+          limit: requireLimit(input.limit ?? ITEM_SEARCH_RESULT_CAP) + 1,
         }),
       );
-      return toHits(rows);
+      return cappedTotal(
+        toHits(rows),
+        requireLimit(input.limit ?? ITEM_SEARCH_RESULT_CAP),
+      );
     }
     const literal = toVectorLiteral(query.vector);
     const maxDistance = requireDistance(
       input.maxDistance ?? ITEM_SEARCH_MAX_DISTANCE,
     );
     const limit = requireLimit(input.limit ?? ITEM_SEARCH_RESULT_CAP);
+    // What every arm reads: one past the limit, the proof of "more".
+    const read = limit + 1;
     if (query.kind === "image") {
-      return toHits(
-        await this.#imageRows(ctx, {
-          literal,
-          model: query.model,
-          types,
-          maxDistance,
-          limit,
-        }),
+      return cappedTotal(
+        toHits(
+          await this.#imageRows(ctx, {
+            literal,
+            model: query.model,
+            types,
+            maxDistance,
+            limit: read,
+          }),
+        ),
+        limit,
       );
     }
 
@@ -312,7 +330,7 @@ export class ItemSearchActor
           from ${itemVectors} v
           where v.vector is not null and (${scanFilter})
           order by v.vector <=> ${literal}::halfvec(768)
-          limit ${limit}
+          limit ${read}
         )
         select
           ${VECTORS.typeExpr(m, types)} as item_type,
@@ -335,7 +353,7 @@ export class ItemSearchActor
           and m.distance <= ${maxDistance}
           and coalesce(${nameCoalesce}) is not null
         order by m.distance asc, name asc, item_id asc
-        limit ${limit}
+        limit ${read}
       `);
         const lexicalRows: readonly LexicalRow[] =
           query.kind === "text"
@@ -343,14 +361,14 @@ export class ItemSearchActor
                 text: query.text,
                 literal,
                 types,
-                limit,
+                limit: read,
               })
             : [];
         return { vectorRows, lexicalRows };
       },
     );
 
-    if (query.kind !== "text") return toHits(vectorRows);
+    if (query.kind !== "text") return cappedTotal(toHits(vectorRows), limit);
     const fused = fuseHybrid(
       toHits(vectorRows),
       toHits(lexicalRows),
@@ -358,9 +376,15 @@ export class ItemSearchActor
         lexicalRows.map((row) => Number(row.score)),
         LEXICAL_TIE,
       ),
-      limit,
+      read,
     );
-    return input.narrow === true ? narrowToNamed(fused) : fused;
+    if (input.narrow !== true) return cappedTotal(fused, limit);
+    // Narrowing only removes, and only from the rows read: past a capped
+    // read, what it keeps is at least the count, not the count.
+    const narrowed = cappedTotal(narrowToNamed(fused), limit);
+    return fused.length > limit
+      ? { ...narrowed, totalIsLowerBound: true }
+      : narrowed;
   }
 
   /**
