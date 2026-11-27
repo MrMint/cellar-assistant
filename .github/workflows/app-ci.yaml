@@ -70,6 +70,8 @@ on:
       - "services/actors/src/actors/barcode-actor.ts"
       - "services/actors/src/lib/ai/factory.ts"
       - "services/actors/src/lib/ai/install.ts"
+      #   limits.ts          the client query-cost tests (queryCostRule)
+      - "services/api/src/limits.ts"
       #   packages/contracts/src/**
       #                      a workspace dependency of the client since
       #                      522d1d1d, imported through its subpath exports:
@@ -107,6 +109,7 @@ on:
       - "services/actors/src/actors/barcode-actor.ts"
       - "services/actors/src/lib/ai/factory.ts"
       - "services/actors/src/lib/ai/install.ts"
+      - "services/api/src/limits.ts"
       - "packages/contracts/src/**"
       - "services/*/package.json"
       - "packages/*/package.json"
@@ -249,10 +252,16 @@ jobs:
       # resolution-time filter only, so this step trusts the committed lockfile.
       # The 24-hour supply-chain window is enforced when someone resolves a new
       # version locally, not here.
+      # `@cellar-assistant/api` is here because four client query-cost tests
+      # (`row-cost`, `home/query-cost`, `user/avatar`, `drafts/needs`) import
+      # `services/api/src/limits.ts` for `queryCostRule`, and its own imports
+      # (`@cellar-assistant/contracts`, `graphql`) resolve from services/api.
+      # Without it they die "Cannot find module" (MEASURED on PR #696).
       - name: Install
         run: |
           bun install --frozen-lockfile \
             --filter "@cellar-assistant/client..." \
+            --filter @cellar-assistant/api \
             --filter cellar-assistant
 
       # Right after Install rather than at job end, so a red typecheck or test
