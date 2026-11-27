@@ -96,7 +96,7 @@ export const AddPhotoBody = ({
 
   return (
     <div className="flex flex-col gap-4">
-      {showTitle && <h2 className="type-title-2">{TITLE}</h2>}
+      {showTitle && <h2 className="t-title">{TITLE}</h2>}
       {blockers.length === 0 && (
         <CameraCapture onCapture={onCameraCapture} showLibrary={false} />
       )}
@@ -121,10 +121,7 @@ export const AddPhotoBody = ({
         }}
       />
       {blockers.map((blocker) => (
-        <p
-          key={blocker}
-          className="type-footnote flex items-start gap-1.5 text-ink-2"
-        >
+        <p key={blocker} className="t-cap flex items-start gap-1.5 text-ink-2">
           <Warning aria-hidden className="mt-0.5 size-3.5 shrink-0" />
           {blocker}
         </p>
@@ -166,8 +163,8 @@ export const RebuyPhotoOffer = ({
         <PhotoLibrary aria-hidden />
       </span>
       <div className="flex flex-col gap-0.5">
-        <p className="type-headline text-ink-1">{title}</p>
-        <p className="type-footnote text-ink-2">{REBUY_PHOTO_BODY}</p>
+        <p className="t-head text-ink-1">{title}</p>
+        <p className="t-cap text-ink-2">{REBUY_PHOTO_BODY}</p>
       </div>
     </div>
     <div className="flex gap-2">

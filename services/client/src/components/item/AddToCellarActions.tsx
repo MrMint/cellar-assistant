@@ -178,7 +178,7 @@ export const AddToCellarSheet = ({
         onOpenChange={setOpen}
         title="Add to cellar"
       >
-        <p className="type-body pb-4 text-ink-2">
+        <p className="t-body pb-4 text-ink-2">
           {loadError !== null ? (
             <span role="alert" className="text-destructive">
               Couldn&apos;t read your cellars: {loadError}
@@ -333,7 +333,7 @@ export const AddToCellarSheet = ({
         footer={
           <div className="flex flex-col gap-2">
             {error !== null && (
-              <p role="alert" className="type-footnote text-destructive">
+              <p role="alert" className="t-cap text-destructive">
                 {error}
               </p>
             )}
@@ -350,15 +350,13 @@ export const AddToCellarSheet = ({
       >
         <div className="flex flex-col gap-5 pb-2">
           {cellars.length === 1 ? (
-            <p className="flex min-h-11 items-center gap-3 rounded-lg bg-surface-1 px-4 type-body">
+            <p className="flex min-h-11 items-center gap-3 rounded-lg bg-surface-1 px-4 t-body">
               <Cellar aria-hidden className="size-5 text-ink-2" />
               Into <span className="text-ink-1">{cellarName}</span>
             </p>
           ) : (
             <fieldset className="flex flex-col gap-2">
-              <legend className="type-overline mb-2 px-4 text-ink-3">
-                Into
-              </legend>
+              <legend className="t-micro mb-2 px-4 text-ink-3">Into</legend>
               <RadioGroup
                 value={cellarId ?? ""}
                 onValueChange={setCellarId}
@@ -370,7 +368,7 @@ export const AddToCellarSheet = ({
                     <label
                       key={cellar.id}
                       htmlFor={id}
-                      className="flex min-h-11 items-center gap-3 px-4 py-2 type-body text-ink-1 active:bg-surface-3"
+                      className="flex min-h-11 items-center gap-3 px-4 py-2 t-body text-ink-1 active:bg-surface-3"
                     >
                       <RadioGroupItem id={id} value={cellar.id} />
                       <span className="min-w-0 truncate">{cellar.name}</span>
@@ -382,7 +380,7 @@ export const AddToCellarSheet = ({
           )}
 
           <div className="flex min-h-11 items-center justify-between gap-3 rounded-lg bg-surface-1 px-4 py-1">
-            <span id={quantityId} className="type-body text-ink-1">
+            <span id={quantityId} className="t-body text-ink-1">
               Bottles
             </span>
             <fieldset
@@ -400,7 +398,7 @@ export const AddToCellarSheet = ({
               </IconButton>
               <output
                 aria-live="polite"
-                className="tabular w-8 text-center type-headline"
+                className="tabular w-8 text-center t-head"
               >
                 {quantity}
               </output>
@@ -423,10 +421,10 @@ export const AddToCellarSheet = ({
             className="flex min-h-11 items-center justify-between gap-3 rounded-lg bg-surface-1 px-4 py-2"
           >
             <span className="flex flex-col">
-              <span className="type-body text-ink-1">
+              <span className="t-body text-ink-1">
                 {quantity === 1 ? "Already open?" : "One already open?"}
               </span>
-              <span className="type-footnote">
+              <span className="t-cap text-ink-3">
                 It starts at today, full — set the level on its page.
               </span>
             </span>

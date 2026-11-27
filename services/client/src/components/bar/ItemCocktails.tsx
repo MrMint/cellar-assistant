@@ -53,7 +53,7 @@ export function ItemCocktails({ itemId, type }: ItemCocktailsProps) {
         <Link
           href="/recipes/bar"
           underline="none"
-          className="relative type-footnote font-medium text-ink-2 after:absolute after:-inset-3 after:content-['']"
+          className="relative t-cap font-medium text-ink-2 after:absolute after:-inset-3 after:content-['']"
         >
           What can I make
         </Link>
@@ -68,7 +68,7 @@ export function ItemCocktails({ itemId, type }: ItemCocktailsProps) {
         />
       ))}
       {more > 0 && (
-        <p className="px-4 py-2.5 type-footnote">
+        <p className="px-4 py-2.5 t-cap text-ink-3">
           {`${more} more ${more === 1 ? "cocktail" : "cocktails"}`}
         </p>
       )}

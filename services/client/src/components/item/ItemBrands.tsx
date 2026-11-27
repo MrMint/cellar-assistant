@@ -99,7 +99,7 @@ export const ItemBrands = ({
   if (brands.length === 0) {
     return change === undefined ? null : (
       <ItemSection title={title}>
-        <p className="type-callout text-ink-3">No brand recorded yet.</p>
+        <p className="t-cap text-ink-3">No brand recorded yet.</p>
         {change}
       </ItemSection>
     );
@@ -121,14 +121,14 @@ export const ItemBrands = ({
                 <Link
                   href={`/brands/${primaryBrand.brand.id}`}
                   underline="always"
-                  className="type-body font-medium text-ink-1"
+                  className="t-body font-medium text-ink-1"
                 >
                   {primaryBrand.brand.name}
                 </Link>
                 <Badge variant="secondary">Primary</Badge>
               </div>
               {primaryBrand.brand.brand_type !== null && (
-                <p className="type-callout text-ink-2">
+                <p className="t-cap text-ink-2">
                   {formatBrandType(primaryBrand.brand.brand_type)}
                 </p>
               )}
@@ -143,12 +143,12 @@ export const ItemBrands = ({
               <Link
                 href={`/brands/${brandRelation.brand.id}`}
                 underline="always"
-                className="type-callout text-ink-1"
+                className="t-cap text-ink-1"
               >
                 {brandRelation.brand.name}
               </Link>
               {brandRelation.brand.brand_type !== null && (
-                <p className="type-footnote">
+                <p className="t-cap text-ink-3">
                   {formatBrandType(brandRelation.brand.brand_type)}
                 </p>
               )}

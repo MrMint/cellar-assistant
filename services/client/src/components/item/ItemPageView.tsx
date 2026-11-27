@@ -90,9 +90,10 @@ function PaneBody({ children }: { children: ReactNode }) {
  * "Cocktails with this" (X14 — so spirits show recipes), food recipes, your
  * review and everyone's, the producer under one title per type (with D8's
  * one-tap brand change for the creator), where it is, and the lists it is
- * on. The ActionBar — Log a drink · Add to cellar · Want to try · `⋯` — rides
- * 12 pt above the tab bar, in flow after the last section so nothing hides
- * under it.
+ * on. There is no bottom bar (Cellars-Bottles 01): Check in and Log sit in
+ * the open bottle row, Want to try beside the heart, and everything else in
+ * the bar's `⋯` menu (`parts/ItemMenu`). With `pane` the same body renders at
+ * pane width, without the full-bleed hero (`ItemPane`).
  */
 export function ItemPageView({
   item,
