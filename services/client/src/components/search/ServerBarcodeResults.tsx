@@ -86,14 +86,14 @@ export async function ServerBarcodeResults({ code }: { code: string }) {
   // display site that must go through `displayBarcode`.
   // F-101: a read that throws (transport, GraphQL) is this face's failure,
   // not error.tsx's — the search box above stays.
-  const read = await apiServerQuery(SearchBarcodeQuery, {
+  const { barcode: lookup } = await apiServerQuery(SearchBarcodeQuery, {
     code,
     first: BARCODE_SEARCH_LIMIT,
   }).catch((error: unknown) => {
     console.error("[search] the barcode read failed:", error);
-    return null;
+    return { barcode: null };
   });
-  const result = read === null ? null : unwrapResult(read.barcode, "Barcode");
+  const result = lookup === null ? null : unwrapResult(lookup, "Barcode");
 
   let results: SearchResultItem[] = [];
   if (result?.ok) {
