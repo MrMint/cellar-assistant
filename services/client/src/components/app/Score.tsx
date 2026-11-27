@@ -10,7 +10,7 @@ export type ScoreProps = {
   /** 0–5; an average may carry more precision than half steps. */
   value: number | null | undefined;
   /**
-   * `inline` "4.5★" in running text, `pill` on tiles, `hero` big Fraunces
+   * `inline` "4.5★" in running text, `pill` on tiles, `hero` the t-score
    * numeral on a detail page.
    */
   variant?: "inline" | "pill" | "hero";
@@ -59,8 +59,8 @@ export function Score({
         data-variant="hero"
         className={cn("inline-flex items-baseline gap-2", className)}
       >
-        <span className="type-numeral-xl tabular text-ink-1">{text}</span>
-        <span className="type-footnote">
+        <span className="t-score tabular text-ink">{text}</span>
+        <span className="t-cap tabular text-ink-3">
           / {RATING_MAX}
           {count !== undefined && count > 0 && ` · ${count}`}
         </span>
@@ -76,16 +76,15 @@ export function Score({
       data-variant={variant}
       className={cn(
         "tabular inline-flex items-center gap-0.5 whitespace-nowrap",
-        variant === "pill" &&
-          "h-6 rounded-full bg-surface-3 px-2 font-semibold text-ink-1 text-xs",
-        variant === "inline" && "font-medium text-ink-2",
+        variant === "pill" && "t-micro h-6 rounded-sm bg-sel px-2 text-ink",
+        variant === "inline" && "t-cap font-semibold text-ink-2",
         className,
       )}
     >
       {text}
       <Star aria-hidden className="size-[0.9em] fill-current" strokeWidth={0} />
       {count !== undefined && count > 0 && (
-        <span className="ml-1 text-ink-3">({count})</span>
+        <span className="ml-1 font-normal text-ink-3">({count})</span>
       )}
     </span>
   );

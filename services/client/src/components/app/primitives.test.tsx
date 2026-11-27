@@ -17,7 +17,7 @@ import { ITEM_TYPE_ORDER } from "@/lib/tokens";
 import { ActionBar } from "./ActionBar";
 import { AIDraftField, CONFIDENCE_LABEL } from "./AIDraftField";
 import { contentLayout } from "./AppShell";
-import { EmptyState } from "./EmptyState";
+import { EmptyState, ErrorState } from "./EmptyState";
 import { FilterChip } from "./FilterChip";
 import { IconButton } from "./IconButton";
 import * as icons from "./icons";
@@ -32,7 +32,7 @@ import {
   TABS,
 } from "./nav";
 import { nextNavStack } from "./nav-history";
-import { InsetSection, ListRow, Page } from "./Page";
+import { HERO_DISC, InsetSection, ListRow, Page, PageHero } from "./Page";
 import { formatScore, Score } from "./Score";
 import { SkipLink } from "./SkipLink";
 import { ITEM_TYPES_IN_ORDER, itemTypeTokens, TypeChip } from "./TypeChip";
@@ -256,18 +256,36 @@ describe("Page, InsetSection, ListRow", () => {
     assert.match(classOf(html(<Page />), "page"), /max-w-\[720px\]/);
     assert.match(classOf(html(<Page wide />), "page"), /max-w-\[1120px\]/);
   });
-  test("InsetSection: an overline heading over a borderless surface", () => {
+  test("InsetSection: a t-cap label over one card, rows split by rules", () => {
     const m = html(
       <InsetSection label="In this cellar">
         <ListRow title="Barolo" description="2016 · 2 bottles" />
       </InsetSection>,
     );
-    assert.match(m, /<h2 class="type-overline[^"]*">In this cellar<\/h2>/);
-    assert.match(m, /bg-surface-1/);
-    assert.doesNotMatch(m, /\bborder\b(?!-)/);
+    assert.match(m, /<h2 class="t-cap[^"]*">In this cellar<\/h2>/);
+    assert.match(m, /border-edge bg-card/);
+    assert.match(m, /divide-rule/);
     assert.match(m, /Barolo/);
     assert.match(m, /2016 · 2 bottles/);
-    assert.match(classOf(m, "list-row"), /min-h-11/);
+    assert.match(classOf(m, "list-row"), /min-h-14/);
+  });
+  test("PageHero: a 300 photo, glass discs, the name in t-title", () => {
+    const m = html(
+      <PageHero
+        photo={<span />}
+        back={
+          <a href="/cellars" aria-label="Back" className={HERO_DISC}>
+            x
+          </a>
+        }
+        title="Orval"
+        meta="Brasserie d'Orval · Trappist"
+      />,
+    );
+    assert.match(m, /h-\[300px\]/);
+    assert.match(m, /<h1 class="t-title[^"]*">Orval<\/h1>/);
+    assert.match(m, /bg-glass/);
+    assert.match(m, /rounded-disc/);
   });
 });
 
@@ -334,13 +352,13 @@ describe("Score", () => {
     assert.equal(html(<Score value={null} />), "");
     assert.equal(html(<Score value={undefined} variant="hero" />), "");
   });
-  test("hero is the Fraunces numeral", () => {
-    assert.match(html(<Score value={4} variant="hero" />), /type-numeral-xl/);
+  test("hero is the t-score numeral", () => {
+    assert.match(html(<Score value={4} variant="hero" />), /t-score/);
   });
 });
 
 describe("EmptyState", () => {
-  test("one Fraunces line, one Inter line, one action", () => {
+  test("one glyph, one t-head message, one action", () => {
     const m = html(
       <EmptyState
         illustration={<icons.Cellar />}
@@ -349,25 +367,41 @@ describe("EmptyState", () => {
         action={<button type="button">Snap a bottle</button>}
       />,
     );
-    assert.match(m, /type-title-1[^>]*>Your cellar is waiting\./);
-    assert.match(m, /Snap a bottle to start\./);
+    assert.match(m, /t-head[^>]*>Your cellar is waiting\./);
+    assert.match(m, /text-glyph/);
+    assert.match(m, /t-cap[^>]*>Snap a bottle to start\./);
+    assert.equal(m.match(/<button/g)?.length, 1);
+  });
+  test("an error says what happened and the one way out, announced", () => {
+    const m = html(
+      <ErrorState
+        title="Couldn't load Home cellar"
+        reason="You're offline"
+        action={<button type="button">Try again</button>}
+        boxed
+      />,
+    );
+    assert.match(m, /role="alert"/);
+    assert.match(m, /Couldn&#x27;t load Home cellar/);
+    assert.match(classOf(m, "empty-state"), /border-edge/);
     assert.equal(m.match(/<button/g)?.length, 1);
   });
 });
 
 describe("AIDraftField", () => {
-  test("drafted: a teal rule and the source's mark", () => {
+  test('drafted: the sparkle and "From the label" on the label row', () => {
     const m = html(
       <AIDraftField source="label" drafted confidence="check">
         <input aria-label="Name" />
       </AIDraftField>,
     );
     assert.match(m, /data-ai-draft="label"/);
-    assert.match(classOf(m, "ai-draft-field"), /border-ai/);
-    assert.match(m, /From label · Check this/);
+    assert.match(m, /From the label · Check this/);
+    assert.match(classOf(m, "ai-draft-mark"), /t-micro/);
+    assert.match(classOf(m, "ai-draft-mark"), /text-ink-2/);
     assert.equal(CONFIDENCE_LABEL.check, "Check this");
   });
-  test("edited: the same wrapper, no mark, no rule", () => {
+  test("edited: the same wrapper, no line", () => {
     const m = html(
       <AIDraftField source="pin" drafted={false}>
         <input aria-label="City" />
@@ -376,7 +410,6 @@ describe("AIDraftField", () => {
     assert.match(m, /data-slot="ai-draft-field"/);
     assert.doesNotMatch(m, /data-ai-draft=/);
     assert.doesNotMatch(m, /ai-draft-mark/);
-    assert.doesNotMatch(classOf(m, "ai-draft-field"), /border-ai/);
   });
   test("X19: a proposal is a chip under the field — offered, never applied", () => {
     const m = html(
@@ -400,14 +433,14 @@ describe("AIDraftField", () => {
     // Not drafted: the field itself carries no mark until the chip is used.
     assert.doesNotMatch(m, /data-ai-draft=/);
   });
-  test("teal is the AI's colour and nothing else's: no brass in the mark", () => {
+  test("the words carry it: no colour of its own, no gold or act in the line", () => {
     for (const source of ["label", "suggested", "pin", "barcode"] as const) {
       const m = html(
         <AIDraftField source={source} drafted>
           <span />
         </AIDraftField>,
       );
-      assert.doesNotMatch(m, /primary|brass/, source);
+      assert.doesNotMatch(m, /primary|gold|bg-act|text-ai|border-ai/, source);
     }
   });
 });
@@ -429,9 +462,9 @@ describe("ActionBar", () => {
 });
 
 describe("UserAvatar", () => {
-  test("the initial without a photo", () => {
+  test("two initials without a photo", () => {
     const m = html(<UserAvatar displayName="test two" size="sm" />);
-    assert.match(m, />T</);
+    assert.match(m, />TT</);
     assert.match(classOf(m, "user-avatar"), /size-8/);
   });
   test("the photo, named, when there is one", () => {

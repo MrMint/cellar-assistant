@@ -33,6 +33,7 @@ export type UseStarRatingInputOptions = {
  *   so sliding a thumb across the stars to scroll sets nothing.
  * - A click that *is* a radio's own (VoiceOver's double-tap, Space) bubbles
  *   to the star as well; the star ignores it, or it would be applied twice.
+ *   A click on the star's `HapticOverlay` is a real tap and counts.
  * - A key with Alt, Ctrl or Meta held is the browser's or the OS's
  *   (Alt+Left is Back), never the rating's.
  * - **Clear** unmounts its own button, so focus moves to the first radio
@@ -84,8 +85,12 @@ export function useStarRatingInput({
   const onStarClick = useCallback(
     (star: number) => (event: MouseEvent<HTMLElement>) => {
       if (disabled) return;
+      // A radio's own click (VoiceOver, Space) is not a tap on the star; the
+      // haptic overlay's checkbox is, so only the radios are skipped.
       const target = event.target as Element | null;
-      if (target !== null && target.tagName === "INPUT") return;
+      const overlay =
+        (target as HTMLElement | null)?.dataset?.slot === "haptic-overlay";
+      if (target?.tagName === "INPUT" && !overlay) return;
       const next = tapStar(star, current);
       commit(next);
       focusValue(next);

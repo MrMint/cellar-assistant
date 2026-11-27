@@ -1,4 +1,7 @@
+"use client";
+
 import type { ComponentProps, ReactNode } from "react";
+import { feedback } from "@/lib/feedback";
 import { cn } from "@/lib/utils";
 
 export type FilterChipProps = Omit<ComponentProps<"button">, "children"> & {
@@ -8,20 +11,29 @@ export type FilterChipProps = Omit<ComponentProps<"button">, "children"> & {
   icon?: ReactNode;
   /** Shown after the label, hidden when zero (design §3.7). */
   count?: number;
+  /**
+   * The label's guess, not yet the person's choice: a dashed boundary (the
+   * kit's kind picker in a read-from-the-label form).
+   */
+  guess?: boolean;
 };
 
 /**
- * A pill that filters a list (replaces clickable Joy `Chip`s). A toggle
- * button — `aria-pressed` — 36 px tall inside a 44 px target. Selected is
- * an inked surface, not brass: a filter is state, not an action.
+ * KIT § 2 "Chips": a toggle button (`aria-pressed`), 44 tall, r8, edge, the
+ * label in t-head and its count in t-cap; on is a sel fill with edge-2 and
+ * ink (a filter is state, not action: never act, never gold). Press .97 and
+ * the press sound, down and up.
  */
 export function FilterChip({
   selected,
   icon,
   count,
+  guess = false,
   className,
   children,
   type = "button",
+  onPointerDown,
+  onPointerUp,
   ...props
 }: FilterChipProps) {
   return (
@@ -30,19 +42,35 @@ export function FilterChip({
       aria-pressed={selected}
       data-slot="filter-chip"
       data-selected={selected ? "" : undefined}
+      onPointerDown={(event) => {
+        onPointerDown?.(event);
+        feedback("press", { phase: "down" });
+      }}
+      onPointerUp={(event) => {
+        onPointerUp?.(event);
+        feedback("press", { phase: "up" });
+      }}
       className={cn(
-        "relative inline-flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-3.5 font-medium text-sm outline-none transition-[color,background-color,transform] duration-(--ca-dur-micro) ease-standard after:absolute after:-inset-y-1 after:inset-x-0 after:content-[''] focus-visible:ring-[3px] focus-visible:ring-ring/50 active:scale-97 disabled:opacity-50 motion-reduce:active:scale-100 [&_svg:not([class*='size-'])]:size-4",
+        "relative inline-flex h-11 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md border px-3.5 outline-none transition-[color,background-color,border-color,transform] duration-(--ca-dur-micro) ease-standard focus-visible:outline-2 focus-visible:outline-act-ink focus-visible:outline-offset-2 active:scale-97 disabled:opacity-40 motion-reduce:active:scale-100 [&_svg:not([class*='size-'])]:size-4",
         selected
-          ? "bg-ink-1 text-background"
-          : "bg-surface-2 text-ink-2 hover:bg-surface-3",
+          ? "border-edge-2 bg-sel text-ink"
+          : "border-edge text-ink-2 active:bg-raised [@media(hover:hover)]:hover:bg-raised",
+        guess && "border-dash border-dashed",
         className,
       )}
       {...props}
     >
       {icon}
-      {children}
+      <span className="t-head">{children}</span>
       {count !== undefined && count > 0 && (
-        <span className="tabular text-xs opacity-70">{count}</span>
+        <span
+          className={cn(
+            "t-cap tabular",
+            selected ? "text-ink-2" : "text-ink-3",
+          )}
+        >
+          {count}
+        </span>
       )}
     </button>
   );

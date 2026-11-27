@@ -1,5 +1,8 @@
 "use client";
 
+import { motion } from "motion/react";
+import { useState } from "react";
+
 import {
   formatRating,
   RATING_STARS,
@@ -11,61 +14,10 @@ import {
 } from "@/components/common/rating/rating";
 import { useStarRatingInput } from "@/components/common/rating/useStarRatingInput";
 import { Button } from "@/components/ui/button";
+import { feedback, HapticOverlay } from "@/lib/feedback";
+import { spring, staggerDelay } from "@/lib/motion";
 import { cn } from "@/lib/utils";
-
-const STAR_PATH =
-  "M12 17.27 18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z";
-
-/**
- * One star, filled to `fraction` (0–1) from the left. Decorative. Empty is
- * an outline (it is the only affordance before a first tap, so it must read
- * at 3:1 against the surface); filled is solid.
- */
-function StarGlyph({
-  fraction,
-  className,
-  fillClass,
-}: {
-  fraction: number;
-  className?: string;
-  fillClass: string;
-}) {
-  return (
-    <span
-      aria-hidden="true"
-      data-slot="star"
-      className={cn("relative inline-block shrink-0", className)}
-    >
-      <svg
-        viewBox="0 0 24 24"
-        className="block size-full fill-none stroke-current text-ink-3"
-        strokeWidth={1.5}
-        strokeLinejoin="round"
-        focusable="false"
-        aria-hidden="true"
-      >
-        <path d={STAR_PATH} />
-      </svg>
-      {fraction > 0 && (
-        <span
-          data-fraction={fraction}
-          className="absolute inset-y-0 left-0 overflow-hidden"
-          style={{ width: `${fraction * 100}%` }}
-        >
-          <svg
-            viewBox="0 0 24 24"
-            className={cn("block h-full fill-current", fillClass)}
-            style={{ width: `${100 / fraction}%` }}
-            focusable="false"
-            aria-hidden="true"
-          >
-            <path d={STAR_PATH} />
-          </svg>
-        </span>
-      )}
-    </span>
-  );
-}
+import { formatKitScore, StarGlyph } from "./parts/Stars";
 
 export type RatingInputProps = {
   value: number | null | undefined;
@@ -79,7 +31,11 @@ export type RatingInputProps = {
 };
 
 /**
- * The N30 half-star rating input, on the app's tokens. All behaviour is ux/rating's `useStarRatingInput`: ten
+ * The N30 half-star rating input, in the kit (KIT § 2 "Stars"): the owner's
+ * gold over glyph outlines, the score in t-score beside them, a tick per
+ * star (felt on an iPhone through each star's `HapticOverlay`), and on a
+ * tap the filled stars pop in turn (SPEC § Movements 11; under reduced
+ * motion the values change only). All behaviour is ux/rating's `useStarRatingInput`: ten
  * native radios named "3.5 stars, Good+", 44 pt star targets, tap a star for
  * that many and again for the half below, arrows by halves, Home/End, and no
  * commit on pointer-leave or hover — a thumb sliding across the stars to
@@ -101,7 +57,18 @@ export function RatingInput({
     onStarClick,
     onRadioChange,
     clear,
-  } = useStarRatingInput({ value, onChange, onClear, disabled });
+  } = useStarRatingInput({
+    value,
+    onChange: (next) => {
+      feedback("tick");
+      setPops((n) => n + 1);
+      onChange(next);
+    },
+    onClear,
+    disabled,
+  });
+  /* Each commit the person makes pops the filled stars once (0: none yet). */
+  const [pops, setPops] = useState(0);
   const fractions = starFractions(current);
   const word = ratingLabel(current);
 
@@ -111,7 +78,7 @@ export function RatingInput({
       data-disabled={disabled ? "" : undefined}
       className={cn(
         "flex flex-wrap items-center gap-x-3 gap-y-1",
-        disabled && "opacity-60",
+        disabled && "opacity-40",
         className,
       )}
     >
@@ -134,11 +101,21 @@ export function RatingInput({
               disabled ? "cursor-default" : "cursor-pointer",
             )}
           >
-            <StarGlyph
-              fraction={fractions[i] ?? 0}
-              className="size-8"
-              fillClass="text-primary"
-            />
+            <motion.span
+              key={(fractions[i] ?? 0) > 0 ? pops : 0}
+              className="inline-flex"
+              initial={
+                pops > 0 && (fractions[i] ?? 0) > 0 ? { scale: 0.6 } : false
+              }
+              animate={{ scale: 1 }}
+              transition={{ ...spring.celebrate, delay: staggerDelay(i) }}
+            >
+              <StarGlyph
+                fraction={fractions[i] ?? 0}
+                className="size-10"
+                fillClass="text-gold"
+              />
+            </motion.span>
             {[star - RATING_STEP, star].map((v) => (
               <input
                 key={v}
@@ -153,10 +130,16 @@ export function RatingInput({
                 onChange={onRadioChange}
               />
             ))}
+            {!disabled && <HapticOverlay />}
           </span>
         ))}
       </div>
-      <p className="type-footnote m-0">
+      {current !== null && (
+        <span data-slot="rating-score" className="t-score tabular text-ink">
+          {formatKitScore(current)}
+        </span>
+      )}
+      <p className="t-cap m-0 basis-full text-ink-2">
         {current === null
           ? "Tap a star to rate"
           : `${formatRating(current)} · ${word ?? ""}${
@@ -164,7 +147,7 @@ export function RatingInput({
             }`}
       </p>
       {onClear !== undefined && current !== null && (
-        <Button size="sm" variant="ghost" onClick={clear} disabled={disabled}>
+        <Button variant="quiet-muted" onClick={clear} disabled={disabled}>
           Clear rating
         </Button>
       )}
@@ -172,7 +155,10 @@ export function RatingInput({
   );
 }
 
-/** A read-only row of stars: one image named "Rated 3.5 out of 5". */
+/**
+ * A read-only row of stars in ink-2 (reviews: anyone's, so never gold): one
+ * image named "Rated 3.5 out of 5". The owner's own are `parts/Stars`.
+ */
 export function RatingDisplay({
   value,
   size = "sm",
