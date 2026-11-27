@@ -99,7 +99,7 @@ test("semantic item search returns ranked results", async ({ api }) => {
 const searchBox = (page: import("@playwright/test").Page) =>
   page.getByRole("textbox").first();
 
-test("the search sheet: its title and Close, Scan, Photo — and no quick-link chips (X01, X10)", async ({
+test("the search page on a desktop: Look in, Photo, no Scan — and no quick-link chips (X01, X10)", async ({
   api,
   primary,
 }) => {
@@ -113,17 +113,22 @@ test("the search sheet: its title and Close, Scan, Photo — and no quick-link c
   const { imageSearch, labelRead } = await aiCapabilities(api);
   const noise = watch(primary);
   await primary.goto("/search");
-  // X10: a full-screen sheet with a title and Close; the greeting is Home's.
+  // Recipes-Search-desktop: the page keeps its "Search" heading for a
+  // screen reader; Close is the phone sheet's (m01), and the desktop has the
+  // sidebar instead. The greeting is Home's.
   await expect(
     primary.getByRole("heading", { name: "Search", level: 1 }),
-  ).toBeVisible();
+  ).toHaveCount(1);
   await expect(
     primary.getByRole("button", { name: "Close search" }),
-  ).toBeVisible();
+  ).toBeHidden();
+  // No query: the Look in tiles, one per section.
+  await expect(primary.getByRole("heading", { name: "Look in" })).toBeVisible();
   await expect(
     primary.getByRole("heading", { name: /^Good (morning|afternoon|evening)/ }),
   ).toHaveCount(0);
-  await expect(primary.getByRole("button", { name: "Scan" })).toBeVisible();
+  // A desktop has no camera to scan with: Scan is the phone's segment.
+  await expect(primary.getByRole("button", { name: "Scan" })).toBeHidden();
   const photo = primary.getByRole("button", { name: "Photo" });
   // L13: Photo also reads a label when the stack cannot search by image
   // (X06's fallback), so it shows when either is on.
@@ -199,7 +204,7 @@ test("typing searches on the debounce and renders sections or one empty state (X
   // empty state. Never a blank results area: with no embedding provider
   // every section still matches by name (D25), so "nothing" is honest.
   const sections = primary.locator("[data-search-sections]");
-  const empty = primary.getByText("Nothing called “a bold red wine” yet.");
+  const empty = primary.getByText("Nothing matches “a bold red wine”");
   await expect(sections.or(empty)).toBeVisible({ timeout: 30_000 });
   await settleNetwork(primary);
   if ((await sections.count()) > 0) {
@@ -211,15 +216,15 @@ test("typing searches on the debounce and renders sections or one empty state (X
     );
     const d10 = ["bottles", "items", "places", "recipes", "people", "brands"];
     expect(order).toEqual(d10.filter((name) => order.includes(name)));
-    // Three rows a section at most, before See all.
+    // Six rows a section at most from md (three on a phone), before See all.
     for (const name of order) {
       const rows = await primary
         .locator(`[data-search-section="${name}"] [data-search-row]`)
         .count();
       expect(
         rows,
-        `section ${name} shows more than three rows`,
-      ).toBeLessThanOrEqual(3);
+        `section ${name} shows more than six rows`,
+      ).toBeLessThanOrEqual(6);
     }
   }
   expect(noise.pageErrors, "the search page threw").toEqual([]);
@@ -269,11 +274,9 @@ test("a scanned code is looked up server-side from ?barcode=", async ({
   const noise = watch(primary);
   await primary.goto("/search?barcode=0000000000000");
   await expect(
-    primary.getByText("Barcode search results", { exact: true }),
+    primary.getByText("No drink matches this barcode"),
   ).toBeVisible();
-  await expect(
-    primary.getByText("No items found matching the barcode"),
-  ).toBeVisible();
+  await expect(primary.getByRole("link", { name: "Add it" })).toBeVisible();
   expect(noise.pageErrors).toEqual([]);
 });
 
@@ -282,7 +285,7 @@ test("an old image-results link, with no photo behind it, asks for a new one (G3
 }) => {
   await primary.goto("/search?image_no_results=true");
   await expect(
-    primary.getByText(/This image search link has expired/),
+    primary.getByText("This photo search has expired"),
   ).toBeVisible();
 });
 
@@ -573,6 +576,8 @@ test("the search sheet and Home draw their box and field once the app runs (L1)"
 test("Close then Back does not reopen the search sheet (leftovers 9)", async ({
   primary,
 }) => {
+  // Close is the phone sheet's; from md the sidebar stays and there is none.
+  await primary.setViewportSize({ width: 390, height: 844 });
   await primary.goto("/");
   await primary
     .getByRole("link", { name: "Search bottles, places and recipes" })
@@ -609,9 +614,9 @@ test("a text search has a Brands section, its See all into /brands (D1, D10)", a
   const noise = watch(primary);
   await primary.goto(`/search?q=${encodeURIComponent(brand.name)}`);
   const brands = primary.locator('[data-search-section="brands"]');
-  await expect(
-    brands.getByRole("heading", { name: "Brands", exact: true }),
-  ).toBeVisible({ timeout: 30_000 });
+  await expect(brands.getByRole("heading", { name: /^Brands\b/ })).toBeVisible({
+    timeout: 30_000,
+  });
   await expect(brands.locator(`a[href="/brands/${brand.id}"]`)).toBeVisible();
   expect(noise.pageErrors, "the search page threw").toEqual([]);
 

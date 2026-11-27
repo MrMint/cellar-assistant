@@ -6,12 +6,12 @@ import { Gql } from "../../fixtures/test.ts";
 
 /**
  * X12 (D9, D10) — universal search at 390x844: one results page of sections,
- * Your bottles · Items · Places · Recipes · People · Brands, three rows each
- * with "See all".
+ * Your bottles · Drinks · Places · Recipes · People · Brands, three rows each
+ * with "See all". Drinks leaves out what is already in your bottles.
  *
  * Fixtures: one PRIVATE cellar holding one bottle of a tea with a unique name
  * (a tea needs no onboarding), and nothing else — no places are created. The
- * tea's name is unique, so "Your bottles" and "Items" can be asserted by name
+ * tea's name is unique, so "Your bottles" and "Drinks" can be asserted by name
  * without depending on what else this stack's catalog holds.
  */
 
@@ -115,7 +115,7 @@ test("typing shows your bottle and the item, each in its own section, and the bo
     timeout: 30_000,
   });
   await expect(
-    bottles.getByRole("heading", { name: "Your bottles" }),
+    bottles.getByRole("heading", { name: /^Your bottles/ }),
   ).toBeVisible();
   const bottle = bottles.getByRole("link", { name: teaName });
   await expect(bottle).toBeVisible();
@@ -125,16 +125,17 @@ test("typing shows your bottle and the item, each in its own section, and the bo
     `/cellars/${cellarId}/teas/${bottleId}`,
   );
 
+  // Ruling 1: a drink already in your bottles is not listed again in Drinks.
   const items = section(page, "items");
-  await expect(items.getByRole("link", { name: teaName })).toBeVisible();
+  await expect(items.getByRole("link", { name: teaName })).toHaveCount(0);
 
-  // Sections come in D10's order: bottles above items.
+  // Sections come in D10's order: bottles first.
   const order = await page.evaluate(() =>
     [...document.querySelectorAll("[data-search-section]")].map((el) =>
       el.getAttribute("data-search-section"),
     ),
   );
-  expect(order.indexOf("bottles")).toBeLessThan(order.indexOf("items"));
+  expect(order[0]).toBe("bottles");
 
   // N01: the results replaced themselves under the box; the box is the same.
   await expect(box).toBeFocused();
@@ -159,11 +160,11 @@ test("typing shows your bottle and the item, each in its own section, and the bo
   expect(noise.pageErrors, "the search page threw").toEqual([]);
 });
 
-test("See all opens one section in place, and All results comes back", async ({
+test("See all opens one section in place, and All comes back", async ({
   page,
   noise,
 }) => {
-  const { teaName } = need();
+  need();
   // A two-word prefix every E12 tea shares, so Items has more than three
   // when earlier runs left their teas behind (items have no delete) — and
   // when it does not, the opened section is reached by URL instead.
@@ -178,15 +179,21 @@ test("See all opens one section in place, and All results comes back", async ({
     await page.goto(`/search?q=${encodeURIComponent(term)}&in=items`);
   }
   await page.waitForURL((url) => url.searchParams.get("in") === "items");
+  // The Drinks chip is lit; earlier runs' teas (no longer in a cellar) are
+  // the drinks, or the section says it found none.
+  const scopes = page.locator("[data-search-scopes]");
+  await expect(scopes.getByRole("link", { name: /^Drinks/ })).toHaveAttribute(
+    "aria-current",
+    "page",
+  );
   await expect(
-    page.getByRole("heading", { name: `Items for “${term}”` }),
+    section(page, "items").or(page.getByText(`No drinks match “${term}”`)),
   ).toBeVisible();
-  await expect(page.getByRole("link", { name: teaName })).toBeVisible();
   // Only the opened section is drawn.
   await expect(section(page, "bottles")).toHaveCount(0);
   await expect(searchBox(page)).toHaveValue(term);
 
-  await page.getByRole("link", { name: "All results" }).tap();
+  await scopes.getByRole("link", { name: /^All/ }).tap();
   await page.waitForURL(
     (url) =>
       url.searchParams.get("in") === null && url.searchParams.get("q") === term,
@@ -201,13 +208,12 @@ test("a search that matches nothing is one empty state with one action", async (
 }) => {
   const nothing = unique("zqxj nothing");
   await page.goto(`/search?q=${encodeURIComponent(nothing)}`);
-  await expect(page.getByText(`Nothing called “${nothing}” yet.`)).toBeVisible({
+  await expect(page.getByText(`Nothing matches “${nothing}”`)).toBeVisible({
     timeout: 30_000,
   });
-  const empty = page.locator('[data-slot="empty-state"]');
   await expect(
-    empty.getByRole("link", { name: "Add an item" }),
-  ).toHaveAttribute("href", "/add");
+    page.getByRole("link", { name: `Add “${nothing}”` }),
+  ).toHaveAttribute("href", /^\/add\?name=/);
   await expect(page.locator("[data-search-section]")).toHaveCount(0);
   expect(noise.pageErrors).toEqual([]);
 });
@@ -228,8 +234,9 @@ test("People finds a friend or someone to add, never yourself", async ({
   const people = section(page, "people");
   await expect(people).toBeVisible({ timeout: 30_000 });
   await expect(people).toContainText(name);
-  // Either connected (a link into Friends) or not (an Add button) — this
-  // account's friendship with the other is other specs' business.
+  // Connected (a link into Friends), not yet (Add friend), or a request
+  // either way (Cancel request / Accept) — this account's friendship with the
+  // other is other specs' business.
   const row = people
     .locator("[data-search-row]")
     .filter({ hasText: name })
@@ -237,7 +244,14 @@ test("People finds a friend or someone to add, never yourself", async ({
   const addButton = row.getByRole("button", {
     name: `Add ${name} as a friend`,
   });
+  const pending = row.getByRole("button", {
+    name: new RegExp(`^(Cancel the request to|Accept) ${name}`),
+  });
   const friendsLink = row.getByRole("link", { name });
-  expect((await addButton.count()) + (await friendsLink.count())).toBe(1);
+  expect(
+    (await addButton.count()) +
+      (await pending.count()) +
+      (await friendsLink.count()),
+  ).toBe(1);
   expect(noise.pageErrors).toEqual([]);
 });

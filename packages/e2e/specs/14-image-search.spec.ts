@@ -84,12 +84,12 @@ test("the Photo button photographs, uploads and searches — and says so honestl
     });
     await photo.click();
     await expect(
-      primary.getByText("Take a picture of the label"),
+      primary.getByRole("dialog", { name: "Search by photo" }),
     ).toBeVisible();
     await primary.waitForFunction(
       () => (document.querySelector("video")?.readyState ?? 0) >= 2,
     );
-    await primary.getByRole("button", { name: "Take photo" }).click();
+    await primary.getByRole("button", { name: "Search by this photo" }).click();
     await primary.waitForURL(/\/add\?mode=bottle&photo=/, { timeout: 30_000 });
     await expect(
       primary.locator('[data-slot="capture-preview"] img'),
@@ -105,20 +105,24 @@ test("the Photo button photographs, uploads and searches — and says so honestl
   }
   await photo.click();
 
-  // The old card, verbatim.
-  await expect(primary.getByText("Take a picture of the item")).toBeVisible();
+  // The camera sheet (Recipes-Search 31), in Photo mode.
+  await expect(
+    primary.getByRole("dialog", { name: "Search by photo" }),
+  ).toBeVisible();
   await expect(primary.locator("video")).toBeVisible();
   await primary.waitForFunction(
     () => (document.querySelector("video")?.readyState ?? 0) >= 2,
   );
-  await primary.getByRole("button", { name: "Take photo" }).click();
+  await primary.getByRole("button", { name: "Search by this photo" }).click();
 
   await primary.waitForURL(/\/search\?image=/, { timeout: 60_000 });
   const imageFileId =
     new URL(primary.url()).searchParams.get("image") ?? "missing";
   expect(imageFileId, "the URL carries the uploaded file's id").toMatch(UUID);
   await expect(
-    primary.getByText("Image search results", { exact: true }),
+    primary
+      .getByText("No drink matches this photo")
+      .or(primary.getByRole("heading", { name: /^Matches/ })),
   ).toBeVisible();
 
   // The capability said yes, so the API must agree: a refusal here is the
@@ -129,7 +133,7 @@ test("the Photo button photographs, uploads and searches — and says so honestl
   );
   await expect(
     primary
-      .getByText("No items found matching the image")
+      .getByText("No drink matches this photo")
       .or(primary.locator("a[href*='/wines/'], a[href*='/beers/']").first()),
   ).toBeVisible();
 
@@ -143,7 +147,7 @@ test("the Photo button photographs, uploads and searches — and says so honestl
   );
 
   // X06: the fallback carries the same photo into Add, read as a label.
-  await primary.getByRole("link", { name: "Read the label instead" }).click();
+  await primary.getByRole("link", { name: /^(Read|Snap) the label$/ }).click();
   await primary.waitForURL(/\/add\?mode=bottle&photo=/);
   await expect(
     primary.getByRole("button", { name: "Read this label" }),
@@ -170,7 +174,7 @@ test("another person's search photo is not searchable by you", async ({
   await primary.waitForFunction(
     () => (document.querySelector("video")?.readyState ?? 0) >= 2,
   );
-  await primary.getByRole("button", { name: "Take photo" }).click();
+  await primary.getByRole("button", { name: "Search by this photo" }).click();
   await primary.waitForURL(/\/search\?image=/, { timeout: 60_000 });
   const imageFileId = new URL(primary.url()).searchParams.get("image") ?? "";
 

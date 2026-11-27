@@ -14,6 +14,7 @@ import {
   SearchRecipesSectionQuery,
   type SearchSection,
   searchUnanswered,
+  sectionAnswered,
   semanticSearchFrom,
 } from "./universal-search";
 
@@ -108,13 +109,18 @@ export async function UniversalSearchResults({
   ]);
 
   const data = { bottles, items, places, recipes, people, brands };
+  const asked = SEARCH_SECTIONS.filter(wants);
   return (
     <SearchSections
       query={query}
       focus={focus}
       semanticSearch={semanticSearchFrom(bottles)}
-      unanswered={searchUnanswered(SEARCH_SECTIONS.filter(wants), data)}
-      sections={buildSections(data, { bounded: bounds !== null })}
+      unanswered={searchUnanswered(asked, data)}
+      failed={asked.filter((section) => !sectionAnswered(section, data))}
+      sections={buildSections(data, {
+        bounded: bounds !== null,
+        origin: location,
+      })}
     />
   );
 }

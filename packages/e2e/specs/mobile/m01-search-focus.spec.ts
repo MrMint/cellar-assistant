@@ -22,7 +22,7 @@ import { expect, test } from "../../fixtures/mobile.ts";
 const FIRST = "lag";
 const REST = "avulin";
 
-/** The one search box on `/search`. It has no label yet; it is the only one. */
+/** The one search box on `/search`, labelled "Search"; it is the only one. */
 const searchBox = (page: Page) =>
   page.getByRole("searchbox").or(page.getByRole("textbox")).first();
 

@@ -46,7 +46,7 @@ export type SearchSection = (typeof SEARCH_SECTIONS)[number];
 
 export const SECTION_LABELS: Readonly<Record<SearchSection, string>> = {
   bottles: "Your bottles",
-  items: "Items",
+  items: "Drinks",
   places: "Places",
   recipes: "Recipes",
   people: "People",
@@ -78,22 +78,23 @@ export const sectionFromParam = (
 };
 
 /**
- * Where a section's "See all" goes. Places open on the map, where a list of
- * places belongs, and brands on `/brands` (the same `brandSearch`, with its
- * index around it); every other section opens in place, under the same box
- * (`?in=`), so the search and its focus survive.
+ * Where a section's "See all" goes: always in place, under the same box
+ * (`?in=`), with that section's chip lit, so the search and its focus
+ * survive (Recipes-Search 15). Brands too: there is no brand index (L37).
+ * An opened Places section offers the map beside it (`mapSearchHref`).
  */
-export const seeAllHref = (section: SearchSection, query: string): string => {
-  const q = encodeURIComponent(query);
-  switch (section) {
-    case "places":
-      return `/map?search=${q}`;
-    case "brands":
-      return `/brands?q=${q}`;
-    default:
-      return `/search?q=${q}&in=${section}`;
-  }
-};
+export const seeAllHref = (section: SearchSection, query: string): string =>
+  `/search?q=${encodeURIComponent(query)}&in=${section}`;
+
+/** A scope chip or a "Look in" tile: the section, with or without a query. */
+export const scopeHref = (section: SearchSection, query: string): string =>
+  query === ""
+    ? `/search?in=${section}`
+    : `/search?q=${encodeURIComponent(query)}&in=${section}`;
+
+/** The opened Places section's way to the map, with the same words. */
+export const mapSearchHref = (query: string): string =>
+  `/map?search=${encodeURIComponent(query)}`;
 
 /** Back from an opened section to every section. */
 export const allResultsHref = (query: string): string =>
@@ -138,6 +139,8 @@ export const SearchItemsSectionQuery = graphql(
     itemSearch(text: $term, narrow: true, limit: $limit, first: $limit) {
       __typename
       ... on ItemSearchConnection {
+        totalCount
+        totalIsLowerBound
         edges {
           node {
             __typename
@@ -165,6 +168,8 @@ export const SearchPlacesSectionQuery = graphql(
     placeSearch(query: $term, bounds: $bounds, limit: $limit, first: $limit) {
       __typename
       ... on PlaceSearchConnection {
+        totalCount
+        totalIsLowerBound
         edges {
           node {
             id
@@ -173,6 +178,10 @@ export const SearchPlacesSectionQuery = graphql(
             locality
             region
             rating
+            location {
+              lat
+              lng
+            }
             textRank
             trigramSimilarity
             reviewStatus
@@ -192,6 +201,8 @@ export const SearchRecipesSectionQuery = graphql(
     recipeSearch(term: $term, hybrid: true, limit: $limit, first: $limit) {
       __typename
       ... on RecipeSearchConnection {
+        totalCount
+        totalIsLowerBound
         edges {
           node {
             recipeId
@@ -233,6 +244,8 @@ export const SearchPeopleSectionQuery = graphql(
     ) {
       __typename
       ... on UserSearchConnection {
+        totalCount
+        totalIsLowerBound
         edges {
           node {
             userId
@@ -255,6 +268,8 @@ export const SearchBrandsSectionQuery = graphql(
     brandSearch(term: $term, limit: $limit, first: $limit) {
       __typename
       ... on BrandSearchConnection {
+        totalCount
+        totalIsLowerBound
         edges {
           node {
             id
@@ -308,10 +323,19 @@ export type SearchRow = {
   /** Where the row goes; absent for a person you are not connected to. */
   readonly href?: string;
   readonly thumb: RowThumb;
-  /** An item's average score, trailing. */
+  /** An item's score: the row's third line of stars. */
   readonly score?: number | null;
-  /** A person you could ask: the row ends in "Add". */
-  readonly addFriend?: { readonly userId: string; readonly name: string };
+  /** A place's public rating, at the right with the people glyph. */
+  readonly rating?: number | null;
+  /**
+   * A person who is not your friend: the row ends in Add friend, Cancel
+   * request or Accept, by where things stand (`PersonAction`).
+   */
+  readonly person?: {
+    readonly userId: string;
+    readonly name: string;
+    readonly relation: Exclude<PersonRelation, "FRIEND">;
+  };
 };
 
 export type SectionModel = {
@@ -319,9 +343,22 @@ export type SectionModel = {
   readonly label: string;
   /** Every row the search held; the preview shows the first three. */
   readonly rows: readonly SearchRow[];
-  /** Matches in all — more than `rows` only for bottles, past the limit. */
+  /** Matches in all, from the API's count; never a fetch limit. */
   readonly total: number;
+  /**
+   * The total is the section's cap, not its count (MC-search): there are
+   * at least that many, so it reads "200+" (CROSS-LOT, totals).
+   */
+  readonly totalIsLowerBound: boolean;
+  /** Words after the count: "in Garage" for bottles, "from you" for places. */
+  readonly context?: string;
 };
+
+/** "16", or "200+" when the API says the count is only a lower bound. */
+export const totalLabel = (model: {
+  readonly total: number;
+  readonly totalIsLowerBound: boolean;
+}): string => `${model.total}${model.totalIsLowerBound ? "+" : ""}`;
 
 /** "Wine · Cabernet Sauvignon" — the words that are there, in that order. */
 const joinLine = (parts: readonly (string | null | undefined)[]) => {
@@ -346,44 +383,97 @@ const itemRowParts = (node: ItemCardNode) => {
   };
 };
 
+/** A section's read: its rows and the API's count of what matched. */
+export type SectionRows = {
+  readonly rows: SearchRow[];
+  readonly total: number;
+  readonly totalIsLowerBound: boolean;
+  readonly context?: string;
+};
+
+const NO_ROWS: SectionRows = { rows: [], total: 0, totalIsLowerBound: false };
+
+/** The API's count, never below the rows in hand, and never a limit. */
+const withTotal = (
+  rows: SearchRow[],
+  found: { totalCount?: number | null; totalIsLowerBound?: boolean },
+): SectionRows => ({
+  rows,
+  total: Math.max(found.totalCount ?? 0, rows.length),
+  totalIsLowerBound:
+    found.totalCount == null ? false : (found.totalIsLowerBound ?? false),
+});
+
+/** The item behind a row, so Drinks can leave out what Your bottles shows. */
+const itemKey = (type: string, itemId: string) => `${type}:${itemId}`;
+
 export const bottleRows = (
   data: ResultOf<typeof SearchBottlesQuery> | undefined,
-): { rows: SearchRow[]; total: number } => {
+): SectionRows & { readonly itemKeys: ReadonlySet<string> } => {
   const found = data?.me?.bottleSearch;
-  if (found === undefined) return { rows: [], total: 0 };
+  if (found === undefined) return { ...NO_ROWS, itemKeys: new Set() };
+  const itemKeys = new Set<string>();
+  const cellars = new Set(found.edges.map(({ node }) => node.cellarName));
   const rows = found.edges.map(({ node }): SearchRow => {
     const { card, title, thumb } = itemRowParts(node.item);
+    itemKeys.add(itemKey(card.type, card.itemId));
     return {
       key: `${node.cellarId}:${node.cellarItemId}`,
       title,
-      // Counts name their noun, and a single bottle needs no count.
+      // One cellar is named once, in the header ("in Garage"); several are
+      // named on each row. Counts name their noun, and one bottle needs none.
       description: joinLine([
-        node.cellarName,
+        card.subtitle,
+        cellars.size > 1 ? node.cellarName : null,
         node.bottleCount > 1 ? `${node.bottleCount} bottles` : null,
       ]),
       href: cellarItemHref(node.cellarId, card.type, node.cellarItemId),
       thumb,
-    };
-  });
-  return { rows, total: Math.max(found.totalCount ?? 0, rows.length) };
-};
-
-export const itemRows = (
-  data: ResultOf<typeof SearchItemsSectionQuery> | undefined,
-): SearchRow[] => {
-  const hits = data?.itemSearch;
-  if (hits?.__typename !== "ItemSearchConnection") return [];
-  return hits.edges.map(({ node }): SearchRow => {
-    const { card, title, thumb } = itemRowParts(node.item);
-    return {
-      key: `${card.type}:${card.itemId}`,
-      title,
-      description: joinLine([itemTypeLabel(card.type), card.subtitle]),
-      href: itemHref(card.type, card.itemId),
-      thumb,
       score: card.score ?? null,
     };
   });
+  const onlyCellar = cellars.size === 1 ? Array.from(cellars)[0] : undefined;
+  return {
+    rows,
+    // Bottles are counted exactly (the cellar is the viewer's own).
+    total: Math.max(found.totalCount ?? 0, rows.length),
+    totalIsLowerBound: false,
+    ...(onlyCellar !== undefined ? { context: `in ${onlyCellar}` } : {}),
+    itemKeys,
+  };
+};
+
+/**
+ * Drinks: the catalog's matches, less the ones already in your cellars —
+ * they appear once, under Your bottles (Recipes-Search ruling 1). The count
+ * loses the ones left out of the rows in hand; past those it is the API's.
+ */
+export const itemRows = (
+  data: ResultOf<typeof SearchItemsSectionQuery> | undefined,
+  inCellars: ReadonlySet<string> = new Set(),
+): SectionRows => {
+  const hits = data?.itemSearch;
+  if (hits?.__typename !== "ItemSearchConnection") return NO_ROWS;
+  let left = 0;
+  const rows = hits.edges.flatMap(({ node }): SearchRow[] => {
+    const { card, title, thumb } = itemRowParts(node.item);
+    if (inCellars.has(itemKey(card.type, card.itemId))) {
+      left += 1;
+      return [];
+    }
+    return [
+      {
+        key: `${card.type}:${card.itemId}`,
+        title,
+        description: joinLine([card.subtitle ?? itemTypeLabel(card.type)]),
+        href: itemHref(card.type, card.itemId),
+        thumb,
+        score: card.score ?? null,
+      },
+    ];
+  });
+  const counted = withTotal(rows, hits);
+  return { ...counted, total: Math.max(counted.total - left, rows.length) };
 };
 
 /**
@@ -394,13 +484,48 @@ export const itemRows = (
  */
 export const PLACE_NAME_MATCH = 0.3;
 
+/** Within this many metres a place is where you are: "Here". */
+export const HERE_METRES = 25;
+
+const NNBSP = " ";
+
+/** Great-circle metres between two points. */
+export const metresBetween = (
+  a: { readonly latitude: number; readonly longitude: number },
+  b: { readonly lat: number; readonly lng: number },
+): number => {
+  const rad = Math.PI / 180;
+  const dLat = (b.lat - a.latitude) * rad;
+  const dLng = (b.lng - a.longitude) * rad;
+  const h =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(a.latitude * rad) *
+      Math.cos(b.lat * rad) *
+      Math.sin(dLng / 2) ** 2;
+  return 2 * 6_371_000 * Math.asin(Math.min(1, Math.sqrt(h)));
+};
+
+/** "Here", "142 m", "1.4 km" — a narrow no-break space before the unit. */
+export const distanceLabel = (metres: number): string => {
+  if (metres < HERE_METRES) return "Here";
+  if (metres < 1000) return `${Math.round(metres)}${NNBSP}m`;
+  return `${(metres / 1000).toFixed(metres < 10_000 ? 1 : 0)}${NNBSP}km`;
+};
+
 export const placeRows = (
   data: ResultOf<typeof SearchPlacesSectionQuery> | undefined,
-  options: { readonly bounded: boolean },
-): SearchRow[] => {
+  options: {
+    readonly bounded: boolean;
+    readonly origin?: {
+      readonly latitude: number;
+      readonly longitude: number;
+    } | null;
+  },
+): SectionRows => {
   const hits = data?.placeSearch;
-  if (hits?.__typename !== "PlaceSearchConnection") return [];
-  return hits.edges
+  if (hits?.__typename !== "PlaceSearchConnection") return NO_ROWS;
+  const origin = options.origin ?? null;
+  const rows = hits.edges
     .map(({ node }) => node)
     .filter(
       (node) =>
@@ -414,13 +539,23 @@ export const placeRows = (
         title: node.name,
         description: joinLine([
           formatPlaceCategory(node.primaryCategory),
-          node.locality ?? node.region,
+          origin !== null && node.location != null
+            ? distanceLabel(metresBetween(origin, node.location))
+            : (node.locality ?? node.region),
           node.reviewStatus === "APPROVED" ? null : "Under review",
         ]),
         href: `/places/${node.id}`,
         thumb: { kind: "icon", icon: "place" },
+        rating: node.rating ?? null,
       }),
     );
+  // Name-only filtering drops rows the API counted, so its count would
+  // overstate: without a position the count is the rows shown.
+  const counted = options.bounded
+    ? withTotal(rows, hits)
+    : { rows, total: rows.length, totalIsLowerBound: false };
+  // CROSS-LOT: name the origin always.
+  return origin !== null ? { ...counted, context: "from you" } : counted;
 };
 
 const makeabilityLine = (
@@ -444,26 +579,34 @@ const makeabilityLine = (
 
 /**
  * Recipes, one row per recipe group (its versions are one drink): the
- * group's name and page when it has one, the recipe's otherwise. The first
- * hit of a group decides its place — name matches come first (D9).
+ * group's name and page when it has one, the recipe's otherwise, and
+ * "n versions" when more than one of the group matched (ruling 4). The
+ * first hit of a group decides its place — name matches come first (D9).
  */
 export const recipeRows = (
   data: ResultOf<typeof SearchRecipesSectionQuery> | undefined,
-): SearchRow[] => {
+): SectionRows => {
   const hits = data?.recipeSearch;
-  if (hits?.__typename !== "RecipeSearchConnection") return [];
-  const seen = new Set<string>();
-  const rows: SearchRow[] = [];
+  if (hits?.__typename !== "RecipeSearchConnection") return NO_ROWS;
+  const versions = new Map<string, number>();
+  const firsts: (typeof hits.edges)[number]["node"][] = [];
   for (const { node } of hits.edges) {
+    const key =
+      node.recipe.recipeGroup?.id ?? node.recipeGroupId ?? node.recipeId;
+    const seen = versions.get(key);
+    versions.set(key, (seen ?? 0) + 1);
+    if (seen === undefined) firsts.push(node);
+  }
+  const rows = firsts.map((node): SearchRow => {
     const group = node.recipe.recipeGroup;
     const key = group?.id ?? node.recipeGroupId ?? node.recipeId;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    rows.push({
+    const count = versions.get(key) ?? 1;
+    return {
       key,
       title: group?.name ?? node.name,
       description: joinLine([
         node.type === "food" ? "Food" : "Cocktail",
+        count > 1 ? `${count} versions` : null,
         makeabilityLine(node.recipe.makeability),
       ]),
       href:
@@ -474,9 +617,18 @@ export const recipeRows = (
         node.recipe.imageUrl !== null && node.recipe.imageUrl !== ""
           ? { kind: "external", url: node.recipe.imageUrl }
           : { kind: "icon", icon: "recipe" },
-    });
-  }
-  return rows;
+    };
+  });
+  // The API counts recipes; the rows are groups. Fewer rows than hits means
+  // the count names versions, so the section counts its groups instead.
+  const counted = withTotal(rows, hits);
+  return rows.length < hits.edges.length
+    ? {
+        ...counted,
+        total: rows.length,
+        totalIsLowerBound: counted.totalIsLowerBound,
+      }
+    : counted;
 };
 
 const RELATION_LINES: Readonly<Record<PersonRelation, string | undefined>> = {
@@ -487,51 +639,50 @@ const RELATION_LINES: Readonly<Record<PersonRelation, string | undefined>> = {
 };
 
 /**
- * People: a friend opens their profile (`/users/<id>`, X18); an open
- * request goes to `/friends`, where it is answered; anyone else ends in
- * "Add". A request is not a profile link: the profile answers friends only.
+ * People: a friend opens their profile (`/users/<id>`, X18); anyone else
+ * ends in their action — Add friend, Cancel request, or Accept — answered
+ * in the row (`PersonAction`). The profile answers friends only.
  */
 export const peopleRows = (
   data: ResultOf<typeof SearchPeopleSectionQuery> | undefined,
-): SearchRow[] => {
+): SectionRows => {
   const hits = data?.userSearch;
-  if (hits?.__typename !== "UserSearchConnection") return [];
-  return hits.edges.map(({ node }): SearchRow => {
+  if (hits?.__typename !== "UserSearchConnection") return NO_ROWS;
+  const rows = hits.edges.map(({ node }): SearchRow => {
     const relation: PersonRelation = node.relation ?? "NONE";
     return {
       key: node.userId,
       title: node.displayName,
       description: RELATION_LINES[relation],
       thumb: { kind: "avatar", url: node.avatarUrl, name: node.displayName },
-      ...(relation === "NONE"
-        ? { addFriend: { userId: node.userId, name: node.displayName } }
+      ...(relation === "FRIEND"
+        ? { href: `/users/${encodeURIComponent(node.userId)}` }
         : {
-            href:
-              relation === "FRIEND"
-                ? `/users/${encodeURIComponent(node.userId)}`
-                : "/friends",
+            person: { userId: node.userId, name: node.displayName, relation },
           }),
     };
   });
+  return withTotal(rows, hits);
 };
 
 export const brandRows = (
   data: ResultOf<typeof SearchBrandsSectionQuery> | undefined,
-): SearchRow[] => {
+): SectionRows => {
   const hits = data?.brandSearch;
-  if (hits?.__typename !== "BrandSearchConnection") return [];
-  return hits.edges.map(
+  if (hits?.__typename !== "BrandSearchConnection") return NO_ROWS;
+  const rows = hits.edges.map(
     ({ node: { brand } }): SearchRow => ({
       key: brand.id,
       title: brand.name,
       description: joinLine([
         brand.brandType === null ? null : formatBrandType(brand.brandType),
-        counted(brand.itemCount, "item", "items"),
+        counted(brand.itemCount, "drink", "drinks"),
       ]),
       href: `/brands/${brand.id}`,
       thumb: { kind: "icon", icon: "brand" },
     }),
   );
+  return withTotal(rows, hits);
 };
 
 /* -------------------------------------------------------------------------- */
@@ -554,18 +705,24 @@ export type SectionData = {
  */
 export const buildSections = (
   data: SectionData,
-  options: { readonly bounded: boolean },
+  options: {
+    readonly bounded: boolean;
+    readonly origin?: {
+      readonly latitude: number;
+      readonly longitude: number;
+    } | null;
+  },
 ): SectionModel[] => {
   const bottles = bottleRows(data.bottles);
-  const rows: Record<SearchSection, { rows: SearchRow[]; total?: number }> = {
+  const rows: Record<SearchSection, SectionRows> = {
     bottles,
-    items: { rows: itemRows(data.items) },
-    places: { rows: placeRows(data.places, options) },
-    recipes: { rows: recipeRows(data.recipes) },
-    people: { rows: peopleRows(data.people) },
-    brands: { rows: brandRows(data.brands) },
+    items: itemRows(data.items, bottles.itemKeys),
+    places: placeRows(data.places, options),
+    recipes: recipeRows(data.recipes),
+    people: peopleRows(data.people),
+    brands: brandRows(data.brands),
   };
-  return SEARCH_SECTIONS.flatMap((section) => {
+  return SEARCH_SECTIONS.flatMap((section): SectionModel[] => {
     const entry = rows[section];
     if (entry.rows.length === 0) return [];
     return [
@@ -573,12 +730,13 @@ export const buildSections = (
         section,
         label: SECTION_LABELS[section],
         rows: entry.rows,
-        total: Math.max(entry.total ?? 0, entry.rows.length),
+        total: entry.total,
+        totalIsLowerBound: entry.totalIsLowerBound,
+        ...(entry.context === undefined ? {} : { context: entry.context }),
       },
     ];
   });
 };
-
 /**
  * Whether a section's search answered at all — found something or found
  * nothing — as opposed to failing: a rejected read (`undefined`), or a root

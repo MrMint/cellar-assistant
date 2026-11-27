@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { type ReactNode, Suspense } from "react";
+import { Suspense } from "react";
 import {
   type SearchParams,
   searchPageTitle,
@@ -10,24 +10,22 @@ import {
   SearchResultsSkeleton,
   SearchSectionsSkeleton,
 } from "@/components/search/SearchResultsSkeleton";
-import {
-  SearchHint,
-  SearchSheetHeader,
-} from "@/components/search/SearchSheetHeader";
+import { SearchSheetHeader } from "@/components/search/SearchSheetHeader";
 import { ServerBarcodeResults } from "@/components/search/ServerBarcodeResults";
 import {
   ExpiredImageSearch,
   ServerImageResults,
 } from "@/components/search/ServerImageResults";
+import { LookIn } from "@/components/search/sections/LookIn";
+import { ScopeRail } from "@/components/search/sections/ScopeRail";
 import { UniversalSearchResults } from "@/components/search/UniversalSearchResults";
 import { sectionFromParam } from "@/components/search/universal-search";
 
 /**
- * `/search` — the search **sheet** (X10). Home is `/` now ("Today"), and
- * search is a full-screen sheet over the app, opened from Home's field or a
- * second tap on Home: a title and Close in place of the tab bar
- * (`AppShell` hides it here), the box, then what it looks through or the
- * results. The URL still works on its own — links, `?q=`, `?barcode=`,
+ * `/search` (Recipes-Search, phone and desktop): the field in a sticky bar,
+ * then "Look in" and its six tiles, or the results. Home is `/` ("Today").
+ * The board keeps the tab bar here; until `AppShell` stops hiding it on
+ * `/search` (hand-off to F2a) the phone keeps the sheet's Close. The URL still works on its own — links, `?q=`, `?barcode=`,
  * `?image=` — and Close goes back to where the sheet was opened from.
  *
  * The landing view's greeting, collection line, Recent Activity and Nearby
@@ -69,50 +67,50 @@ export default async function Search({ searchParams }: SearchPageProps) {
   const { query, barcode, imageFileId, legacyImageLink, hasActiveSearch } =
     state;
   const focus = sectionFromParam(resolvedSearchParams.in);
+  const token =
+    barcode !== null
+      ? "barcode"
+      : imageFileId !== null || legacyImageLink
+        ? "photo"
+        : null;
 
-  // One frame for both views, so the search box never remounts (N01). The
-  // sheet slides up once, when it opens; typing keeps the same page.
+  // One frame for every view, so the search box never remounts (N01).
   return (
-    <div className="mx-auto w-full max-w-[720px] animate-in fade-in-0 slide-in-from-bottom-4 duration-(--ca-dur-medium) ease-enter motion-reduce:slide-in-from-bottom-0">
+    <div className="mx-auto w-full max-w-[1320px] animate-in fade-in-0 duration-(--ca-dur-medium) ease-enter">
       <SearchPageLayout
         urlQuery={query}
         header={<SearchSheetHeader />}
         landing={null}
+        token={query === null ? token : null}
+        scope={focus}
       >
-        {!hasActiveSearch && <SearchHint />}
+        {!hasActiveSearch &&
+          (focus === null ? <LookIn /> : <ScopeRail query="" focus={focus} />)}
 
         {hasActiveSearch && (
-          <div className="flex flex-col gap-6">
+          <div className="flex flex-col gap-6 pb-6">
             {imageFileId !== null && (
-              <ResultsSection title="Image search results">
-                <Suspense fallback={<SearchResultsSkeleton />}>
-                  <ServerImageResults imageFileId={imageFileId} />
-                </Suspense>
-              </ResultsSection>
+              <Suspense fallback={<SearchResultsSkeleton />}>
+                <ServerImageResults imageFileId={imageFileId} />
+              </Suspense>
             )}
 
-            {imageFileId === null && legacyImageLink && (
-              <ResultsSection title="Image search results">
-                <ExpiredImageSearch />
-              </ResultsSection>
-            )}
+            {imageFileId === null && legacyImageLink && <ExpiredImageSearch />}
 
             {barcode !== null && (
-              <ResultsSection title="Barcode search results">
-                <Suspense fallback={<SearchResultsSkeleton />}>
-                  <ServerBarcodeResults code={barcode} />
-                </Suspense>
-              </ResultsSection>
+              <Suspense fallback={<SearchResultsSkeleton />}>
+                <ServerBarcodeResults code={barcode} />
+              </Suspense>
             )}
 
-            {/* X12 (D9, D10): one page of sections — Your bottles · Items ·
+            {/* X12 (D9, D10): one page of sections — Your bottles · Drinks ·
                 Places · Recipes · People · Brands — or the one "See all"
                 opened. The box above is the same element throughout (N01). */}
+            {/* Unkeyed: a search navigation is a transition, so the results
+                on screen stay (dimmed) until the next ones arrive instead of
+                falling back to the skeleton (Recipes-Search ruling 3). */}
             {query !== null && (
-              <Suspense
-                key={`${focus ?? "all"}:${query}`}
-                fallback={<SearchSectionsSkeleton />}
-              >
+              <Suspense fallback={<SearchSectionsSkeleton />}>
                 <UniversalSearchResults query={query} focus={focus} />
               </Suspense>
             )}
@@ -120,21 +118,5 @@ export default async function Search({ searchParams }: SearchPageProps) {
         )}
       </SearchPageLayout>
     </div>
-  );
-}
-
-/** One block of results under its heading. */
-function ResultsSection({
-  title,
-  children,
-}: {
-  title: ReactNode;
-  children: ReactNode;
-}) {
-  return (
-    <section className="flex flex-col gap-4">
-      <h2 className="type-headline text-ink-1">{title}</h2>
-      {children}
-    </section>
   );
 }

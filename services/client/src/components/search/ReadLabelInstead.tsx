@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Scan } from "@/components/app/icons";
 import { Link } from "@/components/app/Link";
 import { Button } from "@/components/ui/button";
 import {
@@ -37,24 +36,27 @@ export function ReadLabelInstead({
   const href = carried
     ? captureHrefWithPhoto("bottle", imageFileId)
     : "/add?mode=bottle";
-  const label = carried ? "Read the label instead" : "Snap the label instead";
+  const label = carried ? "Read the label" : "Snap the label";
 
-  return (
-    <div
+  return prominent ? (
+    <Button variant="outline" asChild data-slot="read-label-instead">
+      <Link href={href} underline="none" className={cn("text-ink", className)}>
+        {label}
+      </Link>
+    </Button>
+  ) : (
+    <p
       data-slot="read-label-instead"
-      className={cn("flex flex-col items-center gap-2 text-center", className)}
+      className={cn("t-cap m-0 flex items-center gap-3 text-ink-2", className)}
     >
-      <p className="type-callout text-ink-2">
-        {prominent
-          ? "Not in the catalog yet? Read its label and add it."
-          : "Not one of these?"}
-      </p>
-      <Button variant={prominent ? "default" : "secondary"} asChild>
-        <Link href={href} underline="none">
-          <Scan aria-hidden />
-          {label}
-        </Link>
-      </Button>
-    </div>
+      Not one of these?
+      <Link
+        href={href}
+        underline="none"
+        className="t-head inline-flex min-h-11 items-center text-act-ink"
+      >
+        {label}
+      </Link>
+    </p>
   );
 }

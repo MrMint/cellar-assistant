@@ -157,7 +157,7 @@ const unmount = async () => {
 
 const input = (): HTMLInputElement => {
   const found = container.querySelector<HTMLInputElement>(
-    'input[aria-label="Search your collection"]',
+    'input[aria-label="Search"]',
   );
   assert.ok(found, "the search input is rendered");
   return found;
@@ -206,6 +206,9 @@ const resolveResults = async (query: string) => {
 };
 
 const testId = (id: string) => container.querySelector(`[data-testid="${id}"]`);
+
+/** Ruling 3: results on screen stay, dimmed, while the next ones load. */
+const refining = () => container.querySelector("[data-search-refining]");
 
 before(() => {
   results.clear();
@@ -312,15 +315,18 @@ describe("the search box survives typing (N01)", () => {
       await typeInto(box, "z");
       await settle();
       // `z`'s shell has not arrived when the next pause comes: not landed.
-      assert.ok(testId("search-results-skeleton"), "z is still pending");
+      assert.ok(refining(), "z is still pending");
       await typeInto(box, "zi");
       await settle();
       await typeInto(box, "zin");
       await settle();
       assert.deepEqual(calls, [["push", "/search?q=z"]], "nothing sent");
       assert.equal(box.value, "zin", "the text is the user's meanwhile");
-      // `z` lands: what the box holds by then goes as one replace.
+      // `z` lands — its shell and, since the results on screen stay until
+      // the next ones arrive (ruling 3), its results — and what the box
+      // holds by then goes as one replace.
       await openShell("/search?q=z");
+      await resolveResults("z");
       await resolveResults("zin");
       assert.equal(testId("results")?.textContent, "results for zin");
       // Landed: from here the session replaces.
@@ -371,7 +377,7 @@ describe("the search box survives typing (N01)", () => {
     }
   });
 
-  test("the results slot shows a skeleton while the next page is pending", async () => {
+  test("while the next page is pending, the results stay, dimmed (ruling 3)", async () => {
     await resolveResults("barolo");
     await mount("/search?q=barolo");
     try {
@@ -382,16 +388,34 @@ describe("the search box survives typing (N01)", () => {
       await typeInto(box, "beer");
       await settle();
 
-      // `beer` has not streamed in: stale results are replaced by a skeleton.
-      assert.ok(testId("search-results-skeleton"), "skeleton while pending");
-      assert.equal(testId("results"), null, "the stale results are hidden");
+      // `beer` has not streamed in: the old results stay, dimmed.
+      assert.ok(refining(), "dimmed while pending");
+      assert.equal(testId("search-results-skeleton"), null, "no skeleton");
+      assert.equal(testId("results")?.textContent, "results for barolo");
       assert.equal(document.activeElement, box);
 
       await resolveResults("beer");
-      assert.equal(testId("search-results-skeleton"), null);
+      assert.equal(refining(), null);
       assert.equal(testId("results")?.textContent, "results for beer");
       assert.equal(input(), box);
       assert.equal(document.activeElement, box);
+    } finally {
+      await unmount();
+    }
+  });
+
+  test("a first search, with nothing on screen yet, shows the skeleton", async () => {
+    deferredIn(shells, "/search?q=gin");
+    await mount("/search");
+    try {
+      const box = input();
+      await act(async () => box.focus());
+      await typeInto(box, "gin");
+      await settle();
+      assert.ok(testId("search-results-skeleton"), "skeleton while pending");
+      await openShell("/search?q=gin");
+      await resolveResults("gin");
+      assert.equal(testId("results")?.textContent, "results for gin");
     } finally {
       await unmount();
     }

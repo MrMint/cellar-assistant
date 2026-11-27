@@ -14,6 +14,11 @@ import { closeSearch, readSessionHistory } from "./search-navigation";
  * sheet was opened from, however many searches were typed inside it, and
  * Home on a cold open, leaving no `/search` entry behind (CR-3): it steps
  * back past the sheet's entries, so Back afterwards does not reopen it.
+ *
+ * Recipes-Search draws no top bar: the tab bar stays. Until the shell shows
+ * it on `/search` (hand-off to F2a's `AppShell`), the phone keeps Close as
+ * its way out; from `md` the rail is there, and the bar is the page's h1
+ * for screen readers only.
  */
 export function SearchSheetHeader() {
   const navigate = useNavigate();
@@ -28,9 +33,13 @@ export function SearchSheetHeader() {
       },
     );
   return (
-    <div className="flex items-center justify-between gap-2">
-      <h1 className="type-title-2 text-ink-1">Search</h1>
-      <IconButton aria-label="Close search" onClick={close} className="-mr-2">
+    <div className="flex items-center justify-between gap-2 md:sr-only">
+      <h1 className="t-title m-0 text-ink">Search</h1>
+      <IconButton
+        aria-label="Close search"
+        onClick={close}
+        className="-mr-2 md:hidden"
+      >
         <Close aria-hidden strokeWidth={ICON_STROKE} />
       </IconButton>
     </div>
@@ -40,7 +49,7 @@ export function SearchSheetHeader() {
 /** What an empty search sheet says: what the box looks through. */
 export function SearchHint() {
   return (
-    <p className="type-callout px-1 text-ink-3">
+    <p className="t-cap px-1 text-ink-2">
       Your bottles, the catalog, places, recipes and brands. Scan a barcode or
       use a photo from the buttons in the box.
     </p>
