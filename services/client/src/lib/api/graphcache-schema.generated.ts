@@ -826,6 +826,19 @@ export const graphcacheSchema: MinifiedIntrospection = {
             },
           },
           {
+            name: "unconfirmedFields",
+            type: {
+              kind: "NON_NULL",
+              ofType: {
+                kind: "LIST",
+                ofType: {
+                  kind: "NON_NULL",
+                  ofType: { kind: "SCALAR", name: "String" },
+                },
+              },
+            },
+          },
+          {
             name: "updatedAt",
             type: {
               kind: "NON_NULL",
@@ -2097,6 +2110,19 @@ export const graphcacheSchema: MinifiedIntrospection = {
             type: {
               kind: "NON_NULL",
               ofType: { kind: "ENUM", name: "ItemType" },
+            },
+          },
+          {
+            name: "unconfirmedFields",
+            type: {
+              kind: "NON_NULL",
+              ofType: {
+                kind: "LIST",
+                ofType: {
+                  kind: "NON_NULL",
+                  ofType: { kind: "SCALAR", name: "String" },
+                },
+              },
             },
           },
           {
@@ -3754,6 +3780,19 @@ export const graphcacheSchema: MinifiedIntrospection = {
             },
           },
           {
+            name: "unconfirmedFields",
+            type: {
+              kind: "NON_NULL",
+              ofType: {
+                kind: "LIST",
+                ofType: {
+                  kind: "NON_NULL",
+                  ofType: { kind: "SCALAR", name: "String" },
+                },
+              },
+            },
+          },
+          {
             name: "updatedAt",
             type: {
               kind: "NON_NULL",
@@ -4270,7 +4309,21 @@ export const graphcacheSchema: MinifiedIntrospection = {
           { name: "backLabelImageId", type: { kind: "SCALAR", name: "ID" } },
           { name: "barcode", type: { kind: "SCALAR", name: "String" } },
           { name: "barcodeType", type: { kind: "SCALAR", name: "String" } },
+          { name: "cellarId", type: { kind: "SCALAR", name: "ID" } },
           { name: "confidence", type: { kind: "SCALAR", name: "Float" } },
+          {
+            name: "confirmedFields",
+            type: {
+              kind: "NON_NULL",
+              ofType: {
+                kind: "LIST",
+                ofType: {
+                  kind: "NON_NULL",
+                  ofType: { kind: "SCALAR", name: "String" },
+                },
+              },
+            },
+          },
           {
             name: "createdAt",
             type: {
@@ -4279,11 +4332,15 @@ export const graphcacheSchema: MinifiedIntrospection = {
             },
           },
           { name: "defaults", type: { kind: "SCALAR", name: "JSON" } },
+          { name: "displayMaker", type: { kind: "SCALAR", name: "String" } },
+          { name: "displayName", type: { kind: "SCALAR", name: "String" } },
+          { name: "draftFields", type: { kind: "SCALAR", name: "JSON" } },
           { name: "frontLabelImageId", type: { kind: "SCALAR", name: "ID" } },
           {
             name: "id",
             type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "ID" } },
           },
+          { name: "imageId", type: { kind: "SCALAR", name: "ID" } },
           {
             name: "itemType",
             type: {
@@ -4309,6 +4366,41 @@ export const graphcacheSchema: MinifiedIntrospection = {
             name: "userId",
             type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "ID" } },
           },
+          {
+            name: "vintageAnswer",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "ENUM", name: "VintageAnswer" },
+            },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "ItemOnboardingConnection",
+        fields: [
+          {
+            name: "edges",
+            type: {
+              kind: "NON_NULL",
+              ofType: {
+                kind: "LIST",
+                ofType: {
+                  kind: "NON_NULL",
+                  ofType: { kind: "OBJECT", name: "ItemOnboardingEdge" },
+                },
+              },
+            },
+          },
+          {
+            name: "pageInfo",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "PageInfo" },
+            },
+          },
+          { name: "totalCount", type: { kind: "SCALAR", name: "Int" } },
         ],
         interfaces: [],
       },
@@ -4323,6 +4415,27 @@ export const graphcacheSchema: MinifiedIntrospection = {
           { kind: "OBJECT", name: "NotFoundError" },
           { kind: "OBJECT", name: "ValidationError" },
         ],
+      },
+      {
+        kind: "OBJECT",
+        name: "ItemOnboardingEdge",
+        fields: [
+          {
+            name: "cursor",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "String" },
+            },
+          },
+          {
+            name: "node",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "ItemOnboarding" },
+            },
+          },
+        ],
+        interfaces: [],
       },
       {
         kind: "OBJECT",
@@ -5582,6 +5695,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
             type: {
               kind: "NON_NULL",
               ofType: { kind: "UNION", name: "ResubmitPlaceResult" },
+            },
+          },
+          {
+            name: "saveDraft",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "UNION", name: "SaveDraftResult" },
             },
           },
           {
@@ -7214,6 +7334,17 @@ export const graphcacheSchema: MinifiedIntrospection = {
             },
           },
           {
+            name: "needsDetails",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "UNION", name: "QueryNeedsDetailsResult" },
+            },
+          },
+          {
+            name: "needsDetailsCount",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
+          {
             name: "ping",
             type: {
               kind: "NON_NULL",
@@ -7719,6 +7850,18 @@ export const graphcacheSchema: MinifiedIntrospection = {
           { kind: "OBJECT", name: "ForbiddenError" },
           { kind: "OBJECT", name: "NotFoundError" },
           { kind: "OBJECT", name: "TierListConnection" },
+          { kind: "OBJECT", name: "ValidationError" },
+        ],
+      },
+      {
+        kind: "UNION",
+        name: "QueryNeedsDetailsResult",
+        possibleTypes: [
+          { kind: "OBJECT", name: "BudgetExceededError" },
+          { kind: "OBJECT", name: "ConflictError" },
+          { kind: "OBJECT", name: "ForbiddenError" },
+          { kind: "OBJECT", name: "ItemOnboardingConnection" },
+          { kind: "OBJECT", name: "NotFoundError" },
           { kind: "OBJECT", name: "ValidationError" },
         ],
       },
@@ -9658,6 +9801,19 @@ export const graphcacheSchema: MinifiedIntrospection = {
             },
           },
           {
+            name: "unconfirmedFields",
+            type: {
+              kind: "NON_NULL",
+              ofType: {
+                kind: "LIST",
+                ofType: {
+                  kind: "NON_NULL",
+                  ofType: { kind: "SCALAR", name: "String" },
+                },
+              },
+            },
+          },
+          {
             name: "updatedAt",
             type: {
               kind: "NON_NULL",
@@ -9668,6 +9824,18 @@ export const graphcacheSchema: MinifiedIntrospection = {
           { name: "yeastStrain", type: { kind: "SCALAR", name: "String" } },
         ],
         interfaces: [{ kind: "INTERFACE", name: "Item" }],
+      },
+      {
+        kind: "UNION",
+        name: "SaveDraftResult",
+        possibleTypes: [
+          { kind: "OBJECT", name: "BudgetExceededError" },
+          { kind: "OBJECT", name: "ConflictError" },
+          { kind: "OBJECT", name: "ForbiddenError" },
+          { kind: "OBJECT", name: "ItemOnboarding" },
+          { kind: "OBJECT", name: "NotFoundError" },
+          { kind: "OBJECT", name: "ValidationError" },
+        ],
       },
       {
         kind: "OBJECT",
@@ -10520,6 +10688,19 @@ export const graphcacheSchema: MinifiedIntrospection = {
             },
           },
           {
+            name: "unconfirmedFields",
+            type: {
+              kind: "NON_NULL",
+              ofType: {
+                kind: "LIST",
+                ofType: {
+                  kind: "NON_NULL",
+                  ofType: { kind: "SCALAR", name: "String" },
+                },
+              },
+            },
+          },
+          {
             name: "updatedAt",
             type: {
               kind: "NON_NULL",
@@ -11147,6 +11328,19 @@ export const graphcacheSchema: MinifiedIntrospection = {
             type: {
               kind: "NON_NULL",
               ofType: { kind: "ENUM", name: "ItemType" },
+            },
+          },
+          {
+            name: "unconfirmedFields",
+            type: {
+              kind: "NON_NULL",
+              ofType: {
+                kind: "LIST",
+                ofType: {
+                  kind: "NON_NULL",
+                  ofType: { kind: "SCALAR", name: "String" },
+                },
+              },
             },
           },
           {
@@ -12546,6 +12740,19 @@ export const graphcacheSchema: MinifiedIntrospection = {
             type: {
               kind: "NON_NULL",
               ofType: { kind: "ENUM", name: "ItemType" },
+            },
+          },
+          {
+            name: "unconfirmedFields",
+            type: {
+              kind: "NON_NULL",
+              ofType: {
+                kind: "LIST",
+                ofType: {
+                  kind: "NON_NULL",
+                  ofType: { kind: "SCALAR", name: "String" },
+                },
+              },
             },
           },
           {

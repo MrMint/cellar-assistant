@@ -50,6 +50,8 @@
  * minting a second one. A second run prints `0 created` for every step.
  */
 import { createHash } from "node:crypto";
+import { existsSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { crc32, deflateSync } from "node:zlib";
 import { createDb } from "@cellar-assistant/db";
 import { sql } from "@cellar-assistant/db/orm";
@@ -58,8 +60,10 @@ import {
   BREW_PREFS,
   CELLARS,
   type DemoItem,
+  type DemoSeedContext,
   type DemoUser,
   type DemoUserKey,
+  DRAFTS,
   FAVORITES,
   FRIENDSHIPS,
   ITEMS,
@@ -357,6 +361,15 @@ const OPEN_ITEM_DRAFT = gql`
     openItemDraft(draftId: $draftId, type: $type) {
       __typename
       ... on ItemOnboarding { id }
+      ... on Error { message }
+    }
+  }
+`;
+const SAVE_DRAFT = gql`
+  mutation DemoSaveDraft($input: SaveDraftInput!) {
+    saveDraft(input: $input) {
+      __typename
+      ... on ItemOnboarding { id status }
       ... on Error { message }
     }
   }
@@ -1394,9 +1407,90 @@ const report = async (): Promise<void> => {
     union all select 'place_menu_items', count(*)::text from place_menu_items m join menu_scans s on s.id = m.menu_scan_id where s.user_id in (${list})
     union all select 'friends', count(*)::text from friends where user_id in (${list})
     union all select 'bar_pantry_items', count(*)::text from bar_pantry_items where user_id in (${list})
+    union all select 'needs_details', count(*)::text from item_onboardings where status = 'NEEDS_DETAILS' and user_id in (${list})
   `);
   console.log("[demo-seed] rows owned by the four demo accounts:");
   for (const r of rows.rows) console.log(`  ${r.what.padEnd(18)} ${r.n}`);
+};
+
+/**
+ * SV-B: unfinished bottles, saved the way the app saves one — `openItemDraft`
+ * then `saveDraft` aimed at a cellar. Each misses its type's floor, so it
+ * lands as `NEEDS_DETAILS`. Keyed by `demoId`, so a second run keeps them.
+ */
+const stepDrafts = async (): Promise<void> => {
+  for (const d of DRAFTS) {
+    const id = demoId(`needs:${d.key}`);
+    if (
+      await exists(
+        sql`select 1 from item_onboardings where id = ${id}::uuid and status = 'NEEDS_DETAILS'`,
+      )
+    ) {
+      count("drafts", false);
+      continue;
+    }
+    await run(
+      d.owner,
+      OPEN_ITEM_DRAFT,
+      { draftId: id, type: d.type },
+      "ItemOnboarding",
+    );
+    const saved = await run(
+      d.owner,
+      SAVE_DRAFT,
+      {
+        input: {
+          onboardingId: id,
+          cellarId: need(ids.cellar, d.cellar, "cellar"),
+          fields: d.fields,
+          confirmedFields: d.confirmedFields,
+          vintageAnswer: d.vintageAnswer,
+        },
+      },
+      "ItemOnboarding",
+    );
+    if (saved?.status !== "NEEDS_DETAILS") {
+      throw new Error(`draft ${d.key} saved as ${String(saved?.status)}`);
+    }
+    count("drafts", true);
+  }
+};
+
+/**
+ * Optional sibling seeds other streams add (quota, social, avatar). Each is
+ * a no-op until its file exists; see `DemoSeedContext` for what it receives.
+ */
+const EXTENSIONS = [
+  "demo-seed-quota.ts",
+  "demo-seed-social.ts",
+  "demo-seed-avatar.ts",
+] as const;
+
+const stepExtensions = async (): Promise<void> => {
+  const ctx: DemoSeedContext = {
+    db,
+    userId,
+    cellarId: (key) => need(ids.cellar, key, "cellar"),
+    itemId,
+    demoId,
+    graphql: call,
+    count,
+  };
+  for (const file of EXTENSIONS) {
+    const url = new URL(`./${file}`, import.meta.url);
+    if (!existsSync(fileURLToPath(url))) continue;
+    const mod = (await import(url.href)) as {
+      seed?: (ctx: DemoSeedContext) => Promise<void>;
+    };
+    if (typeof mod.seed !== "function") {
+      throw new Error(`${file} exports no seed(ctx)`);
+    }
+    const started = Date.now();
+    await mod.seed(ctx);
+    console.log(
+      `[demo-seed] ${file} done (${((Date.now() - started) / 1000).toFixed(1)}s)`,
+    );
+  }
 };
 
 const STEPS: readonly [string, () => Promise<void>][] = [
@@ -1411,6 +1505,8 @@ const STEPS: readonly [string, () => Promise<void>][] = [
   ["drink logs", stepLogs],
   ["want to try, favorites, bar", stepLists],
   ["tier lists", stepTierLists],
+  ["needs-details drafts", stepDrafts],
+  ["extensions", stepExtensions],
 ];
 
 const main = async (): Promise<void> => {

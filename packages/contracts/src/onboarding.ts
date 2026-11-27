@@ -50,11 +50,35 @@ export const ONBOARDING_STATUSES = [
   "CONFIRMED",
   "FAILED",
   "MATCHED",
+  // SV-B (L6): a draft the person saved with a floor field still missing — a
+  // bottle that is not a cellar item yet, counted on the cellar it is aimed
+  // at. `confirm` from here follows the normal path.
+  "NEEDS_DETAILS",
 ] as const;
 export type OnboardingStatus = (typeof ONBOARDING_STATUSES)[number];
 
 export const isOnboardingStatus = (value: string): value is OnboardingStatus =>
   (ONBOARDING_STATUSES as readonly string[]).includes(value);
+
+/**
+ * SV-B · MC-drafts: the person's answer to "which vintage?", kept apart from
+ * the year itself. `NON_VINTAGE` is an answer ("No vintage"); `UNANSWERED` is
+ * the absence of one — the two read the same in `wines.vintage` (NULL) once
+ * an item exists, which is why a draft has to hold the difference.
+ */
+export const VINTAGE_ANSWERS = [
+  "VINTAGE",
+  "NON_VINTAGE",
+  "UNANSWERED",
+] as const;
+export type VintageAnswer = (typeof VINTAGE_ANSWERS)[number];
+
+export const isVintageAnswer = (value: unknown): value is VintageAnswer =>
+  typeof value === "string" &&
+  (VINTAGE_ANSWERS as readonly string[]).includes(value);
+
+/** At most this many names in `confirmedFields`, each at most 64 characters. */
+export const CONFIRMED_FIELDS_MAX = 64;
 
 /**
  * One `item_onboardings` row.
@@ -81,6 +105,19 @@ export type ItemOnboardingDto = {
   readonly lastReprocessResult: string | null;
   readonly createdAt: string;
   readonly updatedAt: string;
+  /** SV-B: the cellar a saved draft is aimed at; `null` for none. */
+  readonly cellarId: string | null;
+  /** SV-B: the guessed fields the person accepted or edited. */
+  readonly confirmedFields: readonly string[];
+  readonly vintageAnswer: VintageAnswer;
+  /** SV-B: what a "Needs details" row shows — the draft's name. */
+  readonly displayName: string | null;
+  /** SV-B: the draft's maker (its brand name). */
+  readonly displayMaker: string | null;
+  /** SV-B: the draft's picture, a `files.id` — its front label. */
+  readonly imageId: string | null;
+  /** SV-B: the saved draft's fields, JSON (`SaveDraftFields`); `null` unsaved. */
+  readonly draftFields: string | null;
 };
 
 /**
@@ -179,6 +216,39 @@ export type ConfirmOnboardingInput = {
   readonly cellarId?: string | null;
   /** Mint it to make the cellar half idempotent as well (§8.4). */
   readonly cellarItemId?: string | null;
+  /**
+   * SV-B: the guessed fields the person accepted or edited, so the item's
+   * `unconfirmedFields` can name the ones they never touched. Absent keeps
+   * what a saved draft recorded.
+   */
+  readonly confirmedFields?: readonly string[] | null;
+};
+
+/**
+ * SV-B · MC-drafts: what a saved draft holds — `ConfirmOnboardingInput`'s item
+ * fields, any of them missing. Stored as given (after shape checks) in
+ * `item_onboardings.draft_fields`.
+ */
+export type SaveDraftFields = {
+  readonly name?: string | null;
+  readonly description?: string | null;
+  readonly country?: string | null;
+  readonly brandName?: string | null;
+  readonly attributes?: Record<string, unknown> | null;
+};
+
+/**
+ * SV-B · MC-drafts: `saveDraft`'s argument. A guess outside the floor never
+ * blocks saving: a draft whose floor (`requireItemAttributes`, plus a name)
+ * is met is stored and left for `confirm`; one missing a floor field becomes
+ * `NEEDS_DETAILS`.
+ */
+export type SaveDraftInput = {
+  /** The cellar it is aimed at; the owner must be able to write it. */
+  readonly cellarId?: string | null;
+  readonly fields: SaveDraftFields;
+  readonly confirmedFields: readonly string[];
+  readonly vintageAnswer: VintageAnswer;
 };
 
 export type ConfirmOnboardingResult = {
@@ -288,6 +358,12 @@ export type ItemOnboardingActorInterface = {
    * type is refused, since the row's type is what `confirm` creates.
    */
   openDraft(ctx: Ctx, input: OpenDraftInput): Promise<ItemOnboardingDto>;
+  /**
+   * SV-B · MC-drafts: keep an unfinished bottle on the account. Owner only;
+   * refused once the session has `CONFIRMED` or `MATCHED`. Idempotent: the
+   * same input stores the same row.
+   */
+  saveDraft(ctx: Ctx, input: SaveDraftInput): Promise<ItemOnboardingDto>;
   confirm(
     ctx: Ctx,
     input: ConfirmOnboardingInput,
@@ -350,6 +426,8 @@ export const ItemOnboardingActorDescriptor: ActorDescriptor<
     defaults: {},
     // One insert, no model (X07).
     openDraft: {},
+    // One update, no model (SV-B).
+    saveDraft: {},
     // Enqueues the new item's `regenerateVector` (an embedding).
     confirm: { modelBacked: true },
     // One status write; no model, no outbox.
