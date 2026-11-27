@@ -63,6 +63,7 @@ import * as brandQueries from "@/components/brand/queries";
 import * as captureQueries from "@/components/capture/queries";
 import * as cellarFragments from "@/components/cellar/fragments";
 import * as onboardingQueries from "@/components/common/OnboardingWizard/queries";
+import * as draftsQueries from "@/components/drafts/queries";
 import * as drinkLogQueries from "@/components/drink-log/queries";
 import * as favoritesFragments from "@/components/favorites/fragments";
 import * as lovedRecipes from "@/components/favorites/loved-recipes";
@@ -112,6 +113,7 @@ const MODULES: Readonly<Record<string, Record<string, unknown>>> = {
   "components/capture/queries.ts": captureQueries,
   "components/cellar/fragments.ts": cellarFragments,
   "components/common/OnboardingWizard/queries.ts": onboardingQueries,
+  "components/drafts/queries.ts": draftsQueries,
   "components/drink-log/queries.ts": drinkLogQueries,
   "components/favorites/fragments.ts": favoritesFragments,
   "components/favorites/loved-recipes.ts": lovedRecipes,
