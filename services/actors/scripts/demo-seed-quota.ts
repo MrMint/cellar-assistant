@@ -18,29 +18,9 @@
  */
 import type { createDb } from "@cellar-assistant/db";
 import { sql } from "@cellar-assistant/db/orm";
-import type { DemoUserKey } from "./demo-seed-data.ts";
+import type { DemoSeedContext } from "./demo-seed-data.ts";
 
 type Db = ReturnType<typeof createDb>;
-
-/**
- * Structurally identical to `DemoSeedContext` in SV-B's `demo-seed-data.ts`
- * (`claude/redesign-2026-11-sv-b` @ dca7e53b), declared here because that
- * branch is not on this one's base yet. At merge, replace it with
- * `import type { DemoSeedContext } from "./demo-seed-data.ts"`.
- */
-type DemoSeedContext = {
-  readonly db: unknown;
-  readonly userId: (k: DemoUserKey) => string;
-  readonly cellarId: (key: string) => string;
-  readonly itemId: (key: string) => string;
-  readonly demoId: (key: string) => string;
-  readonly graphql: (
-    as: DemoUserKey,
-    query: string,
-    variables: Record<string, unknown>,
-  ) => Promise<Record<string, unknown>>;
-  readonly count: (step: string, created: boolean) => void;
-};
 
 /** Seeded period usage per kind, by endpoint under `ai_model`. */
 export const DEMO_QUOTA_USAGE: Readonly<Record<string, number>> = {
