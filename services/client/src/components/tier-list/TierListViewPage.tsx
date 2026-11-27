@@ -316,7 +316,7 @@ export function TierListViewPage({
    * gives it, Unrated without one.
    */
   const handleAdd = useCallback(
-    async (candidates: AddEntryCandidate[]) => {
+    async (candidates: AddEntryCandidate[], chosenBand?: number) => {
       if (candidates.length === 0) return;
       setAdding(true);
       setAddError(null);
@@ -325,7 +325,11 @@ export function TierListViewPage({
         candidates.map((candidate) => ({
           id: candidate.id,
           entityType: candidate.entityType,
-          band: bandForScore(candidate.myScore),
+          // F-175: the band step's answer places what your rating doesn't.
+          band:
+            bandForScore(candidate.myScore) === 0 && chosenBand !== undefined
+              ? chosenBand
+              : bandForScore(candidate.myScore),
         })),
       );
       setAdding(false);
@@ -654,7 +658,8 @@ export function TierListViewPage({
         key={addSession}
         open={addOpen}
         onClose={() => setAddOpen(false)}
-        onAdd={(candidates) => void handleAdd(candidates)}
+        onAdd={(candidates, band) => void handleAdd(candidates, band)}
+        bandCounts={bandCounts}
         busy={adding}
         error={addError}
         listType={data.listType}
