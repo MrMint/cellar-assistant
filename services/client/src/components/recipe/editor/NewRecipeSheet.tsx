@@ -1,7 +1,7 @@
 "use client";
 
 import { useId } from "react";
-import { BottomSheet } from "@/components/app/BottomSheet";
+
 import {
   type AppIcon,
   Camera,
@@ -11,7 +11,10 @@ import {
   Write,
 } from "@/components/app/icons";
 import { Link } from "@/components/app/Link";
+import { pressFeedback } from "@/components/app/overlays/press";
+import { ResponsiveDialog } from "@/components/app/ResponsiveDialog";
 import { useNavigate } from "@/components/app/useNavigate";
+import { feedback } from "@/lib/feedback";
 import { holdRecipePhoto } from "./pending-photo";
 
 export type NewRecipeSheetProps = {
@@ -26,7 +29,7 @@ export type NewRecipeSheetProps = {
 };
 
 const ROW =
-  "relative flex min-h-14 items-center gap-3 rounded-md px-2 py-2 active:bg-surface-3";
+  "relative flex min-h-14 items-center gap-3 rounded-md px-2 py-2 transition-transform duration-(--ca-dur-micro) active:scale-97 active:bg-raised motion-reduce:active:scale-100";
 
 function RowBody({
   icon: Icon,
@@ -39,16 +42,16 @@ function RowBody({
 }) {
   return (
     <>
-      <span className="flex size-10 shrink-0 items-center justify-center rounded-md bg-surface-3 text-ink-1">
+      <span className="flex size-10 shrink-0 items-center justify-center rounded-md bg-raised text-glyph">
         <Icon aria-hidden className="size-5" strokeWidth={ICON_STROKE} />
       </span>
       <span className="flex min-w-0 flex-1 flex-col">
         {title}
-        <span className="t-cap text-ink-3">{description}</span>
+        <span className="t-cap text-ink-2">{description}</span>
       </span>
       <ChevronRight
         aria-hidden
-        className="size-5 text-ink-3"
+        className="size-5 text-glyph"
         strokeWidth={ICON_STROKE}
       />
     </>
@@ -70,12 +73,17 @@ export function NewRecipeSheet({
   const inputId = useId();
 
   return (
-    <BottomSheet open={open} onOpenChange={onOpenChange} title="New recipe">
+    <ResponsiveDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title="New recipe"
+    >
       <ul className="flex flex-col pb-2">
         {aiOffered && (
           // The input is visually hidden, so the row shows its keyboard focus.
           <li
-            className={`${ROW} has-[input:focus-visible]:ring-[3px] has-[input:focus-visible]:ring-ring/50`}
+            {...pressFeedback()}
+            className={`${ROW} has-[input:focus-visible]:outline-2 has-[input:focus-visible]:outline-act-ink`}
           >
             {/* The row is the file input's label, so the tap that opens the
                 sheet's row opens the picker — no second "Choose photo". */}
@@ -90,6 +98,7 @@ export function NewRecipeSheet({
                 if (file === undefined || !file.type.startsWith("image/")) {
                   return;
                 }
+                feedback("success");
                 holdRecipePhoto(file);
                 onOpenChange(false);
                 navigate.push("/recipes/new?from=photo");
@@ -100,7 +109,7 @@ export function NewRecipeSheet({
               title={
                 <label
                   htmlFor={inputId}
-                  className="t-head text-ink-1 after:absolute after:inset-0 after:content-['']"
+                  className="t-head text-ink after:absolute after:inset-0 after:content-['']"
                 >
                   Photo
                 </label>
@@ -110,7 +119,7 @@ export function NewRecipeSheet({
           </li>
         )}
         {aiOffered && (
-          <li className={ROW}>
+          <li className={ROW} {...pressFeedback()}>
             <RowBody
               icon={Paste}
               title={
@@ -118,7 +127,7 @@ export function NewRecipeSheet({
                   href="/recipes/new?from=paste"
                   overlay
                   underline="none"
-                  className="t-head text-ink-1"
+                  className="t-head text-ink"
                   onClick={() => onOpenChange(false)}
                 >
                   Paste
@@ -128,7 +137,7 @@ export function NewRecipeSheet({
             />
           </li>
         )}
-        <li className={ROW}>
+        <li className={ROW} {...pressFeedback()}>
           <RowBody
             icon={Write}
             title={
@@ -136,7 +145,7 @@ export function NewRecipeSheet({
                 href="/recipes/new?from=type"
                 overlay
                 underline="none"
-                className="t-head text-ink-1"
+                className="t-head text-ink"
                 onClick={() => onOpenChange(false)}
               >
                 Type
@@ -146,6 +155,6 @@ export function NewRecipeSheet({
           />
         </li>
       </ul>
-    </BottomSheet>
+    </ResponsiveDialog>
   );
 }

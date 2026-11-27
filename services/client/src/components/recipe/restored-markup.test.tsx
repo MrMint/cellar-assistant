@@ -229,48 +229,74 @@ describe("RecipeGroupCard (restored)", () => {
     assert.match(html, /href="\/recipes\/groups\/g1"/);
   });
 
-  test("the canonical summary renders", () => {
-    assert.match(html, /Featured: Classic Negroni/);
-    assert.match(html, /Equal parts\./);
-    assert.match(html, /★★☆☆☆/);
-    assert.match(html, />3m</);
-    assert.match(html, /Serves 1/);
+  test("a row: the photo, the name, one line in the app's words, one line of description", () => {
     assert.match(html, /src="https:\/\/example.test\/n.jpg"/);
+    assert.match(html, /<h3[^>]*>.*Negroni/);
+    assert.match(stripTags(html), /Gin · Easy · 3\u202Fmin/);
+    assert.match(html, />Equal parts\.</);
+    assert.match(html, />3 versions</);
+    assert.doesNotMatch(html, /★|Featured:|\+1 more/);
   });
 
-  test("category, spirit, versions, three tags and '+1 more'", () => {
-    assert.match(html, />cocktail</);
-    assert.match(html, />Gin</);
-    assert.match(html, />3 versions</);
-    assert.match(html, />classic</);
-    assert.doesNotMatch(html, />italian</);
-    assert.match(html, /\+1 more/);
+  test("no photo: the kit's recipe face", () => {
+    const plain = render(
+      <RecipeGroupCard
+        recipeGroup={{
+          id: "g2",
+          name: "Daiquiri",
+          category: "cocktail",
+          base_spirit: null,
+          tags: [],
+          canonical_recipe: null,
+          recipes_aggregate: { aggregate: { count: 1 } },
+        }}
+      />,
+    );
+    assert.match(plain, /data-face="recipe"/);
+    assert.doesNotMatch(plain, /versions?</);
   });
 });
 
-describe("RecipeGroupSearch (restored)", () => {
+describe("RecipeGroupSearch (Recipes-Browse)", () => {
   const html = render(
     <RecipeGroupSearch
       initialEdges={[]}
       initialEndCursor={null}
       initialHasNextPage={false}
       initialTotalCount={0}
+      between={<p>Between</p>}
     />,
   );
 
-  test("the search card and its filters", () => {
-    // X15: plain words — "recipes", not "recipe groups".
-    assert.match(html, />Search recipes</);
+  test("the search field, All recipes, the kind chip and spirit chips", () => {
     assert.match(html, /placeholder="Search recipes"/);
     assert.doesNotMatch(html, /[Rr]ecipe [Gg]roups/);
-    assert.match(html, /aria-label="Category"/);
-    assert.match(html, /aria-label="Base Spirit"/);
+    assert.match(html, />All recipes</);
+    assert.match(html, /data-slot="filter-chip"[^>]*aria-haspopup="dialog"/);
+    assert.match(stripTags(html), /All kinds/);
+    assert.match(html, />Gin</);
+    // With no term, the index's own sections sit under the field.
+    assert.match(html, /<p>Between<\/p>/);
   });
 
-  test("the empty state", () => {
-    assert.match(html, />No recipes found</);
-    assert.match(html, /Try another word, or clear the filters\./);
-    assert.match(html, />Clear filters</);
+  test("nothing at all: the empty state, with no action to clear", () => {
+    assert.match(html, />No recipes yet</);
+    assert.doesNotMatch(html, />Clear filters</);
+  });
+
+  test("a term: its results, no index sections, the kit's no-match wording", () => {
+    const searched = render(
+      <RecipeGroupSearch
+        initialQuery="zzz"
+        initialEdges={[]}
+        initialTotalCount={0}
+        between={<p>Between</p>}
+      />,
+    );
+    assert.doesNotMatch(searched, /Between/);
+    assert.match(searched, />Results</);
+    assert.match(searched, /No recipe matches “zzz”/);
+    assert.match(searched, />Clear search</);
   });
 });
 
