@@ -68,7 +68,9 @@ function fakePage(cookie: string, prefersLight: boolean) {
     documentElement: {
       setAttribute: (k: string, v: string) => attrs.set(k, v),
     },
-    querySelectorAll: () => [{ setAttribute: (k: string, v: string) => meta.set(k, v) }],
+    querySelectorAll: () => [
+      { setAttribute: (k: string, v: string) => meta.set(k, v) },
+    ],
     addEventListener: () => {},
   };
   const window = { matchMedia: () => query };
