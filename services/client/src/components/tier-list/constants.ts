@@ -101,3 +101,26 @@ export const TIER_LIST_ENTITY_TYPES: readonly TierListEntityType[] = [
   "sake",
   "tea",
 ];
+
+const ENTRY_NOUNS: Record<TierListEntityType, readonly [string, string]> = {
+  place: ["place", "places"],
+  wine: ["wine", "wines"],
+  beer: ["beer", "beers"],
+  spirit: ["spirit", "spirits"],
+  coffee: ["coffee", "coffees"],
+  sake: ["sake", "sakes"],
+  tea: ["tea", "teas"],
+};
+
+/**
+ * What a list's entries are called, by its type and how many: "1 place",
+ * "113 places", "2 wines" (the board's header and band counts). An unknown
+ * type reads "entry".
+ */
+export function entryNoun(listType: string, count: number): string {
+  const nouns = ENTRY_NOUNS[listType as TierListEntityType] ?? [
+    "entry",
+    "entries",
+  ];
+  return count === 1 ? nouns[0] : nouns[1];
+}

@@ -32,6 +32,14 @@ type Toast = {
 const toasts: Toast[] = [];
 const calls: string[] = [];
 
+/** What the next `requestInsightsAction` answers (the panel tests set it). */
+let insightsAnswer:
+  | { success: true; status: string }
+  | {
+      success: false;
+      failure: { code: string; reason: string | null; retryAt: string | null };
+    } = { success: true, status: "PENDING" };
+
 const edit = {
   seq: 7,
   kind: "MOVE" as const,
@@ -69,6 +77,10 @@ mock.module("@/components/tier-list/actions", () => ({
       return { success: true };
     },
     reorderBandAction: async () => ({ success: true }),
+    requestInsightsAction: async (id: string) => {
+      calls.push(`insights ${id}`);
+      return insightsAnswer;
+    },
     addItemToTierListAction: async () => ({ success: true }),
     undoAction: async (id: string, expectedSeq: number) => {
       calls.push(`undo ${id} #${expectedSeq}`);
@@ -94,6 +106,9 @@ const { createRoot } = await import("react-dom/client");
 const { Client, Provider } = await import("urql");
 const { TooltipProvider } = await import("@/components/ui/tooltip");
 const { TierListViewPage } = await import("./TierListViewPage");
+const { TierListInsightsPanel } = await import(
+  "./insights/TierListInsightsPanel"
+);
 
 const client = new Client({
   url: "http://test.invalid/graphql",
@@ -320,5 +335,102 @@ describe("Arrange (X23 / D4)", () => {
   test("a friend's list: no Arrange at all", async () => {
     await render({ ...data, isOwner: false, history: null });
     assert.throws(() => button("Arrange"));
+  });
+});
+
+describe("Insights writes itself on first open (L12, MC-quota)", () => {
+  const entries = ["Barolo", "Rioja", "Chianti"].map((name, i) => ({
+    id: `row-${i}`,
+    band: 4,
+    name,
+    countryCode: null,
+    region: null,
+    primaryCategory: null,
+  }));
+  const idle = {
+    items: entries,
+    aiInsights: null,
+    contentUpdatedAt: null,
+    status: "IDLE" as const,
+    failureReason: null,
+    retryAt: null,
+    showPlaceStats: false,
+  };
+  const renderPanel = async (
+    over: Partial<typeof idle> = {},
+    isOwner = true,
+  ) => {
+    await act(async () =>
+      root.render(
+        <Provider value={client}>
+          <TooltipProvider>
+            <TierListInsightsPanel
+              insights={{ ...idle, ...over }}
+              grounded={{ tierListId: "tl-1", isOwner }}
+              noun="wines"
+            />
+          </TooltipProvider>
+        </Provider>,
+      ),
+    );
+    await act(async () => new Promise((r) => setTimeout(r, 0)));
+  };
+
+  test("the owner's IDLE list of 3 asks once, and shows the working card", async () => {
+    insightsAnswer = { success: true, status: "PENDING" };
+    await renderPanel();
+    assert.deepEqual(
+      calls.filter((c) => c.startsWith("insights")),
+      ["insights tl-1"],
+    );
+    assert.ok(document.querySelector('[aria-label="Writing insights"]'));
+    assert.match(document.body.textContent ?? "", /Reading 3 wines/);
+    // A re-render (the refresh landing still IDLE) never asks twice.
+    await renderPanel();
+    assert.equal(calls.filter((c) => c.startsWith("insights")).length, 1);
+  });
+
+  test("a stranger's list is never written: a read never writes", async () => {
+    await renderPanel({}, false);
+    assert.deepEqual(
+      calls.filter((c) => c.startsWith("insights")),
+      [],
+    );
+    assert.equal(
+      document.querySelector('[aria-label="Writing insights"]'),
+      null,
+    );
+  });
+
+  test("under 3 entries, or already written, sends nothing", async () => {
+    await renderPanel({
+      items: entries.slice(0, 2),
+      status: "NOT_ENOUGH_ENTRIES" as never,
+    });
+    await renderPanel({ status: "READY" as never });
+    assert.deepEqual(
+      calls.filter((c) => c.startsWith("insights")),
+      [],
+    );
+  });
+
+  test("a quota refusal shows Limit reached with the reset", async () => {
+    insightsAnswer = {
+      success: false,
+      failure: {
+        code: "BUDGET_EXCEEDED",
+        reason: "USER_CAP",
+        retryAt: "2099-01-01T15:40:00.000Z",
+      },
+    };
+    await renderPanel();
+    const text = document.body.textContent ?? "";
+    assert.match(text, /Limit reached/);
+    assert.match(text, /try again/i);
+    assert.equal(
+      document.querySelector('[aria-label="Writing insights"]'),
+      null,
+    );
+    insightsAnswer = { success: true, status: "PENDING" };
   });
 });

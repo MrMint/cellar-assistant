@@ -453,6 +453,31 @@ export const UndoTierListEditMutation = graphql(
   ],
 );
 
+/**
+ * L12 / MC-quota: write this list's Insights now — the panel sends it once,
+ * when it sees `insightsStatus: IDLE` on a list of 3+ entries the viewer
+ * owns. Idempotent server-side (a no-op from any other status), creator
+ * only, and counted against `ai_model/tier_list_insights`: a refusal is a
+ * `BudgetExceededError` whose `retryAt` is the reset.
+ */
+export const RequestTierListInsightsMutation = graphql(
+  `
+    mutation RequestTierListInsights($tierListId: ID!) {
+      requestTierListInsights(tierListId: $tierListId) {
+        __typename
+        ... on TierList {
+          id
+          insightsStatus
+          insightsFailureReason
+          insightsRetryAt
+        }
+        ...ActorErrorFields
+      }
+    }
+  `,
+  [ActorErrorFieldsFragment],
+);
+
 /** D4: put back the undone edit `expectedSeq` names — `undo`'s mirror. */
 export const RedoTierListEditMutation = graphql(
   `

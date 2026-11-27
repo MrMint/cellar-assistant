@@ -6,7 +6,12 @@
  */
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import { type InsightsViewInput, insightsView } from "./insights-view.ts";
+import {
+  type InsightsViewInput,
+  insightsLimitNotice,
+  insightsView,
+  shouldRequestInsights,
+} from "./insights-view.ts";
 
 const now = new Date("2026-10-07T12:00:00.000Z");
 const opts = { now, locale: "en-US", timeZone: "UTC" } as const;
@@ -54,6 +59,8 @@ describe("insightsView", () => {
     assert.equal(result.generating, false);
     assert.equal(result.poll, false);
     assert.equal(result.notice?.kind, "user-cap");
+    // MC-quota: the kit's words, with the reset.
+    assert.equal(result.notice?.title, "Limit reached");
     assert.match(result.notice?.message ?? "", /after 3:40 PM/);
   });
 
@@ -96,7 +103,20 @@ describe("insightsView", () => {
       view({ status: "NOT_ENOUGH_ENTRIES", itemCount: 0 }).hint,
       null,
     );
-    assert.match(view({ status: "IDLE" }).hint ?? "", /next change/);
+    assert.match(
+      view({ status: "IDLE" }).hint ?? "",
+      /No insights written yet/,
+    );
+  });
+
+  test("L12: the owner's IDLE list of 3+ shows the working card while it writes", () => {
+    const owner = view({ status: "IDLE", isOwner: true, itemCount: 3 });
+    assert.equal(owner.generating, true);
+    assert.equal(owner.poll, false);
+    assert.equal(owner.hint, null);
+    // A visitor's IDLE list is quiet: nothing is written for them.
+    const visitor = view({ status: "IDLE", isOwner: false, itemCount: 3 });
+    assert.equal(visitor.generating, false);
   });
 
   test("no line assumes the viewer is the list's creator", () => {
@@ -127,5 +147,61 @@ describe("insightsView", () => {
   test("an older API without a status falls back to the old inference", () => {
     assert.equal(view({ status: null }).generating, true);
     assert.equal(view({ status: null, itemCount: 2 }).generating, false);
+  });
+});
+
+describe("shouldRequestInsights (L12)", () => {
+  const ask = (over: Partial<Parameters<typeof shouldRequestInsights>[0]>) =>
+    shouldRequestInsights({
+      status: "IDLE",
+      itemCount: 3,
+      isOwner: true,
+      ...over,
+    });
+
+  test("the owner's IDLE list of 3 or more asks", () => {
+    assert.equal(ask({}), true);
+    assert.equal(ask({ itemCount: 40 }), true);
+  });
+
+  test("a stranger's list never asks: the write is the owner's", () => {
+    assert.equal(ask({ isOwner: false }), false);
+  });
+
+  test("under 3 entries, or any status but IDLE, never asks", () => {
+    assert.equal(ask({ itemCount: 2 }), false);
+    for (const status of [
+      "PENDING",
+      "READY",
+      "FAILED",
+      "UNAVAILABLE",
+      "NOT_ENOUGH_ENTRIES",
+      null,
+    ] as const) {
+      assert.equal(ask({ status }), false, String(status));
+    }
+  });
+});
+
+describe("insightsLimitNotice (MC-quota)", () => {
+  test("a quota refusal reads Limit reached, with the reset", () => {
+    const notice = insightsLimitNotice(
+      {
+        code: "BUDGET_EXCEEDED",
+        reason: "USER_CAP",
+        retryAt: "2026-10-07T15:40:00.000Z",
+      },
+      opts,
+    );
+    assert.equal(notice.title, "Limit reached");
+    assert.match(notice.message, /after 3:40 PM/);
+  });
+
+  test("any other refusal is the plain couldn't-write notice", () => {
+    const notice = insightsLimitNotice(
+      { code: "FORBIDDEN", reason: null, retryAt: null },
+      opts,
+    );
+    assert.notEqual(notice.title, "Limit reached");
   });
 });

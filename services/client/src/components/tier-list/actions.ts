@@ -32,7 +32,11 @@
 
 import { useCallback, useMemo } from "react";
 import { useMutation } from "urql";
-import { unwrapResult } from "@/lib/api/result";
+import {
+  type ApiFailure,
+  failureFromTransport,
+  unwrapResult,
+} from "@/lib/api/result";
 import { addEntryFailureMessage, entryTypeOf } from "./adapter";
 import type { TierListEntityType } from "./constants";
 import {
@@ -42,6 +46,7 @@ import {
   type TierListEditView,
   type TierListHistoryView,
 } from "./history";
+import type { InsightsStatus } from "./insights/insights-view";
 import {
   AddItemsToTierListMutation,
   AddItemToTierListMutation,
@@ -51,6 +56,7 @@ import {
   RedoTierListEditMutation,
   RemoveItemFromTierListMutation,
   ReorderBandMutation,
+  RequestTierListInsightsMutation,
   UndoTierListEditMutation,
 } from "./queries";
 
@@ -137,6 +143,15 @@ export type TierListPick = {
 /** X16: how a new list starts — empty, or from your ratings. */
 export type TierListStart = "EMPTY" | "RATINGS";
 
+/**
+ * L12: the Insights write's answer — where the list's insights stand now, or
+ * the refusal as the API typed it (a `BudgetExceededError` is the quota,
+ * its `retryAt` the reset).
+ */
+export type RequestInsightsResult =
+  | { success: true; status: InsightsStatus }
+  | { success: false; failure: ApiFailure };
+
 /** One Undo or Redo: what it did, and where the history stands after it. */
 export type TierListHistoryStepResult =
   | {
@@ -168,6 +183,7 @@ export function useTierListActions() {
   const [, reorderBand] = useMutation(ReorderBandMutation);
   const [, undoEdit] = useMutation(UndoTierListEditMutation);
   const [, redoEdit] = useMutation(RedoTierListEditMutation);
+  const [, requestInsights] = useMutation(RequestTierListInsightsMutation);
 
   const addTierListAction = useCallback(
     async (
@@ -450,6 +466,27 @@ export function useTierListActions() {
     [historyStep],
   );
 
+  /** L12: write the list's Insights now (idempotent; creator only). */
+  const requestInsightsAction = useCallback(
+    async (tierListId: string): Promise<RequestInsightsResult> => {
+      const response = await requestInsights({ tierListId });
+      if (response.error !== undefined) {
+        return {
+          success: false,
+          failure: failureFromTransport(response.error),
+        };
+      }
+      const result = unwrapResult(
+        response.data?.requestTierListInsights ?? undefined,
+        "TierList",
+      );
+      return result.ok
+        ? { success: true, status: result.data.insightsStatus }
+        : { success: false, failure: result.error };
+    },
+    [requestInsights],
+  );
+
   return useMemo(
     () => ({
       addTierListAction,
@@ -461,6 +498,7 @@ export function useTierListActions() {
       reorderBandAction,
       undoAction,
       redoAction,
+      requestInsightsAction,
     }),
     [
       addTierListAction,
@@ -472,6 +510,7 @@ export function useTierListActions() {
       reorderBandAction,
       undoAction,
       redoAction,
+      requestInsightsAction,
     ],
   );
 }
