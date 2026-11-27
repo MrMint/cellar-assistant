@@ -15,6 +15,10 @@ import type { ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { stripStyleBlocks, stripTags } from "@/test-support/markup";
 
+mock.module("next/navigation", () => ({
+  useRouter: () => ({ push: () => {}, refresh: () => {} }),
+  usePathname: () => "/search",
+}));
 mock.module("next/image", () => ({
   default: (props: { alt: string }) => (
     <span data-next-image="art" data-alt={props.alt} />
@@ -26,6 +30,7 @@ const asked: unknown[] = [];
 mock.module("@/lib/api/urql-server", () => ({
   apiServerQuery: async (_document: unknown, variables: unknown) => {
     asked.push(variables);
+    if (answer instanceof Error) throw answer;
     return { itemSearch: answer };
   },
 }));
@@ -78,6 +83,9 @@ describe("ServerImageResults (restored, G32)", () => {
   test("a match goes to the result grid, not an empty or error state", async () => {
     answer = {
       __typename: "ItemSearchConnection",
+      totalCount: null,
+      totalIsLowerBound: false,
+      pageInfo: { hasNextPage: false },
       edges: [
         {
           node: {
@@ -163,5 +171,42 @@ describe("ServerImageResults (restored, G32)", () => {
     const html = text(await render());
     assert.match(html, /try again a little later/);
     assert.doesNotMatch(html, /\d:\d\d/);
+  });
+
+  test("F-101: a read that throws keeps the page, with its own failure face", async () => {
+    answer = new Error("[network] fetch failed");
+    const html = text(await render());
+    assert.match(html, /Couldn(?:'|&#x27;)t search this photo/);
+    assert.match(html, /Try again/);
+    answer = null;
+  });
+
+  test("F-100: a full page of matches is 'n+', never the limit as a total", async () => {
+    const edge = (id: string) => ({
+      node: {
+        __typename: "ItemSearchResult",
+        id: `h-${id}`,
+        name: "Barolo",
+        type: "WINE",
+        distance: 0.1,
+        item: { ...wine, id },
+      },
+    });
+    answer = {
+      __typename: "ItemSearchConnection",
+      totalCount: null,
+      totalIsLowerBound: false,
+      pageInfo: { hasNextPage: false },
+      edges: Array.from({ length: 10 }, (_, i) => edge(`w${i}`)),
+    };
+    assert.match(text(await render()), /Matches\s+10\+/);
+    answer = {
+      __typename: "ItemSearchConnection",
+      totalCount: null,
+      totalIsLowerBound: false,
+      pageInfo: { hasNextPage: false },
+      edges: [edge("w1"), edge("w2")],
+    };
+    assert.doesNotMatch(text(await render()), /Matches\s+2\+/);
   });
 });

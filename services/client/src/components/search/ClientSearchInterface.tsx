@@ -97,7 +97,7 @@ export const ClientSearchInterface = ({
     onChange,
     commit,
     clear,
-  } = useSearchQuery({ urlQuery, navigate, isNavigating });
+  } = useSearchQuery({ urlQuery, navigate, isNavigating, scope });
 
   const urqlClient = useClient();
   // N07/D25: photo search is not offered where the deployment's embedding

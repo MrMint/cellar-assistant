@@ -14,6 +14,7 @@ import { type SearchResultItem, searchResultsFromNodes } from "./adapter";
 import { BARCODE_SEARCH_LIMIT, SearchBarcodeQuery } from "./queries";
 import { RetrySearchButton } from "./RetrySearchButton";
 import { SearchResultGrid } from "./SearchResultGrid";
+import { fetchedTotalLabel } from "./universal-search";
 
 /** Where an unknown code goes: Add, to photograph the bottle. */
 const ADD_HREF = "/add?mode=bottle";
@@ -83,18 +84,23 @@ export async function ServerBarcodeResults({ code }: { code: string }) {
   // Destructured: the code is never rendered here, and
   // `lib/items/barcode.test.ts` reads every `.barcode` in a component as a
   // display site that must go through `displayBarcode`.
-  const { barcode: lookup } = await apiServerQuery(SearchBarcodeQuery, {
+  // F-101: a read that throws (transport, GraphQL) is this face's failure,
+  // not error.tsx's — the search box above stays.
+  const read = await apiServerQuery(SearchBarcodeQuery, {
     code,
     first: BARCODE_SEARCH_LIMIT,
+  }).catch((error: unknown) => {
+    console.error("[search] the barcode read failed:", error);
+    return null;
   });
-  const result = unwrapResult(lookup, "Barcode");
+  const result = read === null ? null : unwrapResult(read.barcode, "Barcode");
 
   let results: SearchResultItem[] = [];
-  if (result.ok) {
+  if (result?.ok) {
     results = searchResultsFromNodes(
       result.data.items.edges.map((edge) => edge.node),
     );
-  } else if (!isNotFound(result.error)) {
+  } else if (result === null || !isNotFound(result.error)) {
     return (
       <EmptyState
         className="py-10"
@@ -104,6 +110,7 @@ export async function ServerBarcodeResults({ code }: { code: string }) {
       />
     );
   }
+  const page = result?.ok ? result.data.items : null;
 
   const [only] = results;
   if (results.length === 1 && only !== undefined) {
@@ -114,7 +121,14 @@ export async function ServerBarcodeResults({ code }: { code: string }) {
       <div className="flex flex-col gap-3" data-search-barcode="found">
         <h2 className="t-head m-0 flex items-baseline gap-2 text-ink">
           Matches
-          <span className="t-cap tabular text-ink-2">{results.length}</span>
+          <span className="t-cap tabular text-ink-2">
+            {fetchedTotalLabel({
+              shown: results.length,
+              limit: BARCODE_SEARCH_LIMIT,
+              totalCount: page?.totalCount,
+              hasNextPage: page?.pageInfo.hasNextPage,
+            })}
+          </span>
         </h2>
         <SearchResultGrid items={results} />
       </div>
