@@ -1074,6 +1074,80 @@ describe.skipIf(skip)("UserActor (B4)", () => {
       });
     });
 
+    /**
+     * **F-31 (FR-11): a late removal cannot undo a later friendship.** Alice
+     * removes Bob, and the mirror sits in the outbox. Before it is delivered
+     * they re-friend: Alice asks, Bob accepts, which writes `friends(bob,
+     * alice)` at once. The removal then lands on Bob and, unconditionally,
+     * deleted that new row, leaving the new friendship half-made.
+     *
+     * The test database runs every test in one transaction, so `now()` ties
+     * everywhere; the removal's row is backdated a minute to model it having
+     * been queued before the re-friending, as it is on a real clock.
+     */
+    it("a queued removal delivered after a re-friend leaves the new friendship", async () => {
+      await withUserDb(async (db) => {
+        const alice = await seedPerson(db, "Alice");
+        const bob = await seedPerson(db, "Bob");
+        await befriend(db, alice, bob);
+        await (await userActor(alice, db)).removeFriend(
+          userCtx(alice, "r"),
+          bob,
+        );
+        await db
+          .update(outbox)
+          .set({ createdAt: sql`now() - interval '1 minute'` })
+          .where(
+            and(
+              eq(outbox.method, "removeFriendOtherSide"),
+              eq(outbox.targetId, bob),
+            ),
+          );
+
+        const request = await (await userActor(alice, db)).sendFriendRequest(
+          userCtx(alice, "r2"),
+          bob,
+        );
+        await (await userActor(bob, db)).acceptFriendRequest(
+          userCtx(bob, "r2"),
+          request.id,
+        );
+        expect(await friendPairs(db, [alice, bob])).toEqual(["u2→u1"]);
+
+        // Delivers the late removal (seq first), then confirmFriendship.
+        const outboxActor = await drainer(db);
+        await outboxActor.drain(systemCtx("d"));
+        expect(outboxActor.delivered.map((row) => row.method)).toEqual([
+          "removeFriendOtherSide",
+          "confirmFriendship",
+        ]);
+        expect(await friendPairs(db, [alice, bob])).toEqual(["u1→u2", "u2→u1"]);
+      });
+    });
+
+    it("a removal still deletes a friend row that predates it (the backstop)", async () => {
+      await withUserDb(async (db) => {
+        const alice = await seedPerson(db, "Alice");
+        const bob = await seedPerson(db, "Bob");
+        await befriend(db, alice, bob);
+        await (await userActor(alice, db)).removeFriend(
+          userCtx(alice, "r"),
+          bob,
+        );
+        // A legacy half-state: Bob's row survived, from before the removal.
+        await db.insert(friends).values({
+          userId: bob,
+          friendId: alice,
+          createdAt: sql`now() - interval '1 hour'`,
+        });
+
+        const outboxActor = await drainer(db);
+        await outboxActor.drain(systemCtx("d"));
+        expect(outboxActor.results).toEqual([true]);
+        expect(await friendPairs(db, [alice, bob])).toEqual([]);
+      });
+    });
+
     it("refuses to remove someone who is not a friend", async () => {
       await withUserDb(async (db) => {
         const alice = await seedPerson(db, "Alice");

@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { Slider as SliderPrimitive } from "radix-ui";
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useMutation } from "urql";
 import { useDebouncedCallback } from "@/hooks/useDebouncedCallback";
 import {
@@ -80,19 +80,32 @@ export const ItemRemainingSlider = ({
     setNow(Date.now());
   }, 10000);
 
+  // Where the person last moved the thumb, until the server's level agrees
+  // (F-160): a refresh answering an earlier save must not drag the thumb
+  // back from where the keys have since moved it.
+  const pending = useRef<number | null>(null);
+
   // Back to the saved level whenever the server's changes, and whenever a
   // finish ends without one ("Not yet", a refused write, Undo).
   useEffect(() => {
-    if (finishPhase === "idle") setPercent(percentageRemaining);
+    if (finishPhase !== "idle") return;
+    if (pending.current !== null && pending.current !== percentageRemaining)
+      return;
+    pending.current = null;
+    setPercent(percentageRemaining);
   }, [percentageRemaining, finishPhase]);
 
   const save = useDebouncedCallback((value: number) => {
     // 0% is a question, not a write — even for a bottle already saved at 0.
     if (value === 0) {
+      pending.current = null;
       finish.request({ percentageRemaining, openAt: opened ?? null });
       return;
     }
-    if (value === percentageRemaining) return;
+    if (value === percentageRemaining) {
+      pending.current = null;
+      return;
+    }
     startTransition(async () => {
       setError(null);
       const response = (
@@ -104,6 +117,11 @@ export const ItemRemainingSlider = ({
       ).data?.setCellarItemPercentage;
       const result = unwrapResult(response, "CellarItem");
       if (!result.ok) {
+        // Refused: the saved level is the truth again.
+        if (pending.current === value) {
+          pending.current = null;
+          setPercent(percentageRemaining);
+        }
         setError(result.error.message);
         return;
       }
@@ -157,6 +175,7 @@ export const ItemRemainingSlider = ({
             disabled={!isCellarOwner}
             onValueChange={(value) => {
               const next = value[0] ?? 0;
+              pending.current = next;
               setPercent(next);
               save(next);
             }}

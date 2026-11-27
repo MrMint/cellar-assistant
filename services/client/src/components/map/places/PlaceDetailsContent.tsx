@@ -5,7 +5,7 @@
  * the map drawer's body. Save / Mark Visited arrive as `setInteraction`
  * (`recordPlaceInteraction` via `usePlaceDetails`) instead of two Hasura
  * upserts with a client-computed visit count; photos are presigned reads through `next/image`;
- * Google's attribution blocks print with "Powered by Google".
+ * Google's attribution blocks print with "Place details from Google" (FR-15).
  *
  * On shadcn (S8): the feedback Snackbar is `notify`, the tooltips are
  * `ui/tooltip` (hover devices; on touch the `aria-label` names the button).

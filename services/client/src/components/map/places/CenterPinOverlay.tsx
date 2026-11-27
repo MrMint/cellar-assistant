@@ -41,7 +41,7 @@ export function CenterPinOverlay({
       </div>
 
       {/* Shadow dot at pin base for depth */}
-      <div className="pointer-events-none absolute top-1/2 left-1/2 z-[1099] size-2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-black/20" />
+      <div className="pointer-events-none absolute top-1/2 left-1/2 z-[1099] size-2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-scrim" />
 
       {/* Bottom action bar, centred from md. The map already ends above the
           tab bar and the home indicator (N22), so on phones this clears only

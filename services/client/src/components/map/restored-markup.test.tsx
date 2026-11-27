@@ -132,7 +132,7 @@ describe("PlaceMenuItems (X07)", () => {
 });
 
 describe("GoogleAttribution", () => {
-  test("Powered by Google plus the attribution blocks the terms require", () => {
+  test("Place details from Google plus the attribution blocks the terms require", () => {
     const html = render(
       <GoogleAttribution
         enrichment={{
@@ -160,7 +160,7 @@ describe("GoogleAttribution", () => {
         ]}
       />,
     );
-    assert.match(html, /Powered by Google · Yelp · Photos: Ann Author/);
+    assert.match(html, /Place details from Google · Yelp · Photos: Ann Author/);
     assert.equal(render(<GoogleAttribution enrichment={null} />), "");
   });
 });
