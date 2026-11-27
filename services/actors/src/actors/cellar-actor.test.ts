@@ -2341,6 +2341,26 @@ describe.skipIf(skip)("CellarActor move (SV-B, MC-move)", () => {
     });
   });
 
+  it("refuses a read-only member: a friend who can see the cellar cannot move its bottle out (F-78)", async () => {
+    await withTestDb(async (db) => {
+      const { friend, actor, itemId, cellarId } = await seedScenario(
+        db,
+        "FRIENDS",
+      );
+      const ctx = userCtx(friend, "r");
+      // The friend reads the cellar and the bottle...
+      expect(
+        (await actor.items(ctx, { page })).entries.map((e) => e.node.id),
+      ).toEqual([itemId]);
+      // ...but may not take it to a cellar of their own.
+      const theirs = await seedCellar(db, { createdById: friend });
+      await expect(
+        actor.updateItem(ctx, itemId, { cellarId: theirs }),
+      ).rejects.toBeInstanceOf(ForbiddenError);
+      expect((await bottleRow(db, itemId)).cellarId).toBe(cellarId);
+    });
+  });
+
   it("the same cellar is a no-op for the move: the shelf stays", async () => {
     await withTestDb(async (db) => {
       const { owner, actor, itemId, cellarId } = await seedScenario(
