@@ -325,6 +325,13 @@ test("the map page renders and asks the server for a viewport", async ({
   await primary.goto("/map");
   await settleNetwork(primary);
 
+  // The redesign's list (Map board, desktop/Places): the search sits in the
+  // dock on a phone and in the list column from md, one field either way.
+  await expect(
+    primary.getByPlaceholder("Search places", { exact: true }),
+    "the map's place search never rendered",
+  ).toBeVisible();
+
   expect(noise.pageErrors, "the map page threw").toEqual([]);
   expect(
     graphqlCalls.length,

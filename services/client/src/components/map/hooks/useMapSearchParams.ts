@@ -8,7 +8,9 @@ import {
   useQueryState,
 } from "nuqs";
 import { useCallback } from "react";
+import type { FilterKind } from "../core/map-places";
 import type { ItemType, VisitStatus } from "../types";
+import { kindsFromUrl, tierListIdsFromUrl } from "./map-url";
 
 const VALID_ITEM_TYPES: ItemType[] = [
   "wine",
@@ -65,6 +67,15 @@ export function useMapSearchParams() {
     parseAsArrayOf(parseAsString).withDefault([]),
   );
 
+  // The kind chips (Map board: Coffee / Food / Bar), filtered on the client.
+  const [rawKinds, setKinds] = useQueryState(
+    "kinds",
+    parseAsArrayOf(parseAsString).withDefault([]),
+  );
+
+  // L40: a tier list's map link, `/map?list=<id>`.
+  const [list, setList] = useQueryState("list", parseAsString);
+
   // Deep-link to a specific place (e.g. after creating one)
   const [placeId, setPlaceId] = useQueryState("placeId", parseAsString);
 
@@ -80,6 +91,8 @@ export function useMapSearchParams() {
     setMinRating(null);
     setVisitStatuses(null);
     setTierLists(null);
+    setList(null);
+    setKinds(null);
     setGlobalSearchRaw(null);
   }, [
     setSearch,
@@ -87,6 +100,8 @@ export function useMapSearchParams() {
     setMinRating,
     setVisitStatuses,
     setTierLists,
+    setList,
+    setKinds,
     setGlobalSearchRaw,
   ]);
 
@@ -96,9 +111,10 @@ export function useMapSearchParams() {
     itemTypes: parseItemTypes(rawItemTypes),
     minRating,
     visitStatuses: parseVisitStatuses(rawVisitStatuses),
-    tierLists: rawTierLists,
+    tierLists: tierListIdsFromUrl({ list, tierLists: rawTierLists }),
     placeId,
     globalSearch,
+    kinds: kindsFromUrl(rawKinds),
 
     // Setters
     setSearch: (value: string) => setSearch(value || null),
@@ -108,12 +124,17 @@ export function useMapSearchParams() {
       setMinRating(value ?? null),
     setVisitStatuses: (value: VisitStatus[]) =>
       setVisitStatuses(value.length > 0 ? value : null),
-    setTierLists: (value: string[]) =>
-      setTierLists(value.length > 0 ? value : null),
+    // The filter's own choice replaces a list link's (L40): one param holds it.
+    setTierLists: (value: string[]) => {
+      setList(null);
+      return setTierLists(value.length > 0 ? value : null);
+    },
     setPlaceId: (
       value: string | null,
       options?: { history?: "push" | "replace" },
     ) => setPlaceId(value, options),
+    setKinds: (value: FilterKind[]) =>
+      setKinds(value.length > 0 ? value : null),
     setGlobalSearch: (value: boolean) =>
       setGlobalSearchRaw(value ? null : false),
 

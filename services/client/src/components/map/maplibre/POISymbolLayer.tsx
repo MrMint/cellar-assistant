@@ -10,6 +10,7 @@ import type {
 import { Layer, Source } from "react-map-gl/maplibre";
 import type { MapDataItem, MapFilters } from "../types";
 import { LAYER_IDS, SOURCE_IDS } from "./constants";
+import type { MapPalette } from "./palette";
 import {
   type MapFeatureProperties,
   transformToGeoJSON,
@@ -20,7 +21,7 @@ interface POISymbolLayerProps {
   filters?: MapFilters;
   /** X08: the viewer's want-to-go place ids — those pins wear the badge. */
   wantToGo?: ReadonlySet<string>;
-  isDarkMode?: boolean;
+  palette: MapPalette;
   currentZoom?: number;
 }
 
@@ -515,72 +516,84 @@ const poiLayout: SymbolLayerSpecification["layout"] = {
   "symbol-sort-key": ["*", ["get", "sortKey"], -1],
 };
 
-const clusterGlowLayer: CircleLayerSpecification = {
-  id: LAYER_IDS.CLUSTER_GLOW,
-  type: "circle",
-  source: CLUSTER_SOURCE_ID,
-  paint: {
-    "circle-radius": [
-      "*",
-      ["coalesce", ["get", "animatedRadius"], ["get", "radius"]],
-      2.2,
-    ],
-    "circle-radius-transition": transition,
-    "circle-color": "#5c6bc0",
-    "circle-blur": 1,
-    "circle-opacity": ["*", 0.13, ["get", "transitionOpacity"]],
-    "circle-opacity-transition": transition,
-  },
-};
+function clusterLayersFor(palette: MapPalette): {
+  glow: CircleLayerSpecification;
+  core: CircleLayerSpecification;
+  labels: SymbolLayerSpecification;
+} {
+  const glow: CircleLayerSpecification = {
+    id: LAYER_IDS.CLUSTER_GLOW,
+    type: "circle",
+    source: CLUSTER_SOURCE_ID,
+    paint: {
+      "circle-radius": [
+        "*",
+        ["coalesce", ["get", "animatedRadius"], ["get", "radius"]],
+        2.2,
+      ],
+      "circle-radius-transition": transition,
+      "circle-color": palette.shadow,
+      "circle-blur": 1,
+      "circle-opacity": ["*", 0.25, ["get", "transitionOpacity"]],
+      "circle-opacity-transition": transition,
+    },
+  };
 
-const clusterCoreLayer: CircleLayerSpecification = {
-  id: LAYER_IDS.CLUSTER_CIRCLES,
-  type: "circle",
-  source: CLUSTER_SOURCE_ID,
-  paint: {
-    "circle-radius": ["coalesce", ["get", "animatedRadius"], ["get", "radius"]],
-    "circle-radius-transition": transition,
-    "circle-color": "#5c6bc0",
-    "circle-blur": 0.35,
-    "circle-stroke-width": 1.5,
-    "circle-stroke-color": "rgba(255, 255, 255, 0.7)",
-    "circle-opacity": ["*", 0.42, ["get", "transitionOpacity"]],
-    "circle-opacity-transition": transition,
-  },
-};
+  const core: CircleLayerSpecification = {
+    id: LAYER_IDS.CLUSTER_CIRCLES,
+    type: "circle",
+    source: CLUSTER_SOURCE_ID,
+    paint: {
+      "circle-radius": [
+        "coalesce",
+        ["get", "animatedRadius"],
+        ["get", "radius"],
+      ],
+      "circle-radius-transition": transition,
+      "circle-color": palette.pinBody,
+      "circle-stroke-width": 2,
+      "circle-stroke-color": palette.clusterRim,
+      "circle-opacity": ["get", "transitionOpacity"],
+      "circle-stroke-opacity": ["get", "transitionOpacity"],
+      "circle-opacity-transition": transition,
+    },
+  };
 
-const clusterLabelsLayer: SymbolLayerSpecification = {
-  id: LAYER_IDS.CLUSTER_LABELS,
-  type: "symbol",
-  source: CLUSTER_SOURCE_ID,
-  layout: {
-    "text-field": ["get", "displayCount"],
-    "text-font": ["Open Sans Semibold", "Arial Unicode MS Bold"],
-    "text-size": [
-      "step",
-      ["coalesce", ["get", "animatedPointCount"], ["get", "pointCount"]],
-      10,
-      10,
-      11,
-      100,
-      12,
-      1000,
-      14,
-    ],
-    "text-allow-overlap": true,
-  },
-  paint: {
-    "text-color": "#fff",
-    "text-opacity": ["get", "transitionOpacity"],
-    "text-opacity-transition": transition,
-  },
-};
+  const labels: SymbolLayerSpecification = {
+    id: LAYER_IDS.CLUSTER_LABELS,
+    type: "symbol",
+    source: CLUSTER_SOURCE_ID,
+    layout: {
+      "text-field": ["get", "displayCount"],
+      "text-font": ["Open Sans Semibold", "Arial Unicode MS Bold"],
+      "text-size": [
+        "step",
+        ["coalesce", ["get", "animatedPointCount"], ["get", "pointCount"]],
+        10,
+        10,
+        11,
+        100,
+        12,
+        1000,
+        14,
+      ],
+      "text-allow-overlap": true,
+    },
+    paint: {
+      "text-color": palette.clusterInk,
+      "text-opacity": ["get", "transitionOpacity"],
+      "text-opacity-transition": transition,
+    },
+  };
+
+  return { glow, core, labels };
+}
 
 export function POISymbolLayer({
   items,
   filters,
   wantToGo,
-  isDarkMode,
+  palette,
   currentZoom,
 }: POISymbolLayerProps) {
   const allGeoJson = useMemo(
@@ -618,35 +631,32 @@ export function POISymbolLayer({
       paint: {
         "icon-opacity": ["*", ["get", "opacity"], ["get", "transitionOpacity"]],
         "icon-opacity-transition": transition,
-        "text-color": isDarkMode
-          ? [
-              "case",
-              ["boolean", ["feature-state", "hover"], false],
-              "#8ab4f8",
-              "#e0e0e0",
-            ]
-          : [
-              "case",
-              ["boolean", ["feature-state", "hover"], false],
-              "#1a73e8",
-              ["get", "itemTypeColor"],
-            ],
-        "text-halo-color": isDarkMode ? "rgba(0, 0, 0, 0.8)" : "#fff",
+        "text-color": [
+          "case",
+          ["boolean", ["feature-state", "hover"], false],
+          palette.labelHover,
+          palette.label,
+        ],
+        "text-halo-color": palette.halo,
         "text-halo-width": 1.5,
         "text-opacity": ["*", ["get", "opacity"], ["get", "transitionOpacity"]],
         "text-opacity-transition": transition,
         "text-translate": [0, -19],
       },
     }),
-    [isDarkMode],
+    [palette],
   );
+
+  // The cluster disc (Map board): the card surface, an edge-2 ring, the
+  // count in ink, in the map's theme.
+  const clusterLayers = useMemo(() => clusterLayersFor(palette), [palette]);
 
   return (
     <>
       <Source id={CLUSTER_SOURCE_ID} type="geojson" data={clusterData}>
-        <Layer {...clusterGlowLayer} />
-        <Layer {...clusterCoreLayer} />
-        <Layer {...clusterLabelsLayer} />
+        <Layer {...clusterLayers.glow} />
+        <Layer {...clusterLayers.core} />
+        <Layer {...clusterLayers.labels} />
       </Source>
 
       <Source id={SOURCE_IDS.POIS} type="geojson" data={poiData} promoteId="id">

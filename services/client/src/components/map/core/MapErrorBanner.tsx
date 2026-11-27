@@ -2,6 +2,7 @@
 
 import { IconButton } from "@/components/app/IconButton";
 import { Close, ErrorIcon, ICON_STROKE } from "@/components/app/icons";
+import { feedback } from "@/lib/feedback";
 
 interface MapErrorBannerProps {
   message: string;
@@ -27,12 +28,15 @@ export function MapErrorBanner({ message, onDismiss }: MapErrorBannerProps) {
         strokeWidth={ICON_STROKE}
         className="mt-0.5 size-4 shrink-0"
       />
-      <p className="type-callout min-w-0 flex-1 self-center">{message}</p>
+      <p className="t-cap min-w-0 flex-1 self-center">{message}</p>
       {onDismiss ? (
         <IconButton
           aria-label="Dismiss"
           size="sm"
-          onClick={onDismiss}
+          onClick={() => {
+            feedback("press");
+            onDismiss();
+          }}
           className="-my-1.5 shrink-0 text-destructive hover:text-destructive"
         >
           <Close />

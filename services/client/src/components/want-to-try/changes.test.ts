@@ -75,7 +75,7 @@ describe("want-to-go pins", () => {
     const plain = byId.get("plain");
     assert.ok(saved && !saved.isCluster && plain && !plain.isCluster);
     assert.equal(saved.wantToTry, true);
-    assert.equal(saved.pinImageName, pinImageName("default", "poi-wine", true));
+    assert.equal(saved.pinImageName, pinImageName("bar", "poi-wine", true));
     assert.match(saved.pinImageName, /^pin-want-/);
     assert.equal(plain.wantToTry, false);
     assert.match(plain.pinImageName, /^pin-(?!want-)/);
