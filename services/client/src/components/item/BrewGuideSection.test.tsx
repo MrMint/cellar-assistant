@@ -13,6 +13,18 @@ import { brewGuide, typicalBrew } from "./brew-table";
 
 const item = { itemId: "i1", type: "TEA", name: "Sencha" } as ItemView;
 
+const quiet = new Client({
+  url: "http://localhost/graphql",
+  exchanges: [fetchExchange],
+  fetch: () => new Promise<Response>(() => {}),
+});
+const view = (props: Parameters<typeof BrewGuideView>[0]) =>
+  renderToStaticMarkup(
+    <Provider value={quiet}>
+      <BrewGuideView {...props} />
+    </Provider>,
+  );
+
 describe("BrewGuideSection", () => {
   test("BrewGuideSection renders nothing until its read answers (L38)", () => {
     const client = new Client({
@@ -32,18 +44,16 @@ describe("BrewGuideSection", () => {
   });
 
   test("Brew guide: a style with no row shows no guide until you add your own (L08)", () => {
-    const html = renderToStaticMarkup(
-      <BrewGuideView
-        itemType="TEA"
-        itemId="i1"
-        guide={brewGuide(typicalBrew("TEA", { category: "blend" }), null)}
-        prefs={null}
-      />,
-    );
-    assert.match(html, /Add your own/);
-    assert.doesNotMatch(html, />typical</);
+    const html = view({
+      itemType: "TEA",
+      itemId: "i1",
+      guide: brewGuide(typicalBrew("TEA", { category: "blend" }), null),
+      prefs: null,
+    });
+    assert.match(html, /Add yours/);
+    assert.match(html, /No typical numbers for this tea/);
     assert.doesNotMatch(html, /Typical for/);
-    assert.doesNotMatch(html, /Start first steep/);
+    assert.doesNotMatch(html, /Start steep/);
   });
 
   test("Brew guide: the typical row is labelled typical, yours as yours", () => {
@@ -53,31 +63,29 @@ describe("BrewGuideSection", () => {
       doseGrams: null,
       waterMl: null,
     };
-    const html = renderToStaticMarkup(
-      <BrewGuideView
-        itemType="TEA"
-        itemId="i1"
-        guide={brewGuide(typicalBrew("TEA", { category: "oolong" }), prefs)}
-        prefs={prefs}
-      />,
-    );
+    const html = view({
+      itemType: "TEA",
+      itemId: "i1",
+      guide: brewGuide(typicalBrew("TEA", { category: "oolong" }), prefs),
+      prefs: prefs,
+    });
     assert.match(html, /How to steep/);
-    assert.match(html, /95 °C/);
-    assert.match(html, />yours</);
-    assert.match(html, />typical</);
+    assert.match(html, /95\u202F°C/);
+    // Only your own numbers are tagged; the rest are the typical row's.
+    assert.equal(html.match(/>Yours</g)?.length, 1);
     assert.match(html, /Typical for oolong/);
-    assert.match(html, /Start first steep · 3:00/);
+    assert.match(html, />Edit</);
+    assert.match(html, />Start steep</);
+    assert.match(html, />3:00</);
   });
 
-  test("Brew guide: a well-formed <dl> (E-10, axe definition-list) and a 44px Edit (CR-9, L8)", () => {
-    const html = renderToStaticMarkup(
-      <BrewGuideView
-        itemType="TEA"
-        itemId="i1"
-        guide={brewGuide(typicalBrew("TEA", { category: "oolong" }), null)}
-        prefs={null}
-      />,
-    );
+  test("Brew guide: a well-formed <dl> (E-10, axe definition-list) and a 44px Add yours (CR-9, L8)", () => {
+    const html = view({
+      itemType: "TEA",
+      itemId: "i1",
+      guide: brewGuide(typicalBrew("TEA", { category: "oolong" }), null),
+      prefs: null,
+    });
     const dl = /<dl[^>]*>([\s\S]*?)<\/dl>/.exec(html)?.[1] ?? "";
     assert.ok(dl.length > 0, "the guide renders its facts");
     // Each group is a <div> holding only <dt> then <dd>s: no stray element,
@@ -93,7 +101,11 @@ describe("BrewGuideSection", () => {
         `only dt/dd in a group: ${tags.join(",")}`,
       );
     }
-    const edit = /<button[^>]*>Edit<\/button>/.exec(html)?.[0] ?? "";
-    assert.match(edit, /min-h-11/, "the Edit target is at least 44px tall");
+    const edit = /<button[^>]*>Add yours<\/button>/.exec(html)?.[0] ?? "";
+    assert.match(
+      edit,
+      /min-h-11/,
+      "the Add yours target is at least 44px tall",
+    );
   });
 });
