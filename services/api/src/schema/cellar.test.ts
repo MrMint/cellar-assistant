@@ -673,3 +673,69 @@ describe("UI parity wave A: counts, filters, stats", () => {
     expect(calls).toEqual([]);
   });
 });
+
+describe("SV-B MC-move: updateCellarItem(input: { cellarId })", () => {
+  const DEST = "55555555-5555-4555-8555-555555555555";
+
+  it("passes the destination to the source cellar's actor, which does the move", async () => {
+    const { invoke, calls } = stubSidecar({
+      "CellarActor.updateItem": () => ({
+        ...cellarItem,
+        cellarId: DEST,
+        location: null,
+      }),
+    });
+    const result = await run(
+      `mutation {
+         updateCellarItem(cellarId: "${CELLAR_ID}", cellarItemId: "${cellarItem.id}", input: { cellarId: "${DEST}" }) {
+           __typename
+           ... on CellarItem { cellarId location }
+         }
+       }`,
+      testContext(invoke, viewer),
+    );
+    expect(result.errors).toBeUndefined();
+    expect(calls[0]?.actorId).toBe(CELLAR_ID);
+    expect(calls[0]?.args[2]).toEqual({ cellarId: DEST });
+    expect(result.data?.updateCellarItem).toEqual({
+      __typename: "CellarItem",
+      cellarId: DEST,
+      location: null,
+    });
+  });
+
+  it("null is no move: the key is not sent", async () => {
+    const { invoke, calls } = stubSidecar({
+      "CellarActor.updateItem": () => cellarItem,
+    });
+    const result = await run(
+      `mutation {
+         updateCellarItem(cellarId: "${CELLAR_ID}", cellarItemId: "${cellarItem.id}", input: { cellarId: null, percentageRemaining: 50 }) { __typename }
+       }`,
+      testContext(invoke, viewer),
+    );
+    expect(result.errors).toBeUndefined();
+    expect(calls[0]?.args[2]).toEqual({ percentageRemaining: 50 });
+  });
+
+  it("a destination the viewer cannot write comes back as the actor's NotFound", async () => {
+    const { invoke } = stubSidecar({
+      "CellarActor.updateItem": () => {
+        throw new NotFoundError(`CellarActor(${DEST}) has no row`);
+      },
+    });
+    const result = await run(
+      `mutation {
+         updateCellarItem(cellarId: "${CELLAR_ID}", cellarItemId: "${cellarItem.id}", input: { cellarId: "${DEST}" }) {
+           __typename
+           ... on NotFoundError { message }
+         }
+       }`,
+      testContext(invoke, viewer),
+    );
+    expect(result.errors).toBeUndefined();
+    expect(result.data?.updateCellarItem).toMatchObject({
+      __typename: "NotFoundError",
+    });
+  });
+});

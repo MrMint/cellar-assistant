@@ -753,6 +753,11 @@ type Beer implements Item {
 
   """Which of the six tables this row lives in."""
   type: ItemType!
+
+  """
+  SV-B: the fields the label read guessed that you never accepted or edited, from the onboarding that created this item — what “Check this” points at. Empty unless you created the item from a read.
+  """
+  unconfirmedFields: [String!]!
   updatedAt: DateTime!
   vintage: Date
 }
@@ -1832,6 +1837,11 @@ type Coffee implements Item {
 
   """Which of the six tables this row lives in."""
   type: ItemType!
+
+  """
+  SV-B: the fields the label read guessed that you never accepted or edited, from the onboarding that created this item — what “Check this” points at. Empty unless you created the item from a read.
+  """
+  unconfirmedFields: [String!]!
   updatedAt: DateTime!
 }
 
@@ -1905,8 +1915,15 @@ input ConfirmItemOnboardingInput {
   Resolved through `BrandRegistryActor` (find-or-create by `lower(trim(name))`), never written directly.
   """
   brandName: String
+
+  """Absent: a saved draft's own cellar, if it has one. `null`: none."""
   cellarId: ID
   cellarItemId: ID
+
+  """
+  SV-B: the guessed fields the person accepted or edited, so `Item.unconfirmedFields` can name the ones they never touched. Absent keeps what a saved draft recorded.
+  """
+  confirmedFields: [String!]
   country: String
   description: String
 
@@ -3158,6 +3175,11 @@ interface Item {
 
   """Which of the six tables this row lives in."""
   type: ItemType!
+
+  """
+  SV-B: the fields the label read guessed that you never accepted or edited, from the onboarding that created this item — what “Check this” points at. Empty unless you created the item from a read.
+  """
+  unconfirmedFields: [String!]!
   updatedAt: DateTime!
 }
 
@@ -3428,23 +3450,59 @@ type ItemOnboarding {
   barcode: String
   barcodeType: String
 
+  """SV-B: the cellar a saved draft is aimed at."""
+  cellarId: ID
+
   """0–1. Drives whether the client pre-fills or suggests."""
   confidence: Float
+
+  """
+  SV-B: the guessed fields the person accepted or edited (`saveDraft`, `confirmItemOnboarding`).
+  """
+  confirmedFields: [String!]!
   createdAt: DateTime!
 
   """
   The model's proposal. Its per-type shape belongs to the prompt, not to this schema — the actor stores it verbatim.
   """
   defaults: JSON
+
+  """SV-B: a saved draft's maker (its brand name)."""
+  displayMaker: String
+
+  """SV-B: a saved draft's name, for its “Needs details” row."""
+  displayName: String
+
+  """
+  SV-B: the saved draft's fields (`SaveDraftInput.fields`), to finish it from. Null until `saveDraft`.
+  """
+  draftFields: JSON
   frontLabelImageId: ID
   id: ID!
+
+  """SV-B: a saved draft's picture, a `files.id`."""
+  imageId: ID
   itemType: ItemType!
   status: OnboardingStatus!
   updatedAt: DateTime!
   userId: ID!
+  vintageAnswer: VintageAnswer!
+}
+
+type ItemOnboardingConnection {
+  edges: [ItemOnboardingEdge!]!
+  pageInfo: PageInfo!
+
+  """Total rows matching the query, or null when counting is not cheap."""
+  totalCount: Int
 }
 
 union ItemOnboardingDefaultsResult = BudgetExceededError | ConflictError | ForbiddenError | ItemOnboarding | NotFoundError | ValidationError
+
+type ItemOnboardingEdge {
+  cursor: String!
+  node: ItemOnboarding!
+}
 
 """A typed reference to an item: which table, and which row."""
 input ItemRefInput {
@@ -4365,6 +4423,11 @@ type Mutation {
   resubmitPlace(input: ResubmitPlaceInput!, placeId: ID!): ResubmitPlaceResult!
 
   """
+  SV-B: keep an unfinished bottle on your account, aimed at a cellar. Yours alone: someone else's draft, or a cellar you cannot write, is a `NotFoundError`. A filed session (`CONFIRMED`, `MATCHED`) is a `ConflictError`. No model call.
+  """
+  saveDraft(input: SaveDraftInput!): SaveDraftResult!
+
+  """
   Ask another user to be friends. Rejected for yourself (Validation), an existing friend, or a request already open either way (Conflict). All four carry an `ActorError.reason` — CANNOT_FRIEND_SELF, ALREADY_FRIENDS, FRIEND_REQUEST_ALREADY_SENT or FRIEND_REQUEST_ALREADY_RECEIVED — because the three Conflicts share one `code`. Switch on `reason`; never match on `message`.
   """
   sendFriendRequest(userId: ID!): SendFriendRequestResult!
@@ -4611,6 +4674,7 @@ enum OnboardingStatus {
   CONFIRMED
   FAILED
   MATCHED
+  NEEDS_DETAILS
   START
 }
 
@@ -5688,6 +5752,35 @@ type Query {
   ): QueryMyTierListsResult!
 
   """
+  SV-B: your saved “Needs details” drafts, newest first — one cellar's, or all of yours without `cellarId`. Empty when signed out. Pages over the newest 200.
+  """
+  needsDetails(
+    """
+    An `edge.cursor` from a previous page. Opaque and owned by the actor that minted it: cursors are not interchangeable between fields.
+    """
+    after: String
+
+    """**Not supported.** See `last`. Paging is forward-only."""
+    before: String
+    cellarId: ID
+
+    """
+    How many edges to return, 1 to 100 inclusive; defaults to 20. Over the cap is a `VALIDATION` error, not a silent clamp.
+    """
+    first: Int
+
+    """
+    **Not supported.** Present because the Relay spec puts it here; passing it is a `VALIDATION` error rather than a silently forward page. Paging is forward-only — use `first`/`after`.
+    """
+    last: Int
+  ): QueryNeedsDetailsResult!
+
+  """
+  SV-B: how many of your drafts need details — on one cellar, or in all of yours without `cellarId`. A draft is not a cellar item, so this is not in the cellar's item counts. 0 when signed out.
+  """
+  needsDetailsCount(cellarId: ID): Int!
+
+  """
   Invokes PingActor through the sidecar. Proves api -> sidecar -> placement -> actor host.
   """
   ping(actorId: String, message: String): Pong!
@@ -6017,6 +6110,8 @@ union QueryMyPlaceInteractionsResult = BudgetExceededError | ConflictError | For
 union QueryMyRecipesResult = BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | RecipeConnection | ValidationError
 
 union QueryMyTierListsResult = BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | TierListConnection | ValidationError
+
+union QueryNeedsDetailsResult = BudgetExceededError | ConflictError | ForbiddenError | ItemOnboardingConnection | NotFoundError | ValidationError
 
 union QueryPlaceResult = BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | Place | ValidationError
 
@@ -7235,6 +7330,11 @@ type Sake implements Item {
 
   """Which of the six tables this row lives in."""
   type: ItemType!
+
+  """
+  SV-B: the fields the label read guessed that you never accepted or edited, from the onboarding that created this item — what “Check this” points at. Empty unless you created the item from a read.
+  """
+  unconfirmedFields: [String!]!
   updatedAt: DateTime!
 
   """
@@ -7277,6 +7377,26 @@ enum SakeServingTemperature {
   tobikiri_kan
   yuki_hie
 }
+
+"""
+SV-B: an unfinished bottle, kept on the account. A draft missing a floor field (its name, or an attribute the item type requires) is saved as `NEEDS_DETAILS`; one whose floor is met keeps its status, for `confirmItemOnboarding`.
+"""
+input SaveDraftInput {
+  """The cellar it is aimed at; yours to write."""
+  cellarId: ID
+  confirmedFields: [String!]!
+
+  """
+  `{ name, description, country, brandName, attributes }`, any of them missing — `ConfirmItemOnboardingInput`'s item fields.
+  """
+  fields: JSON!
+
+  """From `startItemOnboarding` or `openItemDraft`."""
+  onboardingId: ID!
+  vintageAnswer: VintageAnswer!
+}
+
+union SaveDraftResult = BudgetExceededError | ConflictError | ForbiddenError | ItemOnboarding | NotFoundError | ValidationError
 
 type SeenAtConnection {
   edges: [SeenAtEdge!]!
@@ -7823,6 +7943,11 @@ type Spirit implements Item {
 
   """Which of the six tables this row lives in."""
   type: ItemType!
+
+  """
+  SV-B: the fields the label read guessed that you never accepted or edited, from the onboarding that created this item — what “Check this” points at. Empty unless you created the item from a read.
+  """
+  unconfirmedFields: [String!]!
   updatedAt: DateTime!
   vintage: Date
 }
@@ -8390,6 +8515,11 @@ type Tea implements Item {
 
   """Which of the six tables this row lives in."""
   type: ItemType!
+
+  """
+  SV-B: the fields the label read guessed that you never accepted or edited, from the onboarding that created this item — what “Check this” points at. Empty unless you created the item from a read.
+  """
+  unconfirmedFields: [String!]!
   updatedAt: DateTime!
 }
 
@@ -8861,6 +8991,11 @@ input UpdateCellarInput {
 
 input UpdateCellarItemInput {
   acquiredOn: Date
+
+  """
+  Move the bottle to this cellar, which the viewer must be able to write. A move clears `location`; the bottle's logs follow it. Its own cellar is a no-op.
+  """
+  cellarId: ID
   displayImageId: ID
   drinkFrom: Date
   drinkUntil: Date
@@ -9421,6 +9556,15 @@ enum ViewerRole {
 }
 
 """
+SV-B: a draft's answer to “which vintage?”. `NON_VINTAGE` is the answer “No vintage”; `UNANSWERED` is no answer yet. Both read as a NULL vintage once the item exists, which is why the draft keeps them apart.
+"""
+enum VintageAnswer {
+  NON_VINTAGE
+  UNANSWERED
+  VINTAGE
+}
+
+"""
 Filters against the *viewer's* `user_place_interactions`. There is no argument for whose visits to read; it is always the viewer's.
 """
 enum VisitStatusFilter {
@@ -9787,6 +9931,11 @@ type Wine implements Item {
 
   """Which of the six tables this row lives in."""
   type: ItemType!
+
+  """
+  SV-B: the fields the label read guessed that you never accepted or edited, from the onboarding that created this item — what “Check this” points at. Empty unless you created the item from a read.
+  """
+  unconfirmedFields: [String!]!
   updatedAt: DateTime!
   variety: String
   vineyardDesignation: String

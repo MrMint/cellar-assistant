@@ -1162,3 +1162,88 @@ export const MENU_SCAN = {
     },
   ] satisfies readonly DemoMenuLine[],
 };
+
+/* -------------------------------------------------------------------------- */
+/* Needs-details drafts (SV-B, MC-drafts)                                      */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Bottles saved before they were finished: each misses the floor its type
+ * needs, so `saveDraft` files it as `NEEDS_DETAILS` on the cellar named.
+ * Two of me's cellars carry one each, so the per-cellar count and the
+ * all-cellars list both have something to show. Moving a bottle needs
+ * nothing new: me already owns three cellars.
+ */
+export type DemoDraft = {
+  readonly key: string;
+  readonly owner: DemoUserKey;
+  readonly cellar: string;
+  readonly type: ItemType;
+  readonly fields: {
+    readonly name?: string;
+    readonly brandName?: string;
+    readonly country?: string;
+    readonly attributes?: Readonly<Record<string, unknown>>;
+  };
+  readonly confirmedFields: readonly string[];
+  readonly vintageAnswer: "VINTAGE" | "NON_VINTAGE" | "UNANSWERED";
+};
+
+export const DRAFTS: readonly DemoDraft[] = [
+  {
+    // No style yet: the wine floor's first field.
+    key: "d_home_garnacha",
+    owner: "me",
+    cellar: "home",
+    type: "WINE",
+    fields: {
+      name: "Hillside Garnacha",
+      brandName: "Demo Valley Cellars",
+      country: "SPAIN",
+    },
+    confirmedFields: ["name", "brandName"],
+    vintageAnswer: "UNANSWERED",
+  },
+  {
+    // Style known, vintage still unanswered.
+    key: "d_lake_rose",
+    owner: "me",
+    cellar: "lake",
+    type: "WINE",
+    fields: {
+      name: "Dockside Rosé",
+      attributes: { style: "ROSE" },
+    },
+    confirmedFields: ["name"],
+    vintageAnswer: "UNANSWERED",
+  },
+];
+
+/* -------------------------------------------------------------------------- */
+/* Seed extensions                                                             */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * What `demo-seed.ts` hands an optional sibling module
+ * (`demo-seed-quota.ts`, `demo-seed-social.ts`, `demo-seed-avatar.ts`). Each
+ * one exports `seed(ctx: DemoSeedContext): Promise<void>`, runs after every
+ * built-in step, and must be idempotent like the rest. A module that does not
+ * exist is skipped.
+ */
+export type DemoSeedContext = {
+  /** The seed's database handle (`createDb`), for reads and direct writes. */
+  readonly db: unknown;
+  readonly userId: (k: DemoUserKey) => string;
+  readonly cellarId: (key: string) => string;
+  readonly itemId: (key: string) => string;
+  /** The v5-shaped uuid for a stable key, as every other seeded id. */
+  readonly demoId: (key: string) => string;
+  /** One GraphQL request as `as`; throws on transport or top-level errors. */
+  readonly graphql: (
+    as: DemoUserKey,
+    query: string,
+    variables: Record<string, unknown>,
+  ) => Promise<Record<string, unknown>>;
+  /** Tally a row for the closing created / kept table. */
+  readonly count: (step: string, created: boolean) => void;
+};
