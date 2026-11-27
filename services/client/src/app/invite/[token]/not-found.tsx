@@ -22,7 +22,7 @@ export default async function InviteNotFound() {
       copy={COPY}
       icon={<People strokeWidth={ICON_STROKE} />}
       actions={
-        <Button asChild>
+        <Button asChild variant="outline">
           <Link
             href={viewer === null ? "/sign-in" : "/friends"}
             underline="none"

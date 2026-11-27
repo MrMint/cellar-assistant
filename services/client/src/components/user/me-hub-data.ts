@@ -158,3 +158,155 @@ export const countTiles = (counts: MeCounts | null | undefined): CountTile[] =>
             noun: counts[key] === 1 ? one : many,
           };
         });
+
+/** Requests drawn as rows on the hub; the rest wait on Friends. */
+export const REQUEST_ROWS = 3;
+
+/**
+ * A pinned list's band strip is drawn from its entries; past this many the
+ * strip would be a sample of the top bands, so it is not drawn at all.
+ */
+export const BAND_STRIP_MAX = 100;
+
+/**
+ * The hub's own extras (Shell-Me), a document of its own because the shell
+ * reads `MeHubQuery` on every page for the Me badge: the Loved, Want to try
+ * and Friends counts, each pinned list's bands, and the requests drawn as
+ * rows. The pages are literals, not variables: a variable `first` is costed
+ * at the cap, and 100 lists × 100 entries is past the API's row limit
+ * (`avatar.test.ts` runs its rule). 3 = PINNED_TIER_LISTS, 100 =
+ * BAND_STRIP_MAX, 3 = REQUEST_ROWS.
+ */
+export const MeExtrasQuery = graphql(
+  `
+  query MeExtras {
+    me {
+      id
+      favorites(first: 1) {
+        totalCount
+      }
+      wantToTry(first: 1) {
+        totalCount
+      }
+    }
+    myFriends(first: 1) {
+      __typename
+      ... on FriendConnection {
+        totalCount
+      }
+      ...ActorErrorFields
+    }
+    myTierLists(first: 3, section: MINE) {
+      __typename
+      ... on TierListConnection {
+        edges {
+          node {
+            id
+            items(first: 100) {
+              edges {
+                node {
+                  band
+                }
+              }
+            }
+          }
+        }
+      }
+      ...ActorErrorFields
+    }
+    myFriendRequests(direction: INCOMING, first: 3) {
+      __typename
+      ... on FriendRequestConnection {
+        edges {
+          node {
+            id
+            status
+            direction
+            user {
+              id
+              displayName
+              avatarUrl
+            }
+          }
+        }
+      }
+      ...ActorErrorFields
+    }
+  }
+`,
+  [ActorErrorFieldsFragment],
+);
+
+export type BandCount = { band: number; count: number };
+
+export type HubRequest = {
+  id: string;
+  userId: string;
+  displayName: string;
+  avatarUrl: string | null;
+};
+
+export type MeExtras = {
+  loved: number | null;
+  wantToTry: number | null;
+  friends: number | null;
+  /** Each pinned list's entries per band, best band first; by list id. */
+  bands: Record<string, BandCount[]>;
+  /** Pending requests sent to the viewer, the only ones Accept can answer. */
+  requests: HubRequest[];
+};
+
+export const EMPTY_ME_EXTRAS: MeExtras = {
+  loved: null,
+  wantToTry: null,
+  friends: null,
+  bands: {},
+  requests: [],
+};
+
+const bandCounts = (bands: readonly number[]): BandCount[] => {
+  const counts = new Map<number, number>();
+  for (const band of bands) counts.set(band, (counts.get(band) ?? 0) + 1);
+  return Array.from(counts.entries())
+    .sort(([a], [b]) => b - a)
+    .map(([band, count]) => ({ band, count }));
+};
+
+/** The extras' result → the hub's props; any failed part reads as absent. */
+export const meExtrasFromResult = (
+  data: ResultOf<typeof MeExtrasQuery> | null | undefined,
+): MeExtras => {
+  if (data === null || data === undefined) return EMPTY_ME_EXTRAS;
+  const friends =
+    data.myFriends.__typename === "FriendConnection" ? data.myFriends : null;
+  const lists =
+    data.myTierLists.__typename === "TierListConnection"
+      ? data.myTierLists.edges
+      : [];
+  const requests =
+    data.myFriendRequests.__typename === "FriendRequestConnection"
+      ? data.myFriendRequests.edges
+      : [];
+  return {
+    loved: data.me?.favorites.totalCount ?? null,
+    wantToTry: data.me?.wantToTry.totalCount ?? null,
+    friends: friends?.totalCount ?? null,
+    bands: Object.fromEntries(
+      lists.map(({ node }) => [
+        node.id,
+        bandCounts(node.items.edges.map((edge) => edge.node.band)),
+      ]),
+    ),
+    requests: requests
+      .filter(
+        ({ node }) =>
+          node.status === "PENDING" && node.direction === "INCOMING",
+      )
+      .map(({ node }) => ({
+        id: node.id,
+        userId: node.user.id,
+        displayName: node.user.displayName,
+        avatarUrl: node.user.avatarUrl ?? null,
+      })),
+  };
+};

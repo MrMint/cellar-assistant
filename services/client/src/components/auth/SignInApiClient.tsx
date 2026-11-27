@@ -3,8 +3,9 @@
 /**
  * Sign-in against **better-auth** (`services/actors`), through D1's client.
  *
- * Built beside the Nhost sign-in form D9 deleted, with deliberately identical
- * markup so the swap was invisible to anyone using the app.
+ * Laid out per Shell-Entry: the kinds and the app's name, the providers
+ * first, "or", then email and password, and a way to make an account. No
+ * "forgot password": there is no reset flow behind it (owner question).
  *
  * Nothing here is a server action. `authClient` is a same-origin `fetch` into
  * `/api/auth/*`, which the Next route handler proxies to the actors app, so the
@@ -13,15 +14,22 @@
  */
 
 import { type FormEvent, useCallback, useState } from "react";
-import { Link } from "@/components/app/Link";
 import { Button } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button-variants";
 import { Spinner } from "@/components/ui/spinner";
+import { PressLink } from "@/components/user/PressLink";
 import { usePurgeUserCachesOnMount } from "@/hooks/usePurgeUserCachesOnMount";
 import { authClient, useAuthAction } from "@/lib/api/auth-client";
 import type { PasswordMode } from "@/lib/auth/password-mode";
+import { cn } from "@/lib/utils";
 import { HOME_PATH, withReturnTo } from "@/utilities/sanitize-return-to";
-import { AuthField, AuthPage, AuthPanel, WordDivider } from "./AuthCard";
-import { LiquidBackground } from "./LiquidBackground";
+import {
+  AuthBrand,
+  AuthField,
+  AuthPage,
+  AuthPanel,
+  WordDivider,
+} from "./AuthCard";
 import {
   FORMER_PASSWORD_USER_NOTE,
   SocialButtons,
@@ -79,7 +87,7 @@ export function SignInApiClient({
   const formError = error?.message ?? null;
 
   const passwordForm = (
-    <form onSubmit={handleSubmit} className="mt-4 flex flex-col gap-4">
+    <form onSubmit={handleSubmit} className="flex flex-col gap-4">
       <AuthField
         id="sign-in-email"
         label="Email"
@@ -110,41 +118,19 @@ export function SignInApiClient({
 
   return (
     <AuthPage>
-      <LiquidBackground />
-      <AuthPanel glass>
-        <div
-          className={
-            passwordMode === "disabled"
-              ? "flex flex-col gap-2"
-              : "mb-4 flex flex-col gap-2"
-          }
-        >
-          <div className="mb-4 flex flex-col gap-2">
-            <h1 className="type-title-2">Sign in</h1>
-            <p className="type-callout text-ink-2">
-              New to Cellar Assistant?{" "}
-              <Link
-                href={withReturnTo("/sign-up", returnTo)}
-                underline="always"
-                className="text-ink-1"
-              >
-                Sign up!
-              </Link>
-            </p>
-          </div>
-
+      <AuthPanel>
+        <AuthBrand line="Sign in to your cellars" />
+        <div className="flex flex-col gap-2">
           <SocialButtons
             busy={busy}
             redirectingTo={redirectingTo}
             ssoError={ssoError}
             onSelect={(provider) => void start(provider)}
           />
-          {passwordMode === "disabled" && (
-            <p className="type-callout mt-2 text-ink-2">
-              {FORMER_PASSWORD_USER_NOTE}
-            </p>
-          )}
         </div>
+        {passwordMode === "disabled" && (
+          <p className="t-cap m-0 text-ink-2">{FORMER_PASSWORD_USER_NOTE}</p>
+        )}
         {passwordMode === "enabled" && (
           <>
             <WordDivider>or</WordDivider>
@@ -156,18 +142,26 @@ export function SignInApiClient({
             <WordDivider />
             <Button
               type="button"
-              variant="ghost"
+              variant="quiet"
               size="sm"
               aria-expanded={passwordOpen}
               aria-controls="password-sign-in"
               onClick={() => setPasswordOpen((open) => !open)}
-              className="mt-2 self-center"
+              className="self-center"
             >
               Sign in with your password
             </Button>
             {passwordOpen && <div id="password-sign-in">{passwordForm}</div>}
           </>
         )}
+        <WordDivider />
+        <PressLink
+          href={withReturnTo("/sign-up", returnTo)}
+          underline="none"
+          className={cn(buttonVariants({ variant: "outline" }), "w-full")}
+        >
+          Create an account
+        </PressLink>
       </AuthPanel>
     </AuthPage>
   );

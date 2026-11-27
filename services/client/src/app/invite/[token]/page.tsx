@@ -9,7 +9,6 @@ import { AppShell } from "@/components/shell/AppShell";
 import { isNotFound, unwrapResult } from "@/lib/api/result";
 import { anonymousApiQuery } from "@/lib/api/urql-anonymous";
 import { apiServerQuery } from "@/lib/api/urql-server";
-import { readPasswordMode } from "@/lib/auth/password-mode";
 import { invitePath } from "@/lib/share/routes";
 import { getOptionalServerUser } from "@/utilities/auth-server";
 
@@ -44,9 +43,9 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 /**
  * `/invite/<token>` (X17) — public, signed in or out.
  *
- * Signed out: who invited you, and one brass button into social sign-up that
- * comes back here (D19, `returnTo`). Signed in: the same, with "Add as a
- * friend" (or why there is nothing to do), inside the app shell. A link that
+ * Signed out (Shell-Entry): who invited you, and Join into sign-up, which
+ * comes back here (D19, `returnTo`). Signed in: the same, with Accept (or
+ * why there is nothing to do), inside the app shell. A link that
  * was reset or never existed is the invite's own not-found page.
  */
 export default async function InvitePage({ params }: Props) {
@@ -64,15 +63,8 @@ export default async function InvitePage({ params }: Props) {
     return (
       <ShareFrame
         canonicalPath={invitePath(token)}
-        // Name the providers only where /sign-up offers them: with password
-        // sign-up on (`AUTH_PASSWORD_MODE` unset or "enabled") it shows a
-        // form, not the social buttons.
-        pitch={
-          readPasswordMode() === "enabled"
-            ? "Free to join."
-            : "Free. Sign up with Google, Discord or Facebook."
-        }
-        cta={`Join to connect with ${preview.inviterDisplayName}`}
+        pitch={`Join to be friends with ${preview.inviterDisplayName}.`}
+        cta="Join"
       >
         <InviteHero
           name={preview.inviterDisplayName}

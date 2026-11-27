@@ -43,7 +43,7 @@ const ENSURE_INVITE = `mutation {
   }
 }`;
 
-const NOT_SHARED = "This doesn't exist or isn't shared with you";
+const NOT_SHARED = "Can't open this page";
 
 let publicId = "";
 let privateId = "";
@@ -172,13 +172,17 @@ test.describe("signed out", () => {
     await page.goto(`/invite/${inviteToken}`);
     await expect(
       page.getByRole("heading", {
-        name: `${ACCOUNTS.primary.displayName} invited you to Cellar Assistant`,
+        name: `${ACCOUNTS.primary.displayName} invited you`,
+        exact: true,
       }),
     ).toBeVisible();
     await expect(
-      page.getByRole("link", {
-        name: `Join to connect with ${ACCOUNTS.primary.displayName}`,
-      }),
+      page.getByText(
+        `Join to be friends with ${ACCOUNTS.primary.displayName}.`,
+      ),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("link", { name: "Join", exact: true }),
     ).toHaveAttribute(
       "href",
       `/sign-up?returnTo=${encodeURIComponent(`/invite/${inviteToken}`)}`,
@@ -215,14 +219,17 @@ test.describe("signed in as the person invited", () => {
           name: `${name} invited you to be friends`,
         }),
       ).toBeVisible();
-      await page
-        .getByRole("button", { name: `Add ${name} as a friend` })
-        .click();
+      await page.getByRole("button", { name: "Accept", exact: true }).click();
       await expect(
         page.getByRole("heading", { name: `You and ${name} are friends` }),
       ).toBeVisible();
 
       // Both sides, through the outbox: the inviter sees the new friend too.
+      // Known red before Shell-Entry, and not the client's: `ensureNotFriends`
+      // above enqueues `removeFriendOtherSide`, which can land after this
+      // accept and delete the fresh row (services/actors user-actor.ts
+      // removeFriend / acceptFriendInvite; outbox order holds only on a first
+      // attempt). Handed to the actors owner in the h2 PR.
       await eventually(
         async () => (await friendIds(api)).includes(ACCOUNTS.secondary.id),
         { what: "the invite's friendship to reach the inviter" },

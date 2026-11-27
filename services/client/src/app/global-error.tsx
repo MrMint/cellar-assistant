@@ -26,7 +26,7 @@ export default function GlobalError(props: {
         />
       </head>
       <body className="bg-background font-sans text-foreground">
-        <title>Something went wrong · Cellar Assistant</title>
+        <title>Couldn&apos;t load · Cellar Assistant</title>
         {/* The root layout (and its skip link) is gone; the main stays (X21). */}
         <MainContent className="flex min-h-dvh">
           <BoundaryError {...props} />

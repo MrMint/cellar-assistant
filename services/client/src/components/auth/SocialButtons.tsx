@@ -5,7 +5,7 @@
  *
  * The markup is the production sign-in page's, unchanged
  * (`82450ad1:src/components/auth/SignInClient.tsx`): soft, neutral,
- * full-width (now `Button variant="secondary"`), icon as the start
+ * full-width (now `Button variant="outline"`, Shell-Entry), icon as the start
  * decorator, "Continue with …". It moved here from `SignInApiClient` only so `/sign-up` can offer the same buttons when
  * password sign-up is off (`AUTH_PASSWORD_MODE`). better-auth signs a new user
  * up implicitly on their first social sign-in, so the buttons mean the same
@@ -128,7 +128,7 @@ export function SocialButtons({
           <Button
             key={provider.id}
             type="button"
-            variant="secondary"
+            variant="outline"
             onClick={() => onSelect(provider.id)}
             disabled={busy}
             aria-busy={loading || undefined}
@@ -144,7 +144,7 @@ export function SocialButtons({
         );
       })}
       {ssoError !== null && (
-        <p role="alert" className="type-callout text-destructive">
+        <p role="alert" className="t-cap m-0 text-destructive">
           {ssoError}
         </p>
       )}

@@ -2,14 +2,24 @@
 
 import { track } from "@vercel/analytics/react";
 import { usePathname } from "next/navigation";
-import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useQuery } from "urql";
-import { ICON_STROKE, Share } from "@/components/app/icons";
+import {
+  Add,
+  type AppIcon,
+  Check,
+  ICON_STROKE,
+  Share,
+} from "@/components/app/icons";
+import { notify } from "@/components/app/notify";
 import { ResponsiveDialog } from "@/components/app/ResponsiveDialog";
 import {
-  detectPlatform,
+  OPEN_INSTALL_EVENT,
+  takeInstallPrompt,
+  useInstallOffer,
+} from "@/components/pwa/install-offer";
+import {
   hasSeenFirstSave,
-  type InstallPlatform,
   isPromptAllowed,
   PWA_DISMISS_KEY,
   PWA_DISMISS_PERMANENT_KEY,
@@ -19,14 +29,7 @@ import {
 // The query Home already runs for its stats line: one document, one cache entry.
 import { SearchCollectionStatsQuery } from "@/components/search/queries";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Label } from "@/components/ui/label";
-import type { BeforeInstallPromptEvent } from "@/constants";
-
-const isInStandaloneMode = () =>
-  window.matchMedia("(display-mode: standalone)").matches ||
-  ("standalone" in window.navigator &&
-    (window.navigator as Navigator & { standalone: boolean }).standalone);
+import { feedback } from "@/lib/feedback";
 
 /** `localStorage`, or nothing where reading it throws (private mode). */
 const storage = (): Storage | undefined => {
@@ -41,15 +44,6 @@ const allowed = () => {
   const store = storage();
   return store === undefined ? true : isPromptAllowed(store);
 };
-
-const ShareGlyph = () => (
-  <Share
-    role="img"
-    aria-label="Share"
-    className="inline size-[18px] align-middle"
-    strokeWidth={ICON_STROKE}
-  />
-);
 
 /**
  * Whether the viewer has saved anything yet — the install prompt waits for
@@ -102,171 +96,161 @@ function useFirstSave(enabled: boolean): boolean {
   return saved;
 }
 
+type Step = { icon: AppIcon; text: string };
+
+/** Add to Home Screen, in the words of the browser it is in. */
+const STEPS: Readonly<Record<"ios" | "chrome-ios", readonly Step[]>> = {
+  ios: [
+    { icon: Share, text: "Tap Share at the bottom of Safari" },
+    { icon: Add, text: "Choose Add to Home Screen" },
+    { icon: Check, text: "Tap Add" },
+  ],
+  "chrome-ios": [
+    { icon: Share, text: "Tap Share in the address bar" },
+    { icon: Add, text: "Choose Add to Home Screen" },
+    { icon: Check, text: "Tap Add" },
+  ],
+};
+
+const write = (key: string, value: string | null) => {
+  try {
+    if (value === null) localStorage.removeItem(key);
+    else localStorage.setItem(key, value);
+  } catch {
+    // localStorage unavailable: the answer lasts this page load.
+  }
+};
+
 /**
- * "Install Cellar Assistant" (N15): Chrome's own install prompt where the
- * browser offers one, and Add to Home Screen steps on iPhone and iPad.
+ * "Install the app" (N15, Shell-Entry): Chrome's own install prompt where
+ * the browser offers one, and the Add to Home Screen steps on iPhone and
+ * iPad (`install-offer.ts` says which).
  *
- * Shown only after the viewer's first save — asking someone to install an
- * app they have not used yet is the wrong first impression — and never again
- * once put off for good, or for a week after "Remind me later". A bottom sheet
- * on phones (N27) and a centred dialog from `md` up, where the Joy-era modal
- * was centred too (`ResponsiveDialog`, the mapping for every former Joy
- * `Modal`): the same copy, steps and buttons.
+ * It opens by itself once, after the viewer's first save — asking someone
+ * to install an app they have not used yet is the wrong first impression —
+ * and never again once put off for good, or for a week after Later. Stop
+ * asking says where the way back is (Settings' "Install the app" row, which
+ * opens this sheet with `OPEN_INSTALL_EVENT` whatever was said before).
  */
 export const InstallPwaDialog = () => {
-  const checkboxId = useId();
+  const offer = useInstallOffer();
   const [open, setOpen] = useState(false);
-  const [platform, setPlatform] = useState<InstallPlatform>({
-    ios: false,
-    chromeIos: false,
-  });
-  const [dontShowAgain, setDontShowAgain] = useState(false);
-  const [installEvent, setInstallEvent] = useState<BeforeInstallPromptEvent>();
-  /** An install path exists on this device and the viewer has not put it off. */
-  const [candidate, setCandidate] = useState(false);
-  const saved = useFirstSave(candidate);
+  const shown = useRef(false);
+  const candidate = offer.kind !== null && allowed();
+  const saved = useFirstSave(candidate && !shown.current);
 
   useEffect(() => {
-    const onBeforePrompt = (event: BeforeInstallPromptEvent) => {
-      event.preventDefault();
-      setInstallEvent(event);
-      if (allowed()) setCandidate(true);
+    const onOpen = () => {
+      shown.current = true;
+      setOpen(true);
     };
-    window.addEventListener("beforeinstallprompt", onBeforePrompt);
-
     const onInstalled = () => {
       setOpen(false);
-      setCandidate(false);
       track("pwa_installed");
     };
+    window.addEventListener(OPEN_INSTALL_EVENT, onOpen);
     window.addEventListener("appinstalled", onInstalled);
-
     return () => {
-      window.removeEventListener("beforeinstallprompt", onBeforePrompt);
+      window.removeEventListener(OPEN_INSTALL_EVENT, onOpen);
       window.removeEventListener("appinstalled", onInstalled);
     };
   }, []);
 
+  // Open once a page load, when both hold: a way to install, and a first
+  // save behind it.
   useEffect(() => {
-    const detected = detectPlatform(
-      window.navigator.userAgent,
-      window.navigator.maxTouchPoints ?? 0,
-    );
-    setPlatform(detected);
-    if (!isInStandaloneMode() && detected.ios && allowed()) setCandidate(true);
-  }, []);
-
-  // Open once, when both hold: an install path, and a first save behind it.
-  useEffect(() => {
-    if (!candidate || !saved) return;
+    if (!candidate || !saved || shown.current) return;
+    shown.current = true;
     setOpen(true);
     track("pwa_install_prompt_shown", {
-      platform: installEvent !== undefined ? "android" : "ios",
+      platform: offer.kind === "prompt" ? "android" : "ios",
     });
-    // One showing per page load; dismissing records the choice.
-    setCandidate(false);
-  }, [candidate, saved, installEvent]);
+  }, [candidate, saved, offer.kind]);
 
   useEffect(() => {
     navigator.storage?.persist();
   }, []);
 
-  const handleDismiss = () => {
-    try {
-      if (dontShowAgain) {
-        localStorage.setItem(PWA_DISMISS_PERMANENT_KEY, "true");
-        track("pwa_install_dismissed", { type: "permanent" });
-      } else {
-        localStorage.setItem(PWA_DISMISS_KEY, new Date().toISOString());
-        track("pwa_install_dismissed", { type: "remind_later" });
-      }
-    } catch {
-      // localStorage unavailable
-    }
+  const later = () => {
+    write(PWA_DISMISS_KEY, new Date().toISOString());
+    track("pwa_install_dismissed", { type: "remind_later" });
     setOpen(false);
   };
 
-  const handleInstallClick = async () => {
-    if (installEvent !== undefined) {
-      const result = await installEvent.prompt();
+  const stopAsking = () => {
+    write(PWA_DISMISS_PERMANENT_KEY, "true");
+    track("pwa_install_dismissed", { type: "permanent" });
+    setOpen(false);
+    notify("Won't ask again · it's in Settings", {
+      undo: () => write(PWA_DISMISS_PERMANENT_KEY, null),
+    });
+  };
+
+  const install = async () => {
+    const event = takeInstallPrompt();
+    if (event !== undefined) {
+      const result = await event.prompt();
       track("pwa_install_result", result);
     }
     setOpen(false);
   };
 
   const steps =
-    installEvent !== undefined || !platform.ios
-      ? null
-      : platform.chromeIos
-        ? [
-            <>
-              Tap the share icon <ShareGlyph /> in the toolbar.
-            </>,
-            <>
-              Tap <strong>&quot;Add to Home Screen&quot;</strong>.
-            </>,
-          ]
-        : [
-            <>Make sure you are using Safari.</>,
-            <>
-              Tap the share icon <ShareGlyph /> at the bottom of the screen.
-            </>,
-            <>
-              Scroll down and tap{" "}
-              <strong>&quot;Add to Home Screen&quot;</strong>.
-            </>,
-          ];
+    offer.kind === "ios" || offer.kind === "chrome-ios"
+      ? STEPS[offer.kind]
+      : null;
 
   return (
     <ResponsiveDialog
       open={open}
       onOpenChange={(next) => {
-        if (!next) handleDismiss();
+        // Swiped or closed without an answer: the same as Later.
+        if (!next) later();
       }}
-      title="Install Cellar Assistant"
+      title="Install the app"
       footer={
         <div className="flex w-full flex-col gap-3">
-          <div className="flex items-center gap-2">
-            <Checkbox
-              id={checkboxId}
-              checked={dontShowAgain}
-              onCheckedChange={(checked) => setDontShowAgain(checked === true)}
-            />
-            <Label htmlFor={checkboxId} className="t-body font-normal">
-              Don&apos;t show this again
-            </Label>
-          </div>
-          <div className="flex flex-row justify-end gap-3">
-            {installEvent === undefined ? (
-              <Button onClick={handleDismiss}>
-                {dontShowAgain ? "Close" : "Remind me later"}
-              </Button>
-            ) : (
-              <>
-                <Button variant="outline" onClick={handleDismiss}>
-                  {dontShowAgain ? "No Thanks" : "Remind me later"}
-                </Button>
-                <Button onClick={() => void handleInstallClick()}>
-                  Install
-                </Button>
-              </>
-            )}
+          {offer.kind === "prompt" && (
+            <Button className="w-full" onClick={() => void install()}>
+              Install
+            </Button>
+          )}
+          <div className="flex gap-3">
+            <Button variant="outline" className="flex-1" onClick={later}>
+              Later
+            </Button>
+            <Button variant="outline" className="flex-1" onClick={stopAsking}>
+              Stop asking
+            </Button>
           </div>
         </div>
       }
     >
       {/* The sheet and the dialog pad their own content. */}
-      <div className="flex flex-col gap-3 pb-2">
-        <p className="t-body text-ink-2">
-          To get the full experience of Cellar Assistant we recommend installing
-          it as an app. This will allow easy access from the home screen.
+      <div className="flex flex-col gap-4 pb-2">
+        <p className="t-body m-0 text-ink-2">
+          It opens full screen, like any app.
         </p>
         {steps !== null && (
-          <ol className="t-body flex list-decimal flex-col gap-1 pl-6 text-ink">
-            {steps.map((step, i) => (
-              // Static steps, never reordered.
-              // biome-ignore lint/suspicious/noArrayIndexKey: fixed list.
-              <li key={i}>{step}</li>
+          <ol className="m-0 flex list-none flex-col gap-2 p-0">
+            {steps.map((step, index) => (
+              <li
+                key={step.text}
+                className="flex min-h-12 items-center gap-3"
+                onPointerDown={() => feedback("tick")}
+              >
+                <span className="t-cap tabular w-4 shrink-0 text-ink-3">
+                  {index + 1}
+                </span>
+                <span className="flex size-10 shrink-0 items-center justify-center rounded-md bg-raised text-glyph">
+                  <step.icon
+                    aria-hidden
+                    className="size-5"
+                    strokeWidth={ICON_STROKE}
+                  />
+                </span>
+                <span className="t-body text-ink">{step.text}</span>
+              </li>
             ))}
           </ol>
         )}

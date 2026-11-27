@@ -1,11 +1,13 @@
 /**
- * The `/me` hub (D1): the destinations that are no longer tabs, grouped, and
- * the account rows the old side bar's avatar menu held.
+ * The `/me` hub (D1, Shell-Me): the header into Edit profile and the gear
+ * into Settings, the numbers, then Lists and People, then one Settings row.
  */
 import { mock } from "bun:test";
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
+import type { ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { Client, Provider } from "urql";
 
 mock.module("next/navigation", () => ({
   useRouter: () => ({ replace: () => {}, push: () => {}, refresh: () => {} }),
@@ -18,32 +20,61 @@ mock.module("next/image", () => ({
 }));
 
 const { MeHub, ME_SECTIONS, SETTINGS_LABEL } = await import("./MeHub");
+const { EMPTY_ME_EXTRAS } = await import("./me-hub-data");
 const { textOf } = await import("@/test-support/markup");
 
-const user = { id: "u1", email: "pat@example.test", displayName: "Pat" };
-const html = renderToStaticMarkup(<MeHub user={user} />);
+const client = new Client({ url: "http://localhost/graphql", exchanges: [] });
+const render = (node: ReactNode) =>
+  renderToStaticMarkup(<Provider value={client}>{node}</Provider>);
 
-/** Every link, in document order, as "label -> href". */
-const links = [
-  ...html.matchAll(/<a\b[^>]*href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/g),
-].map(([, href, inner]) => `${textOf(inner ?? "")} -> ${href}`);
+const user = { id: "u1", email: "pat@example.test", displayName: "Pat" };
+const html = render(<MeHub user={user} />);
+
+/** Every link, in document order, as "label -> href" (unlabelled ones by aria-label). */
+const linksOf = (markup: string) =>
+  [...markup.matchAll(/<a\b([^>]*)href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/g)].map(
+    ([, attrs, href, inner]) => {
+      const text =
+        textOf(inner ?? "") ||
+        (attrs?.match(/aria-label="([^"]*)"/)?.[1] ?? "");
+      return `${text} -> ${href}`;
+    },
+  );
+const links = linksOf(html);
+
+const noData = {
+  pinnedTierLists: [],
+  tierListCount: 0,
+  pendingFriendRequests: 0,
+};
 
 describe("MeHub", () => {
-  test("the viewer's name is the page heading, with their email under it", () => {
-    assert.match(html, /<h1\b[^>]*>Pat<\/h1>/);
+  test("the viewer's name is the page heading and opens Edit profile; the email under it", () => {
+    assert.match(
+      html,
+      /<h1\b[^>]*><a\b[^>]*href="\/users\/edit"[^>]*>Pat<\/a><\/h1>/,
+    );
     assert.ok(html.includes("pat@example.test"));
   });
 
-  test("Lists (Tier lists, Top rated, Taste profile, Loved, Want to try), Friends, Edit profile — in that order", () => {
+  test("Shell-Me order: header, gear, Lists, People, Settings", () => {
     assert.deepEqual(links, [
+      "Pat -> /users/edit",
+      "Settings -> /me/settings",
+      "Loved -> /favorites",
+      "Want to try -> /want-to-try",
       "Tier lists -> /tier-lists",
       "Top rated -> /rankings",
       "Taste profile -> /taste-profile",
-      "Loved -> /favorites",
-      "Want to try -> /want-to-try",
       "Friends -> /friends",
-      "Edit profile -> /users/edit",
+      "Add a friend -> /friends#invite-friends",
+      "Settings -> /me/settings",
     ]);
+  });
+
+  test("Sign out and Edit profile rows live in Settings, not on the hub", () => {
+    assert.ok(!textOf(html).includes("Sign out"));
+    assert.ok(!links.some((link) => link.startsWith("Edit profile")));
   });
 
   test("D1: Recipes and Brands are not Me rows (Cellar › Bar, item pages, search)", () => {
@@ -55,8 +86,8 @@ describe("MeHub", () => {
     assert.ok(!links.some((link) => link.endsWith("-> /map/scans")));
   });
 
-  test("your tier lists are pinned first, then All tier lists", () => {
-    const pinned = renderToStaticMarkup(
+  test("your tier lists sit after Want to try, each with its count and band strip", () => {
+    const pinned = render(
       <MeHub
         user={user}
         data={{
@@ -67,64 +98,100 @@ describe("MeHub", () => {
           tierListCount: 4,
           pendingFriendRequests: 0,
         }}
+        extras={{
+          ...EMPTY_ME_EXTRAS,
+          bands: {
+            t1: [
+              { band: 5, count: 6 },
+              { band: 3, count: 3 },
+            ],
+          },
+        }}
       />,
     );
-    const rows = [
-      ...pinned.matchAll(/<a\b[^>]*href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/g),
-    ].map(([, href, inner]) => `${textOf(inner ?? "")} -> ${href}`);
-    assert.deepEqual(rows.slice(0, 4), [
+    const rows = linksOf(pinned);
+    assert.deepEqual(rows.slice(4, 8), [
       "Reds, ranked -> /tier-lists/t1",
       "Whisky wishlist -> /tier-lists/t2",
       "All tier lists -> /tier-lists",
       "Top rated -> /rankings",
     ]);
-    assert.ok(textOf(pinned).includes("9 entries"));
-    // An empty list says nothing rather than "0 entries".
-    assert.ok(!textOf(pinned).includes("0 entries"));
-    assert.ok(textOf(pinned).includes("4 of yours"));
+    const strips = [...pinned.matchAll(/data-slot="band-strip"/g)];
+    assert.equal(strips.length, 1, "an empty list draws no strip");
+    assert.match(pinned, /class="bg-band-5" style="flex-grow:6"/);
+    assert.match(pinned, /data-slot="row-count"[^>]*>9</);
+    assert.match(pinned, /data-slot="row-count"[^>]*>4</);
   });
 
-  test("X18: the count row names each noun, leaves out zeros, and is not a link", () => {
-    const counted = renderToStaticMarkup(
+  test("past BAND_STRIP_MAX entries a list draws no strip (it would be a sample)", () => {
+    const big = render(
       <MeHub
         user={user}
         data={{
-          counts: { bottles: 53, logs: 1, places: 0, tierLists: 4 },
-          pinnedTierLists: [],
-          tierListCount: 4,
+          pinnedTierLists: [{ id: "t1", name: "Everything", itemCount: 140 }],
+          tierListCount: 1,
           pendingFriendRequests: 0,
+        }}
+        extras={{
+          ...EMPTY_ME_EXTRAS,
+          bands: { t1: [{ band: 5, count: 100 }] },
         }}
       />,
     );
-    const row = counted.match(
-      /<dl\b[^>]*data-slot="me-counts"[^>]*>([\s\S]*?)<\/dl>/,
-    );
-    assert.ok(row, "a count row");
-    const tiles = [
-      ...(row?.[1] ?? "").matchAll(
-        /<dt\b[^>]*>([^<]*)<\/dt><dd\b[^>]*>([^<]*)<\/dd>/g,
-      ),
-    ].map(([, noun, value]) => `${value} ${noun}`);
-    assert.deepEqual(tiles, ["53 bottles", "1 log", "4 tier lists"]);
-    assert.ok(!/<a\b/.test(row?.[1] ?? ""));
-    // It sits under the header, above Lists.
-    assert.ok(counted.indexOf("me-counts") < counted.indexOf(">Lists<"));
+    assert.ok(!big.includes('data-slot="band-strip"'));
   });
 
-  test("X18: no counts (unread, or all zero) is no row at all", () => {
-    assert.ok(!html.includes('data-slot="me-counts"'));
-    const zeros = renderToStaticMarkup(
+  test("X18: number tiles name each noun and leave out zeros; Logs has no list to open", () => {
+    const counted = render(
       <MeHub
         user={user}
         data={{
+          ...noData,
+          counts: { bottles: 53, logs: 1, places: 0, tierLists: 4 },
+          tierListCount: 4,
+        }}
+      />,
+    );
+    const tiles = [
+      ...counted.matchAll(
+        /data-slot="stat-tile"[^>]*><span[^>]*>([^<]*)<\/span><span[^>]*>([^<]*)<\/span>/g,
+      ),
+    ].map(([, value, label]) => `${value} ${label}`);
+    assert.deepEqual(tiles, ["53 Bottles", "1 Log", "4 Tier lists"]);
+    const counts = linksOf(counted).filter((link) => /^\d/.test(link));
+    assert.deepEqual(counts, [
+      "53 Bottles -> /cellars",
+      "4 Tier lists -> /tier-lists",
+    ]);
+    assert.ok(counted.indexOf("me-counts") < counted.indexOf(">Lists<"));
+  });
+
+  test("X18: no counts (unread, or all zero) is no tiles at all", () => {
+    assert.ok(!html.includes('data-slot="me-counts"'));
+    const zeros = render(
+      <MeHub
+        user={user}
+        data={{
+          ...noData,
           counts: { bottles: 0, logs: 0, places: 0, tierLists: 0 },
-          pinnedTierLists: [],
-          tierListCount: 0,
-          pendingFriendRequests: 0,
         }}
       />,
     );
     assert.ok(!zeros.includes('data-slot="me-counts"'));
+  });
+
+  test("Loved, Want to try and Friends show their counts; none at zero or unread", () => {
+    const counted = render(
+      <MeHub
+        user={user}
+        extras={{ ...EMPTY_ME_EXTRAS, loved: 12, wantToTry: 0, friends: 3 }}
+      />,
+    );
+    const shown = [
+      ...counted.matchAll(/data-slot="row-count"[^>]*>(\d+)</g),
+    ].map((m) => m[1]);
+    assert.deepEqual(shown, ["12", "3"]);
+    assert.ok(!html.includes('data-slot="row-count"'));
   });
 
   test("Loved says it holds drinks and recipes", () => {
@@ -132,41 +199,50 @@ describe("MeHub", () => {
   });
 
   test("Friends carries a badge for pending requests, said in words to AT", () => {
-    const badged = renderToStaticMarkup(
-      <MeHub
-        user={user}
-        data={{
-          pinnedTierLists: [],
-          tierListCount: 0,
-          pendingFriendRequests: 2,
-        }}
-      />,
+    const badged = render(
+      <MeHub user={user} data={{ ...noData, pendingFriendRequests: 2 }} />,
     );
     assert.match(badged, /data-slot="count-badge"[^>]*>2<\/span>/);
     assert.match(textOf(badged), /Friends\s*,\s*2 friend requests/);
-    // No badge at zero.
     assert.ok(!html.includes('data-slot="count-badge"'));
   });
 
-  test("section labels, Lists first and Settings last", () => {
+  test("a request waiting on you is a row in People with an outlined Accept", () => {
+    const asked = render(
+      <MeHub
+        user={user}
+        extras={{
+          ...EMPTY_ME_EXTRAS,
+          requests: [
+            { id: "r1", userId: "u9", displayName: "Rory", avatarUrl: null },
+          ],
+        }}
+      />,
+    );
+    const people = asked.slice(asked.indexOf(">People<"));
+    assert.ok(people.indexOf("Rory") < people.indexOf(">Friends"));
+    assert.ok(people.includes("Wants to be friends"));
+    assert.match(
+      people,
+      /<button\b[^>]*data-variant="outline"[^>]*aria-label="Accept Rory"|<button\b[^>]*aria-label="Accept Rory"[^>]*data-variant="outline"/,
+    );
+    assert.ok(!html.includes("Wants to be friends"));
+  });
+
+  test("section labels: Lists, then People; Settings is the last row", () => {
     const labels = [...html.matchAll(/<h2\b[^>]*>([^<]*)<\/h2>/g)].map(
       (m) => m[1],
     );
+    assert.deepEqual(
+      labels,
+      ME_SECTIONS.map((s) => s.label),
+    );
     assert.equal(SETTINGS_LABEL, "Settings");
-    assert.deepEqual(labels, [
-      ...ME_SECTIONS.map((s) => s.label),
-      SETTINGS_LABEL,
-    ]);
-    assert.equal(labels[0], "Lists");
-  });
-
-  test("Sign out is a real button, after Edit profile", () => {
-    assert.match(html, /<button\b[^>]*type="button"[^>]*>[\s\S]*?Sign out/);
-    assert.ok(html.indexOf("Sign out") > html.indexOf("Edit profile"));
+    assert.ok(links.at(-1)?.startsWith(`${SETTINGS_LABEL} ->`));
   });
 
   test("the avatar beside the name is hidden from assistive tech (no second reading)", () => {
-    const withPhoto = renderToStaticMarkup(
+    const withPhoto = render(
       <MeHub user={{ ...user, avatarUrl: "https://example.test/a.jpg" }} />,
     );
     assert.match(
@@ -176,11 +252,10 @@ describe("MeHub", () => {
   });
 
   test("no display name: the email stands in, once", () => {
-    const bare = renderToStaticMarkup(
+    const bare = render(
       <MeHub user={{ id: "u2", email: "sam@example.test" }} />,
     );
-    assert.match(bare, /<h1\b[^>]*>sam@example\.test<\/h1>/);
-    // Not repeated as a second line under itself.
+    assert.match(bare, /<h1\b[^>]*><a\b[^>]*>sam@example\.test<\/a><\/h1>/);
     assert.equal(bare.split("sam@example.test").length - 1, 1);
   });
 });

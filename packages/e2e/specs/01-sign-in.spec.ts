@@ -20,7 +20,9 @@ test("signs in through the form and lands on Home (X01)", async ({
   const page = await ctx.newPage();
 
   await page.goto("/sign-in");
-  await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { level: 1, name: "Cellar Assistant" }),
+  ).toBeVisible();
 
   await page.getByLabel("Email").fill(ACCOUNTS.primary.email);
   await page.getByLabel("Password").fill(ACCOUNTS.primary.password);
@@ -93,9 +95,9 @@ test("sign out ends the session", async ({ browser }) => {
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await expect(page).toHaveURL(HOME_URL, { timeout: 30_000 });
 
-  // Sign out lives on the Me hub (D1: the side navigation and its avatar
-  // menu are gone), a plain button rather than a menu item.
-  await page.goto("/me");
+  // Sign out lives in Settings, under Me (Shell-Me), a plain button rather
+  // than a menu item.
+  await page.goto("/me/settings");
   await page.getByRole("button", { name: "Sign out" }).click();
 
   // Wait for the cookie to actually go, which is the first of this test's two

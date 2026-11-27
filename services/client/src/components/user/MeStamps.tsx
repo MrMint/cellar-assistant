@@ -11,8 +11,7 @@
  */
 import { useEffect, useState } from "react";
 import { useQuery } from "urql";
-import { ChevronRight, Trophy } from "@/components/app/icons";
-import { Link } from "@/components/app/Link";
+import { ChevronRight, ICON_STROKE, Trophy } from "@/components/app/icons";
 import { InsetSection, ListRow } from "@/components/app/Page";
 import { RecapStamp } from "@/components/recap/RecapStamp";
 import { recapPeriodLabel } from "@/components/recap/recap-copy";
@@ -20,6 +19,7 @@ import {
   BreadthStampsQuery,
   stampsFromResult,
 } from "@/components/recap/recap-data";
+import { PressLink } from "./PressLink";
 
 export function MeStamps() {
   // Mounted first: no query, no markup, on the server or in a static render.
@@ -43,7 +43,7 @@ function MeStampsLoaded() {
         <ul
           data-slot="me-stamps"
           aria-label="Your stamps"
-          className="flex list-none gap-4 overflow-x-auto px-4 py-4"
+          className="m-0 flex list-none gap-4 overflow-x-auto px-3.5 py-4"
         >
           {stamps.map((stamp) => (
             <li key={stamp.kind} className="flex">
@@ -53,19 +53,32 @@ function MeStampsLoaded() {
         </ul>
       )}
       <ListRow
-        leading={<Trophy aria-hidden className="size-5" strokeWidth={1.75} />}
+        leading={
+          <span className="flex size-10 items-center justify-center rounded-md bg-raised text-glyph">
+            <Trophy aria-hidden className="size-5" strokeWidth={ICON_STROKE} />
+          </span>
+        }
         title={
-          <Link href="/recap" overlay underline="none" className="text-ink-1">
+          <PressLink
+            href="/recap"
+            overlay
+            underline="none"
+            className="text-ink"
+          >
             {`${label} recap`}
-          </Link>
+          </PressLink>
         }
         description={
           stamps.length === 0
             ? "Stamps count new styles, regions and recipes"
-            : undefined
+            : "Your latest month"
         }
         trailing={
-          <ChevronRight aria-hidden className="size-5" strokeWidth={1.75} />
+          <ChevronRight
+            aria-hidden
+            className="size-5 text-glyph"
+            strokeWidth={ICON_STROKE}
+          />
         }
       />
     </InsetSection>

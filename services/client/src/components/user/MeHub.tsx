@@ -1,32 +1,42 @@
+import { Fragment } from "react";
 import {
   type AppIcon,
   ChevronRight,
-  Edit,
   Explore,
+  ICON_STROKE,
   Leaderboard,
   Love,
   People,
+  PersonAdd,
   Ranked,
+  Settings,
   WantToTry,
 } from "@/components/app/icons";
 import { Link } from "@/components/app/Link";
 import { LoadingShell, ShellBlocks } from "@/components/app/LoadingShell";
 import { InsetSection, ListRow, Page } from "@/components/app/Page";
-import { UserAvatar } from "@/components/app/UserAvatar";
+import { BAND_FILL, type Band } from "@/components/app/parts/Rank";
+import { StatGrid, StatTile } from "@/components/app/parts/StatTile";
 import { badgeVariants } from "@/components/ui/badge-variants";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import type { ServerUser } from "@/utilities/auth-server";
+import { MeHeader, MeRequestRow } from "./MeLinks";
 import { MeStamps } from "./MeStamps";
 import {
+  BAND_STRIP_MAX,
+  type BandCount,
   badgeText,
+  type CountTile,
   countTiles,
+  EMPTY_ME_EXTRAS,
   EMPTY_ME_HUB,
   type MeCounts,
+  type MeExtras,
   type MeHubData,
   type PinnedTierList,
 } from "./me-hub-data";
-import { SignOutButton } from "./SignOutButton";
+import { PressLink } from "./PressLink";
 
 export type MeLink = {
   label: string;
@@ -41,8 +51,9 @@ export type MeLink = {
 };
 
 /**
- * The rows the Me tab always shows (D1, design-direction §2), after the
- * viewer's pinned tier lists. Where the rest of the old side bar went:
+ * The rows the Me tab always shows (D1, Shell-Me). The viewer's pinned tier
+ * lists sit in Lists between Want to try and Top rated. Where the rest of
+ * the old side bar went:
  *
  * - **Recipes** — the Cellar tab's "Bar" segment and the Recipes section of
  *   search (`components/cellar/CellarSegments.tsx`, `/search`).
@@ -58,6 +69,13 @@ export const ME_SECTIONS: readonly {
   {
     label: "Lists",
     links: [
+      {
+        label: "Loved",
+        href: "/favorites",
+        icon: Love,
+        description: "Drinks and recipes",
+      },
+      { label: "Want to try", href: "/want-to-try", icon: WantToTry },
       { label: "Top rated", href: "/rankings", icon: Leaderboard },
       // L03: your archetype, and where you and each friend agree.
       {
@@ -66,13 +84,6 @@ export const ME_SECTIONS: readonly {
         icon: Explore,
         description: "Your archetype and friends",
       },
-      {
-        label: "Loved",
-        href: "/favorites",
-        icon: Love,
-        description: "Drinks and recipes",
-      },
-      { label: "Want to try", href: "/want-to-try", icon: WantToTry },
     ],
   },
   {
@@ -85,25 +96,40 @@ export const ME_SECTIONS: readonly {
         badgeLabel: (count) =>
           `${count} friend ${count === 1 ? "request" : "requests"}`,
       },
+      {
+        label: "Add a friend",
+        href: "/friends#invite-friends",
+        icon: PersonAdd,
+      },
     ],
   },
 ];
 
 /**
- * The account's section: Edit profile and Sign out. "Settings" since X18 —
- * it is where anything about the app itself (not your collection) goes. No
- * theme switch: dark is the default and light ships only on evidence (D21).
+ * The last row on the hub: everything about the app rather than the
+ * collection (Appearance, Sound and haptics, location, Sign out) lives on
+ * `/me/settings`. Edit profile is the header itself.
  */
 export const SETTINGS_LABEL = "Settings";
 
 const Chevron = () => (
-  <ChevronRight aria-hidden className="size-5" strokeWidth={1.75} />
+  <ChevronRight
+    aria-hidden
+    className="size-5 text-glyph"
+    strokeWidth={ICON_STROKE}
+  />
+);
+
+/** The row's glyph, in a 40 well. */
+const Well = ({ icon: Icon }: { icon: AppIcon }) => (
+  <span className="flex size-10 items-center justify-center rounded-md bg-raised text-glyph">
+    <Icon aria-hidden className="size-5" strokeWidth={ICON_STROKE} />
+  </span>
 );
 
 /**
- * The visible count. Hidden from assistive tech: the row's link already says
- * it in words ("Friends, 2 friend requests"), which a bare "2" beside it
- * would only repeat.
+ * The visible badge. Hidden from assistive tech: the row's link already says
+ * it in words ("Friends, 2 friend requests").
  */
 function CountBadge({ count }: { count: number }) {
   return (
@@ -120,27 +146,33 @@ function CountBadge({ count }: { count: number }) {
 function LinkRow({
   label,
   href,
-  icon: Icon,
+  icon,
   badge = 0,
   badgeLabel,
   description,
-}: MeLink) {
+  count,
+}: MeLink & { count?: number | null }) {
   return (
     <ListRow
-      leading={<Icon aria-hidden className="size-5" strokeWidth={1.75} />}
+      leading={<Well icon={icon} />}
       title={
-        <Link href={href} overlay underline="none" className="text-ink-1">
+        <PressLink href={href} overlay underline="none" className="text-ink">
           {label}
           {badge > 0 && (
             <span className="sr-only">
               , {badgeLabel?.(badge) ?? `${badge} waiting`}
             </span>
           )}
-        </Link>
+        </PressLink>
       }
       description={description}
       trailing={
         <>
+          {count !== undefined && count !== null && count > 0 && (
+            <span data-slot="row-count" className="t-cap tabular text-ink-3">
+              {count}
+            </span>
+          )}
           {badge > 0 && <CountBadge count={badge} />}
           <Chevron />
         </>
@@ -149,11 +181,20 @@ function LinkRow({
   );
 }
 
+/** Where each number opens; Logs has no list of its own, so it is static. */
+const TILE_HREF: Readonly<Partial<Record<keyof MeCounts, string>>> = {
+  bottles: "/cellars",
+  places: "/places",
+  tierLists: "/tier-lists",
+};
+
+const tileLabel = (tile: CountTile): string =>
+  tile.noun.charAt(0).toUpperCase() + tile.noun.slice(1);
+
 /**
- * The header's count row (X18): bottles, logs, places, tier lists — each the
- * viewer's own, each naming its noun, a zero left out (design §3.7). A
- * summary, not a menu: every one of them has a row or a tab of its own, so
- * the tiles are not links. A `dl`, so each number is read with its noun.
+ * The hub's numbers (X18, Shell-Me): bottles, logs, places, tier lists, two
+ * tiles a row, a zero left out (design §3.7). Each tile with a list of its
+ * own opens it.
  */
 export function MeCountRow({
   counts,
@@ -163,178 +204,239 @@ export function MeCountRow({
   const tiles = countTiles(counts);
   if (tiles.length === 0) return null;
   return (
-    <dl
-      aria-label="Your numbers"
-      data-slot="me-counts"
-      className="flex divide-x divide-line rounded-lg bg-surface-1 py-3"
-    >
-      {tiles.map((tile) => (
-        <div
-          key={tile.key}
-          data-count={tile.key}
-          className="flex min-w-0 flex-1 flex-col-reverse items-center gap-0.5 px-1"
-        >
-          <dt className="type-footnote truncate">{tile.noun}</dt>
-          <dd className="type-title-1 tabular text-ink-1">{tile.value}</dd>
-        </div>
-      ))}
-    </dl>
+    <section aria-label="Your numbers" data-slot="me-counts">
+      <StatGrid>
+        {tiles.map((tile) => {
+          const href = TILE_HREF[tile.key];
+          return href === undefined ? (
+            <div key={tile.key} data-count={tile.key}>
+              <StatTile value={tile.value} label={tileLabel(tile)} />
+            </div>
+          ) : (
+            <PressLink
+              key={tile.key}
+              data-count={tile.key}
+              href={href}
+              underline="none"
+              className="rounded-md outline-none focus-visible:outline-2 focus-visible:outline-act-ink"
+            >
+              <StatTile value={tile.value} label={tileLabel(tile)} />
+            </PressLink>
+          );
+        })}
+      </StatGrid>
+    </section>
   );
 }
 
-/** "8 entries", or nothing for an empty list (counts are hidden at zero). */
-const entriesLine = (count: number): string | undefined =>
-  count === 0 ? undefined : `${count} ${count === 1 ? "entry" : "entries"}`;
+/** A pinned list's bands, best first, each as wide as its share. */
+function BandStrip({ bands }: { bands: readonly BandCount[] }) {
+  if (bands.length === 0) return null;
+  return (
+    <span
+      aria-hidden
+      data-slot="band-strip"
+      className="mt-1 flex h-1.5 w-full max-w-48 gap-px overflow-hidden rounded-full"
+    >
+      {bands.map(({ band, count }) => (
+        <span
+          key={band}
+          className={BAND_FILL[band as Band] ?? "bg-edge"}
+          style={{ flexGrow: count }}
+        />
+      ))}
+    </span>
+  );
+}
 
 /**
- * Me › Lists opens with the viewer's own tier lists (D1: "pinned at the top
- * of Me›Lists"), then one row into all of them. With none yet, that one row
+ * The viewer's own tier lists, pinned in Lists (D1), each with its band
+ * strip and count, then one row into all of them. With none yet, that row
  * is "Tier lists" and leads to the page where the first is made.
  */
 function TierListRows({
   pinned,
   total,
+  bands,
 }: {
   pinned: readonly PinnedTierList[];
   total: number | null;
+  bands: MeExtras["bands"];
 }) {
   return (
     <>
       {pinned.map((list) => (
-        <LinkRow
+        <ListRow
           key={list.id}
-          label={list.name}
-          href={`/tier-lists/${list.id}`}
-          icon={Ranked}
-          description={entriesLine(list.itemCount)}
+          leading={<Well icon={Ranked} />}
+          title={
+            <PressLink
+              href={`/tier-lists/${list.id}`}
+              overlay
+              underline="none"
+              className="text-ink"
+            >
+              {list.name}
+            </PressLink>
+          }
+          description={
+            list.itemCount > 0 && list.itemCount <= BAND_STRIP_MAX ? (
+              <BandStrip bands={bands[list.id] ?? []} />
+            ) : undefined
+          }
+          trailing={
+            <>
+              {list.itemCount > 0 && (
+                <span
+                  data-slot="row-count"
+                  className="t-cap tabular text-ink-3"
+                >
+                  {list.itemCount}
+                </span>
+              )}
+              <Chevron />
+            </>
+          }
         />
       ))}
       <LinkRow
         label={pinned.length === 0 ? "Tier lists" : "All tier lists"}
         href="/tier-lists"
         icon={Ranked}
-        description={
-          total !== null && total > pinned.length
-            ? `${total} of yours`
-            : undefined
-        }
+        count={total !== null && total > pinned.length ? total : undefined}
       />
     </>
   );
 }
 
 /**
- * The `/me` hub: who you are and your numbers, then grouped rows into
- * everything that is yours, then Settings (Edit profile, Sign out). A tab
- * root, so no Back.
+ * The `/me` hub (Shell-Me): who you are and your numbers, stamps, then
+ * Lists and People, then one row into Settings. A tab root, so no Back.
  */
 export function MeHub({
   user,
   data = EMPTY_ME_HUB,
+  extras = EMPTY_ME_EXTRAS,
 }: {
   user: ServerUser;
   data?: MeHubData;
+  extras?: MeExtras;
 }) {
   const name = user.displayName?.trim() || user.email;
   const badges: Record<string, number> = {
     "/friends": data.pendingFriendRequests,
   };
+  const counts: Record<string, number | null> = {
+    "/favorites": extras.loved,
+    "/want-to-try": extras.wantToTry,
+    "/friends": extras.friends,
+  };
   return (
     <Page>
-      <header className="flex items-center gap-4 px-1 pt-2">
-        {/* Decorative here: the name is the heading beside it, and the
-            photo's alt would read it a second time. */}
-        <UserAvatar
-          aria-hidden
-          avatarUrl={user.avatarUrl}
-          displayName={name}
-          size="lg"
-          className="size-16 text-2xl"
-        />
-        <div className="flex min-w-0 flex-col">
-          <h1 className="type-title-1 truncate">{name}</h1>
-          {name !== user.email && (
-            <p className="type-footnote truncate">{user.email}</p>
-          )}
-        </div>
-      </header>
+      <MeHeader
+        name={name}
+        email={user.email}
+        avatarUrl={user.avatarUrl ?? null}
+        displayName={user.displayName ?? ""}
+      />
       <MeCountRow counts={data.counts} />
       {/* ux-c M4 slot: fetches its own data, renders nothing until then. */}
       <MeStamps />
       {ME_SECTIONS.map((section) => (
         <InsetSection key={section.label} label={section.label}>
-          {section.label === "Lists" && (
-            <TierListRows
-              pinned={data.pinnedTierLists}
-              total={data.tierListCount}
-            />
-          )}
+          {section.label === "People" &&
+            extras.requests.map((request) => (
+              <MeRequestRow key={request.id} request={request} />
+            ))}
           {section.links.map((link) => (
-            <LinkRow key={link.href} {...link} badge={badges[link.href] ?? 0} />
+            <Fragment key={link.href}>
+              {link.href === "/rankings" && (
+                <TierListRows
+                  pinned={data.pinnedTierLists}
+                  total={data.tierListCount}
+                  bands={extras.bands}
+                />
+              )}
+              <LinkRow
+                {...link}
+                badge={badges[link.href] ?? 0}
+                count={counts[link.href]}
+              />
+            </Fragment>
           ))}
         </InsetSection>
       ))}
-      <InsetSection label={SETTINGS_LABEL}>
+      <div
+        data-slot="me-settings"
+        className="overflow-hidden rounded-md border border-edge bg-card"
+      >
         <LinkRow
-          label="Edit profile"
-          href="/users/edit"
-          icon={Edit}
-          description="Your name, as friends see it"
+          label={SETTINGS_LABEL}
+          href="/me/settings"
+          icon={Settings}
+          description="Appearance, sound and sign out"
         />
-        <SignOutButton />
-      </InsetSection>
+      </div>
     </Page>
   );
 }
 
 /**
- * `/me` while it loads (X24). Everything on the hub but the viewer's own
- * header is fixed, so the shell draws it for real — the same sections and
- * rows, live links included — and only the avatar, the name and the email,
- * the viewer's tier lists at the head of Lists, and the Sign out row (which
- * needs the client) are placeholders. The Friends badge waits for the page.
+ * `/me` while it loads (X24). Everything but the viewer's own header and
+ * numbers is fixed, so the shell draws it for real — the same sections and
+ * rows, live links included. The header is a placeholder that is still the
+ * way into Edit profile; the Friends badge and the counts wait for the page.
  */
 export function MeHubShell() {
   return (
     <LoadingShell label="your profile">
       <Page>
-        <ShellBlocks className="flex items-center gap-4 px-1 pt-2">
+        <ShellBlocks className="relative flex items-center gap-4 pt-2">
+          <Link
+            href="/users/edit"
+            overlay
+            underline="none"
+            aria-label="Edit profile"
+          />
           <Skeleton className="size-16 shrink-0 rounded-full" />
           <div className="flex min-w-0 flex-1 flex-col gap-2">
             <Skeleton className="h-7 w-[60%]" />
             <Skeleton className="h-4 w-[45%]" />
           </div>
         </ShellBlocks>
-        {/* The count row's height, so the sections do not jump when it lands
-            (an account with nothing yet has no row, and that is the rarer case):
-            py-3 (24) + a title-1 numeral (34) + gap-0.5 (2) + a footnote (18). */}
-        <ShellBlocks className="h-[78px] rounded-lg bg-surface-1" />
+        {/* Two rows of number tiles (88 each, 12 between). */}
+        <ShellBlocks className="grid h-[188px] grid-cols-2 gap-3">
+          <Skeleton className="rounded-md" />
+          <Skeleton className="rounded-md" />
+          <Skeleton className="rounded-md" />
+          <Skeleton className="rounded-md" />
+        </ShellBlocks>
         {ME_SECTIONS.map((section) => (
           <InsetSection key={section.label} label={section.label}>
-            {section.label === "Lists" && (
-              // The viewer's tier lists head this section; how many, and
-              // whether the row says "Tier lists" or "All tier lists", is data.
-              <ShellBlocks className="flex min-h-11 items-center gap-3 px-4 py-2.5">
-                <Skeleton className="size-5 shrink-0 rounded-sm" />
-                <Skeleton className="h-5 w-32" />
-              </ShellBlocks>
-            )}
             {section.links.map((link) => (
-              <LinkRow key={link.href} {...link} />
+              <Fragment key={link.href}>
+                {link.href === "/rankings" && (
+                  <ShellBlocks className="flex min-h-14 items-center gap-3 px-3.5 py-1.5">
+                    <Skeleton className="size-10 shrink-0 rounded-md" />
+                    <Skeleton className="h-5 w-32" />
+                  </ShellBlocks>
+                )}
+                <LinkRow {...link} />
+              </Fragment>
             ))}
           </InsetSection>
         ))}
-        <InsetSection label={SETTINGS_LABEL}>
+        <div
+          data-slot="me-settings"
+          className="overflow-hidden rounded-md border border-edge bg-card"
+        >
           <LinkRow
-            label="Edit profile"
-            href="/users/edit"
-            icon={Edit}
-            description="Your name, as friends see it"
+            label={SETTINGS_LABEL}
+            href="/me/settings"
+            icon={Settings}
+            description="Appearance, sound and sign out"
           />
-          <ShellBlocks className="flex min-h-11 items-center px-4 py-2.5">
-            <Skeleton className="h-5 w-20" />
-          </ShellBlocks>
-        </InsetSection>
+        </div>
       </Page>
     </LoadingShell>
   );

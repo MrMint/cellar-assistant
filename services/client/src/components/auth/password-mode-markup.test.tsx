@@ -77,8 +77,20 @@ describe("sign-in page", () => {
     assert.ok(html.includes(">or<"));
     assert.ok(hasPasswordInput(html));
     assert.ok(html.includes('type="email"'));
-    assert.ok(html.includes("New to Cellar Assistant?"));
-    assert.ok(html.includes('href="/sign-up"'));
+    assert.match(html, /<h1\b[^>]*>Cellar Assistant<\/h1>/);
+    assert.ok(html.includes("Sign in to your cellars"));
+    assert.match(html, /<a\b[^>]*href="\/sign-up"[^>]*>Create an account<\/a>/);
+    // Shell-Entry: the providers come before the password form.
+    assert.ok(
+      html.indexOf("Continue with Facebook") < html.indexOf('type="email"'),
+    );
+    // The password field's toggle is "Show", so the field alone is named
+    // "Password" (getByLabel("Password") finds one control).
+    assert.match(
+      html,
+      /<button\b[^>]*aria-pressed="false"[^>]*>Show<\/button>/,
+    );
+    assert.ok(!/aria-label="[^"]*[Pp]assword/.test(html));
     assert.ok(!html.includes(note));
     assert.ok(!html.includes("Sign in with your password"));
   });
@@ -115,22 +127,34 @@ describe("sign-in page", () => {
 });
 
 describe("sign-up page", () => {
-  test("enabled (default): the password sign-up form, no social buttons", () => {
+  test("enabled (default): providers first, then the password sign-up form", () => {
     const html = render(<SignUpApiClient />);
-    assert.ok(html.includes("Sign up for Cellar Assistant"));
+    assert.match(html, /<h1\b[^>]*>Create an account<\/h1>/);
+    assertSocialButtons(html);
+    assert.ok(html.includes(">or<"));
     assert.ok(hasPasswordInput(html));
-    assert.ok(html.includes("Display name"));
-    for (const label of SOCIAL) assert.ok(!html.includes(label));
+    assert.ok(
+      html.indexOf("Continue with Facebook") < html.indexOf('type="email"'),
+    );
+    assert.match(html, /<label\b[^>]*for="sign-up-name"[^>]*>Name<\/label>/);
+    assert.ok(html.includes("Optional"));
+    assert.ok(html.includes("Friends see this, never your email"));
+    assert.ok(html.includes("9 or more characters"));
+    assert.match(
+      html,
+      /<button\b[^>]*type="submit"[^>]*>[\s\S]*?Create account<\/button>/,
+    );
+    assert.ok(html.includes("Have an account?"));
   });
 
   for (const mode of ["signin-only", "disabled"] as const) {
     test(`${mode}: social buttons only`, () => {
       const html = render(<SignUpApiClient passwordMode={mode} />);
-      assert.ok(html.includes("Sign up for Cellar Assistant"));
+      assert.match(html, /<h1\b[^>]*>Create an account<\/h1>/);
       assertSocialButtons(html);
       assert.ok(!hasPasswordInput(html));
       assert.ok(!html.includes('type="email"'));
-      assert.ok(!html.includes("Display name"));
+      assert.ok(!html.includes("sign-up-name"));
       assert.ok(html.includes('href="/sign-in"'));
     });
   }

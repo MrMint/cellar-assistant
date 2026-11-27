@@ -2,14 +2,20 @@
 
 import { useEffect, useMemo } from "react";
 import { AppBar } from "@/components/app/AppBar";
+import { LabelPlate } from "@/components/app/LabelPlate";
+import { Link } from "@/components/app/Link";
+import { CellarTile } from "@/components/app/parts/CellarTile";
+import { Heart } from "@/components/app/parts/Heart";
+import { itemTypeTokens } from "@/components/app/TypeChip";
 import { CellarItemsFilter } from "@/components/cellar/CellarItemsFilter";
+import { useFavorite } from "@/components/cellar/list/useFavorite";
 import { virtualTotal } from "@/components/cellar/virtualTotal";
 import { ApiError } from "@/components/cellar-api/ApiError";
 import type { ApiItemType } from "@/components/cellar-api/itemTypes";
 import { VirtualGrid } from "@/components/common/VirtualGrid";
-import { ItemCard } from "@/components/item/ItemCard";
 import { itemHref } from "@/components/item-api/itemTypes";
 import { failureFromTransport } from "@/lib/api/result";
+import { feedback } from "@/lib/feedback";
 import { type Page, toPage } from "@/lib/paging/paged-connection";
 import { usePagedConnection } from "@/lib/paging/use-paged-connection";
 import { useTypesFilterState } from "@/utilities/hooks";
@@ -22,6 +28,55 @@ import {
 import { FavoritesQuery } from "./fragments";
 import { LovedSegment } from "./LovedSegment";
 
+/**
+ * One loved drink as the kit's cellar tile (Shell-Me, Loved): photo or
+ * plate, name, maker, your stars, and the heart that unloves it in place.
+ */
+function LovedTile({
+  row,
+  onBeforeNavigate,
+}: {
+  row: FavoriteGridRow;
+  onBeforeNavigate?: () => void;
+}) {
+  const { item, type } = row;
+  const favourite = useFavorite(item.itemId, type, item.isFavorite ?? true);
+  return (
+    <CellarTile
+      name={
+        <Link
+          href={itemHref(type, item.id)}
+          overlay
+          underline="none"
+          onPointerDown={() => feedback("press", { phase: "down" })}
+          onClick={onBeforeNavigate}
+          className="text-ink outline-none"
+        >
+          {item.name}
+        </Link>
+      }
+      maker={item.subtitle}
+      glyph={itemTypeTokens[type].glyph}
+      photoUrl={item.displayImageUrl}
+      plate={
+        <LabelPlate
+          type={type}
+          plate={item.plate ?? { name: item.name }}
+          className="absolute inset-0"
+        />
+      }
+      rating={item.myScore ?? null}
+      heart={
+        <Heart
+          on={favourite.on}
+          onToggle={favourite.set}
+          label={`Love ${item.name}`}
+        />
+      }
+    />
+  );
+}
+
 interface FavoritesClientProps {
   /** The server's first page, for the filter it was rendered with. */
   initialPage: Page<FavoriteGridRow>;
@@ -32,8 +87,9 @@ interface FavoritesClientProps {
  * `82450ad1:src/components/favorites/FavoritesClient.tsx`, restored.
  *
  * Same tree — the title (now an `AppBar`, Back to Me, and "Loved" since
- * D27 renamed favourites at the edges; the data model keeps its name), `CellarItemsFilter` on the old `?types=` URL
- * state, `VirtualGrid` of `ItemCard`s, "No favorites found" — over
+ * D27 renamed favourites at the edges; the data model keeps its name),
+ * `CellarItemsFilter` on the old `?types=` URL state, a `VirtualGrid` of
+ * kit cellar tiles (Shell-Me), "Nothing loved yet" — over
  * `me.favorites(types:)`:
  *
  * - The first page is the server's (the old page fetched one and discarded
@@ -112,12 +168,7 @@ export function FavoritesClient({
         }}
         isLoadingMore={list.status === "loadingMore"}
         renderItem={(x, onBeforeNavigate) => (
-          <ItemCard
-            item={x.item}
-            type={x.type}
-            href={itemHref(x.type, x.item.id)}
-            onClick={onBeforeNavigate}
-          />
+          <LovedTile row={x} onBeforeNavigate={onBeforeNavigate} />
         )}
       />
     </div>

@@ -19,9 +19,11 @@ const render = (node: React.ReactNode) =>
 
 describe("NOT_FOUND_COPY (D24)", () => {
   test("one message that never says which of missing or private it is", () => {
-    assert.match(
-      NOT_FOUND_COPY.title,
-      /doesn't exist or isn't shared with you/,
+    // CROSS-LOT: one wording for gone and private alike.
+    assert.equal(NOT_FOUND_COPY.title, "Can't open this page");
+    assert.equal(
+      NOT_FOUND_COPY.body,
+      "It's gone, or it isn't shared with you.",
     );
     const text = `${NOT_FOUND_COPY.title} ${NOT_FOUND_COPY.body}`;
     // Words that would confirm a private row exists.
@@ -33,7 +35,7 @@ describe("NotFoundMessage", () => {
   test("in the shell: the D24 copy and a way home", () => {
     const html = render(<NotFoundMessage />);
     assert.ok(html.includes(NOT_FOUND_COPY.title), html);
-    assert.match(html, /<h1[^>]*>[^<]*doesn't exist/);
+    assert.match(html, /<h1[^>]*>Can't open this page</);
     assert.ok(html.includes('href="/"'));
     assert.ok(html.includes("Go home"));
   });
@@ -49,13 +51,15 @@ describe("NotFoundMessage", () => {
 describe("describeBoundaryError", () => {
   test("online, the failure is ours and a retry is offered", () => {
     const copy = describeBoundaryError({ online: true });
-    assert.equal(copy.title, "Something went wrong");
-    assert.match(copy.body, /our side/);
+    // combined-error-01: what happened and the one way out, no apology.
+    assert.equal(copy.title, "Couldn't load this page");
+    assert.doesNotMatch(`${copy.title} ${copy.body}`, /sorry|wrong|our side/i);
   });
 
   test("offline, it says so — the one cause the viewer can fix", () => {
     const copy = describeBoundaryError({ online: false });
     assert.equal(copy.title, "You're offline");
+    assert.equal(copy.body, "It opens by itself when you're back");
   });
 });
 
@@ -75,7 +79,7 @@ describe("BoundaryError", () => {
       digest: "abc123",
     });
     const html = render(<BoundaryError error={error} retry={() => {}} />);
-    assert.ok(html.includes("Something went wrong"));
+    assert.ok(html.includes("Couldn't load this page"));
     assert.ok(html.includes("Try again"));
     assert.ok(html.includes("Reference: abc123"));
     // Never the error's own message.

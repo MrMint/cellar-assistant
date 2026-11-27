@@ -49,3 +49,39 @@ export const UpdateProfileMutation = graphql(
 `,
   [ViewerProfileFragment, ActorErrorFieldsFragment],
 );
+
+/**
+ * MC-avatar: make an uploaded file the viewer's picture. The file id is the
+ * only thing sent; the API writes the viewer's own row, and refuses a file
+ * that is not the viewer's own verified `avatar` upload (`avatar.test.ts`).
+ */
+export const SetAvatarMutation = graphql(
+  `
+  mutation SetAvatar($fileId: ID!) {
+    setAvatar(fileId: $fileId) {
+      __typename
+      ... on UserProfile {
+        ...ViewerProfile
+      }
+      ...ActorErrorFields
+    }
+  }
+`,
+  [ViewerProfileFragment, ActorErrorFieldsFragment],
+);
+
+/** Clear the viewer's picture; `avatarUrl` falls back to the provider's. */
+export const RemoveAvatarMutation = graphql(
+  `
+  mutation RemoveAvatar {
+    removeAvatar {
+      __typename
+      ... on UserProfile {
+        ...ViewerProfile
+      }
+      ...ActorErrorFields
+    }
+  }
+`,
+  [ViewerProfileFragment, ActorErrorFieldsFragment],
+);

@@ -6,8 +6,9 @@ import { Gql } from "../../fixtures/test.ts";
 /**
  * X18 · the Me hub and a friend's profile, at 390×844 with a thumb.
  *
- * - Me: the header's count row, Lists, Friends, Settings — every tile and row
- *   inside the screen, no sideways scroll.
+ * - Me: the number tiles, Lists, People and the Settings row — every tile and
+ *   row inside the screen, no sideways scroll; Edit profile and Sign out are
+ *   on Settings, one tap away.
  * - Loved has a Recipes half, and the segment is the URL.
  * - Friends → a friend's row → their profile: their FRIENDS tier list and the
  *   drink they logged are there; their PRIVATE list is not.
@@ -140,27 +141,38 @@ const noSidewaysScroll = async (page: import("@playwright/test").Page) => {
   expect(overflow).toBeLessThanOrEqual(0);
 };
 
-test("Me: counts, Lists, Friends and Settings fit the phone", async ({
+test("Me: numbers, Lists, People and Settings fit the phone", async ({
   page,
   noise,
 }) => {
   await page.goto("/me");
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
 
-  // The account has at least the tier list made above, so the count row is
-  // drawn; each tile names its noun.
+  // The account has at least the tier list made above, so the number tiles
+  // are drawn; each tile names its noun.
   const row = page.locator('[data-slot="me-counts"]');
   await expect(row).toBeVisible();
   const viewport = page.viewportSize();
   const edges = await edgesOf(row);
   expect(edges.left).toBeGreaterThanOrEqual(0);
   expect(edges.right).toBeLessThanOrEqual(viewport?.width ?? 390);
-  await expect(row).toContainText(/tier lists?/);
+  await expect(row).toContainText(/tier lists?/i);
 
   await expect(page.getByRole("heading", { name: "Lists" })).toBeVisible();
   await expect(page.getByRole("link", { name: /^Loved/ })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
-  await expect(page.getByRole("link", { name: "Edit profile" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "People" })).toBeVisible();
+  await noSidewaysScroll(page);
+
+  // The last row and the gear both open Settings, which holds Edit profile
+  // and Sign out.
+  await page.getByRole("link", { name: "Settings" }).last().click();
+  await expect(page).toHaveURL(/\/me\/settings$/);
+  await expect(
+    page.getByRole("heading", { level: 1, name: "Settings" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: /^Edit profile/ }),
+  ).toBeVisible();
   await expect(page.getByRole("button", { name: "Sign out" })).toBeVisible();
   await noSidewaysScroll(page);
   expect(noise.pageErrors).toEqual([]);
@@ -225,11 +237,11 @@ test("a stranger's or nobody's profile is the one not-found; your own is Me", as
 }) => {
   await page.goto("/users/00000000-0000-4000-8000-000000000000");
   await expect(
-    page.getByText(/doesn.t exist or isn.t shared with you/),
+    page.getByText("It's gone, or it isn't shared with you."),
   ).toBeVisible();
   await page.goto("/users/not-an-id");
   await expect(
-    page.getByText(/doesn.t exist or isn.t shared with you/),
+    page.getByText("It's gone, or it isn't shared with you."),
   ).toBeVisible();
 
   await page.goto(`/users/${ACCOUNTS.primary.id}`);
