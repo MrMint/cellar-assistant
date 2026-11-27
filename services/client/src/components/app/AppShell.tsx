@@ -41,15 +41,16 @@ export function contentLayout(pathname: string): {
   return {
     padded: !isMap && !fullScreen,
     scrolls: pathname !== "/map",
-    // X10: search is a full-screen sheet on a phone, and a full-screen sheet
-    // hides the tab bar (design §2), as does capture (X06: "It hides only in
-    // capture"). The side rail stays from `sm` up.
+    // The kit's tab bar never hides on scroll (KIT § 2). It steps aside for
+    // the search sheet (X10: full screen on a phone, with its own Cancel),
+    // the capture surface (X06: the camera has the screen, and Close is the
+    // way out) and the full-screen routes. The rail stays from `md` up.
     tabBar: pathname !== "/search" && !isCaptureRoute(pathname) && !fullScreen,
   };
 }
 
 /**
- * The signed-in chrome: `SideRail` from `sm` up, `TabBar` below it, and
+ * The signed-in chrome: `SideRail` from `md` (900, L8) up, `TabBar` below it, and
  * between them the **inner scroller** (D26) — the one element that scrolls,
  * which is what tab re-tap and (later) pull-to-refresh act on.
  *
@@ -78,7 +79,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     <div
       data-slot="app-shell"
       className={cn(
-        "flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden sm:flex-row",
+        "flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden md:flex-row",
         // Phones: reclaim the bottom safe area the root layout pads, so the
         // tab bar's glass runs under the home indicator. It has to be this
         // element: the shell clips (overflow-hidden), so a negative margin
@@ -86,10 +87,10 @@ export function AppShell({ children }: { children: ReactNode }) {
         // between the root layout and here may clip either. Without a tab
         // bar (the search sheet, X10; capture, X06) there is no glass to run
         // under it, so the root layout's padding keeps the content clear.
-        tabBar && "max-sm:mb-[calc(-1*env(safe-area-inset-bottom))]",
+        tabBar && "max-md:mb-[calc(-1*env(safe-area-inset-bottom))]",
       )}
     >
-      {rail && <SideRail className="hidden sm:flex" />}
+      {rail && <SideRail className="hidden md:flex" />}
       <RouteTransition>
         <main
           {...mainContentProps}
@@ -103,7 +104,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           {children}
         </main>
       </RouteTransition>
-      {tabBar && <TabBar className="sm:hidden" />}
+      {tabBar && <TabBar className="md:hidden" />}
     </div>
   );
 }

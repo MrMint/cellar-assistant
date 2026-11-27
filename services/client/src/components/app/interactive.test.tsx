@@ -598,24 +598,74 @@ describe("SegmentedControl", () => {
 });
 
 describe("TabBar", () => {
-  test("five labelled entries; the route's tab is the current page", async () => {
+  test("the kit's seven: Cellars, Search, Map, Add, Lists, More, Me", async () => {
     pathname = "/cellars/abc";
     await render(<TabBar />);
     const nav = container.querySelector('nav[aria-label="Main"]');
     assert.ok(nav);
-    const links = [...nav.querySelectorAll("a:not([aria-label])")];
-    assert.deepEqual(
-      links.map((a) => a.textContent),
-      ["Home", "Cellar", "Map", "Me"],
+    const names = [...nav.querySelectorAll("a, button")].map(
+      (el) => el.getAttribute("aria-label") ?? el.textContent,
     );
-    const add = nav.querySelector('a[aria-label="Add"]');
-    assert.ok(add, "the capture button");
+    assert.deepEqual(names, [
+      "Cellars",
+      "Search",
+      "Map",
+      "Add",
+      "Lists",
+      "More",
+      "Me",
+    ]);
     assert.deepEqual(
       [...nav.querySelectorAll("[aria-current=page]")].map(
         (a) => a.textContent,
       ),
-      ["Cellar"],
+      ["Cellars"],
     );
+  });
+
+  test("Me is the avatar, named with its friend-request badge", async () => {
+    const { ShellViewerContext, pendingRequests } = await import(
+      "./overlays/ShellViewer"
+    );
+    const requests = pendingRequests({
+      myFriendRequests: {
+        __typename: "FriendRequestConnection",
+        edges: [
+          { node: { id: "r1", status: "PENDING" } },
+          { node: { id: "r2", status: "PENDING" } },
+          { node: { id: "r3", status: "ACCEPTED" } },
+        ],
+      },
+    } as Parameters<typeof pendingRequests>[0]);
+    await render(
+      <ShellViewerContext.Provider
+        value={{ displayName: "Test User", requests }}
+      >
+        <TabBar />
+      </ShellViewerContext.Provider>,
+    );
+    const me = container.querySelector('[data-slot="me-tab"]');
+    assert.equal(me?.getAttribute("aria-label"), "Me, 2 friend requests");
+    assert.equal(me?.getAttribute("href"), "/me");
+    assert.equal(
+      container.querySelector('[data-slot="me-badge"]')?.textContent,
+      "2",
+    );
+    assert.equal(
+      container.querySelector('[data-slot="user-avatar"]')?.textContent,
+      "T",
+    );
+  });
+
+  test("More opens a sheet of the places with no tab", async () => {
+    await render(<TabBar />);
+    const more = container.querySelector('[data-slot="more-button"]');
+    await click(more);
+    await flush();
+    assert.equal(more?.getAttribute("aria-expanded"), "true");
+    const dialog = document.querySelector('[role="dialog"]');
+    assert.ok(dialog, "More's sheet");
+    assert.ok(byText("Recipes", dialog as ParentNode));
   });
 
   test("a tapped tab lights at once, before the route changes", async () => {
@@ -661,7 +711,7 @@ describe("TabBar", () => {
     assert.match(shell?.className ?? "", /overflow-hidden/);
     assert.match(
       shell?.className ?? "",
-      /max-sm:mb-\[calc\(-1\*env\(safe-area-inset-bottom\)\)\]/,
+      /max-md:mb-\[calc\(-1\*env\(safe-area-inset-bottom\)\)\]/,
     );
     assert.doesNotMatch(bar?.className ?? "", /\bmb-\[/);
     assert.match(bar?.className ?? "", /pb-\[env\(safe-area-inset-bottom\)\]/);
@@ -696,11 +746,11 @@ describe("TabBar", () => {
     );
     assert.equal(container.querySelector('[data-slot="tab-bar"]'), null);
     const shell = container.querySelector('[data-slot="app-shell"]');
-    assert.doesNotMatch(shell?.className ?? "", /max-sm:mb-/);
+    assert.doesNotMatch(shell?.className ?? "", /max-md:mb-/);
   });
 
   test("re-tap: scroll to top first, then pop to the tab's root", () => {
-    const cellar = TABS.find((t) => t.key === "cellar");
+    const cellar = TABS.find((t) => t.key === "cellars");
     assert.ok(cellar);
     const scrolled: number[] = [];
     const scroller = {
@@ -724,8 +774,8 @@ describe("TabBar", () => {
     );
   });
 
-  test("X10: Home at its root and the top opens the search sheet", () => {
-    const home = TABS.find((t) => t.key === "home");
+  test("X10: Search at the landing and the top opens the search sheet", () => {
+    const home = TABS.find((t) => t.key === "search");
     assert.ok(home);
     assert.equal(home.href, "/");
     const scroller = { scrollTop: 0, scrollTo: () => {} } as unknown as Element;

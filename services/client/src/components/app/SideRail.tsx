@@ -2,75 +2,103 @@
 
 import { usePathname } from "next/navigation";
 import type { MouseEvent } from "react";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import { HapticOverlay } from "@/lib/feedback";
 import { cn } from "@/lib/utils";
 import { Link } from "./Link";
-import { TABS, type Tab } from "./nav";
-import {
-  CaptureButton,
-  handleActiveTabTap,
-  opensElsewhere,
-  useOptimisticTab,
-} from "./TabBar";
-import { useNavigate } from "./useNavigate";
+import { ADD_KEYS, LEADING_TABS, ME_TAB, type Tab, TRAILING_TABS } from "./nav";
+import { KeyTooltip } from "./overlays/Kbd";
+import { isMoreRoute, MoreMenu } from "./overlays/MoreMenu";
+import { PRESS_CLASS, pressFeedback } from "./overlays/press";
+import { CaptureButton, MeTab, useTabTap } from "./TabBar";
+
+function RailLink({
+  tab,
+  active,
+  onTap,
+}: {
+  tab: Tab;
+  active: boolean;
+  onTap: (event: MouseEvent<HTMLAnchorElement>, tab: Tab) => void;
+}) {
+  const Icon = tab.icon;
+  return (
+    <KeyTooltip label={tab.label} keys={tab.keys}>
+      <Link
+        href={tab.href}
+        underline="none"
+        aria-current={active ? "page" : undefined}
+        data-active={active ? "" : undefined}
+        {...pressFeedback()}
+        onClick={(event) => onTap(event, tab)}
+        className={cn(
+          "t-micro relative flex w-16 flex-col items-center justify-center gap-1 rounded-md py-1.5 outline-none hover:text-ink focus-visible:ring-2 focus-visible:ring-ring",
+          PRESS_CLASS,
+          active ? "font-semibold text-ink" : "text-ink-3",
+        )}
+      >
+        <span
+          className={cn(
+            "flex h-8 w-13 items-center justify-center rounded-lg",
+            active && "bg-sel",
+          )}
+        >
+          <Icon
+            aria-hidden
+            className="size-6"
+            strokeWidth={active ? 2.25 : 1.75}
+          />
+        </span>
+        <span>{tab.label}</span>
+        <HapticOverlay />
+      </Link>
+    </KeyTooltip>
+  );
+}
 
 /**
- * From `sm` up: the same five destinations as `TabBar`, stacked in a rail on
- * the left, labels always visible (so no tooltip is needed to name a glyph).
+ * From `md` up (KIT § 3 Desktop): the 88 rail that replaces the tab bar —
+ * Cellars, Search, Map, Add (teal, 48 × 40), Lists, More, and Me at the foot.
+ * Each item is 64 wide with its label always shown, and names its key in a
+ * tooltip after 400 ms. It never moves.
  */
 export function SideRail({ className }: { className?: string }) {
   const pathname = usePathname() ?? "/";
-  const navigate = useNavigate();
-  const [active, setActive] = useOptimisticTab();
-
-  const onTap = (event: MouseEvent<HTMLAnchorElement>, tab: Tab) => {
-    if (opensElsewhere(event)) return;
-    if (tab.key === active) {
-      if (handleActiveTabTap(tab, pathname, navigate.push)) {
-        event.preventDefault();
-      }
-      return;
-    }
-    setActive(tab.key);
-  };
-
-  const item = (tab: Tab) => {
-    const Icon = tab.icon;
-    const isActive = tab.key === active;
-    return (
-      <Link
-        key={tab.key}
-        href={tab.href}
-        underline="none"
-        aria-current={isActive ? "page" : undefined}
-        data-active={isActive ? "" : undefined}
-        onClick={(event) => onTap(event, tab)}
-        className={cn(
-          "flex min-h-14 w-16 flex-col items-center justify-center gap-1 rounded-md font-medium text-[11px] leading-3.5 transition-colors duration-(--ca-dur-micro) hover:bg-surface-2",
-          isActive ? "bg-surface-2 text-ink-1" : "text-ink-3",
-        )}
-      >
-        <Icon
-          aria-hidden
-          className="size-6"
-          strokeWidth={isActive ? 2.25 : 1.75}
-        />
-        <span>{tab.label}</span>
-      </Link>
-    );
-  };
+  const { active, onTap } = useTabTap();
+  const item = (tab: Tab) => (
+    <RailLink
+      key={tab.key}
+      tab={tab}
+      active={tab.key === active}
+      onTap={onTap}
+    />
+  );
 
   return (
-    <nav
-      aria-label="Main"
-      data-slot="side-rail"
-      className={cn(
-        "touch-none-select flex w-20 shrink-0 flex-col items-center gap-2 bg-surface-1 py-4",
-        className,
-      )}
-    >
-      {TABS.slice(0, 2).map(item)}
-      <CaptureButton className="my-1 hover:bg-primary/90" />
-      {TABS.slice(2).map(item)}
-    </nav>
+    <TooltipProvider>
+      <nav
+        aria-label="Main"
+        data-slot="side-rail"
+        className={cn(
+          "touch-none-select flex w-22 shrink-0 flex-col items-center gap-3 border-hair border-r bg-surface-1 pt-4 pb-4",
+          className,
+        )}
+      >
+        {LEADING_TABS.map(item)}
+        <span className="flex w-16 flex-col items-center gap-1">
+          <KeyTooltip label="Add" keys={ADD_KEYS}>
+            <CaptureButton variant="rail" />
+          </KeyTooltip>
+          <span aria-hidden className="t-micro text-ink-3">
+            Add
+          </span>
+        </span>
+        {TRAILING_TABS.map(item)}
+        <MoreMenu variant="rail" active={isMoreRoute(pathname)} />
+        <div className="mt-auto">
+          <MeTab variant="rail" active={active === ME_TAB.key} onTap={onTap} />
+        </div>
+      </nav>
+    </TooltipProvider>
   );
 }
