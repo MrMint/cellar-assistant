@@ -58,7 +58,7 @@ export function AgreeWithFriends({
           title="No friends to compare yet"
           action={
             primary ? (
-              <InviteFriendButton />
+              <InviteFriendButton label="Invite a friend" />
             ) : (
               <Link
                 href="/friends"
