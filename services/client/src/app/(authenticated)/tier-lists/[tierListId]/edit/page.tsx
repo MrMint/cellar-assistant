@@ -13,7 +13,8 @@ import { isNotFound, unwrapResult } from "@/lib/api/result";
 import { apiServerQuery } from "@/lib/api/urql-server";
 
 /**
- * `/tier-lists/[id]/edit` — the old `EditTierListClient` (`82450ad1`).
+ * `/tier-lists/[id]/edit` — List details as a page (Social-Lists 08; the
+ * list page opens the same form as a sheet).
  *
  * `NotFoundError` ("no such list" or "not yours to see") is `notFound()`, as
  * the old null `tier_lists_by_pk` was. A viewer who can see the list but did
@@ -38,7 +39,7 @@ export async function generateMetadata({
     (await loadTierListEdit(tierListId)).tierList,
     "TierList",
   );
-  return { title: result.ok ? `Edit ${result.data.name}` : "Edit tier list" };
+  return { title: result.ok ? `${result.data.name} details` : "List details" };
 }
 
 export default async function EditTierListPage({
@@ -63,26 +64,24 @@ export default async function EditTierListPage({
     return (
       <div className="flex flex-col gap-2">
         <AppBar title={tierList.name} parent={`/tier-lists/${tierList.id}`} />
-        <p className="text-ink-2 type-callout">
-          Only the person who made a tier list can change it.
+        <p className="t-body m-0 text-ink-2">
+          Only the list's maker can change it.
         </p>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col gap-8">
+    <div className="flex max-w-[600px] flex-col gap-6">
       {/* X21: the page's h1, and Back to the list on a cold open. */}
-      <AppBar
-        title={`Edit ${tierList.name}`}
-        parent={`/tier-lists/${tierList.id}`}
-      />
+      <AppBar title="List details" parent={`/tier-lists/${tierList.id}`} />
       <EditTierListClient tierList={tierList} />
-      <div className="flex">
+      <div className="border-edge border-t pt-2">
         <DeleteTierListButton
           tierListId={tierList.id}
           name={tierList.name}
           itemCount={tierList.itemCount}
+          listType={tierList.listType}
         />
       </div>
     </div>

@@ -1,9 +1,7 @@
 import type { Metadata } from "next";
 import type { SectionKey } from "@/components/common/CollectionSection";
-import {
-  GetTierListsQuery,
-  tierListPageSize,
-} from "@/components/tier-list/queries";
+import { listsPageSize } from "@/components/tier-list/lists/model";
+import { ListsIndexQuery } from "@/components/tier-list/lists/queries";
 import {
   type TierListSectionSeed,
   TierListsPage,
@@ -12,7 +10,7 @@ import { unwrapResult } from "@/lib/api/result";
 import { apiServerQuery } from "@/lib/api/urql-server";
 import { toPage } from "@/lib/paging/paged-connection";
 
-export const metadata: Metadata = { title: "Tier lists" };
+export const metadata: Metadata = { title: "Lists" };
 
 /**
  * `/tier-lists` — Yours, From friends and Discover (decision D2, X11), each a
@@ -24,8 +22,8 @@ export const dynamic = "force-dynamic";
 const SECTIONS: readonly SectionKey[] = ["MINE", "FRIENDS", "DISCOVER"];
 
 async function sectionSeed(section: SectionKey): Promise<TierListSectionSeed> {
-  const data = await apiServerQuery(GetTierListsQuery, {
-    first: tierListPageSize(section),
+  const data = await apiServerQuery(ListsIndexQuery, {
+    first: listsPageSize(section),
     after: null,
     section,
   });

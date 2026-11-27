@@ -5,34 +5,37 @@ import { useCallback, useState } from "react";
 import { useMutation } from "urql";
 import { ConfirmSheet } from "@/components/app/ConfirmSheet";
 import { Delete, ICON_STROKE } from "@/components/app/icons";
+import { FieldError } from "@/components/app/parts/Field";
 import { useNavigate } from "@/components/app/useNavigate";
 import { Button } from "@/components/ui/button";
 import { type ApiFailure, unwrapResult } from "@/lib/api/result";
+import { kindNoun } from "./lists/model";
 import { DeleteTierListMutation } from "./queries";
 
 /**
- * **New-only, kept** (decision 2; the old app had no delete UI): shown under
- * the restored edit form.
+ * "Delete this list" at the foot of List details (Social-Lists 08, 10): a
+ * quiet danger row with the trash glyph, then the kit's confirm. Deleting a
+ * list is the one thing Undo cannot bring back (KIT § 4), so it confirms.
  *
- * Delete, with the cascade said out loud.
- *
- * `TierListActor.delete` **cascades** — B7 chose that deliberately, and
- * deliberately unlike `CellarActor.delete`, which refuses a non-empty cellar
- * and makes the viewer empty it first. Two adjacent aggregates with opposite
- * delete semantics is exactly the situation where a dialog that says "are you
- * sure?" and nothing else gets someone's list of forty bars.
- *
- * The confirm is the app's `ConfirmSheet` (the one place solid danger lives);
- * the API's refusal, when there is one, is said inside it, above its buttons.
+ * `TierListActor.delete` cascades to the entries (B7), and the confirm says
+ * so in the person's terms. Only the list's maker is ever shown this: the
+ * edit page and `ListDetailsSheet` check before they draw it, and the API
+ * refuses anyone else, which the confirm then says above its buttons.
  */
 export function DeleteTierListButton({
   tierListId,
   name,
   itemCount,
+  listType = "",
+  onDeleted,
 }: {
   tierListId: string;
   name: string;
   itemCount: number;
+  /** For the count's noun ("113 places"); entries without it. */
+  listType?: string;
+  /** Before the move to `/tier-lists` (a sheet closes itself here). */
+  onDeleted?: () => void;
 }) {
   const router = useRouter();
   const navigate = useNavigate();
@@ -52,39 +55,39 @@ export function DeleteTierListButton({
       return;
     }
     setOpen(false);
+    onDeleted?.();
     navigate.push("/tier-lists");
     router.refresh();
-  }, [deleteTierList, navigate, router, tierListId]);
+  }, [deleteTierList, navigate, onDeleted, router, tierListId]);
 
   return (
     <>
-      <Button variant="destructive" onClick={() => setOpen(true)}>
+      <Button
+        variant="ghost"
+        className="h-11 justify-start gap-4 px-1 text-danger"
+        onClick={() => setOpen(true)}
+      >
         <Delete aria-hidden strokeWidth={ICON_STROKE} />
-        Delete
+        Delete this list
       </Button>
       <ConfirmSheet
         open={open}
         onOpenChange={(next) => {
           if (!fetching) setOpen(next);
         }}
-        title="Delete this tier list?"
+        title="Delete this list?"
         description={
           <>
-            <strong>{name}</strong> and its {itemCount}{" "}
-            {itemCount === 1 ? "entry" : "entries"} will be deleted. The items
-            and places themselves are not touched — only their place on this
-            list. This cannot be undone.
-            {error !== null && (
-              <span role="alert" className="mt-2 block text-destructive">
-                {error.message}
-              </span>
-            )}
+            <strong className="text-ink">{name}</strong> and its{" "}
+            {kindNoun(listType, itemCount)} go. The drinks and places stay.
           </>
         }
         confirmLabel="Delete"
         onConfirm={() => void confirm()}
         pending={fetching}
-      />
+      >
+        {error !== null && <FieldError>{error.message}</FieldError>}
+      </ConfirmSheet>
     </>
   );
 }

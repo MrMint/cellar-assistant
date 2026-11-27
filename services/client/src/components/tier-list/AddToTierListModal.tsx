@@ -1,67 +1,64 @@
 "use client";
 
 /**
- * `82450ad1:src/components/tier-list/AddToTierListModal.tsx`, restored: the
- * viewer's own lists of the entity's type, "Already added (band)" rows
- * disabled, "Create new list" → "Create & add" with the old default name.
+ * Add to a list (Social-Lists 32, add-drink-01..03; CROSS-LOT "Add to a
+ * list"): the thing's name, the band it lands in ("Outstanding · from your
+ * stars"), your own lists of its kind ("My beers · 100 beers", with its rank
+ * chip and a check where it already is), "New beer list" (a name, then
+ * Create and add) and All lists. Tapping a list adds at once; the toast says
+ * where it went ("Added to Outstanding · #13 · Duchesse…") with Undo, one
+ * step of that list's history (D4).
  *
- * Data: `GetTierListsForItem` (a Hasura filter on `list_type` and
- * `created_by_id` with seven nil-uuid `_or` arms) → every page of the
- * viewer's visible lists (`useAllMyTierLists`) narrowed client-side
- * (`tierListOptionsFor`) plus the entity's own `tierListEntries` (G8) for
- * membership. The walk is what keeps the viewer's own lists on offer when
- * they can see more than 100 (G33, a server-side filter, is not built).
+ * No Unrated band (Social-Lists ruling 2): something you have not rated
+ * asks for a band first, in the same sheet, rather than landing unranked.
  *
- * On the app's primitives (D20): a `ResponsiveDialog` (a bottom sheet on a
- * phone), the lists as full-width row buttons, and a failure as a `notify`
- * error toast in place of the Snackbar.
- *
- * X23: the entry lands in the band **your rating** gives it (`bandForScore`
- * — your review of the item, your rating of the place), Unrated without one,
- * and the sheet says so before you pick. The add's toast offers Undo, one
- * step of that list's edit history (D4).
+ * Only your own lists are offered (`tierListOptionsFor` keeps the owner
+ * check as a second line behind `myTierLists(section: MINE)`), so a list you
+ * do not own is never a target. The props are unchanged: C2's `ItemMenu` and
+ * `AddToListButton`, and the places' `PlaceDetailsContent` and
+ * `MenuLineList`, open it.
  */
 
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { useQuery } from "urql";
-import { Add, Check, ICON_STROKE, Ranked } from "@/components/app/icons";
+import {
+  Add,
+  Check,
+  ChevronRight,
+  ICON_STROKE,
+  Lists,
+} from "@/components/app/icons";
+import { Link } from "@/components/app/Link";
 import { notify } from "@/components/app/notify";
+import {
+  BANDS,
+  type Band,
+  BandMarker,
+  bandName,
+  RankChip,
+} from "@/components/app/parts/Rank";
 import { ResponsiveDialog } from "@/components/app/ResponsiveDialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { unwrapResult } from "@/lib/api/result";
+import { feedback } from "@/lib/feedback";
 import { cn } from "@/lib/utils";
 import { useTierListActions } from "./actions";
 import { entryTypeOf, tierListOptionsFor } from "./adapter";
-import { BAND_LABELS, BAND_TONES, type TierListEntityType } from "./constants";
+import type { TierListEntityType } from "./constants";
 import { bandForScore } from "./history";
+import { kindNoun, kindOne, rankOf, rankOnAppend } from "./lists/model";
+import { ListRanksQuery } from "./lists/queries";
 import {
   ENTITY_ENTRIES_PAGE_SIZE,
   GetTierListsForItemQuery,
   GetTierListsForPlaceQuery,
   TIER_LISTS_PAGE_SIZE,
 } from "./queries";
+import { defaultListName } from "./TierListForm";
 import { useAllMyTierLists } from "./useAllMyTierLists";
-
-// =============================================================================
-// Helpers
-// =============================================================================
-
-const ENTITY_TYPE_LABELS: Record<TierListEntityType, string> = {
-  place: "Place",
-  wine: "Wine",
-  beer: "Beer",
-  spirit: "Spirit",
-  coffee: "Coffee",
-  sake: "Sake",
-  tea: "Tea",
-};
-
-// =============================================================================
-// Types
-// =============================================================================
 
 interface AddToTierListModalProps {
   open: boolean;
@@ -73,9 +70,38 @@ interface AddToTierListModalProps {
   userId?: string;
 }
 
-// =============================================================================
-// Main Modal
-// =============================================================================
+const asBand = (band: number): Band | null =>
+  band >= 1 && band <= 5 ? (band as Band) : null;
+
+/** An entry's rank on one list, read from that list (`ListRanksQuery`). */
+function EntryRank({
+  tierListId,
+  entryId,
+  band,
+}: {
+  tierListId: string;
+  entryId: string;
+  band: number;
+}) {
+  const [{ data }] = useQuery({
+    query: ListRanksQuery,
+    variables: { id: tierListId },
+    requestPolicy: "network-only",
+  });
+  const list = unwrapResult(data?.tierList, "TierList");
+  const rank = list.ok
+    ? rankOf(
+        list.data.items.edges.map((edge) => edge.node),
+        entryId,
+      )
+    : null;
+  const chipBand = asBand(band);
+  if (rank === null || chipBand === null) return null;
+  return <RankChip rank={rank} band={chipBand} />;
+}
+
+const ROW =
+  "relative flex min-h-14 w-full items-center gap-4 rounded-md px-1 text-left outline-none transition-transform duration-(--ca-dur-micro) ease-standard focus-visible:outline-2 focus-visible:outline-act-ink focus-visible:outline-offset-2 active:scale-97 disabled:opacity-40 motion-reduce:active:scale-100 [@media(hover:hover)]:enabled:hover:bg-raised";
 
 export function AddToTierListModal({
   open,
@@ -90,7 +116,7 @@ export function AddToTierListModal({
   const isPlace = entityType === "place";
   const itemType = entryTypeOf(entityType);
 
-  // network-only: an add elsewhere must show as "Already added" on reopen.
+  // network-only: an add elsewhere must show on reopen.
   const [{ data: itemData, fetching: itemFetching }] = useQuery({
     query: GetTierListsForItemQuery,
     variables: {
@@ -133,39 +159,50 @@ export function AddToTierListModal({
             }
           : { entries: [], myScore: null };
       })();
-  const entityEntries = entity.entries;
-  /** X23: where a new entry lands — your verdict's band. */
-  const band = bandForScore(entity.myScore);
+  const entries = entity.entries.map((edge) => edge.node);
+  /** X23: your verdict's band; null when you have not rated it. */
+  const ratedBand = asBand(bandForScore(entity.myScore));
+  const [pickedBand, setPickedBand] = useState<Band | null>(null);
+  const band = ratedBand ?? pickedBand;
 
   const [addingToListId, setAddingToListId] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [newListName, setNewListName] = useState("");
   const [creating, setCreating] = useState(false);
 
-  const tierLists = tierListOptionsFor(
-    lists,
-    entityEntries.map((edge) => edge.node),
-    viewerId,
-    entityType,
-  );
+  const options = tierListOptionsFor(lists, entries, viewerId, entityType);
+  const counts = new Map(lists.map((list) => [list.id, list.itemCount]));
   const busy = addingToListId != null || creating;
 
-  // Reset the create form whenever the modal opens.
+  // A fresh sheet each time it opens.
   useEffect(() => {
     if (!open) return;
     setShowCreate(false);
-    setNewListName(`My ${ENTITY_TYPE_LABELS[entityType]} Tier List`);
+    setPickedBand(null);
+    setNewListName(defaultListName(entityType));
   }, [open, entityType]);
 
   /**
-   * The add's toast: where it went, and an Undo that takes back exactly that
-   * add (`editSeq`, read back with it) — or no Undo at all when the add's
-   * edit could not be named, rather than one that might take back another
-   * device's newer edit.
+   * The add's toast: band, rank and name, and an Undo that takes back
+   * exactly that add (`editSeq`) — or no Undo when the add's edit could not
+   * be named, rather than one that might take back a newer edit.
    */
   const added = useCallback(
-    (tierListId: string, listName: string, editSeq: number | null) => {
-      const message = `Added to ${listName} · ${BAND_LABELS[band]}`;
+    (
+      tierListId: string,
+      listName: string,
+      landed: Band,
+      rank: number | null,
+      editSeq: number | null,
+    ) => {
+      feedback("success");
+      const message = [
+        `Added to ${bandName(landed)}`,
+        rank === null ? null : `#${rank}`,
+        entityName,
+      ]
+        .filter((part) => part !== null)
+        .join(" · ");
       if (editSeq === null) {
         notify(message);
         return;
@@ -174,14 +211,12 @@ export function AddToTierListModal({
         undo: () => {
           void undoAction(tierListId, editSeq).then((result) => {
             if (result.success) {
-              notify(`Took ${entityName} off ${listName}`);
+              notify(`Off ${listName}`);
               router.refresh();
             } else {
-              // This page does not show the list, so the list page's "here's
-              // where it stands now" would point at nothing.
               fail(
                 result.moved === true
-                  ? `${listName} changed somewhere else, so nothing was undone.`
+                  ? `${listName} changed elsewhere · nothing undone`
                   : result.error,
               );
             }
@@ -189,11 +224,12 @@ export function AddToTierListModal({
         },
       });
     },
-    [band, entityName, router, undoAction],
+    [entityName, router, undoAction],
   );
 
   const handleAddToList = useCallback(
     async (tierListId: string, listName: string) => {
+      if (band === null) return;
       setAddingToListId(tierListId);
       try {
         const result = await addItemToTierListAction(
@@ -203,31 +239,38 @@ export function AddToTierListModal({
           band,
         );
         if (result.success) {
+          const list = lists.find((option) => option.id === tierListId);
+          const rank =
+            list === undefined
+              ? null
+              : rankOnAppend(list.bands, list.itemCount, band);
           router.refresh();
           onClose();
-          added(tierListId, listName, result.editSeq ?? null);
+          added(tierListId, listName, band, rank, result.editSeq ?? null);
         } else {
-          fail(result.error ?? "Failed to add item to tier list");
+          fail(result.error ?? "Couldn’t add it · try again");
         }
       } finally {
         setAddingToListId(null);
       }
     },
     [
+      band,
       entityId,
       entityType,
-      band,
       onClose,
       router,
       addItemToTierListAction,
       added,
+      lists,
     ],
   );
 
   const handleCreateAndAdd = useCallback(async () => {
+    if (band === null) return;
     const name = newListName.trim();
     if (name.length === 0) {
-      fail("Please enter a name for the new list");
+      feedback("refuse");
       return;
     }
     setCreating(true);
@@ -239,7 +282,7 @@ export function AddToTierListModal({
         entityType,
       );
       if (!created.success || !created.tierListId) {
-        fail(created.error ?? "Failed to create tier list");
+        fail(created.error ?? "Couldn’t make the list · try again");
         return;
       }
       const result = await addItemToTierListAction(
@@ -251,18 +294,19 @@ export function AddToTierListModal({
       if (result.success) {
         router.refresh();
         onClose();
-        added(created.tierListId, name, result.editSeq ?? null);
+        // The only entry on a new list is #1.
+        added(created.tierListId, name, band, 1, result.editSeq ?? null);
       } else {
-        fail(result.error ?? "Failed to add item to tier list");
+        fail(result.error ?? "Couldn’t add it · try again");
       }
     } finally {
       setCreating(false);
     }
   }, [
+    band,
     newListName,
     entityId,
     entityType,
-    band,
     onClose,
     router,
     addItemToTierListAction,
@@ -270,7 +314,7 @@ export function AddToTierListModal({
     added,
   ]);
 
-  const hasLists = tierLists.length > 0;
+  const kind = kindOne(entityType);
 
   return (
     <ResponsiveDialog
@@ -278,78 +322,116 @@ export function AddToTierListModal({
       onOpenChange={(next) => {
         if (!next) onClose();
       }}
-      title="Add to Tier List"
-      description={
-        <>
-          Add <strong>{entityName}</strong> to a tier list
-        </>
-      }
-      className="md:max-w-[420px]"
+      title="Add to a list"
+      description={entityName}
+      className="md:max-w-[440px]"
     >
-      <div className="flex flex-col gap-4 pb-1">
+      <div data-slot="add-to-list" className="flex flex-col gap-2 pb-1">
         {fetching ? (
-          <div className="flex justify-center py-4">
-            <Spinner />
+          <div className="flex justify-center py-6">
+            <Spinner aria-hidden />
+            <span className="sr-only">Loading your lists</span>
           </div>
         ) : (
           <>
-            <p className="flex items-center gap-1.5 text-ink-2 type-footnote">
-              <span
-                aria-hidden
-                className={cn(
-                  "size-2 shrink-0 rounded-full",
-                  (BAND_TONES[band] ?? BAND_TONES[0]).swatch,
-                )}
-              />
-              {entity.myScore === null
-                ? "Lands in Unrated — rate it to place it."
-                : `Lands in ${BAND_LABELS[band]}, from your rating.`}
-            </p>
-            {hasLists && (
-              <ul className="flex flex-col divide-y divide-line overflow-hidden rounded-lg bg-surface-1">
-                {tierLists.map((tl) => {
-                  const alreadyIn = tl.alreadyInBand !== null;
-                  const isAdding = addingToListId === tl.id;
-                  return (
-                    <li key={tl.id}>
+            {ratedBand !== null ? (
+              <p className="t-body m-0 flex min-h-11 items-center gap-3 text-ink-2">
+                <BandMarker band={ratedBand} />
+                {bandName(ratedBand)} · from your {isPlace ? "rating" : "stars"}
+              </p>
+            ) : (
+              <fieldset className="m-0 flex flex-col gap-2 border-0 p-0 pb-2">
+                <legend className="t-body mb-2 p-0 text-ink-2">
+                  Not rated yet · pick a band
+                </legend>
+                <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none]">
+                  {BANDS.map(({ band: value, name }) => {
+                    const on = pickedBand === value;
+                    return (
                       <button
+                        key={value}
                         type="button"
-                        onClick={() => void handleAddToList(tl.id, tl.name)}
-                        disabled={alreadyIn || busy}
+                        aria-pressed={on}
+                        onClick={() => {
+                          feedback("tick");
+                          setPickedBand(value);
+                        }}
                         className={cn(
-                          "flex min-h-11 w-full items-center gap-3 px-4 py-2.5 text-left outline-none transition-colors duration-(--ca-dur-micro) ease-standard focus-visible:ring-[3px] focus-visible:ring-ring/50 enabled:hover:bg-surface-2 enabled:active:bg-surface-3",
-                          alreadyIn && "bg-success/10",
-                          busy && !alreadyIn && "opacity-60",
+                          "t-head inline-flex h-11 shrink-0 items-center gap-2 whitespace-nowrap rounded-md border px-3.5 outline-none transition-transform duration-(--ca-dur-micro) ease-standard focus-visible:outline-2 focus-visible:outline-act-ink focus-visible:outline-offset-2 active:scale-97 motion-reduce:active:scale-100",
+                          on
+                            ? "border-edge-2 bg-sel text-ink"
+                            : "border-edge text-ink-2",
                         )}
                       >
-                        <span className="flex size-5 shrink-0 items-center justify-center text-ink-2">
-                          {isAdding ? (
-                            <Spinner aria-hidden />
-                          ) : alreadyIn ? (
-                            <Check
-                              aria-hidden
-                              strokeWidth={ICON_STROKE}
-                              className="size-5 text-success"
-                            />
-                          ) : (
-                            <Ranked
-                              aria-hidden
-                              strokeWidth={ICON_STROKE}
-                              className="size-5"
-                            />
-                          )}
-                        </span>
-                        <span className="flex min-w-0 flex-1 flex-col">
-                          <span className="truncate font-semibold text-ink-1 type-callout">
-                            {tl.name}
-                          </span>
-                          {alreadyIn && (
-                            <span className="text-success type-footnote">
-                              Already added (
-                              {BAND_LABELS[tl.alreadyInBand ?? 0]})
-                            </span>
-                          )}
-                        </span>
+                        <BandMarker band={value} />
+                        {name}
+                      </button>
+                    );
+                  })}
+                </div>
+              </fieldset>
+            )}
+
+            {options.length > 0 && (
+              <ul className="m-0 flex list-none flex-col p-0">
+                {options.map((option) => {
+                  const entry = entries.find(
+                    (node) => node.tierListId === option.id,
+                  );
+                  const count = counts.get(option.id) ?? 0;
+                  const isAdding = addingToListId === option.id;
+                  const body = (
+                    <span className="flex min-w-0 flex-1 flex-col">
+                      <span className="t-body truncate text-ink">
+                        {option.name}
+                      </span>
+                      <span className="t-cap tabular text-ink-2">
+                        {kindNoun(entityType, count)}
+                      </span>
+                    </span>
+                  );
+                  if (entry !== undefined) {
+                    return (
+                      <li
+                        key={option.id}
+                        className="flex min-h-14 items-center gap-4 px-1"
+                      >
+                        {body}
+                        <EntryRank
+                          tierListId={option.id}
+                          entryId={entry.id}
+                          band={entry.band}
+                        />
+                        <Check
+                          strokeWidth={ICON_STROKE}
+                          className="size-5 shrink-0 text-act-ink"
+                          aria-label="On this list"
+                        />
+                      </li>
+                    );
+                  }
+                  return (
+                    <li key={option.id}>
+                      <button
+                        type="button"
+                        disabled={busy || band === null}
+                        aria-busy={isAdding || undefined}
+                        onClick={() => {
+                          feedback("tick");
+                          void handleAddToList(option.id, option.name);
+                        }}
+                        className={ROW}
+                      >
+                        {body}
+                        {isAdding ? (
+                          <Spinner aria-hidden />
+                        ) : (
+                          <Add
+                            aria-hidden
+                            strokeWidth={ICON_STROKE}
+                            className="size-5 shrink-0 text-act-ink"
+                          />
+                        )}
                       </button>
                     </li>
                   );
@@ -357,59 +439,79 @@ export function AddToTierListModal({
               </ul>
             )}
 
-            {!hasLists && !showCreate && (
-              <p className="text-center text-ink-3 type-callout">
-                You don't have any{" "}
-                {ENTITY_TYPE_LABELS[entityType].toLowerCase()} tier lists yet.
-              </p>
-            )}
-
             {showCreate ? (
-              <div className="flex flex-col gap-2">
+              <form
+                className="flex flex-col gap-3 pt-2"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  if (!busy) void handleCreateAndAdd();
+                }}
+              >
+                <label
+                  htmlFor="add-to-list-new-name"
+                  className="t-head text-ink"
+                >
+                  New {kind} list
+                </label>
                 <Input
+                  id="add-to-list-new-name"
                   autoFocus
-                  aria-label="List name"
-                  placeholder="List name"
+                  autoComplete="off"
                   value={newListName}
-                  onChange={(e) => setNewListName(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && !busy) {
-                      void handleCreateAndAdd();
-                    }
-                  }}
+                  onChange={(event) => setNewListName(event.target.value)}
                   disabled={busy}
                 />
-                <div className="flex gap-2">
-                  <Button
-                    disabled={busy}
-                    onClick={() => void handleCreateAndAdd()}
-                  >
-                    {creating ? (
-                      <Spinner aria-hidden />
-                    ) : (
-                      <Add aria-hidden strokeWidth={ICON_STROKE} />
-                    )}
-                    Create &amp; add
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    disabled={busy}
-                    onClick={() => setShowCreate(false)}
-                  >
-                    Cancel
-                  </Button>
-                </div>
-              </div>
+                <Button
+                  type="submit"
+                  className="h-11 w-full"
+                  disabled={busy || band === null}
+                >
+                  {creating && <Spinner aria-hidden />}
+                  Create and add
+                </Button>
+              </form>
             ) : (
-              <Button
-                variant="outline"
+              <button
+                type="button"
                 disabled={busy}
-                onClick={() => setShowCreate(true)}
+                onClick={() => {
+                  feedback("tick");
+                  setShowCreate(true);
+                }}
+                className={ROW}
               >
-                <Add aria-hidden strokeWidth={ICON_STROKE} />
-                Create new list
-              </Button>
+                <Add
+                  aria-hidden
+                  strokeWidth={ICON_STROKE}
+                  className="size-5 shrink-0 text-act-ink"
+                />
+                <span className="t-body text-ink">New {kind} list</span>
+              </button>
             )}
+
+            <div className="mt-2 border-edge border-t pt-2">
+              <Link
+                href="/tier-lists"
+                underline="none"
+                onClick={() => {
+                  feedback("tick");
+                  onClose();
+                }}
+                className={cn(ROW, "text-ink")}
+              >
+                <Lists
+                  aria-hidden
+                  strokeWidth={ICON_STROKE}
+                  className="size-5 shrink-0 text-act-ink"
+                />
+                <span className="t-body flex-1">All lists</span>
+                <ChevronRight
+                  aria-hidden
+                  strokeWidth={ICON_STROKE}
+                  className="size-5 shrink-0 text-ink-3"
+                />
+              </Link>
+            </div>
           </>
         )}
       </div>
@@ -417,7 +519,7 @@ export function AddToTierListModal({
   );
 }
 
-/** A failure, said as a toast (the old Snackbar's job). */
+/** A failure, said as a toast. */
 function fail(message: string) {
   notify(message, { tone: "error" });
 }

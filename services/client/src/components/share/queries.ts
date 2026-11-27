@@ -62,8 +62,10 @@ export const SharedTierListCardQuery = graphql(
       ... on SharedTierList {
         id
         name
+        listType
         ownerDisplayName
         entries(first: $first) {
+          totalCount
           edges {
             node {
               id

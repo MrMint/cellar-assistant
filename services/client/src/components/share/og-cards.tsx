@@ -1,33 +1,84 @@
+import { BookOpen, List, MapPin, Martini } from "lucide-react";
 import type { ReactNode } from "react";
 import type { ApiItemType } from "@/components/cellar-api/itemTypes";
-import { BAND_LABELS } from "@/components/tier-list/constants";
-import { bandColor, color, itemTypeColor } from "@/lib/tokens";
+import { kindNoun, rankedKind } from "@/components/tier-list/lists/model";
+import { bandColor, color } from "@/lib/tokens";
 
 /**
  * The link-preview cards (X17, `next/og`): what a chat app shows when a
- * share link is pasted. Satori renders these — a subset of CSS, inline
- * styles only, every element with more than one child a flex box — so the
+ * share link is pasted. Satori renders these (a subset of CSS, inline
+ * styles only, every element with more than one child a flex box), so the
  * colours are read from `lib/tokens.ts` as values, never written here.
  *
- * Dark, like the app (D21): the name large, one brass rule as the signature,
- * and for a tier list the top three in their band colours. A card is built
- * only from the shared (public, anonymous) read; a missing or private thing
- * gets the plain brand card, the same either way.
+ * Always the dark look (Social-Lists share sheet's link preview, drawn
+ * `.keep-dark`; LIGHT-social-b): a small overline, the name, one byline,
+ * up to three lines (a list's top three with their band dots), the act-teal
+ * rule and the name of the app at the foot; the photo, or a plate, in the
+ * right 40 %. A card is built only from the shared (public, anonymous)
+ * read; a missing or private thing gets the plain brand card, the same
+ * either way.
  */
 
 export const OG_SIZE = { width: 1200, height: 630 } as const;
 
+/** The board draws the card 358 px wide; this is that card at 1200. */
+const PANEL = 480;
+
 const ellipsis = (text: string, max: number): string =>
   text.length <= max ? text : `${text.slice(0, max - 1).trimEnd()}…`;
 
+function Plate({ glyph, label }: { glyph: ReactNode; label?: string }) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 20,
+        width: label === undefined ? "40%" : "76%",
+        height: label === undefined ? "40%" : "64%",
+        borderRadius: 24,
+        background: label === undefined ? "transparent" : color.surface1,
+        border: label === undefined ? "none" : `3px solid ${color.line}`,
+        padding: 24,
+      }}
+    >
+      {glyph}
+      {label !== undefined && (
+        <div
+          style={{
+            display: "flex",
+            fontSize: 30,
+            fontWeight: 600,
+            color: color.ink2,
+            textAlign: "center",
+          }}
+        >
+          {ellipsis(label, 60)}
+        </div>
+      )}
+    </div>
+  );
+}
+
+const glyphStyle = (size: number) => ({ width: size, height: size });
+
 function Frame({
   overline,
-  children,
+  title,
+  byline,
+  lines,
   image,
+  plate,
 }: {
   overline: string;
-  children: ReactNode;
+  title: string;
+  byline?: string;
+  lines?: readonly { text: string; dot?: string }[];
   image?: string | null;
+  /** Drawn in the panel when there is no photo. */
+  plate: ReactNode;
 }) {
   return (
     <div
@@ -44,149 +95,167 @@ function Frame({
           display: "flex",
           flexDirection: "column",
           flex: 1,
-          padding: "64px 72px",
-          gap: 20,
+          padding: "56px 40px 44px 64px",
+          gap: 12,
+          minWidth: 0,
         }}
       >
         <div
           style={{
             display: "flex",
-            fontSize: 24,
-            letterSpacing: 4,
-            color: color.ink3,
-            textTransform: "uppercase",
+            fontSize: 36,
+            fontWeight: 600,
+            color: color.ink2,
           }}
         >
           {overline}
         </div>
-        {children}
-        <div style={{ display: "flex", flex: 1 }} />
-        <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
+        <div
+          style={{
+            display: "flex",
+            fontSize: title.length > 32 ? 56 : 68,
+            lineHeight: 1.15,
+            fontWeight: 600,
+            color: color.ink1,
+          }}
+        >
+          {ellipsis(title, 64)}
+        </div>
+        {byline !== undefined && byline !== "" && (
+          <div style={{ display: "flex", fontSize: 40, color: color.ink2 }}>
+            {ellipsis(byline, 40)}
+          </div>
+        )}
+        {lines !== undefined && lines.length > 0 && (
           <div
             style={{
               display: "flex",
-              width: 64,
-              height: 6,
-              borderRadius: 3,
+              flexDirection: "column",
+              gap: 10,
+              marginTop: 10,
+            }}
+          >
+            {lines.map((line) => (
+              <div
+                key={line.text}
+                style={{ display: "flex", alignItems: "center", gap: 18 }}
+              >
+                {line.dot !== undefined && (
+                  <div
+                    style={{
+                      display: "flex",
+                      width: 20,
+                      height: 20,
+                      borderRadius: 10,
+                      background: line.dot,
+                    }}
+                  />
+                )}
+                <div
+                  style={{ display: "flex", fontSize: 40, color: color.ink1 }}
+                >
+                  {ellipsis(line.text, 34)}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+        <div style={{ display: "flex", flex: 1 }} />
+        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+          <div
+            style={{
+              display: "flex",
+              width: 48,
+              height: 10,
+              borderRadius: 6,
               background: color.accent,
             }}
           />
-          <div style={{ display: "flex", fontSize: 28, color: color.ink2 }}>
+          <div
+            style={{
+              display: "flex",
+              fontSize: 36,
+              fontWeight: 600,
+              color: color.ink2,
+            }}
+          >
             Cellar Assistant
           </div>
         </div>
       </div>
-      {image ? (
-        <div
-          style={{
-            display: "flex",
-            width: 420,
-            height: "100%",
-            background: color.surface1,
-          }}
-        >
-          {/* biome-ignore lint/performance/noImgElement: satori renders plain img only. */}
+      <div
+        style={{
+          display: "flex",
+          width: PANEL,
+          height: "100%",
+          alignItems: "center",
+          justifyContent: "center",
+          background: color.surface2,
+        }}
+      >
+        {image ? (
+          // biome-ignore lint/performance/noImgElement: satori renders plain img only.
           <img
             src={image}
             alt=""
-            width={420}
-            height={630}
-            style={{ width: 420, height: 630, objectFit: "cover" }}
+            width={PANEL}
+            height={OG_SIZE.height}
+            style={{ width: PANEL, height: OG_SIZE.height, objectFit: "cover" }}
           />
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-function Title({ children }: { children: string }) {
-  return (
-    <div
-      style={{
-        display: "flex",
-        fontSize: children.length > 40 ? 56 : 72,
-        lineHeight: 1.1,
-        fontWeight: 600,
-        color: color.ink1,
-      }}
-    >
-      {ellipsis(children, 80)}
-    </div>
-  );
-}
-
-function Line({ children }: { children: string }) {
-  return (
-    <div style={{ display: "flex", fontSize: 32, color: color.ink2 }}>
-      {ellipsis(children, 90)}
+        ) : (
+          plate
+        )}
+      </div>
     </div>
   );
 }
 
 export function TierListCard({
   name,
+  listType,
+  itemCount,
   ownerDisplayName,
   top,
 }: {
   name: string;
+  listType: string;
+  itemCount: number;
   ownerDisplayName: string | null;
   top: readonly { rank: number | null; band: number; name: string | null }[];
 }) {
+  const count = kindNoun(listType, itemCount);
+  const Glyph = listType.toLowerCase() === "place" ? MapPin : List;
   return (
-    <Frame overline="A ranked list">
-      <Title>{name}</Title>
-      {ownerDisplayName !== null && <Line>{`by ${ownerDisplayName}`}</Line>}
-      <div
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          gap: 14,
-          marginTop: 12,
-        }}
-      >
-        {top.map((entry) => (
-          <div
-            key={`${entry.rank}`}
-            style={{ display: "flex", alignItems: "center", gap: 18 }}
-          >
-            <div
-              style={{
-                display: "flex",
-                width: 56,
-                fontSize: 36,
-                color: entry.rank === 1 ? color.brandInk : color.ink3,
-              }}
-            >
-              {`#${entry.rank ?? ""}`}
-            </div>
-            <div
-              style={{
-                display: "flex",
-                width: 14,
-                height: 14,
-                borderRadius: 7,
-                background:
-                  bandColor[entry.band as 1 | 2 | 3 | 4 | 5] ?? color.surface3,
-              }}
+    <Frame
+      overline={rankedKind(listType)}
+      title={name}
+      byline={
+        ownerDisplayName === null ? count : `by ${ownerDisplayName} · ${count}`
+      }
+      lines={top.map((entry) => ({
+        text: `#${entry.rank ?? ""} ${entry.name ?? ""}`,
+        dot: bandColor[entry.band as 1 | 2 | 3 | 4 | 5] ?? color.surface3,
+      }))}
+      plate={
+        <Plate
+          glyph={
+            <Glyph
+              color={color.glyph}
+              strokeWidth={1.25}
+              style={glyphStyle(190)}
             />
-            <div style={{ display: "flex", fontSize: 34, color: color.ink1 }}>
-              {ellipsis(entry.name ?? "", 42)}
-            </div>
-            <div style={{ display: "flex", fontSize: 24, color: color.ink3 }}>
-              {BAND_LABELS[entry.band] ?? ""}
-            </div>
-          </div>
-        ))}
-      </div>
-    </Frame>
+          }
+        />
+      }
+    />
   );
 }
 
 export function ItemCard({
-  type,
   typeLabel,
   name,
   subtitle,
+  style,
   scoreAverage,
   scoreCount,
   image,
@@ -195,63 +264,98 @@ export function ItemCard({
   typeLabel: string;
   name: string;
   subtitle: string;
+  /** The style's first segment, a line of its own. */
+  style?: string;
   scoreAverage: number | null;
   scoreCount: number;
   image: string | null;
 }) {
+  const lines: { text: string }[] = [];
+  if (style !== undefined && style !== "") lines.push({ text: style });
+  if (scoreAverage !== null && scoreCount > 0) {
+    lines.push({
+      text: `${Math.round(scoreAverage * 10) / 10} (${scoreCount})`,
+    });
+  }
   return (
-    <Frame overline={typeLabel} image={image}>
-      <div
-        style={{
-          display: "flex",
-          width: 72,
-          height: 6,
-          borderRadius: 3,
-          background: itemTypeColor[type].deep,
-        }}
-      />
-      <Title>{name}</Title>
-      {subtitle !== "" && <Line>{subtitle}</Line>}
-      {scoreAverage !== null && scoreCount > 0 && (
-        <div style={{ display: "flex", alignItems: "baseline", gap: 14 }}>
-          <div style={{ display: "flex", fontSize: 64, color: color.ink1 }}>
-            {`${Math.round(scoreAverage * 10) / 10}`}
-          </div>
-          <div style={{ display: "flex", fontSize: 28, color: color.ink3 }}>
-            {`out of 5 · ${scoreCount} ${scoreCount === 1 ? "rating" : "ratings"}`}
-          </div>
-        </div>
-      )}
-    </Frame>
+    <Frame
+      overline={typeLabel}
+      title={name}
+      byline={subtitle}
+      lines={lines}
+      image={image}
+      plate={
+        <Plate
+          label={name}
+          glyph={
+            <Martini
+              color={color.glyph}
+              strokeWidth={1.25}
+              style={glyphStyle(96)}
+            />
+          }
+        />
+      }
+    />
   );
 }
 
 export function RecipeCard({
+  kind,
   name,
   facts,
-  ingredients,
+  blurb,
 }: {
+  /** "Cocktail", "Food". */
+  kind: string;
   name: string;
+  /** "5 min · Easy". */
   facts: string;
-  ingredients: readonly string[];
+  blurb: string | null;
 }) {
   return (
-    <Frame overline={facts === "" ? "A recipe" : facts}>
-      <Title>{name}</Title>
-      {ingredients.length > 0 && (
-        <Line>{ingredients.slice(0, 5).join(" · ")}</Line>
-      )}
-    </Frame>
+    <Frame
+      overline={kind}
+      title={name}
+      byline={facts}
+      lines={
+        blurb === null || blurb.trim() === "" ? [] : [{ text: blurb.trim() }]
+      }
+      plate={
+        <Plate
+          label={name}
+          glyph={
+            <BookOpen
+              color={color.glyph}
+              strokeWidth={1.25}
+              style={glyphStyle(96)}
+            />
+          }
+        />
+      }
+    />
   );
 }
 
 /** For anything missing or not public: the brand, and nothing about it. */
 export function BrandCard() {
   return (
-    <Frame overline="Shared from">
-      <Title>Cellar Assistant</Title>
-      <Line>Your cellar, your rankings, your friends' picks.</Line>
-    </Frame>
+    <Frame
+      overline="Shared from"
+      title="Cellar Assistant"
+      byline="Your cellar, your rankings, your friends' picks."
+      plate={
+        <Plate
+          glyph={
+            <List
+              color={color.glyph}
+              strokeWidth={1.25}
+              style={glyphStyle(190)}
+            />
+          }
+        />
+      }
+    />
   );
 }
 

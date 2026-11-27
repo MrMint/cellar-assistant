@@ -52,14 +52,15 @@ export default async function SharedTierListPage({ params }: Props) {
   return (
     <ShareFrame
       canonicalPath={canonical}
-      pitch="Rank what you drink, and see what your friends rank."
-      cta="Join Cellar Assistant"
+      pitch="Rank what you drink, too."
+      cta="Join"
     >
       <SharedTierListView
         name={list.name}
         description={list.description}
         listType={list.listType}
         ownerDisplayName={list.ownerDisplayName}
+        itemCount={list.entries.totalCount ?? entries.length}
         entries={entries}
         moreCount={Math.max(0, (list.entries.totalCount ?? 0) - entries.length)}
       />

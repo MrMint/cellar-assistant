@@ -137,6 +137,9 @@ const MODULES: Readonly<Record<string, Record<string, unknown>>> = {
   "components/taste/queries.ts": tasteQueries,
   "components/tier-list/fragments.ts": tierListFragments,
   "components/tier-list/queries.ts": tierListQueries,
+  "components/tier-list/lists/queries.ts": await import(
+    "@/components/tier-list/lists/queries"
+  ),
   "components/user/fragments.ts": userFragments,
   "components/want-to-try/queries.ts": wantToTryQueries,
   "components/user/me-hub-data.ts": meHubData,

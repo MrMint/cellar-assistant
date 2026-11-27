@@ -1,6 +1,9 @@
-import { Score } from "@/components/app/Score";
-import { TypeChip, TypeGlyph } from "@/components/app/TypeChip";
-import type { ApiItemType } from "@/components/cellar-api/itemTypes";
+import { PublicRating } from "@/components/app/parts/Stars";
+import { TypeGlyph } from "@/components/app/TypeChip";
+import {
+  type ApiItemType,
+  itemTypeLabel,
+} from "@/components/cellar-api/itemTypes";
 import {
   type ItemAttributesSource,
   itemCharacteristics,
@@ -44,10 +47,37 @@ export const sharedItemSubtitle = (
     .filter((phrase): phrase is string => Boolean(phrase))
     .join(" · ");
 
+const STYLE_ACRONYMS = new Set(["IPA", "APA", "DIPA", "NEIPA", "ESB"]);
+
+/** The style's first segment ("IPA"; an enum value "RED" as "Red"), or "". */
+export const sharedItemStyle = (
+  attributes: Record<string, unknown>,
+): string => {
+  if (typeof attributes.style !== "string") return "";
+  const first = (attributes.style.split(/\s*[,/]\s*/)[0] ?? "").trim();
+  return /^[A-Z]+(_[A-Z]+)*$/.test(first) && !STYLE_ACRONYMS.has(first)
+    ? first
+        .toLowerCase()
+        .split("_")
+        .join(" ")
+        .replace(/^./, (c) => c.toUpperCase())
+    : first;
+};
+
+/** "Beer · IPA": the kind, and the style's first segment when it has one. */
+export const sharedItemOverline = (
+  type: ApiItemType,
+  attributes: Record<string, unknown>,
+): string =>
+  [itemTypeLabel(type), sharedItemStyle(attributes)]
+    .filter((part) => part !== "")
+    .join(" · ");
+
 /**
- * An item's public page (X17): the photo (or the type's plate), its name and
- * facts, everyone's score, its own description. What a friend sees before
- * they have an account — and nothing a stranger with one would not.
+ * An item's public page (X17; Social-Lists, signed out): the photo (or the
+ * type's plate), the kind, its name and facts, everyone's rating, its own
+ * description. What a friend sees before they have an account, and nothing
+ * a stranger with one would not.
  */
 export function SharedItemView({
   type,
@@ -68,7 +98,7 @@ export function SharedItemView({
 
   return (
     <>
-      <div className="relative mx-auto flex aspect-[4/5] w-full max-w-[360px] items-center justify-center overflow-hidden rounded-lg bg-surface-1">
+      <div className="relative -mx-4 -mt-4 flex h-85 items-center justify-center overflow-hidden bg-raised md:mx-0 md:mt-0 md:rounded-lg">
         {imageUrl !== null ? (
           // biome-ignore lint/performance/noImgElement: a presigned file URL that expires; the optimiser would cache it under a key that stops working.
           <img
@@ -77,45 +107,42 @@ export function SharedItemView({
             className="absolute inset-0 size-full object-contain"
           />
         ) : (
-          <TypeGlyph type={type} className="size-20 opacity-80" />
+          <span className="flex h-3/4 w-1/2 flex-col items-center justify-center gap-2 rounded-lg border border-edge bg-card p-3 text-center">
+            <TypeGlyph type={type} className="size-8 text-glyph" />
+            <span className="t-micro line-clamp-3 text-ink-2">{title}</span>
+          </span>
         )}
       </div>
 
-      <header className="flex flex-col gap-2">
-        <TypeChip type={type} />
-        <h1 className="type-large-title break-words font-display text-ink-1">
-          {title}
-        </h1>
+      <header className="flex flex-col gap-1 pt-1">
+        <p className="t-cap m-0 text-ink-3">
+          {sharedItemOverline(type, attributes)}
+        </p>
+        <h1 className="t-title m-0 break-words text-ink">{title}</h1>
         {subtitle !== "" && (
-          <p className="type-callout text-ink-2">{subtitle}</p>
+          <p className="t-cap tabular m-0 text-ink-2">{subtitle}</p>
         )}
       </header>
 
-      {scoreAverage !== null && scoreCount > 0 ? (
-        <div className="flex items-baseline gap-3 rounded-lg bg-surface-1 px-4 py-3">
-          <Score value={scoreAverage} variant="hero" />
-          <p className="type-callout text-ink-2">
-            from {scoreCount} {scoreCount === 1 ? "rating" : "ratings"} on
-            Cellar Assistant
-          </p>
-        </div>
-      ) : null}
+      {scoreAverage !== null && scoreCount > 0 && (
+        <PublicRating value={scoreAverage} count={scoreCount} />
+      )}
 
       {description !== null && description.trim() !== "" && (
-        <p className="type-body whitespace-pre-line text-ink-2">
+        <p className="t-body m-0 whitespace-pre-line text-ink-2">
           {description}
         </p>
       )}
 
       {characteristics.length > 0 && (
-        <dl className="grid grid-cols-2 gap-2">
+        <dl className="m-0 grid grid-cols-2 gap-2">
           {characteristics.map((row) => (
             <div
               key={row.label}
-              className="flex flex-col rounded-md bg-surface-1 px-3 py-2"
+              className="flex flex-col rounded-md border border-edge bg-card px-3 py-2"
             >
-              <dt className="type-footnote">{row.label}</dt>
-              <dd className="type-body text-ink-1">{row.value}</dd>
+              <dt className="t-cap text-ink-3">{row.label}</dt>
+              <dd className="t-body m-0 text-ink">{row.value}</dd>
             </div>
           ))}
         </dl>

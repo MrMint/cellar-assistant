@@ -56,28 +56,32 @@ export const safeImageUrl = (url: string | null): string | null => {
   }
 };
 
-/** "Cocktail · 5 min · Serves 2". */
+const DIFFICULTY = ["", "Very Easy", "Easy", "Medium", "Hard", "Very Hard"];
+
+/** "Cocktail · 5 min · Easy · Serves 2". */
 export const recipeFacts = ({
   type,
   prepTimeMinutes,
+  difficultyLevel,
   servingSize,
 }: Pick<
   SharedRecipeViewProps,
-  "type" | "prepTimeMinutes" | "servingSize"
+  "type" | "prepTimeMinutes" | "difficultyLevel" | "servingSize"
 >): string =>
   [
     type.charAt(0).toUpperCase() + type.slice(1),
     prepTimeMinutes !== null && prepTimeMinutes > 0
       ? `${prepTimeMinutes} min`
       : null,
+    difficultyLevel !== null ? DIFFICULTY[difficultyLevel] || null : null,
     servingSize !== null && servingSize > 0 ? `Serves ${servingSize}` : null,
   ]
-    .filter((part): part is string => part !== null)
+    .filter((part): part is string => part !== null && part !== "")
     .join(" · ");
 
 /**
- * A recipe's public page (X17): what to pour and how, without the author,
- * the votes or the reviews.
+ * A recipe's public page (X17; Social-Lists, signed out): what to pour and
+ * how, without the author, the votes or the reviews.
  */
 export function SharedRecipeView(props: SharedRecipeViewProps) {
   const { name, description, ingredients, instructions } = props;
@@ -85,7 +89,7 @@ export function SharedRecipeView(props: SharedRecipeViewProps) {
   const Glyph = props.type === "food" ? Recipe : Cocktail;
   return (
     <>
-      <div className="relative flex aspect-[16/10] w-full items-center justify-center overflow-hidden rounded-lg bg-surface-1">
+      <div className="relative -mx-4 -mt-4 flex h-55 items-center justify-center overflow-hidden bg-raised md:mx-0 md:mt-0 md:rounded-lg">
         {image !== null ? (
           // biome-ignore lint/performance/noImgElement: a free-form URL; next/image would need its host allowlisted.
           <img
@@ -94,44 +98,45 @@ export function SharedRecipeView(props: SharedRecipeViewProps) {
             className="absolute inset-0 size-full object-cover"
           />
         ) : (
-          <Glyph
-            aria-hidden
-            strokeWidth={ICON_STROKE}
-            className="size-16 text-ink-3"
-          />
+          <span className="flex h-3/4 w-2/5 flex-col items-center justify-center gap-2 rounded-lg border border-edge bg-card p-3 text-center">
+            <Glyph
+              aria-hidden
+              strokeWidth={ICON_STROKE}
+              className="size-8 text-glyph"
+            />
+            <span className="t-micro line-clamp-3 text-ink-2">{name}</span>
+          </span>
         )}
       </div>
 
-      <header className="flex flex-col gap-1">
-        <p className="type-overline text-ink-3">{recipeFacts(props)}</p>
-        <h1 className="type-large-title break-words font-display text-ink-1">
-          {name}
-        </h1>
+      <header className="flex flex-col gap-1 pt-1">
+        <p className="t-cap tabular m-0 text-ink-3">{recipeFacts(props)}</p>
+        <h1 className="t-title m-0 break-words text-ink">{name}</h1>
         {description !== null && description.trim() !== "" && (
-          <p className="type-body pt-1 text-ink-2">{description}</p>
+          <p className="t-body m-0 pt-1 text-ink-2">{description}</p>
         )}
       </header>
 
       {ingredients.length > 0 && (
-        <section className="flex flex-col gap-2" aria-labelledby="ingredients">
-          <h2 id="ingredients" className="type-overline px-4 text-ink-3">
+        <section className="flex flex-col gap-1" aria-labelledby="ingredients">
+          <h2 id="ingredients" className="t-head m-0 pt-2 text-ink">
             Ingredients
           </h2>
-          <ul className="flex flex-col divide-y divide-line overflow-hidden rounded-lg bg-surface-1">
+          <ul className="m-0 flex list-none flex-col p-0">
             {ingredients.map((row, index) => (
               <li
                 // Ingredients carry no id on the public shape; order is stable.
                 // biome-ignore lint/suspicious/noArrayIndexKey: see above.
                 key={index}
-                className="flex min-h-11 items-center justify-between gap-3 px-4 py-2.5"
+                className="flex min-h-11 items-center justify-between gap-3 border-b border-rule py-2"
               >
-                <span className="type-body text-ink-1">
+                <span className="t-body text-ink">
                   {row.name ?? "An ingredient"}
                   {row.isOptional && (
-                    <span className="type-footnote"> · optional</span>
+                    <span className="t-cap text-ink-3"> · optional</span>
                   )}
                 </span>
-                <span className="type-callout tabular shrink-0 text-ink-2">
+                <span className="t-body tabular shrink-0 text-ink-2">
                   {formatAmount(row.quantity, row.unit)}
                 </span>
               </li>
@@ -141,17 +146,17 @@ export function SharedRecipeView(props: SharedRecipeViewProps) {
       )}
 
       {instructions.length > 0 && (
-        <section className="flex flex-col gap-2" aria-labelledby="method">
-          <h2 id="method" className="type-overline px-4 text-ink-3">
+        <section className="flex flex-col gap-3" aria-labelledby="method">
+          <h2 id="method" className="t-head m-0 pt-2 text-ink">
             Method
           </h2>
-          <ol className="flex flex-col gap-3 rounded-lg bg-surface-1 p-4">
+          <ol className="m-0 flex list-none flex-col gap-3.5 p-0">
             {instructions.map((step) => (
-              <li key={step.stepNumber} className="flex gap-3">
-                <span className="type-headline tabular w-6 shrink-0 font-display text-ink-3">
+              <li key={step.stepNumber} className="flex items-start gap-3">
+                <span className="t-cap tabular flex size-7 shrink-0 items-center justify-center rounded-full bg-raised text-ink">
                   {step.stepNumber}
                 </span>
-                <p className="type-body text-ink-1">{step.text}</p>
+                <p className="t-body m-0 pt-0.5 text-ink">{step.text}</p>
               </li>
             ))}
           </ol>

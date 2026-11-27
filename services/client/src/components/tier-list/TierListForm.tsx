@@ -1,21 +1,14 @@
 "use client";
 
 /**
- * `82450ad1:src/components/tier-list/TierListForm.tsx`, restored: Name,
- * Description, Privacy (`EnumSelect`, default Private), List Type (create
- * only, default Places — the old default, and still the API's), root error,
- * Create / Save. The two server actions come from `useTierListActions`.
- *
- * X16 — **templates pre-banded from your ratings**: creating a list of a type
- * you have rated offers "Start with your ratings" (on by default), and the
- * server fills the new list with each of them in the band your rating gives
- * it — one edit, which one Undo on the list takes back. Picking a type also
- * names an unnamed list ("My wines") until you type a name of your own.
- *
- * On the app's primitives (D20): `ui/field` + `ui/input` / `ui/textarea` /
- * `ui/select`. Privacy is still the shared `EnumSelect` (Joy) until its own
- * slice converts it — a Joy control inside a Tailwind form, which the
- * coexistence rules allow (nothing here is in a Radix modal).
+ * The New list and List details form (Social-Lists 25-27, 08): Kind as chips
+ * (create only; a new list is how you start a kind you don't have yet, so
+ * every kind is offered), Name ("Needs a name"), Description, Who can see it
+ * (Only me / Friends / Everyone), and on create "From my ratings" (X16: on
+ * by default, the server fills the list in the bands your ratings give). The
+ * footer is the settled form-sheet footer: quiet Cancel left, the primary
+ * right. Picking a kind names an unnamed list ("My beers") until you type a
+ * name of your own.
  */
 
 import { isNil, isNotNil } from "ramda";
@@ -27,25 +20,19 @@ import {
   useWatch,
 } from "react-hook-form";
 import { useQuery } from "urql";
-import { EnumSelect } from "@/components/forms/EnumSelect";
+import { FilterChip } from "@/components/app/FilterChip";
+import { FieldError, FormField } from "@/components/app/parts/Field";
+import { SegmentedControl } from "@/components/app/SegmentedControl";
 import { Button } from "@/components/ui/button";
-import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
 import { Switch } from "@/components/ui/switch";
-import { Textarea } from "@/components/ui/textarea";
 import {
   type Permission_Type_Enum,
   type TierListResult,
   useTierListActions,
 } from "./actions";
+import { fromRatingsLine, LIST_KINDS, PRIVACY_OPTIONS } from "./lists/model";
 import { TierListTemplatesQuery } from "./queries";
 
 interface IFormInput {
@@ -57,6 +44,8 @@ interface IFormInput {
 
 export type TierListFormProps = {
   onSubmitted: (id: string) => void;
+  /** The footer's quiet Cancel (a sheet closes, a page goes back). */
+  onCancel?: () => void;
   id?: string;
   defaults?: {
     name?: string;
@@ -122,6 +111,7 @@ const listTypeOptions = [
 export function TierListForm({
   id,
   onSubmitted,
+  onCancel,
   defaults = {
     name: "",
     description: "",
@@ -136,7 +126,12 @@ export function TierListForm({
     setValue,
     getFieldState,
     formState: { isSubmitting, errors },
-  } = useForm<IFormInput>({ defaultValues: defaults });
+  } = useForm<IFormInput>({
+    defaultValues: {
+      ...defaults,
+      name: defaults.name || defaultListName(defaults.list_type ?? "place"),
+    },
+  });
 
   const isEditing = isNotNil(id);
   const fieldId = useId();
@@ -192,158 +187,154 @@ export function TierListForm({
     } else {
       setError("root", {
         type: "custom",
-        message: result.error ?? "Something went wrong, please try again...",
+        message: result.error ?? "Couldn’t save the list. Try again.",
       });
     }
   };
 
   return (
-    <div className="max-w-[600px]">
-      <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
-        <Field className="gap-2 text-foreground">
-          <FieldLabel htmlFor={`${fieldId}-name`} className="gap-1">
-            Name
-            <RequiredMark />
-          </FieldLabel>
+    <form
+      onSubmit={handleSubmit(onSubmit)}
+      noValidate
+      className="flex w-full max-w-[600px] flex-col gap-5"
+    >
+      {!isEditing && (
+        <div className="flex flex-col gap-2">
+          <span id={`${fieldId}-kind`} className="t-head text-ink">
+            Kind
+          </span>
           <Controller
-            name="name"
+            name="list_type"
             control={control}
-            rules={{ required: true }}
-            render={({ field, fieldState }) => (
-              <Input
-                id={`${fieldId}-name`}
-                type="text"
-                placeholder="e.g. Best Wine Bars"
-                required
-                aria-invalid={fieldState.invalid || undefined}
-                disabled={isSubmitting}
-                {...field}
-              />
+            render={({ field: { onChange, value } }) => (
+              <fieldset
+                aria-labelledby={`${fieldId}-kind`}
+                className="-mx-4 m-0 flex min-w-0 gap-2 overflow-x-auto border-0 px-4 pt-0 pb-1 [scrollbar-width:none]"
+              >
+                {LIST_KINDS.map((kind) => (
+                  <FilterChip
+                    key={kind.value}
+                    selected={value === kind.value}
+                    disabled={isSubmitting}
+                    onClick={() => {
+                      if (value === kind.value) return;
+                      onChange(kind.value);
+                      // An unnamed list takes the kind's name until you type
+                      // one; a name you typed is never replaced.
+                      if (!getFieldState("name").isDirty) {
+                        setValue("name", defaultListName(kind.value));
+                      }
+                    }}
+                  >
+                    {kind.label}
+                  </FilterChip>
+                ))}
+              </fieldset>
             )}
           />
-        </Field>
+        </div>
+      )}
 
-        <Field className="gap-2 text-foreground">
-          <FieldLabel htmlFor={`${fieldId}-description`} className="gap-1">
-            Description
-          </FieldLabel>
-          <Controller
-            name="description"
-            control={control}
-            render={({ field }) => (
-              <Textarea
-                id={`${fieldId}-description`}
-                rows={2}
-                placeholder="What is this list about?"
-                disabled={isSubmitting}
-                {...field}
-              />
-            )}
-          />
-        </Field>
+      <Controller
+        name="name"
+        control={control}
+        rules={{
+          validate: (value) => value.trim() !== "" || "Needs a name",
+        }}
+        render={({ field, fieldState }) => (
+          <FormField
+            label="Name"
+            htmlFor={`${fieldId}-name`}
+            error={fieldState.error?.message}
+          >
+            <Input
+              id={`${fieldId}-name`}
+              type="text"
+              autoComplete="off"
+              aria-invalid={fieldState.invalid || undefined}
+              disabled={isSubmitting}
+              {...field}
+            />
+          </FormField>
+        )}
+      />
 
-        <EnumSelect
+      <Controller
+        name="description"
+        control={control}
+        render={({ field }) => (
+          <FormField label="Description" htmlFor={`${fieldId}-description`}>
+            <Input
+              id={`${fieldId}-description`}
+              type="text"
+              autoComplete="off"
+              disabled={isSubmitting}
+              {...field}
+            />
+          </FormField>
+        )}
+      />
+
+      <div className="flex flex-col gap-2">
+        <span id={`${fieldId}-privacy`} className="t-head text-ink">
+          Who can see it
+        </span>
+        <Controller
           name="privacy"
           control={control}
-          enumKey="permission"
-          label="Privacy"
-          required
-          rules={{ required: true }}
+          render={({ field: { onChange, value } }) => (
+            <SegmentedControl
+              aria-label="Who can see it"
+              options={PRIVACY_OPTIONS}
+              value={value}
+              onValueChange={onChange}
+            />
+          )}
         />
+      </div>
 
-        {!isEditing && (
-          <Field className="gap-2 text-foreground">
-            <FieldLabel htmlFor={`${fieldId}-list-type`} className="gap-1">
-              List Type
-              <RequiredMark />
-            </FieldLabel>
-            <Controller
-              name="list_type"
-              control={control}
-              rules={{ required: true }}
-              render={({ field: { ref, onChange, value, name, onBlur } }) => (
-                <Select
-                  name={name}
-                  value={value}
-                  onValueChange={(next) => {
-                    if (!next) return;
-                    onChange(next);
-                    // An unnamed list takes the type's name until you type
-                    // one; a name you typed is never replaced.
-                    if (!getFieldState("name").isDirty) {
-                      setValue("name", defaultListName(next));
-                    }
-                  }}
-                  disabled={isSubmitting}
-                  required
-                >
-                  <SelectTrigger
-                    ref={ref}
-                    id={`${fieldId}-list-type`}
-                    onBlur={onBlur}
-                    className="w-full text-base md:text-sm"
-                  >
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {listTypeOptions.map((opt) => (
-                      <SelectItem key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
-            />
-          </Field>
-        )}
-
-        {!isEditing && ratedCount > 0 && (
-          <label
-            htmlFor={`${fieldId}-from-ratings`}
-            className="flex min-h-11 items-center justify-between gap-3 rounded-lg bg-surface-1 px-4 py-2"
-          >
-            <span className="flex flex-col">
-              <span className="text-ink-1 type-body">
-                Start with your ratings
-              </span>
-              <span className="type-footnote">
-                {ratedSummary(listType, ratedCount)}, each in the band your
-                rating gives it. One Undo empties it again.
-              </span>
+      {!isEditing && ratedCount > 0 && (
+        <label
+          htmlFor={`${fieldId}-from-ratings`}
+          className="flex min-h-14 items-center justify-between gap-3 rounded-lg border border-edge bg-card px-4 py-2"
+        >
+          <span className="flex min-w-0 flex-col">
+            <span className="t-body text-ink">From my ratings</span>
+            <span className="t-cap text-ink-2">
+              {fromRatingsLine(listType, ratedCount)}
             </span>
-            <Switch
-              id={`${fieldId}-from-ratings`}
-              checked={fromRatings}
-              onCheckedChange={setFromRatings}
-              disabled={isSubmitting}
-            />
-          </label>
-        )}
+          </span>
+          <Switch
+            id={`${fieldId}-from-ratings`}
+            checked={fromRatings}
+            onCheckedChange={setFromRatings}
+            disabled={isSubmitting}
+          />
+        </label>
+      )}
 
-        {errors.root !== undefined && (
-          <p role="alert" className="text-destructive type-callout">
-            {errors.root.message}
-          </p>
-        )}
+      {errors.root !== undefined && (
+        <FieldError>{errors.root.message}</FieldError>
+      )}
 
-        <Button type="submit" disabled={isSubmitting}>
+      <div className="flex items-center justify-between gap-3 pt-1">
+        {onCancel !== undefined ? (
+          <Button
+            type="button"
+            variant="quiet-muted"
+            disabled={isSubmitting}
+            onClick={onCancel}
+          >
+            Cancel
+          </Button>
+        ) : (
+          <span />
+        )}
+        <Button type="submit" disabled={isSubmitting} className="h-11 px-6">
           {isSubmitting && <Spinner aria-hidden />}
-          {isEditing ? "Save" : "Create"}
+          {isEditing ? "Save" : "Create list"}
         </Button>
-      </form>
-    </div>
-  );
-}
-
-/**
- * The required asterisk, ink-3 as EnumSelect's (Privacy, beside these) and
- * ItemFormField's are: a red star on an untouched form reads as an error.
- */
-function RequiredMark() {
-  return (
-    <span aria-hidden data-slot="label-asterisk" className="text-ink-3">
-      *
-    </span>
+      </div>
+    </form>
   );
 }
