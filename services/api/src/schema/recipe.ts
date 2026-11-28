@@ -53,6 +53,7 @@ import type {
   IngredientRole,
   InstructionType,
   PermissionType,
+  RecipeBaseSpiritCountDto,
   RecipeCategory,
   RecipeDto,
   RecipeGroupDto,
@@ -1219,6 +1220,52 @@ builder.queryField("recipeGroups", (t) =>
           )
           .list(filter, toPageArgs(args)),
       );
+    },
+  }),
+);
+
+const RecipeBaseSpiritCountType = builder
+  .objectRef<RecipeBaseSpiritCountDto>("RecipeBaseSpiritCount")
+  .implement({
+    description:
+      "F-114: one `/recipes` kind chip — a base spirit and how many groups " +
+      "selecting it would list.",
+    fields: (t) => ({
+      baseSpirit: t.exposeString("baseSpirit"),
+      count: t.exposeInt("count", {
+        description:
+          "Groups `recipeGroups(baseSpirit:)` would list under the same " +
+          "category and term; a bar kind counts its narrower kinds.",
+      }),
+    }),
+  });
+
+builder.queryField("recipeBaseSpiritCounts", (t) =>
+  t.field({
+    type: [RecipeBaseSpiritCountType],
+    description:
+      "F-114: `/recipes`' kind chips — every base spirit the groups " +
+      "`recipeGroups(category, term)` lists carry, with its count, most " +
+      "first. Kinds with no visible group are absent. Same visibility as " +
+      "`recipeGroups`: a version you may not see adds nothing.",
+    args: {
+      category: t.arg({ type: RecipeCategoryEnum, required: false }),
+      term: t.arg.string({ required: false }),
+    },
+    resolve: async (_root, args, context) => {
+      // The unfiltered list's filter, so the count shares its activation.
+      const filter = {
+        category: args.category ?? null,
+        baseSpirit: null,
+        term: normalizeRecipeGroupTerm(args.term),
+        orderBy: DEFAULT_RECIPE_GROUP_ORDER,
+      };
+      return await context
+        .actor(
+          RecipeGroupsCollectionActorDescriptor,
+          recipeGroupsCollectionActorId(filter),
+        )
+        .baseSpiritCounts(filter);
     },
   }),
 );

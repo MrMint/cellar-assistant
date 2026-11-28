@@ -5,7 +5,11 @@
  * are correct — that is `recipe-actor.test.ts` and `recipe-group-actor.test.ts`
  * against real Postgres.
  */
-import { ConflictError, NotFoundError } from "@cellar-assistant/contracts";
+import {
+  ConflictError,
+  NotFoundError,
+  recipeGroupsCollectionActorId,
+} from "@cellar-assistant/contracts";
 import { execute, parse } from "graphql";
 import { describe, expect, it } from "vitest";
 import { stubSidecar, testContext } from "../testing.ts";
@@ -126,6 +130,41 @@ describe("Recipe.viewerLogCount (F-120)", () => {
     expect(calls.filter((call) => call.method === "viewerLogCount")).toEqual(
       [],
     );
+  });
+});
+
+describe("recipeBaseSpiritCounts (F-114)", () => {
+  it("addresses the unfiltered list's activation and passes the counts through", async () => {
+    const { invoke, calls } = stubSidecar({
+      "RecipeGroupsCollectionActor.baseSpiritCounts": () => [
+        { baseSpirit: "gin", count: 4 },
+        { baseSpirit: "whiskey", count: 2 },
+      ],
+    });
+    const result = await run(
+      `{ recipeBaseSpiritCounts(category: cocktail, term: " sour ") {
+           baseSpirit count } }`,
+      testContext(invoke, viewer),
+    );
+    expect(result.errors).toBeUndefined();
+    expect(result.data?.recipeBaseSpiritCounts).toEqual([
+      { baseSpirit: "gin", count: 4 },
+      { baseSpirit: "whiskey", count: 2 },
+    ]);
+    const filter = {
+      category: "cocktail",
+      baseSpirit: null,
+      term: "sour",
+      orderBy: "NEWEST",
+    } as const;
+    expect(calls).toEqual([
+      {
+        actorType: "RecipeGroupsCollectionActor",
+        actorId: recipeGroupsCollectionActorId(filter),
+        method: "baseSpiritCounts",
+        args: [expect.anything(), filter],
+      },
+    ]);
   });
 });
 

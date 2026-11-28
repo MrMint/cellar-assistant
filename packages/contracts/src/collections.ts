@@ -1045,6 +1045,24 @@ export type RecipeGroupsCollectionActorInterface = {
     ctx: Ctx,
     filter: RecipeIngredientUsesFilter,
   ): Promise<readonly CappedList<RecipeIngredientDto>[]>;
+  /**
+   * F-114 — `/recipes`' kind chips: for each base spirit the groups `list`
+   * would return under `filter` carry, how many a chip of that value would
+   * list (a bar kind counts its narrower kinds too, as `baseSpirit` filters
+   * them). `filter.baseSpirit` is ignored by the count but still part of the
+   * key, so call it with `baseSpirit: null`. Most groups first, then by name;
+   * only kinds with at least one visible group.
+   */
+  baseSpiritCounts(
+    ctx: Ctx,
+    filter: RecipeGroupsFilter,
+  ): Promise<readonly RecipeBaseSpiritCountDto[]>;
+};
+
+/** One kind chip's count ({@link RecipeGroupsCollectionActorInterface.baseSpiritCounts}). */
+export type RecipeBaseSpiritCountDto = {
+  readonly baseSpirit: string;
+  readonly count: number;
 };
 
 /** The items one {@link RecipeGroupsCollectionActorInterface.ingredientUses} call reads. */
@@ -1075,6 +1093,7 @@ export const RecipeGroupsCollectionActorDescriptor: ActorDescriptor<RecipeGroups
     methods: {
       list: {},
       ingredientUses: {},
+      baseSpiritCounts: {},
     },
   };
 

@@ -457,6 +457,90 @@ describe.skipIf(skip)("RecipeGroupsCollectionActor", () => {
     });
   });
 
+  it("F-114: baseSpiritCounts counts each present kind as its chip would filter, only visible groups, ignoring baseSpirit", async () => {
+    await withTestDb(async (db) => {
+      const viewer = await seedUser(db);
+      const author = await seedUser(db);
+      const tag = `zzz-f114-${crypto.randomUUID().slice(0, 8)}`;
+      const groupWith = async (
+        name: string,
+        baseSpirit: string | null,
+        privacy: "PUBLIC" | "PRIVATE",
+        category: "cocktail" | "shot" = "cocktail",
+      ) => {
+        const groupId = await seedGroup(db, author, {
+          name: `${tag} ${name}`,
+          baseSpirit,
+          category,
+        });
+        const id = await seedRecipe(db, {
+          name: `${tag} ${name} v1`,
+          createdById: author,
+          privacy,
+        });
+        await db.execute(sql`
+          update public.recipes set recipe_group_id = ${groupId}::uuid
+          where id = ${id}::uuid
+        `);
+      };
+      await groupWith("a", "gin", "PUBLIC");
+      await groupWith("b", "gin", "PUBLIC");
+      await groupWith("c", "bourbon", "PUBLIC");
+      await groupWith("d", "rye", "PUBLIC");
+      await groupWith("e", null, "PUBLIC");
+      await groupWith("f", "mezcal", "PRIVATE");
+      await groupWith("g", "rum", "PUBLIC", "shot");
+
+      const filter = { term: tag } as const;
+      const actor = await activate(
+        createActor(
+          RecipeGroupsCollectionActor,
+          recipeGroupsCollectionActorId(filter),
+          db,
+        ),
+      );
+      // A stranger sees no count for the private group's kind.
+      expect(
+        await actor.baseSpiritCounts(userCtx(viewer, "r"), filter),
+      ).toEqual(
+        [
+          { baseSpirit: "whiskey", count: 2 },
+          { baseSpirit: "bourbon", count: 1 },
+          { baseSpirit: "gin", count: 2 },
+          { baseSpirit: "rum", count: 1 },
+          { baseSpirit: "rye", count: 1 },
+        ].sort(
+          (a, b) =>
+            b.count - a.count || a.baseSpirit.localeCompare(b.baseSpirit),
+        ),
+      );
+      const own = await actor.baseSpiritCounts(userCtx(author, "r"), filter);
+      expect(own.find((row) => row.baseSpirit === "mezcal")).toEqual({
+        baseSpirit: "mezcal",
+        count: 1,
+      });
+
+      // The category narrows; the actor's key still has to match.
+      const shots = { term: tag, category: "shot" } as const;
+      const shotActor = await activate(
+        createActor(
+          RecipeGroupsCollectionActor,
+          recipeGroupsCollectionActorId(shots),
+          db,
+        ),
+      );
+      expect(
+        await shotActor.baseSpiritCounts(userCtx(viewer, "r"), shots),
+      ).toEqual([{ baseSpirit: "rum", count: 1 }]);
+      await expect(
+        actor.baseSpiritCounts(userCtx(viewer, "r"), shots),
+      ).rejects.toBeInstanceOf(ValidationError);
+      await expect(
+        actor.baseSpiritCounts(anonymousCtx("r"), filter),
+      ).rejects.toBeInstanceOf(ForbiddenError);
+    });
+  });
+
   it("F-88: carries communityPickId in the projection, by RecipeGroupActor's rule", async () => {
     await withTestDb(async (db) => {
       const viewer = await seedUser(db);
