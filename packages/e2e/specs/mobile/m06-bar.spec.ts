@@ -1,6 +1,6 @@
 import { unique } from "../../fixtures/data.ts";
 import { expect, test } from "../../fixtures/mobile.ts";
-import { Gql } from "../../fixtures/test.ts";
+import { Gql, visibleOnly } from "../../fixtures/test.ts";
 
 /**
  * X14 · recipes meet the cellar, at 390x844 (decisions D9, D18/G29, D23).
@@ -112,7 +112,8 @@ test("the recipe page says what is missing, with real availability", async ({
   page,
 }) => {
   await page.goto(`/recipes/${recipeId}`);
-  const summary = page.locator("[data-makeability]");
+  // F-24: the streamed segment holds a hidden twin for a moment.
+  const summary = visibleOnly(page.locator("[data-makeability]")).first();
   await expect(summary).toHaveAttribute("data-makeability", "one_away");
   await expect(summary).toContainText("One bottle away");
   await expect(summary).toContainText("Lime juice");
