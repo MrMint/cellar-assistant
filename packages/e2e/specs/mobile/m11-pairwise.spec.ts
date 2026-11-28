@@ -167,7 +167,7 @@ test("places an entry in at most log2(n)+1 taps, then Undo removes it", async ({
     await page.goto(`/tier-lists/${listId}`);
     await page.getByRole("button", { name: "Edit order", exact: true }).tap();
     await page.getByRole("button", { name: "Add entry", exact: true }).tap();
-    const sheet = page.getByRole("dialog", { name: "Add entry" });
+    const sheet = page.getByRole("dialog", { name: /^Add an? / });
     await expect(sheet).toBeVisible();
 
     // The rated tea is in "Tasted, not ranked"; open the section if it is
@@ -186,7 +186,7 @@ test("places an entry in at most log2(n)+1 taps, then Undo removes it", async ({
     await expect(row).toContainText("Very Good");
     await row.tap();
     await sheet
-      .getByRole("button", { name: "Compare to place it", exact: true })
+      .getByRole("button", { name: "Add 1 entry", exact: true })
       .tap();
 
     const placing = page.getByRole("dialog", { name: /^Place / });
@@ -235,9 +235,13 @@ test("places an entry in at most log2(n)+1 taps, then Undo removes it", async ({
 
     // One Undo takes the whole placement back.
     await placing.getByRole("button", { name: "Undo", exact: true }).tap();
+    // The sheet says it was taken back, and offers to place it again.
+    await expect(placing.getByText(/^Took back .* isn't on Very Good now/)).toBeVisible({
+      timeout: 15_000,
+    });
     await expect(
-      placing.getByRole("heading", { name: "Which do you like more?" }),
-    ).toBeVisible({ timeout: 15_000 });
+      placing.getByRole("button", { name: "Place it again" }),
+    ).toBeVisible();
     const after = await eventually(
       async () => {
         const now = await entries(api, listId);
