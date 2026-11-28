@@ -1125,7 +1125,7 @@ builder.mutationField("rewriteTierListInsights", (t) =>
   t.field({
     type: TierListType,
     description:
-      "F-86: \"Rewrite\" — write this list's Insights afresh once they are " +
+      'F-86: "Rewrite" — write this list\'s Insights afresh once they are ' +
       "READY, without waiting out the once-a-day throttle. Creator only. From " +
       "any other status it changes nothing and returns the list as it is. The " +
       "list reads PENDING until the new write lands. The generation counts " +

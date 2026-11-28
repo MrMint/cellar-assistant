@@ -2045,13 +2045,13 @@ describe.skipIf(skip)("per-user period cap and myQuota (SV-A)", () => {
       });
     }
   };
-  const placesCall = (ctx: typeof user, endpoint: 0 | 1) =>
-    (async (actor: BudgetActor) =>
+  const placesCall =
+    (ctx: typeof user, endpoint: 0 | 1) => async (actor: BudgetActor) =>
       actor.reserveForSearch(ctx, {
         kind: placesKinds[endpoint],
         estimatedCostCents: 0,
         reservationId: `places-${crypto.randomUUID()}`,
-      }));
+      });
 
   it("F-230: Places is one monthly allowance across its endpoints, apart from AI", async () => {
     await withTestDb(async (db) => {
@@ -2107,7 +2107,9 @@ describe.skipIf(skip)("per-user period cap and myQuota (SV-A)", () => {
       // here so only the month is in play.
       await openPlaces(db);
       const actor = await withEnv(
-        { BUDGET_USER_CAPS: "google_places/autocomplete=50/50, google_places=5" },
+        {
+          BUDGET_USER_CAPS: "google_places/autocomplete=50/50, google_places=5",
+        },
         () => reactivate(db),
       );
       for (let i = 0; i < 5; i += 1) {

@@ -528,7 +528,10 @@ describe("Viewer.lovedCounts (F-87)", () => {
         return page(
           only === null
             ? 10
-            : only.reduce((sum, type) => sum + (favouritesByType[type] ?? 0), 0),
+            : only.reduce(
+                (sum, type) => sum + (favouritesByType[type] ?? 0),
+                0,
+              ),
         );
       },
       "UserActor.lovedRecipes": () => page(5),

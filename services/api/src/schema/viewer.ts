@@ -87,67 +87,64 @@ const lovedCountOf = (
     .list(pageArgs({ first: 1 }), types)
     .then((page) => page.totalCount);
 
-const LovedCounts = builder
-  .objectRef<ViewerClaims>("LovedCounts")
-  .implement({
-    description:
-      "F-87: how many things the viewer has loved, per kind — Loved's " +
-      "subtitle and count chips. Ask only for the counts you show: each is " +
-      "one count on the server.",
-    fields: (t) => ({
-      drinks: t.int({
-        nullable: true,
-        description: "Every favourited item, all six types.",
-        resolve: (viewer, _args, context) =>
-          lovedCountOf(viewer, context, null),
-      }),
-      recipes: t.int({
-        nullable: true,
-        description: "Loved recipes (D9), the Recipes segment.",
-        resolve: (viewer, _args, context) =>
-          context
-            .actor(UserActorDescriptor, viewer.id)
-            .lovedRecipes(pageArgs({ first: 1 }))
-            .then((page) => page.totalCount),
-      }),
-      wine: t.int({
-        nullable: true,
-        description: "Favourited items of type WINE.",
-        resolve: (viewer, _args, context) =>
-          lovedCountOf(viewer, context, ["WINE"]),
-      }),
-      beer: t.int({
-        nullable: true,
-        description: "Favourited items of type BEER.",
-        resolve: (viewer, _args, context) =>
-          lovedCountOf(viewer, context, ["BEER"]),
-      }),
-      spirit: t.int({
-        nullable: true,
-        description: "Favourited items of type SPIRIT.",
-        resolve: (viewer, _args, context) =>
-          lovedCountOf(viewer, context, ["SPIRIT"]),
-      }),
-      coffee: t.int({
-        nullable: true,
-        description: "Favourited items of type COFFEE.",
-        resolve: (viewer, _args, context) =>
-          lovedCountOf(viewer, context, ["COFFEE"]),
-      }),
-      sake: t.int({
-        nullable: true,
-        description: "Favourited items of type SAKE.",
-        resolve: (viewer, _args, context) =>
-          lovedCountOf(viewer, context, ["SAKE"]),
-      }),
-      tea: t.int({
-        nullable: true,
-        description: "Favourited items of type TEA.",
-        resolve: (viewer, _args, context) =>
-          lovedCountOf(viewer, context, ["TEA"]),
-      }),
+const LovedCounts = builder.objectRef<ViewerClaims>("LovedCounts").implement({
+  description:
+    "F-87: how many things the viewer has loved, per kind — Loved's " +
+    "subtitle and count chips. Ask only for the counts you show: each is " +
+    "one count on the server.",
+  fields: (t) => ({
+    drinks: t.int({
+      nullable: true,
+      description: "Every favourited item, all six types.",
+      resolve: (viewer, _args, context) => lovedCountOf(viewer, context, null),
     }),
-  });
+    recipes: t.int({
+      nullable: true,
+      description: "Loved recipes (D9), the Recipes segment.",
+      resolve: (viewer, _args, context) =>
+        context
+          .actor(UserActorDescriptor, viewer.id)
+          .lovedRecipes(pageArgs({ first: 1 }))
+          .then((page) => page.totalCount),
+    }),
+    wine: t.int({
+      nullable: true,
+      description: "Favourited items of type WINE.",
+      resolve: (viewer, _args, context) =>
+        lovedCountOf(viewer, context, ["WINE"]),
+    }),
+    beer: t.int({
+      nullable: true,
+      description: "Favourited items of type BEER.",
+      resolve: (viewer, _args, context) =>
+        lovedCountOf(viewer, context, ["BEER"]),
+    }),
+    spirit: t.int({
+      nullable: true,
+      description: "Favourited items of type SPIRIT.",
+      resolve: (viewer, _args, context) =>
+        lovedCountOf(viewer, context, ["SPIRIT"]),
+    }),
+    coffee: t.int({
+      nullable: true,
+      description: "Favourited items of type COFFEE.",
+      resolve: (viewer, _args, context) =>
+        lovedCountOf(viewer, context, ["COFFEE"]),
+    }),
+    sake: t.int({
+      nullable: true,
+      description: "Favourited items of type SAKE.",
+      resolve: (viewer, _args, context) =>
+        lovedCountOf(viewer, context, ["SAKE"]),
+    }),
+    tea: t.int({
+      nullable: true,
+      description: "Favourited items of type TEA.",
+      resolve: (viewer, _args, context) =>
+        lovedCountOf(viewer, context, ["TEA"]),
+    }),
+  }),
+});
 
 export const Viewer = builder.objectRef<ViewerClaims>("Viewer").implement({
   description: "The signed-in user, as their token describes them.",

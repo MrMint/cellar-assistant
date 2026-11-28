@@ -245,7 +245,9 @@ describe.skipIf(skip)("MapActor", () => {
         `);
 
         const pick = (entries: readonly MapEntry[], id: string) =>
-          entries.find((entry) => entry.kind === "place" && entry.placeId === id);
+          entries.find(
+            (entry) => entry.kind === "place" && entry.placeId === id,
+          );
 
         expect(pick(await browseAll(db, s.owner), s.listed)).toMatchObject({
           ratingCount: 12,

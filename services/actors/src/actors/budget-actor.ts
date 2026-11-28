@@ -960,7 +960,11 @@ export const parseUserCapConfig = (
           "BUDGET_USER_CAPS names `google_places=` more than once",
         );
       }
-      if (!/^\d+$/.test(placesMatch[1] ?? "") || !Number.isSafeInteger(calls) || calls < 1) {
+      if (
+        !/^\d+$/.test(placesMatch[1] ?? "") ||
+        !Number.isSafeInteger(calls) ||
+        calls < 1
+      ) {
         throw new ValidationError(
           `BUDGET_USER_CAPS entry ${JSON.stringify(text)} is not ` +
             "`google_places=<monthly calls>` with monthly calls >= 1",
@@ -2174,15 +2178,14 @@ export class BudgetActor
 
     if (periodFull !== null) {
       return {
-        reason:
-          places
-            ? `${USER_CAP_REASON}: this account has made ${periodFull.count} of ` +
-              `its ${periodFull.cap} Google Places calls this month ` +
-              `(${budgetKind(kind)} asked for one more). It resets at the ` +
-              "start of the next one; the allowance is BUDGET_USER_CAPS's google_places=."
-            : `${USER_CAP_REASON}: this account has made ${periodFull.count} of ` +
-              `its ${periodFull.cap} calls this ${period} to ${budgetKind(kind)}. ` +
-              "It resets at the start of the next one; the caps are BUDGET_USER_CAPS.",
+        reason: places
+          ? `${USER_CAP_REASON}: this account has made ${periodFull.count} of ` +
+            `its ${periodFull.cap} Google Places calls this month ` +
+            `(${budgetKind(kind)} asked for one more). It resets at the ` +
+            "start of the next one; the allowance is BUDGET_USER_CAPS's google_places=."
+          : `${USER_CAP_REASON}: this account has made ${periodFull.count} of ` +
+            `its ${periodFull.cap} calls this ${period} to ${budgetKind(kind)}. ` +
+            "It resets at the start of the next one; the caps are BUDGET_USER_CAPS.",
         retryAt,
       };
     }
