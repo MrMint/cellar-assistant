@@ -1,6 +1,5 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 import { useMutation } from "urql";
 import { BottomSheet } from "@/components/app/BottomSheet";
@@ -40,6 +39,7 @@ import {
   moveTargets,
   removeMyRating,
 } from "./item-writes";
+import { useRefreshAfterWrite } from "./pane-refresh";
 
 const ICON = {
   list: Lists,
@@ -138,7 +138,7 @@ export function ItemMenu({
   selected,
   myReview,
 }: ItemMenuProps) {
-  const router = useRouter();
+  const refreshAfterWrite = useRefreshAfterWrite();
   const navigate = useNavigate();
   const afterClose = useRef<ItemMenuAction | null>(null);
   const [sheet, setSheet] = useState<ItemMenuAction | null>(null);
@@ -170,7 +170,7 @@ export function ItemMenu({
       });
       return;
     }
-    router.refresh();
+    refreshAfterWrite();
     notify("Rating removed", {
       undo: () => {
         void result.undo().then((undone) => {
@@ -180,7 +180,7 @@ export function ItemMenu({
               description: undone.message,
             });
           }
-          router.refresh();
+          refreshAfterWrite();
         });
       },
     });

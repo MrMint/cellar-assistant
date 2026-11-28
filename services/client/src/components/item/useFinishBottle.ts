@@ -1,6 +1,5 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useCallback, useReducer } from "react";
 import { useMutation } from "urql";
 import {
@@ -15,10 +14,12 @@ import {
   finishReducer,
   initialFinishState,
   performFinish,
+  performRefinish,
   performRestore,
   performUndo,
   type WriteOutcome,
 } from "./finish-bottle";
+import { useRefreshAfterWrite } from "./parts/pane-refresh";
 
 export type FinishBottle = {
   state: FinishState;
@@ -30,7 +31,7 @@ export type FinishBottle = {
   cancel: () => void;
   undo: () => void;
   dismiss: () => void;
-  /** "Restore to cellar" on a bottle finished earlier (no snapshot left). */
+  /** "Put back" on a bottle finished earlier (no snapshot left). */
   restore: (percentageRemaining: number) => void;
 };
 
@@ -46,7 +47,7 @@ export function useFinishBottle({
   cellarId: string;
   cellarItemId: string;
 }): FinishBottle {
-  const router = useRouter();
+  const refreshAfterWrite = useRefreshAfterWrite();
   const [state, dispatch] = useReducer(finishReducer, initialFinishState);
   const [, emptyItem] = useMutation(EmptyCellarItemMutation);
   const [, updateItem] = useMutation(UpdateCellarItemMutation);
@@ -72,7 +73,7 @@ export function useFinishBottle({
         ? { ok: true }
         : { ok: false, message: result.error.message };
     },
-    refresh: () => router.refresh(),
+    refresh: () => refreshAfterWrite(),
   };
 
   const request = useCallback(
@@ -95,6 +96,12 @@ export function useFinishBottle({
     },
     cancel: () => dispatch({ type: "CANCEL" }),
     undo: () => {
+      if (state.phase === "restored") {
+        // F-150: Undo of a put back finishes it again.
+        dispatch({ type: "UNDO" });
+        void performRefinish(deps);
+        return;
+      }
       if (state.phase !== "finished" && state.phase !== "undoFailed") return;
       dispatch({ type: "UNDO" });
       void performUndo(deps, state.snapshot);

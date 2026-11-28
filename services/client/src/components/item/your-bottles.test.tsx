@@ -44,6 +44,7 @@ mock.module("urql", () => ({
           updateCellarItem: { __typename: "CellarItem", id: "b-1" },
           checkIn: { __typename: "CheckIn", id: "k-1" },
           setCellarItemPercentage: undefined,
+          removeItemFromCellar: { __typename: "RemovedCellarItem", id: "b-1" },
         },
       };
     },
@@ -75,6 +76,7 @@ const { act } = await import("react");
 const { createRoot } = await import("react-dom/client");
 const { YourBottles } = await import("./YourBottles");
 const { ItemActionsProvider } = await import("./ItemActions");
+const { DeleteBottleDialog } = await import("./DeleteBottleDialog");
 
 let container: HTMLElement;
 let root: ReturnType<typeof createRoot>;
@@ -184,6 +186,17 @@ describe("Check in (Cellars-Bottles 03)", () => {
     assert.deepEqual(toasts, ["Checked in"]);
   });
 
+  test("the header counts only bottles still in the cellar (F-152)", async () => {
+    const countLine = () =>
+      document.querySelector('[data-slot="your-bottles"] h2 + span')
+        ?.textContent ?? "";
+    const finished = { ...open, id: "b-2", emptyAt: "2026-10-02T00:00:00Z" };
+    await render([finished], "b-2");
+    assert.equal(countLine(), "");
+    await render([open, finished], "b-2");
+    assert.equal(countLine(), "1 in Garage");
+  });
+
   test("a finished bottle offers no Check in", async () => {
     await render([{ ...open, emptyAt: "2026-10-02T00:00:00Z" }]);
     assert.equal(
@@ -282,5 +295,34 @@ describe("the selected bottle's freshness (L02)", () => {
     assert.deepEqual(updates, [
       { cellarId: "c-1", cellarItemId: "b-1", input: { location: "Rack B" } },
     ]);
+  });
+});
+
+describe("Delete this bottle (Cellars-Bottles 22)", () => {
+  test("deleting it raises the board's Bottle deleted toast (F-153)", async () => {
+    await act(async () => {
+      root.render(
+        <DeleteBottleDialog
+          open
+          onOpenChange={() => {}}
+          itemType="TEA"
+          itemName="Sencha"
+          cellarId="c-1"
+          bottleId="b-1"
+          bottle={{ openAt: null, emptyAt: null, percentageRemaining: 100 }}
+        />,
+      );
+      await settle();
+    });
+    const del = [...document.querySelectorAll("button")].find(
+      (b) => b.textContent?.trim() === "Delete",
+    );
+    assert.ok(del, "no Delete button");
+    await act(async () => {
+      del.click();
+      await settle();
+    });
+    assert.deepEqual(updates.at(-1), { cellarId: "c-1", cellarItemId: "b-1" });
+    assert.deepEqual(toasts, ["Bottle deleted"]);
   });
 });
