@@ -40,7 +40,10 @@ export function tallSheetOpen(
   const inset = Number.parseFloat(
     root.style.getPropertyValue(SHEET_INSET_PROPERTY),
   );
-  return Number.isFinite(inset) && inset > viewport * TALL_SHEET;
+  // A sheet that is open but not measured yet (its transition is running)
+  // could be any height: the toast goes to the top rather than over its rows.
+  if (!Number.isFinite(inset)) return true;
+  return inset > viewport * TALL_SHEET;
 }
 
 function useTallSheet(): boolean {

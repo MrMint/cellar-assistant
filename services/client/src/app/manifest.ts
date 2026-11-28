@@ -61,7 +61,7 @@ export default function manifest(): MetadataRoute.Manifest {
         name: "Search",
         short_name: "Search",
         url: "/search",
-        description: "Search your collection",
+        description: "Search your bottles",
         icons: [
           {
             src: "/icons/android/android-launchericon-96-96.png",

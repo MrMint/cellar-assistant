@@ -230,12 +230,16 @@ export function AppBar({
             <Back />
           </BarButton>
         )}
-        <div className={cn("min-w-0 flex-1", photo && "sr-only")}>
-          {typeof title === "string" ? (
-            <h1 className="t-title truncate text-ink">{title}</h1>
-          ) : (
-            title
-          )}
+        {/* Over a photo the title is for screen readers only, but the spacer
+            stays in flow so the ⋯ sits at the right (F-47). */}
+        <div className="min-w-0 flex-1">
+          <div className={cn(photo && "sr-only")}>
+            {typeof title === "string" ? (
+              <h1 className="t-title truncate text-ink">{title}</h1>
+            ) : (
+              title
+            )}
+          </div>
         </div>
         {trailing.map(({ label, icon: Icon, href, onSelect }) =>
           href !== undefined ? (

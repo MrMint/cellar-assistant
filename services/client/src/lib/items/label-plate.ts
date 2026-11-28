@@ -16,7 +16,7 @@ import { formatCountry } from "@/utilities/formatters";
 import { displayItemName } from "@/utilities/smart-title-case";
 
 export type LabelPlateData = {
-  /** The primary brand: the producer, set in Fraunces small caps. */
+  /** The primary brand: the producer, set in Inter small caps. */
   producer?: string;
   name: string;
   /** A four-digit year, "NV" for a non-vintage wine, or absent. */
