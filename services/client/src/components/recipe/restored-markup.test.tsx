@@ -27,6 +27,7 @@ const { RecipeDetails } = await import("./RecipeDetails");
 const { RecipeGroupCard } = await import("./RecipeGroupCard");
 const { RecipeVersionsTab } = await import("./RecipeVersionsTab");
 const { RecipeGroupSearch } = await import("../search/RecipeGroupSearch");
+const { RecipeReadError } = await import("./RecipeReadError");
 
 const client = new Client({
   url: "http://test.invalid/graphql",
@@ -102,6 +103,17 @@ describe("RecipeDetails: the name's heading level (X21)", () => {
   test("one h1 on the page: the bar over the hero adds none (F-106, CR-13)", () => {
     const page = render(<RecipeDetails recipe={recipe} titleLevel="h1" />);
     assert.equal(page.match(/<h1[\s>]/g)?.length, 1);
+  });
+});
+
+describe("A failed recipe read (F-112)", () => {
+  test("keeps the bar with Back, says what happened, and offers Try again", () => {
+    const html = render(<RecipeReadError reason="You're offline" />);
+    assert.match(html, /aria-label="Back"/);
+    assert.match(html, /role="alert"/);
+    assert.match(html, /Couldn(?:'|&#x27;)t open this recipe/);
+    assert.match(html, /<button[^>]*>Try again<\/button>/);
+    assert.equal(html.match(/<h1[\s>]/g)?.length, 1);
   });
 });
 
