@@ -53,6 +53,7 @@ import type {
   IngredientRole,
   InstructionType,
   PermissionType,
+  RecipeBaseSpiritCountDto,
   RecipeCategory,
   RecipeDto,
   RecipeGroupDto,
@@ -523,6 +524,17 @@ RecipeType_.implement({
       description: "Computed in the actor from the loaded reviews.",
       resolve: (recipe, _args, context) =>
         context.actor(RecipeActorDescriptor, recipe.id).score(),
+    }),
+
+    viewerLogCount: t.int({
+      description:
+        "F-120: how many times you have logged this recipe (your own check-ins " +
+        'naming it) — the make page\'s "Your 3rd …". 0 for an anonymous ' +
+        "viewer, without asking.",
+      resolve: (recipe, _args, context) =>
+        context.ctx.viewerId === null
+          ? 0
+          : context.actor(RecipeActorDescriptor, recipe.id).viewerLogCount(),
     }),
 
     /**
@@ -1208,6 +1220,61 @@ builder.queryField("recipeGroups", (t) =>
           )
           .list(filter, toPageArgs(args)),
       );
+    },
+  }),
+);
+
+const RecipeBaseSpiritCountType = builder
+  .objectRef<RecipeBaseSpiritCountDto>("RecipeBaseSpiritCount")
+  .implement({
+    description:
+      "F-114: one `/recipes` kind chip — a base spirit and how many groups " +
+      "selecting it would list.",
+    fields: (t) => ({
+      baseSpirit: t.exposeString("baseSpirit"),
+      count: t.exposeInt("count", {
+        description:
+          "Groups `recipeGroups(baseSpirit:)` would list under the same " +
+          "category and term; a bar kind counts its narrower kinds.",
+      }),
+    }),
+  });
+
+const RecipeBaseSpiritCountConnection = builder.connectionObject(
+  { type: RecipeBaseSpiritCountType, name: "RecipeBaseSpiritCountConnection" },
+  { name: "RecipeBaseSpiritCountEdge" },
+);
+
+builder.queryField("recipeBaseSpiritCounts", (t) =>
+  t.field({
+    type: RecipeBaseSpiritCountConnection,
+    description:
+      "F-114: `/recipes`' kind chips — every base spirit the groups " +
+      "`recipeGroups(category, term)` lists carry, with its count, most " +
+      "first. Kinds with no visible group are absent. Same visibility as " +
+      "`recipeGroups`: a version you may not see adds nothing. A " +
+      "connection (§1.5), though one page holds every kind there is.",
+    args: {
+      ...t.arg.connectionArgs(),
+      category: t.arg({ type: RecipeCategoryEnum, required: false }),
+      term: t.arg.string({ required: false }),
+    },
+    errors: {},
+    resolve: async (_root, args, context) => {
+      // The unfiltered list's filter, so the count shares its activation.
+      const filter = {
+        category: args.category ?? null,
+        baseSpirit: null,
+        term: normalizeRecipeGroupTerm(args.term),
+        orderBy: DEFAULT_RECIPE_GROUP_ORDER,
+      };
+      const counts = await context
+        .actor(
+          RecipeGroupsCollectionActorDescriptor,
+          recipeGroupsCollectionActorId(filter),
+        )
+        .baseSpiritCounts(filter);
+      return connectionFromPage(offsetPage(counts, toPageArgs(args)));
     },
   }),
 );

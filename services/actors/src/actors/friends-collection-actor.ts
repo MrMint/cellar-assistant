@@ -56,6 +56,9 @@ import type {
   FriendsFeedFilter,
   ItemCheckInDto,
   ItemRef,
+  LatestActivityFilter,
+  MutualFriendsDto,
+  MutualFriendsFilter,
   Page,
   PageArgs,
   ProfileFilter,
@@ -71,9 +74,12 @@ import {
   isActivityKind,
   isFriendRequestFilter,
   isItemType,
+  isLatestActivityFilter,
+  isMutualFriendsFilter,
   isProfileFilter,
   isTierListEntryType,
   keysetPage,
+  LATEST_ACTIVITY_MAX_IDS,
   mapPage,
   NotFoundError,
   PROFILE_NOT_SHARED,
@@ -167,6 +173,8 @@ type FriendsInput =
   | ActivityFilter
   | FriendsFeedFilter
   | ProfileFilter
+  | LatestActivityFilter
+  | MutualFriendsFilter
   | null;
 
 type ProfileIdRow = { readonly id: string; readonly sort_key: string };
@@ -211,6 +219,20 @@ const requireActivityFilter = (input: unknown): ActivityFilter => {
     );
   }
   return { kinds: candidate.kinds, limit };
+};
+
+/** F-51: at most a page of ids, each a uuid. */
+const requireLatestActivityFilter = (filter: LatestActivityFilter): void => {
+  if (filter.latestOf.length > LATEST_ACTIVITY_MAX_IDS) {
+    throw new ValidationError(
+      `latestOf takes at most ${LATEST_ACTIVITY_MAX_IDS} ids, got ${filter.latestOf.length}`,
+    );
+  }
+  for (const id of filter.latestOf) {
+    if (typeof id !== "string" || !isUuid(id)) {
+      throw new ValidationError(`latestOf: not a user id: ${String(id)}`);
+    }
+  }
 };
 
 /** Refuses anything but `{ kinds: ActivityKind[] }`. */
@@ -258,6 +280,21 @@ const afterFeedCursor = (
   return sql`(${feedAt(at)} < ${bound}
     or (${feedAt(at)} = ${bound} and ${id} < ${cursor.id}::uuid))`;
 };
+
+/**
+ * F-51: `query` once per author, newest `limit` rows each, in one statement —
+ * a lateral join over the author ids, so a page of friends costs one
+ * statement per kind. Without `perAuthor`, `query` over all authors at once.
+ */
+const latestPerAuthor = (
+  authors: SQL,
+  perAuthor: boolean,
+  query: (who: SQL) => SQL,
+): SQL =>
+  perAuthor
+    ? sql`select per_author.* from unnest(${authors}) as author_ids(author_id)
+          cross join lateral (${query(sql`array[author_ids.author_id]`)}) per_author`
+    : query(authors);
 
 const REVIEWS = ARCS.itemReviews;
 const ENTRIES = ARCS.tierListItems;
@@ -457,22 +494,110 @@ export class FriendsCollectionActor
     );
   }
 
+  /**
+   * F-51: each friend's newest entry, for the `/friends` rows ("Ranked … #1
+   * · 2h ago"). `friendsFeed`'s four reads, each run once per friend through
+   * a lateral join (`latestPerAuthor`, newest one row each), so a page of
+   * friends is four statements plus the friend read. The authors are the
+   * asked ids that are the viewer's friends, read in this turn — a stranger's
+   * id answers `null` without being read — and every kind keeps its rule.
+   */
+  async latestActivity(
+    ctx: Ctx,
+    filter: LatestActivityFilter,
+  ): Promise<readonly (ActivityEntryDto | null)[]> {
+    const asked = filter.latestOf.map((id) => id.toLowerCase());
+    const none = asked.map(() => null);
+    return await this.batch(ctx, filter, none, async () => {
+      const viewer = ctx.viewerId;
+      if (viewer === null || asked.length === 0) return none;
+      const friendIds = friendIdsOf(
+        viewer,
+        await friendshipsOf(this.db, viewer),
+      );
+      const known = new Set(friendIds);
+      const wanted = [...new Set(asked.filter((id) => known.has(id)))];
+      if (wanted.length === 0) return none;
+      // Held to friendship, like a profile: never `"everything"`.
+      const scope: VisibilityScope = { kind: "viewer", viewer, friendIds };
+      const authors = uuidArray(wanted, "friend id");
+      const entries = [
+        ...(await this.#reviews(authors, 1, null, true)),
+        ...(await this.#tierListed(authors, scope, 1, null, true)),
+        ...(await this.#added(authors, scope, 1, null, true)),
+        ...(await this.#checkedIn(authors, scope, viewer, 1, null, true)),
+      ].sort(compareFeedEntries);
+      const newest = new Map<string, ActivityEntryDto>();
+      for (const entry of entries) {
+        if (!newest.has(entry.userId)) newest.set(entry.userId, entry);
+      }
+      return asked.map((id) => newest.get(id) ?? null);
+    });
+  }
+
+  /**
+   * F-94: the locked profile's "Friend of …". The viewer's own friends who
+   * are also the other person's friends (either direction of a `friends`
+   * row, as everywhere here), counted, and the first by name. It names only
+   * people already on the viewer's own list, and only for someone whose
+   * profile `canSeeProfile` admits (every signed-in viewer, L41) — so a
+   * non-friend may ask. Yourself, nobody and a malformed id answer the same
+   * zero, so the answer is no oracle for whether an account exists (D24).
+   */
+  async mutualFriends(
+    ctx: Ctx,
+    filter: MutualFriendsFilter,
+  ): Promise<MutualFriendsDto> {
+    const none: MutualFriendsDto = { count: 0, firstUserId: null };
+    return await this.batch(ctx, filter, none, async () => {
+      const viewer = ctx.viewerId;
+      const other = filter.mutualWith.toLowerCase();
+      if (viewer === null || !isUuid(other) || other === viewer) return none;
+      const mine = friendIdsOf(viewer, await friendshipsOf(this.db, viewer));
+      if (mine.length === 0) return none;
+      const { rows } = await this.db.execute<{
+        readonly id: string;
+        readonly total: number | string;
+      }>(sql`
+        select u.id, count(*) over () as total
+        from "user" u
+        where u.id = any(${uuidArray(mine, "friend id")})
+          and u.id <> ${other}::uuid
+          and exists (
+            select 1 from public.friends f
+            where (f.user_id = ${other}::uuid and f.friend_id = u.id)
+               or (f.friend_id = ${other}::uuid and f.user_id = u.id)
+          )
+        order by u.name asc, u.id asc
+        limit 1
+      `);
+      const first = rows[0];
+      return first === undefined
+        ? none
+        : { count: Number(first.total), firstUserId: first.id };
+    });
+  }
+
   async #reviews(
     authors: SQL,
     limit: number,
     after: ActivityFeedCursor | null = null,
+    perAuthor = false,
   ): Promise<ActivityEntryDto[]> {
-    const { rows } = await this.db.execute<ReviewActivityRow>(sql`
+    const query = (who: SQL): SQL => sql`
       select r.id, r.user_id, r.score, r.text::text as text,
              r.created_at, r.updated_at,
              ${REVIEWS.typeExpr("r")} as item_type,
              ${REVIEWS.idExpr("r")} as item_id
       from public.item_reviews r
-      where r.user_id = any(${authors})
+      where r.user_id = any(${who})
         and ${afterFeedCursor("REVIEWED", after, sql`r.created_at`, sql`r.id`)}
       order by ${feedOrder(sql`r.created_at`, sql`r.id`)}
       limit ${limit}
-    `);
+    `;
+    const { rows } = await this.db.execute<ReviewActivityRow>(
+      latestPerAuthor(authors, perAuthor, query),
+    );
     const entries: ActivityEntryDto[] = [];
     for (const row of rows) {
       const item = itemRefOf(row.item_type, row.item_id);
@@ -510,6 +635,7 @@ export class FriendsCollectionActor
     scope: VisibilityScope,
     limit: number,
     after: ActivityFeedCursor | null = null,
+    perAuthor = false,
   ): Promise<ActivityEntryDto[]> {
     const visible = canSeeSql(scope, {
       createdBy: sql`t.created_by_id`,
@@ -517,7 +643,7 @@ export class FriendsCollectionActor
     });
     // `created_at` is nullable on `tier_list_items`; the old feed skipped a
     // row without one (`if (!tli.createdAt) continue`), so this does too.
-    const { rows } = await this.db.execute<TierListActivityRow>(sql`
+    const query = (who: SQL): SQL => sql`
       select ti.id, ti.tier_list_id, ti.band, ti.position, ti.notes,
              ti.created_at, ti.updated_at,
              ti.type as entry_type,
@@ -530,7 +656,7 @@ export class FriendsCollectionActor
              )::int + 1 as rank
       from public.tier_list_items ti
       join public.tier_lists t on t.id = ti.tier_list_id
-      where t.created_by_id = any(${authors})
+      where t.created_by_id = any(${who})
         and ti.created_at is not null
         and ${visible}
         and ${placeRefVisibleToSql(
@@ -544,7 +670,10 @@ export class FriendsCollectionActor
         and ${afterFeedCursor("TIER_LISTED", after, sql`ti.created_at`, sql`ti.id`)}
       order by ${feedOrder(sql`ti.created_at`, sql`ti.id`)}
       limit ${limit}
-    `);
+    `;
+    const { rows } = await this.db.execute<TierListActivityRow>(
+      latestPerAuthor(authors, perAuthor, query),
+    );
     return rows.map((row): ActivityEntryDto => {
       if (row.entry_type === null || !isTierListEntryType(row.entry_type)) {
         throw new ConflictError(
@@ -585,24 +714,28 @@ export class FriendsCollectionActor
     scope: VisibilityScope,
     limit: number,
     after: ActivityFeedCursor | null = null,
+    perAuthor = false,
   ): Promise<ActivityEntryDto[]> {
     const visible = canSeeSql(scope, {
       createdBy: sql`c.created_by_id`,
       privacy: sql`c.privacy`,
       coOwnedCellarId: sql`c.id`,
     });
-    const { rows } = await this.db.execute<AddedActivityRow>(sql`
+    const query = (who: SQL): SQL => sql`
       select ci.id, ci.cellar_id, ci.created_by, ci.created_at,
              ${BOTTLES.typeExpr("ci")} as item_type,
              ${BOTTLES.idExpr("ci")} as item_id
       from public.cellar_items ci
       join public.cellars c on c.id = ci.cellar_id
-      where ci.created_by = any(${authors})
+      where ci.created_by = any(${who})
         and ${visible}
         and ${afterFeedCursor("ADDED", after, sql`ci.created_at`, sql`ci.id`)}
       order by ${feedOrder(sql`ci.created_at`, sql`ci.id`)}
       limit ${limit}
-    `);
+    `;
+    const { rows } = await this.db.execute<AddedActivityRow>(
+      latestPerAuthor(authors, perAuthor, query),
+    );
     const entries: ActivityEntryDto[] = [];
     for (const row of rows) {
       const item = itemRefOf(row.item_type, row.item_id);
@@ -642,14 +775,15 @@ export class FriendsCollectionActor
     viewer: string,
     limit: number,
     after: ActivityFeedCursor | null = null,
+    perAuthor = false,
   ): Promise<ActivityEntryDto[]> {
     const visible = canSeeCheckInSql(scope, "ci");
-    const { rows } = await this.db.execute<CheckInSqlRow>(sql`
+    const query = (who: SQL): SQL => sql`
       select * from (
         select distinct on (ci.group_id)
           ${checkInColumns("ci", canSeeCheckInDetailsSql(scope, "ci"), scope)}
         from public.check_ins ci
-        where ci.user_id = any(${authors})
+        where ci.user_id = any(${who})
           and ${visible}
         order by ci.group_id, (ci.id = ci.group_id) desc, ci.created_at, ci.id
       ) occasion
@@ -661,7 +795,10 @@ export class FriendsCollectionActor
       )}
       order by ${feedOrder(sql`occasion.created_at`, sql`occasion.id`)}
       limit ${limit}
-    `);
+    `;
+    const { rows } = await this.db.execute<CheckInSqlRow>(
+      latestPerAuthor(authors, perAuthor, query),
+    );
     return rows.map((row): ActivityEntryDto => {
       const checkIn = toItemCheckInDto(row, viewer);
       return {
@@ -877,6 +1014,11 @@ export class FriendsCollectionActor
     await super.authorize(ctx, input);
     if (input === null) return "allow";
     if (isProfileFilter(input)) return await this.#authorizeProfile(ctx, input);
+    if (isLatestActivityFilter(input)) {
+      requireLatestActivityFilter(input);
+      return "allow";
+    }
+    if (isMutualFriendsFilter(input)) return "allow";
     if (typeof input === "string") {
       if (!isFriendRequestFilter(input)) {
         throw new ValidationError(

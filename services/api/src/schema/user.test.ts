@@ -14,6 +14,7 @@
  *   - the three `system` methods have no field at all.
  */
 import {
+  avatarBatchActorId,
   ConflictError,
   ForbiddenError,
   NotFoundError,
@@ -24,6 +25,7 @@ import { execute, parse } from "graphql";
 import { describe, expect, it } from "vitest";
 import { stubSidecar, testContext } from "../testing.ts";
 import { schema } from "./index.ts";
+import { avatarUrlOf } from "./user.ts";
 
 const run = (document: string, context: ReturnType<typeof testContext>) =>
   execute({ schema, document: parse(document), contextValue: context });
@@ -139,70 +141,105 @@ describe("profile picture (SV-D, MC-avatar)", () => {
   const FILE = "33333333-3333-4333-8333-333333333333";
   const query = `{ user(id: "${BOB}") { ... on UserProfile { avatarUrl } } }`;
 
-  it("presigns the uploaded picture when there is one", async () => {
+  const signedBatch = (_actorId: string, ...args: unknown[]) =>
+    (args.at(-1) as { fileIds: string[] }).fileIds.map((id) => ({
+      url: `https://files.example.test/signed/${id}`,
+      expiresAt: "2026-11-27T00:30:00.000Z",
+    }));
+
+  it("presigns the uploaded picture when there is one, in the viewer's batch", async () => {
     const { invoke, calls } = stubSidecar({
       "UserActor.getProfile": (actorId) => ({
         ...profile(actorId, "Bob"),
         avatarUrl: "https://example.test/oauth.png",
         avatarFileId: FILE,
       }),
-      "FileActor.presignRead": () => ({
-        url: "https://files.example.test/signed",
-        expiresAt: "2026-11-27T00:30:00.000Z",
-      }),
+      "FileActor.presignAvatars": signedBatch,
     });
     const result = await run(query, testContext(invoke, alice));
     expect(result.errors).toBeUndefined();
     expect(result.data?.user).toEqual({
-      avatarUrl: "https://files.example.test/signed",
+      avatarUrl: `https://files.example.test/signed/${FILE}`,
     });
-    expect(calls.find((c) => c.actorType === "FileActor")).toMatchObject({
-      actorId: FILE,
-      method: "presignRead",
+    const call = calls.find((c) => c.actorType === "FileActor");
+    expect(call).toMatchObject({
+      actorId: avatarBatchActorId(alice.id),
+      method: "presignAvatars",
     });
+    expect(call?.args.at(-1)).toEqual({ fileIds: [FILE] });
   });
 
-  it("F-89: one presign per picture per request, however many rows show it", async () => {
+  it("F-89: one presign call per request across people, however many rows show them", async () => {
+    const CAROL = "44444444-4444-4444-8444-444444444444";
+    const pictureOf = (id: string) =>
+      `5555555${id === BOB ? "5" : "6"}-5555-4555-8555-555555555555`;
     const { invoke, calls } = stubSidecar({
       "UserActor.getProfile": (actorId) => ({
-        ...profile(actorId, "Bob"),
-        avatarFileId: FILE,
+        ...profile(actorId, "Someone"),
+        avatarFileId: pictureOf(actorId),
       }),
-      "FileActor.presignRead": () => ({
-        url: "https://files.example.test/signed",
-        expiresAt: "2026-11-27T00:30:00.000Z",
-      }),
+      "FileActor.presignAvatars": signedBatch,
     });
     const result = await run(
       `{ a: user(id: "${BOB}") { ... on UserProfile { avatarUrl } }
-         b: user(id: "${BOB}") { ... on UserProfile { avatarUrl } }
+         b: user(id: "${CAROL}") { ... on UserProfile { avatarUrl } }
          c: user(id: "${BOB}") { ... on UserProfile { avatarUrl } } }`,
       testContext(invoke, alice),
     );
     expect(result.errors).toBeUndefined();
-    expect(result.data?.c).toEqual({
-      avatarUrl: "https://files.example.test/signed",
+    expect(result.data?.b).toEqual({
+      avatarUrl: `https://files.example.test/signed/${pictureOf(CAROL)}`,
     });
-    expect(calls.filter((c) => c.actorType === "FileActor")).toHaveLength(1);
+    const fileCalls = calls.filter((c) => c.actorType === "FileActor");
+    expect(fileCalls).toHaveLength(1);
+    const asked = fileCalls[0]?.args.at(-1) as
+      | { fileIds: string[] }
+      | undefined;
+    expect([...(asked?.fileIds ?? [])].sort()).toEqual(
+      [pictureOf(BOB), pictureOf(CAROL)].sort(),
+    );
   });
 
-  it("falls back to user.image with no picture, and when the picture cannot be read", async () => {
+  it("falls back to user.image with no picture, when the batch signs none, and when it fails", async () => {
+    const batches = [
+      () => [null],
+      () => {
+        throw new NotFoundError("gone");
+      },
+    ];
     for (const avatarFileId of [null, FILE]) {
-      const { invoke } = stubSidecar({
-        "UserActor.getProfile": (actorId) => ({
-          ...profile(actorId, "Bob"),
+      for (const batch of batches) {
+        const { invoke } = stubSidecar({
+          "UserActor.getProfile": (actorId) => ({
+            ...profile(actorId, "Bob"),
+            avatarUrl: "https://example.test/oauth.png",
+            avatarFileId,
+          }),
+          "FileActor.presignAvatars": batch,
+        });
+        const result = await run(query, testContext(invoke, alice));
+        expect(result.data?.user).toEqual({
           avatarUrl: "https://example.test/oauth.png",
-          avatarFileId,
-        }),
-        "FileActor.presignRead": () => {
-          throw new NotFoundError("gone");
-        },
-      });
-      const result = await run(query, testContext(invoke, alice));
-      expect(result.data?.user).toEqual({
-        avatarUrl: "https://example.test/oauth.png",
-      });
+        });
+      }
     }
+  });
+
+  it("an anonymous request keeps the one-file presignRead", async () => {
+    const { invoke, calls } = stubSidecar({
+      "FileActor.presignRead": () => ({
+        url: "https://files.example.test/anonymous",
+        expiresAt: "2026-11-27T00:30:00.000Z",
+      }),
+    });
+    const url = await avatarUrlOf(testContext(invoke, null), {
+      avatarFileId: FILE,
+      avatarUrl: null,
+    });
+    expect(url).toBe("https://files.example.test/anonymous");
+    expect(calls).toMatchObject([
+      { actorType: "FileActor", actorId: FILE, method: "presignRead" },
+    ]);
   });
 
   it("setAvatar and removeAvatar run on the viewer's own actor", async () => {
@@ -212,10 +249,7 @@ describe("profile picture (SV-D, MC-avatar)", () => {
         avatarFileId: FILE,
       }),
       "UserActor.removeAvatar": (actorId) => profile(actorId, "Alice"),
-      "FileActor.presignRead": () => ({
-        url: "https://files.example.test/signed",
-        expiresAt: "2026-11-27T00:30:00.000Z",
-      }),
+      "FileActor.presignAvatars": signedBatch,
     });
     const set = await run(
       `mutation { setAvatar(fileId: "${FILE}") { ... on UserProfile { avatarUrl } } }`,
@@ -223,7 +257,7 @@ describe("profile picture (SV-D, MC-avatar)", () => {
     );
     expect(set.errors).toBeUndefined();
     expect(set.data?.setAvatar).toEqual({
-      avatarUrl: "https://files.example.test/signed",
+      avatarUrl: `https://files.example.test/signed/${FILE}`,
     });
     expect(calls[0]).toMatchObject({
       actorType: "UserActor",
