@@ -55,6 +55,7 @@
  * returns an empty page rather than silently widening to the whole viewport.
  */
 import type {
+  FileDto,
   MapCluster,
   MapEntry,
   MapPlace,
@@ -67,6 +68,7 @@ import {
   MapActorDescriptor,
   mapActorId,
 } from "@cellar-assistant/contracts";
+import type { ApiContext } from "../context.ts";
 import { builder } from "./builder.ts";
 import { FileType } from "./file.ts";
 import { connectionFromPage, toPageArgs } from "./pagination.ts";
@@ -134,17 +136,39 @@ const MapPlaceType = builder.objectRef<MapPlace>("MapPlace").implement({
         "tier lists they created — the owner's pin rank. Null when it is on " +
         "none of theirs; never another person's band.",
     }),
-    photo: t.field({
+    photo: t.loadable({
       type: FileType,
       nullable: true,
+      // The SDL text is F-82's, kept byte-for-byte so the checked-in
+      // `packages/schema/schema.graphql` (not this stream's) stays in step;
+      // its rewording is a hand-off. What it no longer says: H-135 below.
       description:
         "F-82: the place's first mirrored Google photo. One actor call per " +
         "marker that selects it, so ask for `photo { url }` only on the pins " +
         "or rows you draw a photo for.",
-      resolve: (place, _args, context) =>
-        place.photoFileId === null || place.photoFileId === undefined
+      // H-135: only a place on the viewer's own tier lists (`myBand` set)
+      // gets a photo — the owner's ranked pins, the only ones that draw one.
+      // A box holds hundreds of markers, so every other one is null with no
+      // FileActor read (nor the presign its `url` would cost), and the ranked
+      // ones are read in one loader batch per request, each file once.
+      resolve: (place) =>
+        place.myBand === null || place.myBand === undefined
           ? null
-          : context.actor(FileActorDescriptor, place.photoFileId).get(),
+          : (place.photoFileId ?? null),
+      load: (
+        fileIds: string[],
+        context: ApiContext,
+      ): Promise<(FileDto | Error)[]> =>
+        Promise.all(
+          fileIds.map((fileId) =>
+            context
+              .actor(FileActorDescriptor, fileId)
+              .get()
+              .catch((cause: unknown) =>
+                cause instanceof Error ? cause : new Error(String(cause)),
+              ),
+          ),
+        ),
     }),
   }),
 });
