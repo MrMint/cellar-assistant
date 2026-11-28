@@ -10,7 +10,6 @@ import { darkValues, light } from "@/lib/tokens";
 import {
   parseThemeChoice,
   readThemeChoice,
-  resolveTheme,
   THEME_COLOR,
   THEME_SCRIPT,
   type ThemeChoice,

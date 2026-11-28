@@ -37,6 +37,14 @@ mock.module("next/navigation", () => ({
   useSearchParams: () => new URLSearchParams(),
 }));
 
+type Notice = { message: string; undo?: () => void; actionLabel?: string };
+let notices: Notice[] = [];
+mock.module("@/components/app/notify", () => ({
+  notify: (message: string, options: Omit<Notice, "message"> = {}) => {
+    notices.push({ message, ...options });
+  },
+}));
+
 const { act } = await import("react");
 const { createRoot } = await import("react-dom/client");
 const { Client, Provider, fetchExchange } = await import("urql");
@@ -52,6 +60,8 @@ let root: ReturnType<typeof createRoot>;
 beforeEach(() => {
   calls = [];
   bodies = [];
+  notices = [];
+  failLogs = 0;
   window.sessionStorage.clear();
   container = document.createElement("div");
   document.body.appendChild(container);
@@ -64,11 +74,17 @@ afterEach(async () => {
 });
 
 let bodies: { query: string; variables: Record<string, unknown> }[] = [];
+/** How many logDrink calls fail (the response is lost) before one lands. */
+let failLogs = 0;
 
 /** Answers every operation as a successful log, and keeps what was sent. */
 const capturingFetch = async (_url: unknown, init?: RequestInit) => {
   const body = JSON.parse(String(init?.body));
   bodies.push(body);
+  if (failLogs > 0) {
+    failLogs -= 1;
+    throw new TypeError("Failed to fetch");
+  }
   return new Response(
     JSON.stringify({
       data: {
@@ -219,6 +235,21 @@ describe("Make mode (L08)", () => {
     const input = bodies[0]?.variables.input as Record<string, unknown>;
     assert.deepEqual(input, { recipeId: "r1" });
     assert.match(container.textContent ?? "", /Made it/);
+    assert.ok(document.querySelector('[data-slot="made-it"]'));
+  });
+
+  test("Try again re-sends the same log id, so a lost response logs once (F-119)", async () => {
+    failLogs = 1;
+    await render([]);
+    await click("Made it");
+    const failed = notices.find((n) => n.actionLabel === "Try again");
+    assert.ok(failed, "the failure offers Try again");
+    await act(async () => {
+      failed.undo?.();
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    });
+    assert.equal(bodies.length, 2);
+    assert.equal(bodies[1]?.variables.id, bodies[0]?.variables.id);
     assert.ok(document.querySelector('[data-slot="made-it"]'));
   });
 });
