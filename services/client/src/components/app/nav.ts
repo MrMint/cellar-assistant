@@ -33,8 +33,8 @@ export type Tab = {
   /** The desktop rail's key, shown in its tooltip ("G C", "/"). */
   keys: string;
   /**
-   * Path prefixes that light this tab, beyond `href` itself: recipes and
-   * brands light Cellars, places light Map, rankings light Lists, and the Me
+   * Path prefixes that light this tab, beyond `href` itself: brands light
+   * Cellars (recipes light More), places light Map, rankings light Lists, and the Me
    * hub's own pages (loved, want to try, friends, taste profile) light Me.
    */
   also: readonly string[];
@@ -54,7 +54,8 @@ export const TABS: readonly Tab[] = [
     href: "/cellars",
     icon: Cellar,
     keys: "G C",
-    also: ["/recipes", "/brands"],
+    // Not /recipes: the Recipes boards light only More there (F-171).
+    also: ["/brands"],
   },
   {
     key: "search",

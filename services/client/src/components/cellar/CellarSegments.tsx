@@ -4,10 +4,10 @@ import { cn } from "@/lib/utils";
 export type CellarSegment = "cellars" | "bar";
 
 /**
- * The Cellar tab's two halves (D1): your **Cellars**, and the **Bar** —
- * recipes, which used to be a destination of their own and are now reached
- * from here (and from the Recipes section of search). The tab lights for
- * both (`nav.ts`).
+ * The Cellar tab's switch (D1), as the Cellars boards draw it: your
+ * **Cellars**, and **Your bar** — recipes, reached from here (and from the
+ * Recipes section of search). A door one way: the Recipes boards draw no
+ * switch, and light More there, not Cellars (FR-5 amended, F-139, F-171).
  *
  * Links, not a `SegmentedControl`: each segment is a page with its own URL,
  * Back and deep link, so it is navigation (`aria-current`), not a radio
@@ -23,7 +23,7 @@ export const CELLAR_SEGMENTS: readonly {
   href: string;
 }[] = [
   { key: "cellars", label: "Cellars", href: "/cellars" },
-  { key: "bar", label: "Bar", href: "/recipes" },
+  { key: "bar", label: "Your bar", href: "/recipes" },
 ];
 
 export function CellarSegments({
@@ -35,7 +35,7 @@ export function CellarSegments({
 }) {
   return (
     <nav
-      aria-label="Cellar"
+      aria-label="Cellars or Your bar"
       data-slot="cellar-segments"
       className={cn(
         "flex w-full items-stretch gap-0.5 rounded-md bg-surface-2 p-0.5 sm:max-w-80",
