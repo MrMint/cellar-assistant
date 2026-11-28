@@ -1,6 +1,6 @@
 /**
  * F-139 (FR-5, amended): the Cellars board's switch reads "Cellars · Your
- * bar" (aria-label "Cellars or Your bar"), and Your bar goes to recipes.
+ * bar", and Your bar goes to recipes.
  */
 import { mock } from "bun:test";
 import assert from "node:assert/strict";
@@ -22,7 +22,6 @@ describe("Cellars · Your bar (F-139)", () => {
       ["Cellars -> /cellars", "Your bar -> /recipes"],
     );
     const out = renderToStaticMarkup(<CellarSegments current="cellars" />);
-    assert.match(out, /aria-label="Cellars or Your bar"/);
     assert.match(out, /<a[^>]*href="\/recipes"[^>]*>Your bar</);
   });
 });

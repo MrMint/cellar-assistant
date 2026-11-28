@@ -35,7 +35,7 @@ export function CellarSegments({
 }) {
   return (
     <nav
-      aria-label="Cellars or Your bar"
+      aria-label="Cellar"
       data-slot="cellar-segments"
       className={cn(
         "flex w-full items-stretch gap-0.5 rounded-md bg-surface-2 p-0.5 sm:max-w-80",

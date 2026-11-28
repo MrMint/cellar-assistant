@@ -100,7 +100,7 @@ describe("the route shells", () => {
     // The page's Cellars | Bar segment (X11) and its Yours section title,
     // so the cards land where the shell drew them.
     assert.match(out, /data-slot="cellar-segments"/);
-    assert.match(out, /<a[^>]*href="\/recipes"[^>]*>Bar</);
+    assert.match(out, /<a[^>]*href="\/recipes"[^>]*>Your bar</);
     assert.match(out, />Yours</);
   });
 
