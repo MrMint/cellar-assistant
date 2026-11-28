@@ -150,7 +150,7 @@ export function FinishOneSheet({
               <option value="">Choose</option>
               {styleOptions.map((option) => (
                 <option key={option.value} value={option.value}>
-                  {humanizeReferenceValue(option.value)}
+                  {spec.style.words(option.value)}
                 </option>
               ))}
             </select>

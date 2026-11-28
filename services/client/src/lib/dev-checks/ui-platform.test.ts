@@ -255,8 +255,8 @@ describe("the kit's style rules, on the stylesheet", () => {
       /\[data-theme="light"\]\s*\{[^}]*--ca-accent:\s*#5f949b;/,
     );
   });
-  test("brass is a shim onto gold until its last use goes (L27)", () => {
-    assert.match(css, /--color-brass:\s*var\(--ca-gold\)/);
+  test("the brass shim is gone", () => {
+    assert.doesNotMatch(css, /--color-(on-)?brass/);
   });
   test("Inter only", () => {
     assert.doesNotMatch(css, /fraunces/i);

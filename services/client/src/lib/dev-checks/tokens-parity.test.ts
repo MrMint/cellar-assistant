@@ -150,10 +150,10 @@ describe("tokens: globals.css ⇄ lib/tokens.ts", () => {
     assert.equal(darkValues, color, "images that leave the app are dark");
   });
 
-  test("action is teal through --ca-accent; brass is a shim onto gold (L27)", () => {
+  test("action is teal through --ca-accent", () => {
     assert.match(css, /--color-primary:\s*var\(--ca-accent\)/);
     assert.match(css, /--color-primary-foreground:\s*var\(--ca-on-accent\)/);
-    assert.match(css, /--color-brass:\s*var\(--ca-gold\)/);
+    assert.doesNotMatch(css, /--color-(on-)?brass/);
     assert.match(css, /--color-ring:\s*var\(--ca-act-ink\)/);
     // shadcn's `accent` is a surface, not the action colour.
     assert.match(css, /--color-accent:\s*var\(--ca-surface-3\)/);
@@ -363,8 +363,8 @@ describe("every type-*, font-display, *-brass and t-* class in use resolves", ()
 
   test("an unknown class is reported, so the check can fail", async () => {
     const compiler = await compileGlobals();
-    const out = compiler.build(["type-nonexistent", "bg-brass"]);
+    const out = compiler.build(["type-nonexistent", "bg-brand"]);
     assert.ok(!out.includes(selector("type-nonexistent")));
-    assert.ok(out.includes(selector("bg-brass")));
+    assert.ok(out.includes(selector("bg-brand")));
   });
 });

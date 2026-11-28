@@ -35,8 +35,6 @@ const APP_COLORS = [
   "ink-1",
   "ink-2",
   "ink-3",
-  "brass",
-  "on-brass",
   "brand",
   "brand-ink",
   "ai",

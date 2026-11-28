@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { useMutation } from "urql";
+import { useMutation, useQuery } from "urql";
 import { AppBar } from "@/components/app/AppBar";
 import { ICON_STROKE, Lock, PersonAdd } from "@/components/app/icons";
 import { notify } from "@/components/app/notify";
@@ -18,7 +18,9 @@ import {
 } from "@/components/friend/friend-lists";
 import { useUndoableWrite } from "@/components/friend/undoable-write";
 import { Button } from "@/components/ui/button";
+import { mutualFriendsLine } from "./adapter";
 import { ProfileHeader, personCrumbs } from "./ProfileHeader";
+import { MutualFriendsQuery } from "./queries";
 
 export type LockedPerson = {
   readonly userId: string;
@@ -42,6 +44,11 @@ export function LockedProfile({ person }: { person: LockedPerson }) {
   const [sendState, send] = useMutation(SendFriendRequestMutation);
   const [rejectState, reject] = useMutation(RejectFriendRequestMutation);
   const [acceptState, accept] = useMutation(AcceptFriendRequestMutation);
+  const [mutual] = useQuery({
+    query: MutualFriendsQuery,
+    variables: { userId: person.userId },
+  });
+  const mutualLine = mutualFriendsLine(mutual.data?.mutualFriends ?? null);
   const { hold: holdWrite, drop: dropWrite } = useUndoableWrite();
 
   const listedSent = requestWith(outgoing.rows, person.userId);
@@ -128,6 +135,9 @@ export function LockedProfile({ person }: { person: LockedPerson }) {
       <AppBar parent="/friends" breadcrumbs={personCrumbs(person.name)} />
       <div data-slot="locked-profile" className="flex flex-col gap-10">
         <ProfileHeader name={person.name} avatarUrl={person.avatarUrl} />
+        {mutualLine !== null && (
+          <p className="t-cap -mt-8 text-center text-ink-2">{mutualLine}</p>
+        )}
         <div className="flex flex-col items-center gap-3 text-center">
           <Lock
             aria-hidden
