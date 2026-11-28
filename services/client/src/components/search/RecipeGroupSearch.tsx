@@ -1,10 +1,7 @@
 "use client";
 
-import {
-  BASE_SPIRIT_KINDS,
-  barKindLabel,
-} from "@cellar-assistant/contracts/bar";
 import { type ReactNode, useCallback, useState } from "react";
+import { useQuery } from "urql";
 import { EmptyState } from "@/components/app/EmptyState";
 import { FilterChip } from "@/components/app/FilterChip";
 import { Check, ChevronDown, NoResults } from "@/components/app/icons";
@@ -29,6 +26,11 @@ import { feedback } from "@/lib/feedback";
 import { pageOf } from "@/lib/paging/paged-connection";
 import { usePagedConnection } from "@/lib/paging/use-paged-connection";
 import { cn } from "@/lib/utils";
+import {
+  RECIPE_SPIRIT_COUNTS_SIZE,
+  RecipeBaseSpiritCountsQuery,
+  spiritChips,
+} from "./recipe-spirit-chips";
 
 /**
  * The SDL's `RecipeCategory`, in the old Select's style. The old Select offered
@@ -105,18 +107,12 @@ export type RecipeGroupSearchProps = {
  * hook dropped it) and every category (it hard-coded `cocktail`). The term
  * is G26: the old box's name / description / version-name substring.
  *
- * Spirit options are the bar vocabulary's spirits (`BASE_SPIRIT_KINDS`, X14):
- * `recipe_groups.base_spirit` holds a bar kind ("rye", "gin") — what the
- * recipe-photo job and `backfill-recipes` write — and the filter matches it
- * (a "Whiskey" filter includes bourbon, rye, Scotch and Irish). The
- * `referenceData(SPIRIT_TYPE)` names this used to offer ("GIN", "BOURBON")
- * are a bottle's type, and never matched a stored value.
+ * Spirit chips are the kinds the groups hold (F-114, H-87):
+ * `recipeBaseSpiritCounts` under the same category and term, each with its
+ * count — a bar kind ("rye", "gin"), what `recipe_groups.base_spirit` holds
+ * and the filter matches (a "Whiskey" chip counts bourbon, rye, Scotch and
+ * Irish). Never the whole vocabulary: a kind no recipe has is no chip.
  */
-const SPIRIT_OPTIONS = BASE_SPIRIT_KINDS.map((kind) => ({
-  value: kind,
-  label: barKindLabel(kind) ?? kind,
-}));
-
 export const RecipeGroupSearch = ({
   initialQuery = "",
   onRecipeGroupSelect,
@@ -203,6 +199,22 @@ export const RecipeGroupSearch = ({
     search(DEFAULT_FILTERS);
   }, [search]);
 
+  const [counts] = useQuery({
+    query: RecipeBaseSpiritCountsQuery,
+    variables: {
+      first: RECIPE_SPIRIT_COUNTS_SIZE,
+      category: filters.category === "all" ? null : filters.category,
+      term: filters.searchTerm.trim() === "" ? null : filters.searchTerm.trim(),
+    },
+  });
+  const countsConnection = counts.data?.recipeBaseSpiritCounts;
+  const spirits = spiritChips(
+    countsConnection?.__typename === "RecipeBaseSpiritCountConnection"
+      ? countsConnection.edges
+      : [],
+    filters.baseSpirit,
+  );
+
   const results = list.rows;
   const isLoading = list.status !== "idle";
   const hasMore = list.hasNextPage;
@@ -254,10 +266,11 @@ export const RecipeGroupSearch = ({
               <ChevronDown aria-hidden className="size-4" />
             </span>
           </FilterChip>
-          {SPIRIT_OPTIONS.map((option) => (
+          {spirits.map((option) => (
             <FilterChip
               key={option.value}
               selected={filters.baseSpirit === option.value}
+              count={option.count}
               onClick={() =>
                 handleUpdateFilters({
                   baseSpirit:

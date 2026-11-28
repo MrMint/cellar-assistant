@@ -285,13 +285,14 @@ describe("RecipeGroupSearch (Recipes-Browse)", () => {
     />,
   );
 
-  test("the search field, All recipes, the kind chip and spirit chips", () => {
+  // The spirit chips come from `recipeBaseSpiritCounts` (F-114), which this
+  // client never answers: `search/recipe-spirit-chips-markup.test.tsx` has them.
+  test("the search field, All recipes and the kind chip", () => {
     assert.match(html, /placeholder="Search recipes"/);
     assert.doesNotMatch(html, /[Rr]ecipe [Gg]roups/);
     assert.match(html, />All recipes</);
     assert.match(html, /data-slot="filter-chip"[^>]*aria-haspopup="dialog"/);
     assert.match(stripTags(html), /All kinds/);
-    assert.match(html, />Gin</);
     // With no term, the index's own sections sit under the field.
     assert.match(html, /<p>Between<\/p>/);
   });
