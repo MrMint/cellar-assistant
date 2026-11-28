@@ -10,12 +10,15 @@
  *   with the same score and note.
  * - Check in: only your own bottle that is not finished; Undo removes
  *   exactly the entry the check-in minted.
+ * - Save the edit form (F-162, H-128): `confirmedFields` names, in the
+ *   server's own words, only the guesses the person settled.
  */
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import {
   canRemoveMyRating,
   checkInBottle,
+  confirmedFields,
   moveBottle,
   moveTargets,
   removeMyRating,
@@ -273,5 +276,25 @@ describe("checkInBottle", () => {
       false,
     );
     assert.equal(calls.length, 0);
+  });
+});
+
+describe("confirmedFields (F-162, H-128)", () => {
+  test("names the guesses settled in the form, in the server's own words", () => {
+    assert.deepEqual(
+      confirmedFields(
+        ["name", "brandName", "alcohol_content_percentage", "region"],
+        new Set(["attributes.alcoholContentPercentage", "brandName"]),
+      ),
+      ["brandName", "alcohol_content_percentage"],
+    );
+  });
+
+  test("nothing settled, or a settled field that was never a guess, sends none", () => {
+    assert.deepEqual(confirmedFields(["name"], new Set()), []);
+    assert.deepEqual(
+      confirmedFields(["name"], new Set(["attributes.region"])),
+      [],
+    );
   });
 });

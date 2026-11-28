@@ -595,11 +595,25 @@ export const ConfirmItemOnboardingMutation = graphql(
 // Mutations — the item itself
 // ---------------------------------------------------------------------------
 
-/** Creator only. Enrichment updates arrive as `system` and never through here. */
+/**
+ * Creator only. Enrichment updates arrive as `system` and never through here.
+ * `$confirmedFields` (F-75, F-162): the label-read guesses the person settled
+ * in the form, so `Item.unconfirmedFields` stops naming them.
+ */
 export const UpdateItemMutation = graphql(
   `
-  mutation UpdateItem($itemId: ID!, $type: ItemType!, $input: UpdateItemInput!) {
-    updateItem(itemId: $itemId, type: $type, input: $input) {
+  mutation UpdateItem(
+    $itemId: ID!
+    $type: ItemType!
+    $input: UpdateItemInput!
+    $confirmedFields: [String!]
+  ) {
+    updateItem(
+      itemId: $itemId
+      type: $type
+      input: $input
+      confirmedFields: $confirmedFields
+    ) {
       __typename
       ... on MutationUpdateItemSuccess {
         data {

@@ -2,46 +2,23 @@ import { ActorErrorFieldsFragment } from "@/lib/api/errors";
 import { graphql } from "@/lib/api/graphql";
 
 /**
- * F-154, Cellars-Pour "Friends' ratings": the reads behind the sheet.
+ * F-154, Cellars-Pour "Friends' ratings": the read behind the sheet.
  *
- * The API has no "friends' reviews of this item" field: `Item.friendsScore`
- * is an average and a count, and `ItemReview.user` says nothing of
- * friendship. So the sheet joins two reads it already has, each at its
- * 100-row cap: your friends (`myFriends`) and the item's reviews. A friend
- * whose review falls past the first 100 is not listed (the server hand-off:
- * an `Item.friendsReviews` connection would make this one read).
+ * `Item.friendsReviews` (B15C, H-127) is the reviews `friendsScore`
+ * averages: one per friend, their newest, the friend set resolved on the
+ * server from your own `friends` rows. So the sheet and the number beside it
+ * agree, and a non-friend's review is never read at all.
  */
-export const ItemFriendsRatingsFriendsQuery = graphql(
+export const ItemFriendsRatingsQuery = graphql(
   `
-  query ItemFriendsRatingsFriends {
-    myFriends(first: 100) {
-      __typename
-      ... on FriendConnection {
-        edges {
-          node {
-            user {
-              id
-            }
-          }
-        }
-      }
-      ...ActorErrorFields
-    }
-  }
-`,
-  [ActorErrorFieldsFragment],
-);
-
-export const ItemFriendsRatingsReviewsQuery = graphql(
-  `
-  query ItemFriendsRatingsReviews($itemId: ID!, $type: ItemType!) {
+  query ItemFriendsRatings($itemId: ID!, $type: ItemType!) {
     item(id: $itemId, type: $type) {
       __typename
       ... on QueryItemSuccess {
         data {
           __typename
           id
-          reviews(first: 100) {
+          friendsReviews(first: 100) {
             edges {
               node {
                 __typename
@@ -85,13 +62,12 @@ export type FriendRatingRow = {
   readonly href: string;
 };
 
-/** Your friends' reviews among `reviews`, best score first, then by name. */
+/** Your friends' reviews as rows, best score first, then by name. */
 export function friendRatingRows(
   reviews: readonly FriendReview[],
-  friendIds: ReadonlySet<string>,
 ): FriendRatingRow[] {
   return reviews
-    .filter((review) => friendIds.has(review.userId) && review.user !== null)
+    .filter((review) => review.user !== null)
     .map((review) => ({
       id: review.id,
       name: review.user?.displayName ?? "",

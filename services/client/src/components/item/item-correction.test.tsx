@@ -330,6 +330,48 @@ describe('"Check this" on the label read’s guesses (C3, CROSS-LOT)', () => {
     );
   });
 
+  test("Save sends the guesses settled here as confirmedFields, in the server's words (F-162, H-128)", async () => {
+    const { client, sent } = clientAnswering({
+      UpdateItem: {
+        updateItem: {
+          __typename: "MutationUpdateItemSuccess",
+          data: { __typename: "Beer", id: "b1" },
+        },
+      },
+    });
+    // A beer: no required select, so Save goes through with no options read.
+    await mount(
+      <Provider value={client}>
+        <ItemForm
+          id="b1"
+          type="BEER"
+          defaultValues={{
+            name: "Pliny",
+            description: "",
+            country: "",
+            attributes: { alcoholContentPercentage: "8" },
+          }}
+          onSavedHref="/beers/b1"
+          unconfirmed={["alcohol_content_percentage", "name", "country"]}
+        />
+      </Provider>,
+    );
+    await click(button("Alcohol Content looks right"));
+    await typeInto(
+      document.querySelector<HTMLInputElement>('input[name="name"]'),
+      "Pliny the Elder",
+    );
+    await click(button("Save"));
+    await flush(30);
+    const update = sent.find((op) => op.operationName === "UpdateItem");
+    assert.ok(update, "no updateItem sent");
+    assert.deepEqual(
+      [...((update.variables.confirmedFields as string[]) ?? [])].sort(),
+      ["alcohol_content_percentage", "name"],
+      "country was never touched, so it is not sent",
+    );
+  });
+
   test("nothing to check: no marks and no counter", async () => {
     const { client } = clientAnswering({});
     await mount(checkForm(client, []));

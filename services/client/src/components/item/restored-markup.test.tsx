@@ -204,6 +204,23 @@ describe("ItemPageView (X09: one item page)", () => {
     );
   });
 
+  test("taste header: the date you rated it under Your rating (F-151, H-130)", () => {
+    const rated = page({
+      item: {
+        ...tea,
+        myReview: {
+          id: "r",
+          score: 4.5,
+          text: null,
+          ratedAt: "2026-11-03T12:00:00Z",
+        },
+      },
+    });
+    const from = rated.indexOf('data-testid="taste-header"');
+    const you = rated.slice(from, rated.indexOf("</a>", from));
+    assert.match(you, /Your rating.*<time dateTime="2026-11-03T12:00:00Z">/s);
+  });
+
   test("fact sheet: every recorded attribute as a row, then the notes", () => {
     const facts = html.slice(html.indexOf('data-testid="item-facts"'));
     assert.match(facts, /<dt[^>]*>Organic<\/dt><dd[^>]*>Yes<\/dd>/);

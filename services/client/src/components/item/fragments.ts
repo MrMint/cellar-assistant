@@ -253,6 +253,7 @@ export const ItemPageBottlesFragment = graphql(`
           openAt
           emptyAt
           percentageRemaining
+          levelBeforeEmpty
           createdAt
           cellar {
             __typename

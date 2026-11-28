@@ -11,8 +11,7 @@ import { feedback } from "@/lib/feedback";
 import {
   type FriendReview,
   friendRatingRows,
-  ItemFriendsRatingsFriendsQuery,
-  ItemFriendsRatingsReviewsQuery,
+  ItemFriendsRatingsQuery,
 } from "./friends-ratings";
 
 /**
@@ -76,37 +75,23 @@ function FriendsRatingsSheet({
   itemId: string;
   itemType: ApiItemType;
 }) {
-  const [friends] = useQuery({
-    query: ItemFriendsRatingsFriendsQuery,
-    pause: !open,
-  });
   const [reviews] = useQuery({
-    query: ItemFriendsRatingsReviewsQuery,
+    query: ItemFriendsRatingsQuery,
     variables: { itemId, type: itemType },
     pause: !open,
   });
 
   const rows = useMemo(() => {
-    const myFriends = friends.data?.myFriends;
     const item = reviews.data?.item;
-    if (
-      myFriends?.__typename !== "FriendConnection" ||
-      item?.__typename !== "QueryItemSuccess"
-    ) {
-      return null;
-    }
-    const ids = new Set(myFriends.edges.map((edge) => edge.node.user.id));
-    const list: FriendReview[] = item.data.reviews.edges.map(
+    if (item?.__typename !== "QueryItemSuccess") return null;
+    const list: FriendReview[] = item.data.friendsReviews.edges.map(
       (edge) => edge.node,
     );
-    return friendRatingRows(list, ids);
-  }, [friends.data, reviews.data]);
+    return friendRatingRows(list);
+  }, [reviews.data]);
 
   const failed =
-    friends.error !== undefined ||
     reviews.error !== undefined ||
-    (friends.data !== undefined &&
-      friends.data.myFriends.__typename !== "FriendConnection") ||
     (reviews.data !== undefined &&
       reviews.data.item.__typename !== "QueryItemSuccess");
 

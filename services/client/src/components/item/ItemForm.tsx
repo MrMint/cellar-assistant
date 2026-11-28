@@ -53,6 +53,7 @@ import {
   yearFromDate,
 } from "./itemFormLayout";
 import { LoadingButton } from "./LoadingButton";
+import { confirmedFields } from "./parts/item-writes";
 
 export type ItemFormValues = {
   name: string;
@@ -408,9 +409,16 @@ export const ItemForm = ({
       return;
     }
 
+    // F-162: the guesses settled here ("Looks right", or edited), so the
+    // page stops asking about them.
+    const confirmed = confirmedFields(
+      unconfirmed ?? [],
+      new Set([...Array.from(settled), ...edited]),
+    );
     const response = await updateItem({
       itemId: id,
       type,
+      ...(confirmed.length === 0 ? {} : { confirmedFields: confirmed }),
       input: {
         name: values.name.trim() === "" ? null : values.name.trim(),
         description:

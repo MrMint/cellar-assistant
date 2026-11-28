@@ -247,16 +247,28 @@ describe("Put back (after the Undo toast is gone)", () => {
     assert.equal(finishReducer(finished, { type: "RESTORED" }), finished);
   });
 
-  test("a finished bottle (saved at 0) comes back full and stays opened", () => {
+  test("a finished bottle (saved at 0) comes back at the level the server kept (H-125)", () => {
+    assert.deepEqual(restoreFinishedInput(0, 40), {
+      emptyAt: null,
+      percentageRemaining: 40,
+    });
+    // A level the read still carries is put back as it is.
+    assert.deepEqual(restoreFinishedInput(40, null), {
+      emptyAt: null,
+      percentageRemaining: 40,
+    });
+    assert.equal("openAt" in restoreFinishedInput(0, 40), false);
+  });
+
+  test("a bottle with no kept level (finished from 0, or before the server kept one) comes back full", () => {
+    assert.deepEqual(restoreFinishedInput(0, null), {
+      emptyAt: null,
+      percentageRemaining: 100,
+    });
     assert.deepEqual(restoreFinishedInput(0), {
       emptyAt: null,
       percentageRemaining: 100,
     });
-    assert.deepEqual(restoreFinishedInput(40), {
-      emptyAt: null,
-      percentageRemaining: 40,
-    });
-    assert.equal("openAt" in restoreFinishedInput(0), false);
   });
 
   test("performRestore: updateCellarItem, RESTORED, then a refresh", async () => {
@@ -274,8 +286,8 @@ describe("Put back (after the Undo toast is gone)", () => {
         refreshes += 1;
       },
     });
-    await performRestore(deps({ ok: true }), 0);
-    assert.deepEqual(calls, ['{"emptyAt":null,"percentageRemaining":100}']);
+    await performRestore(deps({ ok: true }), 0, 55);
+    assert.deepEqual(calls, ['{"emptyAt":null,"percentageRemaining":55}']);
     assert.deepEqual(events, [{ type: "RESTORED" }]);
     assert.equal(refreshes, 1);
     await performRestore(deps({ ok: false, message: "gone" }), 0);

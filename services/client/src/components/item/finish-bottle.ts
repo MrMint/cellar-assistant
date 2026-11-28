@@ -150,16 +150,20 @@ export const undoFinishInput = (
 /**
  * `UpdateCellarItemInput` for "Put back". The board puts it back at the level
  * it had before it was finished, else full. `emptyCellarItem` saves the level
- * as 0 today, so the level before it is gone and the bottle comes back full
- * (F-150's server hand-off: keep the old level through a finish); a level the
- * read still carries is put back as it is. Its `openAt` stays: whether it was
- * opened before finishing is not recorded.
+ * as 0 and keeps the one before it (`CellarItem.levelBeforeEmpty`, F-150,
+ * H-125), so a bottle the read shows at 0 comes back at that kept level, or
+ * full when nothing was kept (finished from 0, or before the server kept
+ * one); a level the read still carries is put back as it is. The level is
+ * always named: the server leaves an unnamed one at 0. Its `openAt` stays:
+ * whether it was opened before finishing is not recorded.
  */
 export const restoreFinishedInput = (
   percentageRemaining: number,
+  levelBeforeEmpty?: number | null,
 ): { emptyAt: null; percentageRemaining: number } => ({
   emptyAt: null,
-  percentageRemaining: percentageRemaining > 0 ? percentageRemaining : 100,
+  percentageRemaining:
+    percentageRemaining > 0 ? percentageRemaining : (levelBeforeEmpty ?? 100),
 });
 
 /** A write's outcome, as the commands need it. */
@@ -208,8 +212,11 @@ export async function performUndo(
 export async function performRestore(
   deps: FinishDeps,
   percentageRemaining: number,
+  levelBeforeEmpty?: number | null,
 ): Promise<void> {
-  const outcome = await deps.update(restoreFinishedInput(percentageRemaining));
+  const outcome = await deps.update(
+    restoreFinishedInput(percentageRemaining, levelBeforeEmpty),
+  );
   if (!outcome.ok) {
     deps.dispatch({ type: "FAILED", message: outcome.message });
     return;
