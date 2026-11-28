@@ -3169,6 +3169,10 @@ export const graphcacheSchema: MinifiedIntrospection = {
         name: "Friend",
         fields: [
           {
+            name: "latestActivity",
+            type: { kind: "OBJECT", name: "ActivityEntry" },
+          },
+          {
             name: "since",
             type: {
               kind: "NON_NULL",
@@ -6095,6 +6099,18 @@ export const graphcacheSchema: MinifiedIntrospection = {
       },
       {
         kind: "OBJECT",
+        name: "MutualFriends",
+        fields: [
+          {
+            name: "count",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
+          { name: "first", type: { kind: "OBJECT", name: "UserProfile" } },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
         name: "NearbyPlace",
         fields: [
           {
@@ -7401,6 +7417,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
             },
           },
           {
+            name: "mutualFriends",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "MutualFriends" },
+            },
+          },
+          {
             name: "myAiQuota",
             type: {
               kind: "NON_NULL",
@@ -7525,6 +7548,16 @@ export const graphcacheSchema: MinifiedIntrospection = {
             type: {
               kind: "NON_NULL",
               ofType: { kind: "UNION", name: "QueryRecipeResult" },
+            },
+          },
+          {
+            name: "recipeBaseSpiritCounts",
+            type: {
+              kind: "NON_NULL",
+              ofType: {
+                kind: "UNION",
+                name: "QueryRecipeBaseSpiritCountsResult",
+              },
             },
           },
           {
@@ -8107,6 +8140,18 @@ export const graphcacheSchema: MinifiedIntrospection = {
       },
       {
         kind: "UNION",
+        name: "QueryRecipeBaseSpiritCountsResult",
+        possibleTypes: [
+          { kind: "OBJECT", name: "BudgetExceededError" },
+          { kind: "OBJECT", name: "ConflictError" },
+          { kind: "OBJECT", name: "ForbiddenError" },
+          { kind: "OBJECT", name: "NotFoundError" },
+          { kind: "OBJECT", name: "RecipeBaseSpiritCountConnection" },
+          { kind: "OBJECT", name: "ValidationError" },
+        ],
+      },
+      {
+        kind: "UNION",
         name: "QueryRecipeGroupResult",
         possibleTypes: [
           { kind: "OBJECT", name: "BudgetExceededError" },
@@ -8629,6 +8674,77 @@ export const graphcacheSchema: MinifiedIntrospection = {
           {
             name: "version",
             type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
+          {
+            name: "viewerLogCount",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "RecipeBaseSpiritCount",
+        fields: [
+          {
+            name: "baseSpirit",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "String" },
+            },
+          },
+          {
+            name: "count",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "RecipeBaseSpiritCountConnection",
+        fields: [
+          {
+            name: "edges",
+            type: {
+              kind: "NON_NULL",
+              ofType: {
+                kind: "LIST",
+                ofType: {
+                  kind: "NON_NULL",
+                  ofType: { kind: "OBJECT", name: "RecipeBaseSpiritCountEdge" },
+                },
+              },
+            },
+          },
+          {
+            name: "pageInfo",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "PageInfo" },
+            },
+          },
+          { name: "totalCount", type: { kind: "SCALAR", name: "Int" } },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "RecipeBaseSpiritCountEdge",
+        fields: [
+          {
+            name: "cursor",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "String" },
+            },
+          },
+          {
+            name: "node",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "RecipeBaseSpiritCount" },
+            },
           },
         ],
         interfaces: [],

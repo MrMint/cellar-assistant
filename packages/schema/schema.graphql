@@ -5942,9 +5942,29 @@ type Query {
   recipe(id: ID!): QueryRecipeResult!
 
   """
-  F-114: `/recipes`' kind chips — every base spirit the groups `recipeGroups(category, term)` lists carry, with its count, most first. Kinds with no visible group are absent. Same visibility as `recipeGroups`: a version you may not see adds nothing.
+  F-114: `/recipes`' kind chips — every base spirit the groups `recipeGroups(category, term)` lists carry, with its count, most first. Kinds with no visible group are absent. Same visibility as `recipeGroups`: a version you may not see adds nothing. A connection (§1.5), though one page holds every kind there is.
   """
-  recipeBaseSpiritCounts(category: RecipeCategory, term: String): [RecipeBaseSpiritCount!]!
+  recipeBaseSpiritCounts(
+    """
+    An `edge.cursor` from a previous page. Opaque and owned by the actor that minted it: cursors are not interchangeable between fields.
+    """
+    after: String
+
+    """**Not supported.** See `last`. Paging is forward-only."""
+    before: String
+    category: RecipeCategory
+
+    """
+    How many edges to return, 1 to 100 inclusive; defaults to 20. Over the cap is a `VALIDATION` error, not a silent clamp.
+    """
+    first: Int
+
+    """
+    **Not supported.** Present because the Relay spec puts it here; passing it is a `VALIDATION` error rather than a silently forward page. Paging is forward-only — use `first`/`after`.
+    """
+    last: Int
+    term: String
+  ): QueryRecipeBaseSpiritCountsResult!
 
   """One recipe group by id, with its versions and their votes."""
   recipeGroup(id: ID!): QueryRecipeGroupResult!
@@ -6213,6 +6233,8 @@ type QueryRecapPeriodsSuccess {
 }
 
 union QueryRecapResult = BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | Recap | ValidationError
+
+union QueryRecipeBaseSpiritCountsResult = BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | RecipeBaseSpiritCountConnection | ValidationError
 
 union QueryRecipeGroupResult = BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | RecipeGroup | ValidationError
 
@@ -6509,6 +6531,19 @@ type RecipeBaseSpiritCount {
   Groups `recipeGroups(baseSpirit:)` would list under the same category and term; a bar kind counts its narrower kinds.
   """
   count: Int!
+}
+
+type RecipeBaseSpiritCountConnection {
+  edges: [RecipeBaseSpiritCountEdge!]!
+  pageInfo: PageInfo!
+
+  """Total rows matching the query, or null when counting is not cheap."""
+  totalCount: Int
+}
+
+type RecipeBaseSpiritCountEdge {
+  cursor: String!
+  node: RecipeBaseSpiritCount!
 }
 
 """The `recipe_category` Postgres enum (`recipe_groups.category`)."""

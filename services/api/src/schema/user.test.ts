@@ -192,9 +192,12 @@ describe("profile picture (SV-D, MC-avatar)", () => {
     });
     const fileCalls = calls.filter((c) => c.actorType === "FileActor");
     expect(fileCalls).toHaveLength(1);
-    expect(
-      [...(fileCalls[0]?.args.at(-1) as { fileIds: string[] }).fileIds].sort(),
-    ).toEqual([pictureOf(BOB), pictureOf(CAROL)].sort());
+    const asked = fileCalls[0]?.args.at(-1) as
+      | { fileIds: string[] }
+      | undefined;
+    expect([...(asked?.fileIds ?? [])].sort()).toEqual(
+      [pictureOf(BOB), pictureOf(CAROL)].sort(),
+    );
   });
 
   it("falls back to user.image with no picture, when the batch signs none, and when it fails", async () => {

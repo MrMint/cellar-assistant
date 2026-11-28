@@ -1240,18 +1240,26 @@ const RecipeBaseSpiritCountType = builder
     }),
   });
 
+const RecipeBaseSpiritCountConnection = builder.connectionObject(
+  { type: RecipeBaseSpiritCountType, name: "RecipeBaseSpiritCountConnection" },
+  { name: "RecipeBaseSpiritCountEdge" },
+);
+
 builder.queryField("recipeBaseSpiritCounts", (t) =>
   t.field({
-    type: [RecipeBaseSpiritCountType],
+    type: RecipeBaseSpiritCountConnection,
     description:
       "F-114: `/recipes`' kind chips — every base spirit the groups " +
       "`recipeGroups(category, term)` lists carry, with its count, most " +
       "first. Kinds with no visible group are absent. Same visibility as " +
-      "`recipeGroups`: a version you may not see adds nothing.",
+      "`recipeGroups`: a version you may not see adds nothing. A " +
+      "connection (§1.5), though one page holds every kind there is.",
     args: {
+      ...t.arg.connectionArgs(),
       category: t.arg({ type: RecipeCategoryEnum, required: false }),
       term: t.arg.string({ required: false }),
     },
+    errors: {},
     resolve: async (_root, args, context) => {
       // The unfiltered list's filter, so the count shares its activation.
       const filter = {
@@ -1260,12 +1268,13 @@ builder.queryField("recipeBaseSpiritCounts", (t) =>
         term: normalizeRecipeGroupTerm(args.term),
         orderBy: DEFAULT_RECIPE_GROUP_ORDER,
       };
-      return await context
+      const counts = await context
         .actor(
           RecipeGroupsCollectionActorDescriptor,
           recipeGroupsCollectionActorId(filter),
         )
         .baseSpiritCounts(filter);
+      return connectionFromPage(offsetPage(counts, toPageArgs(args)));
     },
   }),
 );

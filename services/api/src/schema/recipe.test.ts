@@ -142,15 +142,18 @@ describe("recipeBaseSpiritCounts (F-114)", () => {
       ],
     });
     const result = await run(
-      `{ recipeBaseSpiritCounts(category: cocktail, term: " sour ") {
-           baseSpirit count } }`,
+      `{ recipeBaseSpiritCounts(first: 50, category: cocktail, term: " sour ") {
+           ... on RecipeBaseSpiritCountConnection {
+             edges { node { baseSpirit count } } } } }`,
       testContext(invoke, viewer),
     );
     expect(result.errors).toBeUndefined();
-    expect(result.data?.recipeBaseSpiritCounts).toEqual([
-      { baseSpirit: "gin", count: 4 },
-      { baseSpirit: "whiskey", count: 2 },
-    ]);
+    expect(result.data?.recipeBaseSpiritCounts).toEqual({
+      edges: [
+        { node: { baseSpirit: "gin", count: 4 } },
+        { node: { baseSpirit: "whiskey", count: 2 } },
+      ],
+    });
     const filter = {
       category: "cocktail",
       baseSpirit: null,

@@ -138,8 +138,9 @@ describe("every paging root field degrades per field (A7e)", () => {
    * X15 made it twenty-two: `myRecipes`, the viewer's own recipes and drafts.
    * SV-B made it twenty-three: `needsDetails`, the viewer's unfinished drafts.
    * SV-A made it twenty-four: `myAiQuota`, the viewer's own AI allowance.
+   * F-114 made it twenty-five: `recipeBaseSpiritCounts`, the kind chips.
    */
-  it("has twenty-four of them", () => {
+  it("has twenty-five of them", () => {
     const queryType = schema.getQueryType();
     const paging = Object.values(queryType?.getFields() ?? {}).filter(
       (field) => {
@@ -147,7 +148,7 @@ describe("every paging root field degrades per field (A7e)", () => {
         return CONNECTION_ARGS.every((argument) => args.has(argument));
       },
     );
-    expect(paging).toHaveLength(24);
+    expect(paging).toHaveLength(25);
   });
 });
 
