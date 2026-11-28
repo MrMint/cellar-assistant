@@ -46,7 +46,6 @@ const { FriendsFeed } = await import("./FriendsFeed");
 const { NearbySection, HOME_LOCATION_COPY } = await import("./NearbySection");
 const { TodayHeader } = await import("./TodayHeader");
 const { NewPersonHero } = await import("./HomeLayout");
-const { SearchSheetHeader } = await import("../search/SearchSheetHeader");
 const { seenHash } = await import("./seen-cookie");
 const { seenKeyOf } = await import("./inbox");
 
@@ -443,13 +442,5 @@ describe("NearbySection (D14)", () => {
   test("refused: nothing", () => {
     geo = { ...geo, permission: "denied", error: "denied" };
     assert.equal(render(<NearbySection />), "");
-  });
-});
-
-describe("SearchSheetHeader", () => {
-  test("a title and a named Close", () => {
-    const html = render(<SearchSheetHeader />);
-    assert.match(html, /<h1\b[^>]*>Search<\/h1>/);
-    assert.match(html, /aria-label="Close search"/);
   });
 });

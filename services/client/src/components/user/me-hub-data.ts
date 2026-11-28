@@ -163,19 +163,20 @@ export const countTiles = (counts: MeCounts | null | undefined): CountTile[] =>
 export const REQUEST_ROWS = 3;
 
 /**
- * A pinned list's band strip is drawn from its entries; past this many the
- * strip would be a sample of the top bands, so it is not drawn at all.
+ * How many entries a pinned list may hold and still draw its band strip.
+ * H-131: the strip reads `bandCounts` (F-85), which counts every entry, so
+ * there is no sample to hide any more and no cap.
  */
-export const BAND_STRIP_MAX = 100;
+export const BAND_STRIP_MAX = Number.POSITIVE_INFINITY;
 
 /**
  * The hub's own extras (Shell-Me), a document of its own because the shell
  * reads `MeHubQuery` on every page for the Me badge: the Loved, Want to try
  * and Friends counts, each pinned list's bands, and the requests drawn as
  * rows. The pages are literals, not variables: a variable `first` is costed
- * at the cap, and 100 lists × 100 entries is past the API's row limit
- * (`avatar.test.ts` runs its rule). 3 = PINNED_TIER_LISTS, 100 =
- * BAND_STRIP_MAX, 3 = REQUEST_ROWS.
+ * at the cap (`avatar.test.ts` runs its rule). 3 = PINNED_TIER_LISTS,
+ * 3 = REQUEST_ROWS. Each list's bands come from `bandCounts` (F-85, H-131),
+ * not a page of its entries.
  */
 export const MeExtrasQuery = graphql(
   `
@@ -202,13 +203,7 @@ export const MeExtrasQuery = graphql(
         edges {
           node {
             id
-            items(first: 100) {
-              edges {
-                node {
-                  band
-                }
-              }
-            }
+            bandCounts
           }
         }
       }
@@ -264,13 +259,12 @@ export const EMPTY_ME_EXTRAS: MeExtras = {
   requests: [],
 };
 
-const bandCounts = (bands: readonly number[]): BandCount[] => {
-  const counts = new Map<number, number>();
-  for (const band of bands) counts.set(band, (counts.get(band) ?? 0) + 1);
-  return Array.from(counts.entries())
-    .sort(([a], [b]) => b - a)
-    .map(([band, count]) => ({ band, count }));
-};
+/** `bandCounts` (indexed by band, bottom first) → the bands held, best first. */
+const bandsOf = (counts: readonly number[]): BandCount[] =>
+  counts
+    .map((count, band) => ({ band, count }))
+    .filter(({ count }) => count > 0)
+    .reverse();
 
 /** The extras' result → the hub's props; any failed part reads as absent. */
 export const meExtrasFromResult = (
@@ -292,10 +286,7 @@ export const meExtrasFromResult = (
     wantToTry: data.me?.wantToTry.totalCount ?? null,
     friends: friends?.totalCount ?? null,
     bands: Object.fromEntries(
-      lists.map(({ node }) => [
-        node.id,
-        bandCounts(node.items.edges.map((edge) => edge.node.band)),
-      ]),
+      lists.map(({ node }) => [node.id, bandsOf(node.bandCounts)]),
     ),
     requests: requests
       .filter(
@@ -308,5 +299,109 @@ export const meExtrasFromResult = (
         displayName: node.user.displayName,
         avatarUrl: node.user.avatarUrl ?? null,
       })),
+  };
+};
+
+/** SDL `PermissionType`: who sees a cellar. */
+export type CellarPrivacy = "PRIVATE" | "FRIENDS" | "PUBLIC";
+
+/**
+ * Settings (Shell-Me 12) beyond this device: the account's default cellar
+ * privacy (FR-21, H-126) and this month's AI and Places use (FR-22, H-132).
+ * `20` is `myAiQuota`'s whole list (one row per AI kind, plus Places).
+ */
+export const SettingsQuery = graphql(
+  `
+  query Settings {
+    me {
+      id
+      settings {
+        defaultCellarPrivacy
+      }
+    }
+    myAiQuota(first: 20) {
+      __typename
+      ... on AiQuotaConnection {
+        edges {
+          node {
+            kind
+            service
+            used
+            limit
+            resetsAt
+          }
+        }
+      }
+      ...ActorErrorFields
+    }
+  }
+`,
+  [ActorErrorFieldsFragment],
+);
+
+/**
+ * "Who sees your cellars" (FR-21): the privacy a NEW cellar gets when it is
+ * made without one. It never changes a cellar that already exists.
+ */
+export const SetDefaultCellarPrivacyMutation = graphql(
+  `
+  mutation SetDefaultCellarPrivacy($privacy: PermissionType!) {
+    setDefaultCellarPrivacy(privacy: $privacy) {
+      __typename
+      ... on UserSettings {
+        defaultCellarPrivacy
+      }
+      ...ActorErrorFields
+    }
+  }
+`,
+  [ActorErrorFieldsFragment],
+);
+
+/** One allowance's use: calls counted of the cap, summed over its rows. */
+export type Use = { used: number; limit: number };
+
+export type SettingsData = {
+  /** Null until read (or when the read failed): the row shows no value. */
+  defaultCellarPrivacy: CellarPrivacy | null;
+  /** FR-22: AI use and Places use side by side; null where there is no row. */
+  usage: { ai: Use | null; places: Use | null };
+};
+
+export const EMPTY_SETTINGS: SettingsData = {
+  defaultCellarPrivacy: null,
+  usage: { ai: null, places: null },
+};
+
+const sumOf = (rows: readonly Use[]): Use | null =>
+  rows.length === 0
+    ? null
+    : rows.reduce(
+        (sum, row) => ({
+          used: sum.used + row.used,
+          limit: sum.limit + row.limit,
+        }),
+        { used: 0, limit: 0 },
+      );
+
+/**
+ * The Settings read → its rows. AI use is every AI kind together (each
+ * `AI_MODEL` row); Places is its one `GOOGLE_PLACES` row (F-230). A refused
+ * quota read leaves Usage out rather than showing zeros.
+ */
+export const settingsFromResult = (
+  data: ResultOf<typeof SettingsQuery> | null | undefined,
+): SettingsData => {
+  if (data === null || data === undefined) return EMPTY_SETTINGS;
+  const rows =
+    data.myAiQuota.__typename === "AiQuotaConnection"
+      ? data.myAiQuota.edges.map((edge) => edge.node)
+      : [];
+  return {
+    defaultCellarPrivacy: data.me?.settings.defaultCellarPrivacy ?? null,
+    usage: {
+      ai: sumOf(rows.filter((row) => row.service !== "GOOGLE_PLACES")),
+      places: sumOf(rows.filter((row) => row.service === "GOOGLE_PLACES")),
+    },
   };
 };

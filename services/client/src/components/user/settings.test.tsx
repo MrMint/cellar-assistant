@@ -31,8 +31,76 @@ mock.module("./SignOutButton", () => ({
 
 const { act } = await import("react");
 const { createRoot } = await import("react-dom/client");
+const { Client, Provider } = await import("urql");
+const { fetchExchange } = await import("@urql/core");
 const { SettingsView } = await import("./SettingsView");
 const { feedbackSettings } = await import("@/lib/feedback/settings");
+
+/** Every operation the page sent: its name and variables. */
+let sent: { name: string; variables: Record<string, unknown> }[] = [];
+let privacy = "FRIENDS";
+
+const answer = (name: string, variables: Record<string, unknown>) => {
+  if (name === "SetDefaultCellarPrivacy") {
+    privacy = String(variables.privacy);
+    return {
+      setDefaultCellarPrivacy: {
+        __typename: "UserSettings",
+        defaultCellarPrivacy: privacy,
+      },
+    };
+  }
+  return {
+    me: {
+      __typename: "Viewer",
+      id: "me",
+      settings: { __typename: "UserSettings", defaultCellarPrivacy: privacy },
+    },
+    myAiQuota: {
+      __typename: "AiQuotaConnection",
+      edges: [
+        ["ai_model/tier_list_insights", "AI_MODEL", 3, 20],
+        ["ai_model/label_read", "AI_MODEL", 12, 40],
+        ["google_places", "GOOGLE_PLACES", 30, 500],
+      ].map(([kind, service, used, limit]) => ({
+        __typename: "AiQuotaEdge",
+        node: {
+          __typename: "AiQuota",
+          kind,
+          service,
+          used,
+          limit,
+          resetsAt: "2026-12-01T00:00:00.000Z",
+        },
+      })),
+    },
+  };
+};
+
+const client = () =>
+  new Client({
+    url: "http://localhost/graphql",
+    exchanges: [fetchExchange],
+    preferGetMethod: false,
+    fetch: (async (_url: unknown, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body ?? "{}"));
+      const name = String(body.operationName ?? "");
+      sent.push({ name, variables: body.variables ?? {} });
+      return new Response(
+        JSON.stringify({ data: answer(name, body.variables ?? {}) }),
+        { headers: { "content-type": "application/json" } },
+      );
+    }) as typeof fetch,
+  });
+
+/** Lets the mocked fetches answer and React commit what they bring. */
+const settle = async () => {
+  for (let i = 0; i < 5; i++) {
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+  }
+};
 
 let container: HTMLElement;
 let root: ReturnType<typeof createRoot>;
@@ -63,11 +131,16 @@ beforeEach(async () => {
   container = document.createElement("div");
   document.body.append(container);
   root = createRoot(container);
+  sent = [];
+  privacy = "FRIENDS";
   await act(async () => {
     root.render(
-      <SettingsView profile={{ displayName: "Test One", avatarUrl: null }} />,
+      <Provider value={client()}>
+        <SettingsView profile={{ displayName: "Test One", avatarUrl: null }} />
+      </Provider>,
     );
   });
+  await settle();
 });
 
 afterEach(async () => {
@@ -132,5 +205,45 @@ describe("rows", () => {
     // do it by hand rather than hiding (H-93).
     assert.ok(text.includes("Install the app"));
     assert.ok(text.includes("Add to Home Screen"));
+  });
+});
+
+const button = (name: string): HTMLElement => {
+  const found = [
+    ...document.querySelectorAll<HTMLElement>('button, [role="radio"]'),
+  ].find((el) => el.textContent?.includes(name));
+  assert.ok(found, `no ${name} button`);
+  return found;
+};
+
+describe("Who sees your cellars (FR-21, H-126)", () => {
+  test("the row reads the account default", () => {
+    const row = button("Who sees your cellars");
+    assert.match(row.textContent ?? "", /Friends/);
+  });
+
+  test("choosing Public writes the default, and nothing about existing cellars", async () => {
+    await press(button("Who sees your cellars"));
+    await settle();
+    // The sheet says what the choice reaches: new cellars only.
+    assert.match(document.body.textContent ?? "", /new cellars/i);
+    await press(button("Public"));
+    await settle();
+    const writes = sent.filter((op) => op.name !== "Settings");
+    assert.deepEqual(writes, [
+      { name: "SetDefaultCellarPrivacy", variables: { privacy: "PUBLIC" } },
+    ]);
+    assert.match(button("Who sees your cellars").textContent ?? "", /Public/);
+  });
+});
+
+describe("Usage (FR-22, H-132)", () => {
+  test("this month's AI use and Places use, side by side", () => {
+    const usage = container.querySelector('[data-slot="settings-usage"]');
+    assert.ok(usage, "no Usage row");
+    const text = usage.textContent ?? "";
+    // AI: every AI kind together (3 + 12 of 20 + 40); Places its own row.
+    assert.match(text, /AI\s*15 of 60/);
+    assert.match(text, /Places\s*30 of 500/);
   });
 });

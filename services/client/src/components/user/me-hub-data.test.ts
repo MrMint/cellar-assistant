@@ -102,13 +102,8 @@ describe("meExtrasFromResult", () => {
           {
             node: {
               id: "t1",
-              items: {
-                edges: [
-                  { node: { band: 5 } },
-                  { node: { band: 5 } },
-                  { node: { band: 3 } },
-                ],
-              },
+              // H-131: F-85's per-band counts, every entry counted.
+              bandCounts: [0, 0, 0, 1, 0, 2],
             },
           },
         ],
