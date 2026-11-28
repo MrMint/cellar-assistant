@@ -172,8 +172,9 @@ export const TO_CHECK_READ = 100;
  * "Waiting on you" and the job tray: the AI work, menu matches to confirm
  * (the viewer's own scans, `myDiscoveries`), friend requests to answer, the
  * saved drafts that need details (MC-drafts, L41), the open bottles with a
- * guessed field never checked ("n to check"), and the AI allowance, so
- * "Limit reached" can name its reset (MC-quota).
+ * guessed field never checked ("n to check", with the server's count over
+ * sealed bottles too), and the AI and Places allowances, so "Limit reached"
+ * can name which ran out and its reset (MC-quota, F-231).
  */
 export const HomeInboxQuery = graphql(
   `
@@ -181,6 +182,8 @@ export const HomeInboxQuery = graphql(
     me {
       __typename
       id
+      # F-123: "n to check" over every bottle, sealed ones too (F-76).
+      unconfirmedBottleCount
       aiJobs(first: 30) {
         edges {
           node {
@@ -213,6 +216,7 @@ export const HomeInboxQuery = graphql(
           node {
             __typename
             kind
+            service
             used
             limit
             resetsAt

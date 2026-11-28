@@ -55,6 +55,8 @@ export type IncomingRequest = {
 /** One row of `myAiQuota` (MC-quota). */
 export type AiQuotaRow = {
   readonly kind: string;
+  /** F-230: which allowance; absent reads as an AI one. */
+  readonly service?: "AI_MODEL" | "GOOGLE_PLACES";
   readonly used: number;
   readonly limit: number;
   readonly resetsAt: string;
@@ -65,6 +67,11 @@ export type AiQuotaRow = {
  * refusal carries (`retryAt`), or else the soonest reset of an allowance
  * that is used up (MC-quota: the two are the same instant). Null when
  * neither says when — then the caller keeps the plain wording.
+ *
+ * F-231 / FR-16: Places has its own monthly allowance. When the spent one is
+ * Places — the refusal's reset matches it, or it is the soonest spent — the
+ * line says so, with its use ("Places limit reached · 200 of 200 · …"), so a
+ * refusal always has a visible reason.
  */
 export const limitResetLine = (
   retryAt: string | null,
@@ -73,11 +80,24 @@ export const limitResetLine = (
 ): string | null => {
   const spent = quotas
     .filter((quota) => quota.used >= quota.limit)
-    .map((quota) => quota.resetsAt)
-    .sort();
-  for (const at of [retryAt, ...spent]) {
+    .sort((a, b) => a.resetsAt.localeCompare(b.resetsAt));
+  const instant = (at: string) => new Date(at).getTime();
+  const candidates: { at: string | null; row: AiQuotaRow | undefined }[] = [
+    {
+      at: retryAt,
+      row:
+        retryAt === null
+          ? undefined
+          : spent.find((quota) => instant(quota.resetsAt) === instant(retryAt)),
+    },
+    ...spent.map((row) => ({ at: row.resetsAt, row })),
+  ];
+  for (const { at, row } of candidates) {
     const phrase = retryPhrase(at, options);
-    if (phrase !== null) return `Limit reached · resets ${phrase}`;
+    if (phrase === null) continue;
+    return row?.service === "GOOGLE_PLACES"
+      ? `Places limit reached · ${row.used} of ${row.limit} · resets ${phrase}`
+      : `Limit reached · resets ${phrase}`;
   }
   return null;
 };

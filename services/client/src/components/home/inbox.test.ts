@@ -4,12 +4,14 @@
  */
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
+import { print } from "graphql";
 import {
   buildInbox,
   limitResetLine,
   NEEDS_DETAILS_HREF,
   toCheckFromNodes,
 } from "./inbox";
+import { HomeInboxQuery } from "./queries";
 
 const NOW = new Date("2026-11-27T12:00:00Z");
 const options = { now: NOW, timeZone: "UTC", locale: "en-US" };
@@ -42,6 +44,53 @@ describe("limitResetLine (MC-quota)", () => {
       "Limit reached · resets after Dec 1",
     );
     assert.equal(limitResetLine(null, quotas.slice(0, 1), options), null);
+  });
+});
+
+describe("F-231 / FR-16: Places' own allowance beside AI's", () => {
+  const places = {
+    kind: "google_places",
+    service: "GOOGLE_PLACES" as const,
+    used: 200,
+    limit: 200,
+    resetsAt: "2026-12-01T00:00:00Z",
+  };
+  const ai = {
+    kind: "ai_model/menu_scan",
+    service: "AI_MODEL" as const,
+    used: 4,
+    limit: 10,
+    resetsAt: "2026-11-28T09:00:00Z",
+  };
+  test("a spent Places allowance says it is Places, with its use", () => {
+    assert.equal(
+      limitResetLine(null, [ai, places], options),
+      "Places limit reached · 200 of 200 · resets after Dec 1",
+    );
+  });
+  test("the refusal's own reset picks which allowance it was", () => {
+    const spentAi = { ...ai, used: 10 };
+    assert.equal(
+      limitResetLine("2026-11-28T09:00:00Z", [spentAi, places], options),
+      "Limit reached · resets tomorrow after 9:00 AM",
+    );
+    assert.equal(
+      limitResetLine("2026-12-01T00:00:00Z", [spentAi, places], options),
+      "Places limit reached · 200 of 200 · resets after Dec 1",
+    );
+  });
+  test("an unspent Places allowance is no limit", () => {
+    assert.equal(limitResetLine(null, [{ ...places, used: 3 }], options), null);
+  });
+});
+
+describe("HomeInboxQuery", () => {
+  const source = print(HomeInboxQuery as never);
+  test("reads which allowance each quota row is (F-230)", () => {
+    assert.match(source, /myAiQuota[\s\S]*\bservice\b/);
+  });
+  test("reads the server's n-to-check count over sealed bottles too (F-123, H-86)", () => {
+    assert.match(source, /\bunconfirmedBottleCount\b/);
   });
 });
 

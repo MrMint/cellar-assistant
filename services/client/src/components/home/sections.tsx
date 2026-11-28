@@ -139,6 +139,7 @@ export async function InboxSection() {
   const quotas: AiQuotaRow[] = quota.ok
     ? quota.data.edges.map(({ node }) => ({
         kind: node.kind,
+        service: node.service,
         used: node.used,
         limit: node.limit,
         resetsAt: node.resetsAt as string,
@@ -152,6 +153,8 @@ export async function InboxSection() {
       needsDetails={data.needsDetailsCount}
       toCheck={toCheckFromNodes(
         data.me?.openBottles.edges.map((edge) => edge.node) ?? [],
+        // F-123: the server's count, sealed bottles too (F-76).
+        data.me?.unconfirmedBottleCount ?? 0,
       )}
       quotas={quotas}
       initialSeen={parseSeenCookie(jar.get(SEEN_COOKIE_NAME)?.value)}
