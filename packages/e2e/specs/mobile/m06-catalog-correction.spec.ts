@@ -77,15 +77,8 @@ test("the vintage row: year and NV side by side, inside the gutter", async ({
   expect(Math.abs(nvEdges.top - yearEdges.top)).toBeLessThan(12);
   expect(nvEdges.right).toBeLessThanOrEqual(390 - 16);
   expect(yearEdges.left).toBeGreaterThanOrEqual(16);
-  // 36 px drawn, 44 px to the thumb (FilterChip's touch extension).
-  const target = await nv.evaluate((el) => {
-    const after = getComputedStyle(el, "::after");
-    const box = el.getBoundingClientRect();
-    return (
-      box.height +
-      Math.max(0, -Number.parseFloat(after.top || "0")) +
-      Math.max(0, -Number.parseFloat(after.bottom || "0"))
-    );
-  });
+  // 44 px drawn: FilterChip is `h-11` itself now, with no ::after extension
+  // to add up (KIT § 2 Chips).
+  const target = (await nv.boundingBox())?.height ?? 0;
   expect(target).toBeGreaterThanOrEqual(44);
 });

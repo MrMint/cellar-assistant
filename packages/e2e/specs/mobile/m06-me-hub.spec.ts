@@ -1,7 +1,7 @@
 import { ACCOUNTS } from "../../fixtures/accounts.ts";
 import { ensureFriends, unique } from "../../fixtures/data.ts";
 import { edgesOf, expect, test } from "../../fixtures/mobile.ts";
-import { Gql } from "../../fixtures/test.ts";
+import { Gql, visibleOnly } from "../../fixtures/test.ts";
 
 /**
  * X18 · the Me hub and a friend's profile, at 390×844 with a thumb.
@@ -150,7 +150,8 @@ test("Me: numbers, Lists, People and Settings fit the phone", async ({
 
   // The account has at least the tier list made above, so the number tiles
   // are drawn; each tile names its noun.
-  const row = page.locator('[data-slot="me-counts"]');
+  // F-24: a streamed segment's hidden twin can match too, for a moment.
+  const row = visibleOnly(page.locator('[data-slot="me-counts"]')).first();
   await expect(row).toBeVisible();
   const viewport = page.viewportSize();
   const edges = await edgesOf(row);

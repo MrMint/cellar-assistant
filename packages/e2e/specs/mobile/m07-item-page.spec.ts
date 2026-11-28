@@ -185,9 +185,10 @@ test("Your bottles: Pour is X03's sheet, Log opens the sheet for that bottle", a
   await bottles
     .getByRole("button", { name: `Steep from ${cellarName}` })
     .click();
-  const pour = page.getByRole("dialog", { name: "Pour" });
-  await pour.getByRole("button", { name: /^Cup/ }).click();
-  await pour.getByRole("button", { name: "Pour 3 g" }).click();
+  // The sheet is the tea's own word, and a preset is an option row.
+  const pour = page.getByRole("dialog", { name: "Steep" });
+  await pour.getByRole("radio", { name: /^Cup/ }).click();
+  await pour.getByRole("button", { name: "Steep 3 g" }).click();
   await expect(pour).toBeHidden({ timeout: 20_000 });
   await expect
     .poll(

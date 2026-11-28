@@ -1,7 +1,7 @@
 import { createCellar, unique } from "../../fixtures/data.ts";
 import { deleteCellarWithContents } from "../../fixtures/db.ts";
 import { expect, test } from "../../fixtures/mobile.ts";
-import { Gql, settleNetwork } from "../../fixtures/test.ts";
+import { Gql, settleNetwork, visibleOnly } from "../../fixtures/test.ts";
 
 /**
  * N13b + N28 · the first cellar screen that visibly changes, at 390x844.
@@ -9,12 +9,12 @@ import { Gql, settleNetwork } from "../../fixtures/test.ts";
  * A cellar of three teas — one sealed, one open at 40% that you rated 4.5,
  * one finished — read through the items page the way a thumb would:
  *
- * - BottleCards say "Sealed" / "Open · <1h" + 40% / "Finished", with your
- *   stars on the one you rated, and none of the catalog's "0 ♥ 0 💬";
+ * - the grid's tiles say "Open · 40%" on the open bottle (a sealed one has
+ *   no badge), with your stars on the one you rated, and none of the catalog's "0 ♥ 0 💬";
  * - a bottle with no photo shows its LabelPlate, not the type's clip art;
- * - the sort chip (Open first by default → A–Z) reorders, through a sheet;
- * - the status segment hides finished bottles by default and shows them
- *   under Finished (the X04 diary) and All.
+ * - Arrange (A to Z by default → Least left first) reorders, through a sheet;
+ * - the Show segment, in that sheet, hides finished bottles by default and
+ *   shows them under Finished (the X04 diary) and All.
  *
  * Teas, because `createItem` writes a tea without the onboarding flow
  * (`11-items.spec.ts` says why). Items have no delete, so the three teas
@@ -133,9 +133,13 @@ test.afterAll(() => {
 });
 
 // The collection's grid only: since X04 the dashboard's shelves above it
-// draw BottleCards too.
+// draw tiles too. The grid's tiles are `ListTile`s (combined-01) around the
+// kit's `CellarTile`; BottleCard is the shelves' and the item page's.
 const cards = (page: import("@playwright/test").Page) =>
-  page.locator('[data-slot="cellar-grid"] [data-slot="bottle-card"]');
+  // F-24: a streamed segment's hidden twin can double the grid for a moment.
+  visibleOnly(
+    page.locator('[data-slot="cellar-grid"] [data-slot="cellar-list-tile"]'),
+  );
 const titles = (page: import("@playwright/test").Page) =>
   cards(page).locator("a").allTextContents();
 
@@ -146,21 +150,18 @@ test("BottleCards: state, level, your stars and a LabelPlate — open first", as
   await page.goto(`/cellars/${cellarId}/items`);
   await expect(cards(page)).toHaveCount(2, { timeout: 30_000 });
 
-  // Open first is the default order; the finished bottle is hidden.
-  expect(await titles(page)).toEqual([names.open, names.sealed]);
+  // Name, A to Z is the default order; the finished bottle is hidden.
+  expect(await titles(page)).toEqual([names.sealed, names.open]);
 
   const open = cards(page).filter({ hasText: names.open });
-  await expect(open).toHaveAttribute("data-state", "open");
-  // Opened seconds ago: under a day, the age is in hours ("<1h", "3h").
-  await expect(open).toContainText(/Open · (<1h|\d+h)/);
-  await expect(open).toContainText("40%");
+  // The badge on the photo: "Open · 40%" (the level, `cellar/list/model.ts`).
+  await expect(open).toContainText("Open · 40%");
   await expect(
     open.getByRole("img", { name: "Rated 4.5 out of 5" }),
   ).toBeVisible();
 
   const sealed = cards(page).filter({ hasText: names.sealed });
-  await expect(sealed).toHaveAttribute("data-state", "sealed");
-  await expect(sealed).toContainText("Sealed");
+  await expect(sealed).not.toContainText("Open ·");
   // No photo: the bottle's own plate, printing its name.
   await expect(
     sealed.locator('[data-slot="label-plate"][data-type="TEA"]'),
@@ -196,34 +197,37 @@ test("the sort chip reorders through a sheet, and the URL keeps it", async ({
   await page.goto(`/cellars/${cellarId}/items`);
   await expect(cards(page)).toHaveCount(2, { timeout: 30_000 });
 
-  const chip = page.getByRole("button", { name: "Sort by: Open first" });
+  const chip = page.getByRole("button", { name: "Arrange: Name, A to Z" });
   await chip.click();
-  const sheet = page.getByRole("dialog", { name: "Sort by" });
+  const sheet = page.getByRole("dialog", { name: "Arrange" });
   await expect(
-    sheet.getByRole("radio", { name: "Open first" }),
+    sheet.getByRole("menuitemradio", { name: "Name, A to Z" }),
   ).toHaveAttribute("aria-checked", "true");
-  await sheet.getByRole("radio", { name: "A–Z" }).click();
+  await sheet.getByRole("menuitemradio", { name: "Least left first" }).click();
 
-  await expect(page).toHaveURL(/[?&]sort=a-z/);
+  await expect(page).toHaveURL(/[?&]sort=least-left/);
   await expect(
-    page.getByRole("button", { name: "Sort by: A–Z" }),
+    page.getByRole("button", { name: "Arrange: Least left first" }),
   ).toBeVisible();
   await expect
     .poll(() => titles(page), { timeout: 20_000 })
-    .toEqual([names.sealed, names.open]);
+    .toEqual([names.open, names.sealed]);
 
   // A reload keeps the order.
   await page.reload();
   await settleNetwork(page);
   await expect
     .poll(() => titles(page), { timeout: 20_000 })
-    .toEqual([names.sealed, names.open]);
+    .toEqual([names.open, names.sealed]);
 });
 
 test("the status segment: In cellar by default, then Finished, then All", async ({
   page,
 }) => {
   await page.goto(`/cellars/${cellarId}/items`);
+  // The Show segment lives in the Arrange sheet.
+  await expect(cards(page)).toHaveCount(2, { timeout: 30_000 });
+  await page.getByRole("button", { name: /^Arrange:/ }).click();
   const segment = page.getByRole("radiogroup", { name: "Show" });
   await expect(
     segment.getByRole("radio", { name: "In cellar" }),
@@ -241,7 +245,12 @@ test("the status segment: In cellar by default, then Finished, then All", async 
   await expect(entries.first()).toContainText(names.finished);
   await expect(entries.first()).toContainText(/Finished \d{1,2} [A-Z][a-z]{2}/);
 
-  await segment.getByRole("radio", { name: "All" }).click();
+  // Choosing a status closes the sheet: open it again for All.
+  await page.getByRole("button", { name: /^Arrange:/ }).click();
+  await page
+    .getByRole("radiogroup", { name: "Show" })
+    .getByRole("radio", { name: "All" })
+    .click();
   await expect(page).toHaveURL(/[?&]status=all/);
   await expect(cards(page)).toHaveCount(3, { timeout: 20_000 });
 });
