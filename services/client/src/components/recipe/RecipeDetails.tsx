@@ -472,6 +472,8 @@ export const RecipeDetails = ({
         recipeId={recipe.id}
         recipeName={recipe.name}
         privacy={recipe.privacy}
+        isOwner={isOwner}
+        authorName={recipe.created_by_name}
       />
 
       {isOwner && (
