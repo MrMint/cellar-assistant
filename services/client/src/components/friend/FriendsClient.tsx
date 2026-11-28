@@ -29,6 +29,7 @@ import {
 import { useAllFriendRequests, useAllFriends } from "./friend-lists";
 import { InviteFriendButton } from "./InviteFriendButton";
 import { openIncomingRequests } from "./open-requests";
+import { useUndoableWrite } from "./undoable-write";
 
 /** How often the lists refresh in the background — there is no subscription
  * in the new stack (plan §6 D8). A write refreshes at once; this is for the
@@ -137,6 +138,9 @@ export const FriendsClient = () => {
   const [pendingIds, setPendingIds] = useState<Set<string>>(new Set());
   const [searchTerm, setSearchTerm] = useState("");
   const [chosen, setChosen] = useState<string | null>(null);
+  // Requests declined or canceled whose Undo toast is still up (F-91).
+  const [setAside, setSetAside] = useState<ReadonlySet<string>>(new Set());
+  const { hold: holdWrite } = useUndoableWrite();
 
   const friendsList = useAllFriends();
   const incomingList = useAllFriendRequests("INCOMING");
@@ -178,8 +182,16 @@ export const FriendsClient = () => {
   const incoming = openIncomingRequests(
     incomingList.rows,
     friendRows.map((row) => row.user.id),
-  );
-  const outgoing = outgoingList.rows;
+  ).filter((row) => !setAside.has(row.id));
+  const outgoing = outgoingList.rows.filter((row) => !setAside.has(row.id));
+
+  const aside = (requestId: string, on: boolean) =>
+    setSetAside((prev) => {
+      const next = new Set(prev);
+      if (on) next.add(requestId);
+      else next.delete(requestId);
+      return next;
+    });
 
   const selected =
     friendRows.find((row) => row.user.id === chosen) ?? friendRows[0];
@@ -195,8 +207,25 @@ export const FriendsClient = () => {
         refreshLists();
         return;
       }
+      aside(requestId, false);
       notify(failureLine, { tone: "error" });
     });
+
+  /** Decline or Cancel: the row goes at once, the write when Undo has
+   * passed (KIT § 4; the board's "Declined …'s request", "Request to …
+   * canceled"). */
+  const rejectWithUndo = (
+    requestId: string,
+    message: string,
+    failureLine: string,
+  ) => {
+    aside(requestId, true);
+    holdWrite(requestId, {
+      message,
+      commit: () => void handleReject(requestId, failureLine),
+      restore: () => aside(requestId, false),
+    });
+  };
 
   const handleAccept = (requestId: string, name: string) =>
     withPending(requestId, async () => {
@@ -351,8 +380,9 @@ export const FriendsClient = () => {
                           disabled={pendingIds.has(row.id)}
                           aria-label={`Decline ${row.user.displayName}`}
                           onClick={() =>
-                            void handleReject(
+                            rejectWithUndo(
                               row.id,
+                              `Declined ${row.user.displayName}’s request`,
                               "Couldn't decline that request",
                             )
                           }
@@ -446,8 +476,9 @@ export const FriendsClient = () => {
                         aria-busy={pendingIds.has(row.id) || undefined}
                         aria-label={`Cancel request to ${row.user.displayName}`}
                         onClick={() =>
-                          void handleReject(
+                          rejectWithUndo(
                             row.id,
+                            `Request to ${row.user.displayName} canceled`,
                             "Couldn't cancel the request",
                           )
                         }

@@ -43,6 +43,13 @@ const lists = {
 let searchTerm = "";
 const calls: { name: string; variables: unknown }[] = [];
 const toasts: string[] = [];
+type ToastOptions = {
+  undo?: () => void;
+  onAutoClose?: () => void;
+  onClose?: () => void;
+};
+/** Each toast's options, by message: its Undo and its close callbacks. */
+const raised = new Map<string, ToastOptions>();
 
 const ok: Record<string, unknown> = {
   SendFriendRequest: {
@@ -128,8 +135,9 @@ mock.module("next/navigation", () => ({
   useSearchParams: () => new URLSearchParams(),
 }));
 mock.module("@/components/app/notify", () => ({
-  notify: (message: string) => {
+  notify: (message: string, options: ToastOptions = {}) => {
     toasts.push(message);
+    raised.set(message, options);
     return message;
   },
   dismissNotification: () => {},
@@ -187,6 +195,7 @@ beforeEach(() => {
   searchTerm = "";
   calls.length = 0;
   toasts.length = 0;
+  raised.clear();
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
@@ -206,6 +215,16 @@ const byLabel = (label: string) => {
 const click = async (el: HTMLElement) => {
   await act(async () => {
     el.click();
+    await new Promise((r) => setTimeout(r, 20));
+  });
+};
+
+/** Runs a toast's callback (its Undo, or its time running out). */
+const onToast = async (message: string, which: keyof ToastOptions) => {
+  const options = raised.get(message);
+  if (options === undefined) throw new Error(`no toast "${message}"`);
+  await act(async () => {
+    options[which]?.();
     await new Promise((r) => setTimeout(r, 20));
   });
 };
@@ -256,11 +275,15 @@ describe("/friends", () => {
     await render();
     await click(byLabel("Accept Demo Four"));
     await click(byLabel("Decline Demo Three"));
+    await onToast("Declined Demo Three’s request", "onAutoClose");
     assert.deepEqual(calls, [
       { name: "AcceptFriendRequestAction", variables: { requestId: "r-b" } },
       { name: "RejectFriendRequestAction", variables: { requestId: "r-a" } },
     ]);
-    assert.deepEqual(toasts, ["Demo Four is your friend"]);
+    assert.deepEqual(toasts, [
+      "Demo Four is your friend",
+      "Declined Demo Three’s request",
+    ]);
   });
 
   test("Cancel on a sent request cancels that one only", async () => {
@@ -270,6 +293,7 @@ describe("/friends", () => {
     ];
     await render();
     await click(byLabel("Cancel request to Demo Eight"));
+    await onToast("Request to Demo Eight canceled", "onClose");
     assert.deepEqual(calls, [
       { name: "RejectFriendRequestAction", variables: { requestId: "r-2" } },
     ]);
@@ -308,5 +332,46 @@ describe("/friends", () => {
     await render();
     assert.equal(press("Enter", byLabel("Accept Demo Three")), false);
     assert.equal(press("ArrowDown"), true, "the desktop list keeps J/K");
+  });
+
+  // F-91 (CD-4): Decline and Cancel each end in a toast with Undo, and the
+  // write waits for it (only the other person could undo a decline).
+  test("Decline hides the request, and Undo brings it back unsent", async () => {
+    lists.INCOMING = [
+      { id: "r-a", status: "PENDING", user: person("u-3", "Demo Three") },
+    ];
+    await render();
+    await click(byLabel("Decline Demo Three"));
+    assert.deepEqual(toasts, ["Declined Demo Three’s request"]);
+    assert.deepEqual(calls, [], "nothing is sent while Undo is offered");
+    assert.equal(
+      container.querySelector('button[aria-label="Decline Demo Three"]'),
+      null,
+    );
+    await onToast("Declined Demo Three’s request", "undo");
+    await onToast("Declined Demo Three’s request", "onClose");
+    assert.deepEqual(calls, []);
+    byLabel("Decline Demo Three");
+  });
+
+  test("Cancel request hides it with Undo; leaving the page sends it", async () => {
+    lists.OUTGOING = [
+      { id: "r-2", status: "PENDING", user: person("u-8", "Demo Eight") },
+    ];
+    await render();
+    await click(byLabel("Cancel request to Demo Eight"));
+    assert.deepEqual(toasts, ["Request to Demo Eight canceled"]);
+    assert.deepEqual(calls, []);
+    assert.equal(
+      container.querySelector(
+        'button[aria-label="Cancel request to Demo Eight"]',
+      ),
+      null,
+    );
+    await act(async () => root.unmount());
+    root = createRoot(container);
+    assert.deepEqual(calls, [
+      { name: "RejectFriendRequestAction", variables: { requestId: "r-2" } },
+    ]);
   });
 });

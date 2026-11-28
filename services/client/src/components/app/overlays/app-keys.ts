@@ -17,9 +17,7 @@ import { closeTopOnEscape } from "./layers";
  * the key (a desktop key on a phone, say), and it goes on to the shell's keys
  * and then the browser, whose default is kept.
  */
-export type AppKeyHandler = (
-  event: KeyboardEvent | AppKeyEvent,
-) => boolean | undefined | void;
+export type AppKeyHandler = (event: KeyboardEvent | AppKeyEvent) => unknown;
 
 /** The parts of a keyboard event the handlers read (React's or the DOM's). */
 export type AppKeyEvent = {
