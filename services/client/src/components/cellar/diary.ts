@@ -9,7 +9,36 @@
  * browser's hydration print the same bytes.
  */
 import { bottleAge } from "./bottle-state";
-import { MONTHS_LONG, MONTHS_SHORT } from "./dashboard";
+
+const MONTHS_SHORT = [
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "May",
+  "Jun",
+  "Jul",
+  "Aug",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dec",
+] as const;
+
+const MONTHS_LONG = [
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
+] as const;
 
 /** The calendar parts of `iso` in `zone`, or null if either is bad. */
 export const zonedParts = (

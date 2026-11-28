@@ -145,15 +145,14 @@ export function ListTile({
 
 /**
  * A row of the rows view (combined-21, desktop-08): a 64 thumb, the name,
- * maker · style, the owner's stars (or the public rating when unrated), and
- * the heart.
+ * maker · style, and the owner's stars (or the public rating when unrated)
+ * at the right of the name. No heart: rows are for scanning.
  */
 export function ListRow({ bottle, onPeek, onOpen, selected }: ListItemProps) {
   const hold = useHoldToPeek(() => onPeek(bottle.key));
-  const favourite = useFavorite(bottle.itemId, bottle.type, bottle.favorite);
   const Glyph = itemTypeTokens[bottle.type].glyph;
-  const line = [bottle.maker, bottle.style].filter(Boolean).join(" · ");
   const badge = openBadge(bottle);
+  const line = [badge, bottle.maker, bottle.style].filter(Boolean).join(" · ");
   return (
     <div
       id={tileId(bottle.key)}
@@ -186,40 +185,30 @@ export function ListRow({ bottle, onPeek, onOpen, selected }: ListItemProps) {
         )}
       </div>
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <Link
-          href={bottle.href}
-          overlay
-          onClick={paneClick(onOpen, bottle.key)}
-          className="t-head truncate text-ink outline-none"
-        >
-          {bottle.name}
-        </Link>
+        <div className="flex items-start justify-between gap-2">
+          <Link
+            href={bottle.href}
+            overlay
+            onClick={paneClick(onOpen, bottle.key)}
+            className="t-head line-clamp-2 min-w-0 break-words text-ink outline-none"
+          >
+            {bottle.name}
+          </Link>
+          {bottle.rating !== null ? (
+            <Stars value={bottle.rating} size="sm" className="shrink-0" />
+          ) : bottle.publicScore !== null ? (
+            <PublicRating
+              value={bottle.publicScore}
+              count={bottle.publicCount}
+            />
+          ) : null}
+        </div>
         {line !== "" && (
           <span className="flex min-w-0 items-center gap-1.5 text-ink-2">
             <Glyph aria-hidden className="size-3.5 shrink-0 text-glyph" />
             <span className="t-cap truncate">{line}</span>
           </span>
         )}
-        <span className="flex items-center gap-2">
-          {bottle.rating === null && bottle.publicScore !== null ? (
-            <PublicRating
-              value={bottle.publicScore}
-              count={bottle.publicCount}
-            />
-          ) : (
-            <Stars value={bottle.rating} size="sm" />
-          )}
-          {badge !== null && (
-            <span className="t-micro tabular text-ink-2">{badge}</span>
-          )}
-        </span>
-      </div>
-      <div className="relative z-10">
-        <Heart
-          on={favourite.on}
-          onToggle={favourite.set}
-          label={`Favourite ${bottle.name}`}
-        />
       </div>
     </div>
   );
