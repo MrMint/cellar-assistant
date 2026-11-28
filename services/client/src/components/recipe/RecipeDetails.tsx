@@ -220,9 +220,10 @@ export const RecipeDetails = ({
         <div className="relative md:sticky md:top-4">
           <RecipeHeroPhoto>{photo}</RecipeHeroPhoto>
           {!desktop && (
+            // No title: the name's heading sits under the hero, and the
+            // bar's would be a second h1 (F-106, CR-13).
             <AppBar
               tone="photo"
-              title={recipe.name}
               parent={parent}
               overflow={[shareItem, ...ownerItems]}
             />

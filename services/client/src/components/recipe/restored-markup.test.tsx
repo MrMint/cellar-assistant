@@ -98,6 +98,11 @@ describe("RecipeDetails: the name's heading level (X21)", () => {
     assert.match(page, /<h1[^>]*>Negroni</);
     assert.doesNotMatch(page, /<h[23][^>]*>Negroni</);
   });
+
+  test("one h1 on the page: the bar over the hero adds none (F-106, CR-13)", () => {
+    const page = render(<RecipeDetails recipe={recipe} titleLevel="h1" />);
+    assert.equal(page.match(/<h1[\s>]/g)?.length, 1);
+  });
 });
 
 describe("RecipeDetails (Recipes-Page)", () => {
