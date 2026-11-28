@@ -179,7 +179,9 @@ export type UsageReport = {
  * MC-quota: one kind of AI call, as the viewer's own allowance for the current
  * period (`BUDGET_USER_CAPS`, default a UTC calendar month).
  *
- * - `kind` — the budget kind, `ai_model/<seam>` (e.g. `ai_model/tier_list_insights`).
+ * - `kind` — the budget kind, `ai_model/<seam>` (e.g. `ai_model/tier_list_insights`),
+ *   or (F-230) `google_places`: Google Places' own allowance, one count across
+ *   every Places endpoint, always a UTC calendar month.
  * - `used` — the viewer's own calls counted this period (a released
  *   reservation does not count).
  * - `limit` — the period cap.
@@ -220,7 +222,8 @@ export type BudgetConfigDto = {
  */
 export type BudgetActorInterface = {
   /**
-   * MC-quota: the **viewer's own** period usage per AI kind. Signed-in only,
+   * MC-quota: the **viewer's own** period usage per AI kind, then (F-230)
+   * one `google_places` row for their Places allowance. Signed-in only,
    * and keyed by `ctx.viewerId` — there is no argument naming a user, so it
    * can never read anybody else's.
    */

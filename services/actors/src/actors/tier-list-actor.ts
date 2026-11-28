@@ -458,6 +458,18 @@ const toItemDto = (row: TierListItemRow): TierListItemDto => ({
   updatedAt: iso(row.updatedAt),
 });
 
+/** F-85: one count per band, `[MIN_BAND]` first, `[MAX_BAND]` last. */
+const bandCountsOf = (rows: readonly { band: number }[]): number[] => {
+  const counts = Array.from({ length: MAX_BAND - MIN_BAND + 1 }, () => 0);
+  for (const row of rows) {
+    const index = row.band - MIN_BAND;
+    if (index >= 0 && index < counts.length) {
+      counts[index] = (counts[index] ?? 0) + 1;
+    }
+  }
+  return counts;
+};
+
 /** One band's ids in position order. */
 const bandOrderOf = (
   rows: readonly { id: string; band: number; position: number }[],
@@ -1728,13 +1740,59 @@ export class TierListActor
   }
 
   /**
+   * F-86: "Rewrite" — a fresh write of insights that are already READY. See
+   * the contract's doc. Creator only, like `requestInsights`; a no-op from
+   * any status but READY. The delivery carries `{ rewrite: true }`, which is
+   * the one thing that lets `generateInsights` past its once-a-day throttle;
+   * the generation is attributed to the caller, so their
+   * `ai_model/tier_list_insights` allowance is what bounds how often.
+   *
+   * A refresh already queued (an edit waiting out the throttle) becomes the
+   * rewrite, due now, rather than a second row beside it.
+   */
+  async rewriteInsights(ctx: Ctx): Promise<TierListDto> {
+    const aggregate = this.requireAggregate();
+    await this.#requireCreator(ctx, aggregate, "rewrite the insights on");
+    if (this.#insightsStatus(ctx, aggregate).insightsStatus !== "READY") {
+      return await this.#dtoFor(ctx, aggregate);
+    }
+    const target = OUTBOX_TARGETS["TierListActor.generateInsights"];
+    const payload = { rewrite: true } as const;
+    await this.tx(async (tx) => {
+      await tx
+        .update(tierLists)
+        .set({ insightsRequestedAt: new Date() })
+        .where(eq(tierLists.id, this.key));
+      const queued = await tx.execute<{ id: string }>(sql`
+        update public.outbox
+        set payload = ${JSON.stringify(payload)}::jsonb, run_after = now()
+        where target_actor = ${target.actorType}
+          and target_id = ${this.key}
+          and method = ${target.method}
+          and status = 'pending'
+        returning id
+      `);
+      if (queued.rows.length === 0) {
+        await enqueueOutboxOnce(
+          tx,
+          target,
+          { targetId: this.key, payload },
+          { attributeTo: ctx },
+        );
+      }
+    });
+    await this.reload();
+    return await this.#dtoFor(ctx, this.requireAggregate());
+  }
+
+  /**
    * `system`, via the outbox (§1.7-style split: this method exists only to be
    * *delivered*, never called directly by a request). Idempotent by
    * recomputation — see the class doc.
    */
   async generateInsights(
     ctx: Ctx,
-    _payload: Record<string, unknown> = {},
+    payload: Record<string, unknown> = {},
   ): Promise<GenerateInsightsResult> {
     // The one outbox-delivered method. `system` is constructed only by
     // `OutboxActor` and job actors (§1.6); an administrator is the manual
@@ -1755,7 +1813,11 @@ export class TierListActor
       };
     }
     const generatedAt = aggregate.tierList.insightsGeneratedAt;
+    // F-86: a `rewriteInsights` delivery is the owner asking for a fresh
+    // write now; their model allowance, not the daily throttle, bounds it.
+    const rewrite = payload.rewrite === true;
     if (
+      !rewrite &&
       generatedAt !== null &&
       Date.now() - generatedAt.getTime() < INSIGHTS_THROTTLE_MS
     ) {
@@ -2085,7 +2147,11 @@ export class TierListActor
   /** {@link #toDto}, with `itemCount` as `ctx` may read it. */
   async #dtoFor(ctx: Ctx, aggregate: TierListAggregate): Promise<TierListDto> {
     const visible = await this.#visibleItems(ctx, aggregate);
-    return { ...this.#toDto(ctx, aggregate), itemCount: visible.length };
+    return {
+      ...this.#toDto(ctx, aggregate),
+      itemCount: visible.length,
+      bandCounts: bandCountsOf(visible),
+    };
   }
 
   #toDto(ctx: Ctx, aggregate: TierListAggregate): TierListDto {
@@ -2097,6 +2163,7 @@ export class TierListActor
       privacy: aggregate.tierList.privacy,
       listType: aggregate.tierList.listType,
       itemCount: aggregate.items.length,
+      bandCounts: bandCountsOf(aggregate.items),
       aiInsights:
         (aggregate.tierList.aiInsights as Record<string, unknown> | null) ??
         null,

@@ -46,6 +46,7 @@ import {
   AI_MODEL_SERVICE,
   BudgetActor,
   DEFAULT_GOOGLE_PLACES_MONTHLY_PAID_CENTS,
+  DEFAULT_GOOGLE_PLACES_USER_MONTHLY_CALLS,
   GOOGLE_PLACES_BUDGET_SERVICE,
   googlePlacesPoolRefusal,
   MODEL_RATES,
@@ -1676,15 +1677,38 @@ describe("per-user caps: parsing (W4 security F4)", () => {
         "ai_model/embedding": { hourly: 1, daily: 2 },
       },
       period: "week",
+      placesMonthly: null,
     });
     expect(parseUserCapConfig("period=month").period).toBe("month");
-    expect(parseUserCapConfig(undefined)).toEqual({ caps: {}, period: null });
+    expect(parseUserCapConfig(undefined)).toEqual({
+      caps: {},
+      period: null,
+      placesMonthly: null,
+    });
     for (const bad of [
       "period=day",
       "period=month,period=week",
       "ai_model/embedding=1/2/0",
       "ai_model/embedding=1/2/lots",
       "ai_model/embedding=1/2/3/4",
+    ]) {
+      expect(() => parseUserCapConfig(bad), bad).toThrow(ValidationError);
+    }
+  });
+
+  it("F-230: parses google_places=<monthly> and refuses a period on a Places kind", () => {
+    expect(readModelBudgetPolicy({}).googlePlacesUserMonthlyCalls).toBe(
+      DEFAULT_GOOGLE_PLACES_USER_MONTHLY_CALLS,
+    );
+    expect(
+      readModelBudgetPolicy({ BUDGET_USER_CAPS: "google_places=40" })
+        .googlePlacesUserMonthlyCalls,
+    ).toBe(40);
+    for (const bad of [
+      "google_places=0",
+      "google_places=lots",
+      "google_places=1,google_places=2",
+      "google_places/autocomplete=1/2/3",
     ]) {
       expect(() => parseUserCapConfig(bad), bad).toThrow(ValidationError);
     }
@@ -1982,11 +2006,13 @@ describe.skipIf(skip)("per-user period cap and myQuota (SV-A)", () => {
       });
       expect((await quotaFor(actor, other))?.used).toBe(otherBefore + 1);
 
-      // Every model seam is listed, each with its own limit.
+      // Every model seam is listed, each with its own limit, then (F-230)
+      // Google Places' one allowance.
       const all = await actor.myQuota(user, pageArgs({ first: 50 }));
-      expect(all.entries.map((e) => e.node.kind)).toEqual(
-        MODEL_SEAMS.map((seam) => `${AI_MODEL_SERVICE}/${seam}`),
-      );
+      expect(all.entries.map((e) => e.node.kind)).toEqual([
+        ...MODEL_SEAMS.map((seam) => `${AI_MODEL_SERVICE}/${seam}`),
+        GOOGLE_PLACES_BUDGET_SERVICE,
+      ]);
       expect(
         all.entries.find((e) => e.node.kind === "ai_model/tier_list_insights")
           ?.node.limit,
@@ -1995,6 +2021,103 @@ describe.skipIf(skip)("per-user period cap and myQuota (SV-A)", () => {
           USER_CAPS["ai_model/tier_list_insights"] ?? { hourly: 0, daily: 0 },
         ),
       );
+    });
+  });
+
+  /*
+   * F-230 (FR-16): Google Places has its own monthly allowance per person,
+   * one count across every Places endpoint, separate from every AI kind —
+   * and `myQuota` shows it, so a Places refusal always has a visible reason.
+   */
+  const placesKinds = [
+    { service: "google_places", endpoint: "autocomplete" },
+    { service: "google_places", endpoint: "nearby_search" },
+  ] as const;
+  /** Config rows first: `setBudget` reloads, which re-reads the env. */
+  const openPlaces = async (db: DbOrTx) => {
+    const actor = await reactivate(db);
+    for (const kind of placesKinds) {
+      await actor.setBudget(admin, {
+        kind,
+        monthlyBudgetCents: 100_000,
+        freeTierMonthlyRequests: 100_000,
+        isEnabled: true,
+      });
+    }
+  };
+  const placesCall =
+    (ctx: typeof user, endpoint: 0 | 1) => async (actor: BudgetActor) =>
+      actor.reserveForSearch(ctx, {
+        kind: placesKinds[endpoint],
+        estimatedCostCents: 0,
+        reservationId: `places-${crypto.randomUUID()}`,
+      });
+
+  it("F-230: Places is one monthly allowance across its endpoints, apart from AI", async () => {
+    await withTestDb(async (db) => {
+      await openPlaces(db);
+      const actor = await withEnv(
+        {
+          BUDGET_USER_CAPS:
+            "google_places=3, ai_model/menu_match=10/10/10, period=week",
+        },
+        () => reactivate(db),
+      );
+      expect((await placesCall(user, 0)(actor)).allowed).toBe(true);
+      expect((await placesCall(user, 1)(actor)).allowed).toBe(true);
+      expect((await placesCall(user, 0)(actor)).allowed).toBe(true);
+      const refused = await placesCall(user, 1)(actor);
+      expect(refused.allowed).toBe(false);
+      expect(refused.refusal).toBe("USER_CAP");
+      expect(refused.reason).toMatch(
+        new RegExp(
+          `^${USER_CAP_REASON}: .*3 of its 3 Google Places calls this month`,
+        ),
+      );
+      // Monthly whatever the AI period is.
+      expect(refused.retryAt).toBe(nextMonthStart().toISOString());
+      // Spending Places leaves AI alone, and another person's month is theirs.
+      expect((await actor.reserveForModel(user, matchCall())).allowed).toBe(
+        true,
+      );
+      expect((await placesCall(other, 0)(actor)).allowed).toBe(true);
+
+      const page = await actor.myQuota(user, pageArgs({ first: 50 }));
+      expect(
+        page.entries.find((e) => e.node.kind === GOOGLE_PLACES_BUDGET_SERVICE)
+          ?.node,
+      ).toEqual({
+        kind: GOOGLE_PLACES_BUDGET_SERVICE,
+        used: 3,
+        limit: 3,
+        resetsAt: nextMonthStart().toISOString(),
+      });
+      // The AI rows still count the AI period (a week here), not Places'.
+      expect(
+        page.entries.find((e) => e.node.kind === "ai_model/menu_match")?.node
+          .used,
+      ).toBe(1);
+    });
+  });
+
+  it("F-230: a Places endpoint's own ten-days period no longer binds", async () => {
+    await withTestDb(async (db) => {
+      // 1/1 a day would be a period of ten under the old per-kind rule; the
+      // pooled allowance (5) is what binds now, and the rolling day is lifted
+      // here so only the month is in play.
+      await openPlaces(db);
+      const actor = await withEnv(
+        {
+          BUDGET_USER_CAPS: "google_places/autocomplete=50/50, google_places=5",
+        },
+        () => reactivate(db),
+      );
+      for (let i = 0; i < 5; i += 1) {
+        expect((await placesCall(user, 0)(actor)).allowed, `call ${i}`).toBe(
+          true,
+        );
+      }
+      expect((await placesCall(user, 0)(actor)).allowed).toBe(false);
     });
   });
 

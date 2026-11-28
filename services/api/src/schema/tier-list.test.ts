@@ -34,6 +34,7 @@ const tierListDto = {
   privacy: "PRIVATE" as const,
   listType: "place",
   itemCount: 0,
+  bandCounts: [0, 0, 0, 0, 0, 0],
   aiInsights: null,
   insightsGeneratedAt: null,
   contentUpdatedAt: "2026-09-08T00:00:00.000Z",
@@ -649,6 +650,74 @@ describe("requestTierListInsights (SV-A, L12)", () => {
     );
     expect(hidden.data?.requestTierListInsights).toEqual({
       __typename: "NotFoundError",
+    });
+  });
+});
+
+describe("TierList.bandCounts (F-85)", () => {
+  it("answers the actor's six counts, bottom band first", async () => {
+    const { invoke } = stubSidecar({
+      "TierListActor.get": () => ({
+        ...tierListDto,
+        itemCount: 106,
+        bandCounts: [1, 0, 2, 3, 40, 60],
+      }),
+    });
+    const result = await run(
+      `{ tierList(id: "${tierListDto.id}") { ... on TierList { itemCount bandCounts } } }`,
+      testContext(invoke, viewer),
+    );
+    expect(result.errors).toBeUndefined();
+    expect(result.data?.tierList).toEqual({
+      itemCount: 106,
+      bandCounts: [1, 0, 2, 3, 40, 60],
+    });
+  });
+});
+
+describe("rewriteTierListInsights (F-86)", () => {
+  const rewrite = (id: string) =>
+    `mutation { rewriteTierListInsights(tierListId: "${id}") {
+      __typename
+      ... on TierList { id insightsStatus }
+    } }`;
+
+  it("asks the list's own actor for a rewrite and answers its status", async () => {
+    const { invoke, calls } = stubSidecar({
+      "TierListActor.rewriteInsights": () => tierListDto,
+    });
+    const result = await run(
+      rewrite(tierListDto.id),
+      testContext(invoke, viewer),
+    );
+    expect(result.errors).toBeUndefined();
+    expect(result.data?.rewriteTierListInsights).toEqual({
+      __typename: "TierList",
+      id: tierListDto.id,
+      insightsStatus: "PENDING",
+    });
+    expect(calls).toMatchObject([
+      {
+        actorType: "TierListActor",
+        actorId: tierListDto.id,
+        method: "rewriteInsights",
+        args: [{ viewerId: viewer.id }],
+      },
+    ]);
+  });
+
+  it("puts another person's list on the union as the actor refused it", async () => {
+    const { invoke } = stubSidecar({
+      "TierListActor.rewriteInsights": () => {
+        throw new ForbiddenError("tier list is not yours");
+      },
+    });
+    const result = await run(
+      rewrite(tierListDto.id),
+      testContext(invoke, viewer),
+    );
+    expect(result.data?.rewriteTierListInsights).toEqual({
+      __typename: "ForbiddenError",
     });
   });
 });

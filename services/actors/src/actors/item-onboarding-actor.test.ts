@@ -347,6 +347,41 @@ describe.skipIf(skip)("ItemOnboardingActor (B2)", () => {
       });
     });
 
+    it("F-77: keeps the kind the label read found, so the kind can follow the shot", async () => {
+      await withOnboardingDb(async (db) => {
+        const user = await seedUser(db);
+        // Another kind's label: the seam keeps no values and names the kind,
+        // and its raw completion (stored as `raw_defaults`) says so too.
+        const ai = provider({
+          defaults: {},
+          raw: '```json\n{"imageDescription":"a beer can","labelIsLegible":true,"labelItemType":"BEER"}\n```',
+          model: "test-vision-1",
+          confidence: 0,
+          brandName: null,
+          detectedItemType: "BEER",
+        });
+        const id = randomUUID();
+        const actor = await activate(newOnboardingActor(id, db, ai));
+        const dto = await actor.start(userCtx(user, "r"), { itemType: "WINE" });
+        expect(dto.itemType).toBe("WINE");
+        expect(dto.detectedItemType).toBe("BEER");
+        // Stored, not only returned: a fresh activation reads it back.
+        const again = await activate(newOnboardingActor(id, db, ai));
+        expect((await again.get(userCtx(user, "r2"))).detectedItemType).toBe(
+          "BEER",
+        );
+
+        // A read that named no kind (or an older row) reads null.
+        const plain = await activate(
+          newOnboardingActor(randomUUID(), db, provider()),
+        );
+        expect(
+          (await plain.start(userCtx(user, "r3"), { itemType: "WINE" }))
+            .detectedItemType,
+        ).toBeNull();
+      });
+    });
+
     it("is idempotent: a retry after a completed extraction does not call the model again", async () => {
       await withOnboardingDb(async (db) => {
         const user = await seedUser(db);

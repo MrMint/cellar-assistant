@@ -129,15 +129,20 @@ describe.skipIf(skip)("MapActor", () => {
       "isVerified",
       "kind",
       "location",
+      // F-82: the owner's pin layer — their band, the place's photo, and how
+      // many ratings the average stands on.
+      "myBand",
       "name",
+      "photoFileId",
       "placeId",
       "primaryCategory",
       "rating",
+      "ratingCount",
       // X27: what draws a creator's own place as "Under review".
       "reviewStatus",
     ].sort();
 
-    it("returns exactly the ten place fields, and no more", async () => {
+    it("returns exactly the thirteen place fields, and no more", async () => {
       await withTestDb(async (db) => {
         const s = await scenario(db, "PUBLIC");
         const entries = await browseAll(db, s.owner);
@@ -147,7 +152,7 @@ describe.skipIf(skip)("MapActor", () => {
       });
     });
 
-    it("drops the fifteen columns the browse path never renders", async () => {
+    it("drops the fourteen columns the browse path never renders", async () => {
       await withTestDb(async (db) => {
         const s = await scenario(db, "PUBLIC");
         const [place] = await browseAll(db, s.owner);
@@ -167,7 +172,6 @@ describe.skipIf(skip)("MapActor", () => {
           "price_level",
           "priceLevel",
           "review_count",
-          "reviewCount",
           "cluster_bounds",
           "viewport_area_km2",
           "density_per_km2",
@@ -204,6 +208,65 @@ describe.skipIf(skip)("MapActor", () => {
           40.0,
           6,
         );
+      });
+    });
+
+    it("F-82: carries the rating count, the viewer's own band and the photo", async () => {
+      await withTestDb(async (db) => {
+        const s = await scenario(db, "PUBLIC");
+        await db.execute(sql`
+          update public.places set review_count = 12 where id = ${s.listed}::uuid
+        `);
+        // The viewer's best band wins across their lists; the first mirrored
+        // photo (by display order) is the marker's.
+        const second = await seedTierList(db, {
+          createdById: s.owner,
+          privacy: "PRIVATE",
+        });
+        await db.execute(sql`
+          update public.tier_list_items set band = 2
+          where tier_list_id = ${s.tierListId}::uuid
+        `);
+        await seedTierListPlace(db, second, s.listed, 4);
+        const fileA = crypto.randomUUID();
+        const fileB = crypto.randomUUID();
+        for (const file of [fileA, fileB]) {
+          await db.execute(sql`
+            insert into public.files (id, key) values (${file}::uuid, ${`places/${file}.jpg`})
+          `);
+        }
+        await db.execute(sql`
+          insert into public.place_google_photos
+            (place_id, google_photo_name, storage_file_id, display_order)
+          values
+            (${s.listed}::uuid, 'places/x/photos/b', ${fileB}::uuid, 1),
+            (${s.listed}::uuid, 'places/x/photos/a', ${fileA}::uuid, 0),
+            (${s.listed}::uuid, 'places/x/photos/none', null, -1)
+        `);
+
+        const pick = (entries: readonly MapEntry[], id: string) =>
+          entries.find(
+            (entry) => entry.kind === "place" && entry.placeId === id,
+          );
+
+        expect(pick(await browseAll(db, s.owner), s.listed)).toMatchObject({
+          ratingCount: 12,
+          myBand: 4,
+          photoFileId: fileA,
+        });
+        // Bands are the viewer's own: the stranger sees the place's photo and
+        // count, and no band, even though the list is public.
+        expect(pick(await browseAll(db, s.stranger), s.listed)).toMatchObject({
+          ratingCount: 12,
+          myBand: null,
+          photoFileId: fileA,
+        });
+        // A place with no ratings row, list or photo reads as nulls / zero.
+        expect(pick(await browseAll(db, s.owner), s.unlisted)).toMatchObject({
+          ratingCount: 0,
+          myBand: null,
+          photoFileId: null,
+        });
       });
     });
 
