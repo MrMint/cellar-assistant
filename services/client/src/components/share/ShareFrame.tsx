@@ -44,7 +44,7 @@ export function ShareFrame({
           </span>
           <span className="t-head text-ink">Cellar Assistant</span>
         </span>
-        <Button asChild variant="ghost" className="t-head">
+        <Button asChild variant="ghost" className="t-head text-act-ink">
           <Link href={withReturnTo("/sign-in", canonicalPath)} underline="none">
             Sign in
           </Link>

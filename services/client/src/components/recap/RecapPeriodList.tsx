@@ -64,12 +64,19 @@ export function RecapPeriodRows({
             )}
           >
             <span>{option.label}</span>
-            {checked && variant === "sheet" ? (
-              <Check
-                aria-hidden
-                strokeWidth={ICON_STROKE}
-                className="size-5 text-act-ink"
-              />
+            {variant === "sheet" ? (
+              <span className="flex items-center gap-2">
+                {option.sub !== "" && (
+                  <span className="t-cap text-ink-2">{option.sub}</span>
+                )}
+                {checked && (
+                  <Check
+                    aria-hidden
+                    strokeWidth={ICON_STROKE}
+                    className="size-5 text-act-ink"
+                  />
+                )}
+              </span>
             ) : option.sub !== "" ? (
               <span className="t-cap text-ink-2">{option.sub}</span>
             ) : null}

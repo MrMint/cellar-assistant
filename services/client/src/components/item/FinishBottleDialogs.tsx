@@ -23,9 +23,12 @@ import type { FinishBottle } from "./useFinishBottle";
 export function FinishBottleDialogs({
   finish,
   itemName,
+  cellarName,
 }: {
   finish: FinishBottle;
   itemName: string | undefined;
+  /** The put-back toast's "Back in <cellar>" (F-150). */
+  cellarName?: string;
 }) {
   const { state } = finish;
   const asking =
@@ -34,7 +37,7 @@ export function FinishBottleDialogs({
   const name =
     itemName === undefined || itemName === "" ? "This bottle" : itemName;
 
-  useFinishToast(finish);
+  useFinishToast(finish, cellarName);
 
   return (
     <ResponsiveDialog
@@ -73,7 +76,10 @@ export function FinishBottleDialogs({
  * `finish.finishNow`. The same toast as the slider's: "Finished. Moved out of
  * the cellar." with Undo, "Putting it back…", the refusal with "Try again".
  */
-export function useFinishToast(finish: FinishBottle): void {
+export function useFinishToast(
+  finish: FinishBottle,
+  cellarName?: string,
+): void {
   const { state } = finish;
   const toastId = useId();
   // The toast's callbacks outlive the render that raised them: read the
@@ -87,7 +93,7 @@ export function useFinishToast(finish: FinishBottle): void {
   useEffect(() => {
     const was = previous.current;
     previous.current = state.phase;
-    const message = finishToastCopy(state);
+    const message = finishToastCopy(state, cellarName);
     const closed = {
       // The window passed, or the toast was swiped away: no Undo any more.
       onAutoClose: () => latest.current.dismiss(),
@@ -96,9 +102,15 @@ export function useFinishToast(finish: FinishBottle): void {
     // Keep the toast when its action runs: it shows the Undo running, then
     // its outcome.
     const undo = () => latest.current.undo();
-    if (state.phase === "finished" && message !== null) {
+    if (
+      (state.phase === "finished" || state.phase === "restored") &&
+      message !== null
+    ) {
       notify(message, { id: toastId, undo, keepOnAction: true, ...closed });
-    } else if (state.phase === "undoing" && message !== null) {
+    } else if (
+      (state.phase === "undoing" || state.phase === "refinishing") &&
+      message !== null
+    ) {
       notify(message, { id: toastId, tone: "loading" });
     } else if (state.phase === "undoFailed" && message !== null) {
       notify(message, {
@@ -109,10 +121,13 @@ export function useFinishToast(finish: FinishBottle): void {
         keepOnAction: true,
         ...closed,
       });
-    } else if (state.phase === "idle" && was === "undoing") {
+    } else if (
+      state.phase === "idle" &&
+      (was === "undoing" || was === "refinishing")
+    ) {
       dismissNotification(toastId);
     }
-  }, [state, toastId]);
+  }, [state, toastId, cellarName]);
 
   // Leaving the page takes the toast with it: its Undo would act on a bottle
   // no longer on screen.

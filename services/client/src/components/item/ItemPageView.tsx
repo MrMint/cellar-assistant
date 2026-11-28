@@ -219,6 +219,8 @@ export function ItemPageView({
         {/* The rating line (C3's taste header: yours, friends, everyone),
             then your stars and note under the photo. */}
         <TasteHeader
+          itemId={item.itemId}
+          itemType={item.type}
           cells={tasteCells({
             mine: item.myReview?.score ?? null,
             friends: item.friends,
@@ -241,13 +243,10 @@ export function ItemPageView({
             itemName={item.name}
             bottles={shownBottles}
             addableCellars={addableCellars}
-            total={
-              bottlesTotal === null || bottlesTotal === undefined
-                ? null
-                : // `myBottles` counts bottles still in the cellar, so only a
-                  // finished selected bottle is one it did not count.
-                  bottlesTotal + (owned && selected.emptyAt !== null ? 1 : 0)
-            }
+            // `myBottles` counts bottles still in the cellar, which is what
+            // the header counts (F-152): a finished selected bottle is
+            // listed, not counted.
+            total={bottlesTotal ?? null}
             selectedId={owned ? selected.id : null}
           />
         )}

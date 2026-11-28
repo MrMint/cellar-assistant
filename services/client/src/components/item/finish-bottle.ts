@@ -13,7 +13,7 @@
  * 3. the delete dialog says the check-ins go too, and offers "Mark finished
  *    instead", which goes straight to step 2;
  * 4. after the toast is gone, a finished bottle's page still offers
- *    "Restore to cellar" (`restoring`) — the same `updateCellarItem(emptyAt:
+ *    "Put back" (`restoring`) — the same `updateCellarItem(emptyAt:
  *    null)`, so Undo is not limited to the toast's five seconds.
  *
  * This module is the whole behaviour — a reducer and two commands with their
@@ -42,8 +42,12 @@ export type FinishState =
    * that fails silently would read as done.
    */
   | { phase: "undoFailed"; snapshot: FinishSnapshot; error: string }
-  /** "Restore to cellar" on a bottle that was finished earlier. */
-  | { phase: "restoring" };
+  /** "Put back" on a bottle that was finished earlier. */
+  | { phase: "restoring" }
+  /** F-150: it is back; the toast ("Back in <cellar>") offers Undo. */
+  | { phase: "restored" }
+  /** That Undo: finishing it again. */
+  | { phase: "refinishing" };
 
 export type FinishEvent =
   /** The slider settled on 0%: ask first. */
@@ -56,7 +60,7 @@ export type FinishEvent =
   | { type: "UNDO" }
   | { type: "UNDONE" }
   | { type: "DISMISS" }
-  /** "Restore to cellar", long after the Undo toast. */
+  /** "Put back", long after the Undo toast. */
   | { type: "RESTORE" }
   | { type: "RESTORED" }
   | { type: "FAILED"; message: string };
@@ -87,25 +91,33 @@ export function finishReducer(
         ? { phase: "finishing", snapshot: state.snapshot, asked: true }
         : state;
     case "FINISHED":
+      if (state.phase === "refinishing") return initialFinishState;
       return state.phase === "finishing"
         ? { phase: "finished", snapshot: state.snapshot }
         : state;
     case "UNDO":
+      if (state.phase === "restored") return { phase: "refinishing" };
       return state.phase === "finished" || state.phase === "undoFailed"
         ? { phase: "undoing", snapshot: state.snapshot }
         : state;
     case "UNDONE":
       return state.phase === "undoing" ? initialFinishState : state;
     case "DISMISS":
-      return state.phase === "finished" || state.phase === "undoFailed"
+      return state.phase === "finished" ||
+        state.phase === "undoFailed" ||
+        state.phase === "restored"
         ? initialFinishState
         : state;
     case "RESTORE":
       return state.phase === "idle" ? { phase: "restoring" } : state;
     case "RESTORED":
-      return state.phase === "restoring" ? initialFinishState : state;
+      return state.phase === "restoring" ? { phase: "restored" } : state;
     case "FAILED":
-      if (state.phase === "finishing" || state.phase === "restoring") {
+      if (
+        state.phase === "finishing" ||
+        state.phase === "restoring" ||
+        state.phase === "refinishing"
+      ) {
         return { phase: "idle", error: event.message };
       }
       return state.phase === "undoing"
@@ -136,10 +148,12 @@ export const undoFinishInput = (
 });
 
 /**
- * `UpdateCellarItemInput` for "Restore to cellar". Finishing saved the level
- * as 0 and the level before it is gone, so the bottle comes back full unless
- * it somehow still has a level; the slider is right there to correct it. Its
- * `openAt` stays: whether it was opened before finishing is not recorded.
+ * `UpdateCellarItemInput` for "Put back". The board puts it back at the level
+ * it had before it was finished, else full. `emptyCellarItem` saves the level
+ * as 0 today, so the level before it is gone and the bottle comes back full
+ * (F-150's server hand-off: keep the old level through a finish); a level the
+ * read still carries is put back as it is. Its `openAt` stays: whether it was
+ * opened before finishing is not recorded.
  */
 export const restoreFinishedInput = (
   percentageRemaining: number,
@@ -204,12 +218,31 @@ export async function performRestore(
   deps.refresh();
 }
 
+/** Run after `UNDO` of a put back: finish it again. */
+export async function performRefinish(deps: FinishDeps): Promise<void> {
+  const outcome = await deps.empty();
+  if (!outcome.ok) {
+    deps.dispatch({ type: "FAILED", message: outcome.message });
+    return;
+  }
+  deps.dispatch({ type: "FINISHED" });
+  deps.refresh();
+}
+
 /**
- * The Undo toast's line for each phase that shows one (N13a's wording); null
- * while there is no toast. It stays up `UNDO_TOAST_MS` (`app/notify`).
+ * The Undo toast's line for each phase that shows one (N13a's wording, and
+ * the board's "Back in <cellar>" for a put back); null while there is no
+ * toast. It stays up `UNDO_TOAST_MS` (`app/notify`).
  */
-export function finishToastCopy(state: FinishState): string | null {
+export function finishToastCopy(
+  state: FinishState,
+  cellarName?: string,
+): string | null {
   switch (state.phase) {
+    case "restored":
+      return `Back in ${cellarName === undefined || cellarName === "" ? "the cellar" : cellarName}`;
+    case "refinishing":
+      return "Finishing it again…";
     case "finished":
       return "Finished. Moved out of the cellar.";
     case "undoing":

@@ -3,6 +3,7 @@
 import { useEffect, useState, useTransition } from "react";
 import { useMutation } from "urql";
 import { Delete } from "@/components/app/icons";
+import { notify } from "@/components/app/notify";
 import { ResponsiveDialog } from "@/components/app/ResponsiveDialog";
 import { useNavigate } from "@/components/app/useNavigate";
 import type { ApiItemType } from "@/components/cellar-api/itemTypes";
@@ -95,6 +96,9 @@ export function DeleteBottleDialog({
       }
       setHasDeleted(true);
       navigate.replace(`/cellars/${cellarId}/items`);
+      // F-153: the board's toast. The app's one Toaster outlives the page,
+      // so it shows on the cellar the delete lands on.
+      notify("Bottle deleted");
     });
   };
 

@@ -10,6 +10,7 @@ import {
   finishToastCopy,
   initialFinishState,
   performFinish,
+  performRefinish,
   performRestore,
   performUndo,
   restoredPercentage,
@@ -220,13 +221,12 @@ describe("performFinish / performUndo", () => {
   });
 });
 
-describe("Restore to cellar (after the Undo toast is gone)", () => {
-  test("idle → restoring → idle; a refusal lands idle with its message", () => {
+describe("Put back (after the Undo toast is gone)", () => {
+  test("idle → restoring → restored (its toast); a refusal lands idle with its message", () => {
     let state = run([{ type: "RESTORE" }]);
     assert.deepEqual(state, { phase: "restoring" });
     assert.deepEqual(finishReducer(state, { type: "RESTORED" }), {
-      phase: "idle",
-      error: null,
+      phase: "restored",
     });
     state = finishReducer(state, { type: "FAILED", message: "Not yours" });
     assert.deepEqual(state, { phase: "idle", error: "Not yours" });
@@ -281,6 +281,63 @@ describe("Restore to cellar (after the Undo toast is gone)", () => {
     await performRestore(deps({ ok: false, message: "gone" }), 0);
     assert.deepEqual(events.at(-1), { type: "FAILED", message: "gone" });
     assert.equal(refreshes, 1);
+  });
+});
+
+describe("Put back's toast and its Undo (F-150)", () => {
+  const restored = run([{ type: "RESTORE" }, { type: "RESTORED" }]);
+
+  test("the toast says where it went back to, and offers Undo", () => {
+    assert.equal(finishToastCopy(restored, "Garage"), "Back in Garage");
+    assert.equal(finishToastCopy(restored), "Back in the cellar");
+  });
+
+  test("Undo finishes it again, then ends idle; the toast timing out is the end of it", () => {
+    const again = finishReducer(restored, { type: "UNDO" });
+    assert.deepEqual(again, { phase: "refinishing" });
+    assert.equal(finishToastCopy(again), "Finishing it again…");
+    assert.deepEqual(finishReducer(again, { type: "FINISHED" }), {
+      phase: "idle",
+      error: null,
+    });
+    assert.deepEqual(
+      finishReducer(again, { type: "FAILED", message: "Offline" }),
+      { phase: "idle", error: "Offline" },
+    );
+    assert.deepEqual(finishReducer(restored, { type: "DISMISS" }), {
+      phase: "idle",
+      error: null,
+    });
+  });
+
+  test("performRefinish: emptyCellarItem, FINISHED, then a refresh", async () => {
+    const events: FinishEvent[] = [];
+    const calls: string[] = [];
+    let refreshes = 0;
+    const deps = (outcome: WriteOutcome): FinishDeps => ({
+      dispatch: (event) => events.push(event),
+      empty: async () => {
+        calls.push("empty");
+        return outcome;
+      },
+      update: async () => outcome,
+      refresh: () => {
+        refreshes += 1;
+      },
+    });
+    await performRefinish(deps({ ok: true }));
+    assert.deepEqual(calls, ["empty"]);
+    assert.deepEqual(events, [{ type: "FINISHED" }]);
+    assert.equal(refreshes, 1);
+    await performRefinish(deps({ ok: false, message: "gone" }));
+    assert.deepEqual(events.at(-1), { type: "FAILED", message: "gone" });
+  });
+
+  test("the old level goes back when the server still has it", () => {
+    assert.deepEqual(restoreFinishedInput(70), {
+      emptyAt: null,
+      percentageRemaining: 70,
+    });
   });
 });
 

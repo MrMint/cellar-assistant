@@ -107,7 +107,6 @@ export async function removeMyRating(
   deps: {
     deleteReview: Exec<typeof DeleteItemReviewMutation>;
     addReview: Exec<typeof AddItemReviewMutation>;
-    newId?: () => string;
   },
   {
     itemId,
@@ -141,7 +140,10 @@ export async function removeMyRating(
       itemId,
       type,
       input: {
-        reviewId: (deps.newId ?? newUuid)(),
+        // F-148: the same id, so Undo puts back the review that was removed
+        // rather than a new one. Its `createdAt` is still the server's new
+        // stamp: `AddItemReviewInput` takes none (a server hand-off).
+        reviewId: myReview.id,
         score: myReview.score,
         ...(myReview.text === null ? {} : { text: myReview.text }),
       },

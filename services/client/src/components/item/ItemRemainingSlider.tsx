@@ -1,6 +1,5 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { Slider as SliderPrimitive } from "radix-ui";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useMutation } from "urql";
@@ -15,6 +14,7 @@ import { useInterval } from "@/utilities/hooks";
 import { FinishBottleDialogs } from "./FinishBottleDialogs";
 import { ItemSection } from "./ItemSection";
 import { LoadingButton } from "./LoadingButton";
+import { useRefreshAfterWrite } from "./parts/pane-refresh";
 import { useFinishBottle } from "./useFinishBottle";
 
 export type ItemRemainingSliderProps = {
@@ -28,6 +28,8 @@ export type ItemRemainingSliderProps = {
   percentageRemaining: number;
   /** For the "Finished it?" question. */
   itemName?: string;
+  /** Put back's toast: "Back in <cellar>" (F-150). */
+  cellarName?: string;
 };
 
 /**
@@ -41,7 +43,7 @@ export type ItemRemainingSliderProps = {
  *   action stamped `empty_at` the moment the slider reached 0. Now 0% asks
  *   "Finished it?" first and offers Undo after (N13a, `useFinishBottle`):
  *   "Not yet" puts the slider back on the last saved level. A finished
- *   bottle keeps a "Restore to cellar" button for its owner, so putting it
+ *   bottle keeps a "Put back" button for its owner, so putting it
  *   back is not limited to the Undo toast's five seconds.
  * - "Opened … ago" no longer seeds `now` with `new Date()` during render (the
  *   hydration rule): `now` is set in an effect, so the server and the first
@@ -62,8 +64,9 @@ export const ItemRemainingSlider = ({
   emptied,
   isCellarOwner,
   itemName,
+  cellarName,
 }: ItemRemainingSliderProps) => {
-  const router = useRouter();
+  const refreshAfterWrite = useRefreshAfterWrite();
   const [isPending, startTransition] = useTransition();
   const [percent, setPercent] = useState(percentageRemaining);
   const [now, setNow] = useState<number | null>(null);
@@ -88,7 +91,9 @@ export const ItemRemainingSlider = ({
   // Back to the saved level whenever the server's changes, and whenever a
   // finish ends without one ("Not yet", a refused write, Undo).
   useEffect(() => {
-    if (finishPhase !== "idle") return;
+    // A put back's toast (`restored`) is not a finish in flight: the level
+    // it came back at shows at once.
+    if (finishPhase !== "idle" && finishPhase !== "restored") return;
     if (pending.current !== null && pending.current !== percentageRemaining)
       return;
     pending.current = null;
@@ -125,7 +130,7 @@ export const ItemRemainingSlider = ({
         setError(result.error.message);
         return;
       }
-      router.refresh();
+      refreshAfterWrite();
     });
   }, 400);
 
@@ -141,7 +146,7 @@ export const ItemRemainingSlider = ({
         setError(result.error.message);
         return;
       }
-      router.refresh();
+      refreshAfterWrite();
     });
   };
 
@@ -213,7 +218,7 @@ export const ItemRemainingSlider = ({
               loading={finishPhase === "restoring"}
               onClick={() => finish.restore(percentageRemaining)}
             >
-              Restore to cellar
+              Put back
             </LoadingButton>
           )}
         </div>
@@ -223,7 +228,11 @@ export const ItemRemainingSlider = ({
           {shownError}
         </p>
       )}
-      <FinishBottleDialogs finish={finish} itemName={itemName} />
+      <FinishBottleDialogs
+        finish={finish}
+        itemName={itemName}
+        cellarName={cellarName}
+      />
     </ItemSection>
   );
 };
