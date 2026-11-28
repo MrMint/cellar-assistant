@@ -164,12 +164,13 @@ test("a retried Love stays loved, and the recipe page agrees", async ({
   expect(retry).toMatchObject({ loved: true, changed: false });
 
   await page.goto(`/recipes/${recipeId}`);
-  const loved = page.getByRole("button", { name: "Loved — tap to remove" });
+  const loved = page.getByRole("button", { name: /: loved — tap to remove$/ });
   await expect(loved).toHaveAttribute("aria-pressed", "true");
   await loved.tap();
-  await expect(
-    page.getByRole("button", { name: "Love this recipe" }),
-  ).toHaveAttribute("aria-pressed", "false");
+  await expect(page.getByRole("button", { name: /^Love / })).toHaveAttribute(
+    "aria-pressed",
+    "false",
+  );
   await expect
     .poll(async () => {
       const data = await api.query(
@@ -213,7 +214,7 @@ test("a stale tab's Undo cannot take back an edit made on another device", async
 
   // This tab reads the history: its Undo names the last add.
   await page.goto(`/tier-lists/${tierListId}`);
-  await page.getByRole("button", { name: "Arrange", exact: true }).tap();
+  await page.getByRole("button", { name: "Edit order", exact: true }).tap();
   const bar = page.getByRole("toolbar", { name: "Arrange" });
   const staleUndo = bar.getByRole("button", { name: /^Undo: added / });
   await expect(staleUndo, "Undo does not name the last add").toBeEnabled({
