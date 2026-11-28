@@ -61,6 +61,8 @@ import { basemapStyle, MAP_CANVAS_BACKGROUND } from "./basemap";
 import { INTERACTIVE_LAYER_IDS } from "./constants";
 import { useMapBoundsML } from "./hooks/useMapBoundsML";
 import { useMapInteraction } from "./hooks/useMapInteraction";
+import { OwnerPins } from "./OwnerPins";
+import { splitOwnerPins } from "./owner-pins";
 import { POISymbolLayer } from "./POISymbolLayer";
 import { type MapTheme, mapPalette } from "./palette";
 import { SelectedPlaceLayer } from "./SelectedPlaceLayer";
@@ -244,6 +246,8 @@ export function MapLibreRenderer({
           ),
     [mapItems, list.kinds],
   );
+  // F-196: the owner's ranked places draw as photo pins; the rest as symbols.
+  const pins = useMemo(() => splitOwnerPins(pinItems), [pinItems]);
 
   // ── Sync effects ─────────────────────────────────────────────────────
 
@@ -606,7 +610,7 @@ export function MapLibreRenderer({
         >
           {iconsLoaded && (
             <POISymbolLayer
-              items={pinItems}
+              items={pins.rest}
               filters={filters}
               wantToGo={wantToGo}
               palette={palette}
@@ -616,11 +620,24 @@ export function MapLibreRenderer({
 
           {iconsLoaded && (
             <SelectedPlaceLayer
-              selectedPlace={mapUI.selectedPlace}
+              // An owner's pin shows its own selected state (F-196).
+              selectedPlace={
+                pins.owner.some(
+                  (pin) => pin.place.id === mapUI.selectedPlace?.id,
+                )
+                  ? null
+                  : mapUI.selectedPlace
+              }
               wantToGo={wantToGo}
               palette={palette}
             />
           )}
+
+          <OwnerPins
+            pins={pins.owner}
+            selectedId={mapUI.selectedPlace?.id ?? null}
+            onOpen={openPlace}
+          />
 
           {userLocation && (
             <UserLocationLayer location={userLocation} palette={palette} />
