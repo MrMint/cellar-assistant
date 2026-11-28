@@ -26,6 +26,12 @@ export type ItemRemainingSliderProps = {
   opened?: string | null;
   emptied?: string | null;
   percentageRemaining: number;
+  /**
+   * F-150 (H-125): the level a finished bottle had before it was finished
+   * (`CellarItem.levelBeforeEmpty`), which Put back restores; null or
+   * absent puts it back full.
+   */
+  levelBeforeEmpty?: number | null;
   /** For the "Finished it?" question. */
   itemName?: string;
   /** Put back's toast: "Back in <cellar>" (F-150). */
@@ -60,6 +66,7 @@ export const ItemRemainingSlider = ({
   itemId,
   cellarId,
   percentageRemaining,
+  levelBeforeEmpty = null,
   opened,
   emptied,
   isCellarOwner,
@@ -216,7 +223,9 @@ export const ItemRemainingSlider = ({
             <LoadingButton
               variant="outline"
               loading={finishPhase === "restoring"}
-              onClick={() => finish.restore(percentageRemaining)}
+              onClick={() =>
+                finish.restore(percentageRemaining, levelBeforeEmpty)
+              }
             >
               Put back
             </LoadingButton>

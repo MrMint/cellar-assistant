@@ -678,6 +678,7 @@ export const yourBottlesFromFragment = (
       openAt: (node.openAt as string | null) ?? null,
       emptyAt: (node.emptyAt as string | null) ?? null,
       percentageRemaining: node.percentageRemaining,
+      levelBeforeEmpty: node.levelBeforeEmpty ?? null,
     })),
     total: connection.totalCount ?? null,
   };

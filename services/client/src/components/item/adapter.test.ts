@@ -20,6 +20,7 @@ import {
   reviewFromRow,
   teaTextCards,
   tierListEntryFromNode,
+  yourBottlesFromFragment,
 } from "./adapter";
 import { dateFromYear, formLayout, yearFromDate } from "./itemFormLayout";
 import { tasteScore } from "./TasteHeader";
@@ -588,5 +589,37 @@ describe("F-145: Undo of Delete bottle puts the same bottle back (restoreCellarI
   test("no read of the bottle is no restore: never a bottle rebuilt from guesses", () => {
     assert.equal(restoreBottleVariables(null), null);
     assert.equal(restoreBottleVariables(undefined), null);
+  });
+});
+
+describe("Your bottles keep the level a finish kept (F-150, H-125)", () => {
+  const bottle = (id: string, levelBeforeEmpty: number | null) => ({
+    node: {
+      __typename: "CellarItem",
+      id,
+      cellarId: "c-1",
+      openAt: "2026-10-05T20:00:00.000Z",
+      emptyAt: "2026-11-01T20:00:00.000Z",
+      percentageRemaining: 0,
+      levelBeforeEmpty,
+      createdAt: "2026-10-01T09:00:00.000Z",
+      cellar: { __typename: "Cellar", id: "c-1", name: "Home" },
+    },
+  });
+  test("levelBeforeEmpty comes through, and none kept is null", () => {
+    const { bottles } = yourBottlesFromFragment({
+      __typename: "Tea",
+      myBottles: {
+        totalCount: 2,
+        edges: [bottle("b-1", 40), bottle("b-2", null)],
+      },
+    } as unknown as Parameters<typeof yourBottlesFromFragment>[0]);
+    assert.deepEqual(
+      bottles.map((row) => [row.id, row.levelBeforeEmpty]),
+      [
+        ["b-1", 40],
+        ["b-2", null],
+      ],
+    );
   });
 });

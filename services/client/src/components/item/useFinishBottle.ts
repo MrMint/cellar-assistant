@@ -32,7 +32,11 @@ export type FinishBottle = {
   undo: () => void;
   dismiss: () => void;
   /** "Put back" on a bottle finished earlier (no snapshot left). */
-  restore: (percentageRemaining: number) => void;
+  restore: (
+    percentageRemaining: number,
+    /** `CellarItem.levelBeforeEmpty`: the level kept through the finish. */
+    levelBeforeEmpty?: number | null,
+  ) => void;
 };
 
 /**
@@ -107,10 +111,10 @@ export function useFinishBottle({
       void performUndo(deps, state.snapshot);
     },
     dismiss: () => dispatch({ type: "DISMISS" }),
-    restore: (percentageRemaining) => {
+    restore: (percentageRemaining, levelBeforeEmpty) => {
       if (state.phase !== "idle") return;
       dispatch({ type: "RESTORE" });
-      void performRestore(deps, percentageRemaining);
+      void performRestore(deps, percentageRemaining, levelBeforeEmpty);
     },
   };
 }

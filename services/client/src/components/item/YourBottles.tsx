@@ -312,6 +312,7 @@ export function YourBottles({
                       cellarId={bottle.cellarId}
                       isCellarOwner
                       percentageRemaining={bottle.percentageRemaining}
+                      levelBeforeEmpty={bottle.levelBeforeEmpty}
                       opened={bottle.openAt}
                       emptied={bottle.emptyAt}
                       itemName={itemName}

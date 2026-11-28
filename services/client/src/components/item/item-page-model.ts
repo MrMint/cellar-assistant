@@ -247,6 +247,11 @@ export type YourBottle = {
   readonly openAt: string | null;
   readonly emptyAt: string | null;
   readonly percentageRemaining: number;
+  /**
+   * F-150 (H-125): the level kept through a finish, which Put back restores;
+   * null when nothing was kept (or the read did not say).
+   */
+  readonly levelBeforeEmpty?: number | null;
 };
 
 /**
