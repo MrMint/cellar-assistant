@@ -13,8 +13,8 @@
  *
  * ## What replaced the trigger, exactly
  *
- * Today a Hasura event trigger on `menu_scans.processing_status` fires an HTTP
- * shim (`onMenuScanComplete`) which raw-`fetch`es `matchMenuItems`. Three
+ * An event trigger on `menu_scans.processing_status` used to fire an HTTP
+ * shim (`onMenuScanComplete`) which raw-`fetch`ed `matchMenuItems`. Three
  * things were wrong with that and all three are gone: the trigger fires on a
  * *column value*, so a manual `UPDATE` in psql started a pipeline; the shim
  * had no retry and no idempotency key, so a 500 lost the match run silently;

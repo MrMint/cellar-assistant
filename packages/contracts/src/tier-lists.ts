@@ -279,9 +279,8 @@ export type CreateTierListInput = {
   readonly description?: string | null;
   /** Defaults to the column default, `PRIVATE`. */
   readonly privacy?: PermissionType;
-  /** Defaults to the column default, `'place'`. Settable only at creation —
-   *  the Hasura permissions this replaces never allowed changing it later,
-   *  and `UpdateTierListInput` below preserves that. */
+  /** Defaults to the column default, `'place'`. Settable only at creation:
+   *  `UpdateTierListInput` below has no `listType`. */
   readonly listType?: string;
   /**
    * X16: `RATINGS` starts the list pre-banded — every entry of its type you

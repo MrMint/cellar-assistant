@@ -5,7 +5,7 @@ behind Loki's existing nginx-proxy instead of a Caddy of its own (§1). Not yet
 executed on Loki — see
 [§8](#8-what-is-unverified-from-here) for exactly which parts of this have been
 run and which have only been reasoned about.
-**Audience:** whoever does the first production deploy of the post-Nhost stack.
+**Audience:** whoever deploys this stack to Loki from scratch.
 
 This covers the public edge, TLS and identity, and the deploy pipeline — which
 is pull-based: Loki fetches, builds and deploys itself (§2.6, §4.1;
@@ -166,10 +166,6 @@ Print them for your origin rather than retyping:
 cd services/actors && PUBLIC_APP_ORIGIN=https://cellar.example.com \
   node -e 'import("./src/auth/config.ts").then(m => console.log(m.oauthRedirectUris(process.env.PUBLIC_APP_ORIGIN)))'
 ```
-
-Leave the existing Nhost redirect URIs in place until E4's 30-day rollback
-window closes — providers allow several, and removing them early makes rollback
-impossible.
 
 `services/actors/src/auth/config.test.ts` pins these against the mounted base path,
 so a change in either one fails CI rather than production.
@@ -343,7 +339,7 @@ neither of.
 
 | | (a) GHCR images built by Actions | (b) the git commit, built on Loki — **chosen** |
 |---|---|---|
-| Exists before a merge to `main` | no — the build job runs only on `main`, and merging is gated (e4-decisions decision 15) | yes, any branch; today that is `migrate-off-nhost` |
+| Exists before a merge to `main` | no — the build job runs only on `main`, and merging is gated (e4-decisions decision 15) | yes, any branch |
 | Credential on Loki | a PAT with `read:packages` unless the packages are made public | none — a public repository is read anonymously |
 | What Loki trusts | a mutable tag (`sha-<7>`) that any workflow with `packages: write` on `main` could re-push, unless digests are carried through a second trusted channel | a commit id: `git archive <sha>` of the object fetched is the tree, byte for byte |
 | Cost on Loki | a pull | a build — niced, one image at a time, on the host's layer cache |
@@ -366,7 +362,7 @@ build-and-smoke check on `main` and the writer of the layer cache stack-ci's
 running stack alone):
 
 1. **Only the tracked branch** (`PULL_DEPLOY_BRANCH`: `main` for every merge,
-   `production` for releases only, `migrate-off-nhost` until the merge).
+   `production` for releases only).
    `--sha` deploys a specific commit, which must be reachable from that branch.
 2. **Forward only.** On a timer tick the new head must be a descendant of the
    deployed commit. A force-push that rewinds or replaces the branch is
@@ -442,18 +438,8 @@ GOOGLE_APPLICATION_CREDENTIALS_JSON=<the service-account key, inline>
 ```
 
 The key is read **from the environment only**. There is no checked-in credentials file and no
-database lane for it — the Nhost stack's `admin_credentials` fallback was deliberately not ported
-(`services/actors/src/lib/ai/config.ts`). Which raises the one thing to do before day 30:
-
-> **`admin.credentials` may hold the only copy of this key.** `e4-decisions.md` decision 4: if
-> production ran with `CREDENTIALS_GCP_ID` set and no credentials file, that row is a live
-> service-account private key. Run `scripts/cutover/preflight.sql:302-308` and dump it before
-> Nhost is deleted, or rotate the service account in GCP instead. This decision makes Vertex the
-> deployed AI path, so that key is now load-bearing rather than vestigial.
->
-> **Since resolved (decision 4, 2026-09-18):** the table is empty in the rollback database, so
-> there was never a key in it to rescue. The preflight query still reports production's count, and
-> the key this section needs comes from a GCP service account either way.
+database lane for it, deliberately (`services/actors/src/lib/ai/config.ts`). The key comes from a
+GCP service account.
 
 Two properties of the deployed embedding path worth knowing before something fails at 2am:
 
@@ -471,8 +457,8 @@ Two properties of the deployed embedding path worth knowing before something fai
 - **Changing the embedding model invalidates every stored vector.** Two models are two spaces.
   Every `item_vectors` / `recipe_vectors` row records the model that made it (`embedding_model`),
   and `VectorReembedJobActor` re-embeds every row another model made:
-  `bun scripts/operator.ts reembed` (§4.2). **The cutover is such a switch** — every migrated
-  vector has `embedding_model` NULL — so §4.2 is a step of the first deploy, not an option.
+  `bun scripts/operator.ts reembed` (§4.2). So is a NULL `embedding_model`, which every
+  vector imported in the 2026-10 migration has — so §4.2 is a step of the first deploy, not an option.
 - **Changing the embedded text invalidates item vectors too.** Every `item_vectors` row also
   records which `embeddingTextFor` format and text made it (`embedding_text`, `v<format>:<digest>`;
   N08, `20261008030906_item_vectors_embedding_text`), and the same job re-embeds every item row
@@ -660,9 +646,8 @@ the one step that is easy to forget, and the edge answers 502 until it runs.
 
 ### 4.1 Every deploy after the first — schema first, then code
 
-The first deploy's database comes out of the cutover (`scripts/cutover/`), whose
-`migrate` phase seeds the migration ledger (`cellar_meta.schema_migrations`).
-From then on, **every schema change reaches production through the deploy,
+Production's database carries the migration ledger (`cellar_meta.schema_migrations`); a
+database built from scratch gets it from `packages/db/baseline/build.sh`. From then on, **every schema change reaches production through the deploy,
 before the image that needs it starts**. `scripts/deploy/pull-deploy.sh`, run
 on Loki by its timer once a new commit has passed §2.6's checks, does this in
 order; each step is a line in `~/cellar-prod/logs/pull-deploy.log` and its
@@ -775,10 +760,10 @@ hours later; it fails the `up --wait` in step 6, naming the migration. Under `NO
 sha256, naming the variable and never the value — so a deploy that skipped
 `check-prod-config.mjs` still cannot run on them.
 
-### 4.2 The re-embed — once, right after the cutover deploy
+### 4.2 The re-embed — after the first deploy or a model change
 
-**Every migrated vector has to be re-embedded, and nothing does it on its own.** Legacy production
-embedded with `gemini-embedding-2-preview`; this stack embeds with `gemini-embedding-2` (§2.7), a
+**A vector another model made has to be re-embedded, and nothing does it on its own.** Vectors
+imported in the 2026-10 migration were embedded with `gemini-embedding-2-preview`; this stack embeds with `gemini-embedding-2` (§2.7), a
 different space. Every `item_vectors` / `recipe_vectors` row records the embedding that made it
 in `embedding_model` (`<provider>:<model>@<dims>/RETRIEVAL_DOCUMENT`, migration
 `20260928162504_vector_embedding_identity`), and every migrated row has it **NULL**, deliberately.
@@ -997,9 +982,7 @@ authority differ — check `FILES_S3_ENDPOINT` is a bare hostname and that no
 
 Finally, the plan's remaining E3 acceptance lines: a Dapr trace for one actor
 call visible in Grafana (Explore → Tempo), and a merge to `main` redeploying
-without manual steps (E3b). A merge to `main` also redeploys production **Nhost
-Cloud** through the `nhost` GitHub app — `e4-decisions.md` decision 15 — so that
-merge is never a Loki-only event.
+without manual steps (E3b).
 
 ---
 
@@ -1048,10 +1031,6 @@ edge stack's, in its `certs` volume, and outlive all of this.
 Never `down -v` on this stack: it destroys the Postgres data, the MinIO
 objects, the Dapr scheduler's reminder store **and** the observability volume (every log, metric and trace, Grafana's alert state,
 silences and annotations, and the admin password as last rotated).
-
-The E4 rollback is a different thing — redeploying the pre-cutover frontend
-against Nhost. The `epic-burnell-*` Nhost containers exist for that and must be
-left alone for the 30-day window.
 
 ---
 
@@ -1497,8 +1476,8 @@ shows on Grafana's Alerting page (`http://<LAN address>:3010/alerting`); the
 root notification policy routes everything to `empty`, a receiver with no
 integrations that is already present in Grafana's default config for
 `grafana/otel-lgtm:0.32.1`. Nothing is sent off the box, nothing is attempted
-and logged as a failure, and `infra/.env.prod` needs no webhook. During the
-cutover's 24-hour watch, "watching alerts" means opening that page.
+and logged as a failure, and `infra/.env.prod` needs no webhook. Until a contact
+point is added, "watching alerts" means opening that page.
 
 **Adding a contact point later.** The delivering configuration this replaced
 is the last version of `contact-points-and-policies.yaml` before 2026-10-05

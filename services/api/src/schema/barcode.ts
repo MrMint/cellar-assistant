@@ -8,9 +8,8 @@
  *   lookup already resolved into `Item`s.
  * - **`ensureBarcode`** is find-or-create. There is no `updateBarcode`, and
  *   that absence is deliberate: §2.1 says a `barcodes` row may be written
- *   "only on creation or admin", and today's Hasura permission (`filter: {}`
- *   over `[code, type]` for every signed-in user) is exactly the thing being
- *   removed. Re-typing an existing code returns `ForbiddenError` unless the
+ *   "only on creation or admin", so a signed-in user may not rewrite
+ *   `[code, type]` on an existing row. Re-typing an existing code returns `ForbiddenError` unless the
  *   caller is an admin.
  * - **`linkBarcodeItem`** points an item at a code, and refuses a caller who
  *   is not the item's creator. The item's `barcode_code` is written by

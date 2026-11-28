@@ -4,7 +4,7 @@
 # where the workspace globs live under bun) and the packages/* dependency
 # closure visible at build time. Without this file that
 # context includes every already-installed node_modules in the repo (100s of MB
-# per project) plus .git, secrets, and the legacy Nhost stack.
+# per project) plus .git and secrets.
 #
 # Keep in sync by hand: there is no automated check that a new top-level
 # directory gets added here.
@@ -14,12 +14,6 @@
 **/dist
 **/.next
 .git
-
-# Legacy Nhost stack — D9 removes it after cutover; irrelevant to services/api and
-# services/actors either way, and functions/ is a separate pnpm 10 context that
-# the bun migration deliberately left alone.
-nhost
-functions
 
 # The Next.js frontend and the browser suite. Neither ships in a backend
 # image, and services/client's dependency tree is by far the largest in the

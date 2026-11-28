@@ -3,7 +3,7 @@
  *
  * `Brand`'s two reverse edges. D4 recorded the gap plainly: *"`Brand` has no
  * reverse edges at all — no `items`, no `places`, no `parentBrand`, no
- * `childBrands`. The Hasura `/brands/[id]` page rendered all four."* The two
+ * `childBrands`. The old `/brands/[id]` page rendered all four."* The two
  * self-referential ones are `brands.parent_brand_id` and need no actor;
  * these two cross into other actors' tables and are why this file exists.
  *

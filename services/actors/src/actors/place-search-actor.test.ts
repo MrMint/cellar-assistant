@@ -12,7 +12,7 @@
  * `places` and `category_vectors` are empty in this development database, so
  * every fixture here is built by `lib/search-testing.ts`. A3b's differential
  * test of these functions was functional only; this is the first ranking
- * evidence for `search_places_hybrid` in the new stack.
+ * evidence for `search_places_hybrid` in this stack.
  */
 import type { Ctx, PlaceSearchInput } from "@cellar-assistant/contracts";
 import {

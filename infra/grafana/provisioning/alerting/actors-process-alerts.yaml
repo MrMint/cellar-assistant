@@ -71,7 +71,7 @@ groups:
       # external delivery was removed on 2026-10-05).
       #
       # Measured 2026-09-27 on a per-worktree lane's own otel-lgtm (Grafana
-      # 13.2.0, project `cellar-epic-burnell-4b4be9`, provisioning reloaded
+      # 13.2.0, a per-worktree compose project, provisioning reloaded
       # with `POST /api/admin/provisioning/alerting/reload`, no recreate), with
       # SYNTHETIC-tagged OTLP records (`synthetic=true`) under
       # service.name=actors, pushed to the lane's :4318. Negative control

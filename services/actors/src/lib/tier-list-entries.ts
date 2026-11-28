@@ -16,7 +16,7 @@
  * that are not in the data"*. The six fields it then asks for — a palate
  * profile, blind spots, a hot take, an archetype — are all reads of **what the
  * person ranked**, and none of them is answerable from a band histogram. The
- * old Nhost function built the same six fields from names, cities, categories,
+ * original function built the same six fields from names, cities, categories,
  * price levels, public ratings and editorial summaries.
  *
  * That is the consequence the row is about, and it is not "slightly worse
@@ -90,7 +90,7 @@ export type TierListEntryAttribute = {
 /**
  * What an insights prompt is allowed to know about one ranked entry.
  *
- * Deliberately closed and small. Every field here is one the old Nhost prompt
+ * Deliberately closed and small. Every field here is one the original prompt
  * consumed; nothing is carried "in case it is useful later", because an opaque
  * blob would put whatever a table happens to hold — `created_by_id`,
  * `barcode_code`, a `google_place_id` — into a third-party model's context.
@@ -357,7 +357,7 @@ export const resolveTierListEntries = async (
  * How many entries must be describable before insights are worth asking for.
  *
  * The same number `TierListActor` skips under (`MIN_ITEMS_FOR_INSIGHTS`, the
- * old Nhost function's `MIN_ITEMS`), kept here so the actor's *count* gate and
+ * original function's `MIN_ITEMS`), kept here so the actor's *count* gate and
  * this *substance* gate are one constant rather than two that can drift.
  */
 export const MIN_GROUNDED_ENTRIES = 3;

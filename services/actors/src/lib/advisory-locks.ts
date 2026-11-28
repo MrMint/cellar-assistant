@@ -25,7 +25,7 @@
  * separate lock spaces in Postgres (the lock tag records which form was used),
  * and every other advisory lock in this repository — the migrator
  * (`packages/db/src/migrate/cli.ts`) and the test-template builder
- * (`packages/db/transform/test-db.sh`) — uses the single-`int8` form over
+ * (`packages/db/baseline/test-db.sh`) — uses the single-`int8` form over
  * `hashtext(...)`. Using the two-`int4` form here means none of those can ever
  * collide with a lock taken below, whatever `hashtext` returns.
  *

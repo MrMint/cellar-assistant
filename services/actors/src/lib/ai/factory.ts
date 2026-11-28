@@ -9,9 +9,7 @@
  *
  * ## Caching
  *
- * The Nhost factory cached a single module-level provider and had to be
- * `async` because one branch fetched credentials out of Postgres. Neither
- * survives: configuration is read from the environment, so construction is
+ * No module-level provider and no `async`: configuration is read from the environment, so construction is
  * synchronous and cheap, and the cache is keyed by the resolved provider name
  * so a test that changes the environment gets a different provider rather than
  * a stale one. `resetAIProviderCache()` is exported for the same reason the

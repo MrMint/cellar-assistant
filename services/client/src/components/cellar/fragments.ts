@@ -2,7 +2,7 @@
  * The restored cellars pages' documents — the new-schema successor of
  * `82450ad1:src/components/cellar/fragments.ts` and `queries.ts`.
  *
- * Old Hasura selection → new field:
+ * Old (`82450ad1`) selection → new field:
  *
  * - `createdBy { id displayName avatarUrl }` → `Cellar.createdBy` (G4). Null
  *   only for an anonymous viewer, which the `(authenticated)` layout rules out;

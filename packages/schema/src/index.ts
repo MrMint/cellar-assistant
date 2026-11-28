@@ -1,12 +1,11 @@
 /**
  * The printed API schema, and gql.tada configured against it.
  *
- * `schema.graphql` is written by `services/api` (`pnpm --filter
+ * `schema.graphql` is written by `services/api` (`bun run --filter
  * @cellar-assistant/api schema:print`) and checked in; `graphql-env.d.ts` is
- * generated *from that file* by `pnpm --filter @cellar-assistant/schema
- * codegen`. Neither step introspects a running server — the old setup pointed
- * gql.tada at `https://local.graphql.nhost.run/v1`, which meant type checking
- * needed the stack up and could silently drift from what CI built.
+ * generated *from that file* by `bun run --filter @cellar-assistant/schema
+ * build`. Neither step introspects a running server, so type checking needs
+ * no stack and cannot drift from what CI built.
  *
  * The frontend (D1 onwards) imports `graphql` from here.
  */

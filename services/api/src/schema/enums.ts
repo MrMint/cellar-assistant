@@ -22,9 +22,8 @@
  * `packages/schema/schema.graphql` today.
  *
  * Value order matches `tables.ts`'s `pgEnum(...)` call for each — alphabetical,
- * per the transform's own note (`packages/db/transform/04_enum_split.sql`):
- * "Enum order is the sort order, so alphabetical is the only choice that
- * leaves existing `ORDER BY` results unchanged."
+ * because enum order is the sort order, and alphabetical is the only choice
+ * that kept existing `ORDER BY` results unchanged when the enums were created.
  */
 import {
   BRAND_TYPES,
@@ -55,15 +54,12 @@ export const FriendRequestStatusEnum = builder.enumType("FriendRequestStatus", {
 
 export const InstructionTypeEnum = builder.enumType("InstructionType", {
   description:
-    "The `instruction_types` Postgres enum (`recipe_instructions.instruction_type`). " +
-    "Keyed on `id` in the pre-A3 Hasura table this enum replaces.",
+    "The `instruction_types` Postgres enum (`recipe_instructions.instruction_type`).",
   values: INSTRUCTION_TYPES,
 });
 
 export const BrandTypeEnum = builder.enumType("BrandType", {
-  description:
-    "The `brand_types` Postgres enum (`brands.brand_type`). Keyed on `id` in " +
-    "the pre-A3 Hasura table this enum replaces.",
+  description: "The `brand_types` Postgres enum (`brands.brand_type`).",
   values: BRAND_TYPES,
 });
 

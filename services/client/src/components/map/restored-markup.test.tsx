@@ -384,7 +384,7 @@ describe("drawer content (restored)", () => {
     assert.doesNotMatch(idle, /Details pending|Loading details/);
   });
 
-  test("the mirrored photo goes through /_next/image, as the old Nhost one did", () => {
+  test("the mirrored photo goes through /_next/image", () => {
     const photo =
       "https://files.test/cellar-files/place-photo/p.jpg?X-Amz-Signature=1";
     const html = renderToStaticMarkup(

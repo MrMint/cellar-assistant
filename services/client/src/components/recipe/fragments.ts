@@ -9,9 +9,9 @@
  * - `recipe_ingredients { wine beer spirit coffee generic_item }` → one
  *   `item` (the `Item` interface, any of six types) or `genericItem`.
  * - `recipe_reviews { user }` → `reviews` (a paged connection) with
- *   `RecipeReview.user` (G4). In production the relationship had no Hasura
+ *   `RecipeReview.user` (G4). In production the relationship had no read
  *   permission, so the old detail page threw on load.
- * - `votes_aggregate` ×3 and `votes(where: {user_id: "X-Hasura-User-Id"})` →
+ * - `votes_aggregate` ×3 and `votes(where: {user_id: "<session variable name>"})` →
  *   `Recipe.upvotes`/`downvotes`/`netScore`/`myVote` (G27). The old query
  *   aliased nothing, so its "downvotes" were always 0 and its `myVote` filter
  *   compared against the literal string — neither is carried forward.

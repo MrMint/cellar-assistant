@@ -95,7 +95,7 @@ cost real time. Read it before a first substantial change. The short version:
 - **Item types are parameterised.** Wine, beer, spirit, coffee, sake and tea
   share the components in `services/client/src/components/item-api/`. Adding a
   per-type component folder is almost always the wrong move. Adding a seventh
-  type is still a multi-package change; `docs/architecture/migration-plan.md`
+  type is still a multi-package change; `docs/archive/nhost-migration/migration-plan.md`
   §9.1 lists every file, and which ones no check will remind you about.
 - **Database schema changes** are `drizzle-kit` migrations in `packages/db`,
   reviewed like any other code.
@@ -108,9 +108,7 @@ cost real time. Read it before a first substantial change. The short version:
 - The block in `services/client/AGENTS.md` between the
   `<!-- BEGIN:nextjs-agent-rules -->` markers — `next dev` maintains it and will
   rewrite any edit, landing as an uncommitted change in whatever you were doing.
-- The `nhost/` directory. It is frozen pre-migration history; nothing runs it,
-  and the rollback of record is a checkout of `82450ad1`, not this tree. Don't
-  build features against it.
+- `docs/archive/` — frozen history. Cite it; don't edit it.
 
 ## Licence
 

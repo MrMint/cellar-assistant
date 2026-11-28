@@ -7,19 +7,7 @@
  * > - Methods: `get`, `ensure(type)`, `linkItem`. **Today any user can update
  * >   any barcode; now only the actor can, and only on creation or admin.**
  *
- * ## The live hole this closes
- *
- * `target-stack.md` §7 lists it among the "live authorization holes on the
- * current stack", and the metadata is unambiguous — `82450ad1:nhost/metadata/databases/
- * default/tables/public_barcodes.yaml`:
- *
- * ```yaml
- * update_permissions:
- *   - role: user
- *     permission:
- *       columns: [code, type]
- *       filter: {}          # ← every row, for every signed-in user
- * ```
+ * ## Who may write a barcode
  *
  * `barcodes` has **no owner column at all** — it is `(code text primary key,
  * type text)` and nothing else — so "the row's owner" cannot be a column

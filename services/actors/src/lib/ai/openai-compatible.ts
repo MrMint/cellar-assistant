@@ -2,7 +2,7 @@
  * Any server speaking OpenAI's HTTP surface — the sanctioned **local dev**
  * provider, and the reason it is not called `vllm`.
  *
- * The standing decision (`docs/architecture/e4-decisions.md` §12) is: local dev
+ * The standing decision (`docs/archive/nhost-migration/e4-decisions.md` §12) is: local dev
  * on the Mac runs vLLM, deployed runs Gemini on Vertex. vLLM is reached here
  * because vLLM serves an OpenAI-compatible API — and writing the provider
  * against *that* rather than against vLLM means `llama-server`, LM Studio, an
@@ -28,7 +28,7 @@
  *  - **No `openai` npm dependency.** Two documented POSTs, against a service
  *    that runs straight off the source with no build step (`http.ts`).
  *  - **No prompt or response logging.** Menu photos and recipe notes are user
- *    content (`ollama.ts` makes the same point about the Nhost provider).
+ *    content (`ollama.ts` makes the same point).
  *  - **No normalisation or zero-filling of a wrong-width vector.** A vector of
  *    the wrong width is an error, not something to repair silently — except
  *    under the explicit Matryoshka opt-in, which renormalises correctly.

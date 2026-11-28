@@ -23,7 +23,7 @@
 // non-interactive shell, say) got whatever was on PATH, and a wrong major
 // version doesn't fail cleanly — it breaks Node's built-in TypeScript type
 // stripping in a way that surfaces as unrelated-looking test failures deep in
-// a run (see services/actors/src/auth/migrate-users.test.ts) rather than as
+// a run rather than as
 // "you're on the wrong Node". Failing once, here, with a clear message, is
 // cheaper than debugging that.
 //

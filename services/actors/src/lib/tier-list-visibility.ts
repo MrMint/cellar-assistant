@@ -8,13 +8,13 @@
  * C1 as the fix site. `search_places_hybrid` has the identical hole in its
  * three `EXISTS (SELECT 1 FROM tier_list_items …)` clauses. Both take
  * `tier_list_ids uuid[]`, and neither knows who is asking, so **any caller who
- * knows or guesses a private tier list's id gets its places back** — on Nhost
- * today, and in the ported SQL until this module is used.
+ * knows or guesses a private tier list's id gets its places back** — in the ported SQL,
+ * until this module is used.
  *
  * ## Why the fix is here and not in the SQL
  *
- * §1.6 and §2.4 are explicit: there is no RLS and no in-SQL authorization in
- * the new stack. So the function keeps its body, and the *argument* is
+ * §1.6 and §2.4 are explicit: there is no RLS and no in-SQL authorization
+ * here. So the function keeps its body, and the *argument* is
  * sanitised before it is passed. `visibleTierListIds` answers the same question
  * `TierListActor` answers — B7 made `canSeeTierList` the rule, creator-only for
  * writes, four-branch for reads — over a *set* of ids in one round trip.

@@ -62,7 +62,7 @@ cap binds first for each seam.
 ### Which provider, where
 
 Settled by the user on 2026-09-17 and recorded in
-`docs/architecture/e4-decisions.md` §12:
+`docs/archive/nhost-migration/e4-decisions.md` §12:
 
 | | provider | why |
 |---|---|---|
@@ -409,9 +409,9 @@ Three things to know before deploying either:
 ### A set-but-incomplete provider stops the boot
 
 Deliberate, and the one design decision worth reading `src/lib/ai/config.ts` for.
-The Nhost stack's `functions/refreshPlaces/_services/factory.ts` answered missing
-GCP credentials with a `console.warn` and a mock service reading a fixed JSON
-file — in production, with every caller downstream none the wiser. So:
+A provider that answers missing GCP credentials with a `console.warn` and a
+mock service reading a fixed JSON file serves fake data in production, with
+every caller downstream none the wiser. So:
 
 - `AI_PROVIDER` unset → nothing installed, seams throw on use. Fine.
 - `AI_PROVIDER` set and complete → installed.
@@ -420,7 +420,7 @@ file — in production, with every caller downstream none the wiser. So:
 `src/lib/ai/no-silent-fallback.test.ts` holds all three, and additionally parses
 this directory to assert that every `catch` rethrows, that nothing imports a
 JSON fixture or a module named `mock`/`fixture`/`stub`, and that nothing branches
-on `NODE_ENV`. Those are the three things the old factory did.
+on `NODE_ENV`. Those are the three ways a silent fallback gets in.
 
 ## Tests
 
@@ -428,7 +428,7 @@ on `NODE_ENV`. Those are the three things the old factory did.
 bun run --filter @cellar-assistant/actors test
 ```
 
-The suite builds and runs against `cellar_test` (`packages/db/transform/test-db.sh`),
+The suite builds and runs against `cellar_test` (`packages/db/baseline/test-db.sh`),
 never the development database. No test reaches a model: every AI test either
 injects a fake at the seam boundary or an injected transport at `fetch`.
 `src/lib/ai/ollama.live.test.ts` is the one exception and skips itself unless an
@@ -456,9 +456,7 @@ environment problem. Check `node -v` before believing a red suite.
 
 `OvertureReloadJobActor` walks a BigQuery table of Overture Maps places and
 upserts them on `places_overture_id_key`, through
-`PlaceActor.bulkUpsertFromOverture` at the reserved key `overture-bulk`. It
-replaces the payload half of the Nhost `refreshPlaces` +
-`processPlaceRefreshBatch` pair; C4 had already replaced the cursor loop.
+`PlaceActor.bulkUpsertFromOverture` at the reserved key `overture-bulk`.
 
 ```bash
 # Nothing configured is a supported state: the reload job refuses to start and

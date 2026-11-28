@@ -1,7 +1,7 @@
 /**
  * The cellars adapters: new API shapes → the old components' props, pinned
  * against what `82450ad1`'s `Cellars.tsx`, `EditCellarClient.tsx` and the
- * items page computed from the Hasura rows.
+ * items page computed.
  */
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";

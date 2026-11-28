@@ -2,7 +2,7 @@
  * `RankingsActor(viewerId)` — C2 (migration plan §2.4).
  *
  * > | `RankingsActor(viewerId)` | `/rankings` | replaces the `item_scores`
- * > Hasura native query: `AVG(score)`, `COUNT(*)` over `item_reviews` grouped
+ * > native query: `AVG(score)`, `COUNT(*)` over `item_reviews` grouped
  * > by item, for a reviewer set of *everyone* or *viewer + friends*, top 200 by
  * > score then count. **The reviewer set is derived from `ctx`, never passed by
  * > the client (today it is).** Returns a projection with typed `Item` refs. |
@@ -11,9 +11,8 @@
  *
  * Worth stating plainly because an earlier review of the plan concluded
  * `/rankings` had no backend at all — there is no `item_scores` table, and
- * `grep` finds nothing. It is a Hasura *native query*, declared in
- * `82450ad1:nhost/metadata/databases/databases.yaml` and reached as a GraphQL root
- * field. Hasura is going away, so it is reimplemented here. The original, for
+ * `grep` finds nothing. It was a *native query* reached as a GraphQL root
+ * field (as of `82450ad1`), and is reimplemented here. The original, for
  * the record:
  *
  * ```sql
@@ -223,7 +222,7 @@ export class RankingsActor
    *   - `ME` → the viewer, and only ever the viewer.
    *   - `FRIENDS` → the viewer's friends, read here rather than accepted from
    *     the client. `friends` is visible only to the two people in the row
-   *     (today's Hasura rule and B4's), so a client-supplied list let a
+   *     (B4's rule), so a client-supplied list let a
    *     stranger aggregate over a social graph they cannot even read.
    *   - `ME_AND_FRIENDS` → both.
    *
@@ -247,7 +246,7 @@ export class RankingsActor
   }
 
   /**
-   * The old `where: {type: {_in: […]}}`, which Hasura applied *after* the
+   * The old `where: {type: {_in: […]}}`, which was applied *after* the
    * grouping. Applied before it here, over the polymorphic columns: the
    * `num_nonnulls(…) = 1` check makes "the `CASE` said `WINE`" and
    * "`wine_id is not null`" the same predicate, and the column form can use an

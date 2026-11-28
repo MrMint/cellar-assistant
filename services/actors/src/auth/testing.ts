@@ -4,13 +4,10 @@
  *
  * Not imported by `src/index.ts`.
  *
- * The DDL comes from `packages/db/transform/13_better_auth_tables.sql` — the
- * same file that builds `cellar`, `cellar_test` and, at cutover, production.
- * Before X2 it came from `./migrations/0000_better_auth_tables/migration.sql`,
- * a copy generated from a schema file that lived in this directory; now that
- * better-auth's tables are ordinary `public` tables there is exactly one piece
- * of DDL for them and this reads it, so the schema these tests run against
- * cannot drift from the schema anything else gets.
+ * The DDL comes from `./auth-tables.sql`, the same tables
+ * `packages/db/baseline/schema.sql` builds every database with;
+ * `auth-schema.test.ts` checks both against better-auth's own
+ * `getAuthTables()`.
  */
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
@@ -20,14 +17,9 @@ import { Client } from "pg";
 import { createAuth } from "./auth.ts";
 import type { AuthConfig } from "./config.ts";
 
-const MIGRATION = fileURLToPath(
-  new URL(
-    "../../../../packages/db/transform/13_better_auth_tables.sql",
-    import.meta.url,
-  ),
-);
+const MIGRATION = fileURLToPath(new URL("./auth-tables.sql", import.meta.url));
 
-/** The stack's Postgres (infra/docker-compose.yml), not Nhost's. */
+/** The stack's Postgres (infra/docker-compose.yml). */
 export const adminUrl = (): string =>
   process.env.AUTH_TEST_ADMIN_URL ??
   "postgres://cellar:cellar@localhost:5433/postgres";
@@ -43,8 +35,7 @@ export const scratchUrl = (name: string): string =>
  * opens with `DROP DATABASE … WITH (FORCE)`, so a second run reaching it while
  * the first was mid-test disconnected the first outright. Measured, from two
  * `bun run --filter @cellar-assistant/actors test` started together: three
- * failures in `migrate-users.test.ts`, `database "auth_test_migrate" does not
- * exist` and `It seems to have just been dropped or renamed` — and a green run
+ * failures in one suite, `database "auth_test_…" does not exist` and `It seems to have just been dropped or renamed` — and a green run
  * in the other window, which is the shape of a race that gets blamed on
  * whoever is unlucky.
  *

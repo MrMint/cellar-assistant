@@ -122,8 +122,8 @@ describe("barcodeProblem", () => {
   });
 
   test("what the legacy scanner wrote is now refused", () => {
-    // Both are real rows in `barcodes`, written by the Nhost-era flow, which
-    // validated nothing. They are why `BarcodeActor` has a pattern at all.
+    // Both are real rows in `barcodes`, written by the legacy scanner,
+    // which validated nothing. They are why `BarcodeActor` has a pattern at all.
     assert.notEqual(barcodeProblem("ANNO\n1822"), null);
     // The empty-string row cannot be re-created: blank means "no barcode".
     assert.equal(normalizeBarcode(""), "");

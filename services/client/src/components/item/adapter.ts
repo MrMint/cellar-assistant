@@ -2,7 +2,7 @@
  * New API shapes → the old item components' props.
  *
  * The six `82450ad1:src/components/{wine,…}/{T}Details.tsx` and
- * `Cellar{T}Details.tsx` built their children's props inline from Hasura
+ * `Cellar{T}Details.tsx` built their children's props inline from query
  * rows (`formatVintage(coreData.vintage)`, `x.cellar.co_owners.map(…)`); this
  * is those mappings, lifted out so they are unit-tested, over the fields in
  * `./fragments.ts`.
@@ -313,7 +313,7 @@ type Profile = {
 };
 
 /**
- * A `UserProfile` → the old `User`. `avatarUrl` was non-null under Nhost;
+ * A `UserProfile` → the old `User`. `avatarUrl` was non-null;
  * `""` makes `UserAvatar` show the initial.
  */
 export const userFromProfile = (profile: Profile): ItemCellarUser => ({

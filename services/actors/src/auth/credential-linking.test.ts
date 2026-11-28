@@ -62,7 +62,7 @@ const query = async <T extends Record<string, unknown>>(
   }
 };
 
-/** A password user exactly as `scripts/migrate-users.ts` writes one. */
+/** An imported password user: a credential account with a bcrypt hash. */
 const seedPasswordUser = async (
   url: string,
   email: string,

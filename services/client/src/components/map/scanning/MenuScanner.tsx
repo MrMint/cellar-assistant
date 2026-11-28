@@ -5,8 +5,8 @@
  * photo / Choose a photo, then the progress in the Menu card itself (the
  * `ScanSteps` card), then the results page once lines are read.
  *
- * `uploadAndProcessMenuScan(formData)` (a server action that uploaded to
- * Nhost and fired `processMenuScan` with the webhook secret) →
+ * `uploadAndProcessMenuScan(formData)` (a server action that uploaded the
+ * photo and fired `processMenuScan` with a webhook secret) →
  * `usePlaceActions().uploadAndProcessMenuScan(file, placeId)`: presigned
  * upload, verify, then `createMenuScan` with this place as its `placeHint`;
  * the pipeline runs from the outbox. The status poll is a network-only

@@ -13,8 +13,7 @@
  * `process.versions.bun` is the check. `process.versions.node` is **not** — Bun
  * reports a synthetic Node version there (26.3.0 under bun 1.4.2), so a
  * Node-version assertion passes under Bun for a reason that has nothing to do
- * with Node being present. `src/auth/migrate-users.test.ts` has such an
- * assertion and its header explains why it now means something different.
+ * with Node being present.
  *
  * Two processes have to agree, and this checks both:
  *

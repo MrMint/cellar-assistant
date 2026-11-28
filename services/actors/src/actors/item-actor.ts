@@ -586,7 +586,7 @@ export class ItemActor
       : imageRowToDto(aggregate.ref.type, row);
   }
 
-  /** Reviews are world-readable today (`filter: {}` in the Hasura metadata). */
+  /** Reviews are readable by every signed-in viewer. */
   async reviews(ctx: Ctx, page: PageArgs): Promise<Page<ItemReviewDto>> {
     const aggregate = this.#requireItem();
     requireSignedIn(ctx, "view item reviews");

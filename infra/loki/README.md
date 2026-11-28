@@ -45,8 +45,7 @@ D=~/.local/lib/cellar-pull-deploy/pull-deploy.sh
 
 2. **Edit the config:** `NGINX_PROXY_VHOST_DIR` (required; on Loki
    `/home/loki/Documents/nginx/vhost.d`) and `PULL_DEPLOY_BRANCH`
-   (`migrate-off-nhost` until the migration is merged; then `main`, or
-   `production` to deploy releases only).
+   (`main`, or `production` to deploy releases only).
 
 3. **Adopt the hand-made first deploy's tree**, once, if `~/cellar-prod/src` is
    a directory (the installer warns). The deployer never replaces a real

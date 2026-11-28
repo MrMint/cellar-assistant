@@ -12,7 +12,7 @@
  * `embeddingActorId` — the same function the actor checks its own id against.
  *
  * No database is touched: an embedding is a pure function of the text (§1.3 has
- * nothing to say about it), so this suite runs without a transformed database.
+ * nothing to say about it), so this suite runs without a built database.
  */
 import type { Ctx } from "@cellar-assistant/contracts";
 import {

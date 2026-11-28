@@ -43,7 +43,7 @@ with its own way of failing quietly:
                           bucket (minio-init is a one-shot container, so `up -d`
                           re-runs it — a deleted bucket heals here)
 3/7  database schema      clone from a running cellar-* stack, or build from the
-                          checked-in Nhost baseline (transform/run.sh) if there
+                          checked-in baseline (baseline/build.sh) if there
                           is nothing to clone from
 4/7  apps + sidecars      `dev:up --detach`
 5/7  readiness            `dev:wait` — a real PingActor call, not a port probe
@@ -87,7 +87,7 @@ What it knows, and why each one is in there:
 - **The `node` on PATH — by capability, not version.** It runs a one-line `.ts`
   file to see whether type stripping works, because that is what
   `node scripts/seed.ts` and the `node "$SEED"` step inside
-  `packages/db/transform/test-db.sh` depend on. fnm's `--use-on-cd` does not
+  `packages/db/baseline/test-db.sh` depend on. fnm's `--use-on-cd` does not
   fire in a non-interactive shell, so an agent shell here gets whatever the
   machine default is. It then **resolves** a satisfying Node out of
   fnm/nvm/volta/asdf and puts it in front of PATH for those steps only — no
@@ -145,8 +145,8 @@ bun run dev:db:clone -- --schema-only      # structure only
 bun run dev:db:clone -- --from cellar-other-worktree
 ```
 
-This repository's schema comes from the cutover transform of an Nhost dump
-(`packages/db/transform/run.sh`), not from a replayable migration chain, so the
+Building a database from scratch means restoring the checked-in baseline and applying every
+migration since (`packages/db/baseline/build.sh`), and the result has no seed data, so the
 quickest working database is a copy of one that already works.
 
 One measured trap, now handled in both `bootstrap` and `db:clone`: **a
@@ -287,21 +287,19 @@ bun run dev:bootstrap -- --tests
 Three prerequisites of `bun run test` live outside this stack entirely, and
 `doctor` reports each:
 
-1. `packages/db/transform/test-db.sh` builds `cellar_test_template` in
+1. `packages/db/baseline/test-db.sh` builds `cellar_test_template` in
    **`cellar-stack-postgres-1`** by default — the shared lane, not your
    worktree. Concurrent runs are safe there: the build is serialised on a
    Postgres advisory lock and each run clones its own `_run_<pid>_<epoch>`
    database (`services/actors/src/lib/test-db-setup.ts`). This used to say
    every run DROPs and re-CREATEs a shared `cellar_test`; the per-run databases
    had already replaced that when this file landed in `4e067928`. What is still
-   shared is the template's fingerprint, so worktrees whose transform files
-   differ rebuild it when they alternate — which is why `--tests` uses this
+   shared is the template's fingerprint, so worktrees whose baseline or
+   migrations differ rebuild it when they alternate — which is why `--tests` uses this
    worktree's own Postgres.
 2. Building the *template* restores the checked-in
-   `packages/db/transform/nhost-schema.sql` (X4) and needs no Nhost stack —
-   the same input CI uses. It used to re-dump the legacy Nhost container by
-   default; that container, and the local Nhost stack, are gone since
-   2026-10-05 (AGENTS.md, "Nhost: retired, and how rollback works").
+   `packages/db/baseline/schema.sql` and needs nothing but that Postgres —
+   the same input CI uses.
 3. One client test file, `src/lib/api/round-trip.test.ts` (the auth proxy's
    end-to-end steps), **skips itself** unless a sign-in as `test@test.com`
    succeeds against `:3002`, so a green suite with its skips proves less than it
@@ -561,8 +559,7 @@ bun run dev:prune -- --apply  # `docker compose -p <name> down --volumes --remov
 ```
 
 `cellar-stack` is excluded by name and never pruned. Projects that are not
-`cellar-*` — such as a legacy Nhost stack brought up from a `82450ad1`
-checkout, named after its directory — are not considered at all.
+`cellar-*` are not considered at all.
 
 ---
 
@@ -956,7 +953,7 @@ the app), PUT the bytes, `verify` (through the binding), `presignRead` (signed b
 the binding), GET the URL, byte-compare. Both signers must agree with what a
 browser can dial, which is why both are checked.
 
-Measured on stack `epic-burnell-4b4be9` (MinIO on `localhost:9340`), 2026-09-10:
+Measured on a per-worktree stack (MinIO on `localhost:9340`), 2026-09-10:
 
 ```
   OK   1. upload URL signed for localhost:9340 (app-side signer)

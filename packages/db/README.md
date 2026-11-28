@@ -1,6 +1,6 @@
 # @cellar-assistant/db
 
-Drizzle schema, RQB v2 relations, and migrations for the post-Nhost stack.
+Drizzle schema, RQB v2 relations, and migrations.
 
 ## Pinned versions
 
@@ -41,8 +41,10 @@ Verify with `bunx drizzle-kit --version` (note: `node
   single store entry, so it is one copy today — but the rule holds regardless,
   because the peer set is what decides. One import path, one Drizzle. See
   `src/orm.ts`.
-- `transform/` — the cutover transform. **Frozen** at the ledger horizon; see
-  "Applying migrations" below and `transform/README.md`.
+- `baseline/` — `schema.sql`, the schema every database is built from: a
+  schema-only dump at the ledger horizon, **frozen** (see "Applying migrations"
+  below). `build.sh` (`bun run build:baseline`) restores it and runs
+  `db:migrate`; `test-db.sh` builds the test template the same way.
 - `migrations/` — `drizzle-kit` output plus the hand-written lane (§8.6).
 - `src/migrate/` — the migration ledger and `db:migrate`, the only thing that
   applies `migrations/`. See "Applying migrations".
@@ -55,12 +57,12 @@ re-pull diff unreadable.
 
 ## Reproducing the baseline
 
-The database must be a *transformed* one — `transform/run.sh` first.
+The database must be one `baseline/build.sh` built.
 
 ```bash
 export PATH="$HOME/.local/share/fnm/node-versions/v24.14.0/installation/bin:$PATH"
 
-packages/db/transform/run.sh                    # restore + transform (drops the `drizzle` schema)
+packages/db/baseline/build.sh                   # restore + db:migrate (drops the `drizzle` schema)
 cd packages/db
 bunx drizzle-kit pull --init                    # -> migrations/<ts>_<name>/{migration.sql,snapshot.json}
                                                 #    plus migrations/schema.ts and relations.ts
@@ -75,14 +77,10 @@ bunx drizzle-kit generate                       # must say "No schema changes"
 
 `drizzle.config.ts` carries the two settings that matter:
 
-- `schemaFilter: ["public"]`. A3 had to widen this to
-  `["public", "auth", "storage"]` because `pull` emits a `.references()` for a
-  foreign key whose target it was told not to pull, so a `public`-only baseline
-  named `usersInAuth` / `filesInStorage` and threw at import. **That is over.**
-  A8 moved the six `storage.files` foreign keys onto `public.files`
-  (`transform/09`, `10`, `12`) and X2 moved the 31 `auth.users` ones onto
-  `"user"` and dropped the schema (`transform/13`–`15`). No `public` table
-  references anything outside `public`, and the narrow filter is now correct.
+- `schemaFilter: ["public"]`. `pull` emits a `.references()` for a foreign key
+  whose target it was told not to pull, and the result throws at import, so the
+  filter is correct only because no `public` table references anything outside
+  `public`. Keep it that way.
   better-auth's five tables are pulled like any other `public` table — see
   "better-auth's tables" below.
 - `extensionsFilters: ["postgis"]`, which keeps `spatial_ref_sys` and PostGIS's
@@ -102,12 +100,9 @@ name, so a re-pull that renamed one would break sign-in at runtime and compile
 perfectly. `services/actors/src/auth/auth-schema.test.ts` checks the generated
 definitions against better-auth's own `getAuthTables()`; run it after a re-pull.
 
-Their DDL is `transform/13_better_auth_tables.sql` — the same lane that creates
-`files`, `jobs` and `outbox` (`06_new_tables.sql`) — and, through the baseline,
-`migrations/`. A6's merge checklist asked for its generated migration
-(`services/actors/src/auth/migrations/0000_better_auth_tables`) to be copied into
-`migrations/` by hand; taking the baseline over a database the transform has
-already built puts it there without a second copy to keep in sync.
+Their DDL is in `baseline/schema.sql` with every other table's.
+`services/actors/src/auth/auth-tables.sql` holds the same DDL as a test fixture
+for `auth/testing.ts`.
 
 ### Hand-edits to re-apply after every re-pull
 
@@ -118,7 +113,7 @@ already built puts it there without a second copy to keep in sync.
    ` gin_trgm_ops` inside the `sql` template. Without it the DDL drizzle generates
    is not merely different, it is invalid — `text` has no default GIN operator
    class. The `restore_expression_index_opclass` migration is the resulting
-   no-op-against-a-transformed-database rebuild.
+   no-op-against-a-baseline-built-database rebuild.
 3. **The `.through()` audit** in `relations.ts`, below.
 4. **The typed `customType` wrappers.** `pull` leaves `places.location`,
    `places.search_text` and `menu_scans.scan_location` as untyped
@@ -129,8 +124,7 @@ already built puts it there without a second copy to keep in sync.
    `custom-types.ts` itself is hand-written, not generated, and survives a
    re-pull untouched — only the three call sites in `tables.ts` need
    reapplying. `place_menu_items.menu_item_price` does **not** need one: it's
-   `numeric(10,2)` since `transform/05_money_to_numeric.sql`, which Drizzle
-   introspects natively.
+   `numeric(10,2)`, which Drizzle introspects natively.
 5. **`outbox.seq`.** `pull` writes `bigserial({ mode: 'number' })`; it becomes
    `bigserial({ mode: "bigint" })`. See "Hand-edit 6" below — the number is a
    historical label, and hand-edit 5 is retired.
@@ -138,21 +132,20 @@ already built puts it there without a second copy to keep in sync.
 ### Known rc.4 rough edges (all worked around, none reported upstream)
 
 - `pull --init` **writes to the target database** (`drizzle.__drizzle_migrations`).
-  It is not read-only. `transform/run.sh` drops the `drizzle` schema so a re-init
+  It is not read-only. `baseline/build.sh` drops the `drizzle` schema so a re-init
   is possible; without that, `--init` refuses with "database already has
   migrations set".
 - `pull` writes single-column foreign keys as inline `.references(...)`, which has
   nowhere to hold the constraint's name, while `--init` writes a snapshot straight
   from the catalog *with* names. `generate` then wants to rename 171 foreign keys.
-  `transform/07_align_constraint_names.sql` fixes it from the database side, so the
+  The baseline's constraint names are already drizzle's derived names, so the
   generated `tables.ts` stays untouched generator output. Three derived names
   exceed Postgres's 63-byte identifier limit; drizzle substitutes
-  `<table>_<12-char hash>_fkey` (deterministic), and `07` lists those three
-  verbatim and aborts loudly if a fourth ever appears.
+  `<table>_<12-char hash>_fkey` (deterministic).
 - `drizzle-kit migrate` **cannot replay the introspected baseline migration**: its
   SQL is wrapped in a `/* … */` block, and the runner splits on
   `--> statement-breakpoint` before stripping comments, so it hands Postgres an
-  unterminated comment. Rebuild a development database with `transform/run.sh`,
+  unterminated comment. Rebuild a development database with `baseline/build.sh`,
   which produces the same schema directly and ends with `db:migrate`. Nothing
   here uses `drizzle-kit migrate` or its `__drizzle_migrations` table.
 - The order of members within `relations.ts` blocks, and which side of a
@@ -168,10 +161,7 @@ against the real constraints; the rule applied was: it is a genuine junction onl
 if the pair of foreign-key columns is uniquely keyed (composite primary key, or a
 unique constraint on both).
 
-The audit below is X2's, re-done from scratch against the `public`-only baseline.
-A3's original had three more entries on each side — `user_providers` and
-`user_roles` kept, `oauth2_auth_requests` and `refresh_tokens` deleted — all of
-which went with the `auth` schema.
+The audit below is X2's, against the `public`-only baseline.
 
 **Kept (6):** `place_brands`, `cellar_owners`, `menu_item_recipes`,
 `user_place_interactions`, `recipe_reviews`, `recipe_votes`.
@@ -209,23 +199,23 @@ advisory lock, sets `lock_timeout` (`MIGRATE_LOCK_TIMEOUT`, default 10s), and
 **refuses**: a recorded migration whose file has changed; a pending migration
 that sorts before one already recorded; SQL that cannot run in a transaction.
 There is no default database and it never reads `DATABASE_URL`. It is the only
-apply path — `transform/run.sh` (so `test-db.sh` and CI), `cutover.sh`'s
-`migrate` phase, and the dev lane's `bootstrap` all call it.
+apply path — `baseline/build.sh` (so `test-db.sh` and CI), the production
+deploy, and the dev lane's `bootstrap` all call it.
 
 **Writing a migration:** change `src/schema/tables.ts`, `bun run db:generate`
 (or `drizzle-kit generate --custom` for SQL Drizzle cannot express), commit both,
-and apply it with `db:migrate`. Do **not** mirror it into `transform/` — that rule
-is retired: the transform is frozen at `TRANSFORM_HORIZON`
-(`src/migrate/ledger.ts`, pinned by `src/migrate/transform-freeze.test.ts`) and
-`db:migrate` applies everything after it to fresh builds too. Migrations are
+and apply it with `db:migrate`. Do **not** edit `baseline/schema.sql`: it is frozen
+at `BASELINE_HORIZON` (`src/migrate/ledger.ts`, pinned by
+`src/migrate/baseline-freeze.test.ts`) and `db:migrate` applies everything after
+it to fresh builds too. Migrations are
 forward-only and immutable once applied anywhere (migration plan §8.6). CI's
 `db:drift` fails if `tables.ts` and the migrations disagree.
 
 **Adoption.** A database built before the ledger existed is adopted on first
 contact: the baseline is recorded, the five idempotent (ex-lane) migrations are
-re-applied, and the five the transform mirrors are probed against the catalog —
-present → `adopted`, absent → applied and re-probed, half present → refused. One
-transaction, and only if the database looks transform-built. `ADOPTION` in
+re-applied, and the five the baseline already holds are probed against the
+catalog — present → `adopted`, absent → applied and re-probed, half present →
+refused. One transaction, and only if the database looks baseline-built. `ADOPTION` in
 `ledger.ts` lists every migration up to the horizon and is frozen with it.
 
 ## Rule
@@ -235,13 +225,10 @@ database credentials.
 
 ### Hand-edit 5: `item_favorites` sake/tea unique constraints — **retired**
 
-`tables.ts` declares `item_favorites_user_id_{sake,tea}_id_key`, which the Nhost database never
-had. B4 found the table carried per-type uniques for wine, beer, spirit and coffee only, so
-`UserActor.favorite` could not use `onConflictDoNothing` for two of the six item types.
-`transform/08_item_favorites_missing_uniques.sql` adds them, and **aborts rather than
-deduplicating** if production data holds duplicates -- decide that deliberately during E1.
-X2 re-took the baseline against a database `08` had already run on, so `pull` emits both
-constraints from the catalog and there is nothing left to re-apply by hand.
+`tables.ts` declares `item_favorites_user_id_{sake,tea}_id_key` beside the wine, beer, spirit
+and coffee ones, so `UserActor.favorite` can use `onConflictDoNothing` for all six item types.
+The baseline holds both constraints, so `pull` emits them from the catalog and there is nothing
+left to re-apply by hand.
 
 ### Hand-edit 6: `outbox.seq` is `bigserial({ mode: "bigint" })`
 
@@ -255,24 +242,22 @@ down here; it is now. Re-apply it after every re-pull.
 
 `tables.ts` declares `outbox_dead_letter_acks` in a block marked `HAND-ADDED` (`3b187a32`),
 which points here. The table is created by a hand-written lane migration,
-`migrations/20260920164500_outbox_dead_letter_acks`, not by the transform, so its columns,
+`migrations/20260920164500_outbox_dead_letter_acks`, not by the baseline, so its columns,
 primary key and `ON DELETE CASCADE` foreign key were copied from that DDL. The foreign key is the
 plain `.references()` form, because that is the only form `drizzle-kit pull` renders for a
-single-column FK — a named `foreignKey({...})` builder made the cutover's baseline diff fail on
-syntax alone (`fcd8f9e8`, verified against a from-scratch build). So the *database* is aligned to
+single-column FK — a named `foreignKey({...})` builder made a `drizzle-kit pull` diff against
+this file fail on syntax alone (`fcd8f9e8`, verified against a from-scratch build). So the *database* is aligned to
 Drizzle's derived name instead: `migrations/20260926150000_outbox_dead_letter_acks_fkey_align`
 renames Postgres's default `outbox_dead_letter_acks_outbox_id_fkey` to
-`outbox_dead_letter_acks_outbox_id_outbox_id_fkey`, the same direction
-`transform/07_align_constraint_names.sql` takes for the pulled tables. `07` itself cannot do it,
-because it runs before the lane creates this table. Its writer in `src/writers.ts` is `MaintenanceActor` (`acknowledgeDeadLetters`), not
-`infrastructure:outbox`. Its one index is deliberately absent from
-`transform/17_target_indexes.sql`: `run.sh` runs `db:migrate` after every numbered file, so `17`
-cannot see the table, and `src/schema/target-indexes.test.ts` records the exemption.
+`outbox_dead_letter_acks_outbox_id_outbox_id_fkey`, the naming every pulled table's constraints
+already follow in the baseline. Its writer in `src/writers.ts` is `MaintenanceActor` (`acknowledgeDeadLetters`), not
+`infrastructure:outbox`. Its one index comes from that
+migration, not the baseline; `src/schema/target-indexes.test.ts` counts it the same way.
 
 #### Three things the creating migration's header says that are no longer true
 
 `migrations/20260920164500_outbox_dead_letter_acks/migration.sql`'s DDL is right; parts of its
-prose are not. The file is left as written — `transform/test-db.sh` hashes every lane migration
+prose are not. The file is left as written — `baseline/test-db.sh` hashes every lane migration
 into the test template's fingerprint, and the file is also what an operator applies by hand to a
 live database, so a comment-only edit would rebuild templates and make "which version did you
 apply?" a question with two answers. The corrections live here instead:

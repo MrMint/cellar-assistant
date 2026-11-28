@@ -112,7 +112,7 @@ const run = (
     migrations,
     horizon: HORIZON,
     adoption: ADOPTION,
-    transformed: [],
+    baselineChecks: [],
   });
 
 const query = async <T extends pg.QueryResultRow>(

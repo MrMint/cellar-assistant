@@ -31,8 +31,8 @@
 # ## Prerequisite
 #
 # A running stack to copy a schema from (default project `cellar-stack`). This
-# repository's schema comes from the cutover transform of an Nhost dump, not
-# from a replayable migration chain, so the fastest correct empty database is a
+# repository's schema is a restored baseline plus migrations, not a chain
+# replayable from zero, so the fastest correct empty database is a
 # `pg_dump --schema-only` of one that already works. `--source-project` picks a
 # different donor.
 set -euo pipefail

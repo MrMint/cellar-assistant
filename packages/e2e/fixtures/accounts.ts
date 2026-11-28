@@ -3,13 +3,11 @@
  *
  * `bun run db:seed` creates them, and creates them **with these exact ids** —
  * `services/actors/scripts/seed.ts` pins them, precisely because the friends spec
- * below asserts on `secondary.id`. They are the ids these accounts have had
- * since Nhost, so a database built by `migrate-users.ts` and one built by
- * `db:seed` agree.
+ * below asserts on `secondary.id`. They are the ids these accounts had before
+ * the 2026-10 migration, so imported accounts and seeded ones agree.
  *
- * X2 landed: there is one `user` table, in `cellar`, and the 31 domain foreign
- * keys reference it. The rows D2 hand-inserted into `cellar.auth.users` are
- * gone along with the schema, and nothing here changed — which was the point.
+ * There is one `user` table, in `cellar`, and the 31 domain foreign keys
+ * reference it.
  */
 export const ACCOUNTS = {
   primary: {

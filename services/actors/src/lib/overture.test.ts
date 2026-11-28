@@ -444,7 +444,7 @@ describe("configuration — the three outcomes, and no fourth", () => {
     const visit = (node: ts.Node): void => {
       if (
         ts.isStringLiteralLike(node) &&
-        /NODE_ENV|NHOST_LOCAL|wisconsin/i.test(node.text)
+        /NODE_ENV|wisconsin/i.test(node.text)
       ) {
         hits.push(node.text);
       }

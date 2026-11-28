@@ -34,7 +34,7 @@ import { withSerwist } from "@serwist/turbopack";
  * request at all.
  *
  * This fails *asymmetrically*, which is why it would not surface until
- * cutover: `img-src` below already allows `https:`, so existing images render
+ * the first upload: `img-src` below already allows `https:`, so existing images render
  * fine while every new upload is blocked.
  *
  * ## The rule for editing this
@@ -179,8 +179,7 @@ export const fileImagePattern = (origin) => {
  *
  * ## `minimumCacheTTL` is the window, not 31 days
  *
- * Production at `82450ad1` used 31 days for Nhost storage URLs, which never
- * changed. A presigned URL changes every window, so an optimizer entry older
+ * A long TTL suits a URL that never changes. A presigned URL changes every window, so an optimizer entry older
  * than the window is one no page will request again — a longer TTL adds no
  * hits. It only lets anyone holding an old `/_next/image?url=<signed URL>`
  * keep fetching the image from the optimizer's (public) cache long after the
@@ -214,8 +213,7 @@ export const imagesConfig = () => {
   return {
     dangerouslyAllowLocalIP:
       process.env.NODE_ENV === "development" || loopbackOnly,
-    // See "`minimumCacheTTL` is the window" above. Was 31 days (2678400)
-    // under Nhost, then 1 day (86400).
+    // See "`minimumCacheTTL` is the window" above: 6 days.
     minimumCacheTTL: 518400,
     // Only webp — default includes avif+webp which doubles transformations per image.
     formats: ["image/webp"],

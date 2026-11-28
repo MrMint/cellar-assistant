@@ -1,10 +1,9 @@
 /**
  * The SQL functions allowed to exist in `public`, and why each one is there.
  *
- * Hasura exposed SQL functions as GraphQL — computed fields, tracked queries
- * and mutations — so the Nhost database accumulated them; the actor stack
- * calls four by name and needs three more as trigger bodies. Nineteen others
- * survived the cutover transform with no caller at all until
+ * The actor stack calls four by name and needs three more as trigger bodies.
+ * Nineteen others, exposed as GraphQL by the previous backend, sat in the
+ * schema with no caller at all until
  * `packages/db/migrations/20260928181327_drop_hasura_surface_functions`, and
  * seven redundant `updated_at` trigger functions until
  * `20260928181546_one_updated_at_trigger_function`. This file is what stops
@@ -14,10 +13,10 @@
  * called from the body of another listed function.
  *
  * It runs against the harness database, which is built exactly the way
- * production is (the cutover transform over the Nhost schema, then every
+ * production is (the checked-in baseline, then every
  * migration), so it checks the schema the repo ships rather than a
  * migrations-only approximation — which is also why it lives here and not in
- * `packages/db`, whose tests have a bare Postgres server but no transformed
+ * `packages/db`, whose tests have a bare Postgres server but no built
  * database. Extension-owned functions (postgis, pgvector, pg_trgm, pgcrypto,
  * citext: `pg_depend.deptype = 'e'`) are not ours and are excluded.
  */

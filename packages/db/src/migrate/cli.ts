@@ -21,7 +21,7 @@
  * {@link migrate} is exported so `cli.test.ts` can drive it against a
  * throwaway database with migrations of its own; it runs as a command only
  * when this file is the process's entry point. Everything stays in this one
- * file on purpose: `transform/test-db.sh` fingerprints `ledger.ts` and
+ * file on purpose: `baseline/test-db.sh` fingerprints `ledger.ts` and
  * `cli.ts` to decide when the test template is stale.
  */
 import { realpathSync } from "node:fs";
@@ -30,6 +30,8 @@ import pg from "pg";
 import {
   ADOPTION,
   type Adoption,
+  BASELINE_DATABASE,
+  BASELINE_HORIZON,
   type Check,
   LEDGER_SCHEMA,
   LEDGER_TABLE,
@@ -37,8 +39,6 @@ import {
   type Migration,
   plan,
   redact,
-  TRANSFORM_HORIZON,
-  TRANSFORMED_DATABASE,
 } from "./ledger.ts";
 
 /**
@@ -200,17 +200,17 @@ export type MigrateOptions = {
   readonly migrations?: readonly Migration[];
   readonly horizon?: string;
   readonly adoption?: Readonly<Record<string, Adoption>>;
-  /** The "is this transform-built?" checks asked before any adoption. */
-  readonly transformed?: readonly Check[];
+  /** The "was this built from the baseline?" checks asked before any adoption. */
+  readonly baselineChecks?: readonly Check[];
 };
 
 /** One `db:migrate` run. Returns the exit status (header); throws on failure. */
 export const migrate = async (options: MigrateOptions): Promise<number> => {
   const args = options;
   const lockWaitSeconds = options.lockWaitSeconds ?? LOCK_WAIT_SECONDS;
-  const horizon = options.horizon ?? TRANSFORM_HORIZON;
+  const horizon = options.horizon ?? BASELINE_HORIZON;
   const adoptionTable = options.adoption ?? ADOPTION;
-  const transformed = options.transformed ?? TRANSFORMED_DATABASE;
+  const baselineChecks = options.baselineChecks ?? BASELINE_DATABASE;
   const migrations = options.migrations ?? loadMigrations();
   const decide = (rows: Parameters<typeof plan>[1]) =>
     plan(migrations, rows, horizon, adoptionTable);
@@ -222,7 +222,7 @@ export const migrate = async (options: MigrateOptions): Promise<number> => {
   // A migration that changes data says what it did with `RAISE NOTICE` —
   // `20260928185314_canonical_barcode_codes` reports how many barcodes it
   // rewrote, merged and kept opaque — and node-postgres drops notices unless
-  // someone listens. The operator running the cutover is who should read it.
+  // someone listens. The operator running the deploy is who should read it.
   client.on("notice", (notice) => {
     note(`${notice.severity ?? "NOTICE"}: ${notice.message ?? ""}`);
   });
@@ -275,16 +275,16 @@ export const migrate = async (options: MigrateOptions): Promise<number> => {
     const adoptions = decided.steps.filter((s) => s.action === "adopt");
     const applies = decided.steps.filter((s) => s.action === "apply");
 
-    // Adoption needs a transform-built database underneath it. Asked even in
+    // Adoption needs a baseline-built database underneath it. Asked even in
     // --status, so the doctor can say "this is not the database you think".
     const resolutions = new Map<string, Resolution>();
     if (adoptions.length > 0) {
-      const { missing } = await probe(client, transformed);
+      const { missing } = await probe(client, baselineChecks);
       if (missing.length > 0) {
         console.error(
-          `db:migrate: REFUSED: ${adoptions.length} migration(s) at or before the transform horizon are unrecorded, ` +
-            `so this database has to be adopted — and it does not look transform-built (not true: ${missing.join("; ")}). ` +
-            "Build it with packages/db/transform/run.sh (or the cutover's transform phases) first.",
+          `db:migrate: REFUSED: ${adoptions.length} migration(s) at or before the baseline horizon are unrecorded, ` +
+            `so this database has to be adopted — and it does not look built from the baseline (not true: ${missing.join("; ")}). ` +
+            "Build it with packages/db/baseline/build.sh first.",
         );
         return 1;
       }

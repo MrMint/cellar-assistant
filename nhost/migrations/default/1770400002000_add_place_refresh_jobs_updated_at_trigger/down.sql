@@ -1,1 +1,0 @@
-DROP TRIGGER IF EXISTS set_public_place_refresh_jobs_updated_at ON public.place_refresh_jobs;

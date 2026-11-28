@@ -20,7 +20,7 @@
  * the other returns 403 `SignatureDoesNotMatch`, and signing for the host the
  * request actually uses round-trips. See `docs/architecture/deploy-loki.md`
  * ("Verifying the file path"), which carries the transcript and the one-liner
- * to repeat it against the real host after cutover.
+ * to repeat it against the real host.
  */
 import { describe, expect, it } from "vitest";
 import {

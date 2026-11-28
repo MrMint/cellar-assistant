@@ -99,7 +99,7 @@ const SUBJECT: PlaceReviewSubject = {
 
 describe("PLACE_REVIEW_SCHEMA", () => {
   it("requires `approved` and nothing else", () => {
-    // The Nhost schema required five fields. `required` compiles into the
+    // `required` compiles into the
     // sampler's grammar, so every extra entry here is a field the model is
     // forbidden from declining to answer — and `enrichedDescription` is
     // persisted as the place's own description. If this assertion is failing

@@ -19,8 +19,8 @@
     "db:pull": "drizzle-kit pull --init",
     "db:migrate": "node src/migrate/cli.ts",
     "db:drift": "./scripts/check-drift.sh",
-    "transform": "./transform/run.sh",
-    "test-db": "./transform/test-db.sh"
+    "build:baseline": "./baseline/build.sh",
+    "test-db": "./baseline/test-db.sh"
   },
   "devDependencies": {
     "@cellar-assistant/analysis": "workspace:*",

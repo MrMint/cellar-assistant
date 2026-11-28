@@ -12,7 +12,7 @@
  *   3. `session.update.before` refuses to refresh a disabled user's session.
  *
  * (2) and (3) run against a database *without* the trigger — the scratch
- * database is built from `transform/13` only — which is exactly the case they
+ * database is built from `./auth-tables.sql` only — which is exactly the case they
  * exist for: a session row the trigger never saw.
  *
  * Needs the stack's Postgres (`bun run stack:up`, host port 5433).

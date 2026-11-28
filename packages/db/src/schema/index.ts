@@ -2,7 +2,7 @@
  * The Drizzle baseline (migration-plan §6 A3, re-taken by X2).
  *
  * `tables.ts` and `relations.ts` are `drizzle-kit pull --init` output taken
- * against the transformed database (`../transform/`). `relations.ts` has been
+ * against a database built from `../baseline/schema.sql`. `relations.ts` has been
  * hand-audited — see `../README.md` for what was changed and why.
  *
  * Regenerate with the command recorded in `../README.md`; do not hand-edit
@@ -22,9 +22,8 @@ export * from "./tables.ts";
  *
  * These are the only tables in this schema that an actor does not write —
  * better-auth's own adapter does (§3, and `../writers.ts`'s
- * `infrastructure:better-auth`). X2 merged them out of the separate `auth_dev`
- * database and into `public`, which is what let the 31 `public.*` foreign keys
- * that used to reference `auth.users(id)` reference `"user"(id)` instead.
+ * `infrastructure:better-auth`). They live in `public`, so the 31 `public.*`
+ * foreign keys to a user reference `"user"(id)` directly.
  *
  * **The property names in `tables.ts` are a contract.** better-auth's adapter
  * addresses a column by the JS property name Drizzle derives from it, so a
@@ -44,11 +43,9 @@ export const authSchema = {
  * Application tables, keyed by their Postgres name. `spatial_ref_sys` is
  * PostGIS's own and is filtered out of the pull.
  *
- * `auth.*` and `storage.*` are gone rather than merely absent: A6/X2 replaced
- * `auth` with the five better-auth tables below and `transform/15` dropped the
- * schema, and A8 copied `storage.files` into `public.files`. `storage` itself
- * survives as unreferenced rows until E1 verifies the file migration against
- * production; nothing in `public` points at it and nothing here declares it.
+ * Users are the five better-auth tables below and uploads are `files`, both in
+ * `public`. The baseline still carries an unreferenced `storage` schema;
+ * nothing in `public` points at it and nothing here declares it.
  */
 export const tables = {
   account: t.account,

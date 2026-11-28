@@ -4,14 +4,14 @@
  *
  * Kept: the formatters the restored cards and headers render with.
  *
- * Deliberately **not** restored (see `src/components/LEGACY-RESTORE.md`):
- * - `getNhostStorageUrl` — Nhost storage is gone; images render from the
+ * Deliberately **not** restored (see `docs/archive/nhost-migration/LEGACY-RESTORE.md`):
+ * - the storage-URL builder — images render from the
  *   presigned `ItemImage.file.url` the API hands back.
  * - `dataUrlToFile`, `compressImage` — the base64-through-a-server-action
  *   upload path (E2d/E2f). Uploads go through `lib/api/files.ts`.
  * - `formatIsoDateString`, `convertYearToDate` — date-fns, and the hydration
  *   rule: dates render through `common/Timestamp.tsx`.
- * - `typeToIdKey`, `getItemType` — Hasura table and column names.
+ * - `typeToIdKey`, `getItemType` — the old table and column names.
  * - `getRandomInt` — its one caller was the `Math.random()` ingredient
  *   availability bug (§7).
  */
@@ -103,7 +103,7 @@ export const parseNumber = (value: string | null | undefined) => {
 /**
  * `Brand · Descriptor`, the line under an item's name on every card.
  *
- * The old signature took a Hasura row (`brands[0].brand.name`,
+ * The old signature took a query row (`brands[0].brand.name`,
  * `subtitle_field`); this takes the two values directly so any adapter can
  * call it. Same join, same `formatEnum` on the descriptor.
  */

@@ -15,8 +15,8 @@
 #
 # `--target-db` MUST start with `cellar_restore_`. `cellar` is the live
 # database other work depends on; `cellar_test` and `cellar_test_template` are
-# `packages/db/transform/test-db.sh`'s. A blocklist naming those three would
-# miss the next database anyone adds. `packages/db/transform/test-db.sh` makes
+# `packages/db/baseline/test-db.sh`'s. A blocklist naming those three would
+# miss the next database anyone adds. `packages/db/baseline/test-db.sh` makes
 # exactly this call for its own `cellar_test*` names — same reasoning, same
 # shape, different prefix.
 #

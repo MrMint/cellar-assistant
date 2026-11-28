@@ -51,9 +51,9 @@ export type MenuExtractionRequest = {
  * `searchName` is the pipeline's existing `search_name`: the AI-normalised
  * name the matcher searches with, as distinct from the menu's own wording
  * ("Ch. Margaux '15 — glass" vs "Château Margaux 2015"). It is stored in
- * `place_menu_items.search_name` (the Nhost pipeline kept it in
- * `extracted_attributes`; `20260928182317_place_menu_items_scan_columns`
- * moved it).
+ * `place_menu_items.search_name`
+ * (`20260928182317_place_menu_items_scan_columns` moved it out of
+ * `extracted_attributes`).
  */
 export type ExtractedMenuLine = {
   readonly name: string;

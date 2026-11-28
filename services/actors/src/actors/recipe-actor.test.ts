@@ -4,7 +4,7 @@
  * What this file is built to prove:
  *
  *   1. **the `recipe_reviews` authorization gap is closed** — `target-stack.md`
- *      §7 records that `recipe_reviews` has no permissions in Hasura metadata
+ *      §7 records that `recipe_reviews` had no permissions
  *      at all, so there was no rule, only an absence. The rule B6 chose (insert
  *      = any signed-in, update/delete = author) is asserted from all three
  *      viewpoints, including the one that matters: the *recipe's creator* is

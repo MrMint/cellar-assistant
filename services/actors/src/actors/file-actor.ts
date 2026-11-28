@@ -1,7 +1,7 @@
 /**
  * `FileActor` — A8 (migration plan §2.1, §3; target-stack §4).
  *
- * Owns `files`, the table replacing `storage.files`. Implements the upload
+ * Owns `files`. Implements the upload
  * protocol:
  *
  *   createUploadTarget → client PUTs to the returned URL → verify() confirms
@@ -217,8 +217,7 @@ export const fileRowToDto = (row: FileRow): FileDto => ({
 /** A2's own presign demonstration used 15m; kept the same here for the PUT side. */
 const UPLOAD_TTL_SECONDS = 15 * 60;
 /**
- * The in-network read's TTL (`presignReadInternal`). Matches Nhost's own
- * `storage.buckets.download_expiration` default (30m). The browser-facing
+ * The in-network read's TTL (`presignReadInternal`): 30m. The browser-facing
  * `presignRead` no longer uses a per-call TTL: it signs a stable URL per
  * window (`stableReadWindow` in `src/lib/s3-presign.ts`), valid for
  * `FILES_READ_URL_WINDOW_SECONDS` + `FILES_READ_URL_MIN_VALIDITY_SECONDS`
@@ -779,8 +778,8 @@ export class FileActor
    * is reading a public photo somebody else uploaded. `FileActor` cannot know
    * that from `files` alone.
    *
-   * Rather than give `files` a `public` flag — new state, and a backfill at
-   * cutover for every migrated row — the rule is **derived** from the tables
+   * Rather than give `files` a `public` flag — new state, and a backfill for
+   * every existing row — the rule is **derived** from the tables
    * that reference the file. `FileActor` writes neither of them, so §1.3 says
    * read them fresh per call rather than cache them; this query runs only on
    * the path where the viewer is *not* the uploader.

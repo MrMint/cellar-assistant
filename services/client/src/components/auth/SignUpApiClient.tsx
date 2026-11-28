@@ -69,8 +69,7 @@ function SignUpHead({ returnTo, busy }: { returnTo?: string; busy?: boolean }) {
 
 /**
  * The actor host's floor — `minPasswordLength: 9` in
- * `services/actors/src/auth/auth.ts`, matching the outgoing stack's
- * `passwordMinLength`. Saying so beats a round trip that fails. It said 8
+ * `services/actors/src/auth/auth.ts`. Saying so beats a round trip that fails. It said 8
  * (better-auth's own default), so an eight-character password passed here and
  * was refused there.
  */

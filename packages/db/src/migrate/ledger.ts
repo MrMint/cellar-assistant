@@ -3,50 +3,35 @@
  * rule for bringing it up to date.
  *
  * `cli.ts` (`bun run db:migrate`) is the only thing that applies a migration
- * under `packages/db/migrations`, everywhere: `transform/run.sh` (and through it
- * `test-db.sh`), `scripts/cutover/cutover.sh`'s `migrate` phase, and the dev
- * lane's `bootstrap` / `migrate`. This file is the part of it that needs no
- * database — the manifest, the loader and the planner — so it can be tested
- * without one.
+ * under `packages/db/migrations`, everywhere: `baseline/build.sh` (and through
+ * it `test-db.sh`), the production deploy, and the dev lane's `bootstrap` /
+ * `migrate`. This file is the part of it that needs no database — the
+ * manifest, the loader and the planner — so it can be tested without one.
  *
- * ## Why a ledger
- *
- * Before it, a migration reached a database one of two ways. A migration
- * carrying the "Hand-written SQL lane" marker was re-applied by `run.sh` and
- * `cutover.sh` on every build (they were written to be idempotent). Every other
- * one reached a *fresh* build only because a numbered transform file mirrored it
- * by hand — and reached a *long-lived* database (`cellar-stack`, a worktree
- * cloned from it) only if somebody applied it by hand. That is how one database
- * came to lack `teas_country_country_value_fkey` while every build had it. There
- * was no record anywhere of what a database held, so nothing could say.
- *
- * `cellar_meta.schema_migrations` is that record: one row per migration, with
+ * `cellar_meta.schema_migrations` is the record: one row per migration, with
  * the sha256 of the exact file that was applied. A recorded migration is never
  * applied again, a changed file is refused rather than silently re-run, and an
  * unrecorded one is applied, in name order, in its own transaction.
  *
  * ## The horizon, and adoption
  *
- * Databases already exist that were built without a ledger — every
- * transform-built one, `cellar-stack`, and the production database E4 is about
- * to build. Their state up to now is known only by construction, so the
- * migrations up to `TRANSFORM_HORIZON` are *adopted* rather than blindly run:
+ * A fresh database starts from `baseline/schema.sql`, which already holds every
+ * migration up to `BASELINE_HORIZON` but no ledger rows for them. Those
+ * migrations are therefore *adopted* rather than blindly run:
  *
- *   - the introspected baseline is recorded and never executed (it cannot be:
- *     its SQL is commented out — `packages/db/README.md`);
- *   - an idempotent migration (the old hand-written lane) is re-applied, which
- *     is what every build did anyway;
+ *   - the introspected baseline migration is recorded and never executed (it
+ *     cannot be: its SQL is commented out — `packages/db/README.md`);
+ *   - an idempotent migration is re-applied;
  *   - every other one is **probed**: all of its objects present → recorded as
  *     `adopted`; none present → applied and then re-probed, so a probe that
  *     does not actually detect its own migration fails loudly instead of
  *     recording a lie; some present → refused, naming what is missing, because
  *     a half-applied migration is a question for a human.
  *
- * After the horizon there is no adoption and no probe. **The transform is frozen
- * at the horizon** (`transform-freeze.test.ts` pins its files): a new schema
- * change is a new migration, applied to every database — fresh, long-lived and
- * production alike — by this one path, and it is never mirrored into
- * `transform/`. The mirroring rule, and the lane marker, are history.
+ * After the horizon there is no adoption and no probe. **The baseline is frozen
+ * at the horizon** (`baseline-freeze.test.ts` pins it): a schema change is a
+ * new migration, applied to every database — fresh, long-lived and production
+ * alike — by this one path.
  *
  * `ADOPTION` is therefore frozen with the horizon, and so are its probes: they
  * describe migrations that will never change (their checksums are recorded).
@@ -64,10 +49,10 @@ export const LEDGER_SCHEMA = "cellar_meta";
 export const LEDGER_TABLE = `${LEDGER_SCHEMA}.schema_migrations`;
 
 /**
- * The last migration the frozen transform already produces. Every migration
+ * The last migration `baseline/schema.sql` already contains. Every migration
  * named after this one is applied by `db:migrate` alone, on every database.
  */
-export const TRANSFORM_HORIZON =
+export const BASELINE_HORIZON =
   "20260927215215_budget_attribution_and_reservation_index";
 
 /** One catalog question, answered by a single boolean. */
@@ -78,7 +63,7 @@ export type Adoption =
   | { readonly kind: "reapply"; readonly why: string }
   | {
       readonly kind: "probe";
-      /** Which transform file(s) produce this migration's objects. */
+      /** Where this migration's objects already come from. */
       readonly producedBy: string;
       readonly checks: readonly Check[];
     };
@@ -106,7 +91,7 @@ const constraint = (table: string, name: string, defLike = "%"): Check => ({
 });
 
 /**
- * Every migration up to and including `TRANSFORM_HORIZON`, and how an
+ * Every migration up to and including `BASELINE_HORIZON`, and how an
  * unrecorded one is brought onto the ledger. Frozen: `ledger.test.ts` fails if
  * a migration at or before the horizon is missing here, or if this names one
  * that does not exist.
@@ -114,16 +99,16 @@ const constraint = (table: string, name: string, defLike = "%"): Check => ({
 export const ADOPTION: Readonly<Record<string, Adoption>> = {
   "20260910003220_opposite_havok": {
     kind: "baseline",
-    why: "the introspected baseline: the transform (transform/01-18) is what builds it, and its own SQL is commented out and cannot be replayed",
+    why: "the introspected baseline: baseline/schema.sql holds it, and its own SQL is commented out and cannot be replayed",
   },
   "20260910003742_restore_expression_index_opclass": {
     kind: "probe",
-    producedBy: "transform/17_target_indexes.sql",
+    producedBy: "baseline/schema.sql",
     checks: [index("idx_places_name_compact_trgm", "%gin_trgm_ops%")],
   },
   "20260910003754_hand_written_sql_lane": {
     kind: "reapply",
-    why: "CREATE OR REPLACE of the four search functions transform/02 drops",
+    why: "CREATE OR REPLACE of the four search functions",
   },
   "20260910003755_pgvector_distance_helpers": {
     kind: "reapply",
@@ -135,7 +120,7 @@ export const ADOPTION: Readonly<Record<string, Adoption>> = {
   },
   "20260910040517_b8b_widen_menu_item_type": {
     kind: "probe",
-    producedBy: "transform/16_widen_menu_item_detected_type.sql",
+    producedBy: "baseline/schema.sql",
     checks: [
       constraint(
         "place_menu_items",
@@ -146,8 +131,7 @@ export const ADOPTION: Readonly<Record<string, Adoption>> = {
   },
   "20260919192020_outbox_claim_token_and_live_indexes": {
     kind: "probe",
-    producedBy:
-      "transform/06_new_tables.sql (column), transform/17_target_indexes.sql (indexes)",
+    producedBy: "baseline/schema.sql",
     checks: [
       column("outbox", "claim_token"),
       index("outbox_delivering_idx"),
@@ -156,7 +140,7 @@ export const ADOPTION: Readonly<Record<string, Adoption>> = {
   },
   "20260920005733_teas_country_fk": {
     kind: "probe",
-    producedBy: "transform/18_teas_country_fk.sql",
+    producedBy: "baseline/schema.sql",
     checks: [constraint("teas", "teas_country_country_value_fkey")],
   },
   "20260920164500_outbox_dead_letter_acks": {
@@ -169,8 +153,7 @@ export const ADOPTION: Readonly<Record<string, Adoption>> = {
   },
   "20260927215215_budget_attribution_and_reservation_index": {
     kind: "probe",
-    producedBy:
-      "transform/06_new_tables.sql (column), transform/17_target_indexes.sql (index)",
+    producedBy: "baseline/schema.sql",
     checks: [
       column("outbox", "attributed_to"),
       index("idx_api_usage_log_reservation_id"),
@@ -179,21 +162,15 @@ export const ADOPTION: Readonly<Record<string, Adoption>> = {
 };
 
 /**
- * "Is this a transform-built database?" — asked before adopting anything. The
- * three tables the transform creates, and neither of the two schemas it drops.
- * An empty database, the Nhost source, and a cutover target on which
- * `transform-c` has not run yet all answer no.
+ * "Was this database built from the baseline?" — asked before adopting
+ * anything. An empty database answers no.
  */
-export const TRANSFORMED_DATABASE: readonly Check[] = [
+export const BASELINE_DATABASE: readonly Check[] = [
   {
     what: 'public.outbox, public.files and public."user" exist',
     sql: `SELECT to_regclass('public.outbox') IS NOT NULL
              AND to_regclass('public.files') IS NOT NULL
              AND to_regclass('public."user"') IS NOT NULL`,
-  },
-  {
-    what: "neither the auth nor the hdb_catalog schema exists",
-    sql: `SELECT NOT EXISTS (SELECT 1 FROM pg_namespace WHERE nspname IN ('auth', 'hdb_catalog'))`,
   },
 ];
 
@@ -273,7 +250,7 @@ export type Plan = {
 export const plan = (
   migrations: readonly Migration[],
   ledger: readonly LedgerRow[],
-  horizon: string = TRANSFORM_HORIZON,
+  horizon: string = BASELINE_HORIZON,
   adoption: Readonly<Record<string, Adoption>> = ADOPTION,
 ): Plan => {
   const refusals: string[] = [];
@@ -281,9 +258,7 @@ export const plan = (
   const recorded = new Map(ledger.map((r) => [r.name, r.sha256]));
 
   if (!onDisk.has(horizon)) {
-    refusals.push(
-      `the transform horizon ${horizon} is not a migration on disk`,
-    );
+    refusals.push(`the baseline horizon ${horizon} is not a migration on disk`);
   }
 
   for (const [name, recordedSha] of recorded) {
@@ -327,7 +302,7 @@ export const plan = (
       const entry = adoption[migration.name];
       if (entry === undefined) {
         refusals.push(
-          `${migration.name} is at or before the transform horizon (${horizon}) but has ` +
+          `${migration.name} is at or before the baseline horizon (${horizon}) but has ` +
             "no ADOPTION entry, so there is no way to tell whether a database already has it",
         );
         continue;

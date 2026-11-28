@@ -42,7 +42,7 @@ export type EnumKey = ReferenceSource | StaticSource | "permission";
 export type EnumOption = { value: string; label: string };
 
 /**
- * `cellar_permission` in its Hasura enum-table order (alphabetical, which is
+ * `cellar_permission` in its old enum-table order (alphabetical, which is
  * what `order_by: value` returned). `satisfies` ties it to the SDL enum, so a
  * renamed value is a type error rather than an option the API refuses.
  */

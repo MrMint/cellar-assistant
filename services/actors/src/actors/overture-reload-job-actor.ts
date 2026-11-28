@@ -200,7 +200,7 @@ export class OvertureReloadJobActor
   /**
    * **Admin only, and only when a source is installed.**
    *
-   * The Hasura predecessor carried `role: admin`; this one rewrites the
+   * This job rewrites the
    * reference half of every place in the database, so a plain signed-in user
    * may not start it. `system` also passes, which is how a scheduled
    * `run_after` outbox row could start one later.

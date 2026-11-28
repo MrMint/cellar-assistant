@@ -1,6 +1,6 @@
 # Actor keys: what each key serialises, and whether it should
 
-Written in Wave 6 of the pre-cutover hardening (2026-09-28), against `291bcb97` and `e5daa1cc`.
+Written in Wave 6 of the September hardening (2026-09-28), against `291bcb97` and `e5daa1cc`.
 Two things live here:
 
 - the two decisions that wave made: re-keying `PlaceCreationActor`, and keeping `BudgetActor` a
@@ -246,7 +246,7 @@ sidecar hop, so the singleton can take a few hundred reserve turns per second ac
 The largest monthly request cap is 200,000 embeddings, an average of 0.08 per second. The largest
 per-user hourly cap is 400 `menu_match` calls, about 0.1 per second per user. A menu-match batch
 of 25 items makes at most about 75 budget turns spread over the batch's model calls, which take
-seconds each. **Queueing on this actor is not a pre-cutover risk.** The actor's time per call is
+seconds each. **Queueing on this actor is not a risk at this load.** The actor's time per call is
 two orders of magnitude below the model call it gates.
 
 ### The one real defect, fixed now
@@ -265,7 +265,7 @@ every `#reserve` and `settleForModel` transaction is `pg_advisory_xact_lock` on 
   Each race grants exactly one.
 - **Negative control:** with the lock removed, both tests get `[true, true]`.
 
-### Verdict: (a) keep the singleton key for cutover. (b) and (c) are post-cutover.
+### Verdict: (a) keep the singleton key. (b) and (c) are later work.
 
 - **(b) Key per seam, as `BudgetActor("<service>/<endpoint>")`.** This is now *safe*: the lock
   makes each kind's caps exact whatever the key, and no cap spans kinds. But it is not *needed*,
@@ -285,7 +285,7 @@ every `#reserve` and `settleForModel` transaction is `pg_advisory_xact_lock` on 
   actor. But it moves writes to `api_usage_log` out of its owning actor. That breaks §1.2's
   single-writer rule and needs its enforcement test re-argued. It also moves the config cache and
   the env-derived policy (`readModelBudgetPolicy`) into a module. That is a design change, not a
-  fix, and it does not belong in the week before cutover.
+  fix.
 
 ## Advisory lock namespaces
 
@@ -294,7 +294,7 @@ All locks taken in `services/actors` go through `lib/advisory-locks.ts`.
 They use the **two-`int4`** form of `pg_advisory_xact_lock`. Postgres keeps that separate from the
 single-`int8` form, and the single-`int8` form is used by the migrator
 (`packages/db/src/migrate/cli.ts`, `hashtext`) and the test-template builder
-(`packages/db/transform/test-db.sh`). So neither of those can collide with these.
+(`packages/db/baseline/test-db.sh`). So neither of those can collide with these.
 
 Each family's first key carries `namespace << 20`. Add a family to `ADVISORY_LOCK_NAMESPACE`; never
 pick a number inline.
@@ -321,15 +321,15 @@ Verdicts:
 - **fine**: the key serialises what must be serialised and turns are short.
 - **accepted**: a long in-turn call holds the key, but the only callers who wait are the ones who
   asked.
-- **post-cutover**: worth changing, not worth the risk now.
+- **later**: worth changing, not worth the risk now.
 - **flag**: a defect or smell to act on.
 
 ### Singletons and fixed keys
 
 | Actor | Key | Serialises | Turn | Contention | Verdict |
 |---|---|---|---|---|---|
-| `BudgetActor` | `"singleton"` | every reservation and settlement | about 2–3ms of SQL, no external calls | every paid call (above) | **fine for cutover.** It now also holds per-kind DB locks. See Decision 2. |
-| `OutboxActor` | `"singleton"` | all outbox delivery, globally serial | one `drain` claims up to 100 rows and delivers them one at a time until a 15s deadline. The deadline is checked *before* each delivery, so a turn is about 15s plus one delivery timeout: at least 125s for a model-backed target, up to 300s (Overture `runBatch`) | its own 2s keep-alive reminder | **post-cutover: worker pool.** Every model-backed follow-up waits behind the one in front of it, and one hung provider holds the whole queue for about 125s per attempt. Row claims already use `FOR UPDATE SKIP LOCKED`, so N drainers keyed `outbox-<n>` is mostly a keying change. It is out of scope before cutover. |
+| `BudgetActor` | `"singleton"` | every reservation and settlement | about 2–3ms of SQL, no external calls | every paid call (above) | **fine.** It now also holds per-kind DB locks. See Decision 2. |
+| `OutboxActor` | `"singleton"` | all outbox delivery, globally serial | one `drain` claims up to 100 rows and delivers them one at a time until a 15s deadline. The deadline is checked *before* each delivery, so a turn is about 15s plus one delivery timeout: at least 125s for a model-backed target, up to 300s (Overture `runBatch`) | its own 2s keep-alive reminder | **later: worker pool.** Every model-backed follow-up waits behind the one in front of it, and one hung provider holds the whole queue for about 125s per attempt. Row claims already use `FOR UPDATE SKIP LOCKED`, so N drainers keyed `outbox-<n>` is mostly a keying change. |
 | `MaintenanceActor` | `"singleton"` | maintenance scheduling | the reminder only arms two outbox chains. The work (`reapOrphanFiles`, `reportDeadLetters`) runs as outbox deliveries, inside `OutboxActor`'s turn. | hourly reminder | **fine.** Note that the orphan scan has no `LIMIT`, and it runs inside the outbox's serial turn. |
 | `CategoryVectorsActor` | `"singleton"` (`exactKey`) | `seed` and `all` | none | **no caller** in `services/api` or `services/actors`. `PlaceSearchActor` reads `category_vectors` by SQL. | **flag: unused.** Harmless as a singleton. Either wire it in or remove it. |
 | `ReferenceDataActor` | the table kind, 10 fixed ids (`isReferenceKind`) | reads of one catalog (read-only, fully cached) | none | every dropdown | **fine.** Not a singleton; one activation per catalog. |
@@ -342,15 +342,15 @@ Verdicts:
 |---|---|---|---|---|---|
 | `PlaceCreationActor` | **viewer id** (was `"singleton"`) | one user's submissions | rate limit, duplicate check, insert — 30s budget. The AI review left the turn in X27: the place is inserted `pending` and `PlaceReviewActor(placeId)` reviews it from the outbox | `createPlace` | **re-keyed in this wave.** See Decision 1. |
 | `PlaceReviewActor` | place uuid (X27) | one place's review | one model call, then a short sync hop to `PlaceActor.applyReview`; bounded by the outbox delivery timeout | outbox only | **fine.** Holds no reader's turn: the model call is outside `PlaceActor(placeId)`. |
-| `PlaceActor` | place uuid | writes to one place | system `enrichFromGoogle` / `refreshFromSource`: up to 8 Google requests plus a `FileActor` upload and verify per photo, 90s. `create`: milliseconds, including the geocell locks. | per-place reads from field resolvers; outbox; `PlaceRefreshJobActor` | **accepted.** Reads of a place queue behind its own enrichment, up to 90s. Post-cutover: move the photo loop out of the turn. |
+| `PlaceActor` | place uuid | writes to one place | system `enrichFromGoogle` / `refreshFromSource`: up to 8 Google requests plus a `FileActor` upload and verify per photo, 90s. `create`: milliseconds, including the geocell locks. | per-place reads from field resolvers; outbox; `PlaceRefreshJobActor` | **accepted.** Reads of a place queue behind its own enrichment, up to 90s. Later: move the photo loop out of the turn. |
 | `BrandRegistryActor` | `normalizeBrandName` = `trim().toLowerCase()` (`textKey`) | find-or-create of one normalised name | sync hop to `BrandActor(newId).create` | `resolveBrand`; `ItemOnboardingActor.confirm` | **fine.** Dedupe is exact, below. |
 | `BrandActor` | brand uuid | one brand's writes | none | registry, and brand edits | **fine** |
 | `BarcodeActor` | the canonical code: `barcodeActorId(code, symbology)` (`contracts/src/barcodes.ts`), within `/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/` | `ensure` and `linkItem` for one **product** | none | barcode resolvers; onboarding `confirm` | **fixed: canonical key** (below) |
-| `ItemActor` | `<type>:<uuid>` / `generic:<uuid>` | all writes to one item | `regenerateVector` → sync `EmbeddingActor.embedDocument`, model call plus image reads, 100s | item resolvers; outbox; `VectorReembedJobActor` | **accepted, post-cutover.** A user's edit to an item queues behind that item's re-embed, up to about 100s. The embed could run outside the turn and write its result back. |
+| `ItemActor` | `<type>:<uuid>` / `generic:<uuid>` | all writes to one item | `regenerateVector` → sync `EmbeddingActor.embedDocument`, model call plus image reads, 100s | item resolvers; outbox; `VectorReembedJobActor` | **accepted, later.** A user's edit to an item queues behind that item's re-embed, up to about 100s. The embed could run outside the turn and write its result back. |
 | `ItemOnboardingActor` | onboarding uuid | one onboarding session | `start`: model call, 120s (§8.5's other exception). `confirm`: sync `BarcodeActor` → `BrandRegistryActor` → `BrandActor`, three keys deep, none of which calls back. | the onboarding user only | **fine.** It blocks only its own user. |
 | `CellarActor` | cellar uuid | all writes to one cellar | `items` with `semanticQuery` → `EmbeddingActor.embed` (model call). The method declares `modelBacked`; the embed may take 30s. | cellar resolvers | **accepted.** A semantic search in a cellar blocks that cellar's writes for the length of one embedding. It is usually cached by `EmbeddingActor`. |
 | `UserActor` | user uuid | one user's profile, friend, favorite and interaction writes | none (friendship mirroring goes through the outbox) | user resolvers | **fine** |
-| `TierListActor` | list uuid | edits to one list | `generateInsights`: model call in-turn, throttled to one per 24h | list resolvers; outbox | **accepted, post-cutover.** The list's own edits queue behind the insight call while it runs. |
+| `TierListActor` | list uuid | edits to one list | `generateInsights`: model call in-turn, throttled to one per 24h | list resolvers; outbox | **accepted, later.** The list's own edits queue behind the insight call while it runs. |
 | `RecipeActor` | recipe uuid | edits to one recipe | `setIngredients`: sync `ItemActor("generic:…").createGeneric` per new item. `regenerateVector`: sync embed (model call), 100s. | recipe resolvers; `RecipePhotoJobActor`; outbox | **accepted.** It has the same re-embed shape as `ItemActor`. Generic-item dedupe is exact on `(name, category)` via `idx_generic_items_name_category` plus `ConflictError` convergence, with no registry actor. |
 | `RecipeGroupActor` | group uuid | votes and the canonical recipe | none | recipe resolvers | **fine** |
 | `FileActor` | file uuid | one file's lifecycle | storage presign, stat and delete (30s) | every image-reading model call, and uploads | **fine** |
@@ -443,7 +443,7 @@ The others reach a model through one sync hop (`ItemOnboardingActor.reprocess`,
     trimmed (`brand-actor.ts:139`), so the two agree in practice.
 - **`CategoryVectorsActor` has no callers.** See the singletons table.
 - **Docs that still describe `PlaceCreationActor` as a singleton**:
-  `docs/architecture/migration-plan.md` §2.1 (`**PlaceCreationActor()** — singleton registry`,
+  `docs/archive/nhost-migration/migration-plan.md` §2.1 (`**PlaceCreationActor()** — singleton registry`,
   including the geohash escape hatch), and `docs/architecture/target-stack.md` Q19 ("singleton,
   fuzzy dedupe"). Neither file was in this wave's scope. This document supersedes both on this
   point.

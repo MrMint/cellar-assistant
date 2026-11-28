@@ -14,10 +14,8 @@ import { HOME_PATH } from "./utilities/sanitize-return-to";
 /**
  * The signed-in gate, in front of every page.
  *
- * Next 16 renamed `middleware.ts` to `proxy.ts`; this is that file. D9 replaced
- * its Nhost body — a cookie parse, a JWT expiry check and a refresh-token
- * exchange against `hasura-auth` — with a presence check on better-auth's
- * session cookie. The session itself is resolved by the actors app.
+ * Next 16 renamed `middleware.ts` to `proxy.ts`; this is that file. It is a
+ * presence check on better-auth's session cookie. The session itself is resolved by the actors app.
  *
  * **One exception: the daily session check.** better-auth re-issues its
  * session cookie with a fresh 7-day `Max-Age` on the first session read after

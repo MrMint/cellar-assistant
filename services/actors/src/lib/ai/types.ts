@@ -1,7 +1,7 @@
 /**
  * The AI provider contract — X1's port of `functions/_utils/ai-providers/types.ts`.
  *
- * The shape is deliberately unchanged from the Nhost side, because five
+ * The shape is deliberately unchanged from the original, because five
  * workstreams (B2, B7, B8, C1, C4) each left a seam sized to fit it and the
  * contract is proven: two methods, `generateContent` for structured output and
  * `generateEmbeddings` for a vector, with three quality tiers mapping to three
@@ -10,7 +10,7 @@
  * ## What changed in the port, and why
  *
  *  - **`generateEmbeddings` is no longer optional.** It was `generateEmbeddings?`
- *    on the Nhost side, so every call site had to test for it — and a provider
+ *    originally, so every call site had to test for it — and a provider
  *    that simply lacked the method looked, at the call site, exactly like a
  *    provider that was never configured. All three implementations have always
  *    had it; making it required turns "this provider cannot embed" into a
@@ -38,7 +38,7 @@ export const isModelQuality = (value: string): value is ModelQuality =>
   (MODEL_QUALITIES as readonly string[]).includes(value);
 
 /**
- * Vertex/Google embedding task types. Verbatim from the Nhost port — the
+ * Vertex/Google embedding task types. Verbatim from the original — the
  * strings are Google's own, so they cannot be renamed.
  *
  * `EmbeddingActor.embed` asks for `RETRIEVAL_QUERY` (a search phrase);
@@ -149,7 +149,7 @@ export type EmbeddingResponse = {
  * `/v1` route all serve `POST /v1/chat/completions` and `POST /v1/embeddings`,
  * so all of them reach this one provider with a base-URL and model change and
  * no code change at all. That is deliberate: the sanctioned local runtime is
- * vLLM (`docs/architecture/e4-decisions.md` §12), vLLM has **no Metal
+ * vLLM (`docs/archive/nhost-migration/e4-decisions.md` §12), vLLM has **no Metal
  * backend** and runs CPU-only on Apple silicon, and the measurement behind
  * that caveat (`docs/architecture/findings/vllm-provider.md` §6) is bad enough
  * that the decision may well be revised. Naming the provider after the

@@ -93,7 +93,7 @@ scripts/backup/pg-restore.sh --dump ~/cellar-assistant-backups/postgres/cellar-2
 
 - `--target-db` **must** start with `cellar_restore_` — enforced by the
   script before anything destructive happens, the same shape as
-  `packages/db/transform/test-db.sh`'s own `cellar_test*` guard. `cellar` and
+  `packages/db/baseline/test-db.sh`'s own `cellar_test*` guard. `cellar` and
   `cellar_test`/`cellar_test_template` cannot be named here even by typo.
 - Pass `--drop-existing` to rebuild a target that already exists (the drill,
   run again a month later, reuses the same name).

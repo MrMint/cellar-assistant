@@ -2,7 +2,7 @@
  * The Overture Maps source seam — C4b (migration plan §1326, §2.6, §8.4).
  *
  * Places in this database start life as rows in a BigQuery table of Overture
- * Maps points of interest. The old stack loaded them with
+ * Maps points of interest. They were originally loaded with
  * `functions/refreshPlaces` + `processPlaceRefreshBatch`: `DELETE FROM places`,
  * then a keyset walk of that table upserted 500 at a time on
  * `places_overture_id_key`. C4 ported the *cursor loop* and explicitly did not
@@ -504,10 +504,8 @@ export const readOvertureConfig = (
     throw new ConflictError(
       "OVERTURE_SOURCE=bigquery needs a service-account key: set " +
         "OVERTURE_GCP_CREDENTIALS_JSON to the key itself, or " +
-        "GOOGLE_APPLICATION_CREDENTIALS to a key file path. (The Nhost lane " +
-        "that read the key out of the `admin_credentials` table is not " +
-        "ported — that table does not exist in the transformed schema, and " +
-        "deployment secrets belong in the environment.)",
+        "GOOGLE_APPLICATION_CREDENTIALS to a key file path. Deployment " +
+        "secrets belong in the environment.",
     );
   }
   const json =
@@ -600,7 +598,7 @@ const defaultFetch: FetchLike = (input, init) =>
  * Called once from `boot()` (`src/boot.ts`), before any actor is registered or
  * the server starts. A set-but-incomplete `OVERTURE_SOURCE` throws here and the
  * host never starts serving — the third row of the module doc's table, and the
- * row the Nhost factory got wrong. `overture.test.ts` holds all three rows, and
+ * row a silent mock fallback gets wrong. `overture.test.ts` holds all three rows, and
  * asserts that `boot()` actually calls this (and `boot.test.ts` watches it
  * happen): B5b's lesson is that a seam named in a comment and not installed
  * fails exactly like one nobody wrote.

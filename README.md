@@ -282,8 +282,6 @@ service, you must offer its users the corresponding source.
 
 ## A note on history
 
-This project ran on Nhost and Hasura until 2026 and has since migrated to the
-stack described above. The local Nhost stack is retired; the rollback of record
-is a checkout of the pre-migration commit `82450ad1`, and the `nhost/` directory
-still in this tree is frozen history that nothing executes. See "Nhost: retired,
-and how rollback works" in [`AGENTS.md`](AGENTS.md).
+The 2026-10 move onto the stack described above is recorded in
+[`docs/archive/nhost-migration/`](docs/archive/nhost-migration/); the
+pre-migration tree is commit `82450ad1`.

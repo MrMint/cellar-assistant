@@ -17,8 +17,7 @@
  * ## Visibility: catalog data, signed in
  *
  * §2.1 gives this actor no `Visibility:` line, the same absence B3 resolved
- * for `BrandActor`. Today's Hasura select permission on `places` is
- * `filter: {}` for role `user` and there is no anonymous role, so every
+ * for `BrandActor`. Places are catalog data: every
  * signed-in viewer sees every place — owner, friend and stranger alike — and
  * only an anonymous caller is refused. `place_menus`, `place_menu_items`,
  * `place_google_enrichments` and `place_google_photos` carry the same grant.
@@ -942,7 +941,7 @@ export class PlaceActor
         description: trimOrNull(input.description),
         confidence: confidence === null ? null : confidence.toFixed(2),
         createdBy: input.createdById,
-        // Server-set, exactly as today's Hasura insert permission `set`s them.
+        // Server-set, never from the input.
         source: "user",
         isVerified: false,
         // X27 / D28: saved at once, shared with nobody until the review —
@@ -1402,7 +1401,7 @@ export class PlaceActor
    *
    * This method carried `#requireSignedIn` alone, which the contracts doc
    * justified as matching "today's reality … reachable by any authenticated
-   * client" — i.e. Hasura's `filter: {}` update permission on
+   * client" — i.e. an unfiltered update permission on
    * `place_menu_items`. `BarcodeActor.linkItem` is the site that already
    * settled what to do with an inherited `filter: {}`: it closed it
    * ("Today's `filter: {}` update permission on `barcodes` lets any signed-in

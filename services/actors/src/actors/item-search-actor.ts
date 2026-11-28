@@ -6,8 +6,8 @@
  *
  * ## What it replaces, exactly
  *
- * Two Hasura *native queries* with identical bodies, differing only in the name
- * of their one argument (`82450ad1:nhost/metadata/databases/databases.yaml`):
+ * Two *native queries* with identical bodies, differing only in the name
+ * of their one argument (as of `82450ad1`):
  *
  * ```sql
  * SELECT DISTINCT ON (beer_id, wine_id, spirit_id, coffee_id, sake_id, tea_id) *,
@@ -51,7 +51,7 @@
  * order — two items embedded from near-identical text tie — and a search actor
  * pages its result set by *offset* (§1.5), so a tie broken differently between
  * two turns would drop or repeat a row across a page boundary. The old query
- * had the same latent problem and never noticed because Hasura re-ran it.
+ * had the same latent problem and never noticed because it was re-run per page.
  *
  * ## Viewer: not in the key
  *

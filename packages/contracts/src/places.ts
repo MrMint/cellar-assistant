@@ -23,17 +23,14 @@
  * custom type (`packages/db/src/schema/custom-types.ts`), which decodes EWKB
  * to `{ lng, lat }` on read and emits `POINT(lng lat)` on write. That is the
  * only shape this contract knows: no GeoJSON, no `[lng, lat]` tuple, no WKT.
- * The old server action passed GeoJSON (`{ type: "Point", coordinates: [...] }`)
- * because Hasura's `geography` scalar took it; nothing here does.
  *
  * ## Visibility: catalog data, signed-in only
  *
  * §2.1 gives `PlaceActor` no `Visibility:` line, the same absence B3 resolved
- * for `BrandActor`. Today's Hasura grant is `filter: {}` for role `user` —
- * every signed-in user may read every place, including user-created ones —
- * with no anonymous role at all. B3's rule for catalog aggregates ("any
- * signed-in viewer; anonymous refused") reproduces that exactly, so it is what
- * `PlaceActor` uses for an *approved* place.
+ * for `BrandActor`. Every signed-in user may read every place, including
+ * user-created ones, and an anonymous caller may read none: B3's rule for
+ * catalog aggregates ("any signed-in viewer; anonymous refused"), which is
+ * what `PlaceActor` uses for an *approved* place.
  *
  * X27 / D28 added the one owner branch: a user-created place is inserted
  * `pending` and stays visible to its creator alone until the outbox-delivered
@@ -348,8 +345,7 @@ export const isPlaceBrandRelationship = (
  * load-bearing rather than an omission.
  *
  * `source`, `isVerified` and `createdById` are absent for the same reason:
- * today's Hasura permission `set`s all three server-side, and a client that
- * could choose them could mint a `source: "overture"`, `is_verified: true`
+ * the server sets all three, and a client that could choose them could mint a `source: "overture"`, `is_verified: true`
  * row indistinguishable from imported reference data.
  */
 export type CreatePlaceInput = {
@@ -543,7 +539,7 @@ export type RecordedAccess = {
  *   - `verifyMenuItemMatch` — **the owner of the scan that produced the menu
  *     line** (plus `system`/`admin`, which is how an accepted suggestion is
  *     delivered). It was in the bullet above, on the same "today's reality"
- *     grounds; that reality was Hasura's `filter: {}` update permission on
+ *     grounds; that reality was an update grant over every row of
  *     `place_menu_items`, and carrying it forward let a signed-in stranger
  *     stamp a match onto another user's scanned menu. `BarcodeActor.linkItem`
  *     closed the identical inherited grant on `barcodes`; see the method in

@@ -4,9 +4,8 @@
  * `drizzle-kit@1.0.0-rc.4 pull` introspects `geography`, `geometry`, `tsvector`
  * and `money` as untyped `customType(...)` placeholders — see
  * `../../README.md` and `docs/architecture/target-stack.md` §2. `money` no
- * longer needs one (`transform/05_money_to_numeric.sql` converts
- * `place_menu_items.menu_item_price` to `numeric(10,2)`, which Drizzle models
- * natively), leaving exactly three surviving columns that need a real type:
+ * longer needs one (`place_menu_items.menu_item_price` is `numeric(10,2)`,
+ * which Drizzle models natively), leaving exactly three surviving columns that need a real type:
  *
  *   - `places.location`        geography(Point,4326)
  *   - `places.search_text`     tsvector

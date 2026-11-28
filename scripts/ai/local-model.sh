@@ -25,7 +25,7 @@
 #
 # ## The standing decision, and its sharp edge
 #
-# Local dev = vLLM; deployed = Gemini on Vertex (`docs/architecture/e4-decisions.md`
+# Local dev = vLLM; deployed = Gemini on Vertex (`docs/archive/nhost-migration/e4-decisions.md`
 # §12). But **vLLM has no Metal backend**: on Apple silicon it builds CPU-only,
 # and `docs/architecture/findings/vllm-provider.md` §6 measured 52 s/image
 # against 1.16 s on MPS. So this script serves *any* OpenAI-compatible server —

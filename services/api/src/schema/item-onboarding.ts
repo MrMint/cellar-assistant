@@ -1,9 +1,7 @@
 /**
  * `ItemOnboarding` — B2 (migration plan §2.1 `ItemOnboardingActor`, §8.5).
  *
- * Replaces the six `*_defaults` Hasura actions and the `getItemDefaults`
- * function with two mutations and one query, all on one actor keyed by the
- * onboarding id.
+ * Two mutations and one query, all on one actor keyed by the onboarding id.
  *
  * **`startItemOnboarding` is slow on purpose.** §8.5 names it one of only two
  * request-driven long operations in the system (the other is place creation):

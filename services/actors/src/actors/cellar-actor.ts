@@ -25,9 +25,7 @@
  * first, so a viewer who may not see the cellar and a cellar that does not
  * exist are both `NotFoundError` and indistinguishable.
  *
- * Writes are not one rule but two, matching the Hasura permissions they
- * replace (`82450ad1:nhost/metadata/databases/default/tables/public_cellars.yaml` and
- * `public_cellar_owners.yaml`):
+ * Writes are not one rule but two:
  *
  * - **creator or co-owner** may rename, re-privacy, and add/change/remove
  *   items;
@@ -63,10 +61,9 @@
  * to the wrong method.
  *
  * One consequence worth naming: inside a cellar you *can* see, you see every
- * check-in, including a co-owner's, whether or not you are their friend. The
- * Hasura rule could not express that (it gated on friendship alone, with no
- * cellar branch at all), so co-owners could not see each other's check-ins.
- * The cellar is the unit of sharing; that is the point of co-ownership.
+ * check-in, including a co-owner's, whether or not you are their friend —
+ * a rule gated on friendship alone would hide co-owners' check-ins from each
+ * other. The cellar is the unit of sharing; that is the point of co-ownership.
  *
  * ## Idempotency (§8.4)
  *

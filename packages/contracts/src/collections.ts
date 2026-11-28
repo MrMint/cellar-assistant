@@ -177,9 +177,8 @@ export const isCollectionSection = (
  *
  * The set is `canSeeCellar` over `cellars`, which is the four-branch rule and
  * therefore a **superset** of §2.2's three groups: it also contains a
- * stranger's PUBLIC cellar. That is deliberate and is what the page shows
- * today — `82450ad1:nhost/metadata/databases/default/tables/public_cellars.yaml` grants
- * role `user` `privacy = PUBLIC OR (privacy = FRIENDS AND friend-of-creator) OR
+ * stranger's PUBLIC cellar. That is deliberate: a signed-in user sees
+ * `privacy = PUBLIC OR (privacy = FRIENDS AND friend-of-creator) OR
  * created_by_id = viewer OR co_owner = viewer`, and `/cellars` renders that
  * filter unmodified. Narrowing it is a product decision for D2, not a security
  * one; dropping cellars a user can see today would read as a bug.
@@ -782,7 +781,7 @@ export type FriendProfileDto = {
  *
  * Both are the viewer's own rows and nobody else's; the viewer-key check is the
  * whole of the authorization, because `friends` and `friend_requests` are
- * visible only to the two people named in them (today's Hasura rule and B4's).
+ * visible only to the two people named in them (B4's rule).
  */
 export type FriendsCollectionActorInterface = {
   /** **ids** — the other user in each `friends` row, newest friendship first. */
@@ -1263,7 +1262,7 @@ export type BrandLinksFilter = {
  * ## Why a collection actor rather than fields on `BrandActor`
  *
  * D4 recorded that `Brand` has **no reverse edges at all** — no `items`, no
- * `places` — while the Hasura `/brands/[id]` page rendered both. The tables
+ * `places` — while the `/brands/[id]` page renders both. The tables
  * that answer them are not `BrandActor`'s: `TABLE_WRITERS` assigns
  * `item_brands` to `ItemActor` and `place_brands` to `PlaceActor`. So the
  * reverse edge cannot be a `BrandActor` method — §1.3 lets an entity actor

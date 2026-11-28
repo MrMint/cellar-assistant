@@ -308,9 +308,8 @@ const PlacePhotoType = builder
        * both matter:
        *
        *  1. `fileId` itself is nullable — `place_google_photos.storage_file_id`
-       *     is a nullable column, and `10_place_file_fk_repoint.sql` migrates
-       *     rows written by the Nhost lane, where a photo could be recorded
-       *     without its bytes ever being mirrored.
+       *     is a nullable column: imported rows can record a photo whose
+       *     bytes were never mirrored.
        *  2. `File.url` throws `ConflictError` on an unverified file. Nullable
        *     here means such a throw nulls *this one photo* rather than the
        *     whole `photos` connection — the failure mode `items.ts` has to

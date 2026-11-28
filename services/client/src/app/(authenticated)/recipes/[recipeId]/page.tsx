@@ -2,9 +2,7 @@ import { RecipePage, recipePageMetadata } from "@/components/recipe/RecipePage";
 
 /**
  * `/recipes/[recipeId]` — `82450ad1:src/app/(authenticated)/recipes/[recipeId]/page.tsx`,
- * restored: `RecipeDetails` over one `recipe(id:)` read (`RecipePage`). In
- * production this page threw on load — the reviews relationship had no Hasura
- * permission.
+ * restored: `RecipeDetails` over one `recipe(id:)` read (`RecipePage`).
  */
 export const dynamic = "force-dynamic";
 

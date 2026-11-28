@@ -1,9 +1,9 @@
 /**
- * `/search`'s documents — the successors of the old page's Hasura queries
+ * `/search`'s documents — the successors of the old page's queries
  * (`82450ad1:src/app/(authenticated)/search/actions.ts`,
  * `82450ad1:src/components/search/fragments.ts`).
  *
- * | old (Hasura)                                        | new (`services/api`)                     |
+ * | old                                                 | new (`services/api`)                     |
  * | --------------------------------------------------- | ---------------------------------------- |
  * | `create_search_vector(text:)` + `text_search(… limit: 10, distance ≤ 1)` | `itemSearch(text:, narrow: true)` — the Items section of universal search (X12, `universal-search.ts`) |
  * | six `*ItemCardFragment`s on the hit's `beer`/`wine`/… | `item { ...ItemCard }`                 |

@@ -11,12 +11,12 @@ import { describe, expect, it } from "vitest";
 import {
   ADOPTION,
   type Adoption,
+  BASELINE_HORIZON,
   loadMigrations,
   MIGRATIONS_DIR,
   type Migration,
   plan,
   sha256,
-  TRANSFORM_HORIZON,
   transactionHazards,
 } from "./ledger.ts";
 
@@ -31,7 +31,7 @@ const m = (name: string, sql = `-- ${name}`): Migration => ({
 describe("the migrations directory", () => {
   it("is read, not silently empty", () => {
     expect(REAL.length).toBeGreaterThanOrEqual(11);
-    expect(REAL.map((x) => x.name)).toContain(TRANSFORM_HORIZON);
+    expect(REAL.map((x) => x.name)).toContain(BASELINE_HORIZON);
   });
 
   it("gives every migration a migration.sql and a snapshot.json", () => {
@@ -68,14 +68,14 @@ describe("the migrations directory", () => {
     );
     for (const step of p.steps) {
       expect(step.action).toBe(
-        step.migration.name <= TRANSFORM_HORIZON ? "adopt" : "apply",
+        step.migration.name <= BASELINE_HORIZON ? "adopt" : "apply",
       );
     }
   });
 });
 
 describe("the adoption manifest (frozen at the horizon)", () => {
-  const atOrBefore = REAL.filter((x) => x.name <= TRANSFORM_HORIZON);
+  const atOrBefore = REAL.filter((x) => x.name <= BASELINE_HORIZON);
 
   it("covers exactly the migrations at or before the horizon", () => {
     expect(Object.keys(ADOPTION).sort()).toEqual(atOrBefore.map((x) => x.name));
@@ -180,7 +180,7 @@ describe("plan", () => {
   it("refuses a horizon migration with no adoption entry (negative control)", () => {
     const p = plan([A, B], [], B.name, adoption);
     expect(p.refusals.join()).toMatch(
-      /20260102000000_b is at or before the transform horizon/,
+      /20260102000000_b is at or before the baseline horizon/,
     );
   });
 

@@ -3,8 +3,7 @@
  *
  * > Loads: … Profile fields live in better-auth's `user` table (§3, exempt).
  *
- * There is no `public.users` table and there never was one — Nhost kept
- * identity in `auth.users`, and A6 moved it to better-auth's `user`. §3 exempts
+ * There is no `public.users` table: identity is better-auth's `user`. §3 exempts
  * better-auth's five tables from the single-writer map because better-auth's
  * own Drizzle adapter writes them (`packages/db/src/writers.ts`,
  * `infrastructure:better-auth`), which is why an actor still may not reach them
@@ -134,9 +133,9 @@ const toFields = (row: {
 }): ProfileFields => ({
   id: row.id,
   // better-auth calls it `name`; every screen in this app calls it a display
-  // name, and `migrate-users.ts` copies `auth.users.display_name` into it.
+  // name.
   displayName: row.name,
-  // `""` is Nhost's default for `avatar_url`, and it survived the migration.
+  // Imported accounts carry `""` for no avatar.
   // An empty string is not a URL, so it reaches GraphQL as null.
   avatarUrl: row.image === null || row.image === "" ? null : row.image,
   avatarFileId: row.avatarFileId,

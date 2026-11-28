@@ -633,5 +633,4 @@ The DaprCallingReview (2026-09-28, a session review — not a committed document
 post-E4 design questions: whether the singletons should be sharded or moved off the request path,
 whether `system` ctx should be minted from something a caller cannot forge rather than accepted
 as an argument, whether better-auth should move to its own port/process, and whether a Resiliency
-policy should replace per-call retry logic. Those are decisions for after the E4 cutover
-(`docs/architecture/e4-decisions.md`), and they belong in our architecture docs, not upstream.
+policy should replace per-call retry logic. Those are open design decisions, and they belong in our architecture docs, not upstream.

@@ -15,27 +15,10 @@
  * outright, and §2.1's "`vote` … recomputes `canonical_recipe_id` and `name`
  * in-turn" is the reason).
  *
- * ## `recipe_reviews` and `recipe_votes` had no rule at all
+ * ## `recipe_reviews` and `recipe_votes`
  *
- * `target-stack.md` §7 lists it among the live authorization holes: both
- * tables are absent from Hasura's metadata except as bare table
- * declarations — no insert, select, update or delete permission for any
- * role. What that produces is not an open door but a *dead feature*. Hasura
- * generates root fields only for tables a role can reach, so on the legacy
- * stack `recipe_reviews` and `recipe_votes` have none at all for role
- * `user`, and every call fails GraphQL validation before it reaches a
- * permission check: `field 'insert_recipe_reviews_one' not found in type:
- * 'mutation_root'`. Reviewing and voting on recipes has simply never worked
- * there.
- *
- * An earlier version of this comment said the server actions that write
- * these tables "do so with the admin secret". They do not, and the
- * difference is the whole point: `src/app/actions/recipes.ts` on `main`
- * imports `serverMutation` and nothing else — the caller's own JWT — so a
- * missing permission fails *closed*. Had it used the admin secret, a table
- * with no permissions would have been reachable by anyone. (Checked against
- * the running legacy Hasura, 2026-09-19: both root fields are absent for
- * role `user`.)
+ * Neither table had a write rule before these actors, and reviewing and voting
+ * on recipes had never worked.
  *
  * So there was no *existing* rule to preserve, only one to choose. B6 chose the
  * one B2 applied to `item_reviews`, because it is the same kind of row:
@@ -55,9 +38,8 @@
  *
  * Neither actor has a `Visibility:` line in §2.1 and neither table carries a
  * `permission_type` column, so the four-branch rule has nothing to read.
- * Today's Hasura `select` filter on `recipes` and `recipe_groups` is `{}` for
- * the `user` role — every signed-in user, nobody else — which is exactly the
- * catalog rule B3 settled for `BrandActor` and B2 reused for `ItemActor`.
+ * Reads of `recipes` and `recipe_groups` are open to every signed-in user and
+ * nobody else, which is exactly the catalog rule B3 settled for `BrandActor` and B2 reused for `ItemActor`.
  * B6 applies it unchanged: **any signed-in viewer; anonymous refused.**
  *
  * ## Ingredients: six item types, plus a generic item, and `ItemActor` owns

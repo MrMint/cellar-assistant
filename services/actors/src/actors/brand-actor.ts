@@ -24,8 +24,7 @@
  * ## The tripwire
  *
  * `create` and `update`/`setParent`'s rename path can all violate
- * `brands_unique_lower_name` (`82450ad1:nhost/migrations/default/
- * 1773700000000_brands_dedup_and_unique_name_index`) — a case-insensitive
+ * `brands_unique_lower_name` (`packages/db/baseline/schema.sql`) — a case-insensitive
  * unique index on `name` *as stored*, not `trim(name)`. Every write here
  * always stores a trimmed name, which is what keeps "the DB's `lower(name)`"
  * and "§2.1's `lower(trim(name))`" the same index in practice (see

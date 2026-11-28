@@ -1,8 +1,8 @@
 /**
  * Password hashing for A6.
  *
- * Nhost's `hasura-auth` stores bcrypt (`$2a$10$…`, 60 chars). better-auth's
- * default is scrypt. A migrated user must be able to sign in with the password
+ * Accounts imported in the 2026-10 migration carry bcrypt hashes (`$2a$10$…`,
+ * 60 chars). better-auth's default is scrypt. An imported user must be able to sign in with the password
  * they already have, without a reset — so `verify` recognises a bcrypt hash and
  * checks it with bcrypt, and falls through to better-auth's own verifier for
  * everything else.

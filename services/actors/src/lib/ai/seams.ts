@@ -299,7 +299,7 @@ export const providerInsightsGenerator =
         );
       }
     }
-    // The Nhost function stamped these two into `ai_insights` itself; the
+    // Stamped here, into `ai_insights`; the
     // column is opaque `jsonb`, and the frontend reads `generatedAt`.
     insights.generatedAt = new Date().toISOString();
     insights.model = metadata.model;
@@ -1087,7 +1087,7 @@ const strings = (value: unknown): readonly string[] => {
  *
  * ## What did not, and why
  *
- * 1. **The `required` list went from five fields to one.** The Nhost schema
+ * 1. **The `required` list went from five fields to one.** The original schema
  *    required `approved`, `confidence_adjustment`, `enriched_description`,
  *    `suggested_categories` and `flags`; a provider compiles `required` into
  *    the sampler's grammar, so "I have nothing to add here" was literally

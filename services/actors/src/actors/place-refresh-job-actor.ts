@@ -7,10 +7,10 @@
  * ## What this replaces, and what it does not — read before deleting anything
  *
  * The old pair is **two unrelated things wearing one name**, and only one of
- * them has a home in the new stack:
+ * them has a home here:
  *
  *  1. **the cursor loop** — a `place_refresh_jobs` row whose `cursor` column
- *     was updated by each batch, with a Hasura event trigger on `update:
+ *     was updated by each batch, with an event trigger on `update:
  *     [cursor]` re-invoking the worker. That is precisely `JobActor` (§2.6),
  *     and it is what this actor is;
  *  2. **the payload** — a `DELETE FROM places` followed by a keyset walk of a
@@ -23,7 +23,7 @@
  * What this actor refreshes instead is what B5 built `PlaceActor.refreshFromSource`
  * for and documented as "called by C4's `PlaceRefreshJobActor`": the **Google
  * enrichment** of places whose `last_sync_at` has gone stale. That is a real,
- * useful, budget-aware refresh, and it is the one the new stack can express.
+ * useful, budget-aware refresh, and it is the one this stack can express.
  * `refreshPlaces/_services/` (BigQuery + the Wisconsin mock) is **not** ported
  * and must not be deleted on the assumption that it was.
  *
@@ -192,8 +192,7 @@ export class PlaceRefreshJobActor
   }
 
   /**
-   * **Admin only.** The old Hasura action carried `role: admin` and this one
-   * spends money through `BudgetActor` on every place it touches, so a plain
+   * **Admin only.** This one spends money through `BudgetActor` on every place it touches, so a plain
    * signed-in user may not start it. `system` also passes, which is how a
    * scheduled `run_after` outbox row could start one later.
    */

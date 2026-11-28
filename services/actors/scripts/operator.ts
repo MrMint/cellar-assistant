@@ -14,7 +14,7 @@
  * | `report` | `MaintenanceActor.reportDeadLetters`       | the dead-letter report now, rather than within the hour; prints it |
  * | `ack`    | `MaintenanceActor.acknowledgeDeadLetters`  | record a triage decision so the dead-letter alarm stops paging for those rows (only rows already `dead`; `--by` is required and stored) |
  * | `backfill-recipes` | `MaintenanceActor.backfillRecipeMeta` | X14: enqueue the per-recipe ingredient kind/role backfill and the per-group `base_spirit` backfill for cocktails (up to `--limit` each, default 500); prints what it scheduled and the cursors to continue from. Run it again with `--after-recipe <nextAfterRecipe> --after-group <nextAfterGroup>` until both print `null` |
- * | `reembed`| `VectorReembedJobActor(<id>).start`, then `progress` until terminal | re-embed every vector another embedding model made — the cutover step after `gemini-embedding-2` — and every item vector made from an older `embeddingTextFor` format (N08's backfill: `--tables item_vectors`) |
+ * | `reembed`| `VectorReembedJobActor(<id>).start`, then `progress` until terminal | re-embed every vector another embedding model made — run after a switch of embedding model, as after `gemini-embedding-2` — and every item vector made from an older `embeddingTextFor` format (N08's backfill: `--tables item_vectors`) |
  *
  *   bun scripts/operator.ts reembed [--batch-size N] [--max-vectors N]
  *                                   [--tables item_vectors,recipe_vectors]

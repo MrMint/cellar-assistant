@@ -322,23 +322,9 @@ the one-shot scripts, and there is nothing to roll back for it.
 
 ## Outstanding
 
-- **The CI workflows have never run on a GitHub runner.** They are written and lint clean
-  (`actionlint` over all five), `oven-sh/setup-bun` is pinned and asserted against
-  `packageManager`, and every changed shell step was executed against a clean `git archive`
-  export of HEAD — installs, both guard scripts, typegen, six typechecks, five of six test legs
-  at their baseline counts, both biome invocations, `docker compose config --quiet`, all exit 0.
-  What is missing is an *execution*: the branch is unpushed. Nothing structural blocks one —
-  every job is `ubuntu-latest` — **provided "one" means a push or a PR, never a merge.** Pushing
-  this branch or opening a PR from it is inert outside CI; merging it to `main` is not. A merge
-  to `main` redeploys **production Nhost** (its GitHub app deploys from `main` — no longer: the
-  repository was disconnected from the Nhost project on 2026-10-05, decision 15), and the
-  release-please PR that merge opens would, once merged, fast-forward `production` and redeploy
-  the **production Vercel frontend**. Both are gated in `e4-decisions.md` decision 15 and must be
-  in place and confirmed before anything reaches `main` — so "get CI to run" is a push, and the
-  merge is runbook step 0a, not a way to trigger the workflows.
 - **The `services/actors` CI leg is the one step never executed locally.** Its
   three database steps — `docker compose up --wait postgres`,
-  `packages/db/transform/test-db.sh --no-dump`, and the suite itself — all act
+  `packages/db/baseline/test-db.sh`, and the suite itself — all act
   on the `cellar-stack` compose project, which is the shared dev lane and was in
   use. Running them would have dropped another session's `cellar_test`, and
   `Stop Postgres`'s `down -v` would have taken the volumes with it. The steps
@@ -346,8 +332,7 @@ the one-shot scripts, and there is nothing to roll back for it.
 - **`deploy-loki.yaml` has no `deploy` job any more** (2026-10-05): the deploy is pull-based, run
   on Loki by `scripts/deploy/pull-deploy.sh` (`deploy-loki.md` §2.6). Its `build` job on
   `ubuntu-latest` is all there is. Nothing in that workflow is Node- or
-  pnpm-shaped, so the toolchain move left it alone; the consequences for the cutover are
-  `e4-decisions.md` decisions 5 and 14, not this file's problem.
+  pnpm-shaped, so the toolchain move left it alone.
 - **`release-please` needs no bun change, and that was measured rather than
   assumed.** `release-type: node` bumps the root package.json version on every
   release; `bun.lock`'s root workspace entry carries a `name` and no `version`,

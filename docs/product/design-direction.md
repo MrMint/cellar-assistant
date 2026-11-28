@@ -27,7 +27,7 @@ This is the brief for the intentional overhaul. It is Track B of `ux-review-road
 - **N11, N27 and N28** are its first, small, Now-horizon pieces.
 - **D20 and D21** are its platform and palette decisions.
 
-It deliberately replaces the "restored verbatim" look (docs/architecture/ui-parity-decisions.md). It is grounded in two sources:
+It deliberately replaces the "restored verbatim" look (docs/archive/nhost-migration/ui-parity-decisions.md). It is grounded in two sources:
 - the 2026-10-05 capture, taken on tree b2c5f541;
 - the verified findings: visual-1…18, motion-1…18, shell-3/12/13, map-13/15/16 and recipes-11.
 

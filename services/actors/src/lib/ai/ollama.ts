@@ -8,7 +8,7 @@
  *  - `POST /api/embeddings` `{model, prompt}` → `{embedding: number[]}`
  *  - `POST /api/chat` `{model, messages, format, stream:false}` →
  *    `{message:{content}}`, where `format` is a JSON Schema object and Ollama
- *    constrains the sampler to it (the same field the Nhost provider passed).
+ *    constrains the sampler to it.
  *
  * `nomic-embed-text` is the default embedding model because it is **768**
  * dimensions — exactly the width of every `halfvec` column in this database,
@@ -17,7 +17,7 @@
  * three vision seams (item defaults, menu extraction, recipe photos) work
  * against the same pull.
  *
- * ## Two things the Nhost provider did that are deliberately not ported
+ * ## Two things this provider deliberately does not do
  *
  *  - **`ensureModelAvailable`.** The old provider listed models and, on a miss,
  *    called `client.pull()` inline. That is a multi-gigabyte download inside
@@ -129,7 +129,7 @@ export const createOllamaProvider = (
               },
             ],
             // Ollama takes the JSON Schema object verbatim and constrains
-            // decoding to it — the same contract the Nhost provider used.
+            // decoding to it.
             ...(request.schema === undefined ? {} : { format: request.schema }),
           },
           `generateContent(${model})`,

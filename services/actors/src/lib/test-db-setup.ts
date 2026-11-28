@@ -9,7 +9,7 @@
  * database instead, recreated from a template clone here so it starts from a
  * known state every time.
  *
- * All the work is in `packages/db/transform/test-db.sh`; this file only decides
+ * All the work is in `packages/db/baseline/test-db.sh`; this file only decides
  * *whether* to run it and what a failure means. Keeping the build in bash is
  * what lets CI invoke the identical thing.
  */
@@ -18,7 +18,7 @@ import { fileURLToPath } from "node:url";
 import { testDatabaseName, testDatabaseUrl } from "./testing.ts";
 
 const SCRIPT = fileURLToPath(
-  new URL("../../../../packages/db/transform/test-db.sh", import.meta.url),
+  new URL("../../../../packages/db/baseline/test-db.sh", import.meta.url),
 );
 
 /** The same URL with a different database name. */
@@ -87,7 +87,7 @@ export const setup = (): (() => void) | undefined => {
   if (name === undefined || !name.startsWith("cellar_test")) {
     console.warn(
       `[harness] ${name ?? url} is not a cellar_test* database; leaving it ` +
-        "alone. It must already hold the transformed schema.",
+        "alone. It must already hold the baseline schema.",
     );
     return;
   }

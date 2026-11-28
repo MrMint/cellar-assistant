@@ -18,7 +18,7 @@
 # This development sandbox has neither `pg_dump` nor `pg_restore` installed on
 # the host (checked; PATH has none), so the default here instead runs them via
 # `docker exec` into the already-running postgres container — matching
-# `packages/db/transform/test-db.sh`'s own `DST_CONTAINER` convention exactly
+# `packages/db/baseline/test-db.sh`'s own `DST_CONTAINER` convention exactly
 # (same tool, same house pattern, same reason: it is what actually works on
 # whichever machine the script is run from).
 #

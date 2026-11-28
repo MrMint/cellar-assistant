@@ -27,11 +27,11 @@
  * `privacy` and `is_draft`, and every read is `canSeeRecipe` — the four-branch
  * rule, with a draft its creator's alone — answered as `NotFound` when it
  * says no (`canSee` / `requireVisible` below). Anonymous is still refused
- * outright, except by `getShared`. The writes follow today's Hasura metadata:
+ * outright, except by `getShared`. The writes:
  * `recipes`' update/delete
  * filters are `created_by_id = session user`, which is what `#requireCreator`
  * is. `recipe_ingredients` and `recipe_instructions` gate on
- * `recipe.created_by_id` in the same metadata, so `setIngredients` and
+ * `recipe.created_by_id` too, so `setIngredients` and
  * `setInstructions` are creator-only too.
  *
  * `recipes.created_by_id` is **nullable** and `ON DELETE SET NULL` (unlike the
@@ -73,7 +73,7 @@
  *
  * ## The vector: outbox-driven, and it watches the group too
  *
- * §5 routes `generateRecipeVector` (a Hasura event trigger on `recipes`) here,
+ * §5 routes `generateRecipeVector` (an event trigger on `recipes`) here,
  * "via outbox". `create`, `update`, `setIngredients` and `setInstructions`
  * enqueue `regenerateVector` in the same transaction as their write, and only
  * when the text that would be embedded actually changed — the recipe-shaped
@@ -1444,7 +1444,7 @@ export class RecipeActor
 
   /**
    * `system`, via the outbox (§2.1, §5). Replaces the `generate_recipe_vector`
-   * Hasura event trigger on `recipes`.
+   * event trigger on `recipes`.
    *
    * **Idempotent without an idempotency key** (§8.4's "naturally idempotent"
    * branch): a delivery whose vector is already newer than everything the

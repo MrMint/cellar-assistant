@@ -7,12 +7,12 @@
  * runs one turn at a time per actor id") and would queue every dropdown in
  * the app behind the same activation.
  *
- * **The ten kinds, and why not twelve.** §4 splits the old Hasura enum tables
+ * **The ten kinds, and why not twelve.** §4 splits the old enum tables
  * into "code branches on this" (→ `pgEnum`, `packages/db/src/schema/tables.ts`)
  * and "catalog data code never branches on" (→ stays a table, read here). A3
  * corrected the unit from *table* to *column* and, separately, converted
  * `instruction_types` and `brand_types` to native enums during the same pass
- * (`packages/db/transform/04_enum_split.sql`) — so of §4's twelve names, only
+ * — so of §4's twelve names, only
  * ten are still tables `ReferenceDataActor` can read. `REFERENCE_KINDS`
  * (`@cellar-assistant/contracts`) is those ten, and every one of them is a
  * `(value text primary key, comment text)` lookup — the key-column split A3

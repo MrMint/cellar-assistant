@@ -1559,11 +1559,9 @@ export class UserActor
    * `user_id = this.key`, so the cached `favorites` this checks cannot go
    * stale between the read and the insert. The database backs that up rather
    * than being relied on: all six item columns carry a
-   * `item_favorites_user_id_<type>_id_key` unique constraint (sake and tea
-   * since `packages/db/transform/08_item_favorites_missing_uniques.sql`, and
-   * in the `packages/db` baseline migration and schema), so a double
-   * insert that somehow got past the turn lock would fail loudly as a unique
-   * violation instead of leaving a duplicate row — not be absorbed as an
+   * `item_favorites_user_id_<type>_id_key` unique constraint
+   * (`packages/db/baseline/schema.sql`), so a double insert that somehow got
+   * past the turn lock would fail loudly as a unique violation instead of leaving a duplicate row — not be absorbed as an
    * idempotent toggle.
    */
   async setFavorite(
@@ -2517,10 +2515,8 @@ const toInteractionDto = (row: PlaceInteractionRow): PlaceInteractionDto => ({
 /**
  * A placeholder for a user whose profile row is missing.
  *
- * B4 added this because `auth.users` and better-auth's `user` were two tables in
- * two databases and a row could exist in one and not the other. X2 merged them,
- * so that case is gone: `loadAggregate` checks existence against the same row
- * the profile comes from. What is left is the narrower one — a `friends` or
+ * `loadAggregate` checks existence against the same row the profile comes
+ * from, so the case left is a `friends` or
  * `friend_requests` row naming a user deleted out from under it (both foreign
  * keys are `ON DELETE RESTRICT`, so it takes a deliberate cascade or a manual
  * delete). A friend list that threw on the first such id would be unusable;
@@ -2555,10 +2551,8 @@ const normaliseLocale = (value: string | null): string | null => {
   if (value === null) return null;
   const trimmed = value.trim().toLowerCase();
   if (trimmed === "") return null;
-  // Nhost's `auth.users.locale` was `varchar(3)`, so anything longer was
-  // silently truncated by Postgres — worse than refusing it. `"user".locale` is
-  // `text` and would keep whatever it was given, which is exactly why the
-  // check stays: the shape of the value is the application's rule, not the
+  // `"user".locale` is `text` and would keep whatever it was given, which is
+  // exactly why the check is here: the shape of the value is the application's rule, not the
   // column's.
   if (!/^[a-z]{2,3}$/.test(trimmed)) {
     throw new ValidationError(

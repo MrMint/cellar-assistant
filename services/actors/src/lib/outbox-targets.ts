@@ -804,9 +804,9 @@ export const OUTBOX_TARGETS = defineOutboxTargets({
           authorization: null,
           accepted:
             "Recipe groups are community groupings — the versions of one drink " +
-            "— not owned aggregates for membership: the legacy Hasura " +
-            "permission on `recipes.recipe_group_id` was `check: {}` for insert " +
-            "and update, and the actor keeps that on purpose. The delivery " +
+            "— not owned aggregates for membership: any signed-in user may set " +
+            "`recipes.recipe_group_id` on insert and update, and the actor " +
+            "keeps that on purpose. The delivery " +
             "recomputes the group's canonical version from its current members " +
             "and votes, deterministically and idempotently; it can rename the " +
             "group to the winning recipe's name, which is also what any vote " +

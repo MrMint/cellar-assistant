@@ -191,8 +191,8 @@ const seedPlace = async (
 
 /**
  * `place_menu_items.menu_scan_id` is a real FK, and `menu_scans` needs a
- * `public.files` row (B8's transform 12 repointed `original_image_id` off
- * `storage.files`, the way B5's transform 10 moved `place_google_photos`).
+ * `public.files` row (`original_image_id` references it, as
+ * `place_google_photos` does).
  */
 const seedMenuScan = async (db: DbOrTx, userId: string): Promise<string> => {
   const [file] = await db
@@ -345,7 +345,7 @@ describe.skipIf(skip)("PlaceActor (B5)", () => {
         categories: ["wine_bar", "bar"],
         location: SAN_FRANCISCO,
         createdById: creator,
-        // A client trying the old Hasura column list. `CreatePlaceInput` has
+        // A client trying to set the binding column. `CreatePlaceInput` has
         // no such field, so this is dead weight at runtime and a type error
         // in any real caller — see the `google_place_id` test below.
         ...({ googlePlaceId: "ChIJ_ATTACKER" } as Record<string, unknown>),
@@ -1921,7 +1921,7 @@ describe.skipIf(skip)(
 /* -------------------------------------------------------------------------- */
 
 /**
- * The shape the Nhost transform leaves for a place that was enriched before
+ * The shape an imported place has when it was enriched before
  * its photos were ever fetched: fresh details, `photo_references` stored,
  * `photos_fetched_at` null and no `place_google_photos` rows. The old place
  * page re-asked in exactly this case (`82450ad1`'s

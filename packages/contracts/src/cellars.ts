@@ -57,8 +57,7 @@ import type { DrinkWindow } from "./shelf-life.ts";
  *
  * A fixed six-key record rather than a list of `{type, count}` pairs: the
  * schema refuses any composite list that is not a connection's `edges`
- * (§1.5), and six named fields are what the old cards read anyway — the old
- * Hasura fragment was six `count(columns: [<type>_id])` aggregates.
+ * (§1.5), and six named fields are what the cards read anyway.
  */
 export type ItemTypeCountsDto = {
   readonly total: number;
@@ -552,7 +551,7 @@ export type RemovedCellarItem = { readonly id: string };
  * `CellarActor(cellarId)` — entity actor, owned by **B1**.
  *
  * Reads (`get`, `items`, `checkIns`) are gated on cellar visibility. Writes
- * split two ways, matching what the Hasura permissions they replace allowed:
+ * split two ways:
  *
  * - **creator or co-owner** — `update` (name/privacy), every `*Item` method;
  * - **creator only** — changing the co-owner set, and `delete`.

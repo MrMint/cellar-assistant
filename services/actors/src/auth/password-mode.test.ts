@@ -197,7 +197,7 @@ describe("AUTH_PASSWORD_MODE against better-auth", () => {
 
   beforeAll(async () => {
     url = await resetScratchDatabase(DB);
-    // A migrated password user: the shape `scripts/migrate-users.ts` writes.
+    // An imported password user: a credential account with a bcrypt hash.
     const hash = await bcryptHash(PASSWORD, 10);
     await query(
       url,

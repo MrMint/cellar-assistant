@@ -1,7 +1,7 @@
 /**
  * The tier-list fragments — the successor of
  * `82450ad1:src/components/tier-list/fragments.ts`, on `TierList` /
- * `TierListItem` instead of the Hasura `tier_lists` / `tier_list_items` tables.
+ * `TierListItem` instead of the `tier_lists` / `tier_list_items` tables.
  *
  * Old field → new field:
  *

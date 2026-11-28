@@ -1,5 +1,5 @@
 /**
- * The recipe queries and mutations — the successor of the Hasura documents in
+ * The recipe queries and mutations — the successor of the documents in
  * `82450ad1:src/app/(authenticated)/recipes/**` and the server actions in
  * `82450ad1:src/app/actions/recipes.ts` (`addRecipeReviewAction`,
  * `voteRecipeAction`, `removeVoteAction`).

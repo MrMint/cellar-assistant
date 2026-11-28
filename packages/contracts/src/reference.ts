@@ -4,7 +4,7 @@
  *
  * ## `ReferenceDataActor(kind)`
  *
- * §4 splits the old twenty-two Hasura enum tables into two groups: twelve
+ * §4 splits twenty-two enum tables into two groups: twelve
  * become native Postgres enums (`packages/db/src/schema/tables.ts`'s
  * `pgEnum(...)` calls — code branches on their values, so they belong at
  * compile time) and ten stay tables — catalogs with display data
@@ -14,10 +14,8 @@
  * the table, and the ten surviving tables' key column is `value` — every one
  * of them is a `(value text primary key, comment text)` lookup
  * (`packages/db/src/schema/tables.ts`). The other two entries §4 originally
- * listed as tables, `instruction_types` and `brand_types`, key on `id` in the
- * *old* Hasura schema — but A3's `04_enum_split.sql` already converts both to
- * native enums (`instructionTypes`, `brandTypes` in `tables.ts`), so neither
- * is a table `ReferenceDataActor` can read any more. `REFERENCE_KINDS` below
+ * listed as tables, `instruction_types` and `brand_types`, are native enums
+ * (`instructionTypes`, `brandTypes` in `tables.ts`), so neither is a table `ReferenceDataActor` can read any more. `REFERENCE_KINDS` below
  * is deliberately the ten that remain, not twelve.
  *
  * One activation per table (§1.5: "Key read-only actors by something with

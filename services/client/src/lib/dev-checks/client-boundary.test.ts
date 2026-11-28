@@ -177,10 +177,8 @@ test("the scan walked a real tree", () => {
   // directory or a bad root would turn this file into a green no-op.
   //
   // The floors are a self-check on the walk, not an invariant about the app, so
-  // they are set well below the real counts rather than at them. D9 deleted the
-  // whole Hasura lane — 278 modules — which took `src/` from 520 files to 231
-  // and the `"use client"` count from ~180 to 82; floors pinned just under the
-  // old numbers turned that into a false failure.
+  // they are set well below the real counts rather than at them: pinned
+  // just under, any large deletion of modules would read as a false failure.
   const { files, clientModules, serverModulesJudged } = scan.counts;
   assert.ok(files > 150, `only ${files} source files under src/`);
   assert.ok(

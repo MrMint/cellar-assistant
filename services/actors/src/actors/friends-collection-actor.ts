@@ -35,7 +35,7 @@
  * ## Authorization
  *
  * `friends` and `friend_requests` are visible only to the two people named in
- * them (today's Hasura rule, and B4's `#requireSelf`). Every row this actor can
+ * them (B4's `#requireSelf`). Every row this actor can
  * reach names its own viewer, so the per-turn `ctx.viewerId === this.key` check
  * in `ViewerCollectionActorBase` *is* the authorization — which is why it runs
  * before anything else, on every turn, and cannot be skipped by a warm
@@ -363,7 +363,7 @@ export class FriendsCollectionActor
    * (`82450ad1:src/components/search/fragments.ts`'s `RecentReviewsQuery`,
    * `RecentTierListItemsQuery` and `recent_cellar_items`).
    *
-   * The old page asked Hasura for `item_reviews(where: user_id _in $userIds)`
+   * The old page asked for `item_reviews(where: user_id _in $userIds)`
    * with `$userIds` built in the browser from the friend list — so any id
    * could be put in it, and the tier-list query's only filter was
    * `tier_list.created_by_id _in $userIds`, which returned entries (and the

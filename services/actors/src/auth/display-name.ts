@@ -4,8 +4,7 @@
  * `displayName` is returned by `user(id)` and matched by `userSearch` for any
  * signed-in viewer, while `email` comes back `null` to everyone but its owner.
  * Sign-up used to default the name to the email when the field was left blank
- * (`SignUpApiClient.tsx`, and `authClient.signUp.email` behind it), and
- * hasura-auth did the same, so `userSearch(term: "@")` listed the address of
+ * (`SignUpApiClient.tsx`, and `authClient.signUp.email` behind it), so `userSearch(term: "@")` listed the address of
  * every user who never chose a name. The concealment was only as good as the
  * one field nobody thought of as containing an email.
  *
@@ -76,11 +75,8 @@ export const handleForId = (id: string): string =>
  * containing an email-shaped string all become {@link handleForId}; anything
  * else is kept as it is.
  *
- * `scripts/migrate-users.ts` applies it to every row it imports. The
- * migration covers the cutover order (users are imported, then `db:migrate`
- * runs), but the ledger applies a migration once — an import run *after* it,
- * a rehearsal re-run with `--update-existing` for one, would otherwise put
- * hasura-auth's email default straight back.
+ * The TypeScript statement of the migration's SQL rule;
+ * `display-name.test.ts` checks the two agree.
  */
 export const displayNameForExistingUser = (row: {
   readonly id: string;

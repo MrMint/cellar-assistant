@@ -9,9 +9,7 @@
  * `PlaceSearchActor` and `RecipeSearchActor` all reach it. Its entire job is to
  * be the thing that turns a phrase into 768 floats *once* — the activation is
  * the cache, replacing `src/lib/cache/index.ts`'s `unstable_cache` wrapper
- * around an admin-credentialled `create_search_vector` call (§2.3, and
- * `target-stack.md` §7's note that the workaround exists because Hasura would
- * not expose the function to a `user` role).
+ * around an admin-credentialled `create_search_vector` call (§2.3).
  *
  * ## The key is B1's, and it is checked
  *

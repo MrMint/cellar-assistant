@@ -19,10 +19,6 @@
 #   - the `type=gha` layer cache under the `api` / `actors` scopes, which
 #     stack-ci's `images` job reads (read-only) on every PR.
 #
-# The `nhost` GitHub app used to redeploy production Nhost Cloud on every merge
-# to `main` as well; the repository was disconnected from it on 2026-10-05
-# (docs/architecture/e4-decisions.md, decision 15), so it no longer does.
-#
 # Hardening: never add a `pull_request` / `pull_request_target` trigger; every
 # action is pinned to a full commit SHA (the comment names the release it was
 # taken from — bump both together); read-only token; and the job refuses to

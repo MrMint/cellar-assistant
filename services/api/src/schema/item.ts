@@ -1084,7 +1084,7 @@ const UPDATE_ITEM = {
 
 const UPDATE_ITEM_REVIEW = {
   // `item_reviews.score` is NOT NULL and the contract's `score?: number` has
-  // no null. Legacy Hasura errored on `_set: { score: null }`; so does this.
+  // no null, so a null score is an error.
   score: "reject",
   text: { policy: "clearable", map: (text) => JSON.stringify(text) },
 } satisfies PatchPolicy<typeof UpdateItemReviewInput.$inferInput>;

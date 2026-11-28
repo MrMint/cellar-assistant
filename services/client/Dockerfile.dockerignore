@@ -23,11 +23,6 @@
 **/.next
 .git
 
-# Legacy Nhost stack — irrelevant to this image, and `functions/` is a separate
-# pnpm 10 context the bun migration deliberately left alone.
-nhost
-functions
-
 # The backend services and the browser suite. None of them ships in the
 # frontend image and services/actors' tree (47 actor types plus the soak
 # scripts) is the bulk of what would otherwise be copied. Their **manifests**

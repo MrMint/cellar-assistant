@@ -2,7 +2,7 @@
  * New API shapes → the old cellar components' props.
  *
  * `82450ad1:src/components/cellar/Cellars.tsx` built `CellarCardClient`'s
- * `cellar` prop inline from the Hasura row; this is that mapping, lifted out so
+ * `cellar` prop inline from the row it read; this is that mapping, lifted out so
  * it is unit-tested, over `Cellar.createdBy`/`coOwners` (G4) and
  * `Cellar.itemCounts` (G1).
  *
@@ -42,8 +42,8 @@ type Profile = {
 };
 
 /**
- * A `UserProfile` → the old `User`. The old type had a non-null `avatarUrl`
- * (Nhost always set one); `UserAvatar` treats `""` as "no picture" and shows
+ * A `UserProfile` → the old `User`. The old type had a non-null `avatarUrl`;
+ * `UserAvatar` treats `""` as "no picture" and shows
  * the initial, which is what a missing avatar now means.
  */
 export const userFromProfile = (profile: Profile): CellarCardUser => ({

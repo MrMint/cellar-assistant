@@ -1,7 +1,7 @@
 /**
  * Reverse edges — UI parity wave B (G8–G11, G14, G15, G23–G25).
  *
- * The old UI read each of these straight off a row through a Hasura
+ * The old UI read each of these straight off a row through a
  * relationship: an item's `tier_list_items { tier_list { name } }`, its
  * `cellar_items { cellar }`, its `recipe_ingredients { recipe }`, a bottle's
  * `check_ins` and `display_image`, a brand's `item_brands_aggregate`. Here

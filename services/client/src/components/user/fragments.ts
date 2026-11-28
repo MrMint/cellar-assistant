@@ -7,8 +7,7 @@ import { graphql } from "@/lib/api/graphql";
  * `disabled` and `emailVerified` are deliberately absent from
  * `UpdateProfileInput`, so there is no field here that could write them.
  *
- * A rewrite of the Nhost-era `fragments.ts` rather than an edit to it; nothing
- * outside `/users/edit` imports this module.
+ * Nothing outside `/users/edit` imports this module.
  */
 
 export const ViewerProfileFragment = graphql(`
