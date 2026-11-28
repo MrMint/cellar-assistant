@@ -30,8 +30,6 @@ export type AddReviewProps = {
     score: number;
     /** Serialized Lexical state, or null (`richTextFromReviewText`). */
     text: string | null;
-    /** When the verdict was last set: shown under "Your rating". */
-    updatedAt?: string | null;
   } | null;
 };
 
@@ -145,15 +143,6 @@ export const AddReview = ({
     myReview?.text === null || myReview?.text === undefined
       ? ""
       : plainTextFromRichText(myReview.text).trim();
-  const ratedOnTime = Date.parse(myReview?.updatedAt ?? "");
-  const ratedOn = Number.isNaN(ratedOnTime)
-    ? undefined
-    : new Intl.DateTimeFormat("en-US", {
-        month: "short",
-        day: "numeric",
-        year: "numeric",
-        timeZone: "UTC",
-      }).format(ratedOnTime);
   const openEditor = () => {
     feedback("tick");
     setScore(myReview?.score);
@@ -176,17 +165,12 @@ export const AddReview = ({
         aria-label="Your rating"
         className="flex flex-col gap-1"
       >
-        {ratedOn !== undefined && (
-          <p className="t-cap text-ink-2" data-slot="your-rating-date">
-            {ratedOn}
-          </p>
-        )}
         <div className="flex items-center gap-4">
           <button
             type="button"
             onClick={openEditor}
             aria-label={editing ? "Change your rating" : "Rate it"}
-            className="-mx-1 -my-0 flex min-h-11 items-center rounded-md px-1 outline-none focus-visible:outline-2 focus-visible:outline-act-ink"
+            className="-m-1 rounded-md p-1 outline-none focus-visible:outline-2 focus-visible:outline-act-ink"
           >
             <Stars value={myReview?.score ?? null} size="lg" />
           </button>

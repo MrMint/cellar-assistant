@@ -1,4 +1,5 @@
 import { ICON_STROKE, People } from "@/components/app/icons";
+import { formatScore } from "@/components/app/Score";
 import type { ApiItemType } from "@/components/cellar-api/itemTypes";
 import { ratingSummary } from "@/components/common/rating/rating";
 import { cn } from "@/lib/utils";
@@ -73,7 +74,7 @@ export function TasteHeader({
                   cell.value === null ? "text-ink-3" : "text-ink",
                 )}
               >
-                {cell.value === null ? "–" : cell.value.toFixed(1)}
+                {cell.value === null ? "–" : formatScore(cell.value)}
               </span>
               {cell.key === "everyone" && cell.value !== null && (
                 <span aria-hidden className="tabular text-ink-3">
