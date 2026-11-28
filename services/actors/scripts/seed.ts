@@ -295,7 +295,7 @@ const pinName = async (
   id: string,
   name: string,
 ): Promise<"renamed" | "already"> => {
-  const result = await db.execute(sql`
+  const result = await db.execute<never>(sql`
     update "user" set name = ${name}, updated_at = now()
      where id = ${id}::uuid and name is distinct from ${name}
   `);

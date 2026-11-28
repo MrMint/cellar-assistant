@@ -2397,7 +2397,10 @@ describe.skipIf(skip)("CellarActor move (SV-B, MC-move)", () => {
   afterAll(closeTestDb);
 
   const bottleRow = async (db: DbOrTx, id: string) => {
-    const result = await db.execute(sql`
+    const result = await db.execute<{
+      cellarId: string;
+      location: string | null;
+    }>(sql`
       select cellar_id::text as "cellarId", location
       from public.cellar_items where id = ${id}::uuid
     `);
@@ -2430,7 +2433,7 @@ describe.skipIf(skip)("CellarActor move (SV-B, MC-move)", () => {
       const there = await dest.items(ctx, { page });
       expect(there.entries.map((e) => e.node.id)).toEqual([itemId]);
       // The log points at the bottle, not the cellar, so it follows it.
-      const logs = await db.execute(
+      const logs = await db.execute<{ n: number }>(
         sql`select count(*)::int as n from public.check_ins where cellar_item_id = ${itemId}::uuid`,
       );
       expect(logs.rows[0]).toEqual({ n: 1 });

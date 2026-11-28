@@ -448,7 +448,7 @@ a `halfvec(768)` column.
 Note the runtime, because it produces convincing false failures: run the suite
 with `bun run --bun vitest run`. A bare `bun run vitest` is a **silent no-op** —
 vitest's bin carries a `#!/usr/bin/env node` shebang that `bun run` honours, so
-the whole tree goes to Node. And the repo pins Node 24 (`.nvmrc`); under Node 20
+the whole tree goes to Node. And the repo pins Node 26 (`.nvmrc`); under Node 20
 several tests fail as ordinary-looking assertion errors rather than as an
 environment problem. Check `node -v` before believing a red suite.
 

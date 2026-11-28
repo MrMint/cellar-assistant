@@ -1251,7 +1251,7 @@ export class CellarActor
     await super.onActorMethodPre();
     const aggregate = this.aggregate;
     if (aggregate === null) return;
-    const result = await this.db.execute(sql`
+    const result = await this.db.execute<{ n: number; at: number }>(sql`
       select count(*)::int as n,
              coalesce(floor(extract(epoch from max(updated_at)) * 1000), 0)::float8 as at
       from public.cellar_items where cellar_id = ${this.key}::uuid

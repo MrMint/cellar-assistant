@@ -25,7 +25,7 @@ locked decision, raise it — don't quietly build something else.
 | Dapr hosting | Docker Compose on Loki | Sidecars + placement + scheduler. An in-memory actor state store (required to host actors at all); no pub/sub. |
 | File storage | Dapr binding → MinIO | Presigned URLs; swappable to GCS via component config. See §4. |
 | Exposure | Port forward + public DNS + Caddy TLS | Cloudflare Tunnel was considered; not needed. |
-| Observability | Dapr OTLP → Grafana all-in-one (`otel-lgtm`) | Same compose file. Secrets from `.env`. Pinned to `0.35.0`, data on the `otel-lgtm-data` volume with 30/30/14-day retention, login required in prod, Dapr runtime metrics scraped — `deploy-loki.md` §9. |
+| Observability | Dapr OTLP → Grafana all-in-one (`otel-lgtm`) | Same compose file. Secrets from `.env`. Pinned to `0.41.1`, data on the `otel-lgtm-data` volume with 30/30/14-day retention, login required in prod, Dapr runtime metrics scraped — `deploy-loki.md` §9. |
 | Client types | gql.tada | Fed by `printSchema` to a checked-in `schema.graphql`. |
 
 **Not in the stack:** GraphQL subscriptions (polling instead) and Postgres RLS (never adopted;

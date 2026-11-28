@@ -1,10 +1,10 @@
 {
   "name": "cellar-assistant",
-  "version": "0.59.0",
+  "version": "1.0.0",
   "private": true,
   "license": "AGPL-3.0-only",
   "engines": {
-    "node": ">=24.14.0 <25.0.0"
+    "node": ">=26.13.1 <27.0.0"
   },
   "workspaces": {
     "packages": [
@@ -12,16 +12,16 @@
       "packages/*"
     ],
     "catalog": {
-      "@types/node": "25.9.9",
+      "@types/node": "26.6.11",
       "@types/pg": "8.23.1",
-      "drizzle-kit": "1.0.0-rc.4",
-      "drizzle-orm": "1.0.0-rc.4",
-      "gql.tada": "1.11.4",
-      "graphql": "17.0.2",
-      "jose": "6.2.12",
+      "drizzle-kit": "1.0.0-rc.6",
+      "drizzle-orm": "1.0.0-rc.6",
+      "gql.tada": "1.11.5",
+      "graphql": "17.1.0",
+      "jose": "6.2.18",
       "pg": "8.23.1",
       "typescript": "6.0.3",
-      "vitest": "5.0.3"
+      "vitest": "5.1.2"
     }
   },
   "trustedDependencies": [
@@ -74,9 +74,9 @@
     "test:visual:compare": "bun run --filter @cellar-assistant/e2e visual:compare",
     "test:harness": "node --test \".claude/hooks/*.test.mjs\" \"tools/*.test.ts\""
   },
-  "packageManager": "bun@1.4.2",
+  "packageManager": "bun@1.4.5",
   "devDependencies": {
-    "@biomejs/biome": "2.5.15",
-    "turbo": "^2.11.7"
+    "@biomejs/biome": "2.6.9",
+    "turbo": "^2.11.13"
   }
 }

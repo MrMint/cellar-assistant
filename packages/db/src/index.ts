@@ -7,7 +7,7 @@
  * migration-plan §1.5).
  */
 
-import { drizzle } from "drizzle-orm/node-postgres";
+import { drizzle, nodePgRawTextTypes } from "drizzle-orm/node-postgres";
 import type { PoolConfig } from "pg";
 import { relations } from "./schema/index.ts";
 
@@ -117,9 +117,23 @@ export const POOL_SETTINGS = {
  * The object form of `connection` is what carries {@link POOL_SETTINGS}:
  * `drizzle(connectionString, …)` hands `new pg.Pool({ connectionString })` and
  * nothing else, so the string overload cannot express any of them.
+ *
+ * `types: nodePgRawTextTypes` keeps raw `db.execute(sql…)` returning
+ * timestamp, timestamptz, date and interval columns (and their arrays) as the
+ * text Postgres sent. Drizzle up to 1.0.0-rc.4 applied that parser to every
+ * query; rc.6 applies it only to query-builder queries, so without it a raw
+ * query gets node-postgres's own parsers: a `timestamptz` becomes a `Date`,
+ * which drops the microseconds a `(created_at, id)` keyset cursor compares
+ * on, and a `date` becomes local midnight. Raw queries here type those
+ * columns as `string`.
+ * `services/actors/src/lib/raw-execute-types.test.ts` holds this.
  */
 export const createDb = (connectionString: string) =>
   drizzle({
-    connection: { connectionString, ...POOL_SETTINGS },
+    connection: {
+      connectionString,
+      ...POOL_SETTINGS,
+      types: nodePgRawTextTypes,
+    },
     relations,
   });

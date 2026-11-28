@@ -60,6 +60,13 @@ export const createApiYoga = ({ context, plugins }: ApiYogaOptions) =>
      * See `redactingYogaLogger`; `yoga-logging.test.ts` holds it.
      */
     logging: redactingYogaLogger,
+    /**
+     * Off. Yoga 6 assigns its own request id, trusting an incoming
+     * `x-request-id` as-is and echoing it in the response. Ours is
+     * `requestIdFor` (`request-id.ts`), which refuses a spoofed one, and the
+     * redacting logger has no use for Yoga's per-request logger.
+     */
+    requestId: false,
     landingPage: false,
     /** Opt-in, and off by default. See `config.graphiql` for why not `NODE_ENV`. */
     graphiql: config.graphiql,

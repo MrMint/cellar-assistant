@@ -79,7 +79,7 @@ if [[ -n "$DST_CONTAINER" ]]; then
 else
   migrate_port="${PGPORT:-5432}"
 fi
-# Node 24 (.nvmrc) runs `.ts` through its own type stripping; an older one fails
+# Node 26 (.nvmrc) runs `.ts` through its own type stripping; an older one fails
 # with an ESM loader error that names neither the version nor this step.
 node "$REPO/scripts/check-node-version.mjs" > /dev/null
 # The value goes through the environment, not argv: under `bun run --bun` (the

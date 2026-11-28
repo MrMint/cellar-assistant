@@ -126,13 +126,15 @@ export const createHostApp = (): Express => {
 /**
  * A `router` 2 layer. Its matchers are opaque path-to-regexp 8 functions, so
  * what a route accepts is learned by asking it (`match`), not by reading a
- * regexp as Express 4's path-to-regexp 0.1 allowed. `match` records what it
- * matched on the layer; {@link probe} puts that back.
+ * regexp as Express 4's path-to-regexp 0.1 allowed. Up to `router` 2.2,
+ * `match` returned `true` and recorded what it matched on the layer, which
+ * {@link probe} puts back; from 2.3 (Express 5.3) it is pure and returns the
+ * match object, or `false`. `probe` accepts either.
  */
 type RouteLayer = {
   readonly route?: { readonly path?: unknown };
   readonly handle?: { readonly stack?: unknown };
-  match?: (path: string) => boolean;
+  match?: (path: string) => unknown;
   params?: unknown;
   path?: unknown;
   keys?: unknown;
@@ -158,7 +160,8 @@ const samplePath = (path: string): string =>
 const probe = (layer: RouteLayer, path: string): boolean => {
   const { params, path: matched, keys } = layer;
   try {
-    return layer.match?.(path) === true;
+    const match = layer.match?.(path);
+    return match === true || (typeof match === "object" && match !== null);
   } finally {
     layer.params = params;
     layer.path = matched;
