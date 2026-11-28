@@ -30,7 +30,7 @@ describe("cn", () => {
   });
 
   test("app colour roles merge like built-in colours", () => {
-    assert.equal(cn("bg-surface-2", "bg-brass"), "bg-brass");
+    assert.equal(cn("bg-surface-2", "bg-brand"), "bg-brand");
     assert.equal(cn("text-ink-1", "text-ink-3"), "text-ink-3");
     assert.equal(cn("bg-type-wine/20", "bg-type-tea/20"), "bg-type-tea/20");
     assert.equal(cn("text-type-sake-text", "text-ai"), "text-ai");

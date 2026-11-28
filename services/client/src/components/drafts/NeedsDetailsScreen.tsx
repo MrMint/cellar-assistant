@@ -275,7 +275,7 @@ export function NeedsDetailsScreen({
   const parent = cellar === null ? "/" : `/cellars/${cellar.id}/items`;
   const subtitle =
     cellar === null
-      ? bottlesLine(count)
+      ? `${bottlesLine(count)} · All cellars`
       : `${bottlesLine(count)} · ${cellar.name}`;
 
   return (

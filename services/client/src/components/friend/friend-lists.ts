@@ -19,6 +19,7 @@ export const useAllFriends = () =>
     select: (data) =>
       pageOf(unwrapResult(data?.myFriends, "FriendConnection"), (edge) => ({
         since: edge.node.since,
+        latestActivity: edge.node.latestActivity ?? null,
         user: edge.node.user,
       })),
     pageSize: PAGE_SIZE,

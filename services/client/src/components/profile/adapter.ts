@@ -5,6 +5,7 @@
 import type { ApiItemType } from "@/components/cellar-api/itemTypes";
 import { entryContext } from "@/components/drink-log/log-draft";
 import { itemHref } from "@/components/item-api/itemTypes";
+import { type BandStrip, bandStrip } from "@/components/tier-list/lists/model";
 import type { ResultOf } from "@/lib/api/graphql";
 import { type ApiResult, unwrapResult } from "@/lib/api/result";
 import { type Page, toPage } from "@/lib/paging/paged-connection";
@@ -34,6 +35,9 @@ export type ProfileListRow = {
   readonly href: string;
   /** "9 entries · Friends only", or the privacy alone for an empty list. */
   readonly description: string;
+  /** F-52: the kind glyph and the five-band bar, when the read has them. */
+  readonly listType?: string;
+  readonly strip?: BandStrip;
 };
 
 export type ProfileCellarRow = {
@@ -111,17 +115,38 @@ const PRIVACY_WORDS: Record<string, string> = {
 const entries = (count: number): string =>
   `${count} ${count === 1 ? "entry" : "entries"}`;
 
-export const listRow = (node: ListNode): ProfileListRow => ({
-  id: node.id,
-  name: node.name,
-  href: `/tier-lists/${node.id}`,
-  description: [
-    node.itemCount > 0 ? entries(node.itemCount) : null,
-    PRIVACY_WORDS[node.privacy] ?? null,
-  ]
-    .filter((part): part is string => part !== null)
-    .join(" · "),
-});
+const KIND_WORDS = (listType: string): string =>
+  listType.charAt(0).toUpperCase() + listType.slice(1).toLowerCase();
+
+export const listRow = (node: ListNode): ProfileListRow => {
+  const base = { id: node.id, name: node.name, href: `/tier-lists/${node.id}` };
+  if (typeof node.listType !== "string") {
+    return {
+      ...base,
+      description: [
+        node.itemCount > 0 ? entries(node.itemCount) : null,
+        PRIVACY_WORDS[node.privacy] ?? null,
+      ]
+        .filter((part): part is string => part !== null)
+        .join(" · "),
+    };
+  }
+  return {
+    ...base,
+    // The board: "Beer · 6 ranked" and the bar; sharing lives on the list.
+    description: [
+      KIND_WORDS(node.listType),
+      node.itemCount > 0 ? `${node.itemCount} ranked` : null,
+    ]
+      .filter((part): part is string => part !== null)
+      .join(" · "),
+    listType: node.listType,
+    strip: bandStrip(
+      (node.bands?.edges ?? []).map((edge) => edge.node.band),
+      node.itemCount,
+    ),
+  };
+};
 
 export const cellarRow = (node: CellarNode): ProfileCellarRow => {
   const bottles = node.itemCounts.total;
@@ -273,3 +298,21 @@ export const sharesNothing = (view: FriendProfileView): boolean =>
   view.tierLists.rows.length === 0 &&
   view.cellars.rows.length === 0 &&
   view.logs.rows.length === 0;
+
+/**
+ * F-94, the locked profile's "Friend of Ana" / "Friend of Ana and 2 others";
+ * null with none, so nothing shows.
+ */
+export const mutualFriendsLine = (
+  mutual: {
+    readonly count: number;
+    readonly first: { readonly displayName: string } | null;
+  } | null,
+): string | null => {
+  if (mutual === null || mutual.count <= 0 || mutual.first === null)
+    return null;
+  const others = mutual.count - 1;
+  return others <= 0
+    ? `Friend of ${mutual.first.displayName}`
+    : `Friend of ${mutual.first.displayName} and ${others} ${others === 1 ? "other" : "others"}`;
+};
