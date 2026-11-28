@@ -33,6 +33,8 @@ import type {
   UserProfileDto,
 } from "@cellar-assistant/contracts";
 import {
+  AVATAR_BATCH_MAX_IDS,
+  avatarBatchActorId,
   FileActorDescriptor,
   ForbiddenError,
   FRIEND_REQUEST_DIRECTIONS,
@@ -43,6 +45,7 @@ import {
   UserActorDescriptor,
   viewerCollectionActorId,
 } from "@cellar-assistant/contracts";
+import DataLoader from "dataloader";
 import type { ApiContext } from "../context.ts";
 import { builder } from "./builder.ts";
 import { FriendRequestStatusEnum } from "./enums.ts";
@@ -118,11 +121,54 @@ const loadProfiles = async (
  * who could not see it gets the fallback, never an error for the whole row.
  */
 /**
- * F-89: the presign for each picture, once per request. A page that shows
- * one person many times (a feed, search hits beside a friends list) used to
- * activate their `FileActor` and presign once per row. Keyed by the request's
- * context object, so nothing outlives the request or crosses viewers.
+ * F-89: every picture a request shows is signed in **one** call. A signed-in
+ * viewer's pictures go through a per-request DataLoader to
+ * `FileActor.presignAvatars`, addressed at the viewer's own id — a friends
+ * page of 100 people with pictures is one actor turn, not 100 activations
+ * and presigns. Keyed by the request's context object, so nothing outlives
+ * the request or crosses viewers; the loader's cache also gives each
+ * picture one URL however many rows show it.
+ *
+ * An anonymous request (a share page's inviter) has no batch to be keyed by
+ * and keeps the one-file `presignRead`, memoised the same way.
  */
+const avatarBatchByRequest = new WeakMap<
+  ApiContext,
+  DataLoader<string, string | null>
+>();
+
+const avatarBatchOf = (
+  context: ApiContext,
+  viewerId: string,
+): DataLoader<string, string | null> => {
+  const known = avatarBatchByRequest.get(context);
+  if (known !== undefined) return known;
+  const loader = new DataLoader<string, string | null>(
+    async (fileIds) => {
+      const urls: (string | null)[] = [];
+      for (let at = 0; at < fileIds.length; at += AVATAR_BATCH_MAX_IDS) {
+        const chunk = fileIds.slice(at, at + AVATAR_BATCH_MAX_IDS);
+        try {
+          const targets = await context
+            .actor(FileActorDescriptor, avatarBatchActorId(viewerId))
+            .presignAvatars({ fileIds: chunk });
+          urls.push(...chunk.map((_id, index) => targets[index]?.url ?? null));
+        } catch (error) {
+          console.warn(
+            `[api] ${chunk.length} avatar file(s) could not be presigned; ` +
+              `falling back to user.image: ${String(error)}`,
+          );
+          urls.push(...chunk.map(() => null));
+        }
+      }
+      return urls;
+    },
+    { maxBatchSize: AVATAR_BATCH_MAX_IDS * 4 },
+  );
+  avatarBatchByRequest.set(context, loader);
+  return loader;
+};
+
 const presignedThisRequest = new WeakMap<
   ApiContext,
   Map<string, Promise<string | null>>
@@ -137,6 +183,12 @@ export const avatarUrlOf = async (
 ): Promise<string | null> => {
   const fileId = profile.avatarFileId;
   if (fileId === null) return profile.avatarUrl;
+  const viewerId = context.ctx.viewerId;
+  if (viewerId !== null) {
+    return (
+      (await avatarBatchOf(context, viewerId).load(fileId)) ?? profile.avatarUrl
+    );
+  }
   const memo = presignedThisRequest.get(context) ?? new Map();
   presignedThisRequest.set(context, memo);
   const key = `${fileId}\u0000${profile.avatarUrl ?? ""}`;
