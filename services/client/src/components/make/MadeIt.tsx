@@ -1,9 +1,9 @@
 "use client";
 
 import { LabelPlate } from "@/components/app/LabelPlate";
-import { AddRecipeReview } from "@/components/recipe/AddRecipeReview";
 import type { RecipeDetailsItem } from "@/components/recipe/adapter";
 import { Button } from "@/components/ui/button";
+import { RateIt } from "./RateIt";
 import { ingredientName } from "./scaling";
 
 type Ingredient = RecipeDetailsItem["ingredients"][number];
@@ -44,9 +44,13 @@ export const usedBottles = (ingredients: readonly Ingredient[]): UsedBottle[] =>
 
 /**
  * The Made it screen (Recipes-Make board): the recipe's plate, "Made it",
- * the recipe's own review form to rate it (L29, never PourSheet), the
- * bottles it came from, and Recipe / Done. The log itself and its Undo are
- * Make mode's; this screen only shows what happened.
+ * "Rate it" in place (stars that save on the tap, and Add a note: `RateIt`;
+ * L29, never PourSheet), the bottles it came from, and Recipe / Done. The log
+ * itself and its Undo are Make mode's; this screen only shows what happened.
+ *
+ * Not built: the board's "Your 3rd <drink>" and "Your log" link. The API has
+ * no count of the viewer's logs of a recipe and the app has no log page
+ * (hand-off, F-120).
  */
 export function MadeIt({
   recipe,
@@ -86,22 +90,15 @@ export function MadeIt({
             {recipe.name} is in your drinks
           </p>
         </div>
-        <section
-          aria-label="Rate it"
-          className="rounded-md border border-edge bg-card p-4"
-        >
-          <h2 className="t-head m-0 mb-2 text-ink">Rate it</h2>
-          <AddRecipeReview
-            key={mine?.id ?? "new"}
-            recipeId={recipe.id}
-            viewerId={viewerId}
-            myReview={
-              mine === null
-                ? null
-                : { id: mine.id, score: mine.score, text: mine.text }
-            }
-          />
-        </section>
+        <RateIt
+          key={mine?.id ?? "new"}
+          recipeId={recipe.id}
+          myReview={
+            mine === null
+              ? null
+              : { id: mine.id, score: mine.score, text: mine.text }
+          }
+        />
         {bottles.length > 0 && (
           <section aria-labelledby="made-from" className="flex flex-col gap-2">
             <h2 id="made-from" className="t-head m-0 px-1 text-ink">
