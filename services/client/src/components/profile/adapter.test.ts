@@ -10,6 +10,7 @@ import {
   listRow,
   logPageResult,
   logRow,
+  mutualFriendsLine,
   sharesNothing,
 } from "./adapter";
 
@@ -110,6 +111,24 @@ describe("rows", () => {
         privacy: "PUBLIC",
       } as Parameters<typeof listRow>[0]).description,
       "Public",
+    );
+  });
+
+  test("a tier list with its kind reads 'Beer · 6 ranked' and carries the band strip (F-52)", () => {
+    const row = listRow({
+      __typename: "TierList",
+      id: "t3",
+      name: "Pale ales",
+      itemCount: 6,
+      privacy: "FRIENDS",
+      listType: "beer",
+      bands: { edges: [5, 5, 4, 3, 1, 1].map((band) => ({ node: { band } })) },
+    } as unknown as Parameters<typeof listRow>[0]);
+    assert.equal(row.description, "Beer · 6 ranked");
+    assert.equal(row.listType, "beer");
+    assert.deepEqual(
+      row.strip?.segments.map((segment) => segment.count),
+      [2, 1, 1, 0, 2],
     );
   });
 
@@ -317,5 +336,24 @@ describe("listPageResult / cellarPageResult (leftovers 6)", () => {
       ).ok,
       false,
     );
+  });
+});
+
+describe("mutualFriendsLine (F-94)", () => {
+  const ana = { displayName: "Ana" };
+  test("names the first, then counts the rest", () => {
+    assert.equal(mutualFriendsLine({ count: 1, first: ana }), "Friend of Ana");
+    assert.equal(
+      mutualFriendsLine({ count: 2, first: ana }),
+      "Friend of Ana and 1 other",
+    );
+    assert.equal(
+      mutualFriendsLine({ count: 4, first: ana }),
+      "Friend of Ana and 3 others",
+    );
+  });
+  test("nothing when there are none", () => {
+    assert.equal(mutualFriendsLine({ count: 0, first: null }), null);
+    assert.equal(mutualFriendsLine(null), null);
   });
 });

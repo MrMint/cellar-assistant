@@ -44,6 +44,18 @@ export const MyFriendsQuery = graphql(
         edges {
           node {
             since
+            latestActivity {
+              kind
+              occurredAt
+              rank
+              item {
+                name
+              }
+              place {
+                name
+                displayName
+              }
+            }
             user {
               ...UserSummary
             }

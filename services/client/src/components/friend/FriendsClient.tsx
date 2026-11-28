@@ -19,6 +19,7 @@ import type { ResultOf } from "@/lib/api/graphql";
 import type { ApiFailure } from "@/lib/api/result";
 import { feedback } from "@/lib/feedback";
 import { cn } from "@/lib/utils";
+import { type FriendActivity, friendActivityLine } from "./activity-line";
 import { FriendPane } from "./FriendPane";
 import {
   AcceptFriendRequestMutation,
@@ -143,6 +144,9 @@ export const FriendsClient = () => {
   const { hold: holdWrite } = useUndoableWrite();
 
   const friendsList = useAllFriends();
+  // A relative time is a hydration mismatch: the clock starts after mount.
+  const [now, setNow] = useState<number | null>(null);
+  useEffect(() => setNow(Date.now()), []);
   const incomingList = useAllFriendRequests("INCOMING");
   const outgoingList = useAllFriendRequests("OUTGOING");
   const searching = searchTerm.trim().length > 0;
@@ -446,7 +450,12 @@ export const FriendsClient = () => {
                       }
                       displayName={row.user.displayName}
                       avatarUrl={row.user.avatarUrl}
-                      status={friendsSinceLine(row.since as string)}
+                      status={
+                        friendActivityLine(
+                          (row.latestActivity as FriendActivity | null) ?? null,
+                          now,
+                        ) ?? friendsSinceLine(row.since as string)
+                      }
                       chevron
                     />
                   </li>
