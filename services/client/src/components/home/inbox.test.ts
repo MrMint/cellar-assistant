@@ -72,6 +72,22 @@ describe("toCheckFromNodes", () => {
   test("nothing guessed: no row", () => {
     assert.equal(toCheckFromNodes([node("b0", "i0", [])]), null);
   });
+
+  test("a sealed bottle's guesses count too: the server's count over every bottle (F-123)", () => {
+    // `me.unconfirmedBottleCount` (F-76) sees sealed bottles the open read cannot.
+    const sealedOnly = toCheckFromNodes([node("b0", "i0", [])], 2);
+    assert.equal(sealedOnly?.count, 2);
+    assert.equal(sealedOnly?.name, null);
+    assert.equal(sealedOnly?.fields, "Guessed from a label");
+    assert.equal(sealedOnly?.href, "/cellars");
+    const both = toCheckFromNodes([node("b1", "i1", ["country"])], 3);
+    assert.equal(both?.count, 3, "the open one named, the sealed ones counted");
+    assert.equal(both?.href, "/cellars/c1/beers/b1");
+    assert.equal(
+      toCheckFromNodes([node("b1", "i1", ["country"])], 0)?.count,
+      1,
+    );
+  });
 });
 
 describe("buildInbox: drafts sit after matches, before requests", () => {

@@ -448,7 +448,11 @@ function InboxRow({
               {item.check.count} to check
             </PressLink>
           }
-          detail={`${item.check.name} · ${item.check.fields}`}
+          detail={
+            item.check.name === null
+              ? item.check.fields
+              : `${item.check.name} · ${item.check.fields}`
+          }
           trailing={<Chevron />}
         />
       );
