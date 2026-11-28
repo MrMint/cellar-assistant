@@ -791,6 +791,23 @@ export class RecipeActor
     return { average: total / scored.length, count: scored.length };
   }
 
+  /**
+   * F-120: how many times the viewer has logged this recipe (`check_ins` with
+   * this `recipe_id`, about the viewer). The make page's "Your 3rd …" after
+   * Made it. Only ever the viewer's own rows, so the recipe's own read rule
+   * is the whole gate; one indexed count (`idx_check_ins_recipe_id`).
+   */
+  async viewerLogCount(ctx: Ctx): Promise<number> {
+    await this.#readable(ctx, "see your logs of a recipe");
+    const viewer = ctx.viewerId;
+    if (viewer === null) return 0;
+    const { rows } = await this.db.execute<{ n: number | string }>(sql`
+      select count(*) as n from public.check_ins k
+      where k.recipe_id = ${this.key}::uuid and k.user_id = ${viewer}::uuid
+    `);
+    return Number(rows[0]?.n ?? 0);
+  }
+
   /* ---------------------------------------------------------------------- */
   /* The recipe itself                                                       */
   /* ---------------------------------------------------------------------- */

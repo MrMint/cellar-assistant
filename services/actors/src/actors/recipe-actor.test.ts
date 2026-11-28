@@ -1071,6 +1071,63 @@ describe.skipIf(skip)("RecipeActor", () => {
   });
 
   /* ---------------------------------------------------------------------- */
+  /* F-120: the viewer's own log count for a recipe                          */
+  /* ---------------------------------------------------------------------- */
+
+  describe("viewerLogCount (F-120: 'Your 3rd …' after Made it)", () => {
+    const seedRecipeLog = async (
+      db: DbOrTx,
+      userId: string,
+      recipeId: string,
+    ): Promise<void> => {
+      await db.execute(sql`
+        insert into public.check_ins (user_id, created_by_id, group_id, recipe_id)
+        values (${userId}::uuid, ${userId}::uuid, gen_random_uuid(), ${recipeId}::uuid)
+      `);
+    };
+
+    it("counts only the viewer's own logs of this recipe", async () => {
+      await withTestDb(async (db) => {
+        const owner = await seedUser(db);
+        const other = await seedUser(db);
+        const recipeId = await seedRecipe(db, { createdById: owner });
+        const elsewhere = await seedRecipe(db, { createdById: owner });
+        await seedRecipeLog(db, owner, recipeId);
+        await seedRecipeLog(db, owner, recipeId);
+        await seedRecipeLog(db, owner, elsewhere);
+        await seedRecipeLog(db, other, recipeId);
+        const actor = await activate(newRecipeActor(recipeId, db));
+
+        expect(await actor.viewerLogCount(userCtx(owner, "r"))).toBe(2);
+        expect(await actor.viewerLogCount(userCtx(other, "r"))).toBe(1);
+        const stranger = await seedUser(db);
+        expect(await actor.viewerLogCount(userCtx(stranger, "r"))).toBe(0);
+      });
+    });
+
+    it("is refused, as absent, to a stranger who may not see the recipe", async () => {
+      await withTestDb(async (db) => {
+        const owner = await seedUser(db);
+        const stranger = await seedUser(db);
+        const recipeId = await seedRecipe(db, {
+          createdById: owner,
+          privacy: "PRIVATE",
+        });
+        await seedRecipeLog(db, owner, recipeId);
+        const actor = await activate(newRecipeActor(recipeId, db));
+
+        await expect(
+          actor.viewerLogCount(userCtx(stranger, "r")),
+        ).rejects.toThrow(NotFoundError);
+        await expect(actor.viewerLogCount(anonymousCtx("r"))).rejects.toThrow(
+          ForbiddenError,
+        );
+        expect(await actor.viewerLogCount(userCtx(owner, "r"))).toBe(1);
+      });
+    });
+  });
+
+  /* ---------------------------------------------------------------------- */
   /* Reviews — target-stack §7's `recipe_reviews` gap                        */
   /* ---------------------------------------------------------------------- */
 

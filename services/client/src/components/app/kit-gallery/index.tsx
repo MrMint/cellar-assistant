@@ -16,6 +16,16 @@ function loadOptional(name: string): Promise<Record<string, unknown>> {
   return import(`./${name}`);
 }
 
+/** The theme on screen now: `<html data-theme>`, else the OS's scheme. */
+export function onScreenKitTheme(): KitTheme {
+  const set = document.documentElement.dataset.theme;
+  if (set === "light" || set === "dark") return set;
+  return typeof window.matchMedia === "function" &&
+    window.matchMedia("(prefers-color-scheme: light)").matches
+    ? "light"
+    : "dark";
+}
+
 /** Sets `<html data-theme>` while the kit is open; puts back what was there. */
 export function applyKitTheme(theme: KitTheme): () => void {
   const html = document.documentElement;
@@ -33,10 +43,15 @@ export function applyKitTheme(theme: KitTheme): () => void {
  * one.
  */
 export function KitGallery() {
-  const [theme, setTheme] = useState<KitTheme>("dark");
+  // H-92: the switch starts from the theme on screen, not always dark.
+  const [theme, setTheme] = useState<KitTheme | null>(null);
   const [Overlays, setOverlays] = useState<ComponentType | null>(null);
 
-  useEffect(() => applyKitTheme(theme), [theme]);
+  useEffect(() => setTheme(onScreenKitTheme()), []);
+  useEffect(() => {
+    if (theme === null) return;
+    return applyKitTheme(theme);
+  }, [theme]);
 
   useEffect(() => {
     let live = true;
@@ -67,7 +82,7 @@ export function KitGallery() {
             { value: "dark", label: "Dark" },
             { value: "light", label: "Light" },
           ]}
-          value={theme}
+          value={theme ?? "dark"}
           onValueChange={setTheme}
         />
       </header>

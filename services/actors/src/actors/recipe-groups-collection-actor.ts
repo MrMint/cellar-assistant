@@ -63,6 +63,7 @@ import type {
   ItemRef,
   Page,
   PageArgs,
+  RecipeBaseSpiritCountDto,
   RecipeCategory,
   RecipeGroupDto,
   RecipeGroupOrder,
@@ -361,6 +362,60 @@ export class RecipeGroupsCollectionActor
         };
       },
     );
+  }
+
+  /**
+   * F-114: the kind chips' counts. One `group by` over the list's own scope
+   * (visibility, category, term — never `baseSpirit`, which would leave one
+   * chip), then each bar kind with narrower kinds present gets their sum, so
+   * a chip's count is what selecting it lists ({@link baseSpiritMatches}).
+   */
+  async baseSpiritCounts(
+    ctx: Ctx,
+    filter: RecipeGroupsFilter,
+  ): Promise<readonly RecipeBaseSpiritCountDto[]> {
+    const term = normalizeRecipeGroupTerm(filter.term);
+    if (term !== null && term.length > RECIPE_GROUP_TERM_MAX_LENGTH) {
+      throw new ValidationError(
+        `term must be at most ${RECIPE_GROUP_TERM_MAX_LENGTH} characters`,
+      );
+    }
+    return await this.batch(ctx, filter, [], async () => {
+      const scope = await recipeScope(this.db, ctx);
+      const { from, where } = this.#scope(
+        { ...filter, baseSpirit: null },
+        scope,
+      );
+      const { rows } = await this.db.execute<{
+        readonly base_spirit: string;
+        readonly n: number | string;
+      }>(sql`
+        select g.base_spirit, count(*) as n
+        from ${from}
+        where ${where} and g.base_spirit is not null
+        group by g.base_spirit
+      `);
+      const exact = new Map(
+        rows.map((row) => [row.base_spirit, Number(row.n)]),
+      );
+      const kinds = new Set(exact.keys());
+      for (const kind of BAR_KIND_KEYS) {
+        const parent = (BAR_KINDS[kind] as { parent?: string }).parent;
+        if (parent !== undefined && exact.has(kind)) kinds.add(parent);
+      }
+      return [...kinds]
+        .map((baseSpirit) => ({
+          baseSpirit,
+          count: baseSpiritMatches(baseSpirit).reduce(
+            (sum, value) => sum + (exact.get(value) ?? 0),
+            0,
+          ),
+        }))
+        .sort(
+          (a, b) =>
+            b.count - a.count || a.baseSpirit.localeCompare(b.baseSpirit),
+        );
+    });
   }
 
   /** Shared by the page and its `count(*)` — see `PageScope`. */

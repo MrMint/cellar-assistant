@@ -335,7 +335,9 @@ export function CellarList({
               <ChevronLeft aria-hidden className="size-6" />
             </Link>
             <div className="flex min-w-0 flex-1 flex-col md:flex-row md:items-baseline md:gap-2">
-              <h1 className="t-title m-0 truncate text-ink">{cellarName}</h1>
+              <h1 className="t-title m-0 line-clamp-2 break-words text-ink">
+                {cellarName}
+              </h1>
               <span
                 className="t-cap tabular text-ink-2"
                 data-slot="cellar-list-count"
@@ -359,7 +361,7 @@ export function CellarList({
               className="w-[92px] shrink-0 [&_[role=radio]>span:not(:has(svg))]:sr-only"
             />
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2 md:flex-nowrap">
             <SearchField
               aria-label="Search this cellar"
               placeholder={`Search ${cellarName}`}
@@ -369,7 +371,7 @@ export function CellarList({
               onDebounced={(value) =>
                 void setSearch(value.trim() === "" ? null : value)
               }
-              className="min-w-0 flex-1 md:max-w-80"
+              className="min-w-0 flex-1 md:max-w-80 md:flex-none md:basis-80"
             />
             <ArrangeSheet
               arrangement={arrangement}
@@ -382,16 +384,17 @@ export function CellarList({
               onJump={openJump}
               searching={searching}
             />
+            {body === undefined && (
+              <CountFilters<"OPEN" | ApiItemType>
+                aria-label="Show only"
+                lead={counts.open}
+                cells={counts.kinds}
+                value={filter}
+                onValueChange={setFilter}
+                className="max-md:basis-full md:min-w-0 md:flex-1"
+              />
+            )}
           </div>
-          {body === undefined && (
-            <CountFilters<"OPEN" | ApiItemType>
-              aria-label="Show only"
-              lead={counts.open}
-              cells={counts.kinds}
-              value={filter}
-              onValueChange={setFilter}
-            />
-          )}
         </header>
 
         {needsDetails > 0 && (

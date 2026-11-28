@@ -63,7 +63,7 @@ const ActivityKindEnum = builder.enumType("ActivityKind", {
   values: ACTIVITY_KINDS,
 });
 
-const ActivityEntryType = builder
+export const ActivityEntryType = builder
   .objectRef<ActivityEntryDto>("ActivityEntry")
   .implement({
     description:

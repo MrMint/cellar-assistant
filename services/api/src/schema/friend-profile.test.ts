@@ -289,3 +289,117 @@ describe("friendProfile sections page within the server cap (leftovers 6)", () =
     });
   });
 });
+
+describe("Friend.latestActivity (F-51)", () => {
+  const OTHER = "77777777-7777-4777-8777-777777777777";
+  const review = {
+    kind: "REVIEWED",
+    id: ENTRY,
+    occurredAt: "2026-11-20T10:00:00.000Z",
+    userId: FRIEND,
+    item: null,
+    placeId: null,
+    review: null,
+    tierListItem: null,
+    rank: null,
+    cellarId: null,
+    cellarItemId: null,
+    checkIn: null,
+  };
+
+  it("is one latestActivity call for the whole page, aligned to its friends", async () => {
+    const { invoke, calls } = stubSidecar({
+      "FriendsCollectionActor.friends": () =>
+        page([
+          { userId: FRIEND, since: "2026-01-01T00:00:00.000Z" },
+          { userId: OTHER, since: "2026-01-02T00:00:00.000Z" },
+        ]),
+      "FriendsCollectionActor.latestActivity": () => [review, null],
+    });
+    const result = await run(
+      `{ myFriends(first: 2) { ... on FriendConnection {
+           edges { node { latestActivity { kind occurredAt } } } } } }`,
+      testContext(invoke, viewer),
+    );
+    expect(result.errors).toBeUndefined();
+    expect(result.data?.myFriends).toEqual({
+      edges: [
+        {
+          node: {
+            latestActivity: {
+              kind: "REVIEWED",
+              occurredAt: "2026-11-20T10:00:00.000Z",
+            },
+          },
+        },
+        { node: { latestActivity: null } },
+      ],
+    });
+    const latest = calls.filter((c) => c.method === "latestActivity");
+    expect(latest).toHaveLength(1);
+    expect(latest[0]).toMatchObject({
+      actorType: "FriendsCollectionActor",
+      actorId: viewerCollectionActorId(viewer.id),
+    });
+    expect(latest[0]?.args.at(-1)).toEqual({ latestOf: [FRIEND, OTHER] });
+  });
+});
+
+describe("mutualFriends (F-94)", () => {
+  const STRANGER = "88888888-8888-4888-8888-888888888888";
+
+  it("asks the viewer's own FriendsCollectionActor and hydrates the first friend", async () => {
+    const { invoke, calls } = stubSidecar({
+      "FriendsCollectionActor.mutualFriends": () => ({
+        count: 2,
+        firstUserId: FRIEND,
+      }),
+      "UserActor.getProfile": (actorId) => ({
+        id: actorId,
+        displayName: "Sam",
+        avatarUrl: null,
+        avatarFileId: null,
+        locale: "en",
+        email: null,
+      }),
+    });
+    const result = await run(
+      `{ mutualFriends(userId: "${STRANGER}") { count first { id displayName } } }`,
+      testContext(invoke, viewer),
+    );
+    expect(result.errors).toBeUndefined();
+    expect(result.data?.mutualFriends).toEqual({
+      count: 2,
+      first: { id: FRIEND, displayName: "Sam" },
+    });
+    const call = calls.find((c) => c.method === "mutualFriends");
+    expect(call).toMatchObject({
+      actorType: "FriendsCollectionActor",
+      actorId: viewerCollectionActorId(viewer.id),
+    });
+    expect(call?.args.at(-1)).toEqual({ mutualWith: STRANGER });
+  });
+
+  it("answers no first friend with none, and refuses an anonymous caller without a call", async () => {
+    const empty = stubSidecar({
+      "FriendsCollectionActor.mutualFriends": () => ({
+        count: 0,
+        firstUserId: null,
+      }),
+    });
+    const none = await run(
+      `{ mutualFriends(userId: "${STRANGER}") { count first { id } } }`,
+      testContext(empty.invoke, viewer),
+    );
+    expect(none.errors).toBeUndefined();
+    expect(none.data?.mutualFriends).toEqual({ count: 0, first: null });
+
+    const anonymous = stubSidecar({});
+    const refused = await run(
+      `{ mutualFriends(userId: "${STRANGER}") { count } }`,
+      testContext(anonymous.invoke, null),
+    );
+    expect(refused.errors?.[0]?.message).toMatch(/sign in/);
+    expect(anonymous.calls).toEqual([]);
+  });
+});

@@ -8,8 +8,6 @@ import { listBottleFromNode } from "./read";
 
 /** The API's page cap (`first`: 1 to 100). */
 const PAGE = 100;
-/** How many pages one list reads before it says "2000+" (CROSS-LOT). */
-const MAX_PAGES = 20;
 
 export type WholeCellar =
   | {
@@ -17,8 +15,8 @@ export type WholeCellar =
       bottles: ListBottle[];
       /** Bottles (×N counted), not tiles: the header's "240 bottles". */
       bottleCount: number;
-      /** The read stopped at the cap: the count is a lower bound. */
-      capped: boolean;
+      /** Always false: the read has no cap now (F-145); kept for callers. */
+      capped: false;
     }
   | { ok: false; error: ApiFailure };
 
@@ -38,7 +36,7 @@ export async function loadWholeCellar(
   const bottles: ListBottle[] = [];
   let after: string | null = null;
   let bottleCount = 0;
-  for (let page = 0; page < MAX_PAGES; page += 1) {
+  for (;;) {
     const data: ResultOf<typeof GetCellarListQuery> = await apiServerQuery(
       GetCellarListQuery,
       {
@@ -61,7 +59,6 @@ export async function loadWholeCellar(
     }
     after = groups.pageInfo.endCursor;
   }
-  return { ok: true, bottles, bottleCount, capped: true };
 }
 
 /** MC-drafts: the cellar's Needs-details count; 0 when it cannot be read. */

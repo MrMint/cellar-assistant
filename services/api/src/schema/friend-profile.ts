@@ -15,10 +15,16 @@
  * (`PROFILE_NOT_SHARED`, D24). It does not read the profile first: a profile
  * read would answer "this account exists" before the gate said no.
  */
-import type { FriendProfileDto } from "@cellar-assistant/contracts";
+import type {
+  ActivityEntryDto,
+  FriendEdgeDto,
+  FriendProfileDto,
+  MutualFriendsDto,
+} from "@cellar-assistant/contracts";
 import {
   ForbiddenError,
   FriendsCollectionActorDescriptor,
+  LATEST_ACTIVITY_MAX_IDS,
   MAX_PAGE_SIZE,
   UserActorDescriptor,
   viewerCollectionActorId,
@@ -26,10 +32,11 @@ import {
 import type { ApiContext } from "../context.ts";
 import { builder } from "./builder.ts";
 import { CellarConnection } from "./cellar.ts";
+import { ActivityEntryType } from "./discovery.ts";
 import { ItemCheckInConnection } from "./item.ts";
 import { connectionFromPage, toPageArgs } from "./pagination.ts";
 import { TierListConnection } from "./tier-list.ts";
-import { UserProfileType } from "./user.ts";
+import { FriendType, UserProfileType } from "./user.ts";
 import { Viewer } from "./viewer.ts";
 
 /** The viewer's own `FriendsCollectionActor`, or a `Forbidden`. */
@@ -189,5 +196,71 @@ builder.queryField("friendProfile", (t) =>
     errors: {},
     resolve: (_root, args, context) =>
       friendsOf(context, "see a profile").profile(String(args.userId)),
+  }),
+);
+
+/* -------------------------------------------------------------------------- */
+/* Friend.latestActivity — F-51                                                */
+/* -------------------------------------------------------------------------- */
+
+builder.objectField(FriendType, "latestActivity", (t) =>
+  t.loadable({
+    type: ActivityEntryType,
+    nullable: true,
+    description:
+      "F-51: this friend's newest activity you may see — a ranking, a log, " +
+      "a review or a bottle, each by its own rule (a PRIVATE list's entry " +
+      "never counts) — or null with none. One batched " +
+      "`FriendsCollectionActor.latestActivity` call per page of friends.",
+    resolve: (friend: FriendEdgeDto) => friend.userId,
+    load: async (
+      keys: string[],
+      context: ApiContext,
+    ): Promise<(ActivityEntryDto | null)[]> => {
+      const collection = friendsOf(context, "see your friends");
+      const out: (ActivityEntryDto | null)[] = [];
+      for (let at = 0; at < keys.length; at += LATEST_ACTIVITY_MAX_IDS) {
+        const chunk = keys.slice(at, at + LATEST_ACTIVITY_MAX_IDS);
+        out.push(...(await collection.latestActivity({ latestOf: chunk })));
+      }
+      return out;
+    },
+  }),
+);
+
+/* -------------------------------------------------------------------------- */
+/* mutualFriends — F-94                                                        */
+/* -------------------------------------------------------------------------- */
+
+const MutualFriendsType = builder
+  .objectRef<MutualFriendsDto>("MutualFriends")
+  .implement({
+    description:
+      "F-94: your friends who are also someone's friends — the locked " +
+      'profile\'s "Friend of …". Only ever people already on your own list.',
+    fields: (t) => ({
+      count: t.exposeInt("count"),
+      first: t.field({
+        type: UserProfileType,
+        nullable: true,
+        description: "The first of them by name; null with none.",
+        resolve: (mutual) => mutual.firstUserId,
+      }),
+    }),
+  });
+
+builder.queryField("mutualFriends", (t) =>
+  t.field({
+    type: MutualFriendsType,
+    description:
+      "F-94: how many of your friends are `userId`'s friends, and the first " +
+      "by name. Answered for any profile you may see, friend or not; " +
+      "yourself, an id that names nobody and a malformed id all answer a " +
+      "count of 0, so it never says whether an account exists.",
+    args: { userId: t.arg.id({ required: true }) },
+    resolve: (_root, args, context) =>
+      friendsOf(context, "see mutual friends").mutualFriends({
+        mutualWith: String(args.userId),
+      }),
   }),
 );

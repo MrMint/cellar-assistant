@@ -143,6 +143,9 @@
  */
 import {
   type ActorCategory,
+  AVATAR_BATCH_MAX_IDS,
+  type AvatarBatchFilter,
+  avatarBatchActorId,
   ConflictError,
   type CreateUploadTargetInput,
   type Ctx,
@@ -163,7 +166,7 @@ import {
   placeGooglePhotos,
   user,
 } from "@cellar-assistant/db";
-import { and, eq, sql } from "@cellar-assistant/db/orm";
+import { and, eq, inArray, isNotNull, sql } from "@cellar-assistant/db/orm";
 import { canSeeProfile, isOwner } from "@cellar-assistant/policy";
 import type { ActorId, DaprClient } from "@dapr/dapr";
 import { EntityActorBase } from "../lib/actor-base.ts";
@@ -184,6 +187,7 @@ import {
   readUrlWindowSettings,
   stableReadWindow,
 } from "../lib/s3-presign.ts";
+import { isUuid } from "../lib/uuid.ts";
 import { visibilityScope } from "../lib/visibility-sql.ts";
 
 export type FileRow = typeof files.$inferSelect;
@@ -532,6 +536,57 @@ export class FileActor
       (key) => this.#binding.presignGetInternal(key, READ_TTL_SECONDS),
       new Date(Date.now() + READ_TTL_SECONDS * 1000),
     );
+  }
+
+  /**
+   * F-89: one turn signs a page of profile pictures (contract doc). One
+   * statement finds which ids are verified pictures and whose; each is
+   * signed in process (`presignGetPublic` dials nothing), under one window,
+   * so the URLs are the ones `presignRead` would have handed out.
+   *
+   * The only rule a picture has is `canSeeProfile` of its owner (the
+   * `canSee` doc, SV-D): this never signs a file through any other referent,
+   * so it can admit nothing `presignRead` would refuse. Addressed at the
+   * viewer's own id ({@link avatarBatchActorId}), and refused for anyone
+   * else, so no activation is shared between viewers.
+   */
+  async presignAvatars(
+    ctx: Ctx,
+    filter: AvatarBatchFilter,
+  ): Promise<readonly (ReadTarget | null)[]> {
+    const viewer = requireSignedIn(ctx, "see profile pictures");
+    if (viewer === null || avatarBatchActorId(viewer) !== this.key) {
+      throw new ForbiddenError(
+        `FileActor(${this.key}) signs pictures only for the viewer it is keyed by`,
+      );
+    }
+    const ids = filter.fileIds.map((id) => String(id).toLowerCase());
+    if (ids.length > AVATAR_BATCH_MAX_IDS) {
+      throw new ValidationError(
+        `presignAvatars takes at most ${AVATAR_BATCH_MAX_IDS} ids, got ${ids.length}`,
+      );
+    }
+    for (const id of ids) {
+      if (!isUuid(id)) throw new ValidationError(`not a file id: ${id}`);
+    }
+    if (ids.length === 0) return [];
+    const rows = await this.db
+      .select({ id: files.id, key: files.key, owner: user.id })
+      .from(files)
+      .innerJoin(user, eq(user.avatarFileId, files.id))
+      .where(and(inArray(files.id, ids), isNotNull(files.verifiedAt)));
+    const window = stableReadWindow(new Date(), readUrlWindowSettings());
+    const signed = new Map<string, ReadTarget>();
+    for (const row of rows) {
+      if (signed.has(row.id) || !canSeeProfile(ctx, { userId: row.owner })) {
+        continue;
+      }
+      signed.set(row.id, {
+        url: await this.#binding.presignGetPublic(row.key, window),
+        expiresAt: window.expiresAt.toISOString(),
+      });
+    }
+    return ids.map((id) => signed.get(id) ?? null);
   }
 
   /** The half both read methods share, so neither can drift from the other. */

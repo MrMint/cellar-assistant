@@ -134,7 +134,7 @@ describe("/cellars sections", () => {
 describe("Cellars · Bar (D1)", () => {
   test("two links, the current one marked; Bar is recipes", () => {
     const html = render(<CellarSegments current="bar" />);
-    assert.match(html, /<nav\b[^>]*aria-label="Cellar"/);
+    assert.match(html, /<nav\b[^>]*aria-label="Cellars or Your bar"/);
     assert.deepEqual(
       CELLAR_SEGMENTS.map((s) => `${s.label} -> ${s.href}`),
       ["Cellars -> /cellars", "Your bar -> /recipes"],

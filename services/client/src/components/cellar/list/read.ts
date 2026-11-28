@@ -1,3 +1,4 @@
+import { styleLabel } from "@cellar-assistant/contracts/taste";
 import {
   plainTextFromRichText,
   richTextFromReviewText,
@@ -24,6 +25,12 @@ export const noteWords = (text: unknown): string | null => {
   return words === "" ? null : words;
 };
 
+/** F-4: the stored style (`PALE_ALE`) as words, null when there is none. */
+const styleWords = (raw: string | null | undefined): string | null =>
+  raw === null || raw === undefined || raw.trim() === ""
+    ? null
+    : styleLabel(raw);
+
 /** A `CellarListGroup` node → one tile of the list. */
 export const listBottleFromNode = (
   cellarId: string,
@@ -42,7 +49,7 @@ export const listBottleFromNode = (
     type: cell.type,
     name: cell.item.name,
     maker: primaryBrandName(item) ?? null,
-    style: subtitleDescriptor(item) ?? null,
+    style: styleWords(subtitleDescriptor(item)),
     photoUrl: cell.item.displayImageUrl ?? null,
     plate: cell.item.plate ?? null,
     rating: cell.item.myScore ?? null,

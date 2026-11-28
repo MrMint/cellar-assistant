@@ -529,6 +529,11 @@ export type RecipeActorInterface = {
   reviews(ctx: Ctx, page: PageArgs): Promise<Page<RecipeReviewDto>>;
   /** Computed in memory from the loaded reviews; replaces `_aggregate` (§2.1). */
   score(ctx: Ctx): Promise<RecipeScoreDto>;
+  /**
+   * F-120: how many times the viewer has logged this recipe (their own
+   * `check_ins` naming it). Gated like every read; 0 for none.
+   */
+  viewerLogCount(ctx: Ctx): Promise<number>;
 
   /** Provisional-id pattern: the caller mints the id and addresses the actor by it. */
   create(ctx: Ctx, input: CreateRecipeInput): Promise<RecipeDto>;
@@ -628,6 +633,7 @@ export const RecipeActorDescriptor: ActorDescriptor<RecipeActorInterface> = {
     instructions: {},
     reviews: {},
     score: {},
+    viewerLogCount: {},
     create: { timeoutMs: 20_000, modelBacked: true },
     update: { modelBacked: true },
     setIngredients: { timeoutMs: 20_000, modelBacked: true },

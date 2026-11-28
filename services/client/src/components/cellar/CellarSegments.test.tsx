@@ -24,4 +24,10 @@ describe("Cellars · Your bar (F-139)", () => {
     const out = renderToStaticMarkup(<CellarSegments current="cellars" />);
     assert.match(out, /<a[^>]*href="\/recipes"[^>]*>Your bar</);
   });
+
+  test("each segment is 44 px tall (CA-8, F-140)", () => {
+    const out = renderToStaticMarkup(<CellarSegments current="cellars" />);
+    assert.equal(out.match(/min-h-11/g)?.length, 2);
+    assert.doesNotMatch(out, /min-h-10/);
+  });
 });

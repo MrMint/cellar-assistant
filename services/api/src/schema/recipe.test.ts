@@ -5,7 +5,11 @@
  * are correct — that is `recipe-actor.test.ts` and `recipe-group-actor.test.ts`
  * against real Postgres.
  */
-import { ConflictError, NotFoundError } from "@cellar-assistant/contracts";
+import {
+  ConflictError,
+  NotFoundError,
+  recipeGroupsCollectionActorId,
+} from "@cellar-assistant/contracts";
 import { execute, parse } from "graphql";
 import { describe, expect, it } from "vitest";
 import { stubSidecar, testContext } from "../testing.ts";
@@ -93,6 +97,77 @@ describe("recipe query", () => {
       actorId: RECIPE_ID,
       method: "get",
     });
+  });
+});
+
+describe("Recipe.viewerLogCount (F-120)", () => {
+  it("asks RecipeActor for the viewer's own count", async () => {
+    const { invoke, calls } = stubSidecar({
+      "RecipeActor.get": () => recipeDto(),
+      "RecipeActor.viewerLogCount": () => 3,
+    });
+    const result = await run(
+      `{ recipe(id: "${RECIPE_ID}") { ... on Recipe { viewerLogCount } } }`,
+      testContext(invoke, viewer),
+    );
+    expect(result.errors).toBeUndefined();
+    expect(result.data?.recipe).toEqual({ viewerLogCount: 3 });
+    expect(
+      calls.find((call) => call.method === "viewerLogCount"),
+    ).toMatchObject({ actorType: "RecipeActor", actorId: RECIPE_ID });
+  });
+
+  it("answers 0 for an anonymous viewer, with no sidecar hop", async () => {
+    const { invoke, calls } = stubSidecar({
+      "RecipeActor.get": () => recipeDto(),
+    });
+    const result = await run(
+      `{ recipe(id: "${RECIPE_ID}") { ... on Recipe { viewerLogCount } } }`,
+      testContext(invoke, null),
+    );
+    expect(result.errors).toBeUndefined();
+    expect(result.data?.recipe).toEqual({ viewerLogCount: 0 });
+    expect(calls.filter((call) => call.method === "viewerLogCount")).toEqual(
+      [],
+    );
+  });
+});
+
+describe("recipeBaseSpiritCounts (F-114)", () => {
+  it("addresses the unfiltered list's activation and passes the counts through", async () => {
+    const { invoke, calls } = stubSidecar({
+      "RecipeGroupsCollectionActor.baseSpiritCounts": () => [
+        { baseSpirit: "gin", count: 4 },
+        { baseSpirit: "whiskey", count: 2 },
+      ],
+    });
+    const result = await run(
+      `{ recipeBaseSpiritCounts(first: 50, category: cocktail, term: " sour ") {
+           ... on RecipeBaseSpiritCountConnection {
+             edges { node { baseSpirit count } } } } }`,
+      testContext(invoke, viewer),
+    );
+    expect(result.errors).toBeUndefined();
+    expect(result.data?.recipeBaseSpiritCounts).toEqual({
+      edges: [
+        { node: { baseSpirit: "gin", count: 4 } },
+        { node: { baseSpirit: "whiskey", count: 2 } },
+      ],
+    });
+    const filter = {
+      category: "cocktail",
+      baseSpirit: null,
+      term: "sour",
+      orderBy: "NEWEST",
+    } as const;
+    expect(calls).toEqual([
+      {
+        actorType: "RecipeGroupsCollectionActor",
+        actorId: recipeGroupsCollectionActorId(filter),
+        method: "baseSpiritCounts",
+        args: [expect.anything(), filter],
+      },
+    ]);
   });
 });
 

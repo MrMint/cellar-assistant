@@ -2520,6 +2520,10 @@ type ForbiddenError implements ActorError & Error {
 
 """Someone the user is friends with, and since when."""
 type Friend {
+  """
+  F-51: this friend's newest activity you may see — a ranking, a log, a review or a bottle, each by its own rule (a PRIVATE list's entry never counts) — or null with none. One batched `FriendsCollectionActor.latestActivity` call per page of friends.
+  """
+  latestActivity: ActivityEntry
   since: DateTime!
 
   """
@@ -4719,6 +4723,16 @@ type MutationUpdateItemSuccess {
   data: Item!
 }
 
+"""
+F-94: your friends who are also someone's friends — the locked profile's "Friend of …". Only ever people already on your own list.
+"""
+type MutualFriends {
+  count: Int!
+
+  """The first of them by name; null with none."""
+  first: UserProfile
+}
+
 """A place near the point you asked about, and how far it is."""
 type NearbyPlace {
   """Great-circle distance from the point, in metres."""
@@ -5649,6 +5663,11 @@ type Query {
   menuScan(id: ID!): QueryMenuScanResult!
 
   """
+  F-94: how many of your friends are `userId`'s friends, and the first by name. Answered for any profile you may see, friend or not; yourself, an id that names nobody and a malformed id all answer a count of 0, so it never says whether an account exists.
+  """
+  mutualFriends(userId: ID!): MutualFriends!
+
+  """
   MC-quota: how much of your AI allowance you have used this period, per kind, and when it resets. Signed-in only; always your own.
   """
   myAiQuota(
@@ -5991,6 +6010,31 @@ type Query {
   """
   recipe(id: ID!): QueryRecipeResult!
 
+  """
+  F-114: `/recipes`' kind chips — every base spirit the groups `recipeGroups(category, term)` lists carry, with its count, most first. Kinds with no visible group are absent. Same visibility as `recipeGroups`: a version you may not see adds nothing. A connection (§1.5), though one page holds every kind there is.
+  """
+  recipeBaseSpiritCounts(
+    """
+    An `edge.cursor` from a previous page. Opaque and owned by the actor that minted it: cursors are not interchangeable between fields.
+    """
+    after: String
+
+    """**Not supported.** See `last`. Paging is forward-only."""
+    before: String
+    category: RecipeCategory
+
+    """
+    How many edges to return, 1 to 100 inclusive; defaults to 20. Over the cap is a `VALIDATION` error, not a silent clamp.
+    """
+    first: Int
+
+    """
+    **Not supported.** Present because the Relay spec puts it here; passing it is a `VALIDATION` error rather than a silently forward page. Paging is forward-only — use `first`/`after`.
+    """
+    last: Int
+    term: String
+  ): QueryRecipeBaseSpiritCountsResult!
+
   """One recipe group by id, with its versions and their votes."""
   recipeGroup(id: ID!): QueryRecipeGroupResult!
 
@@ -6258,6 +6302,8 @@ type QueryRecapPeriodsSuccess {
 }
 
 union QueryRecapResult = BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | Recap | ValidationError
+
+union QueryRecipeBaseSpiritCountsResult = BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | RecipeBaseSpiritCountConnection | ValidationError
 
 union QueryRecipeGroupResult = BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | RecipeGroup | ValidationError
 
@@ -6537,6 +6583,36 @@ type Recipe {
   """
   upvotes: Int!
   version: Int!
+
+  """
+  F-120: how many times you have logged this recipe (your own check-ins naming it) — the make page's "Your 3rd …". 0 for an anonymous viewer, without asking.
+  """
+  viewerLogCount: Int!
+}
+
+"""
+F-114: one `/recipes` kind chip — a base spirit and how many groups selecting it would list.
+"""
+type RecipeBaseSpiritCount {
+  baseSpirit: String!
+
+  """
+  Groups `recipeGroups(baseSpirit:)` would list under the same category and term; a bar kind counts its narrower kinds.
+  """
+  count: Int!
+}
+
+type RecipeBaseSpiritCountConnection {
+  edges: [RecipeBaseSpiritCountEdge!]!
+  pageInfo: PageInfo!
+
+  """Total rows matching the query, or null when counting is not cheap."""
+  totalCount: Int
+}
+
+type RecipeBaseSpiritCountEdge {
+  cursor: String!
+  node: RecipeBaseSpiritCount!
 }
 
 """The `recipe_category` Postgres enum (`recipe_groups.category`)."""

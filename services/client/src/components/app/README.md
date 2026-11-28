@@ -61,7 +61,7 @@ left column, use the right.
 | `textColor="text.secondary"` | `text-ink-2` |
 | `textColor="text.tertiary"`, `neutral.500` | `text-ink-3` |
 | numbers | add `tabular` |
-| vintages, hero names, rank numerals | Fraunces: `type-title-1` / `type-numeral-xl` / `font-display` |
+| vintages, hero names, rank numerals | Inter: `type-title-1` / `type-numeral-xl` / `font-display` |
 
 Pick the element for meaning (`h1`, `h2`, `p`, `span`), the class for looks.
 No ALL CAPS except `type-overline`.
@@ -340,7 +340,7 @@ while the caller reports the action's progress), `onAutoClose` / `onClose`;
 `dismissNotification(id)`. Don't import `sonner` directly. The single `<Toaster/>` is mounted in `AppClientProviders`
 and sits above the tab bar.
 
-**`EmptyState`** — `illustration?`, `title` (one Fraunces line),
+**`EmptyState`** — `illustration?`, `title` (one Inter line),
 `description?` (one Inter line), `action?` (exactly one element). Copy:
 design §3.6.
 
@@ -384,7 +384,7 @@ a glyph never stands without its word.
 
 **`LabelPlate` / `VesselSilhouette`** — `<LabelPlate type="WINE" plate={labelPlateFrom(…)} />`
 (N28): what an item looks like with no photo. A deterministic plate — the
-producer in Fraunces small caps, the name, a big Fraunces vintage ("NV" only
+producer in Inter small caps, the name, a big Inter vintage ("NV" only
 for wine), region · ABV — on the type tint with one vessel per type at 12%.
 It fills its box; the caller sets the aspect. Decorative (`aria-hidden`) by
 default; `labelled` makes it an image named by its text (a detail hero);
@@ -392,7 +392,7 @@ default; `labelled` makes it an image named by its text (a detail hero);
 (`lib/items/label-plate.ts`) — never invent a field it does not have.
 
 **`Score`** — `<Score value={4.5} />` "4.5★" inline; `variant="pill"` on
-tiles; `variant="hero"` the Fraunces numeral; `count?`. One decimal only when
+tiles; `variant="hero"` the Inter numeral; `count?`. One decimal only when
 non-zero; renders nothing when not rated.
 
 **`RatingInput` / `RatingDisplay`** — `RatingInput` (`value`, `onChange`,
