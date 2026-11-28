@@ -268,7 +268,6 @@ export function FinishOneSheet({
       <div data-slot="finish-one" className="flex flex-col gap-5 pb-2">
         <div className="flex items-start gap-3">
           <DraftThumb
-            imageId={row.draft.imageId}
             imageUrl={row.imageUrl}
             glyph={<TypeGlyph type={type} className="size-8 text-glyph" />}
             className="size-[72px] rounded-md"
