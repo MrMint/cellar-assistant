@@ -152,7 +152,7 @@ services:
     #
     # This line is load-bearing in a way that is easy to miss: it OVERRIDES the
     # image's `CMD`, so while it said `node` the bun image ran Node. The image
-    # ships both interpreters on a `node:24-bookworm-slim` base precisely so
+    # ships both interpreters on a `node:26-bookworm-slim` base precisely so
     # reverting this one word is the complete rollback — no rebuild, no redeploy
     # of a different tag.
     working_dir: /workspace/services/actors
@@ -242,7 +242,7 @@ services:
     healthcheck:
       # better-auth's key set: proves the HTTP server, the better-auth mount and
       # the database adapter are all up, which a bare TCP check would not.
-      # `node -e` rather than curl/wget — neither is in node:24-bookworm-slim.
+      # `node -e` rather than curl/wget — neither is in node:26-bookworm-slim.
       test:
         - "CMD"
         - "node"
@@ -371,7 +371,7 @@ services:
     # The pinned default is the base file's tag; see the UPGRADE CHECKLIST on
     # the base service before overriding it — ./grafana/otel-lgtm/prometheus.yaml
     # is a copy of that tag's file and has to move with it.
-    image: ${OTEL_LGTM_IMAGE:-grafana/otel-lgtm:0.35.0}
+    image: ${OTEL_LGTM_IMAGE:-grafana/otel-lgtm:0.41.1}
     # Changes when infra/grafana/** changes (provisioning, dashboards, alert
     # rules, the Prometheus override), so a deploy recreates this container
     # exactly then — Grafana reads alerting provisioning only at startup, and
@@ -405,7 +405,7 @@ services:
       # So infra/grafana/provisioning must carry its own copies. Dump the
       # originals to start from (same tag as `image:` above):
       #
-      #   id=$(docker create grafana/otel-lgtm:0.35.0)
+      #   id=$(docker create grafana/otel-lgtm:0.41.1)
       #   docker cp "$id:/otel-lgtm/grafana/conf/provisioning/." infra/grafana/provisioning
       #   docker rm "$id"
       #

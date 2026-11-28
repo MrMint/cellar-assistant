@@ -19,7 +19,7 @@
 # to this container over HTTP on APP_PORT, exactly as it does to the
 # bind-mounted dev container in infra/docker-compose.yml.
 #
-# ## Why the base image is still node:24-bookworm-slim and not oven/bun
+# ## Why the base image is still node:26-bookworm-slim and not oven/bun
 #
 # This image ships BOTH runtimes on purpose. `services/actors` is the riskiest
 # process in the stack to move — 47 actor types, Scheduler-backed reminders, the
@@ -41,7 +41,7 @@
 # The cost is the bun binary in the runtime layer (~100 MB uncompressed, shared
 # with nothing). That is the price of the rollback being a `CMD` override.
 
-FROM node:24-bookworm-slim AS base
+FROM node:26-bookworm-slim AS base
 WORKDIR /workspace
 
 # Bun is both the package manager and — since phase 5b — the runtime, so it is
@@ -56,7 +56,7 @@ WORKDIR /workspace
 # @parcel/watcher and @swc/core. Bun will NOT fail the install the way pnpm did
 # if that ruling goes missing — it skips the script in silence — which is what
 # scripts/check-blocked-builds.mjs exists to catch in CI.
-COPY --from=oven/bun:1.4.2 /usr/local/bin/bun /usr/local/bin/bun
+COPY --from=oven/bun:1.4.5 /usr/local/bin/bun /usr/local/bin/bun
 
 # ---- deps: install with the workspace visible, production deps only -------
 FROM base AS deps

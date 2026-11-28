@@ -137,8 +137,8 @@ concurrency:
 # "Check the pinned tool versions" step in both jobs below asserts them against
 # package.json rather than leaving a comment asking someone to remember.
 env:
-  BUN_VERSION: "1.4.2"
-  BIOME_VERSION: "2.5.15"
+  BUN_VERSION: "1.4.5"
+  BIOME_VERSION: "2.6.9"
 
 jobs:
   check:

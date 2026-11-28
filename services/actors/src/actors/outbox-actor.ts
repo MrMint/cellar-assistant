@@ -1369,7 +1369,7 @@ export class OutboxActor extends ActorBase implements OutboxActorInterface {
     if (Date.now() < this.#nextRetentionSweep) return 0;
     this.#nextRetentionSweep = Date.now() + RETENTION_SWEEP_INTERVAL_MS;
     const deleted = await this.tx(async (tx) => {
-      const result = await tx.execute(sql`
+      const result = await tx.execute<never>(sql`
         delete from outbox where ctid in (
           select ctid from outbox
           where status = 'delivered'

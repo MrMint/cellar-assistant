@@ -191,7 +191,7 @@ FILES_RUNNER="${FILES_RUNNER:-docker}"
 # when set (`-e NAME`), so the script's defaults still apply otherwise.
 S3_OPTIONAL_VARS="SOURCE_S3_USE_SSL SOURCE_S3_REGION TARGET_S3_USE_SSL TARGET_S3_REGION"
 FILES_NETWORKS="${FILES_NETWORKS:-epic-burnell-4b4be9_default cellar-stack_default}"
-NODE_IMAGE="${NODE_IMAGE:-node:24-bookworm-slim}"
+NODE_IMAGE="${NODE_IMAGE:-node:26-bookworm-slim}"
 
 # ---------------------------------------------------------------- files SOURCE
 # Where `files` reads the object BYTES from (rows always come from
@@ -255,7 +255,7 @@ ROWS_SOURCE_DSN_INTERNAL="${ROWS_SOURCE_DSN_INTERNAL:-$TARGET_DSN_INTERNAL}"
 # NODE_BIN, or have the right `node` first on PATH. Whatever `node` this
 # resolves to is checked against .nvmrc (`check_node`) before a phase that
 # runs host `node` starts — it is not trusted because the path looks right.
-export PATH="${NODE_BIN:-$HOME/.local/share/fnm/node-versions/v24.14.0/installation/bin}:$PATH"
+export PATH="${NODE_BIN:-$HOME/.local/share/fnm/node-versions/v26.13.1/installation/bin}:$PATH"
 export CI=true
 
 # ---------------------------------------------------------------- helpers

@@ -22,8 +22,8 @@ bun run dev              # the Next dev server, in its own terminal
 If anything looks wrong, `bun run dev:doctor` names every known silent failure
 mode, and `bun run dev:doctor --fix` repairs the ones it can.
 
-Two prerequisites are exact, not approximate: **Node 24.14.0** (`.nvmrc`) and
-**Bun 1.4.2** (`packageManager`). A mismatched Node is the single most common
+Two prerequisites are exact, not approximate: **Node 26.13.1** (`.nvmrc`) and
+**Bun 1.4.5** (`packageManager`). A mismatched Node is the single most common
 cause of a red test suite that looks like real failures — some tests run
 TypeScript through Node's native type stripping and fail as ordinary assertion
 errors under an older runtime. Check `node -v` and `bun --version` before you

@@ -13,7 +13,10 @@
  * exactly this: serve both files from `public/` and point `setWorkerUrl` at
  * the worker (maplibre-gl-js docs/index.md, ESM → Turbopack).
  *
- * Both files are copied, not just the worker, and they are copied from
+ * Since maplibre-gl 6.19 the worker bundles what it used to import from
+ * `maplibre-gl-shared.mjs`, so the list below is the worker alone;
+ * `maplibre-worker.test.ts` walks the worker's relative imports and fails if
+ * the list and the imports ever disagree again. The files are copied from
  * `node_modules` at dev/build time, so they always match the installed
  * version — a committed copy would go stale on the next bump and fail the same
  * silent way. `public/maplibre/` is gitignored.
@@ -27,10 +30,7 @@ import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-const MAPLIBRE_WORKER_FILES = [
-  "maplibre-gl-worker.mjs",
-  "maplibre-gl-shared.mjs",
-];
+const MAPLIBRE_WORKER_FILES = ["maplibre-gl-worker.mjs"];
 
 const clientDir = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),

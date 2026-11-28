@@ -116,7 +116,7 @@ describe.skipIf(skip)("migration: item_image_vectors (G32)", () => {
       await db.execute(
         sql`delete from public.item_image where id = ${image.imageId}::uuid`,
       );
-      const { rows } = await db.execute(sql`
+      const { rows } = await db.execute<Record<string, unknown>>(sql`
         select 1 from public.item_image_vectors
         where item_image_id = ${image.imageId}::uuid
       `);

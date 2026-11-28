@@ -10,7 +10,7 @@ export SRC_DSN='postgres://…'             # the Nhost project (read-only use)
 # The target's real password — infra/.env.prod's POSTGRES_PASSWORD on Loki.
 # Read it from the file rather than typing it into shell history.
 export DST_PASSWORD="$(sed -n 's/^POSTGRES_PASSWORD=//p' infra/.env.prod)"
-export NODE_BIN=/path/to/node-24.14.0/bin  # only if `node` on PATH is not .nvmrc's
+export NODE_BIN=/path/to/node-26.13.1/bin  # only if `node` on PATH is not .nvmrc's
 # Where `files` reads the objects: Nhost Cloud's Storage API. Both values are
 # in the Nhost dashboard; neither has a default. Type the secret, don't paste
 # it onto a command line (see "Reading the objects" below).
@@ -396,7 +396,7 @@ compare files to files. The check E1 actually needs is the middle one:
 | `DST_USER` / `DST_PASSWORD` | `cellar` / `cellar` | The development defaults. On Loki, `infra/.env.prod`'s `POSTGRES_USER` / `POSTGRES_PASSWORD`. `dst()` never proves these (local socket, `trust`); the TCP check does. |
 | `DST_HOST_PORT` | `5433` | Where the target is published on this host — `infra/.env.prod`'s `POSTGRES_PORT` on Loki. |
 | `TARGET_DSN` | built from `DST_*` | What `files`/`users`/`baseline` log in with over TCP, and what the TCP check tests. Overrides `DST_USER`/`DST_PASSWORD`/`DST_HOST_PORT`/`DST_DB` for those phases. |
-| `NODE_BIN` | this Mac's fnm path for 24.14.0 | Prepended to `PATH`. Whatever `node` results is checked against `.nvmrc` before a phase that runs host `node`. |
+| `NODE_BIN` | this Mac's fnm path for 26.13.1 | Prepended to `PATH`. Whatever `node` results is checked against `.nvmrc` before a phase that runs host `node`. |
 | `WORK` | `$TMPDIR/cellar-cutover` | Dump, logs, row counts, diffs, `timings.tsv`. **The dump holds every production row, including `admin.credentials`' private key (dropped from the target by `migrate`, not from the dump): delete `$WORK` once the 24-hour watch is over.** |
 | `DUMP` | `$WORK/nhost-full.dump` | A `pg_dump -Fc` archive, restored with `pg_restore -j`. A plain SQL file (e.g. `packages/db/transform/nhost-schema.sql`) still restores, through one psql; `restore` tells them apart by the archive's `PGDMP` magic. |
 | `DUMP_COMPRESS` | `lz4` | `pg_dump --compress`. See "Dump and restore". |

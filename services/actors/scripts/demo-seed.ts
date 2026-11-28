@@ -191,7 +191,9 @@ type Db = ReturnType<typeof createDb>;
 const db: Db = createDb(DATABASE_URL);
 
 const one = async <T>(query: ReturnType<typeof sql>): Promise<T | undefined> =>
-  ((await db.execute(query)).rows[0] as T | undefined) ?? undefined;
+  ((await db.execute<Record<string, unknown>>(query)).rows[0] as
+    | T
+    | undefined) ?? undefined;
 const exists = async (query: ReturnType<typeof sql>): Promise<boolean> =>
   (await one(query)) !== undefined;
 

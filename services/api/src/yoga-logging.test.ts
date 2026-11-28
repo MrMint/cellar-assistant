@@ -193,3 +193,26 @@ describe("createApiYoga: an ActorError keeps its message, code and reason", () =
     expect(output).toEqual([]);
   });
 });
+
+describe("createApiYoga: request ids stay ours (Yoga 6)", () => {
+  it("does not echo a client's x-request-id back", async () => {
+    const yoga = createApiYoga({
+      context: ({ request }) =>
+        makeContextFactory({
+          verify: anonymousVerify,
+          invoke: stubSidecar({}).invoke,
+        })(request),
+      plugins: [],
+    });
+    const response = await yoga.fetch("http://api.test/graphql", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-request-id": "outbox:00000000-0000-4000-8000-000000000000",
+      },
+      body: JSON.stringify({ query: "{ __typename }" }),
+    });
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-request-id")).toBeNull();
+  });
+});

@@ -416,7 +416,7 @@ describe.skipIf(skip)(
         // And a second run changes nothing at all.
         const snapshot = async () => ({
           barcodes: (
-            await db.execute(
+            await db.execute<Record<string, unknown>>(
               sql`select code, type from public.barcodes order by code collate "C"`,
             )
           ).rows,
@@ -436,7 +436,7 @@ describe.skipIf(skip)(
             ].map((item) => itemState(db, item)),
           ),
           outbox: (
-            await db.execute(
+            await db.execute<Record<string, unknown>>(
               sql`select id, payload, ctid::text as ctid from public.outbox where id = any(${idArray}::uuid[]) order by id`,
             )
           ).rows,

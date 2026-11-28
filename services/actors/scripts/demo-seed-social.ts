@@ -93,7 +93,8 @@ const halfStar = (score: number): number =>
 const first = async <T>(
   db: Db,
   query: ReturnType<typeof sql>,
-): Promise<T | undefined> => (await db.execute(query)).rows[0] as T | undefined;
+): Promise<T | undefined> =>
+  (await db.execute<Record<string, unknown>>(query)).rows[0] as T | undefined;
 
 /** Called once per row: whether this run created it (`ctx.count`). */
 type Tally = (step: string, created: boolean) => void;
@@ -138,7 +139,7 @@ export const seedDemoSocial = async (
       const voterId = userIds.get(voter);
       // Never the author's own vote: it would not count toward the pick.
       if (voterId === undefined || voterId === owner) continue;
-      const inserted = await db.execute(sql`
+      const inserted = await db.execute<Record<string, unknown>>(sql`
         insert into public.recipe_votes (recipe_id, user_id, vote_type)
         values (${row.id}::uuid, ${voterId}::uuid, 'upvote')
         on conflict (recipe_id, user_id) do nothing

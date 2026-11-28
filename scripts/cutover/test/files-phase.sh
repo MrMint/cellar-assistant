@@ -18,7 +18,7 @@
 #   CUT_TEST_NETWORK       cellar-stack_default      and from a container on this network
 #   CUT_TEST_S3_ACCESS     cellar      CUT_TEST_S3_SECRET    cellar-dev-secret
 #
-# plus `bun`, `docker`, Node 24 as `node` (or NODE_BIN), and `bun install`
+# plus `bun`, `docker`, Node 26 as `node` (or NODE_BIN), and `bun install`
 # done for services/actors. Everything it creates carries this run's tag and
 # is removed on exit: two `cutfiles_*` databases and three `cutfiles-*`
 # buckets. It never touches another database or bucket.

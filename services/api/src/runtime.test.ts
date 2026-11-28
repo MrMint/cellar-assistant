@@ -82,7 +82,7 @@ it("keeps the Node A/B lane, in package.json and in the image", () => {
   // The bun binary has to be in a stage the *runtime* inherits, or CMD cannot
   // resolve it. It used to live in `deps` alone, on purpose; phase 5a moved it.
   const base = dockerfile.slice(
-    dockerfile.indexOf("FROM node:24-bookworm-slim AS base"),
+    dockerfile.indexOf("FROM node:26-bookworm-slim AS base"),
     dockerfile.indexOf("AS deps"),
   );
   expect(
@@ -91,7 +91,7 @@ it("keeps the Node A/B lane, in package.json and in the image", () => {
       "runtime stage inherits base and CMD is now `bun`.",
   ).toContain("/usr/local/bin/bun /usr/local/bin/bun");
   // And real Node must still be in the image, which is the whole reason the
-  // base image is node:24-bookworm-slim and not oven/bun (where `node` is a
+  // base image is node:26-bookworm-slim and not oven/bun (where `node` is a
   // symlink to bun and the A/B would silently measure Bun twice).
-  expect(dockerfile).toContain("FROM node:24-bookworm-slim AS base");
+  expect(dockerfile).toContain("FROM node:26-bookworm-slim AS base");
 });

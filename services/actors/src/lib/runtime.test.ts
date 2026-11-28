@@ -69,7 +69,7 @@ it("starts the host on bun, and keeps a documented node path", async () => {
   ).toBe("bun src/index.ts");
   expect(
     scripts["start:node"],
-    "`start:node` is the documented rollback to Node 24 type stripping; " +
+    "`start:node` is the documented rollback to Node 26 type stripping; " +
       "deleting it removes the only supported way back",
   ).toBe("node src/index.ts");
 });
