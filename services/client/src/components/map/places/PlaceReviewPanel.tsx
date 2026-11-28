@@ -34,6 +34,7 @@ import {
 } from "@/components/app/icons";
 import { Link } from "@/components/app/Link";
 import { notify } from "@/components/app/notify";
+import { afterHistorySettles } from "@/components/app/overlays/layers";
 import { pressFeedback } from "@/components/app/overlays/press";
 import { useNavigate } from "@/components/app/useNavigate";
 import { Button } from "@/components/ui/button";
@@ -184,9 +185,11 @@ function ReviewState({
       });
       return;
     }
+    // Close first, then leave once the sheet's Back has landed: a replace in
+    // the same tick is undone by that Back, and the page stays (F-45).
     setConfirming(false);
     notify(`Deleted ${placeName}`, { tone: "success" });
-    navigate.replace("/map");
+    afterHistorySettles(() => navigate.replace("/map"));
   };
 
   return (
