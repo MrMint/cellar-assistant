@@ -96,6 +96,39 @@ describe("recipe query", () => {
   });
 });
 
+describe("Recipe.viewerLogCount (F-120)", () => {
+  it("asks RecipeActor for the viewer's own count", async () => {
+    const { invoke, calls } = stubSidecar({
+      "RecipeActor.get": () => recipeDto(),
+      "RecipeActor.viewerLogCount": () => 3,
+    });
+    const result = await run(
+      `{ recipe(id: "${RECIPE_ID}") { ... on Recipe { viewerLogCount } } }`,
+      testContext(invoke, viewer),
+    );
+    expect(result.errors).toBeUndefined();
+    expect(result.data?.recipe).toEqual({ viewerLogCount: 3 });
+    expect(
+      calls.find((call) => call.method === "viewerLogCount"),
+    ).toMatchObject({ actorType: "RecipeActor", actorId: RECIPE_ID });
+  });
+
+  it("answers 0 for an anonymous viewer, with no sidecar hop", async () => {
+    const { invoke, calls } = stubSidecar({
+      "RecipeActor.get": () => recipeDto(),
+    });
+    const result = await run(
+      `{ recipe(id: "${RECIPE_ID}") { ... on Recipe { viewerLogCount } } }`,
+      testContext(invoke, null),
+    );
+    expect(result.errors).toBeUndefined();
+    expect(result.data?.recipe).toEqual({ viewerLogCount: 0 });
+    expect(calls.filter((call) => call.method === "viewerLogCount")).toEqual(
+      [],
+    );
+  });
+});
+
 describe("RecipeIngredient", () => {
   it("resolves item and genericItem as siblings, never both", async () => {
     const { invoke, calls } = stubSidecar({

@@ -525,6 +525,17 @@ RecipeType_.implement({
         context.actor(RecipeActorDescriptor, recipe.id).score(),
     }),
 
+    viewerLogCount: t.int({
+      description:
+        "F-120: how many times you have logged this recipe (your own check-ins " +
+        'naming it) — the make page\'s "Your 3rd …". 0 for an anonymous ' +
+        "viewer, without asking.",
+      resolve: (recipe, _args, context) =>
+        context.ctx.viewerId === null
+          ? 0
+          : context.actor(RecipeActorDescriptor, recipe.id).viewerLogCount(),
+    }),
+
     /**
      * A7d item 4. `netScore` and `myVote` are the two numbers a versions list
      * draws, and neither existed on `Recipe`: `netScore` lived only on
