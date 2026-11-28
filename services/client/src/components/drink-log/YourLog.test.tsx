@@ -27,6 +27,9 @@ const { createRoot } = await import("react-dom/client");
 const { Client, Provider, createRequest, ssrExchange } = await import("urql");
 const { YourLog } = await import("./YourLog");
 const { ItemDrinkLogQuery } = await import("./queries");
+const { useOverlayLayer, resetLayers } = await import(
+  "@/components/app/overlays/layers"
+);
 
 const entry = (over: Record<string, unknown>) => ({
   __typename: "ItemCheckIn",
@@ -169,5 +172,97 @@ describe("YourLog", () => {
   test("an entry the viewer may neither edit nor remove has no ⋯", async () => {
     await mount([entry({ isMine: false, canRemove: false })]);
     assert.equal(buttons("More for this log").length, 0);
+  });
+});
+
+/**
+ * F-167 (CE-2, H-11): Your log's ⋯ → Edit closes one sheet and opens the
+ * next in the same commit, and a row that navigates leaves from inside a
+ * sheet. Neither may leave a dead history entry behind. A fake history
+ * with an asynchronous Back, as browsers have.
+ */
+type Entry = { state: unknown; url: string };
+const fakeHistory = () => {
+  const entries: Entry[] = [{ state: null, url: "/wines/w1" }];
+  let index = 0;
+  const h = window.history;
+  const define = (name: string, value: unknown) =>
+    Object.defineProperty(h, name, {
+      configurable: true,
+      writable: true,
+      value,
+    });
+  Object.defineProperty(h, "state", {
+    configurable: true,
+    get: () => entries[index]?.state ?? null,
+  });
+  define("pushState", (state: unknown, _t: string, url?: string) => {
+    entries.splice(index + 1);
+    entries.push({ state, url: url ?? entries[index]?.url ?? "" });
+    index += 1;
+  });
+  define("replaceState", (state: unknown, _t: string, url?: string) => {
+    entries[index] = { state, url: url ?? entries[index]?.url ?? "" };
+  });
+  define("back", () => {
+    setTimeout(() => {
+      if (index === 0) return;
+      index -= 1;
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    }, 1);
+  });
+  return {
+    get index() {
+      return index;
+    },
+    get length() {
+      return entries.length;
+    },
+  };
+};
+
+const settle = () =>
+  act(async () => {
+    await new Promise((r) => setTimeout(r, 20));
+  });
+
+function TwoSheets({ a, b }: { a: boolean; b: boolean }) {
+  useOverlayLayer(a, () => {});
+  useOverlayLayer(b, () => {});
+  return null;
+}
+
+describe("sheet history (F-167)", () => {
+  test("⋯ → Edit → Cancel leaves no dead entry: Back then leaves the page", async () => {
+    resetLayers();
+    const history = fakeHistory();
+    await act(async () => root.render(<TwoSheets a b={false} />));
+    assert.equal(history.index, 1, "the menu sheet pushed its entry");
+    // Edit: the menu closes and the edit sheet opens in one commit.
+    await act(async () => root.render(<TwoSheets a={false} b />));
+    await settle();
+    assert.equal(history.index, 1, "one entry, the edit sheet's");
+    assert.equal(
+      (window.history.state as Record<string, unknown> | null)?.caOverlay !==
+        undefined,
+      true,
+      "the current entry is the open sheet's",
+    );
+    // Cancel: the edit sheet closes and takes its entry back off.
+    await act(async () => root.render(<TwoSheets a={false} b={false} />));
+    await settle();
+    assert.equal(history.index, 0, "back at the page's own entry");
+  });
+
+  test("a row that navigates from a sheet leaves no entry behind", async () => {
+    resetLayers();
+    const history = fakeHistory();
+    await act(async () => root.render(<TwoSheets a b={false} />));
+    // The row's navigation: the router pushes the next page.
+    window.history.pushState({ __NA: true }, "", "/places/p1");
+    await act(async () => root.render(<TwoSheets a={false} b={false} />));
+    await settle();
+    assert.equal(history.length, 2, "the page, then the place: no sheet entry");
+    assert.equal(history.index, 1);
   });
 });
