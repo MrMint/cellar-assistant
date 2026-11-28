@@ -118,10 +118,14 @@ test("the recipe page says what is missing, with real availability", async ({
   await expect(summary).toContainText("One bottle away");
   await expect(summary).toContainText("Lime juice");
 
-  const lime = page.locator("li", { hasText: "Lime juice" });
+  const lime = visibleOnly(
+    page.locator("li", { hasText: "Lime juice" }),
+  ).first();
   await expect(lime).toContainText("¾ oz");
   await expect(lime.locator('[data-availability="missing"]')).toBeVisible();
-  const syrup = page.locator("li", { hasText: "Simple syrup" });
+  const syrup = visibleOnly(
+    page.locator("li", { hasText: "Simple syrup" }),
+  ).first();
   await expect(syrup).toContainText("½ oz");
   await expect(syrup.locator('[data-availability="have"]')).toContainText(
     "In your pantry",
@@ -130,13 +134,14 @@ test("the recipe page says what is missing, with real availability", async ({
 
 test("Love replaces the heart", async ({ page }) => {
   await page.goto(`/recipes/${recipeId}`);
-  const love = page.getByRole("button", { name: "Love this recipe" });
+  // The heart names the recipe ("Love <name>") once the page knows it.
+  const love = page.getByRole("button", { name: /^Love / });
   await expect(love).toBeVisible();
   const box = await love.boundingBox();
   expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
   await love.tap();
   await expect(
-    page.getByRole("button", { name: "Loved — tap to remove" }),
+    page.getByRole("button", { name: /: loved — tap to remove$/ }),
   ).toHaveAttribute("aria-pressed", "true");
 
   await expect
