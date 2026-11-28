@@ -70,7 +70,9 @@ import type {
   Ctx,
   MapActorInterface,
   MapBrowseInput,
+  MapCluster,
   MapEntry,
+  MapPlace,
   Page,
   PageArgs,
 } from "@cellar-assistant/contracts";
@@ -80,6 +82,7 @@ import {
   searchHash,
   ValidationError,
 } from "@cellar-assistant/contracts";
+import { sql } from "@cellar-assistant/db/orm";
 import { requireSignedIn } from "../lib/guards.ts";
 import {
   type ClusteredPlaceRow,
@@ -191,19 +194,86 @@ export class MapActor
 
     // Own places first, so the cap never drops the marker the creator is
     // most likely looking for; the whole answer still honours `limit`.
-    return [...own.map(unsharedToMapEntry), ...rows.map(toMapEntry)].slice(
-      0,
-      limit,
+    const entries = [
+      ...own.map(unsharedToMapEntry),
+      ...rows.map(toMapEntry),
+    ].slice(0, limit);
+    return this.#withPinExtras(ctx, entries);
+  }
+
+  /**
+   * F-82: the owner's pin layer reads three things the clustering SQL does not
+   * return per marker — the rating count, the viewer's own band and a photo.
+   * One batched read for every place marker in the answer, never one per pin.
+   */
+  async #withPinExtras(
+    ctx: Ctx,
+    entries: readonly MapEntryDraft[],
+  ): Promise<readonly MapEntry[]> {
+    const ids = entries.flatMap((entry) =>
+      entry.kind === "place" ? [entry.placeId] : [],
     );
+    const extras = new Map<string, PinExtrasRow>();
+    if (ids.length > 0) {
+      const idArray = sql`${`{${ids.join(",")}}`}::uuid[]`;
+      const viewer = ctx.viewerId;
+      const { rows } = await this.db.execute<PinExtrasRow>(sql`
+        select p.id,
+               coalesce(p.review_count, 0)::int as rating_count,
+               ${
+                 viewer === null
+                   ? sql`null::int`
+                   : sql`(
+                       select max(tli.band)::int
+                       from public.tier_list_items tli
+                       join public.tier_lists tl on tl.id = tli.tier_list_id
+                       where tli.place_id = p.id
+                         and tl.created_by_id = ${viewer}::uuid
+                     )`
+               } as my_band,
+               (
+                 select pgp.storage_file_id
+                 from public.place_google_photos pgp
+                 where pgp.place_id = p.id and pgp.storage_file_id is not null
+                 order by pgp.display_order asc, pgp.created_at asc
+                 limit 1
+               ) as photo_file_id
+        from public.places p
+        where p.id = any(${idArray})
+      `);
+      for (const row of rows) extras.set(row.id, row);
+    }
+    return entries.map((entry) => {
+      if (entry.kind === "cluster") return entry;
+      const extra = extras.get(entry.placeId);
+      return {
+        ...entry,
+        ratingCount: extra?.rating_count ?? 0,
+        myBand: extra?.my_band ?? null,
+        photoFileId: extra?.photo_file_id ?? null,
+      };
+    });
   }
 }
+
+type PinExtrasRow = {
+  readonly id: string;
+  readonly rating_count: number;
+  readonly my_band: number | null;
+  readonly photo_file_id: string | null;
+};
+
+/** A marker before {@link MapActor.#withPinExtras} adds the F-82 fields. */
+type MapEntryDraft =
+  | Omit<MapPlace, "ratingCount" | "myBand" | "photoFileId">
+  | MapCluster;
 
 /**
  * One row → one marker. The `is_cluster` branch is the SQL's own: a clustered
  * row carries `cluster_id`/`cluster_count`/`cluster_center` and leaves the
  * place columns null, and a place row the reverse.
  */
-const toMapEntry = (row: ClusteredPlaceRow): MapEntry =>
+const toMapEntry = (row: ClusteredPlaceRow): MapEntryDraft =>
   row.is_cluster === true
     ? {
         kind: "cluster",
@@ -226,7 +296,7 @@ const toMapEntry = (row: ClusteredPlaceRow): MapEntry =>
       };
 
 /** One of the viewer's own unshared places → its own marker. */
-const unsharedToMapEntry = (row: UnsharedMapRow): MapEntry => ({
+const unsharedToMapEntry = (row: UnsharedMapRow): MapEntryDraft => ({
   kind: "place",
   placeId: row.id,
   name: row.name,

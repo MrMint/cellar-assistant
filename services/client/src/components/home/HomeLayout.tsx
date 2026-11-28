@@ -65,9 +65,9 @@ export function SectionHead({
   );
 }
 
-/** The "See all" on a section head: quiet act-ink text, 44 tall. */
+/** The "See all" on a section head: quiet act-ink text, 44 tall. Its box ends at the 16 px gutter (F-130: a `-mr-2` pulled it 8 px past). */
 export const SEE_ALL_CLASS =
-  "t-head -mr-2 flex min-h-11 min-w-11 items-center justify-center rounded-md px-2 text-act-ink outline-none focus-visible:outline-2 focus-visible:outline-act-ink active:opacity-60 [@media(hover:hover)]:hover:bg-raised";
+  "t-head flex min-h-11 min-w-11 items-center justify-end rounded-md text-act-ink outline-none focus-visible:outline-2 focus-visible:outline-act-ink active:opacity-60 [@media(hover:hover)]:hover:opacity-70";
 
 /**
  * The new-person Home (Shell-Home "New person"): the bottle glyph, one line,

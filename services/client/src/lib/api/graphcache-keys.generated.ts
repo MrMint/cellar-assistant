@@ -123,6 +123,7 @@ export const KEYLESS_TYPES = [
   "LinkedBarcodeItem",
   "LngLat",
   "LoggedDrinkPayload",
+  "LovedCounts",
   "MapCluster",
   "MapEntryConnection",
   "MapEntryEdge",

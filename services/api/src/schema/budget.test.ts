@@ -69,6 +69,48 @@ describe("myAiQuota (SV-A)", () => {
     expect(calls).toEqual([]);
   });
 
+  it("F-230: carries Google Places' allowance as its own row, with its service", async () => {
+    const rows: AiQuotaDto[] = [
+      ...quotas,
+      {
+        kind: "google_places",
+        used: 12,
+        limit: 5000,
+        resetsAt: "2026-12-01T00:00:00.000Z",
+      },
+    ];
+    const { invoke } = stubSidecar({
+      "BudgetActor.myQuota": (_id, _ctx, page) =>
+        offsetPage(rows, page as PageArgs),
+    });
+    const result = await run(
+      `{ myAiQuota(first: 20) { ... on AiQuotaConnection {
+        edges { node { kind service used limit } } } } }`,
+      testContext(invoke, viewer),
+    );
+    expect(result.errors).toBeUndefined();
+    expect(result.data?.myAiQuota).toEqual({
+      edges: [
+        {
+          node: {
+            kind: "ai_model/tier_list_insights",
+            service: "AI_MODEL",
+            used: 3,
+            limit: 1500,
+          },
+        },
+        {
+          node: {
+            kind: "google_places",
+            service: "GOOGLE_PLACES",
+            used: 12,
+            limit: 5000,
+          },
+        },
+      ],
+    });
+  });
+
   it("takes no argument naming a user", () => {
     const field = schema.getQueryType()?.getFields().myAiQuota;
     expect(field?.args.map((a) => a.name).sort()).toEqual(

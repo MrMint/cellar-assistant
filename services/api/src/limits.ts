@@ -258,6 +258,11 @@ export const MODEL_BACKED_FIELDS: ReadonlyMap<string, ModelBackedField> =
       "Mutation.requestTierListInsights",
       { via: ["TierListActor.requestInsights"] },
     ],
+    // F-86: enqueues `generateInsights` past the throttle, from READY.
+    [
+      "Mutation.rewriteTierListInsights",
+      { via: ["TierListActor.rewriteInsights"] },
+    ],
     // An embedding it enqueues (`regenerateVector`).
     ["Mutation.createItem", { via: ["ItemActor.create"] }],
     ["Mutation.updateItem", { via: ["ItemActor.update"] }],

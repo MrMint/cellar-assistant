@@ -348,6 +348,12 @@ export const TierListType = TierListLoadable.implement({
         "`tier_lists.list_type` — free text, settable only at creation.",
     }),
     itemCount: t.exposeInt("itemCount"),
+    bandCounts: t.exposeIntList("bandCounts", {
+      description:
+        "F-85: entries per band, indexed by band — `[0]` the bottom band, " +
+        "`[5]` the top — always six long, and adding up to `itemCount` " +
+        "however many entries the list holds (past any page of `items`).",
+    }),
     aiInsights: t.field({
       type: "JSON",
       nullable: true,
@@ -1112,5 +1118,24 @@ builder.mutationField("requestTierListInsights", (t) =>
       context
         .actor(TierListActorDescriptor, String(args.tierListId))
         .requestInsights(),
+  }),
+);
+
+builder.mutationField("rewriteTierListInsights", (t) =>
+  t.field({
+    type: TierListType,
+    description:
+      'F-86: "Rewrite" — write this list\'s Insights afresh once they are ' +
+      "READY, without waiting out the once-a-day throttle. Creator only. From " +
+      "any other status it changes nothing and returns the list as it is. The " +
+      "list reads PENDING until the new write lands. The generation counts " +
+      "against the viewer's `ai_model/tier_list_insights` allowance " +
+      "(`myAiQuota`); a refusal shows as FAILED with reason USER_CAP.",
+    errors: {},
+    args: { tierListId: t.arg.id({ required: true }) },
+    resolve: (_root, args, context) =>
+      context
+        .actor(TierListActorDescriptor, String(args.tierListId))
+        .rewriteInsights(),
   }),
 );

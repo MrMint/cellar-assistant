@@ -384,7 +384,7 @@ function Row({
       <div className="flex min-w-0 flex-1 flex-col">
         <span className="t-head line-clamp-2 text-ink">{title}</span>
         {detail !== undefined && detail !== null && (
-          <span className="t-cap truncate text-ink-2">{detail}</span>
+          <span className="t-cap line-clamp-2 text-ink-2">{detail}</span>
         )}
         {extra}
       </div>

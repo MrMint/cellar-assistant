@@ -86,7 +86,8 @@ export type MapBrowseInput = {
  *
  * **This is the reduced projection §2.4 asks for, and every field earns its
  * place in a renderer.** `search_places_adaptive_cluster` returns 27 columns;
- * the browse path renders nine of them:
+ * the browse path renders nine of them, plus three F-82 reads for the
+ * owner's pin layer (`ratingCount`, `myBand`, `photoFileId`):
  *
  * - `placeId`, `name`, `location` — the feature's id, label and geometry;
  * - `primaryCategory` — `categoryToIcon()`, the marker's glyph;
@@ -96,7 +97,7 @@ export type MapBrowseInput = {
  *
  * Everything else the SQL returns is dropped: `street_address`, `locality`,
  * `region`, `postcode`, `country_code`, `phone`, `website`, `email`, `hours`,
- * `price_level`, `review_count`, `cluster_bounds`, `viewport_area_km2`,
+ * `price_level`, `cluster_bounds`, `viewport_area_km2`,
  * `density_per_km2`, `clustering_applied`. The address and contact block is
  * read by the place drawer, which fetches the place by id (`PlaceActor.get`);
  * the three clustering diagnostics are read by nothing at all.
@@ -117,6 +118,24 @@ export type MapPlace = {
    * folded into a cluster — so "Under review" stays visible at any zoom.
    */
   readonly reviewStatus: PlaceReviewStatus;
+  /**
+   * F-82 (the owner's pin layer). Optional only so marker fixtures written
+   * before it stay valid; `MapActor` always sets all three.
+   * `places.review_count`: how many ratings
+   * `rating` stands on — `0` when none.
+   */
+  readonly ratingCount?: number;
+  /**
+   * F-82: the viewer's own best band (0–5) for this place across every tier
+   * list they created, or null when it is on none of theirs (and always for
+   * an anonymous viewer). Another person's band never reaches this field.
+   */
+  readonly myBand?: number | null;
+  /**
+   * F-82: the place's first mirrored Google photo (lowest `display_order`
+   * with stored bytes), as a `FileActor` id — the API resolves it to a URL.
+   */
+  readonly photoFileId?: string | null;
 };
 
 /** One cluster bubble: a position and a count, and nothing else is drawn. */

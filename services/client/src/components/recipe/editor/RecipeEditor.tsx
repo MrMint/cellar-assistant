@@ -8,7 +8,7 @@ import { AIDraftField } from "@/components/app/AIDraftField";
 import { AppBar } from "@/components/app/AppBar";
 import { ConfirmSheet } from "@/components/app/ConfirmSheet";
 import { IconButton } from "@/components/app/IconButton";
-import { Add, AI, Check, Close, Delete } from "@/components/app/icons";
+import { Add, AI, Check, Close } from "@/components/app/icons";
 import { notify } from "@/components/app/notify";
 import { Page } from "@/components/app/Page";
 import { SegmentedControl } from "@/components/app/SegmentedControl";
@@ -307,7 +307,7 @@ export function RecipeEditor(props: RecipeEditorProps) {
             value={form.name}
             autoComplete="off"
             enterKeyHint="next"
-            placeholder="Negroni"
+            placeholder="Recipe name"
             aria-invalid={
               shownProblems.some((p) => p.field === "name") || undefined
             }
@@ -317,12 +317,17 @@ export function RecipeEditor(props: RecipeEditorProps) {
           />
         </Field>
 
-        <SegmentedControl
-          aria-label="What it makes"
-          value={form.type}
-          onValueChange={(type) => setForm((current) => ({ ...current, type }))}
-          options={TYPE_OPTIONS}
-        />
+        <div className="flex flex-col gap-2">
+          <p className="t-cap m-0 px-1 text-ink-2">What it makes</p>
+          <SegmentedControl
+            aria-label="What it makes"
+            value={form.type}
+            onValueChange={(type) =>
+              setForm((current) => ({ ...current, type }))
+            }
+            options={TYPE_OPTIONS}
+          />
+        </div>
 
         <section
           className="flex flex-col gap-3"
@@ -428,7 +433,7 @@ export function RecipeEditor(props: RecipeEditorProps) {
                     }));
                   }}
                 >
-                  <Delete aria-hidden />
+                  <Close aria-hidden />
                 </IconButton>
               </li>
             ))}
@@ -601,7 +606,7 @@ function IngredientRow({
             onRemove();
           }}
         >
-          <Delete aria-hidden />
+          <Close aria-hidden />
         </IconButton>
       </div>
       {line.match !== null && (

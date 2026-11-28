@@ -100,6 +100,15 @@ export type ItemOnboardingDto = {
   readonly defaults: string | null;
   /** The model's raw text, kept for debugging a bad extraction. */
   readonly rawDefaults: string | null;
+  /**
+   * F-77: the kind of drink the label read says the photographed label is
+   * for, or `null` when it named none (or no read has run). When it differs
+   * from `itemType`, `defaults` is empty — the label was read against the
+   * wrong kind's vocabulary — and the client can start a read as this kind,
+   * so the kind is picked after the shot rather than before it. Read from the
+   * stored completion (`raw_defaults`'s `labelItemType`), its one record.
+   */
+  readonly detectedItemType: ItemType | null;
   readonly aiModel: string | null;
   readonly confidence: number | null;
   readonly lastReprocessResult: string | null;

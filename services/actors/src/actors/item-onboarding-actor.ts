@@ -293,6 +293,32 @@ export const confirmedFieldsOf = (value: unknown): string[] => {
   return out;
 };
 
+/**
+ * F-77: the label read's `labelItemType`, from the completion it stored in
+ * `raw_defaults` — the seam keeps the whole answer there, grounding fields
+ * included, so this is the detected kind's one record and needs no column of
+ * its own. Anything that is not one of the six kinds (`NONE`, an older row's
+ * completion that never asked, text that is not JSON) is `null`.
+ */
+const detectedItemTypeOf = (raw: string | null): ItemType | null => {
+  if (raw === null) return null;
+  // A completion may arrive fenced (```json … ```); the object is the answer.
+  const start = raw.indexOf("{");
+  const end = raw.lastIndexOf("}");
+  if (start === -1 || end < start) return null;
+  let answer: unknown;
+  try {
+    answer = JSON.parse(raw.slice(start, end + 1));
+  } catch {
+    return null;
+  }
+  const value =
+    typeof answer === "object" && answer !== null
+      ? (answer as { labelItemType?: unknown }).labelItemType
+      : undefined;
+  return typeof value === "string" && isItemType(value) ? value : null;
+};
+
 export const onboardingRowToDto = (row: OnboardingRow): ItemOnboardingDto => ({
   id: row.id,
   userId: row.userId,
@@ -306,6 +332,7 @@ export const onboardingRowToDto = (row: OnboardingRow): ItemOnboardingDto => ({
   backLabelImageId: row.backLabelImageId,
   defaults: jsonOrNull(row.defaults),
   rawDefaults: row.rawDefaults,
+  detectedItemType: detectedItemTypeOf(row.rawDefaults),
   aiModel: row.aiModel,
   confidence: row.confidence,
   lastReprocessResult: jsonOrNull(row.lastReprocessResult),
