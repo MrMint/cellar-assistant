@@ -57,7 +57,7 @@ window.matchMedia = ((query: string) => {
 type Sent = { operationName: string; variables: Record<string, unknown> };
 const sent: Sent[] = [];
 /** The server's answer to a save: the draft, or not found (not yours). */
-let saveAnswer: "ok" | "not-found" = "ok";
+let saveAnswer: "ok" | "not-found" | "conflict" = "ok";
 
 globalThis.fetch = (async (_url: unknown, init?: { body?: unknown }) => {
   const body = JSON.parse(String(init?.body ?? "{}")) as {
@@ -84,53 +84,69 @@ globalThis.fetch = (async (_url: unknown, init?: { body?: unknown }) => {
     operationName === "SaveNeedsDetailsDraft"
       ? {
           saveDraft:
-            saveAnswer === "not-found"
+            saveAnswer === "conflict"
               ? {
-                  __typename: "NotFoundError",
-                  code: "NOT_FOUND",
-                  message: "no such onboarding",
+                  __typename: "ConflictError",
+                  code: "CONFLICT",
+                  message: "onboarding is closed (CONFIRMED)",
                   reason: null,
                   retryAt: null,
                 }
-              : {
-                  __typename: "ItemOnboarding",
-                  id: input?.onboardingId,
-                  itemType:
-                    input?.onboardingId === COFFEE_ID ? "COFFEE" : "WINE",
-                  status: "NEEDS_DETAILS",
-                  cellarId: input?.cellarId,
-                  displayName: input?.fields.name ?? null,
-                  displayMaker: input?.fields.brandName ?? null,
-                  draftFields: input?.fields,
-                  confirmedFields: input?.confirmedFields,
-                  vintageAnswer: input?.vintageAnswer,
-                  imageId: null,
-                  updatedAt: "2026-11-27T00:00:00Z",
-                },
+              : saveAnswer === "not-found"
+                ? {
+                    __typename: "NotFoundError",
+                    code: "NOT_FOUND",
+                    message: "no such onboarding",
+                    reason: null,
+                    retryAt: null,
+                  }
+                : {
+                    __typename: "ItemOnboarding",
+                    id: input?.onboardingId,
+                    itemType:
+                      input?.onboardingId === COFFEE_ID ? "COFFEE" : "WINE",
+                    status: "NEEDS_DETAILS",
+                    cellarId: input?.cellarId,
+                    displayName: input?.fields.name ?? null,
+                    displayMaker: input?.fields.brandName ?? null,
+                    draftFields: input?.fields,
+                    confirmedFields: input?.confirmedFields,
+                    vintageAnswer: input?.vintageAnswer,
+                    imageId: null,
+                    updatedAt: "2026-11-27T00:00:00Z",
+                  },
         }
-      : operationName === "ConfirmNeedsDetailsDraft"
+      : operationName === "CloseNeedsDetailsDraft"
         ? {
-            confirmItemOnboarding: {
-              __typename: "ConfirmedItemOnboarding",
-              onboardingId: variables.onboardingId,
-              itemId: "i-1",
-              itemType: "COFFEE",
-              cellarItemId: "ci-1",
+            closeItemOnboarding: {
+              __typename: "ItemOnboarding",
+              id: variables.onboardingId,
+              status: "MATCHED",
             },
           }
-        : operationName === "NeedsDetails"
+        : operationName === "ConfirmNeedsDetailsDraft"
           ? {
-              needsDetailsCount: 4,
-              needsDetails: {
-                __typename: "ItemOnboardingConnection",
-                // The first page's last draft again, then one new one.
-                edges: [MORE_DUPLICATE, MORE_NEW].map((node) => ({
-                  node: { __typename: "ItemOnboarding", ...node },
-                })),
-                pageInfo: { hasNextPage: false, endCursor: null },
+              confirmItemOnboarding: {
+                __typename: "ConfirmedItemOnboarding",
+                onboardingId: variables.onboardingId,
+                itemId: "i-1",
+                itemType: "COFFEE",
+                cellarItemId: "ci-1",
               },
             }
-          : {};
+          : operationName === "NeedsDetails"
+            ? {
+                needsDetailsCount: 4,
+                needsDetails: {
+                  __typename: "ItemOnboardingConnection",
+                  // The first page's last draft again, then one new one.
+                  edges: [MORE_DUPLICATE, MORE_NEW].map((node) => ({
+                    node: { __typename: "ItemOnboarding", ...node },
+                  })),
+                  pageInfo: { hasNextPage: false, endCursor: null },
+                },
+              }
+            : {};
   return new Response(JSON.stringify({ data }), {
     status: 200,
     headers: { "content-type": "application/json" },
@@ -479,5 +495,124 @@ describe("NeedsDetailsScreen", () => {
       "Harbour Pale",
     ]);
     assert.equal(more(), undefined, "no further page");
+  });
+
+  const openDraft = async (title: string) =>
+    click(
+      [...document.querySelectorAll('[data-slot="draft-row"]')].find((b) =>
+        b.textContent?.includes(title),
+      ),
+    );
+  const sheetText = () =>
+    document.querySelector('[data-slot="finish-one"]')?.textContent ?? "";
+  const ops = (name: string) => sent.filter((s) => s.operationName === name);
+
+  test("F-66: Save on a draft that is Ready to add files it as a bottle", async () => {
+    const ready = {
+      ...DRAFTS[2],
+      draftFields: { ...DRAFTS[2]?.draftFields, country: "COLOMBIA" },
+    } as (typeof DRAFTS)[number];
+    await render(
+      <NeedsDetailsScreen
+        cellar={null}
+        count={1}
+        drafts={[ready]}
+        endCursor={null}
+        failed={false}
+      />,
+    );
+    assert.match(document.body.textContent ?? "", /Ready to add/);
+    await openDraft("Morning Field");
+    await click(button("Save"));
+    await flush(20);
+    assert.equal(
+      document.querySelector('[data-slot="finish-one"] [role="alert"]'),
+      null,
+      "no refusal",
+    );
+    assert.deepEqual(rowTitles(), []);
+    assert.equal(toasts.at(-1)?.message, "Saved");
+    await act(async () => toasts.at(-1)?.onAutoClose?.());
+    await flush(20);
+    const confirms = ops("ConfirmNeedsDetailsDraft");
+    assert.equal(confirms.length, 1);
+    assert.equal(confirms[0]?.variables.onboardingId, COFFEE_ID);
+  });
+
+  test("F-67: Save on the last row moves on to the next bottle, not closed", async () => {
+    await render(screen());
+    await openDraft("Morning Field");
+    await select("Origin", "COLOMBIA");
+    await click(button("Save"));
+    await flush(20);
+    assert.match(sheetText(), /Hillside Garnacha/);
+    assert.match(sheetText(), /2 left/);
+  });
+
+  test("F-65: Delete draft takes the row away, offers Undo, and closes it when Undo runs out", async () => {
+    await render(screen());
+    await openDraft("Dockside Rosé");
+    await click(button("Delete draft"));
+    await flush(10);
+    assert.deepEqual(rowTitles(), ["Hillside Garnacha", "Morning Field"]);
+    assert.match(document.body.textContent ?? "", /2 bottles/);
+    assert.equal(toasts.at(-1)?.message, "Draft deleted");
+    assert.equal(
+      ops("CloseNeedsDetailsDraft").length,
+      0,
+      "not until Undo ends",
+    );
+    await act(async () => toasts.at(-1)?.onAutoClose?.());
+    await flush(20);
+    const closes = ops("CloseNeedsDetailsDraft");
+    assert.equal(closes.length, 1);
+    assert.equal(closes[0]?.variables.onboardingId, ROSE_ID);
+  });
+
+  test("F-65: Undo of a delete puts the draft back and writes nothing", async () => {
+    await render(screen());
+    await openDraft("Dockside Rosé");
+    await click(button("Delete draft"));
+    await flush(10);
+    await act(async () => toasts.at(-1)?.undo?.());
+    await flush(20);
+    assert.deepEqual(rowTitles(), [
+      "Hillside Garnacha",
+      "Dockside Rosé",
+      "Morning Field",
+    ]);
+    await act(async () => root.unmount());
+    root = createRoot(container);
+    await flush(20);
+    assert.equal(ops("CloseNeedsDetailsDraft").length, 0);
+  });
+
+  test("F-70: Undo after the bottle was filed says it could not be undone", async () => {
+    await render(screen());
+    await openDraft("Morning Field");
+    await select("Origin", "COLOMBIA");
+    await click(button("Save"));
+    await flush(20);
+    const saved = toasts.at(-1);
+    // Leaving the page files it; the toast (global) stays up.
+    await act(async () => root.unmount());
+    root = createRoot(container);
+    await flush(20);
+    assert.equal(ops("ConfirmNeedsDetailsDraft").length, 1);
+    saveAnswer = "conflict";
+    await act(async () => saved?.undo?.());
+    await flush(20);
+    const last = toasts.at(-1);
+    assert.equal(last?.tone, "error");
+    assert.match(last?.message ?? "", /Couldn't undo/);
+  });
+
+  test("F-72: Maker is the brand picker", async () => {
+    await render(screen());
+    await openDraft("Dockside Rosé");
+    const box = document.querySelector(
+      '[data-slot="finish-one"] [role="combobox"]',
+    );
+    assert.ok(box, "a brand combobox in the sheet");
   });
 });
