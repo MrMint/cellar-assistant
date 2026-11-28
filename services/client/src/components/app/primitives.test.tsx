@@ -503,19 +503,3 @@ describe("SkipLink (X21)", () => {
     assert.doesNotMatch(cls, /(^| )p[xy]?-\d/);
   });
 });
-
-describe("F-173: the glyphs the later rows swap in", () => {
-  test("icons exports them", () => {
-    for (const name of [
-      "Unlink",
-      "Keyboard",
-      "Flashlight",
-      "ArrowUp",
-      "ArrowDown",
-      "Download",
-      "CalendarDays",
-    ]) {
-      assert.ok(name in icons, name);
-    }
-  });
-});

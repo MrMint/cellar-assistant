@@ -333,3 +333,20 @@ describe("fix-b23 rows", () => {
     assert.doesNotMatch(bare, /SLOT/);
   });
 });
+
+describe("F-173: the glyphs the later rows swap in", () => {
+  test("icons exports them", async () => {
+    const icons = await import("../icons");
+    for (const name of [
+      "Unlink",
+      "Keyboard",
+      "Flashlight",
+      "ArrowUp",
+      "ArrowDown",
+      "Download",
+      "CalendarDays",
+    ]) {
+      assert.ok(name in icons, name);
+    }
+  });
+});
