@@ -1,5 +1,4 @@
-import { placeKind } from "../core/map-places";
-import { KIND_GLYPH } from "../core/PlaceFilters";
+import { placeGlyph } from "../core/PlaceFilters";
 import type { PlaceResult } from "../types";
 
 /**
@@ -8,7 +7,7 @@ import type { PlaceResult } from "../types";
  * and the name, no border. The map's places carry no photo yet.
  */
 export function PlacePlate({ place }: { place: PlaceResult }) {
-  const Glyph = KIND_GLYPH[placeKind(place)];
+  const Glyph = placeGlyph(place);
   return (
     <div
       data-slot="place-plate"

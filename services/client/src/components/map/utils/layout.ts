@@ -6,7 +6,8 @@
 
 import type { ViewportInsets } from "../hooks/useViewportInsets";
 
-export const DETAIL_PANEL_WIDTH = 400;
+/** F2a's `DesktopPane` (KIT § 3): the place panel is 440 wide. */
+export const DETAIL_PANEL_WIDTH = 440;
 /** The old shell's rail and bar: only a fallback until the map is measured. */
 export const SIDEBAR_WIDTH = 56;
 export const MOBILE_NAV_HEIGHT = 50;
@@ -17,7 +18,7 @@ export const MOBILE_NAV_HEIGHT = 50;
  *
  * With `insets` (the map's own box, `useViewportInsets`) the map ends where
  * the rail and the tab bar begin, and the drawer is placed against that box
- * (`PlaceDetailsDrawer`): the panel covers the map's first 400 px, and the
+ * (`PlaceDetailsDrawer`): the panel covers the map's first 440 px, and the
  * half sheet the bottom half of the map's height. Without them — before the
  * first measurement — the old shell's geometry, in which the map ran under a
  * 56 px rail and a 50 px bar.

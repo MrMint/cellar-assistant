@@ -101,8 +101,9 @@ export type InfrastructureWriter = (typeof INFRASTRUCTURE_WRITERS)[number];
  * - `lib/profile-store` — B4's declared seam. `UserActor.updateProfile` cannot
  *   call better-auth's session-shaped HTTP API from inside a turn (§2.1 forbids
  *   a network round trip there), so the proxy is at the storage layer instead:
- *   the same three columns better-auth's adapter writes, and nothing else.
- *   `role`, `disabled` and `emailVerified` are deliberately not writable there.
+ *   the profile columns only — `name`, `image`, `avatarFileId`, `locale` and
+ *   `updatedAt` — and nothing else. `role`, `disabled` and `emailVerified` are
+ *   deliberately not writable there.
  *
  * Paths are relative to `services/actors/src`, matched as a file or as a directory
  * prefix — the same rule `writerModule()` gets for an actor.

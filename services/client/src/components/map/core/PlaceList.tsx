@@ -8,8 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import type { PlaceResult, UserLocation } from "../types";
-import { placeKind, placeWhere } from "./map-places";
-import { KIND_GLYPH } from "./PlaceFilters";
+import { placeWhere } from "./map-places";
+import { placeGlyph } from "./PlaceFilters";
 
 /**
  * The map's list (Map board "In view"; desktop/Places): a heading with its
@@ -110,7 +110,7 @@ export function PlaceList({
       </div>
       <ul className="flex flex-col gap-2">
         {places.map((place, index) => {
-          const Glyph = KIND_GLYPH[placeKind(place)];
+          const Glyph = placeGlyph(place);
           const selected = place.id === selectedId;
           return (
             <li key={place.id}>

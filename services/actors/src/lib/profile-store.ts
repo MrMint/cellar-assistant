@@ -15,8 +15,9 @@
  * name the same one), and it is no longer absent from `@cellar-assistant/db`.
  * So this module is now a *rule* rather than a physical necessity — the one
  * place in `services/actors` outside `auth/` that the single-writer containment
- * check lets touch better-auth's tables, holding the surface down to three
- * columns. It reads through `actorDb()`, the process's one pool.
+ * check lets touch better-auth's tables, holding the surface down to the
+ * profile columns `update` writes (`name`, `image`, `avatarFileId`, `locale`
+ * and `updatedAt`). It reads through `actorDb()`, the process's one pool.
  *
  * The practical consequence for callers is that `UserActor`'s `missingProfile`
  * fallback no longer covers a real case: existence and profile are one row now,

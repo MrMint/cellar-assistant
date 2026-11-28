@@ -1062,6 +1062,13 @@ export type RecipeMakeability = {
  * bottle away**: exactly one is. An Unknown counts as missing on purpose: the
  * app cannot vouch for an ingredient it cannot name, and claiming a drink is
  * makeable when it is not is the one wrong answer this screen must not give.
+ *
+ * **Swaps (FR-4).** A recipe that needs a substitute is MAKE_NOW here, on the
+ * server, with `substituteCount` above zero — that is the contract. The client
+ * is the one place that moves it: `splitBar` (client
+ * `components/bar/your-bar/sections.ts`) shows a MAKE_NOW with swaps under
+ * "One bottle away", first, and counts it there. Keep that rule in the client;
+ * do not change this status to make the screen agree.
  */
 export const recipeMakeability = (
   ingredients: readonly MakeabilityIngredient[],
@@ -1089,6 +1096,8 @@ export const recipeMakeability = (
       if (isBarKind(ingredient.kind)) missingKinds.push(ingredient.kind);
     }
   }
+  // A swap is still MAKE_NOW here; the client's `splitBar` reads it as One
+  // bottle away (FR-4, see above).
   const status: MakeabilityStatus =
     missing.length === 0
       ? "MAKE_NOW"

@@ -2,10 +2,23 @@
 
 import { FilterChip } from "@/components/app/FilterChip";
 import { Cocktail, Lists } from "@/components/app/icons";
-import { CoffeeGlyph, FoodGlyph } from "@/components/app/parts/glyphs";
+import {
+  BeerGlyph,
+  CoffeeGlyph,
+  FoodGlyph,
+  SpiritGlyph,
+  WineGlyph,
+} from "@/components/app/parts/glyphs";
 import { feedback } from "@/lib/feedback";
 import { cn } from "@/lib/utils";
-import { FILTER_KINDS, type FilterKind, type PlaceKind } from "./map-places";
+import { categoryToIcon } from "../maplibre/utils/geoJsonTransform";
+import type { PlaceResult } from "../types";
+import {
+  FILTER_KINDS,
+  type FilterKind,
+  type PlaceKind,
+  placeKind,
+} from "./map-places";
 
 /** Each kind's glyph, shared with the rows (Map board). */
 export const KIND_GLYPH = {
@@ -14,6 +27,32 @@ export const KIND_GLYPH = {
   bar: Cocktail,
   other: FoodGlyph,
 } as const;
+
+/** The pin's category icon (`categoryToIcon`) as the kit's row glyph. */
+const PIN_ICON_GLYPH: Record<string, (typeof KIND_GLYPH)[PlaceKind]> = {
+  "poi-wine": WineGlyph,
+  "poi-beer": BeerGlyph,
+  "poi-cocktail": Cocktail,
+  "poi-spirit": SpiritGlyph,
+  "poi-coffee": CoffeeGlyph,
+  "poi-restaurant": FoodGlyph,
+  "poi-default": FoodGlyph,
+};
+
+/**
+ * A place's row glyph: the same picture its pin draws (F-192), so a beer
+ * bar's row shows the beer glyph its pin shows, not the bar kind's glass.
+ * A pin icon the kit draws no glyph for (grocery, hotel) falls back to the
+ * kind's.
+ */
+export function placeGlyph(
+  place: Pick<PlaceResult, "primary_category" | "categories">,
+): (typeof KIND_GLYPH)[PlaceKind] {
+  return (
+    PIN_ICON_GLYPH[categoryToIcon(place.primary_category)] ??
+    KIND_GLYPH[placeKind(place)]
+  );
+}
 
 const KIND_WORDS: Record<FilterKind, { phone: string; desktop: string }> = {
   coffee: { phone: "Coffee", desktop: "Coffee" },
