@@ -16,6 +16,7 @@ import {
 } from "@/components/app/icons";
 import { Link } from "@/components/app/Link";
 import { notify } from "@/components/app/notify";
+import { afterHistorySettles } from "@/components/app/overlays/layers";
 import { TumblerGlyph } from "@/components/app/parts/glyphs";
 import { useNavigate } from "@/components/app/useNavigate";
 import { ApiError } from "@/components/cellar-api/ApiError";
@@ -146,10 +147,14 @@ export const RecipeDetails = ({
       setDeleteFailure(result.error);
       return;
     }
+    // Close first, then leave once the sheet's Back has landed: a replace in
+    // the same tick is undone by that Back, and the page stays (F-45).
     setConfirmingDelete(false);
     notify(isDraft ? "Draft discarded" : `Deleted ${recipe.name}`);
-    navigate.replace("/recipes", { kind: "back" });
-    router.refresh();
+    afterHistorySettles(() => {
+      navigate.replace("/recipes", { kind: "back" });
+      router.refresh();
+    });
   };
   const changed = () => {
     if (onChanged === undefined) router.refresh();

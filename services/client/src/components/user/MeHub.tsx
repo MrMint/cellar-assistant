@@ -24,7 +24,6 @@ import type { ServerUser } from "@/utilities/auth-server";
 import { MeHeader, MeRequestRow } from "./MeLinks";
 import { MeStamps } from "./MeStamps";
 import {
-  BAND_STRIP_MAX,
   type BandCount,
   badgeText,
   type CountTile,
@@ -281,7 +280,7 @@ function TierListRows({
             </PressLink>
           }
           description={
-            list.itemCount > 0 && list.itemCount <= BAND_STRIP_MAX ? (
+            list.itemCount > 0 ? (
               <BandStrip bands={bands[list.id] ?? []} />
             ) : undefined
           }

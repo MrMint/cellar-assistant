@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useClient, useQuery } from "urql";
+import { IconButton } from "@/components/app/IconButton";
 import { More } from "@/components/app/icons";
 import { Link } from "@/components/app/Link";
 import { GlassDisc } from "@/components/app/overlays/GlassDisc";
@@ -21,7 +22,7 @@ export type ItemPaneProps = {
   /**
    * H-115: the item's read, when the pane's owner lifted it (so `⋯` in the
    * desktop pane's own glass discs, `ItemPaneMenu`, shares it). Without one
-   * the pane reads for itself and keeps its own `⋯`.
+   * the pane reads for itself and draws its own `⋯` row above the body.
    */
   source?: ItemPaneSource;
 };
@@ -111,16 +112,13 @@ export function ItemPane({
   if (state.phase === "ready") {
     return (
       <PaneRefreshProvider value={refresh}>
-        <div
-          data-testid="item-pane"
-          // H-115: with the menu in the pane's discs, ItemTop's own `⋯` row
-          // (the first child of the pane body) is not drawn.
-          className={
-            source === undefined
-              ? undefined
-              : "[&_[data-testid=item-pane-body]>:first-child]:hidden"
-          }
-        >
+        <div data-testid="item-pane">
+          {source === undefined && (
+            // H-136: no menu in the pane's discs, so the pane draws its own.
+            <div className="flex justify-end px-4 pt-4">
+              <ItemPaneMenu source={own} plain />
+            </div>
+          )}
           <ItemPageView
             {...state.data}
             selected={null}
@@ -164,20 +162,28 @@ export function ItemPane({
  * H-115: the item's `⋯` as a glass disc for `DesktopPane`'s `more` slot,
  * with the item's menu, from the read the pane's owner lifted.
  */
-export function ItemPaneMenu({ source }: { source: ItemPaneSource }) {
+export function ItemPaneMenu({
+  source,
+  plain = false,
+}: {
+  source: ItemPaneSource;
+  /** A plain icon button, for a pane whose chrome has no `more` slot. */
+  plain?: boolean;
+}) {
   const [open, setOpen] = useState(false);
   const { state, refresh } = source;
   const data = state.phase === "ready" ? state.data : null;
+  const Trigger = plain ? IconButton : GlassDisc;
   return (
     <>
-      <GlassDisc
+      <Trigger
         aria-label="More actions"
         aria-haspopup="dialog"
         disabled={data === null}
         onClick={() => setOpen(true)}
       >
         <More aria-hidden />
-      </GlassDisc>
+      </Trigger>
       {data !== null && (
         <PaneRefreshProvider value={refresh}>
           <ItemMenu

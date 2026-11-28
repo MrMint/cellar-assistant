@@ -70,11 +70,15 @@ afterEach(async () => {
   document.body.innerHTML = "";
 });
 
-const mount = async (client: InstanceType<typeof Client>) => {
+const mount = async (client: InstanceType<typeof Client>, label?: string) => {
   await act(async () =>
     root.render(
       <Provider value={client}>
-        <BrandPicker value="" onChange={(next) => changes.push(next)} />
+        <BrandPicker
+          value=""
+          label={label}
+          onChange={(next) => changes.push(next)}
+        />
       </Provider>,
     ),
   );
@@ -219,5 +223,34 @@ describe("BrandPicker (free-solo combobox)", () => {
     await act(async () => clear.click());
     assert.equal(input.value, "");
     assert.deepEqual(changes, ["Viet", ""]);
+  });
+
+  test("the label names what the field holds when it is not a brand (H-134)", async () => {
+    const input = await mount(answering("Viet", []), "Producer");
+    const label = container.querySelector("label");
+    assert.equal(label?.textContent, "Producer");
+    assert.equal(label?.getAttribute("for"), input.id);
+  });
+
+  test("Clear search shows only when nothing matched, and empties the box (H-134)", async () => {
+    const some = await mount(answering("Viet", ["Vietti"]));
+    await typeInto(some, "Viet");
+    await settle();
+    const clearSearch = () =>
+      [...container.querySelectorAll("button")].find(
+        (button) => button.textContent === "Clear search",
+      );
+    assert.equal(clearSearch(), undefined, "a match is the way on, not Clear");
+
+    changes = [];
+    const none = await mount(answering("Zzyx", []));
+    await typeInto(none, "Zzyx");
+    await settle();
+    const button = clearSearch();
+    assert.ok(button, "no match: Clear search is one tap back");
+    await act(async () => button.click());
+    assert.equal(none.value, "");
+    assert.deepEqual(changes, ["Zzyx", ""]);
+    assert.equal(clearSearch(), undefined);
   });
 });

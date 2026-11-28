@@ -89,7 +89,7 @@ test("a new place is saved at once, and only its creator can see it", async ({
 
   await page.goto(`/map/create-place?lat=${lat}&lng=${lng}`);
   await expect(
-    page.getByRole("heading", { name: "Add a new place" }),
+    page.getByRole("heading", { name: "Add a place" }),
   ).toBeVisible();
   await expect(page.getByText("Loading address...")).toBeHidden({
     timeout: 30_000,

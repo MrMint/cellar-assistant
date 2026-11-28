@@ -536,19 +536,24 @@ export class UserActor
   /* ---------------------------------------------------------------------- */
 
   /**
-   * Every `friends` row touching this user, in **both** directions: the owned
-   * half from the aggregate, the mirrored half read fresh.
+   * Every `friends` row touching this user, in **both** directions, read
+   * fresh.
    *
-   * One indexed select on `friends.friend_id`. Deliberately not cached — the
-   * whole of the module doc's "Only the rows this actor *writes* are cached".
+   * The owned half is fresh too, not the aggregate's copy: `removeFriend`
+   * on the other side deletes this user's row in its own transaction, and
+   * this activation only hears of it when the outbox delivers
+   * `removeFriendOtherSide`. A check made in that window read the deleted
+   * row and answered "already friends". An invite accepted then wrote
+   * nothing, and the friendship never reached the inviter (FR-11,
+   * m06-share). Still not cached, per the module doc's "Only the rows this
+   * actor *writes* are cached": another actor deletes these rows as well.
    */
   async #friendRows(): Promise<readonly FriendRow[]> {
-    const { ownFriends } = this.requireAggregate();
-    const reverse = await this.db
+    this.requireAggregate();
+    return await this.db
       .select()
       .from(friends)
-      .where(eq(friends.friendId, this.key));
-    return [...ownFriends, ...reverse];
+      .where(or(eq(friends.userId, this.key), eq(friends.friendId, this.key)));
   }
 
   /**
