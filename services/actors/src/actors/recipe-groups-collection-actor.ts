@@ -74,6 +74,7 @@ import type {
 import {
   BAR_KIND_KEYS,
   BAR_KINDS,
+  COMMUNITY_PICK_MIN_NET,
   ITEM_TYPES,
   isBarKind,
   isItemType,
@@ -103,6 +104,7 @@ import { ARCS } from "../lib/item-arcs.ts";
 import { ingredientRowToDto } from "../lib/recipe-ingredients.ts";
 import {
   type RecipeScope,
+  recipeRefVisibleSql,
   recipeScope,
   recipeVisibleSql,
 } from "../lib/recipe-visibility.ts";
@@ -118,6 +120,8 @@ type GroupRow = {
   readonly image_url: string | null;
   readonly created_by_id: string | null;
   readonly canonical_recipe_id: string | null;
+  /** F-88: `communityPickOf` in SQL, named only when the viewer may see it. */
+  readonly community_pick_id: string | null;
   readonly recipe_count: string | number;
   readonly created_at: Date | string | null;
   readonly updated_at: Date | string | null;
@@ -350,6 +354,7 @@ export class RecipeGroupsCollectionActor
           imageUrl: row.image_url,
           createdById: row.created_by_id,
           canonicalRecipeId: row.canonical_recipe_id,
+          communityPickId: row.community_pick_id,
           recipeCount: Number(row.recipe_count),
           createdAt: toIso(row.created_at),
           updatedAt: toIso(row.updated_at),
@@ -419,6 +424,28 @@ export class RecipeGroupsCollectionActor
                select 1 from public.recipes r
                where r.id = g.canonical_recipe_id and ${recipeVisibleSql(scope)}
              ) then g.canonical_recipe_id end as canonical_recipe_id,
+             -- F-88 / MC-pick: communityPickOf (recipe-group-actor.ts)
+             -- over the whole group — net votes from people other than the
+             -- version's author, at least the floor, never a draft, the
+             -- oldest winning a tie — then named only when visible (X15).
+             (select pick.id from (
+                select pr.id from public.recipes pr
+                cross join lateral (
+                  select coalesce(sum(
+                           case when v.vote_type = 'upvote' then 1 else -1 end
+                         ), 0) as net
+                  from public.recipe_votes v
+                  where v.recipe_id = pr.id
+                    and v.user_id is distinct from pr.created_by_id
+                ) votes
+                where pr.recipe_group_id = g.id
+                  and not pr.is_draft
+                  and votes.net >= ${COMMUNITY_PICK_MIN_NET}
+                order by votes.net desc, pr.created_at asc, pr.id asc
+                limit 1
+              ) pick
+              where ${recipeRefVisibleSql(scope, sql`pick.id`)}
+             ) as community_pick_id,
              g.created_at, g.updated_at,
              (${ORDERS.NEWEST.sort})::text as sort_key,
              (select count(*) from public.recipes r
