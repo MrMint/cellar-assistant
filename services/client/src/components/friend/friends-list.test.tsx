@@ -16,8 +16,10 @@ GlobalRegistrator.register({ url: "http://localhost/friends" });
 (
   globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
 ).IS_REACT_ACT_ENVIRONMENT = true;
+/** The width the page sees: false is a phone, true is `md` and up. */
+let wide = false;
 window.matchMedia = ((query: string) => ({
-  matches: false,
+  matches: wide,
   media: query,
   onchange: null,
   addEventListener: () => {},
@@ -150,11 +152,35 @@ mock.module("./FriendPane", () => ({ FriendPane: () => null }));
 const { act } = await import("react");
 const { createRoot } = await import("react-dom/client");
 const { FriendsClient } = await import("./FriendsClient");
+const { handleAppKey } = await import("@/components/app/overlays/app-keys");
+
+const shell = {
+  navigate: () => {},
+  openKeys: () => {},
+  openMore: () => {},
+  focusSearch: () => false,
+};
+/** A key through the app element's dispatcher: whether the shell took it
+ * (and so prevented the browser's default). */
+const press = (key: string, target: EventTarget = document.body) =>
+  handleAppKey(
+    {
+      key,
+      metaKey: false,
+      ctrlKey: false,
+      altKey: false,
+      target,
+      preventDefault: () => {},
+    },
+    shell,
+    { armed: false },
+  );
 
 let container: HTMLElement;
 let root: ReturnType<typeof createRoot>;
 
 beforeEach(() => {
+  wide = false;
   lists.friends = [];
   lists.INCOMING = [];
   lists.OUTGOING = [];
@@ -257,5 +283,30 @@ describe("/friends", () => {
       { name: "SendFriendRequest", variables: { userId: "u-6" } },
     ]);
     assert.deepEqual(toasts, ["Request sent to Demo Six"]);
+  });
+
+  // F-90 (CD-3): the list's keys are desktop keys. On a phone they are the
+  // browser's (arrows scroll), and Enter on a focused button presses it.
+  test("on a phone the arrows and Enter stay the browser's", async () => {
+    lists.friends = [
+      { since: "2026-10-01T00:00:00Z", user: person("u-2", "Test Two") },
+    ];
+    await render();
+    assert.equal(press("ArrowDown"), false);
+    assert.equal(press("ArrowUp"), false);
+    assert.equal(press("Enter"), false);
+  });
+
+  test("Enter on a focused button presses it, at every width", async () => {
+    wide = true;
+    lists.friends = [
+      { since: "2026-10-01T00:00:00Z", user: person("u-2", "Test Two") },
+    ];
+    lists.INCOMING = [
+      { id: "r-in", status: "PENDING", user: person("u-3", "Demo Three") },
+    ];
+    await render();
+    assert.equal(press("Enter", byLabel("Accept Demo Three")), false);
+    assert.equal(press("ArrowDown"), true, "the desktop list keeps J/K");
   });
 });

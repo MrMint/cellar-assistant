@@ -244,9 +244,11 @@ export const FriendsClient = () => {
     });
 
   // Desktop keys (KIT § 3): J/K and the arrows move the cursor through the
-  // friends; Enter opens the chosen one's page.
-  const move = (step: 1 | -1) => {
-    if (!desktop || friendRows.length === 0) return;
+  // friends; Enter opens the chosen one's page. Below `md` there is no
+  // cursor, so each declines (`false`) and the key stays the browser's: the
+  // arrows scroll, Enter presses what has focus (F-90).
+  const move = (step: 1 | -1): boolean => {
+    if (!desktop || friendRows.length === 0) return false;
     const at = friendRows.findIndex((row) => row.user.id === selectedId);
     const next =
       friendRows[Math.min(friendRows.length - 1, Math.max(0, at + step))];
@@ -254,13 +256,16 @@ export const FriendsClient = () => {
       feedback("tick");
       setChosen(next.user.id);
     }
+    return true;
   };
   useAppKey("ArrowDown", () => move(1));
   useAppKey("j", () => move(1));
   useAppKey("ArrowUp", () => move(-1));
   useAppKey("k", () => move(-1));
   useAppKey("Enter", () => {
-    if (desktop && selectedId !== null) navigate.push(`/users/${selectedId}`);
+    if (!desktop || selectedId === null) return false;
+    navigate.push(`/users/${selectedId}`);
+    return true;
   });
 
   const searchData: SearchResult | undefined = searchResult.data;
