@@ -49,6 +49,7 @@ import {
   FIELD_CONFIDENCE_KEY,
   INGREDIENT_ROLES,
   ITEM_ATTRIBUTE_KEY,
+  ITEM_TYPES,
   type ItemType,
   isRecipeType,
   RECIPE_TYPES,
@@ -320,7 +321,15 @@ const ANSWER_GROUNDING = new Set([
   // X05: what the photo is of, not a value for the item. Read by
   // `requireLegibleLabel` on an abstention; kept in `raw` like the other two.
   "surfaceKind",
+  // F-77: the kind the label is for; returned as `detectedItemType`.
+  "labelItemType",
 ]);
+
+/** F-77: the model's `labelItemType`, or `null` for `NONE` or anything else. */
+const detectedItemTypeOf = (value: unknown): ItemType | null =>
+  typeof value === "string" && (ITEM_TYPES as readonly string[]).includes(value)
+    ? (value as ItemType)
+    : null;
 
 /**
  * Whether the answer proposes a value for `field` — at the top level (`name`,
@@ -403,6 +412,20 @@ export const providerItemDefaults =
       "high",
     );
     const answer = parseModelJson(content, "item defaults");
+    const detectedItemType = detectedItemTypeOf(answer.labelItemType);
+    if (detectedItemType !== null && detectedItemType !== request.itemType) {
+      // F-77: another kind's label. Its values were read against this kind's
+      // schema and vocabulary, so none is kept; the kind is the answer.
+      const result: ItemDefaultsResult = {
+        defaults: {},
+        raw: content,
+        model: metadata.model,
+        confidence: 0,
+        brandName: null,
+        detectedItemType,
+      };
+      return result;
+    }
     requireLegibleLabel({
       itemType: request.itemType,
       // The model is asked the *positive* question, because a negatively-named
@@ -458,6 +481,7 @@ export const providerItemDefaults =
       model: metadata.model,
       confidence: confidence(defaults.confidence, 0.5),
       brandName: str(defaults.brandName),
+      detectedItemType,
     };
     return result;
   };

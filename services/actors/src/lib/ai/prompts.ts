@@ -613,6 +613,20 @@ export const itemDefaultsSchema = (
         "menu, a drinks or wine list, or a price list; `other` for " +
         "anything else (a page, a screen, a receipt, a blank image).",
     },
+    // F-77: fourth, behind the verdict and the surface (nothing may sit
+    // between `imageDescription` and `labelIsLegible`), before any value.
+    // Optional, and answered even on a false verdict: a beer can photographed
+    // while a wine is being added is not "no label", it is the wrong kind.
+    labelItemType: {
+      type: "string",
+      enum: [...ITEM_TYPES, "NONE"],
+      description:
+        "Answer this even when labelIsLegible is false. Which kind of drink " +
+        "the container in the image holds, from its own label: WINE, BEER, " +
+        "SPIRIT, COFFEE, SAKE or TEA. NONE when the image shows no drink " +
+        `container's label. You were told this is a ${type.toLowerCase()}; ` +
+        "say what the label actually shows, even if it is another kind.",
+    },
     name: string_("The product name exactly as printed on the label."),
     description: string_("2-3 sentences describing the product."),
     brandName: string_(
