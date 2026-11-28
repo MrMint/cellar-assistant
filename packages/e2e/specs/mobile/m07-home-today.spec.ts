@@ -238,11 +238,14 @@ test("/ is Home: one h1, and its search field opens the search sheet and comes b
   await expect(
     page.getByRole("heading", { name: "Search", level: 1 }),
   ).toBeVisible();
-  await expect(page.getByRole("textbox").first()).toBeVisible();
-  // A full-screen sheet: no tab bar under it.
-  await expect(page.locator('nav[data-slot="tab-bar"]')).toHaveCount(0);
+  await expect(page.getByRole("searchbox").first()).toBeVisible();
+  // FR-2: the tab bar shows on /search, and the Close control is gone.
+  await expect(page.locator('nav[data-slot="tab-bar"]')).toBeVisible();
+  await expect(page.getByRole("button", { name: "Close search" })).toHaveCount(
+    0,
+  );
 
-  await page.getByRole("button", { name: "Close search" }).tap();
+  await page.goBack();
   await expect(page).toHaveURL(HOME_URL);
   await expect(page.locator('nav[data-slot="tab-bar"]')).toBeVisible();
 });
@@ -284,6 +287,12 @@ test("Drink soon: a sealed bottle whose own date is close, with Open and Undo (L
   const sealed = section
     .locator('[data-kind="drink-soon-sealed"]')
     .filter({ hasText: names.sealed });
+  // Drink soon shows four rows; other runs' sealed teas may fill them.
+  const more = section.getByRole("button", { name: /^Show \d+ more$|^Show more/ });
+  await expect(section).toBeVisible({ timeout: 20_000 });
+  if (!(await sealed.isVisible()) && (await more.count()) > 0) {
+    await more.first().click();
+  }
   await expect(sealed).toBeVisible({ timeout: 20_000 });
   await expect(sealed).toContainText(
     `Sealed · your date: drink by ${inAMonth.label}`,

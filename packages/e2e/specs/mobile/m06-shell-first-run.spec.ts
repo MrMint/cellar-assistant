@@ -29,11 +29,11 @@ test("Me: your tier lists, Top rated, Loved, Friends — no Recipes or Brands ro
 });
 
 test("re-tapping the lit tab pops to its root (X01)", async ({ page }) => {
-  await page.goto("/me");
-  await page.getByRole("main").getByRole("link", { name: "Top rated" }).click();
-  await expect(page).toHaveURL(/\/rankings/);
-  // Top rated belongs to Me, so Me is lit there; tapping it again goes home
-  // to the hub rather than doing nothing.
+  // Loved belongs to Me (so do Want to try, Friends, Taste profile), so Me is
+  // lit there; tapping it again goes home to the hub rather than doing
+  // nothing. /rankings lights Lists, not Me.
+  await page.goto("/favorites");
+  await expect(page).toHaveURL(/\/favorites/);
   const me = page
     .getByRole("navigation", { name: "Main" })
     .getByRole("link", { name: "Me", exact: true });
@@ -42,29 +42,29 @@ test("re-tapping the lit tab pops to its root (X01)", async ({ page }) => {
   await expect(page).toHaveURL(/\/me$/);
 });
 
-test("the Cellar tab is Cellars · Bar, and Bar is recipes (D1)", async ({
+test("the Cellars strip is Cellars · Your bar, a one-way door to recipes (D1, FR-5)", async ({
   page,
 }) => {
   await page.goto("/cellars");
-  const segments = page.getByRole("navigation", { name: "Cellar" });
+  const segments = page.getByRole("navigation", {
+    name: "Cellars or Your bar",
+  });
   await expect(segments.getByRole("link", { name: "Cellars" })).toHaveAttribute(
     "aria-current",
     "page",
   );
   await expect(page.getByRole("region", { name: "Yours" })).toBeVisible();
-  await segments.getByRole("link", { name: "Bar" }).click();
+  await segments.getByRole("link", { name: "Your bar" }).click();
   await expect(page).toHaveURL(/\/recipes/);
+  // The Recipes boards draw no switch, and no tab is lit but More.
   await expect(
-    page.getByRole("navigation", { name: "Cellar" }).getByRole("link", {
-      name: "Bar",
-    }),
-  ).toHaveAttribute("aria-current", "page");
-  // Still the Cellar tab.
+    page.getByRole("navigation", { name: "Cellars or Your bar" }),
+  ).toHaveCount(0);
   await expect(
     page
       .getByRole("navigation", { name: "Main" })
-      .getByRole("link", { name: "Cellar" }),
-  ).toHaveAttribute("aria-current", "page");
+      .getByRole("link", { name: "Cellars" }),
+  ).not.toHaveAttribute("aria-current", "page");
 });
 
 test("a brand-new account: lands Home, has My Cellar, and every empty screen offers one thing to do (N15)", async ({
@@ -88,10 +88,10 @@ test("a brand-new account: lands Home, has My Cellar, and every empty screen off
       (await email.count()) === 0,
       "this stack does not offer password sign-up (AUTH_PASSWORD_MODE)",
     );
-    await page.getByLabel("Display name").fill("First Run");
+    await page.getByLabel("Name", { exact: true }).fill("First Run");
     await email.fill(`e2e-first-run-${randomUUID()}@test.com`);
     await page.getByLabel("Password").fill(`pw-${randomUUID()}`);
-    await page.getByRole("button", { name: "Sign up", exact: true }).click();
+    await page.getByRole("button", { name: "Create account", exact: true }).click();
 
     // X01/X10: Home "Today" at `/` — not /cellars, and not /search any more.
     await expect(page).toHaveURL(/^https?:\/\/[^/]+\/(?:\?.*)?$/, {
@@ -117,32 +117,32 @@ test("a brand-new account: lands Home, has My Cellar, and every empty screen off
       });
     }).toPass({ timeout: 30_000 });
     // Nobody else's cellar is among the new account's own.
-    await expect(yours.getByRole("link", { name: "My Cellar" })).toHaveCount(1);
+    await expect(yours.locator('[data-slot="cellar-card"]')).toHaveCount(1);
 
     // An empty cellar: one line, one action.
-    await yours.getByRole("link", { name: "My Cellar" }).click();
-    await expect(page.getByText("Your cellar is waiting.")).toBeVisible();
+    await yours.getByRole("link", { name: "My Cellar", exact: true }).click();
+    await expect(page.getByText("Nothing in My Cellar yet")).toBeVisible();
     await expect(
-      page.getByRole("link", { name: "Snap a bottle" }),
+      page.getByRole("link", { name: "Add a bottle" }),
     ).toBeVisible();
 
     await page.goto("/tier-lists");
-    await expect(page.getByText("Nothing ranked yet.")).toBeVisible();
+    await expect(page.getByText(/Nothing ranked yet/)).toBeVisible();
     await expect(
-      page.getByRole("region", { name: "Yours" }).getByRole("link", {
-        name: "New tier list",
+      page.getByRole("region", { name: "Yours" }).getByRole("button", {
+        name: "New list",
       }),
     ).toBeVisible();
 
     await page.goto("/friends");
-    await expect(page.getByText("Taste is better compared.")).toBeVisible();
+    await expect(page.getByText("No friends yet")).toBeVisible();
     await expect(
-      page.getByRole("button", { name: "Invite a friend" }),
+      page.getByRole("button", { name: "Invite" }).last(),
     ).toBeVisible();
 
     // Top rated opens on Me, and Me has rated nothing yet.
     await page.goto("/rankings");
-    await expect(page.getByText("Nothing rated yet.")).toBeVisible({
+    await expect(page.getByText(/Nothing rated yet/)).toBeVisible({
       timeout: 20_000,
     });
 
