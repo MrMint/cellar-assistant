@@ -343,6 +343,7 @@ describe("rows", () => {
               displayName: "Alonzo",
               avatarUrl: null,
               relation: "REQUEST_RECEIVED",
+              pendingRequestId: "req-2",
             },
           },
           {
@@ -364,13 +365,18 @@ describe("rows", () => {
           "Alonzo",
           "Wants to be friends",
           undefined,
-          { userId: "u2", name: "Alonzo", relation: "REQUEST_RECEIVED" },
+          {
+            userId: "u2",
+            name: "Alonzo",
+            relation: "REQUEST_RECEIVED",
+            requestId: "req-2",
+          },
         ],
         [
           "Alberta",
           undefined,
           undefined,
-          { userId: "u3", name: "Alberta", relation: "NONE" },
+          { userId: "u3", name: "Alberta", relation: "NONE", requestId: null },
         ],
       ],
     );

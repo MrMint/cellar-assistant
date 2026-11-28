@@ -252,6 +252,7 @@ export const SearchPeopleSectionQuery = graphql(
             displayName
             avatarUrl
             relation
+            pendingRequestId
           }
         }
       }
@@ -335,6 +336,8 @@ export type SearchRow = {
     readonly userId: string;
     readonly name: string;
     readonly relation: Exclude<PersonRelation, "FRIEND">;
+    /** The open request between you, for Cancel or Accept (F-43, F-105). */
+    readonly requestId: string | null;
   };
 };
 
@@ -689,7 +692,12 @@ export const peopleRows = (
       ...(relation === "FRIEND"
         ? { href: `/users/${encodeURIComponent(node.userId)}` }
         : {
-            person: { userId: node.userId, name: node.displayName, relation },
+            person: {
+              userId: node.userId,
+              name: node.displayName,
+              relation,
+              requestId: node.pendingRequestId ?? null,
+            },
           }),
     };
   });

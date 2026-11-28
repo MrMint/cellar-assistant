@@ -59,6 +59,7 @@ function PersonResult({ row }: { row: SearchRow }) {
         name={row.person.name}
         avatarUrl={row.thumb.kind === "avatar" ? row.thumb.url : null}
         relation={row.person.relation}
+        requestId={row.person.requestId}
       />
     );
   }
