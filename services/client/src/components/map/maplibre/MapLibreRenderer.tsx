@@ -25,7 +25,7 @@ import { MapBottomStack } from "../core/MapBottomStack";
 import { MapErrorBanner } from "../core/MapErrorBanner";
 import { MapPlacesColumn, MapPlacesDock } from "../core/MapPlaces";
 import { MapShell } from "../core/MapShell";
-import { matchesKinds } from "../core/map-places";
+import { matchesKinds, quickLookIndex } from "../core/map-places";
 import { PlaceQuickLook } from "../core/PlaceQuickLook";
 import { MapPlacePane } from "../desktop/MapPlacePane";
 import {
@@ -200,11 +200,18 @@ export function MapLibreRenderer({
     if (list.query !== "") setDetent("full");
   }, [list.query]);
 
-  // The quick look's place, by its index in the list (phone).
-  const [peek, setPeek] = useState<number | null>(null);
+  // The quick look's place, held by id (phone): the list re-sorts on every
+  // location fix, so an index could swap the open card (F-193).
+  const [peekId, setPeekId] = useState<string | null>(null);
+  const peek = quickLookIndex(list.places, peekId);
+  const setPeek = useCallback(
+    (index: number | null) =>
+      setPeekId(index === null ? null : (list.places[index]?.id ?? null)),
+    [list.places],
+  );
   // Open page lands on `?placeId=` (the drawer): the quick look gives way.
   useEffect(() => {
-    if (searchParams.placeId) setPeek(null);
+    if (searchParams.placeId) setPeekId(null);
   }, [searchParams.placeId]);
 
   const placeHref = useCallback(
@@ -378,9 +385,8 @@ export function MapLibreRenderer({
   const openPlace = useCallback(
     (place: PlaceResult) => {
       if (!isDesktop) {
-        const index = list.places.findIndex((p) => p.id === place.id);
-        if (index >= 0) {
-          setPeek(index);
+        if (list.places.some((p) => p.id === place.id)) {
+          setPeekId(place.id);
           return;
         }
       }
@@ -500,7 +506,7 @@ export function MapLibreRenderer({
   const handleAddPlace = useCallback(() => {
     pendingPlaceNameRef.current = listQuery || null;
     if (listQuery !== "") clearSearch();
-    setPeek(null);
+    setPeekId(null);
     mapActions.enterPinPlacement();
   }, [listQuery, clearSearch, mapActions]);
 
@@ -731,7 +737,7 @@ export function MapLibreRenderer({
           index={peek ?? 0}
           open={peek !== null}
           onOpenChange={(open) => {
-            if (!open) setPeek(null);
+            if (!open) setPeekId(null);
           }}
           onIndexChange={setPeek}
           hrefFor={placeHref}

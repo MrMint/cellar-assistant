@@ -6,6 +6,17 @@ import type { PlaceResult } from "../types";
 import { useMapActions, useMapUI } from "./useMapMachine";
 import { useMapSearchParams } from "./useMapSearchParams";
 
+/**
+ * Whether the URL just took the open place away (Back): `?placeId=` went
+ * from a value to none. A null placeId alone is not that: a pick sets the
+ * selection at once and its `?placeId=` a render later, so closing on "null
+ * while open" closed every desktop pick as it opened (F-190).
+ */
+export const urlClosedPlace = (
+  previous: string | null,
+  next: string | null,
+): boolean => previous !== null && next === null;
+
 interface UseMapPlaceSelectionOptions {
   isDesktop: boolean;
   detailDrawerRef: RefObject<PlaceDetailsDrawerRef | null>;
@@ -63,8 +74,11 @@ export function useMapPlaceSelection({
   }, [mapActions]);
 
   // Sync: browser back removes placeId → close drawer
+  const previousPlaceIdRef = useRef(searchParams.placeId);
   useEffect(() => {
-    if (!searchParams.placeId && isDrawerOpen) {
+    const previous = previousPlaceIdRef.current;
+    previousPlaceIdRef.current = searchParams.placeId;
+    if (urlClosedPlace(previous, searchParams.placeId) && isDrawerOpen) {
       mapActions.closeDrawer();
     }
   }, [searchParams.placeId, isDrawerOpen, mapActions]);
