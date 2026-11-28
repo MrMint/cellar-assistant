@@ -95,8 +95,12 @@ describe("the route shells", () => {
   test("Cellars: the bar's title and a live Add cellar link", () => {
     const out = html(<CellarsShell />);
     assert.match(out, />Cellars</);
-    assert.match(out, /<a[^>]*href="\/cellars\/add"[^>]*>.*Add cellar/);
-    assert.equal(out.match(/rounded-lg bg-surface-1 p-4/g)?.length, 5);
+    assert.match(out, /<a[^>]*href="\/cellars\/add"[^>]*>.*New cellar/);
+    assert.equal(
+      out.match(/overflow-hidden rounded-lg border border-line bg-card/g)
+        ?.length,
+      3,
+    );
     // The page's Cellars | Bar segment (X11) and its Yours section title,
     // so the cards land where the shell drew them.
     assert.match(out, /data-slot="cellar-segments"/);

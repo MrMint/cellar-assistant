@@ -35,7 +35,7 @@ export function CellarSegments({
 }) {
   return (
     <nav
-      aria-label="Cellar"
+      aria-label="Cellars or Your bar"
       data-slot="cellar-segments"
       className={cn(
         "flex w-full items-stretch gap-0.5 rounded-md bg-surface-2 p-0.5 sm:max-w-80",
@@ -51,10 +51,7 @@ export function CellarSegments({
             underline="none"
             aria-current={active ? "page" : undefined}
             className={cn(
-              "relative flex min-h-10 min-w-0 flex-1 items-center justify-center rounded-[10px] px-3 font-medium text-sm outline-none transition-colors duration-(--ca-dur-micro) ease-standard focus-visible:ring-[3px] focus-visible:ring-ring/50",
-              // 40 px tall, with the hit area reaching the group's padding:
-              // 44 px in all (design §3.3).
-              "after:absolute after:inset-x-0 after:-inset-y-0.5 after:content-['']",
+              "flex min-h-11 min-w-0 flex-1 items-center justify-center rounded-[10px] px-3 font-medium text-sm outline-none transition-colors duration-(--ca-dur-micro) ease-standard focus-visible:ring-[3px] focus-visible:ring-ring/50",
               active
                 ? "bg-surface-3 text-ink-1 shadow-sm"
                 : "text-ink-2 hover:text-ink-1 active:bg-surface-3",
