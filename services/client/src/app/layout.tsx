@@ -13,7 +13,7 @@ import {
   readThemeChoice,
   THEME_COLOR,
   THEME_SCRIPT,
-  themeAttribute,
+  themeHtmlProps,
 } from "@/lib/theme";
 import "./globals.css";
 // B05 route motion; after globals.css, and its own file (L26).
@@ -84,14 +84,15 @@ export default async function RootLayout({
 }) {
   const choice = readThemeChoice(await cookies());
   return (
-    // The theme is rendered from the `theme` cookie (L9), and THEME_SCRIPT
-    // re-reads it before first paint (Phone resolves the OS's scheme; the
-    // precached offline page follows the cookie, L45). It runs before
-    // hydration and may change the attribute, hence suppressHydrationWarning.
+    // The choice comes from the `theme` cookie (L9); THEME_SCRIPT sets
+    // data-theme from it before first paint (Phone resolves the OS's scheme;
+    // the precached offline page follows the cookie, L45). The server never
+    // renders data-theme: React would patch it back on every router.refresh()
+    // (CA-1). The script adds it before hydration, hence
+    // suppressHydrationWarning.
     <html
       lang="en"
-      data-theme={themeAttribute(choice)}
-      data-theme-choice={choice}
+      {...themeHtmlProps(choice)}
       className={inter.variable}
       suppressHydrationWarning
     >

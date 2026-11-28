@@ -33,16 +33,24 @@ const NAME_ERROR = "Needs a name";
  * else's: neither document names a person (`avatar.test.ts`).
  *
  * `onCancel` draws the sheet's quiet "Not now" at the left of the footer;
- * `onDone` runs after a save (the sheet closes, the page stays).
+ * `onDone` runs after a save (the sheet closes, the page stays);
+ * `onSavingChange` tells the sheet a save is running, so it can't be closed
+ * under it (F-131).
+ *
+ * A refused save says so in the form and in a toast. Each write is done once:
+ * when the photo lands and the name is then refused, Save again sends only
+ * the name, never a second upload (F-131).
  */
 export function ProfileEditor({
   profile,
   onDone,
   onCancel,
+  onSavingChange,
 }: {
   profile: EditableProfile;
   onDone?: () => void;
   onCancel?: () => void;
+  onSavingChange?: (saving: boolean) => void;
 }) {
   const nameId = useId();
   const router = useRouter();
@@ -58,6 +66,11 @@ export function ProfileEditor({
   const [removing, setRemoving] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // What this editor has already written, so a retry skips it.
+  const written = useRef<{ photo: File | null; removed: boolean }>({
+    photo: null,
+    removed: false,
+  });
 
   useEffect(() => {
     if (photo === null) {
@@ -81,15 +94,18 @@ export function ProfileEditor({
       return;
     }
     setSaving(true);
+    onSavingChange?.(true);
     setError(null);
     try {
-      if (photo !== null)
+      if (photo !== null && written.current.photo !== photo) {
         await saveAvatar(photo, avatarDeps(client, setAvatar));
-      else if (removing) {
+        written.current = { photo, removed: false };
+      } else if (photo === null && removing && !written.current.removed) {
         const result = await removeAvatar({});
         if (result.data?.removeAvatar.__typename !== "UserProfile") {
           throw new Error(result.error?.message ?? "Couldn't remove the photo");
         }
+        written.current = { photo: null, removed: true };
       }
       if (nameChanged) {
         const result = await updateProfile({ input: { displayName: trimmed } });
@@ -110,9 +126,12 @@ export function ProfileEditor({
       onDone?.();
     } catch (cause) {
       feedback("refuse");
-      setError(cause instanceof Error ? cause.message : "Couldn't save");
+      const message = cause instanceof Error ? cause.message : "Couldn't save";
+      setError(message);
+      notify(`Couldn't save your profile: ${message}`, { tone: "error" });
     } finally {
       setSaving(false);
+      onSavingChange?.(false);
     }
   };
 

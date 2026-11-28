@@ -71,6 +71,10 @@ export const MakeMode = ({ recipe, viewerId }: MakeModeProps) => {
   const keepsAwake = useWakeLock(loggedId === null);
   const timers = useStepTimers(steps);
   const swipeFrom = useRef<number | null>(null);
+  // The id of the log Made it is trying to write. Minted once per log and
+  // kept until it lands, so Try again after a lost response re-sends the
+  // same id: the API treats that as the same log (§8.4), never a second.
+  const pendingLogId = useRef<string | null>(null);
 
   const total = steps.length;
   const stepIndex = stage - 1;
@@ -106,10 +110,11 @@ export const MakeMode = ({ recipe, viewerId }: MakeModeProps) => {
   };
 
   const madeIt = async () => {
+    pendingLogId.current ??= crypto.randomUUID();
     const result = unwrapResult(
       (
         await logDrink({
-          id: crypto.randomUUID(),
+          id: pendingLogId.current,
           input: madeItInput(recipe.id),
         })
       ).data?.logDrink,
@@ -125,6 +130,7 @@ export const MakeMode = ({ recipe, viewerId }: MakeModeProps) => {
       return;
     }
     const entryId = result.data.entry.id;
+    pendingLogId.current = null;
     feedback("success");
     setLoggedId(entryId);
     notify(`${recipe.name} logged`, {

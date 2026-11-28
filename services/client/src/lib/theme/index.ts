@@ -3,11 +3,16 @@
  *
  * - A `theme` cookie holds the choice (`dark | light | phone`; unset is
  *   Phone, the default for a new visitor).
- * - The server renders `<html data-theme>` from it (`readThemeChoice`,
- *   `themeAttribute`), and `THEME_SCRIPT`, inline at the top of `<head>`,
- *   re-reads the cookie before first paint for every choice, so the precached
- *   offline page follows the person's theme too. For Phone it resolves
- *   `prefers-color-scheme` and follows its changes.
+ * - The server renders `<html data-theme-choice>` from it (`readThemeChoice`,
+ *   `themeHtmlProps`), and `THEME_SCRIPT`, inline at the top of `<head>`,
+ *   sets `data-theme` from the cookie before first paint for every choice, so
+ *   the precached offline page follows the person's theme too. For Phone it
+ *   resolves `prefers-color-scheme` and follows its changes.
+ * - The server never renders `data-theme` (CA-1). React patches every
+ *   attribute it renders on each `router.refresh()`, and Phone can't be
+ *   resolved on the server, so a server value overwrote the script's: Light,
+ *   then Phone with the OS light, then any refresh, and the app went dark.
+ *   Until the script runs, `:root` is the dark theme.
  * - Client code reads and writes it with `useThemeChoice` /
  *   `useResolvedTheme` from `@/lib/theme/client`.
  *
@@ -56,11 +61,15 @@ export function resolveTheme(
 }
 
 /**
- * The `data-theme` the server renders. Phone cannot be resolved on the server,
- * so it renders dark and the pre-paint script corrects it before first paint.
+ * The theme attributes the server renders on `<html>`: the choice only. The
+ * choice is exact on the server (it is the cookie) and `setThemeChoice` writes
+ * the same value, so React's patch on a refresh is a no-op. `data-theme` is
+ * left to the pre-paint script and `setThemeChoice`, which can see the OS.
  */
-export function themeAttribute(choice: ThemeChoice): ResolvedTheme {
-  return resolveTheme(choice, false);
+export function themeHtmlProps(choice: ThemeChoice): {
+  "data-theme-choice": ThemeChoice;
+} {
+  return { "data-theme-choice": choice };
 }
 
 /** `Set-Cookie`-shaped string the client writes (`document.cookie = …`). */
@@ -92,7 +101,7 @@ function prePaint(dark: string, lite: string): void {
     if (q.addEventListener) q.addEventListener("change", apply);
     document.addEventListener("DOMContentLoaded", apply);
   } catch (_) {
-    // No cookie access or no matchMedia: the server's attribute stands.
+    // No cookie access or no matchMedia: `:root`'s dark theme stands.
   }
 }
 
