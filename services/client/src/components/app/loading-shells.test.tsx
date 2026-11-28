@@ -120,7 +120,7 @@ describe("the route shells", () => {
     const out = html(<MapShell />);
     assert.match(out, /data-slot="map-shell"/);
     assert.match(out, /bg-surface-1/);
-    assert.match(out, />Search places\.\.\.</);
+    assert.match(out, />Search places</);
     assert.doesNotMatch(out, /Loading map/);
     const waiting = html(<MapShell status="Getting your location..." />);
     assert.match(waiting, />Getting your location\.\.\.</);
