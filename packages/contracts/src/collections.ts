@@ -702,6 +702,49 @@ export const isProfileFilter = (value: unknown): value is ProfileFilter =>
   Object.keys(value).length === 1;
 
 /**
+ * F-51: whose latest activity to read — a page of the viewer's friends, by
+ * user id. At most {@link LATEST_ACTIVITY_MAX_IDS}; an id that is not one of
+ * the viewer's friends answers `null`, like a friend with nothing visible.
+ */
+export type LatestActivityFilter = { readonly latestOf: readonly string[] };
+
+/** The most ids one {@link LatestActivityFilter} may carry (a friends page). */
+export const LATEST_ACTIVITY_MAX_IDS = 100;
+
+export const isLatestActivityFilter = (
+  value: unknown,
+): value is LatestActivityFilter =>
+  typeof value === "object" &&
+  value !== null &&
+  Array.isArray((value as { latestOf?: unknown }).latestOf) &&
+  Object.keys(value).length === 1;
+
+/**
+ * F-94: the person whose mutual friends with the viewer to count — any
+ * profile the viewer may see (`canSeeProfile`), friend or not.
+ */
+export type MutualFriendsFilter = { readonly mutualWith: string };
+
+export const isMutualFriendsFilter = (
+  value: unknown,
+): value is MutualFriendsFilter =>
+  typeof value === "object" &&
+  value !== null &&
+  typeof (value as { mutualWith?: unknown }).mutualWith === "string" &&
+  Object.keys(value).length === 1;
+
+/**
+ * F-94: the viewer's own friends who are also friends of someone — how many,
+ * and the first by name (the locked profile's "Friend of …"). Only ever the
+ * viewer's own friends, so it names nobody the viewer does not already know.
+ */
+export type MutualFriendsDto = {
+  readonly count: number;
+  /** The first mutual friend by display name, or `null` with none. */
+  readonly firstUserId: string | null;
+};
+
+/**
  * The one answer every refused profile gets — not a friend, no such user,
  * yourself, or not a user id at all. One message for all of them, so the
  * answer is never an oracle for whether an account exists (D24).
@@ -810,6 +853,27 @@ export type FriendsCollectionActorInterface = {
     filter: ProfileFilter,
     page: PageArgs,
   ): Promise<Page<ItemCheckInDto>>;
+  /**
+   * F-51 — **projection**: each friend's newest activity entry, aligned to
+   * `filter.latestOf`, by `recentActivity`'s rules for every kind (a PRIVATE
+   * list's entry, a hidden cellar's bottle or a log `canSeeCheckIn` refuses
+   * never counts). `null` for a friend with nothing visible and for an id that
+   * is not a friend. One statement per kind for the whole page.
+   */
+  latestActivity(
+    ctx: Ctx,
+    filter: LatestActivityFilter,
+  ): Promise<readonly (ActivityEntryDto | null)[]>;
+  /**
+   * F-94: the viewer's friends who are also `filter.mutualWith`'s friends.
+   * Answered for anyone `canSeeProfile` admits, friend or not; the viewer
+   * themself, an id that names nobody and a malformed id all answer
+   * `{ count: 0, firstUserId: null }`, so it is no oracle for an account.
+   */
+  mutualFriends(
+    ctx: Ctx,
+    filter: MutualFriendsFilter,
+  ): Promise<MutualFriendsDto>;
 };
 
 export const FriendsCollectionActorDescriptor: ActorDescriptor<FriendsCollectionActorInterface> =
@@ -825,6 +889,8 @@ export const FriendsCollectionActorDescriptor: ActorDescriptor<FriendsCollection
       profileTierLists: {},
       profileCellars: {},
       profileLogs: {},
+      latestActivity: {},
+      mutualFriends: {},
     },
   };
 

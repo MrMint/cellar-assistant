@@ -859,3 +859,156 @@ describe.skipIf(skip)(
     });
   },
 );
+
+describe.skipIf(skip)(
+  "FriendsCollectionActor — latest activity and mutual friends (F-51, F-94)",
+  () => {
+    afterAll(closeTestDb);
+
+    const actorOf = (db: DbOrTx, viewer: string) =>
+      activate(createActor(FriendsCollectionActor, viewer, db));
+
+    const ago = async (
+      db: DbOrTx,
+      table: "item_reviews" | "tier_list_items" | "cellar_items",
+      where: ReturnType<typeof sql>,
+      minutesAgo: number,
+    ) => {
+      await db.execute(sql`
+        update ${sql.identifier("public")}.${sql.identifier(table)}
+        set created_at = now() - make_interval(mins => ${minutesAgo})
+        where ${where}
+      `);
+    };
+
+    it("F-51: each friend's newest entry the viewer may see, aligned, and null for a stranger", async () => {
+      await withTestDb(async (db) => {
+        const viewer = await seedUser(db);
+        const ana = await seedUser(db);
+        const ben = await seedUser(db);
+        const cai = await seedUser(db);
+        const stranger = await seedUser(db);
+        for (const friend of [ana, ben, cai]) {
+          await seedFriendship(db, viewer, friend);
+        }
+        const wine = await seedWine(db, ana, "F-51 wine");
+
+        // Ana: a review, then a bottle in a PUBLIC cellar — the bottle wins.
+        await seedItemReview(db, ana, wine, 4);
+        await ago(db, "item_reviews", sql`user_id = ${ana}::uuid`, 30);
+        const anaCellar = await seedCellar(db, {
+          createdById: ana,
+          privacy: "PUBLIC",
+        });
+        const anaBottle = await seedCellarItem(db, anaCellar, ana, wine);
+        await ago(db, "cellar_items", sql`id = ${anaBottle}::uuid`, 10);
+
+        // Ben: a review, then a bottle in a PRIVATE cellar — the review wins.
+        await seedItemReview(db, ben, wine, 3);
+        await ago(db, "item_reviews", sql`user_id = ${ben}::uuid`, 60);
+        const benCellar = await seedCellar(db, {
+          createdById: ben,
+          privacy: "PRIVATE",
+        });
+        const benBottle = await seedCellarItem(db, benCellar, ben, wine);
+        await ago(db, "cellar_items", sql`id = ${benBottle}::uuid`, 1);
+
+        // Cai: only an entry on a PRIVATE list — nothing to show.
+        const place = await seedPlace(db, { name: "P", lng: 0, lat: 0 });
+        const caiList = await seedTierList(db, {
+          createdById: cai,
+          privacy: "PRIVATE",
+        });
+        await seedTierListPlace(db, caiList, place);
+
+        // A stranger's activity is never read, though the id is asked for.
+        await seedItemReview(db, stranger, wine, 5);
+
+        const actor = await actorOf(db, viewer);
+        const latest = await actor.latestActivity(userCtx(viewer, "r"), {
+          latestOf: [ana, ben, cai, stranger],
+        });
+        expect(latest.map((entry) => entry?.kind ?? null)).toEqual([
+          "ADDED",
+          "REVIEWED",
+          null,
+          null,
+        ]);
+        expect(latest[0]?.cellarItemId).toBe(anaBottle);
+        expect(latest[0]?.userId).toBe(ana);
+        expect(latest[1]?.userId).toBe(ben);
+        expect(actor.queryCount).toBe(1);
+      });
+    });
+
+    it("F-51: refuses another viewer, a malformed id list and more than a page", async () => {
+      await withTestDb(async (db) => {
+        const viewer = await seedUser(db);
+        const other = await seedUser(db);
+        const actor = await actorOf(db, viewer);
+        await expect(
+          actor.latestActivity(userCtx(other, "r"), { latestOf: [] }),
+        ).rejects.toBeInstanceOf(ForbiddenError);
+        await expect(
+          actor.latestActivity(userCtx(viewer, "r"), {
+            latestOf: ["not-a-uuid"],
+          }),
+        ).rejects.toBeInstanceOf(ValidationError);
+        await expect(
+          actor.latestActivity(userCtx(viewer, "r"), {
+            latestOf: Array.from({ length: 101 }, () => randomUUID()),
+          }),
+        ).rejects.toBeInstanceOf(ValidationError);
+        expect(
+          await actor.latestActivity(userCtx(viewer, "r"), { latestOf: [] }),
+        ).toEqual([]);
+      });
+    });
+
+    it("F-94: counts the viewer's own friends who are the other's friends, for a non-friend, first by name", async () => {
+      await withTestDb(async (db) => {
+        const viewer = await seedUser(db);
+        const target = await seedUser(db);
+        const zed = await seedUser(db, { displayName: "Zed F94" });
+        const amy = await seedUser(db, { displayName: "Amy F94" });
+        const onlyTargets = await seedUser(db);
+        const onlyMine = await seedUser(db);
+        for (const mutual of [zed, amy]) {
+          await seedFriendship(db, viewer, mutual);
+          await seedFriendship(db, mutual, viewer);
+        }
+        await seedFriendship(db, viewer, onlyMine);
+        // Both directions of the target's side, one mid-handshake.
+        await seedFriendship(db, target, zed);
+        await seedFriendship(db, amy, target);
+        await seedFriendship(db, target, onlyTargets);
+
+        const actor = await actorOf(db, viewer);
+        const ctx = userCtx(viewer, "r");
+        expect(await actor.mutualFriends(ctx, { mutualWith: target })).toEqual({
+          count: 2,
+          firstUserId: amy,
+        });
+        // The target's friends the viewer does not know are never named.
+        const none = { count: 0, firstUserId: null };
+        const nobody = await seedUser(db);
+        expect(await actor.mutualFriends(ctx, { mutualWith: nobody })).toEqual(
+          none,
+        );
+        // Yourself, an id that names nobody and a malformed one: one answer.
+        expect(await actor.mutualFriends(ctx, { mutualWith: viewer })).toEqual(
+          none,
+        );
+        expect(
+          await actor.mutualFriends(ctx, { mutualWith: randomUUID() }),
+        ).toEqual(none);
+        expect(
+          await actor.mutualFriends(ctx, { mutualWith: "not-a-uuid" }),
+        ).toEqual(none);
+        await expect(
+          actor.mutualFriends(userCtx(target, "r"), { mutualWith: viewer }),
+        ).rejects.toBeInstanceOf(ForbiddenError);
+      });
+    });
+  },
+);
