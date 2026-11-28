@@ -583,6 +583,38 @@ describe.skipIf(skip)("TierListActor (B7)", () => {
         // say a hidden place is on the list.
         expect((await actor.get(userCtx(creator, "r3"))).itemCount).toBe(2);
         expect((await actor.get(userCtx(stranger, "r4"))).itemCount).toBe(1);
+        // F-85: the band counts agree with the rows the same way.
+        expect((await actor.get(userCtx(creator, "r5"))).bandCounts).toEqual([
+          2, 0, 0, 0, 0, 0,
+        ]);
+        expect((await actor.get(userCtx(stranger, "r6"))).bandCounts).toEqual([
+          1, 0, 0, 0, 0, 0,
+        ]);
+      });
+    });
+
+    it("F-85: bandCounts holds one count per band, bottom (0) to top (5), past any page size", async () => {
+      await withTestDb(async (db) => {
+        const owner = await seedUser(db);
+        const id = await seedTierList(db, { createdById: owner });
+        const actor = await activate(newTierListActor(id, db));
+        const layout: Array<[band: number, n: number]> = [
+          [5, 3],
+          [3, 1],
+          [0, 2],
+        ];
+        for (const [band, n] of layout) {
+          for (let i = 0; i < n; i += 1) {
+            const placeId = await seedPlace(db, `Bar ${band}-${i}`);
+            await actor.addItem(userCtx(owner, `r-${band}-${i}`), {
+              entry: { type: "PLACE", id: placeId },
+              band,
+            });
+          }
+        }
+        const dto = await actor.get(userCtx(owner, "read"));
+        expect(dto.bandCounts).toEqual([2, 0, 0, 1, 0, 3]);
+        expect(dto.bandCounts.reduce((a, b) => a + b, 0)).toBe(dto.itemCount);
       });
     });
   });
@@ -1625,6 +1657,144 @@ describe.skipIf(skip)("TierListActor (B7)", () => {
           expect(
             (await visible.actor.get(userCtx(owner, "r"))).insightsStatus,
           ).toBe("IDLE");
+        }),
+      );
+    });
+  });
+
+  /* ------------------------------------------------------------------ */
+  /* F-86: rewriteInsights — a fresh write once READY                    */
+  /* ------------------------------------------------------------------ */
+
+  describe("rewriteInsights (F-86)", () => {
+    const withInsights = async <T>(run: () => Promise<T>): Promise<T> => {
+      setAiCapabilities({ ...NO_AI_CAPABILITIES, tierListInsights: true });
+      try {
+        return await run();
+      } finally {
+        setAiCapabilities(NO_AI_CAPABILITIES);
+      }
+    };
+
+    /** A list of three wines whose insights were written just now: READY. */
+    const seedReadyList = async (db: DbOrTx, owner: string) => {
+      let calls = 0;
+      const generator: InsightsGenerator = async () => {
+        calls += 1;
+        return { summary: `take ${calls}` };
+      };
+      const id = await seedTierList(db, { createdById: owner });
+      const actor = await activate(newTierListActor(id, db, generator));
+      for (const name of ["A", "B", "C"]) {
+        const wineId = await seedWine(db, owner, name);
+        await actor.addItem(userCtx(owner, `add-${wineId}`), {
+          entry: { type: "WINE", id: wineId },
+        });
+      }
+      await actor.generateInsights(systemCtx("first"));
+      await db.delete(outbox).where(eq(outbox.targetId, id));
+      const reopen = () => activate(newTierListActor(id, db, generator));
+      return { id, actor, calls: () => calls, reopen };
+    };
+
+    const pendingRowsOf = async (db: DbOrTx, id: string) =>
+      db
+        .select({
+          payload: outbox.payload,
+          attributedTo: outbox.attributedTo,
+        })
+        .from(outbox)
+        .where(and(eq(outbox.targetId, id), eq(outbox.status, "pending")));
+
+    it("asks for a fresh write from READY, inside the daily throttle, attributed to the owner", async () => {
+      await withInsights(() =>
+        withTestDb(async (db) => {
+          const owner = await seedUser(db);
+          const { id, actor, calls } = await seedReadyList(db, owner);
+          const me = userCtx(owner, "rewrite");
+          expect((await actor.get(me)).insightsStatus).toBe("READY");
+          expect(calls()).toBe(1);
+
+          const asked = await actor.rewriteInsights(me);
+          expect(asked.insightsStatus).toBe("PENDING");
+          expect(await pendingRowsOf(db, id)).toEqual([
+            { payload: { rewrite: true }, attributedTo: owner },
+          ]);
+
+          // The delivery carries the rewrite, so the throttle does not skip it.
+          const result = await actor.generateInsights(systemCtx("deliver"), {
+            rewrite: true,
+          });
+          expect(result).toMatchObject({ skipped: false, reason: "generated" });
+          expect(calls()).toBe(2);
+          const after = await actor.get(me);
+          expect(after.insightsStatus).toBe("READY");
+          expect(after.aiInsights).toEqual({ summary: "take 2" });
+
+          // A plain redelivery inside the throttle still skips.
+          expect(
+            await actor.generateInsights(systemCtx("again")),
+          ).toMatchObject({ skipped: true, reason: "throttled" });
+          expect(calls()).toBe(2);
+        }),
+      );
+    });
+
+    it("turns a refresh already waiting out the throttle into the rewrite, leaving one row", async () => {
+      await withInsights(() =>
+        withTestDb(async (db) => {
+          const owner = await seedUser(db);
+          const seeded = await seedReadyList(db, owner);
+          const { id } = seeded;
+          // An edit inside the throttle: the delivery defers to tomorrow.
+          await db
+            .update(tierLists)
+            .set({ contentUpdatedAt: new Date(Date.now() + 1000) })
+            .where(eq(tierLists.id, id));
+          const actor = await seeded.reopen();
+          await actor.generateInsights(systemCtx("throttled"));
+          expect(await pendingRowsOf(db, id)).toHaveLength(1);
+
+          await actor.rewriteInsights(userCtx(owner, "rewrite"));
+          const rows = await pendingRowsOf(db, id);
+          expect(rows).toHaveLength(1);
+          expect(rows[0]?.payload).toEqual({ rewrite: true });
+          const [due] = await db
+            .select({ runAfter: outbox.runAfter })
+            .from(outbox)
+            .where(and(eq(outbox.targetId, id), eq(outbox.status, "pending")));
+          expect((due?.runAfter ?? new Date(0)).getTime()).toBeLessThanOrEqual(
+            Date.now() + 1000,
+          );
+        }),
+      );
+    });
+
+    it("is a no-op unless READY, and refuses anybody but the owner", async () => {
+      await withInsights(() =>
+        withTestDb(async (db) => {
+          const owner = await seedUser(db);
+          const stranger = await seedUser(db);
+          const id = await seedTierList(db, {
+            createdById: owner,
+            privacy: "PUBLIC",
+          });
+          const empty = await activate(newTierListActor(id, db));
+          expect(
+            (await empty.rewriteInsights(userCtx(owner, "r"))).insightsStatus,
+          ).toBe("NOT_ENOUGH_ENTRIES");
+          expect(await outboxRowsFor(db, id)).toEqual([]);
+
+          const ready = await seedReadyList(db, owner);
+          await db
+            .update(tierLists)
+            .set({ privacy: "PUBLIC" })
+            .where(eq(tierLists.id, ready.id));
+          const reopened = await ready.reopen();
+          await expect(
+            reopened.rewriteInsights(userCtx(stranger, "r")),
+          ).rejects.toBeInstanceOf(ForbiddenError);
+          expect(await outboxRowsFor(db, ready.id)).toEqual([]);
         }),
       );
     });

@@ -122,6 +122,14 @@ export type TierListDto = {
   readonly listType: string;
   /** Cheap: `loadAggregate` reads every `tier_list_items` row on activate. */
   readonly itemCount: number;
+  /**
+   * F-85: how many entries sit in each band, indexed by band — `[0]` the
+   * bottom band (`MIN_BAND`), `[5]` the top (`MAX_BAND`) — always six long.
+   * Counts the same entries `itemCount` does (an entry for a place under
+   * review is its creator's alone, X27), so the six add up to `itemCount`
+   * however many entries the list holds, past any page of `items`.
+   */
+  readonly bandCounts: readonly number[];
   /** `ai_insights`, `generateInsights`'s output. `null` until first generated. */
   readonly aiInsights: Record<string, unknown> | null;
   readonly insightsGeneratedAt: string | null;
@@ -589,6 +597,16 @@ export type TierListActorInterface = {
   requestInsights(ctx: Ctx): Promise<TierListDto>;
 
   /**
+   * F-86: "Rewrite" — ask for a fresh write of insights that are READY,
+   * without waiting out the once-a-day throttle. Creator only, like
+   * `requestInsights`; from any other status it is a no-op that returns the
+   * list as it is. The list reads `PENDING` until the new write lands. The
+   * generation is attributed to the caller and counts against their
+   * `ai_model/tier_list_insights` allowance, which is what bounds how often.
+   */
+  rewriteInsights(ctx: Ctx): Promise<TierListDto>;
+
+  /**
    * `system`, via the outbox — replaces the `tier_list_items_content_changed`
    * trigger plus the `generate_tier_list_insights` event trigger. Enqueued by
    * every content-changing write, never by `update`. Idempotent by
@@ -629,6 +647,8 @@ export const TierListActorDescriptor: ActorDescriptor<TierListActorInterface> =
       redo: { modelBacked: true },
       // SV-A: enqueues `generateInsights` from IDLE.
       requestInsights: { modelBacked: true },
+      // F-86: enqueues `generateInsights` past the throttle, from READY.
+      rewriteInsights: { modelBacked: true },
       generateInsights: {},
     },
   };

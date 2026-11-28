@@ -17,7 +17,7 @@
  *
  * ## The projection is exactly C2's, and it is not widened here
  *
- * `MapPlace` is nine fields and `MapCluster` is three, and
+ * `MapPlace` is thirteen fields (F-82 added three) and `MapCluster` is three, and
  * `packages/contracts/src/views.ts` justifies each one against a renderer:
  * `primaryCategory` picks the marker glyph, `categories` (plural — it is the
  * whole array, not the primary repeated) drives `calculateItemTypeMatches`,
@@ -60,6 +60,7 @@ import type {
   MapPlace,
 } from "@cellar-assistant/contracts";
 import {
+  FileActorDescriptor,
   ForbiddenError,
   isMapCluster,
   MAP_RESULT_CAP,
@@ -67,6 +68,7 @@ import {
   mapActorId,
 } from "@cellar-assistant/contracts";
 import { builder } from "./builder.ts";
+import { FileType } from "./file.ts";
 import { connectionFromPage, toPageArgs } from "./pagination.ts";
 import { LngLatType, PlaceReviewStatusEnum, reviewStatusOut } from "./place.ts";
 import { MapBoundsInput, VisitStatusEnum } from "./place-search.ts";
@@ -77,7 +79,7 @@ import { MapBoundsInput, VisitStatusEnum } from "./place-search.ts";
 
 const MapPlaceType = builder.objectRef<MapPlace>("MapPlace").implement({
   description:
-    "One place marker. Ten fields, every one of them read by the marker " +
+    "One place marker. Thirteen fields, every one of them read by the marker " +
     "renderer (§2.4); the address and contact block lives on `Place` and is " +
     "fetched by id when the drawer opens.",
   fields: (t) => ({
@@ -117,6 +119,30 @@ const MapPlaceType = builder.objectRef<MapPlace>("MapPlace").implement({
         "are the viewer's own places under review — drawn as their own " +
         "markers, never clustered — and appear on nobody else's map.",
       resolve: (place) => reviewStatusOut(place.reviewStatus),
+    }),
+    ratingCount: t.exposeInt("ratingCount", {
+      description:
+        "F-82: how many ratings `rating` stands on (`places.review_count`); " +
+        "0 when none.",
+    }),
+    myBand: t.exposeInt("myBand", {
+      nullable: true,
+      description:
+        "F-82: the viewer's own best band (0–5) for this place across the " +
+        "tier lists they created — the owner's pin rank. Null when it is on " +
+        "none of theirs; never another person's band.",
+    }),
+    photo: t.field({
+      type: FileType,
+      nullable: true,
+      description:
+        "F-82: the place's first mirrored Google photo. One actor call per " +
+        "marker that selects it, so ask for `photo { url }` only on the pins " +
+        "or rows you draw a photo for.",
+      resolve: (place, _args, context) =>
+        place.photoFileId === null
+          ? null
+          : context.actor(FileActorDescriptor, place.photoFileId).get(),
     }),
   }),
 });
