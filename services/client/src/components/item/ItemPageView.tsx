@@ -241,13 +241,10 @@ export function ItemPageView({
             itemName={item.name}
             bottles={shownBottles}
             addableCellars={addableCellars}
-            total={
-              bottlesTotal === null || bottlesTotal === undefined
-                ? null
-                : // `myBottles` counts bottles still in the cellar, so only a
-                  // finished selected bottle is one it did not count.
-                  bottlesTotal + (owned && selected.emptyAt !== null ? 1 : 0)
-            }
+            // `myBottles` counts bottles still in the cellar, which is what
+            // the header counts (F-152): a finished selected bottle is
+            // listed, not counted.
+            total={bottlesTotal ?? null}
             selectedId={owned ? selected.id : null}
           />
         )}

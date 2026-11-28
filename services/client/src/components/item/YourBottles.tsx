@@ -85,14 +85,20 @@ const dateLine = (bottle: YourBottle): ReactNode => {
   );
 };
 
-/** "3 in Home" when every bottle is in one cellar; "3 bottles" otherwise. */
+/**
+ * "3 in Home" when every bottle is in one cellar; "3 bottles" otherwise.
+ * Only bottles still in the cellar count (F-152): a finished one the URL
+ * names is listed, but it is no longer "in Home".
+ */
 const countLine = (
   type: ApiItemType,
   bottles: readonly YourBottle[],
-  count: number,
+  total: number | null | undefined,
 ): string | null => {
-  if (count === 0) return null;
-  const names = bottles.map((bottle) => bottle.cellarName);
+  const inCellar = bottles.filter((bottle) => bottle.emptyAt === null);
+  const count = total ?? inCellar.length;
+  if (count === 0 || inCellar.length === 0) return null;
+  const names = inCellar.map((bottle) => bottle.cellarName);
   const only = names[0];
   return names.every((name) => name === only) &&
     only !== null &&
@@ -180,7 +186,7 @@ export function YourBottles({
       <div className="flex min-h-11 items-center gap-2">
         <h2 className="t-head text-ink">{yourContainersLabel(itemType)}</h2>
         <span className="t-body tabular min-w-0 flex-1 truncate text-ink-2">
-          {countLine(itemType, bottles, total ?? bottles.length)}
+          {countLine(itemType, bottles, total)}
         </span>
         {canAdd && bottles.length > 0 && (
           <Button variant="quiet" onClick={() => setAdding(true)}>

@@ -227,11 +227,7 @@ export const AddReview = ({
         >
           {editing ? "Save" : "Add"}
         </LoadingButton>
-        <Button
-          variant="outline"
-          disabled={isPending}
-          onClick={cancel}
-        >
+        <Button variant="outline" disabled={isPending} onClick={cancel}>
           Cancel
         </Button>
         {editing && (
