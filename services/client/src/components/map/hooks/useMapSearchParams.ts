@@ -112,6 +112,8 @@ export function useMapSearchParams() {
     minRating,
     visitStatuses: parseVisitStatuses(rawVisitStatuses),
     tierLists: tierListIdsFromUrl({ list, tierLists: rawTierLists }),
+    /** L40 / F-191: the `?list=<id>` a list's Map link carries, or null. */
+    list,
     placeId,
     globalSearch,
     kinds: kindsFromUrl(rawKinds),

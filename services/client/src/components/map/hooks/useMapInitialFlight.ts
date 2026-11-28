@@ -11,6 +11,8 @@ interface UseMapInitialFlightOptions {
   userLocation: { latitude: number; longitude: number } | null;
   locationLoading: boolean;
   cachedLocation?: { latitude: number; longitude: number } | null;
+  /** F-191: a list's link opens on the list; the location must not pull it away. */
+  suppressFlight?: boolean;
 }
 
 /**
@@ -27,6 +29,7 @@ export function useMapInitialFlight({
   userLocation,
   locationLoading,
   cachedLocation,
+  suppressFlight = false,
 }: UseMapInitialFlightOptions) {
   const hasFlownRef = useRef(false);
 
@@ -34,6 +37,7 @@ export function useMapInitialFlight({
   // Without mapReady, the effect fires on the same render the Map mounts
   // but before onLoad — flyTo silently fails on an unloaded map.
   useEffect(() => {
+    if (suppressFlight) return;
     if (userLocation && !hasFlownRef.current && mapRef.current && mapReady) {
       hasFlownRef.current = true;
       mapRef.current.flyTo({
@@ -42,7 +46,7 @@ export function useMapInitialFlight({
         duration: 600,
       });
     }
-  }, [userLocation, mapReady, mapRef]);
+  }, [userLocation, mapReady, mapRef, suppressFlight]);
 
   // Capture initial view state once geolocation resolves.
   // A ref (not useMemo) is used because useMemo([], []) would compute
