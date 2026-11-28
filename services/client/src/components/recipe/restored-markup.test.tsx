@@ -255,7 +255,7 @@ describe("RecipeGroupCard (restored)", () => {
     assert.doesNotMatch(html, /★|Featured:|\+1 more/);
   });
 
-  test("no photo: the kit's recipe face", () => {
+  test("no photo: the glass glyph alone, not a clipped label plate (F-113)", () => {
     const plain = render(
       <RecipeGroupCard
         recipeGroup={{
@@ -269,7 +269,8 @@ describe("RecipeGroupCard (restored)", () => {
         }}
       />,
     );
-    assert.match(plain, /data-face="recipe"/);
+    assert.match(plain, /data-slot="recipe-thumb"/);
+    assert.doesNotMatch(plain, /data-slot="label-plate"/);
     assert.doesNotMatch(plain, /versions?</);
   });
 });

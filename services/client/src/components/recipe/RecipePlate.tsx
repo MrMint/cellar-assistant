@@ -1,4 +1,6 @@
+import { Restaurant } from "@/components/app/icons";
 import { LabelPlate } from "@/components/app/LabelPlate";
+import { TumblerGlyph } from "@/components/app/parts/glyphs";
 import { cn } from "@/lib/utils";
 import type { GlassIngredient } from "./glass-colors";
 
@@ -45,14 +47,37 @@ export function RecipePlate({
 export function RecipeThumb({
   type,
   name = "",
+  glyphOnly = false,
   className,
 }: {
   type: string;
   ingredients?: readonly GlassIngredient[];
   /** The recipe's name, drawn on the plate when the thumb is 75 px or more. */
   name?: string;
+  /**
+   * Draw the kind glyph alone, whatever the size: a row or card thumb that
+   * is wider than 75 px would otherwise draw a clipped label plate (the
+   * boards draw a glass, or a fork and knife for food).
+   */
+  glyphOnly?: boolean;
   className?: string;
 }) {
+  if (glyphOnly) {
+    const Glyph = type === "food" ? Restaurant : TumblerGlyph;
+    return (
+      <span
+        aria-hidden
+        data-slot="recipe-thumb"
+        data-recipe-type={type === "food" ? "food" : "cocktail"}
+        className={cn(
+          "relative flex size-full items-center justify-center overflow-hidden bg-raised",
+          className,
+        )}
+      >
+        <Glyph aria-hidden strokeWidth={1.25} className="size-1/2 text-glyph" />
+      </span>
+    );
+  }
   return (
     <span
       aria-hidden

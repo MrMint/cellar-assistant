@@ -63,7 +63,7 @@ export const RecipeGroupCard = memo<RecipeGroupCardProps>(
               className="absolute inset-0 size-full object-cover"
             />
           ) : (
-            <RecipeThumb type="cocktail" name={recipeGroup.name} />
+            <RecipeThumb type="cocktail" name={recipeGroup.name} glyphOnly />
           )}
         </div>
         <div className="flex min-w-0 flex-1 flex-col justify-center gap-0.5 px-4 py-3">

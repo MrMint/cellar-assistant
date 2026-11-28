@@ -118,7 +118,7 @@ describe("Sound and haptics (MC-feedback)", () => {
 });
 
 describe("rows", () => {
-  test("Edit profile, Use my location and Sign out are there; Install only when offered", () => {
+  test("Edit profile, Use my location and Sign out are there; Install stays, with how-to words, where the browser cannot install", () => {
     const text = container.textContent ?? "";
     for (const label of [
       "Edit profile",
@@ -128,7 +128,9 @@ describe("rows", () => {
     ]) {
       assert.ok(text.includes(label), label);
     }
-    // happy-dom is no iPhone and has no install prompt: nothing to offer.
-    assert.ok(!text.includes("Install the app"));
+    // happy-dom is no iPhone and has no install prompt: the row says how to
+    // do it by hand rather than hiding (H-93).
+    assert.ok(text.includes("Install the app"));
+    assert.ok(text.includes("Add to Home Screen"));
   });
 });

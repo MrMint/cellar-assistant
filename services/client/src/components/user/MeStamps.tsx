@@ -20,6 +20,7 @@ import {
   stampsFromResult,
 } from "@/components/recap/recap-data";
 import { PressLink } from "./PressLink";
+import { BOLD_LABEL } from "./section-label";
 
 export function MeStamps() {
   // Mounted first: no query, no markup, on the server or in a static render.
@@ -38,15 +39,18 @@ function MeStampsLoaded() {
     now,
   );
   return (
-    <InsetSection label="Stamps">
+    <InsetSection label="Stamps" className={BOLD_LABEL}>
       {stamps.length > 0 && (
         <ul
           data-slot="me-stamps"
           aria-label="Your stamps"
-          className="m-0 flex list-none gap-4 overflow-x-auto px-3.5 py-4"
+          className="m-0 grid list-none grid-cols-4 justify-items-center gap-2 px-3.5 py-4"
         >
           {stamps.map((stamp) => (
-            <li key={stamp.kind} className="flex">
+            <li
+              key={stamp.kind}
+              className="flex [&>[data-slot=recap-stamp]]:size-[72px]"
+            >
               <RecapStamp stamp={stamp} size="sm" />
             </li>
           ))}

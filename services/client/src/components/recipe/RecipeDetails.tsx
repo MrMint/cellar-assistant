@@ -248,9 +248,8 @@ export const RecipeDetails = ({
                     <WantToTryButton
                       target={{ kind: "RECIPE", recipeId: recipe.id }}
                       saved={recipe.is_want_to_try}
-                      name={recipe.name}
                       variant="button"
-                      className="rounded-full"
+                      className="rounded-full aria-pressed:border-ink aria-pressed:bg-raised"
                     />
                   )}
                   {recipe.is_loved !== undefined && (
@@ -487,6 +486,7 @@ export const RecipeDetails = ({
               : "Its reviews, votes and Loves go with it."
           }
           confirmLabel={isDraft ? "Discard" : "Delete"}
+          cancelLabel="Keep it"
           pending={deleting}
           onConfirm={() => void remove()}
         >

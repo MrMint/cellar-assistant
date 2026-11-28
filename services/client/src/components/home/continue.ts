@@ -4,6 +4,7 @@
  * Pure — `continue.test.ts`.
  */
 
+import { styleLabel } from "@cellar-assistant/contracts/taste";
 import type { PlateStyleFields } from "@/components/app/LabelPlate";
 import {
   type ApiItemType,
@@ -43,6 +44,8 @@ export type OpenBottle = {
   readonly percentageRemaining: number;
   /** The field the drink-soon table reads (D29), per type. */
   readonly style: string | null;
+  /** `style` as a person reads it (F-127): `AMARO_A…` is "Amaro", never the enum. */
+  readonly styleName: string | null;
   readonly form: string | null;
   /** The owner's own score (`myReview`), or null when not rated yet. */
   readonly rating: number | null;
@@ -130,6 +133,7 @@ export const openBottleFromNode = (node: BottleNode): OpenBottle | null => {
     emptyAt: node.emptyAt as string | null,
     percentageRemaining: node.percentageRemaining,
     style: style ?? null,
+    styleName: style ? styleLabel(style) : null,
     form: item.__typename === "Tea" ? (item.form ?? null) : null,
     rating: item.myReview?.score ?? null,
     maker: makerOf(item.brands?.edges.map((edge) => edge.node) ?? []),
