@@ -364,10 +364,12 @@ enum AiJobStatus {
   RUNNING
 }
 
-"""Your own allowance for one kind of AI call this period (SV-A, L5)."""
+"""
+Your own allowance for one kind of AI call this period (SV-A, L5), or (F-230) for Google Places this month.
+"""
 type AiQuota {
   """
-  The budget kind, `ai_model/<seam>` — e.g. `ai_model/tier_list_insights`.
+  The budget kind, `ai_model/<seam>` — e.g. `ai_model/tier_list_insights` — or `google_places`, every Places endpoint together (F-230).
   """
   kind: String!
 
@@ -378,6 +380,11 @@ type AiQuota {
   When the period resets — the same instant a USER_CAP refusal carries as `BudgetExceededError.retryAt`.
   """
   resetsAt: DateTime!
+
+  """
+  F-230: AI_MODEL for an AI kind, GOOGLE_PLACES for Places' allowance, which always resets monthly.
+  """
+  service: AiQuotaService!
 
   """Your calls counted this period."""
   used: Int!
@@ -394,6 +401,14 @@ type AiQuotaConnection {
 type AiQuotaEdge {
   cursor: String!
   node: AiQuota!
+}
+
+"""
+F-230: which allowance a quota row is — an AI kind, or Google Places' one monthly allowance.
+"""
+enum AiQuotaService {
+  AI_MODEL
+  GOOGLE_PLACES
 }
 
 input AttachItemImageInput {
@@ -3478,6 +3493,11 @@ type ItemOnboarding {
   """
   defaults: JSON
 
+  """
+  F-77: the kind the label read says this label is for, or null when it named none. When it differs from `itemType`, `defaults` is empty and the client can read the label again as this kind — the kind follows the shot.
+  """
+  detectedItemType: ItemType
+
   """SV-B: a saved draft's maker (its brand name)."""
   displayMaker: String
 
@@ -3732,6 +3752,35 @@ type LoggedDrinkPayload {
 }
 
 """
+F-87: how many things the viewer has loved, per kind — Loved's subtitle and count chips. Ask only for the counts you show: each is one count on the server.
+"""
+type LovedCounts {
+  """Favourited items of type BEER."""
+  beer: Int
+
+  """Favourited items of type COFFEE."""
+  coffee: Int
+
+  """Every favourited item, all six types."""
+  drinks: Int
+
+  """Loved recipes (D9), the Recipes segment."""
+  recipes: Int
+
+  """Favourited items of type SAKE."""
+  sake: Int
+
+  """Favourited items of type SPIRIT."""
+  spirit: Int
+
+  """Favourited items of type TEA."""
+  tea: Int
+
+  """Favourited items of type WINE."""
+  wine: Int
+}
+
+"""
 MAKE_NOW: nothing required is missing (substitutes allowed). ONE_AWAY: exactly one required ingredient is (G29's One bottle away). MISSING: two or more. Optional ingredients and garnishes are never required.
 """
 enum MakeabilityStatus {
@@ -3778,7 +3827,7 @@ type MapEntryEdge {
 }
 
 """
-One place marker. Ten fields, every one of them read by the marker renderer (§2.4); the address and contact block lives on `Place` and is fetched by id when the drawer opens.
+One place marker. Thirteen fields, every one of them read by the marker renderer (§2.4); the address and contact block lives on `Place` and is fetched by id when the drawer opens.
 """
 type MapPlace {
   """
@@ -3795,11 +3844,26 @@ type MapPlace {
 
   """Null for a place with no geometry; skip it when drawing."""
   location: LngLat
+
+  """
+  F-82: the viewer's own best band (0–5) for this place across the tier lists they created — the owner's pin rank. Null when it is on none of theirs; never another person's band.
+  """
+  myBand: Int
   name: String!
+
+  """
+  F-82: the place's first mirrored Google photo. One actor call per marker that selects it, so ask for `photo { url }` only on the pins or rows you draw a photo for.
+  """
+  photo: File
 
   """Picks the marker glyph."""
   primaryCategory: String
   rating: Float
+
+  """
+  F-82: how many ratings `rating` stands on (`places.review_count`); 0 when none.
+  """
+  ratingCount: Int!
 
   """
   X27: APPROVED for every shared marker. PENDING / REJECTED markers are the viewer's own places under review — drawn as their own markers, never clustered — and appear on nobody else's map.
@@ -4447,6 +4511,11 @@ type Mutation {
   Edit a PENDING or REJECTED place you added and send it for review again — the whole place, not a patch: it goes back to PENDING, its old verdict and suggestions are cleared, and a fresh review is queued. An APPROVED place is shared and is not editable here. To anyone but its creator the place does not exist (NotFound).
   """
   resubmitPlace(input: ResubmitPlaceInput!, placeId: ID!): ResubmitPlaceResult!
+
+  """
+  F-86: "Rewrite" — write this list's Insights afresh once they are READY, without waiting out the once-a-day throttle. Creator only. From any other status it changes nothing and returns the list as it is. The list reads PENDING until the new write lands. The generation counts against the viewer's `ai_model/tier_list_insights` allowance (`myAiQuota`); a refusal shows as FAILED with reason USER_CAP.
+  """
+  rewriteTierListInsights(tierListId: ID!): RewriteTierListInsightsResult!
 
   """
   SV-B: keep an unfinished bottle on your account, aimed at a cellar. Yours alone: someone else's draft, or a cellar you cannot write, is a `NotFoundError`. A filed session (`CONFIRMED`, `MATCHED`) is a `ConflictError`. No model call.
@@ -7171,6 +7240,8 @@ type ReverseGeocodeResult {
   streetAddress: String
 }
 
+union RewriteTierListInsightsResult = BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | TierList | ValidationError
+
 type Sake implements Item {
   acidity: Float
   alcoholContentPercentage: Float
@@ -8747,6 +8818,11 @@ type TierList {
 
   """`generateInsights`'s output. Null until first generated."""
   aiInsights: JSON
+
+  """
+  F-85: entries per band, indexed by band — `[0]` the bottom band, `[5]` the top — always six long, and adding up to `itemCount` however many entries the list holds (past any page of `items`).
+  """
+  bandCounts: [Int!]!
   contentUpdatedAt: DateTime!
   createdAt: DateTime
 
@@ -9551,6 +9627,11 @@ type Viewer {
     last: Int
   ): ActivityEntryConnection!
   id: ID!
+
+  """
+  F-87: per-kind counts of what the viewer has loved (Loved's subtitle and chips), without paging `favorites` to count it.
+  """
+  lovedCounts: LovedCounts!
 
   """
   The /search Nearby Places strip: places in a ±0.018° box around `location` (the old strip's ~2km), nearest first. The same browse `mapBrowse` runs, on your own map actor; cluster bubbles are dropped, as the old strip dropped them.
