@@ -75,6 +75,37 @@ export const bandStrip = (
   };
 };
 
+/**
+ * F-181: the five-band bar from `TierList.bandCounts` (F-85) — every entry,
+ * however long the list, so nothing is left neutral. `[0]` is Unrated, which
+ * the bar does not draw; a missing index is an empty band.
+ */
+export const bandStripFromCounts = (
+  bandCounts: readonly number[],
+): BandStrip => ({
+  segments: ([5, 4, 3, 2, 1] as const).map((band) => ({
+    band,
+    count: bandCounts[band] ?? 0,
+  })),
+  unloaded: 0,
+});
+
+/**
+ * F-181: an add's rank, from the list's `bandCounts` read after it landed.
+ * The actor appends to the end of its band, so the new entry is last among
+ * every entry in its band or above. Null for Unrated, or counts that do not
+ * hold the add (a read from before it).
+ */
+export const rankFromBandCounts = (
+  bandCounts: readonly number[],
+  landed: number,
+): number | null => {
+  if (landed < 1 || landed > 5 || (bandCounts[landed] ?? 0) < 1) return null;
+  let rank = 0;
+  for (let band = landed; band <= 5; band++) rank += bandCounts[band] ?? 0;
+  return rank;
+};
+
 /** The derived rank (`band desc, position asc`) of one entry, or null. */
 export const rankOf = (
   entries: readonly { id: string; band: number; position: number }[],

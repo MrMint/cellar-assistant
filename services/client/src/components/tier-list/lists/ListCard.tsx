@@ -28,6 +28,7 @@ import { cn } from "@/lib/utils";
 import {
   type BandStrip as BandStripData,
   bandStrip,
+  bandStripFromCounts,
   kindNoun,
   shortDate,
 } from "./model";
@@ -41,6 +42,24 @@ const PRIVACY: Record<string, { icon: AppIcon; label: string }> = {
 
 const isItemType = (value: string): value is ApiItemType =>
   (ITEM_TYPES as readonly string[]).includes(value);
+
+/**
+ * F-181: the card's bar from `bandCounts` (F-85), every entry counted. An
+ * answer without it (fixtures written before F-85 still carry the old
+ * first-100 `bands` read) keeps the old drawing: the bands it holds, the
+ * rest neutral, never guessed.
+ */
+const stripOf = (list: ListCardData): BandStripData => {
+  if (Array.isArray(list.bandCounts))
+    return bandStripFromCounts(list.bandCounts);
+  const legacy = (
+    list as { bands?: { edges: readonly { node: { band: number } }[] } }
+  ).bands;
+  return bandStrip(
+    legacy?.edges.map((edge) => edge.node.band) ?? [],
+    list.itemCount,
+  );
+};
 
 /** The five-band bar: one segment per band, a stub for an empty one. */
 export function BandStrip({
@@ -176,10 +195,7 @@ export function ListCard({
 }) {
   const privacy = PRIVACY[list.privacy] ?? PRIVACY.PRIVATE;
   const PrivacyIcon = privacy.icon;
-  const strip = bandStrip(
-    list.bands.edges.map((edge) => edge.node.band),
-    list.itemCount,
-  );
+  const strip = stripOf(list);
   const count = kindNoun(list.listType, list.itemCount);
   const privacyGlyph = (
     <>

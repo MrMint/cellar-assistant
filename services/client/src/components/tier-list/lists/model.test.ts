@@ -2,10 +2,12 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import {
   bandStrip,
+  bandStripFromCounts,
   canEditList,
   fromRatingsLine,
   kindNoun,
   privacyLine,
+  rankFromBandCounts,
   rankOf,
   rankOnAppend,
   shortDate,
@@ -115,5 +117,39 @@ describe("rankOnAppend: where an add lands, from the bands at hand", () => {
     assert.equal(rankOnAppend([0, 0, 3], 3, 3), 2);
     assert.equal(rankOnAppend([5, 5], 113, 5), null);
     assert.equal(rankOnAppend([5], 1, 0), null);
+  });
+});
+
+describe("F-181: bandCounts (F-85), exact past any page of entries", () => {
+  // [0] Unrated … [5] the top band, adding up to itemCount.
+  const counts = [7, 40, 30, 20, 60, 50];
+  test("the card's band bar draws every entry, none left unloaded", () => {
+    assert.deepEqual(bandStripFromCounts(counts), {
+      segments: [
+        { band: 5, count: 50 },
+        { band: 4, count: 60 },
+        { band: 3, count: 20 },
+        { band: 2, count: 30 },
+        { band: 1, count: 40 },
+      ],
+      unloaded: 0,
+    });
+  });
+  test("a short or missing array draws empty bands, not a guess", () => {
+    assert.deepEqual(
+      bandStripFromCounts([]).segments.map((s) => s.count),
+      [0, 0, 0, 0, 0],
+    );
+  });
+  test("an add's #n, read after it landed: everything in its band or above", () => {
+    // 200 entries: the 100-entry page would have said nothing.
+    assert.equal(rankFromBandCounts(counts, 5), 50);
+    assert.equal(rankFromBandCounts(counts, 4), 110);
+    assert.equal(rankFromBandCounts(counts, 1), 200);
+  });
+  test("Unrated has no rank, and a band with nothing in it cannot hold the add", () => {
+    assert.equal(rankFromBandCounts(counts, 0), null);
+    assert.equal(rankFromBandCounts([0, 0, 0, 0, 0, 0], 3), null);
+    assert.equal(rankFromBandCounts([], 3), null);
   });
 });

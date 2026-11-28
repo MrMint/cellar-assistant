@@ -13,6 +13,8 @@ import type { ApiFailure } from "@/lib/api/result";
 import type { Page as ListPage } from "@/lib/paging/paged-connection";
 import { usePagedConnection } from "@/lib/paging/use-paged-connection";
 import { LovedSegment } from "./LovedSegment";
+import { LovedSubtitle } from "./LovedSubtitle";
+import type { LovedCounts } from "./loved-counts";
 import {
   LOVED_RECIPES_PAGE_SIZE,
   type LovedRecipeRow,
@@ -48,9 +50,12 @@ function Thumbnail({ row }: { row: LovedRecipeRow }) {
 export function LovedRecipes({
   initialPage,
   initialFailure,
+  counts = null,
 }: {
   initialPage: ListPage<LovedRecipeRow> | null;
   initialFailure: ApiFailure | null;
+  /** F-135: `me.lovedCounts` for the subtitle; null shows none. */
+  counts?: LovedCounts | null;
 }) {
   const list = usePagedConnection({
     query: LovedRecipesQuery,
@@ -69,6 +74,7 @@ export function LovedRecipes({
     // at the same height in both halves.
     <Page className="gap-4">
       <AppBar title="Loved" parent="/me" />
+      <LovedSubtitle counts={counts} />
       <LovedSegment value="recipes" />
       {list.failure !== null && <ApiError error={list.failure} title="Loved" />}
       {list.rows.length === 0 && list.failure === null ? (

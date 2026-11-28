@@ -16,11 +16,13 @@ import {
   itemSubtitlePhrases,
   myReviewFromRow,
   recipeIngredientFromNode,
+  restoreBottleVariables,
   reviewFromRow,
   teaTextCards,
   tierListEntryFromNode,
 } from "./adapter";
 import { dateFromYear, formLayout, yearFromDate } from "./itemFormLayout";
+import { tasteScore } from "./TasteHeader";
 
 const core = { name: "X", description: null, country: "FRANCE" };
 
@@ -166,6 +168,29 @@ describe("rows", () => {
     });
     assert.equal(review.user.displayName, "Unknown user");
     assert.equal(review.text, null);
+  });
+
+  test("F-151: myReview carries when you rated it, for the line under Your rating", () => {
+    assert.equal(
+      myReviewFromRow({
+        id: "r",
+        score: 4,
+        text: null,
+        updatedAt: "2026-11-03T18:00:00.000Z",
+      })?.ratedAt,
+      "2026-11-03T18:00:00.000Z",
+    );
+    assert.equal(
+      myReviewFromRow({ id: "r", score: 4, text: null })?.ratedAt,
+      null,
+    );
+  });
+
+  test("F-151: the taste header's scores are one decimal, always", () => {
+    assert.equal(tasteScore(4), "4.0");
+    assert.equal(tasteScore(4.25), "4.3");
+    assert.equal(tasteScore(3.96), "4.0");
+    assert.equal(tasteScore(5.4), "5.0");
   });
 
   test("myReview: null stays null", () => {
@@ -510,5 +535,58 @@ describe("itemPlateStyle (H-2)", () => {
       style: null,
       variety: null,
     });
+  });
+});
+
+describe("F-145: Undo of Delete bottle puts the same bottle back (restoreCellarItem)", () => {
+  const row = {
+    __typename: "CellarItem",
+    id: "b-1",
+    cellarId: "c-1",
+    createdAt: "2026-10-01T09:00:00.000Z",
+    updatedAt: "2026-11-01T09:00:00.000Z",
+    acquiredOn: "2026-09-30",
+    displayImageId: "img-1",
+    drinkFrom: null,
+    drinkUntil: "2030-01-01",
+    emptyAt: null,
+    location: "Rack B",
+    openAt: "2026-10-05T20:00:00.000Z",
+    packagedOn: null,
+    percentageRemaining: 70,
+    priceAmount: 24.5,
+    priceCurrency: "USD",
+    sourceMenuItemId: null,
+    sourcePlaceId: "p-1",
+    sourceType: "manual" as const,
+    item: { __typename: "Tea", id: "t-1", type: "TEA" as const },
+  };
+  test("under its own id and createdAt, with every field it had", () => {
+    assert.deepEqual(restoreBottleVariables(row), {
+      cellarId: "c-1",
+      cellarItemId: "b-1",
+      createdAt: "2026-10-01T09:00:00.000Z",
+      input: {
+        item: { id: "t-1", type: "TEA" },
+        acquiredOn: "2026-09-30",
+        displayImageId: "img-1",
+        drinkFrom: null,
+        drinkUntil: "2030-01-01",
+        emptyAt: null,
+        location: "Rack B",
+        openAt: "2026-10-05T20:00:00.000Z",
+        packagedOn: null,
+        percentageRemaining: 70,
+        priceAmount: 24.5,
+        priceCurrency: "USD",
+        sourceMenuItemId: null,
+        sourcePlaceId: "p-1",
+        sourceType: "manual",
+      },
+    });
+  });
+  test("no read of the bottle is no restore: never a bottle rebuilt from guesses", () => {
+    assert.equal(restoreBottleVariables(null), null);
+    assert.equal(restoreBottleVariables(undefined), null);
   });
 });

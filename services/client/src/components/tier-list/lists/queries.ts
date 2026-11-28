@@ -1,8 +1,8 @@
 /**
  * The lists index's own read (Social-Lists 01): each card's name, privacy,
- * count and date, its top four entries with a photo (the strip), and the
- * bands of its first 100 entries (the five-band bar). A list longer than 100
- * draws its remainder neutral (`bandStrip`), never a guessed band.
+ * count and date, its top four entries with a photo (the strip), and
+ * `bandCounts` (F-85) for the five-band bar — every entry, however long the
+ * list (F-181; it was the first 100 entries' bands, the rest drawn neutral).
  *
  * Its own document rather than `GetTierLists` (`../queries.ts`), which the
  * list page's stream owns and which carries none of the strip or the bar.
@@ -69,14 +69,8 @@ export const ListCardFragment = graphql(`
         }
       }
     }
-    bands: items(first: 100) {
-      edges {
-        node {
-          id
-          band
-        }
-      }
-    }
+    # F-181: entries per band over the whole list (F-85), for the bar.
+    bandCounts
   }
 `);
 
@@ -147,6 +141,26 @@ export const listsIndexQueryFor = (section: SectionKey) =>
  * One list's entries, for a rank: where an entry stands after an add (the
  * toast's "#n") and on the Add to a list sheet's rows.
  */
+/**
+ * F-181: one list's entries per band, read after an add when the list is
+ * longer than the 100 entries the picker holds, so the toast's #n is exact.
+ */
+export const ListBandCountsQuery = graphql(
+  `
+    query ListBandCounts($id: ID!) {
+      tierList(id: $id) {
+        __typename
+        ... on TierList {
+          id
+          bandCounts
+        }
+        ...ActorErrorFields
+      }
+    }
+  `,
+  [ActorErrorFieldsFragment],
+);
+
 export const ListRanksQuery = graphql(
   `
     query ListRanks($id: ID!) {
