@@ -142,7 +142,7 @@ describe("canRemoveMyRating", () => {
 });
 
 describe("removeMyRating", () => {
-  test("deletes your own review by its id; Undo re-creates the same score and note", async () => {
+  test("deletes your own review by its id; Undo re-creates it under the same id, score and note (F-148)", async () => {
     const { calls, exec } = recorder((name) =>
       name === "delete"
         ? { __typename: "DeletedItemReview", id: "r-mine" }
@@ -152,7 +152,6 @@ describe("removeMyRating", () => {
       {
         deleteReview: exec("delete", "deleteItemReview"),
         addReview: exec("add", "addItemReview"),
-        newId: () => "r-new",
       },
       { itemId: "i-1", type: "BEER", myReview: review, ownsBottle: false },
     );
@@ -168,7 +167,7 @@ describe("removeMyRating", () => {
       variables: {
         itemId: "i-1",
         type: "BEER",
-        input: { reviewId: "r-new", score: 4.5, text: '{"root":"note"}' },
+        input: { reviewId: "r-mine", score: 4.5, text: '{"root":"note"}' },
       },
     });
   });
@@ -183,7 +182,6 @@ describe("removeMyRating", () => {
       {
         deleteReview: exec("delete", "deleteItemReview"),
         addReview: exec("add", "addItemReview"),
-        newId: () => "r-new",
       },
       {
         itemId: "i-1",
@@ -195,7 +193,7 @@ describe("removeMyRating", () => {
     assert.ok(result.ok);
     await result.undo();
     assert.deepEqual(calls[1]?.variables.input, {
-      reviewId: "r-new",
+      reviewId: "r-mine",
       score: 4.5,
     });
   });

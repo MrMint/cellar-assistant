@@ -58,10 +58,12 @@ export const AddReview = ({
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [open, setOpen] = useState(false);
-  const [score, setScore] = useState<number | undefined>(myReview?.score);
-  const [text, setText] = useState<string | undefined>(
-    myReview?.text ?? undefined,
-  );
+  // F-146 / F-147: the editor's draft. It is seeded from the saved review
+  // each time the editor opens (`openEditor`), never once at mount, so it
+  // follows every refresh (an Add, a Remove from ⋯ and its Undo) and an
+  // abandoned edit (Cancel) is thrown away rather than carried to the next.
+  const [score, setScore] = useState<number | undefined>(undefined);
+  const [text, setText] = useState<string | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
   const [, addReview] = useMutation(AddItemReviewMutation);
   const [, updateReview] = useMutation(UpdateItemReviewMutation);
@@ -99,8 +101,6 @@ export const AddReview = ({
           setError(result.error.message);
           return;
         }
-        setScore(undefined);
-        setText(undefined);
       } else {
         const result = unwrapResult(
           (
@@ -135,8 +135,6 @@ export const AddReview = ({
         setError(result.error.message);
         return;
       }
-      setScore(undefined);
-      setText(undefined);
       finish();
     });
   };
@@ -147,8 +145,14 @@ export const AddReview = ({
       : plainTextFromRichText(myReview.text).trim();
   const openEditor = () => {
     feedback("tick");
+    setScore(myReview?.score);
+    setText(myReview?.text ?? undefined);
+    setError(null);
     setOpen(true);
   };
+  // Button already sounds the press (KIT § 2); Cancel only closes, and the
+  // draft is re-seeded on the next open.
+  const cancel = () => setOpen(false);
 
   if (open === false) {
     // Cellars-Bottles 01: the rating and note sit under the photo — the
@@ -226,7 +230,7 @@ export const AddReview = ({
         <Button
           variant="outline"
           disabled={isPending}
-          onClick={() => setOpen(false)}
+          onClick={cancel}
         >
           Cancel
         </Button>

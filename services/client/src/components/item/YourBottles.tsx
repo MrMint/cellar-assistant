@@ -301,6 +301,7 @@ export function YourBottles({
                       opened={bottle.openAt}
                       emptied={bottle.emptyAt}
                       itemName={itemName}
+                      cellarName={bottle.cellarName ?? undefined}
                     />
                     <BottleFreshnessFields
                       cellarId={bottle.cellarId}
