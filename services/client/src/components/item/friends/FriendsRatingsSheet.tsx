@@ -1,8 +1,8 @@
 "use client";
 
-import Link from "next/link";
 import { type ReactNode, useMemo, useState } from "react";
 import { useQuery } from "urql";
+import { Link } from "@/components/app/Link";
 import { formatKitScore, Stars } from "@/components/app/parts/Stars";
 import { ResponsiveDialog } from "@/components/app/ResponsiveDialog";
 import { UserAvatar } from "@/components/app/UserAvatar";

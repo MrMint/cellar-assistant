@@ -1,3 +1,4 @@
+import { ActorErrorFieldsFragment } from "@/lib/api/errors";
 import { graphql } from "@/lib/api/graphql";
 
 /**
@@ -10,7 +11,8 @@ import { graphql } from "@/lib/api/graphql";
  * whose review falls past the first 100 is not listed (the server hand-off:
  * an `Item.friendsReviews` connection would make this one read).
  */
-export const ItemFriendsRatingsFriendsQuery = graphql(`
+export const ItemFriendsRatingsFriendsQuery = graphql(
+  `
   query ItemFriendsRatingsFriends {
     myFriends(first: 100) {
       __typename
@@ -23,11 +25,15 @@ export const ItemFriendsRatingsFriendsQuery = graphql(`
           }
         }
       }
+      ...ActorErrorFields
     }
   }
-`);
+`,
+  [ActorErrorFieldsFragment],
+);
 
-export const ItemFriendsRatingsReviewsQuery = graphql(`
+export const ItemFriendsRatingsReviewsQuery = graphql(
+  `
   query ItemFriendsRatingsReviews($itemId: ID!, $type: ItemType!) {
     item(id: $itemId, type: $type) {
       __typename
@@ -53,9 +59,12 @@ export const ItemFriendsRatingsReviewsQuery = graphql(`
           }
         }
       }
+      ...ActorErrorFields
     }
   }
-`);
+`,
+  [ActorErrorFieldsFragment],
+);
 
 export type FriendReview = {
   readonly id: string;
