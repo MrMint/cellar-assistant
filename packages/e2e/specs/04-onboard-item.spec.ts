@@ -85,7 +85,10 @@ test.describe("onboard → cellar → check in", () => {
     ).toBeVisible({ timeout: 15_000 });
     await style.click();
 
-    await expect(add, "the floor is filled, so the button names its verb").toBeEnabled({
+    await expect(
+      add,
+      "the floor is filled, so the button names its verb",
+    ).toBeEnabled({
       timeout: 15_000,
     });
     await add.click();
@@ -189,7 +192,10 @@ test.describe("onboard → cellar → check in", () => {
     // The cellar home is a list of tiles now (no dashboard shelf): the new
     // bottle is a tile, and Pour is the bottle row's own action on its page.
     await expect(
-      primary.getByText(/E2 Wine/).filter({ visible: true }).first(),
+      primary
+        .getByText(/E2 Wine/)
+        .filter({ visible: true })
+        .first(),
       "the cellar page does not show its new item",
     ).toBeVisible({ timeout: 20_000 });
     await primary
