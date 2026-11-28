@@ -15,7 +15,7 @@
     "visual:compare": "node ../../scripts/check-node-version.mjs && node visual/compare.ts"
   },
   "devDependencies": {
-    "@axe-core/playwright": "4.13.0",
+    "@axe-core/playwright": "4.14.1",
     "@playwright/test": "^1.63.0",
     "@types/node": "catalog:",
     "typescript": "catalog:"
