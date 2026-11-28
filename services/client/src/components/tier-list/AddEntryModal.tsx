@@ -4,21 +4,34 @@ import {
   type FormEvent,
   type ReactNode,
   useCallback,
+  useEffect,
   useId,
   useMemo,
   useState,
 } from "react";
 import { useClient, useQuery } from "urql";
+import { FilterChip } from "@/components/app/FilterChip";
 import {
+  Add,
   Check,
+  ChevronLeft,
+  ChevronRight,
   Close,
   ICON_STROKE,
   Place,
   Search,
 } from "@/components/app/icons";
+import { Link } from "@/components/app/Link";
+import { BandMarker, BANDS as RANKED_BANDS } from "@/components/app/parts/Rank";
 import { ResponsiveDialog } from "@/components/app/ResponsiveDialog";
 import { formatScore } from "@/components/app/Score";
+import {
+  type CreatedPlace,
+  NewPlaceSheet,
+} from "@/components/capture/NewPlaceSheet";
+import { useGeolocation } from "@/components/map/hooks/useGeolocation";
 import { Button } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button-variants";
 import {
   InputGroup,
   InputGroupAddon,
@@ -39,8 +52,11 @@ import {
   type AddEntryCandidate,
   type AddEntrySection,
   addButtonLabel,
+  CAFE_CATEGORIES,
   candidateKey,
+  isUnratedPick,
   type Picks,
+  picksSummary,
   SECTION_PREVIEW,
   type SuggestionNode,
   sectionTitle,
@@ -64,6 +80,9 @@ import {
 } from "./queries";
 
 export type { AddEntryCandidate } from "./add-entry";
+
+/** F-177: how long typing rests before the picker searches. */
+const SEARCH_DEBOUNCE_MS = 300;
 
 const ENTITY_LABELS: Record<TierListEntityType, string> = {
   place: "places",
@@ -109,11 +128,15 @@ export function AddEntryModal({
   listName,
   onList,
   tierListId,
+  bandCounts,
 }: {
   open: boolean;
   onClose: () => void;
-  /** The picks, in the order picked. */
-  onAdd: (candidates: AddEntryCandidate[]) => void;
+  /**
+   * The picks, in the order picked. `band` is the band step's answer for
+   * the picks your rating gives none (F-175); a rated pick keeps its own.
+   */
+  onAdd: (candidates: AddEntryCandidate[], band?: number) => void;
   busy: boolean;
   error: string | null;
   listType: string;
@@ -122,6 +145,8 @@ export function AddEntryModal({
   /** Board hrefs of the entries already on the list (`onListHrefs`). */
   onList: ReadonlySet<string>;
   tierListId: string;
+  /** How many sit in each band now: the band step's counts. */
+  bandCounts?: Readonly<Record<number, number>>;
 }) {
   const client = useClient();
   const entityType: TierListEntityType = isValidListType(listType)
@@ -134,6 +159,13 @@ export function AddEntryModal({
   const [picks, setPicks] = useState<Picks>(() => new Map());
   /** L09: the one pick being placed by comparison, while it is. */
   const [placing, setPlacing] = useState<AddEntryCandidate | null>(null);
+  /** F-175: several picks, one of them unrated: the band step is showing. */
+  const [banding, setBanding] = useState(false);
+  /** F-180: a place search keeps only cafés. */
+  const [cafesOnly, setCafesOnly] = useState(false);
+  /** F-177: "Add a new place" is showing the new-place sheet. */
+  const [creatingPlace, setCreatingPlace] = useState(false);
+  const geo = useGeolocation();
   /** A resubmit retires the search before it: only the newest may land. */
   const [searchGate] = useState(createLatestOnly);
 
@@ -151,10 +183,8 @@ export function AddEntryModal({
     setLoading(false);
   }, [searchGate]);
 
-  const search = useCallback(
-    async (event: FormEvent) => {
-      event.preventDefault();
-      const phrase = text.trim();
+  const runSearch = useCallback(
+    async (phrase: string) => {
       if (phrase === "") return;
       const isCurrent = searchGate.begin();
       setLoading(true);
@@ -165,6 +195,7 @@ export function AddEntryModal({
           .query(TierListPlacePickerQuery, {
             query: phrase,
             first: PICKER_PAGE_SIZE,
+            filterCategories: cafesOnly ? [...CAFE_CATEGORIES] : null,
           })
           .toPromise();
         if (!isCurrent()) return;
@@ -236,8 +267,25 @@ export function AddEntryModal({
         })),
       );
     },
-    [client, entityType, searchGate, text],
+    [cafesOnly, client, entityType, searchGate],
   );
+
+  // F-177: the picker searches as you type, once typing rests; Enter still
+  // searches at once. Emptying the field goes back to the sections.
+  const phrase = text.trim();
+  useEffect(() => {
+    if (phrase === "") {
+      clearSearch();
+      return;
+    }
+    const timer = setTimeout(() => void runSearch(phrase), SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [phrase, runSearch, clearSearch]);
+
+  const search = (event: FormEvent) => {
+    event.preventDefault();
+    void runSearch(phrase);
+  };
 
   const message = searchError ?? error;
   const placeholder =
@@ -247,6 +295,32 @@ export function AddEntryModal({
   const SearchGlyph = entityType === "place" ? Place : Search;
   const picked = Array.from(picks.values());
   const [onlyPick] = picked;
+  const showBandStep = banding && picked.length > 1;
+
+  if (creatingPlace) {
+    return (
+      <NewPlaceSheet
+        open={open}
+        onOpenChange={(next) => {
+          if (!next) setCreatingPlace(false);
+        }}
+        location={geo.location}
+        hasPhoto={false}
+        onCreated={(place: CreatedPlace) => {
+          setCreatingPlace(false);
+          // A new place is nobody's rating yet: the band step places it.
+          setPlacing({
+            id: place.id,
+            entityType: "place",
+            name: place.name,
+            subtitle: "",
+            myScore: null,
+          });
+        }}
+        onPickInstead={() => setCreatingPlace(false)}
+      />
+    );
+  }
 
   if (placing !== null) {
     return (
@@ -274,47 +348,68 @@ export function AddEntryModal({
       onOpenChange={(next) => {
         if (!next) onClose();
       }}
-      title={`Add a ${entryNoun(entityType, 1)}`}
-      {...(listName === undefined || listName === ""
-        ? {}
-        : { description: `To ${listName}` })}
+      // F-175: the band step replaces the picker in the same sheet; the
+      // picker stays mounted underneath, so Back finds the picks and the
+      // sections as they were.
+      {...(showBandStep
+        ? { title: "Which band?", hideTitle: true }
+        : {
+            title: `Add a ${entryNoun(entityType, 1)}`,
+            ...(listName === undefined || listName === ""
+              ? {}
+              : { description: `To ${listName}` }),
+          })}
       className="md:max-w-[480px]"
       footer={
-        <div className="flex w-full flex-col gap-2">
-          {/* W-1: an unrated pick has no band to compare within; plain Add
-              puts it in Unrated, so Compare is not offered for it. */}
-          {picked.length === 1 &&
-            onlyPick !== undefined &&
-            onlyPick.myScore !== null &&
-            onlyPick.myScore !== undefined && (
-              <Button
-                variant="secondary"
-                className="w-full"
-                disabled={busy}
-                onClick={() => setPlacing(onlyPick)}
-              >
-                Compare to place it
-              </Button>
-            )}
-          <Button
-            className="w-full"
-            disabled={picked.length === 0 || busy}
-            onClick={() => onAdd(picked)}
-          >
-            {busy && <Spinner aria-hidden />}
-            {addButtonLabel(picked.length)}
-          </Button>
-        </div>
+        showBandStep ? undefined : (
+          <div className="flex w-full flex-col gap-2">
+            {/* F-175: nothing lands in Unrated unasked. One pick is placed
+              (its band, asked when your rating gives none, then the
+              questions and where it landed); several with an unrated one
+              ask Which band? first; several rated ones keep their bands. */}
+            <Button
+              className="w-full"
+              disabled={picked.length === 0 || busy}
+              onClick={() => {
+                feedback("press");
+                if (picked.length === 1 && onlyPick !== undefined) {
+                  setPlacing(onlyPick);
+                } else if (picked.some(isUnratedPick)) {
+                  setBanding(true);
+                } else {
+                  onAdd(picked);
+                }
+              }}
+            >
+              {busy && <Spinner aria-hidden />}
+              {addButtonLabel(picked.length)}
+            </Button>
+          </div>
+        )
       }
     >
-      <div className="flex flex-col gap-4 pb-1">
+      {showBandStep && (
+        <BandStep
+          picks={picked}
+          noun={(count) => entryNoun(entityType, count)}
+          counts={bandCounts}
+          busy={busy}
+          error={error}
+          onBack={() => setBanding(false)}
+          onChoose={(band) => onAdd(picked, band)}
+        />
+      )}
+      <div hidden={showBandStep} className="flex flex-col gap-4 pb-1">
         <form onSubmit={search} className="flex gap-2">
           <InputGroup className="flex-1">
             <InputGroupAddon>
               <SearchGlyph aria-hidden strokeWidth={ICON_STROKE} />
             </InputGroupAddon>
+            {/* type="text": a search input draws the browser's own ✕ beside
+                ours (F-177). */}
             <InputGroupInput
-              type="search"
+              type="text"
+              enterKeyHint="search"
               aria-label={placeholder}
               value={text}
               onChange={(event) => setText(event.target.value)}
@@ -334,15 +429,18 @@ export function AddEntryModal({
               </InputGroupAddon>
             )}
           </InputGroup>
-          <Button
-            type="submit"
-            variant="secondary"
-            disabled={loading || text.trim() === ""}
-          >
-            {loading && <Spinner aria-hidden />}
-            Search
-          </Button>
         </form>
+
+        {entityType === "place" && (
+          <div className="flex flex-wrap gap-2">
+            <FilterChip
+              selected={cafesOnly}
+              onClick={() => setCafesOnly((on) => !on)}
+            >
+              Cafés only
+            </FilterChip>
+          </div>
+        )}
 
         {message !== null && (
           <p role="alert" className="t-body m-0 text-danger">
@@ -356,9 +454,20 @@ export function AddEntryModal({
           </div>
         ) : rows !== null ? (
           rows.length === 0 ? (
-            <p className="t-body m-0 text-center text-ink-3">
-              No {entryNoun(entityType, 1)} matches “{text.trim()}”
-            </p>
+            <NoMatch
+              noun={entryNoun(entityType, 1)}
+              phrase={phrase}
+              {...(entityType === "place"
+                ? {
+                    onAddPlace: () => {
+                      geo.request();
+                      setCreatingPlace(true);
+                    },
+                  }
+                : {
+                    href: `/add?type=${entryTypeOf(entityType)}&name=${encodeURIComponent(phrase)}`,
+                  })}
+            />
           ) : (
             <CandidateList
               label="Search results"
@@ -624,5 +733,157 @@ export function CandidateRow({
         </span>
       )}
     </button>
+  );
+}
+
+/**
+ * F-177 (KIT § 4): "No wine matches “q”" and its one action, Add a new
+ * wine — the catalog's door with the words carried (`/add?type=&name=`), or
+ * for a place list the new-place sheet.
+ */
+function NoMatch({
+  noun,
+  phrase,
+  href,
+  onAddPlace,
+}: {
+  noun: string;
+  phrase: string;
+  href?: string;
+  onAddPlace?: () => void;
+}) {
+  const label = `Add a new ${noun}`;
+  const action = cn(buttonVariants({ variant: "outline" }), "text-ink");
+  return (
+    <div className="flex flex-col items-center gap-3 py-6 text-center">
+      <Search
+        aria-hidden
+        strokeWidth={ICON_STROKE}
+        className="size-6 text-glyph"
+      />
+      <p className="t-head m-0 text-ink">
+        No {noun} matches “{phrase}”
+      </p>
+      {href !== undefined ? (
+        <Link
+          href={href}
+          underline="none"
+          className={action}
+          onClick={() => feedback("press")}
+        >
+          <Add aria-hidden strokeWidth={ICON_STROKE} />
+          {label}
+        </Link>
+      ) : (
+        <Button
+          variant="outline"
+          className="text-ink"
+          onClick={() => {
+            feedback("press");
+            onAddPlace?.();
+          }}
+        >
+          <Add aria-hidden strokeWidth={ICON_STROKE} />
+          {label}
+        </Button>
+      )}
+    </div>
+  );
+}
+
+/**
+ * F-175 (placing 06): several picks, one with no band of your own — the one
+ * band they all go to. Back returns to the picks, still picked.
+ */
+function BandStep({
+  picks,
+  noun,
+  counts,
+  busy,
+  error,
+  onBack,
+  onChoose,
+}: {
+  picks: readonly AddEntryCandidate[];
+  noun: (count: number) => string;
+  counts: Readonly<Record<number, number>> | undefined;
+  busy: boolean;
+  error: string | null;
+  onBack: () => void;
+  onChoose: (band: number) => void;
+}) {
+  return (
+    <div data-slot="add-band-step" className="flex flex-col gap-3">
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          aria-label="Back"
+          onClick={() => {
+            feedback("press");
+            onBack();
+          }}
+          className="-ml-2 flex size-11 shrink-0 items-center justify-center rounded-md text-ink outline-none focus-visible:bg-raised"
+        >
+          <ChevronLeft
+            aria-hidden
+            strokeWidth={ICON_STROKE}
+            className="size-6"
+          />
+        </button>
+        <span className="t-title text-ink" aria-hidden>
+          Which band?
+        </span>
+      </div>
+      <div className="flex items-center gap-3">
+        <span className="t-head tabular flex size-12 shrink-0 items-center justify-center rounded-md bg-raised text-ink">
+          {picks.length}
+        </span>
+        <div className="flex min-w-0 flex-col">
+          <span className="t-head truncate text-ink">
+            {picks.length} {noun(picks.length)}
+          </span>
+          <span className="t-cap truncate text-ink-2">
+            {picksSummary(picks)}
+          </span>
+        </div>
+      </div>
+      <fieldset aria-label="Band" className="m-0 flex flex-col border-0 p-0">
+        {RANKED_BANDS.map(({ band, name }) => (
+          <button
+            key={band}
+            type="button"
+            disabled={busy}
+            onClick={() => {
+              feedback("tick");
+              onChoose(band);
+            }}
+            className="-mx-2 flex h-[52px] items-center gap-3 rounded-md px-2 text-left outline-none active:bg-raised focus-visible:bg-raised disabled:opacity-50"
+          >
+            <BandMarker band={band} />
+            <span className="t-head min-w-0 flex-1 truncate text-ink">
+              {name}
+            </span>
+            <span className="t-cap tabular text-ink-3">
+              {counts?.[band] ?? 0}
+            </span>
+            <ChevronRight
+              aria-hidden
+              strokeWidth={ICON_STROKE}
+              className="size-5 text-glyph"
+            />
+          </button>
+        ))}
+      </fieldset>
+      {busy && (
+        <div className="flex justify-center">
+          <Spinner aria-label="Adding" />
+        </div>
+      )}
+      {error !== null && (
+        <p role="alert" className="t-body m-0 text-danger">
+          {error}
+        </p>
+      )}
+    </div>
   );
 }

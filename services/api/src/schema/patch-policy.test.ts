@@ -380,6 +380,7 @@ const NOT_PATCHES: Readonly<Record<string, string>> = {
   createTierList: CREATES,
   createUploadTarget: STARTS,
   logDrink: CREATES,
+  restoreCellarItem: CREATES,
   resubmitPlace: RESUBMITS,
   setRecipeIngredients: REPLACES,
   setRecipeInstructions: REPLACES,

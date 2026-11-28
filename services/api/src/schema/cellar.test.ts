@@ -383,6 +383,34 @@ describe("cellar mutations (§8.3)", () => {
     });
   });
 
+  it("restoreCellarItem sends the bottle back with its own id and createdAt (F-79)", async () => {
+    const { invoke, calls } = stubSidecar({
+      "CellarActor.restoreItem": () => cellarItem,
+      "ItemActor.get": () => wine,
+    });
+    const result = await run(
+      `mutation {
+         restoreCellarItem(cellarId: "${CELLAR_ID}", cellarItemId: "${cellarItem.id}",
+           createdAt: "2026-11-01T10:00:00.000Z",
+           input: { item: { type: WINE, id: "${WINE_ID}" }, percentageRemaining: 40, location: "Rack A" }) {
+           __typename
+         }
+       }`,
+      testContext(invoke, viewer),
+    );
+    expect(result.errors).toBeUndefined();
+    expect(calls.map((call) => [call.actorId, call.method])).toEqual([
+      [CELLAR_ID, "restoreItem"],
+    ]);
+    expect(calls[0]?.args[1]).toMatchObject({
+      item: { type: "WINE", id: WINE_ID },
+      cellarItemId: cellarItem.id,
+      createdAt: "2026-11-01T10:00:00.000Z",
+      percentageRemaining: 40,
+      location: "Rack A",
+    });
+  });
+
   it("every other command maps onto exactly one actor method", async () => {
     const { invoke, calls } = stubSidecar({
       "CellarActor.delete": () => ({ id: CELLAR_ID }),

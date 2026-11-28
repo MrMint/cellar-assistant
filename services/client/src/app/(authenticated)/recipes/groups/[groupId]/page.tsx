@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { cache } from "react";
-import { EmptyState, ErrorState } from "@/components/app/EmptyState";
+import { EmptyState } from "@/components/app/EmptyState";
 import { People, Verified } from "@/components/app/icons";
 import { Link } from "@/components/app/Link";
 import { shownVersion } from "@/components/recipe/group-pick";
@@ -11,6 +11,7 @@ import {
   QUIET_ACTION,
   RecipeInfoCard,
 } from "@/components/recipe/RecipePageParts";
+import { RecipeReadError } from "@/components/recipe/RecipeReadError";
 import { versionsLine } from "@/components/recipe/recipe-meta";
 import { isNotFound, unwrapResult } from "@/lib/api/result";
 import { apiServerQuery } from "@/lib/api/urql-server";
@@ -56,12 +57,7 @@ export default async function RecipeGroupPage({
   const result = unwrapResult(data.recipeGroup, "RecipeGroup");
   if (!result.ok) {
     if (isNotFound(result.error)) notFound();
-    return (
-      <ErrorState
-        title="Couldn't open this recipe"
-        reason={result.error.message}
-      />
-    );
+    return <RecipeReadError reason={result.error.message} />;
   }
 
   const recipeGroup = result.data;

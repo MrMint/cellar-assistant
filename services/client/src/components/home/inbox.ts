@@ -82,11 +82,14 @@ export const limitResetLine = (
   return null;
 };
 
-/** "n to check": open bottles with a guessed field nobody checked (MC-drafts). */
+/**
+ * "n to check": bottles with a guessed field nobody checked (MC-drafts) —
+ * open or sealed, since a label read adds a sealed bottle (F-123).
+ */
 export type ToCheck = {
   readonly count: number;
-  /** The first one, named on the row. */
-  readonly name: string;
+  /** The first open one, named on the row; null when only sealed ones are. */
+  readonly name: string | null;
   /** "country, from the label". */
   readonly fields: string;
   readonly href: string;
@@ -109,9 +112,14 @@ const fieldWords = (field: string): string =>
     .replace(/_/g, " ")
     .toLowerCase();
 
-/** The open bottles whose item still has guessed fields, one per item. */
+/**
+ * The open bottles whose item still has guessed fields, one per item, named
+ * and linked; `total` is the server's count over every bottle, sealed ones
+ * too (`me.unconfirmedBottleCount`, F-76), which the open read cannot see.
+ */
 export const toCheckFromNodes = (
   nodes: readonly ToCheckNode[],
+  total = 0,
 ): ToCheck | null => {
   const seen = new Set<string>();
   const rows: { node: ToCheckNode; type: ApiItemType }[] = [];
@@ -124,9 +132,18 @@ export const toCheckFromNodes = (
     rows.push({ node, type: item.type as ApiItemType });
   }
   const first = rows[0];
-  if (first === undefined || first.node.item === null) return null;
+  if (first === undefined || first.node.item === null) {
+    return total > 0
+      ? {
+          count: total,
+          name: null,
+          fields: "Guessed from a label",
+          href: "/cellars",
+        }
+      : null;
+  }
   return {
-    count: rows.length,
+    count: Math.max(total, rows.length),
     name: displayItemName(first.node.item.name),
     fields: `${first.node.item.unconfirmedFields.map(fieldWords).join(", ")}, from the label`,
     href: cellarItemHref(first.node.cellarId, first.type, first.node.id),

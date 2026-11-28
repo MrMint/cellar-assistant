@@ -51,6 +51,7 @@ import {
   ITEM_CHECK_IN_SCOPES,
   ITEM_TYPES,
   ItemActorDescriptor,
+  ItemOnboardingActorDescriptor,
   itemActorId,
   mapPage,
   parseItemActorId,
@@ -1186,14 +1187,35 @@ builder.mutationField("updateItem", (t) =>
       type: t.arg({ type: ItemTypeEnum, required: true }),
       itemId: t.arg.id({ required: true }),
       input: t.arg({ type: UpdateItemInput, required: true }),
+      confirmedFields: t.arg.stringList({
+        required: false,
+        description:
+          "F-75: the label-read guesses you accepted as they are, by field " +
+          "name, so `unconfirmedFields` stops pointing at them. Recorded in " +
+          "the onboarding that created the item, after the update; ignored " +
+          "for an item made without one.",
+      }),
     },
-    resolve: (_root, args, context) =>
-      context
-        .actor(
-          ItemActorDescriptor,
-          itemActorId({ type: args.type, id: String(args.itemId) }),
-        )
-        .update(patch(args.input, UPDATE_ITEM) satisfies UpdateItemInputType),
+    resolve: async (_root, args, context) => {
+      const ref: ItemRef = { type: args.type, id: String(args.itemId) };
+      const item = await context
+        .actor(ItemActorDescriptor, itemActorId(ref))
+        .update(patch(args.input, UPDATE_ITEM) satisfies UpdateItemInputType);
+      const fields = args.confirmedFields ?? [];
+      if (fields.length > 0) {
+        // The update just passed the creator check, so a source is there;
+        // `null` would be a race with a delete, and there is nothing to mark.
+        const source = await context
+          .actor(ItemActorDescriptor, itemActorId(ref))
+          .correctionSource();
+        if (source?.onboardingId) {
+          await context
+            .actor(ItemOnboardingActorDescriptor, source.onboardingId)
+            .confirmItemFields({ item: ref, fields });
+        }
+      }
+      return item;
+    },
   }),
 );
 

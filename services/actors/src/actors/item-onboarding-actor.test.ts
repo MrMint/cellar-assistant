@@ -1659,7 +1659,7 @@ describe.skipIf(skip)("ItemOnboardingActor.saveDraft (SV-B, MC-drafts)", () => {
     });
   });
 
-  it("a draft whose floor is met when first saved keeps its status", async () => {
+  it("a draft set aside with its floor met is still NEEDS_DETAILS (FR-1)", async () => {
     await withOnboardingDb(async (db) => {
       const { owner, actor } = await openWineDraft(db);
       const saved = await actor.saveDraft(userCtx(owner, "r"), {
@@ -1667,7 +1667,30 @@ describe.skipIf(skip)("ItemOnboardingActor.saveDraft (SV-B, MC-drafts)", () => {
         confirmedFields: [],
         vintageAnswer: "NON_VINTAGE",
       });
-      expect(saved.status).toBe("START");
+      expect(saved.status).toBe("NEEDS_DETAILS");
+    });
+  });
+
+  it("a named beer set aside with Finish later is NEEDS_DETAILS, though its floor is just a name (F-41)", async () => {
+    await withOnboardingDb(async (db) => {
+      const owner = await seedUser(db);
+      await seedReferenceValues(db);
+      const actor = await activate(
+        newOnboardingActor(
+          randomUUID(),
+          db,
+          provider(),
+          undefined,
+          brandRegistry(db),
+        ),
+      );
+      await actor.openDraft(userCtx(owner, "r"), { itemType: "BEER" });
+      const saved = await actor.saveDraft(userCtx(owner, "r"), {
+        fields: { name: "Demo Pale Ale" },
+        confirmedFields: [],
+        vintageAnswer: "UNANSWERED",
+      });
+      expect(saved.status).toBe("NEEDS_DETAILS");
     });
   });
 
@@ -1850,6 +1873,73 @@ describe.skipIf(skip)("ItemOnboardingActor.saveDraft (SV-B, MC-drafts)", () => {
           attributes: { vintage: null, style: "RED" },
         }),
       ).rejects.toBeInstanceOf(NotFoundError);
+    });
+  });
+});
+
+describe.skipIf(skip)("ItemOnboardingActor.confirmItemFields (F-75)", () => {
+  /** A confirmed wine session whose read guessed name and country. */
+  const seedGuessedWine = async (db: DbOrTx, owner: string) => {
+    await db.execute(
+      sql`insert into public.wine_style (value) values ('RED') on conflict do nothing`,
+    );
+    const onboardingId = randomUUID();
+    await db.execute(sql`
+      insert into public.item_onboardings
+        (id, user_id, item_type, status, defaults, confirmed_fields)
+      values (${onboardingId}::uuid, ${owner}::uuid, 'WINE', 'CONFIRMED',
+              ${JSON.stringify({ name: "Demo Red", fieldConfidence: { name: "sure", country: "check" } })}::jsonb,
+              '{name}'::text[])
+    `);
+    const wineId = randomUUID();
+    await db.execute(sql`
+      insert into public.wines (id, name, created_by_id, style, item_onboarding_id)
+      values (${wineId}::uuid, 'Demo Red', ${owner}::uuid, 'RED', ${onboardingId}::uuid)
+    `);
+    return { onboardingId, wineId };
+  };
+  const confirmedOf = async (db: DbOrTx, id: string) =>
+    (
+      await db.execute<{ confirmedFields: string[] }>(sql`
+        select confirmed_fields as "confirmedFields"
+        from public.item_onboardings where id = ${id}::uuid
+      `)
+    ).rows[0]?.confirmedFields;
+
+  it("adds the fields the creator confirmed on the item's edit page, keeping the earlier ones", async () => {
+    await withOnboardingDb(async (db) => {
+      const owner = await seedUser(db);
+      const { onboardingId, wineId } = await seedGuessedWine(db, owner);
+      const actor = await activate(newOnboardingActor(onboardingId, db));
+      const dto = await actor.confirmItemFields(userCtx(owner, "r"), {
+        item: { type: "WINE", id: wineId },
+        fields: [" country ", "name"],
+      });
+      expect(dto.confirmedFields).toEqual(["name", "country"]);
+      expect(await confirmedOf(db, onboardingId)).toEqual(["name", "country"]);
+    });
+  });
+
+  it("refuses anyone but the creator, and an item another session made, writing nothing", async () => {
+    await withOnboardingDb(async (db) => {
+      const owner = await seedUser(db);
+      const stranger = await seedUser(db);
+      const { onboardingId, wineId } = await seedGuessedWine(db, owner);
+      const other = await seedGuessedWine(db, owner);
+      const actor = await activate(newOnboardingActor(onboardingId, db));
+      await expect(
+        actor.confirmItemFields(userCtx(stranger, "r"), {
+          item: { type: "WINE", id: wineId },
+          fields: ["country"],
+        }),
+      ).rejects.toBeInstanceOf(NotFoundError);
+      await expect(
+        actor.confirmItemFields(userCtx(owner, "r"), {
+          item: { type: "WINE", id: other.wineId },
+          fields: ["country"],
+        }),
+      ).rejects.toBeInstanceOf(ValidationError);
+      expect(await confirmedOf(db, onboardingId)).toEqual(["name"]);
     });
   });
 });

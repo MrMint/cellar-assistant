@@ -70,6 +70,7 @@ describe("TierListViewPage title morph (H-7)", () => {
           privacy: "FRIENDS",
           listType: "place",
           isOwner: true,
+          createdById: "me",
           itemCount: 0,
           items: [],
           history: null,

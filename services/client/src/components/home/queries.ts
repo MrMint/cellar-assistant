@@ -447,8 +447,12 @@ export const HomeFriendsFeedQuery = graphql(
   [ActorErrorFieldsFragment],
 );
 
-/** How many sealed Drink soon rows Home reads (L02). */
-export const DRINK_SOON_READ = 20;
+/**
+ * How many Drink soon rows Home reads (L02): the most a page holds, since the
+ * server lists the opened bottles first and Home draws only the sealed ones
+ * after them (F-128).
+ */
+export const DRINK_SOON_READ = 100;
 
 /**
  * L02: the sealed half of Drink soon, which the server computes from each

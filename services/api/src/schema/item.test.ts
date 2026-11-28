@@ -364,6 +364,68 @@ describe("item mutations (§8.3)", () => {
     });
   });
 
+  it("updateItem records confirmedFields in the item's own onboarding (F-75)", async () => {
+    const { invoke, calls } = stubSidecar({
+      "ItemActor.update": () => ITEMS["wine:w1"],
+      "ItemActor.correctionSource": () => ({
+        onboardingId: "66666666-6666-4666-8666-666666666666",
+        hasLabel: true,
+      }),
+      "ItemOnboardingActor.confirmItemFields": () => ({}),
+    });
+    const result = await run(
+      `mutation {
+        updateItem(type: WINE, itemId: "w1", input: { country: "SPAIN" },
+                   confirmedFields: ["country"]) { __typename }
+      }`,
+      testContext(invoke, viewer),
+    );
+    expect(result.errors).toBeUndefined();
+    expect(result.data?.updateItem).toEqual({
+      __typename: "MutationUpdateItemSuccess",
+    });
+    expect(calls.map((c) => [c.actorId, c.method, c.args[1]])).toEqual([
+      ["wine:w1", "update", { country: "SPAIN" }],
+      ["wine:w1", "correctionSource", undefined],
+      [
+        "66666666-6666-4666-8666-666666666666",
+        "confirmItemFields",
+        { item: { type: "WINE", id: "w1" }, fields: ["country"] },
+      ],
+    ]);
+  });
+
+  it("updateItem without confirmedFields, or for an item made without a read, confirms nothing", async () => {
+    const { invoke, calls } = stubSidecar({
+      "ItemActor.update": () => ITEMS["wine:w1"],
+      "ItemActor.correctionSource": () => ({
+        onboardingId: null,
+        hasLabel: false,
+      }),
+    });
+    for (const extra of [
+      "",
+      "confirmedFields: []",
+      'confirmedFields: ["name"]',
+    ]) {
+      const result = await run(
+        `mutation {
+          updateItem(type: WINE, itemId: "w1", input: { name: "N" } ${extra}) {
+            __typename
+          }
+        }`,
+        testContext(invoke, viewer),
+      );
+      expect(result.errors).toBeUndefined();
+    }
+    expect(calls.map((c) => c.method)).toEqual([
+      "update",
+      "update",
+      "update",
+      "correctionSource",
+    ]);
+  });
+
   it("attachItemImage passes the file id through unchanged", async () => {
     const { invoke, calls } = stubSidecar({
       "ItemActor.attachImage": () => ({

@@ -107,6 +107,7 @@ import {
 } from "./adapter";
 import { BAND_LABELS, BANDS, entryNoun } from "./constants";
 import type { TierListItemDisplay } from "./types";
+import { UnratedBandSheet } from "./UnratedBandSheet";
 
 // =============================================================================
 // Types
@@ -302,6 +303,7 @@ const EntryRow = memo(function EntryRow({
             selected && !picked && "ring-2 ring-ring-select",
           )}
           glyph={glyph}
+          photoUrl={item.photoUrl ?? null}
           where={where}
           rating={item.publicRating}
           ratingCount={item.publicRatingCount}
@@ -463,7 +465,12 @@ function DragOverlayRow({
 }) {
   return (
     <div className="scale-[1.03] cursor-grabbing shadow-pop">
-      <PlaceRow name={item.name} glyph={glyph} where={item.subtitle} />
+      <PlaceRow
+        name={item.name}
+        glyph={glyph}
+        photoUrl={item.photoUrl ?? null}
+        where={item.subtitle}
+      />
     </div>
   );
 }
@@ -1052,6 +1059,29 @@ export function TierListView({
             subject={picked.name}
             rank={pickedRank}
             band={pickedBand}
+            listName={listName}
+            counts={Object.fromEntries(
+              RANKED.map((band) => [band, bandMap[band]?.length ?? 0]),
+            )}
+            onChoose={(band) => {
+              setBandSheetOpen(false);
+              void applyMove(picked.id, { kind: "band", band });
+            }}
+            onRemove={() => {
+              setBandSheetOpen(false);
+              void handleRemove(picked.id);
+            }}
+          />
+        )}
+      {picked !== null &&
+        pickedRank !== null &&
+        pickedBand !== null &&
+        !isRanked(pickedBand) && (
+          <UnratedBandSheet
+            open={bandSheetOpen}
+            onOpenChange={setBandSheetOpen}
+            subject={picked.name}
+            rank={pickedRank}
             listName={listName}
             counts={Object.fromEntries(
               RANKED.map((band) => [band, bandMap[band]?.length ?? 0]),

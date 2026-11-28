@@ -1491,11 +1491,14 @@ enum CellarItemSort {
   ADDED_ASC
   ADDED_DESC
   FINISHED_DESC
+  MAKER_ASC
   NAME_ASC
   OPENED_DESC
   OPEN_FIRST
   PERCENTAGE_ASC
   PERCENTAGE_DESC
+  RATING_DESC
+  STYLE_ASC
 }
 
 """`cellar_items.source_type` — how the bottle got here."""
@@ -4425,6 +4428,11 @@ type Mutation {
   resolveBrand(name: String!): ResolveBrandResult!
 
   """
+  F-79: Undo for `removeItemFromCellar` — the bottle back under its own id and `createdAt`, so it returns to its place in the list. Creator or co-owner; again is a no-op. The check-ins the removal detached stay detached.
+  """
+  restoreCellarItem(cellarId: ID!, cellarItemId: ID!, createdAt: DateTime!, input: AddCellarItemInput!): RestoreCellarItemResult!
+
+  """
   Undo `deleteDrinkLog`: the entries it removed come back with their own ids and dates. Only for whoever removed them, within an hour. A bottle, place or photo that has gone since comes back as none; a companion who is no longer your friend does not come back.
   """
   restoreDrinkLog(
@@ -4587,7 +4595,15 @@ type Mutation {
   updateGenericItem(genericItemId: ID!, input: UpdateGenericItemInput!): UpdateGenericItemResult!
 
   """Creator only. Enrichment updates arrive as `system` instead."""
-  updateItem(input: UpdateItemInput!, itemId: ID!, type: ItemType!): UpdateItemResult!
+  updateItem(
+    """
+    F-75: the label-read guesses you accepted as they are, by field name, so `unconfirmedFields` stops pointing at them. Recorded in the onboarding that created the item, after the update; ignored for an item made without one.
+    """
+    confirmedFields: [String!]
+    input: UpdateItemInput!
+    itemId: ID!
+    type: ItemType!
+  ): UpdateItemResult!
 
   """The author's alone."""
   updateItemReview(input: UpdateItemReviewInput!, itemId: ID!, reviewId: ID!, type: ItemType!): UpdateItemReviewResult!
@@ -5777,7 +5793,7 @@ type Query {
   ): QueryMyTierListsResult!
 
   """
-  SV-B: your saved “Needs details” drafts, newest first — one cellar's, or all of yours without `cellarId`. Empty when signed out. Pages over the newest 200.
+  SV-B: your saved “Needs details” drafts, newest first — one cellar's, or all of yours without `cellarId`. Empty when signed out. Pages over every draft `needsDetailsCount` counts.
   """
   needsDetails(
     """
@@ -5801,7 +5817,7 @@ type Query {
   ): QueryNeedsDetailsResult!
 
   """
-  SV-B: how many of your drafts need details — on one cellar, or in all of yours without `cellarId`. A draft is not a cellar item, so this is not in the cellar's item counts. 0 when signed out.
+  SV-B: how many of your drafts need details — on one cellar, or in all of yours without `cellarId`. A draft is not a cellar item, so this is not in the cellar's item counts. 0 when signed out, and for a `cellarId` that is not a UUID (`needsDetails` reports that one).
   """
   needsDetailsCount(cellarId: ID): Int!
 
@@ -7104,6 +7120,8 @@ union ResetFriendInviteResult = BudgetExceededError | ConflictError | ForbiddenE
 
 union ResolveBrandResult = Brand | BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | ValidationError
 
+union RestoreCellarItemResult = BudgetExceededError | CellarItem | ConflictError | ForbiddenError | NotFoundError | ValidationError
+
 union RestoreDrinkLogResult = BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | RestoredDrinkLogPayload | ValidationError
 
 """What `restoreDrinkLog` put back."""
@@ -7462,7 +7480,7 @@ enum SakeServingTemperature {
 }
 
 """
-SV-B: an unfinished bottle, kept on the account. A draft missing a floor field (its name, or an attribute the item type requires) is saved as `NEEDS_DETAILS`; one whose floor is met keeps its status, for `confirmItemOnboarding`.
+SV-B: an unfinished bottle, kept on the account. Every saved draft is `NEEDS_DETAILS`, floor met or not, and listed in `needsDetails` until `confirmItemOnboarding`.
 """
 input SaveDraftInput {
   """The cellar it is aimed at; yours to write."""
@@ -9638,6 +9656,11 @@ type Viewer {
     """
     last: Int
   ): TierListTemplateConnection!
+
+  """
+  F-76: Home's “n to check” — how many of your bottles (open or sealed, not finished, in cellars you created or co-own) are of an item you created whose `unconfirmedFields` is not empty.
+  """
+  unconfirmedBottleCount: Int!
 
   """
   The viewer's Want to try list (X08): items, recipes and places, newest first. Owner-only, like Loved.

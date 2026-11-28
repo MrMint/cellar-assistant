@@ -25,10 +25,12 @@ describe("shownVersion (MC-pick)", () => {
     });
   });
 
-  test("a pick the viewer can't see falls back to the original", () => {
-    assert.deepEqual(shownVersion("hidden", versions), {
-      id: "original",
-      isPick: false,
+  test("a pick past the loaded versions is still shown and labelled (F-107)", () => {
+    // The group page loads 20 versions; the API names the pick whatever
+    // page it sits on, and nulls it when the viewer may not see it.
+    assert.deepEqual(shownVersion("version-21", versions), {
+      id: "version-21",
+      isPick: true,
     });
   });
 

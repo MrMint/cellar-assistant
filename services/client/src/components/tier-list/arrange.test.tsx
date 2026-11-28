@@ -141,6 +141,7 @@ const data = {
   privacy: "PRIVATE",
   listType: "wine",
   isOwner: true,
+  createdById: "me",
   itemCount: items.length,
   items,
   history: { canUndo: true, canRedo: false, undo: edit, redo: null },
@@ -366,6 +367,46 @@ describe("Arrange (X23 / D4)", () => {
     assert.equal(calls.length, 6);
   });
 
+  test("F-176: an Unrated row's Move to band… opens the bands and moves it", async () => {
+    const unrated = {
+      ...data,
+      items: [
+        ...data.items,
+        { ...items[1], id: "row-u", name: "Gamay", band: 0, position: 0 },
+      ],
+    };
+    await render(unrated);
+    await click(button("Edit order"));
+    await click(button("Gamay"));
+    await click(button("Move to band…"));
+    const bands = document.querySelector(
+      '[role="radiogroup"][aria-label="Band"]',
+    );
+    assert.ok(bands, "Move to band… opened nothing for an Unrated row");
+    assert.match(document.body.textContent ?? "", /#4 · Unrated · Reds/);
+    const good = [...(bands?.querySelectorAll('[role="radio"]') ?? [])].find(
+      (el) =>
+        el.textContent?.includes("Good") && !el.textContent.includes("Very"),
+    ) as HTMLElement | undefined;
+    assert.ok(good);
+    assert.equal(good?.getAttribute("aria-checked"), "false");
+    await click(good as HTMLElement);
+    assert.deepEqual(calls, ["reorder tl-1 3 row-1,row-2,row-u", "refresh"]);
+  });
+
+  test("F-176: an Unrated row can be removed from the band sheet", async () => {
+    await render({
+      ...data,
+      items: [
+        ...data.items,
+        { ...items[1], id: "row-u", name: "Gamay", band: 0, position: 0 },
+      ],
+    });
+    await click(button("Edit order"));
+    await remove("Gamay");
+    assert.deepEqual(calls, ["remove row-u", "refresh"]);
+  });
+
   test("a stranger's list is never written: no pick, no move, no removal", async () => {
     await render({ ...data, isOwner: false, history: null });
     for (const name of [
@@ -388,6 +429,44 @@ describe("Arrange (X23 / D4)", () => {
     await render({ ...data, isOwner: false, history: null });
     assert.throws(() => button("Edit order"));
     assert.throws(() => button("Add a wine"));
+  });
+});
+
+describe("Share and Details open L2's sheets (F-22 / H-33)", () => {
+  const dialogTitled = (title: string) =>
+    [...document.querySelectorAll('[role="dialog"]')].find((el) =>
+      [...el.querySelectorAll("h2")].some((h) => h.textContent === title),
+    );
+
+  test("Share opens the share sheet, not a copied link", async () => {
+    await render({ ...data, privacy: "FRIENDS" });
+    await click(button("Share"));
+    assert.ok(dialogTitled("Share"), "no Share sheet");
+    assert.equal(
+      toasts.length,
+      0,
+      "a toast instead of the sheet: the link was copied",
+    );
+  });
+
+  test("Details opens the details sheet on the page, with the list's values", async () => {
+    await render();
+    await click(button("Details"));
+    const sheet = dialogTitled("List details");
+    assert.ok(sheet, "no List details sheet");
+    const name = sheet.querySelector("input");
+    assert.equal(name?.value, "Reds");
+  });
+
+  test("a friend's list has Share but never Details", async () => {
+    await render({
+      ...data,
+      privacy: "FRIENDS",
+      isOwner: false,
+      history: null,
+    });
+    assert.ok(button("Share"));
+    assert.throws(() => button("Details"));
   });
 });
 

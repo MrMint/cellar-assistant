@@ -1237,6 +1237,76 @@ describe.skipIf(skip)("CellarActor (B1)", () => {
       });
     });
 
+    it("F-79: MAKER_ASC, STYLE_ASC and RATING_DESC order by maker, style and your own rating", async () => {
+      await withTestDb(async (db) => {
+        const { owner, actor, ctx, zinfandel, albarino, beer } =
+          await seedMixed(db);
+        const zin = zinfandel.item.id;
+        const alb = albarino.item.id;
+        const ale = beer.item.id;
+        // Style (the card's descriptor): a wine's variety, a beer's style.
+        await db.execute(sql`
+          insert into public.wine_variety (value) values ('MERLOT') on conflict do nothing
+        `);
+        await db.execute(sql`
+          insert into public.beer_style (value) values ('ALTBIER') on conflict do nothing
+        `);
+        await db.execute(
+          sql`update public.wines set variety = 'MERLOT' where id = ${zin}::uuid`,
+        );
+        await db.execute(
+          sql`update public.beers set style = 'ALTBIER' where id = ${ale}::uuid`,
+        );
+        // Maker: the primary brand wins over an earlier, alphabetically first one.
+        const brand = async (name: string) => {
+          const id = randomUUID();
+          await db.execute(
+            sql`insert into public.brands (id, name) values (${id}::uuid, ${name})`,
+          );
+          return id;
+        };
+        const aaa = await brand("Aaa Imports");
+        const casa = await brand("Casa Demo");
+        const brew = await brand("Brew Demo");
+        await db.execute(sql`
+          insert into public.item_brands (wine_id, brand_id, is_primary) values
+            (${zin}::uuid, ${aaa}::uuid, false), (${zin}::uuid, ${casa}::uuid, true)
+        `);
+        await db.execute(sql`
+          insert into public.item_brands (beer_id, brand_id, is_primary)
+          values (${ale}::uuid, ${brew}::uuid, true)
+        `);
+        // Rating: the viewer's own; someone else's 5 on the zinfandel is not.
+        const other = await seedUser(db);
+        await db.execute(sql`
+          insert into public.item_reviews (user_id, wine_id, beer_id, score) values
+            (${owner}::uuid, ${alb}::uuid, null, 4.5),
+            (${owner}::uuid, null, ${ale}::uuid, 3),
+            (${other}::uuid, ${zin}::uuid, null, 5)
+        `);
+        const order = async (sort: "MAKER_ASC" | "STYLE_ASC" | "RATING_DESC") =>
+          (await actor.items(ctx, { page, sort, status: "ALL" })).entries.map(
+            (entry) => entry.node.id,
+          );
+        // Missing keys sort last, by name.
+        expect(await order("MAKER_ASC")).toEqual([
+          beer.id,
+          zinfandel.id,
+          albarino.id,
+        ]);
+        expect(await order("STYLE_ASC")).toEqual([
+          beer.id,
+          zinfandel.id,
+          albarino.id,
+        ]);
+        expect(await order("RATING_DESC")).toEqual([
+          albarino.id,
+          beer.id,
+          zinfandel.id,
+        ]);
+      });
+    });
+
     it("G3: a semanticQuery breaks distance ties by name", async () => {
       await withTestDb(async (db) => {
         const { owner, cellarId, zinfandel, albarino, beer } =
@@ -2338,6 +2408,88 @@ describe.skipIf(skip)("CellarActor move (SV-B, MC-move)", () => {
         actor.updateItem(userCtx(stranger, "r"), itemId, { cellarId: mine }),
       ).rejects.toBeInstanceOf(ForbiddenError);
       expect((await bottleRow(db, itemId)).cellarId).toBe(cellarId);
+    });
+  });
+
+  it("refuses a read-only member: a friend who can see the cellar cannot move its bottle out (F-78)", async () => {
+    await withTestDb(async (db) => {
+      const { friend, actor, itemId, cellarId } = await seedScenario(
+        db,
+        "FRIENDS",
+      );
+      const ctx = userCtx(friend, "r");
+      // The friend reads the cellar and the bottle...
+      expect(
+        (await actor.items(ctx, { page })).entries.map((e) => e.node.id),
+      ).toEqual([itemId]);
+      // ...but may not take it to a cellar of their own.
+      const theirs = await seedCellar(db, { createdById: friend });
+      await expect(
+        actor.updateItem(ctx, itemId, { cellarId: theirs }),
+      ).rejects.toBeInstanceOf(ForbiddenError);
+      expect((await bottleRow(db, itemId)).cellarId).toBe(cellarId);
+    });
+  });
+
+  it("restoreItem puts a removed bottle back as it was: its id, its place in the list, its details (F-79)", async () => {
+    await withTestDb(async (db) => {
+      const { owner, friend, actor, itemId, wine } = await seedScenario(
+        db,
+        "FRIENDS",
+      );
+      const ctx = userCtx(owner, "r");
+      const newer = await actor.addItem(ctx, { item: wine });
+      // One transaction stamps both rows with the same now(): age the first.
+      await db.execute(sql`
+        update public.cellar_items
+        set created_at = now() - interval '1 day', updated_at = clock_timestamp()
+        where id = ${itemId}::uuid
+      `);
+      await actor.onActorMethodPre();
+      await actor.updateItem(ctx, itemId, {
+        location: "Rack A",
+        percentageRemaining: 40,
+      });
+      const [before] = (
+        await actor.items(ctx, { page, sort: "ADDED_ASC", status: "ALL" })
+      ).entries.map((e) => e.node);
+      expect(before?.id).toBe(itemId);
+      if (before === undefined) return;
+      await actor.removeItem(ctx, itemId);
+
+      const input = {
+        item: before.item,
+        cellarItemId: before.id,
+        createdAt: before.createdAt,
+        percentageRemaining: before.percentageRemaining,
+        location: before.location,
+      };
+      // A friend may see the cellar, not put bottles in it.
+      await expect(
+        actor.restoreItem(userCtx(friend, "r"), input),
+      ).rejects.toBeInstanceOf(ForbiddenError);
+      const restored = await actor.restoreItem(ctx, input);
+      expect(restored).toMatchObject({
+        id: itemId,
+        createdAt: before.createdAt,
+        percentageRemaining: 40,
+        location: "Rack A",
+      });
+      // Back below the newer bottle, where it was, not on top as a new add.
+      expect(
+        (await actor.items(ctx, { page, status: "ALL" })).entries.map(
+          (e) => e.node.id,
+        ),
+      ).toEqual([newer.id, itemId]);
+      // Again is a no-op; a future date is refused.
+      expect((await actor.restoreItem(ctx, input)).id).toBe(itemId);
+      await expect(
+        actor.restoreItem(ctx, {
+          ...input,
+          cellarItemId: randomUUID(),
+          createdAt: new Date(Date.now() + 86_400_000).toISOString(),
+        }),
+      ).rejects.toBeInstanceOf(ValidationError);
     });
   });
 

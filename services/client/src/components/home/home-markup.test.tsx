@@ -144,6 +144,38 @@ describe("HomeInbox", () => {
     assert.match(html, /data-tone="warning"/, "a budget is calm, not red");
   });
 
+  test("failed list insights are one quiet row, not one per list (F-32)", () => {
+    const insights = ["t1", "t2", "t3", "t4"].map((id, index) =>
+      job({
+        id: `TIER_LIST_INSIGHTS:${id}`,
+        kind: "TIER_LIST_INSIGHTS",
+        status: "FAILED",
+        subjectId: id,
+        tierListName: `List ${id}`,
+        failureCode: "UNAVAILABLE",
+        finishedAt: `2026-10-09T12:0${index}:00.000Z`,
+      }),
+    );
+    const html = render(
+      <HomeInbox
+        initialJobs={[...insights, job({ placeName: "Old Mill" })]}
+        suggestions={[]}
+        requests={[]}
+        initialSeen={[]}
+      />,
+    );
+    const words = text(html);
+    assert.equal(words.match(/No insights for/g)?.length, 1);
+    assert.match(words, /No insights for 4 lists yet/);
+    assert.match(
+      words,
+      /Reading the menu at Old Mill/,
+      "the running read still shows",
+    );
+    assert.doesNotMatch(words, /\d more/, "two rows: nothing folded away");
+    assert.match(html, /aria-label="Dismiss: No insights for 4 lists yet"/);
+  });
+
   test("Waiting on you: matches, a draft and a request, each deep-linked", () => {
     const html = render(
       <HomeInbox
@@ -281,12 +313,11 @@ describe("ContinueSection", () => {
       <ContinueSection
         bottles={[bottle("a", "RED", 6)]}
         sealed={["s1", "s2", "s3", "s4", "s5"].map(sealedRow)}
-        sealedTotal={9}
         serverNow={NOW}
       />,
     );
     const words = text(html);
-    assert.match(words, /Drink soon 9/);
+    assert.match(words, /Drink soon 5/, "the rows Show more reaches");
     assert.match(words, /Sealed · ended Jan 2026/);
     assert.match(words, /Typical for IPA/);
     assert.equal(html.match(/data-kind="drink-soon-sealed"/g)?.length, 4);

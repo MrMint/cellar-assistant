@@ -5790,6 +5790,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
             },
           },
           {
+            name: "restoreCellarItem",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "UNION", name: "RestoreCellarItemResult" },
+            },
+          },
+          {
             name: "restoreDrinkLog",
             type: {
               kind: "NON_NULL",
@@ -9837,6 +9844,18 @@ export const graphcacheSchema: MinifiedIntrospection = {
       },
       {
         kind: "UNION",
+        name: "RestoreCellarItemResult",
+        possibleTypes: [
+          { kind: "OBJECT", name: "BudgetExceededError" },
+          { kind: "OBJECT", name: "CellarItem" },
+          { kind: "OBJECT", name: "ConflictError" },
+          { kind: "OBJECT", name: "ForbiddenError" },
+          { kind: "OBJECT", name: "NotFoundError" },
+          { kind: "OBJECT", name: "ValidationError" },
+        ],
+      },
+      {
+        kind: "UNION",
         name: "RestoreDrinkLogResult",
         possibleTypes: [
           { kind: "OBJECT", name: "BudgetExceededError" },
@@ -12789,6 +12808,10 @@ export const graphcacheSchema: MinifiedIntrospection = {
               kind: "NON_NULL",
               ofType: { kind: "OBJECT", name: "TierListTemplateConnection" },
             },
+          },
+          {
+            name: "unconfirmedBottleCount",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
           },
           {
             name: "wantToTry",

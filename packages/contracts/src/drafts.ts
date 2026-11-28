@@ -39,6 +39,12 @@ export type DraftsCollectionActorInterface = {
     ctx: Ctx,
     items: readonly ItemRef[],
   ): Promise<readonly (readonly string[])[]>;
+  /**
+   * F-76: how many of the viewer's bottles — not empty, open or sealed, in
+   * any cellar they created or co-own — are of an item they created whose
+   * `unconfirmedFields` is not empty. Home's "n to check".
+   */
+  unconfirmedBottleCount(ctx: Ctx): Promise<number>;
 };
 
 export const DraftsCollectionActorDescriptor: ActorDescriptor<DraftsCollectionActorInterface> =
@@ -49,5 +55,6 @@ export const DraftsCollectionActorDescriptor: ActorDescriptor<DraftsCollectionAc
       needsDetails: {},
       needsDetailsCount: {},
       unconfirmedFields: {},
+      unconfirmedBottleCount: {},
     },
   };
