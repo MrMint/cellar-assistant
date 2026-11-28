@@ -731,6 +731,43 @@ describe.skipIf(skip)("UserActor (B4)", () => {
       });
     });
 
+    /**
+     * **FR-11 (m06-share "Add as a friend").** Alice removes Bob, which drops
+     * both rows in her own transaction, and the mirror that tells Bob's
+     * activation to reload sits in the outbox. Bob accepts her invite in that
+     * window. His activation still caches the `friends(bob, alice)` row Alice
+     * deleted, so the accept read "already friends", wrote nothing and said
+     * so, and the friendship never reached Alice.
+     */
+    it("an invite accepted before the removal's mirror lands still makes the friendship", async () => {
+      await withUserDb(async (db) => {
+        const alice = await seedPerson(db, "Alice");
+        const bob = await seedPerson(db, "Bob");
+        await befriend(db, alice, bob);
+        const { token } = await (await userActor(alice, db)).ensureFriendInvite(
+          userCtx(alice, "r"),
+        );
+        const input = parseInviteToken(token);
+        if (input === null) throw new Error("bad token");
+        // Bob's activation, loaded while they are friends.
+        const bobs = await userActor(bob, db);
+
+        await (await userActor(alice, db)).removeFriend(
+          userCtx(alice, "r"),
+          bob,
+        );
+        expect(await friendPairs(db, [alice, bob])).toEqual([]);
+
+        // No drain: the removal's mirror has not reached Bob's activation.
+        const accepted = await bobs.acceptFriendInvite(
+          userCtx(bob, "r2"),
+          input,
+        );
+        expect(accepted).toEqual({ friendId: alice, becameFriends: true });
+        expect(await friendPairs(db, [alice, bob])).toEqual(["u2→u1"]);
+      });
+    });
+
     it("refuses anonymous, a rotated link, and your own link", async () => {
       await withUserDb(async (db) => {
         const alice = await seedPerson(db, "Alice");
