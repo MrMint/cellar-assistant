@@ -18,7 +18,6 @@ import { useThemeChoice } from "@/lib/theme/client";
 import { EditProfileSheet } from "./EditProfileSheet";
 import type { EditableProfile } from "./ProfileEditor";
 import { SignOutButton } from "./SignOutButton";
-import { WhoSeesCellars } from "./WhoSeesCellars";
 
 const APPEARANCE = [
   { value: "dark", label: "Dark" },
@@ -207,7 +206,6 @@ export function SettingsView({ profile }: { profile: EditableProfile | null }) {
           />
         </Block>
         <LocationRow />
-        <WhoSeesCellars />
         {install.kind !== null ? (
           <DoorRow
             label="Install the app"

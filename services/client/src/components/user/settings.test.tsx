@@ -25,9 +25,6 @@ mock.module("@/components/map/hooks/useGeolocation", () => ({
     dismiss: () => {},
   }),
 }));
-mock.module("./WhoSeesCellars", () => ({
-  WhoSeesCellars: () => <button type="button">Who sees your cellars</button>,
-}));
 mock.module("./SignOutButton", () => ({
   SignOutButton: () => <button type="button">Sign out</button>,
 }));
@@ -127,7 +124,6 @@ describe("rows", () => {
       "Edit profile",
       "Name and picture",
       "Use my location",
-      "Who sees your cellars",
       "Sign out",
     ]) {
       assert.ok(text.includes(label), label);
