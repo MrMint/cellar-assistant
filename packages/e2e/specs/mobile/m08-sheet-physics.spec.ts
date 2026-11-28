@@ -58,10 +58,10 @@ async function touchDrag(
 async function settleSheet(page: Page, name: string): Promise<Locator> {
   const sheet = page.getByRole("dialog", { name });
   await expect(sheet).toBeVisible();
-  await expect(
-    sheet,
-    "the sheet should be vaul's BottomSheet",
-  ).toHaveAttribute("data-slot", "bottom-sheet");
+  await expect(sheet, "the sheet should be vaul's BottomSheet").toHaveAttribute(
+    "data-slot",
+    "bottom-sheet",
+  );
   // vaul ignores drags for its first 500 ms (the open transition).
   await page.waitForTimeout(700);
   return sheet;

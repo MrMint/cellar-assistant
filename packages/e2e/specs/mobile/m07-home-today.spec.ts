@@ -288,7 +288,9 @@ test("Drink soon: a sealed bottle whose own date is close, with Open and Undo (L
     .locator('[data-kind="drink-soon-sealed"]')
     .filter({ hasText: names.sealed });
   // Drink soon shows four rows; other runs' sealed teas may fill them.
-  const more = section.getByRole("button", { name: /^Show \d+ more$|^Show more/ });
+  const more = section.getByRole("button", {
+    name: /^Show \d+ more$|^Show more/,
+  });
   await expect(section).toBeVisible({ timeout: 20_000 });
   if (!(await sealed.isVisible()) && (await more.count()) > 0) {
     await more.first().click();

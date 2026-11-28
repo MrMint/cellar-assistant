@@ -91,7 +91,9 @@ test("a brand-new account: lands Home, has My Cellar, and every empty screen off
     await page.getByLabel("Name", { exact: true }).fill("First Run");
     await email.fill(`e2e-first-run-${randomUUID()}@test.com`);
     await page.getByLabel("Password").fill(`pw-${randomUUID()}`);
-    await page.getByRole("button", { name: "Create account", exact: true }).click();
+    await page
+      .getByRole("button", { name: "Create account", exact: true })
+      .click();
 
     // X01/X10: Home "Today" at `/` — not /cellars, and not /search any more.
     await expect(page).toHaveURL(/^https?:\/\/[^/]+\/(?:\?.*)?$/, {

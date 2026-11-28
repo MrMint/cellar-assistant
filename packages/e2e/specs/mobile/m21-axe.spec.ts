@@ -385,7 +385,9 @@ test("touch targets: the item page's tins and the bottle page's Steep sheet pass
       // Axe takes a CSS selector, so tag the section by its heading first.
       await page
         .getByRole("heading", { name: "Your tins" })
-        .evaluate((h) => h.closest("section")?.setAttribute("data-e2e-tins", ""));
+        .evaluate((h) =>
+          h.closest("section")?.setAttribute("data-e2e-tins", ""),
+        );
       await expect(page.locator(tins).first()).toBeVisible();
       expect
         .soft(await targetSizeIn(page, tins), `${route}: Your tins`)

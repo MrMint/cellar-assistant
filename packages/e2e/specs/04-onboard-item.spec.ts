@@ -1,12 +1,6 @@
 import { createCellar, unique } from "../fixtures/data.ts";
 import { deleteCellarWithContents } from "../fixtures/db.ts";
-import {
-  bodyText,
-  expect,
-  settleNetwork,
-  test,
-  watch,
-} from "../fixtures/test.ts";
+import { expect, settleNetwork, test, watch } from "../fixtures/test.ts";
 
 /**
  * Onboard a wine, put it in a cellar, check it in.
