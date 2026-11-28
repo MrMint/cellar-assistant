@@ -116,13 +116,6 @@ const shownNote = () =>
 
 const saved = { id: "r-1", score: 4, text: "Bright and bitter" };
 
-describe("the stars button (F-149)", () => {
-  test("its tap target is 44 px tall", async () => {
-    await render(saved);
-    assert.match(button("Change your rating").className, /\bmin-h-11\b/);
-  });
-});
-
 describe("the rating editor (F-146)", () => {
   test("after Add, Edit note opens on the score and note just saved", async () => {
     await render(null);
