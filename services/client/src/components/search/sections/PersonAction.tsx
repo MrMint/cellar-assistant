@@ -9,11 +9,11 @@ import {
   RejectFriendRequestMutation,
   SendFriendRequestMutation,
 } from "@/components/friend/fragments";
+import { useUndoableWrite } from "@/components/friend/undoable-write";
 import { Button } from "@/components/ui/button";
 import { feedback } from "@/lib/feedback";
 import { addFriendOutcome } from "../AddFriendButton";
 import type { PersonRelation } from "../universal-search";
-import { usePendingRequest } from "./person-requests";
 
 type Standing = Exclude<PersonRelation, "FRIEND"> | "FRIEND";
 
@@ -28,39 +28,39 @@ export const STANDING_LINES: Readonly<Record<Standing, string | undefined>> = {
 /**
  * A person's row action (Recipes-Search 25–28): Add friend; Cancel request
  * once one is out (`rejectFriendRequest`, L2 — no new mutation); Accept when
- * they asked first. Each acts at once; Add friend's and Cancel's toasts
- * carry Undo (KIT § 4; F-97), and a failure puts the row back as it was. An
- * Undo is itself quiet: it raises no second undo toast. Outlined, as every action inside a
- * row is (CROSS-LOT); Cancel is quiet.
+ * they asked first. Cancel and Accept use the row's own `pendingRequestId`
+ * (F-43, F-105), or the id Add friend just got back: no lookup.
+ *
+ * Add friend acts at once, and its toast's Undo cancels. Cancel can't be put
+ * back without a second request, so it is held until its Undo toast closes
+ * (`friend/undoable-write`, KIT § 4, H-91): the row turns at once, Undo sends
+ * nothing, and Add friend while it is held takes it back. A failure puts the
+ * row back as it was. An Undo is itself quiet: it raises no second toast.
+ * Outlined, as every action inside a row is (CROSS-LOT); Cancel is quiet.
  */
 export function PersonAction({
   userId,
   name,
   relation,
+  requestId = null,
   onStanding,
 }: {
   userId: string;
   name: string;
   relation: Exclude<PersonRelation, "FRIEND">;
+  /** The open request between you (`UserSearchResult.pendingRequestId`). */
+  requestId?: string | null;
   /** The row's status line follows the action. */
   onStanding?: (standing: Standing) => void;
 }) {
   const [, send] = useMutation(SendFriendRequestMutation);
   const [, reject] = useMutation(RejectFriendRequestMutation);
   const [, accept] = useMutation(AcceptFriendRequestMutation);
+  const { hold, drop } = useUndoableWrite();
   const [standing, setStandingState] = useState<Standing>(relation);
-  // The request this row sent, so Cancel needs no lookup.
-  const [sentId, setSentId] = useState<string | null>(null);
+  // The open request: the row's own, then the one this row sent.
+  const [pending, setPending] = useState<string | null>(requestId);
   const [busy, setBusy] = useState(false);
-  // The id Cancel or Accept needs, read only while one could be tapped.
-  const outgoing = usePendingRequest(
-    standing === "REQUEST_SENT" && sentId === null ? "OUTGOING" : null,
-    userId,
-  );
-  const incoming = usePendingRequest(
-    standing === "REQUEST_RECEIVED" ? "INCOMING" : null,
-    userId,
-  );
 
   const setStanding = (next: Standing) => {
     setStandingState(next);
@@ -73,17 +73,9 @@ export function PersonAction({
     notify(words, { tone: "error" });
   };
 
-  const cancel = async (known: string | null, undoable = true) => {
-    setBusy(true);
-    setStanding("NONE");
-    const requestId = known ?? outgoing.id;
-    if (requestId === null) {
-      setBusy(false);
-      failed(`Couldn't cancel the request to ${name}`, "REQUEST_SENT");
-      return;
-    }
-    const response = await reject({ requestId });
-    setBusy(false);
+  /** Sends the cancel now: Add's Undo, or a held cancel going. */
+  const sendCancel = async (id: string) => {
+    const response = await reject({ requestId: id });
     if (
       response.data?.rejectFriendRequest.__typename !==
       "RejectFriendRequestPayload"
@@ -91,24 +83,37 @@ export function PersonAction({
       failed(`Couldn't cancel the request to ${name}`, "REQUEST_SENT");
       return;
     }
-    setSentId(null);
-    if (undoable)
-      notify(`Request to ${name} canceled`, {
-        undo: () => void add(false),
-      });
+    setPending((now) => (now === id ? null : now));
+  };
+
+  const cancel = (id: string) => {
+    setStanding("NONE");
+    hold(userId, {
+      message: `Request to ${name} canceled`,
+      commit: () => void sendCancel(id),
+      restore: () => setStanding("REQUEST_SENT"),
+    });
   };
 
   const add = async (undoable = true) => {
+    // A cancel still held is taken back rather than sent and asked again.
+    if (drop(userId)) {
+      setStanding("REQUEST_SENT");
+      return;
+    }
     setBusy(true);
     setStanding("REQUEST_SENT");
     const response = await send({ userId });
     setBusy(false);
     const sent = response.data?.sendFriendRequest;
     if (sent?.__typename === "FriendRequest") {
-      setSentId(sent.id);
+      setPending(sent.id);
       if (undoable)
         notify(`Request sent to ${name}`, {
-          undo: () => void cancel(sent.id, false),
+          undo: () => {
+            setStanding("NONE");
+            void sendCancel(sent.id);
+          },
         });
       return;
     }
@@ -123,16 +128,10 @@ export function PersonAction({
     failed(`Couldn't send ${name} a request`, "NONE");
   };
 
-  const acceptRequest = async () => {
+  const acceptRequest = async (id: string) => {
     setBusy(true);
     setStanding("FRIEND");
-    const requestId = incoming.id;
-    if (requestId === null) {
-      setBusy(false);
-      failed(`Couldn't accept ${name}'s request`, "REQUEST_RECEIVED");
-      return;
-    }
-    const response = await accept({ requestId });
+    const response = await accept({ requestId: id });
     setBusy(false);
     if (
       response.data?.acceptFriendRequest.__typename !==
@@ -176,11 +175,11 @@ export function PersonAction({
           variant="quiet-muted"
           size="sm"
           className="min-h-11 min-w-11"
-          disabled={busy || outgoing.fetching}
+          disabled={busy || pending === null}
           aria-label={`Cancel the request to ${name}`}
           onClick={(event) => {
             stop(event);
-            void cancel(sentId);
+            if (pending !== null) cancel(pending);
           }}
         >
           Cancel request
@@ -192,11 +191,11 @@ export function PersonAction({
           variant="outline"
           size="sm"
           className="min-h-11 min-w-11"
-          disabled={busy || incoming.fetching}
+          disabled={busy || pending === null}
           aria-label={`Accept ${name}'s request`}
           onClick={(event) => {
             stop(event);
-            void acceptRequest();
+            if (pending !== null) void acceptRequest(pending);
           }}
         >
           Accept
@@ -214,11 +213,13 @@ export function PersonResultRow({
   name,
   avatarUrl,
   relation,
+  requestId = null,
 }: {
   userId: string;
   name: string;
   avatarUrl: string | null;
   relation: Exclude<PersonRelation, "FRIEND">;
+  requestId?: string | null;
 }) {
   const [standing, setStanding] = useState<Standing>(relation);
   return (
@@ -232,6 +233,7 @@ export function PersonResultRow({
           userId={userId}
           name={name}
           relation={relation}
+          requestId={requestId}
           onStanding={setStanding}
         />
       }

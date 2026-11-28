@@ -13,9 +13,11 @@ import { PlaceRow } from "@/components/app/parts/PlaceRow";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { cn } from "@/lib/utils";
 import { RetrySearchButton } from "./RetrySearchButton";
+import { DESKTOP_PREVIEW_SIZE, lookOrder } from "./search-quick-look";
 import { PersonResultRow } from "./sections/PersonAction";
 import { ResultRow } from "./sections/ResultRow";
 import { ScopeRail } from "./sections/ScopeRail";
+import { SearchQuickLook } from "./sections/SearchQuickLook";
 import {
   allResultsHref,
   mapSearchHref,
@@ -28,8 +30,7 @@ import {
   totalLabel,
 } from "./universal-search";
 
-/** Rows a preview shows from `md` up: two lines of the three-column grid. */
-export const DESKTOP_PREVIEW_SIZE = 6;
+export { DESKTOP_PREVIEW_SIZE };
 
 function PlaceResult({ row }: { row: SearchRow }) {
   return (
@@ -59,6 +60,7 @@ function PersonResult({ row }: { row: SearchRow }) {
         name={row.person.name}
         avatarUrl={row.thumb.kind === "avatar" ? row.thumb.url : null}
         relation={row.person.relation}
+        requestId={row.person.requestId}
       />
     );
   }
@@ -347,12 +349,14 @@ export function SearchSections({
     return (
       <div className="flex flex-col gap-4">
         {rail}
-        <OpenSection
-          section={focus}
-          model={sections.find((model) => model.section === focus)}
-          query={query}
-          unanswered={unanswered}
-        />
+        <SearchQuickLook rows={lookOrder(sections, focus)}>
+          <OpenSection
+            section={focus}
+            model={sections.find((model) => model.section === focus)}
+            query={query}
+            unanswered={unanswered}
+          />
+        </SearchQuickLook>
       </div>
     );
   }
@@ -400,14 +404,19 @@ export function SearchSections({
           Matching names only
         </p>
       )}
-      {sections.map((model, index) => (
-        <PreviewSection
-          key={model.section}
-          model={model}
-          query={query}
-          index={index}
-        />
-      ))}
+      {/* F-42: J/K, Enter and the desktop pane over these rows. */}
+      <SearchQuickLook rows={lookOrder(sections, null)}>
+        <div className="flex flex-col gap-6">
+          {sections.map((model, index) => (
+            <PreviewSection
+              key={model.section}
+              model={model}
+              query={query}
+              index={index}
+            />
+          ))}
+        </div>
+      </SearchQuickLook>
       {failed.length > 0 && (
         <div
           role="status"

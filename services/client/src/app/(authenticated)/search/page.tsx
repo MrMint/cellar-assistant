@@ -10,7 +10,7 @@ import {
   SearchResultsSkeleton,
   SearchSectionsSkeleton,
 } from "@/components/search/SearchResultsSkeleton";
-import { SearchSheetHeader } from "@/components/search/SearchSheetHeader";
+import { SearchHeading } from "@/components/search/SearchSheetHeader";
 import { ServerBarcodeResults } from "@/components/search/ServerBarcodeResults";
 import {
   ExpiredImageSearch,
@@ -25,9 +25,9 @@ import { sectionFromParam } from "@/components/search/universal-search";
 /**
  * `/search` (Recipes-Search, phone and desktop): the field in a sticky bar,
  * then "Look in" and its six tiles, or the results. Home is `/` ("Today").
- * The board keeps the tab bar here; until `AppShell` stops hiding it on
- * `/search` (hand-off to F2a) the phone keeps the sheet's Close. The URL still works on its own — links, `?q=`, `?barcode=`,
- * `?image=` — and Close goes back to where the sheet was opened from.
+ * The board keeps the tab bar here, and the shell shows it (FR-2), so the
+ * page has no Close: its h1 is for screen readers only (F-103). The URL
+ * works on its own — links, `?q=`, `?barcode=`, `?image=`.
  *
  * The landing view's greeting, collection line, Recent Activity and Nearby
  * Places moved to Home with X10 (its Friends and Nearby sections); `?activity=`
@@ -82,7 +82,7 @@ export default async function Search({ searchParams }: SearchPageProps) {
     <div className="mx-auto w-full max-w-[1320px] animate-in fade-in-0 duration-(--ca-dur-medium) ease-enter">
       <SearchPageLayout
         urlQuery={query}
-        header={<SearchSheetHeader />}
+        header={<SearchHeading />}
         landing={null}
         token={query === null ? token : null}
         scope={focus}

@@ -17,6 +17,7 @@
  * shared: opening a section re-reads nothing the preview did not.
  */
 
+import type { ApiItemType } from "@/components/cellar-api/itemTypes";
 import {
   cellarItemHref,
   itemTypeLabel,
@@ -252,6 +253,7 @@ export const SearchPeopleSectionQuery = graphql(
             displayName
             avatarUrl
             relation
+            pendingRequestId
           }
         }
       }
@@ -316,6 +318,21 @@ export type RowThumb =
       readonly name: string;
     };
 
+/**
+ * What a row opens in the desktop quick-look pane (F-42): an item's page
+ * body (`ItemPane`), or a place's (`PlacePane`). Absent: no pane, Enter
+ * opens the page.
+ */
+export type SearchLook =
+  | {
+      readonly kind: "item";
+      readonly itemId: string;
+      readonly itemType: ApiItemType;
+      /** Your bottle's cellar, when the row is one of your bottles. */
+      readonly cellarId?: string;
+    }
+  | { readonly kind: "place"; readonly placeId: string };
+
 export type SearchRow = {
   readonly key: string;
   readonly title: string;
@@ -327,6 +344,8 @@ export type SearchRow = {
   readonly score?: number | null;
   /** A place's public rating, at the right with the people glyph. */
   readonly rating?: number | null;
+  /** What the desktop pane shows for this row (F-42). */
+  readonly look?: SearchLook;
   /**
    * A person who is not your friend: the row ends in Add friend, Cancel
    * request or Accept, by where things stand (`PersonAction`).
@@ -335,6 +354,8 @@ export type SearchRow = {
     readonly userId: string;
     readonly name: string;
     readonly relation: Exclude<PersonRelation, "FRIEND">;
+    /** The open request between you, for Cancel or Accept (F-43, F-105). */
+    readonly requestId: string | null;
   };
 };
 
@@ -455,6 +476,12 @@ export const bottleRows = (
         node.bottleCount > 1 ? `${node.bottleCount} bottles` : null,
       ]),
       href: cellarItemHref(node.cellarId, card.type, node.cellarItemId),
+      look: {
+        kind: "item",
+        itemId: card.itemId,
+        itemType: card.type,
+        cellarId: node.cellarId,
+      },
       thumb,
       score: card.score ?? null,
     };
@@ -494,6 +521,7 @@ export const itemRows = (
         title,
         description: joinLine([card.subtitle ?? itemTypeLabel(card.type)]),
         href: itemHref(card.type, card.itemId),
+        look: { kind: "item", itemId: card.itemId, itemType: card.type },
         thumb,
         score: card.score ?? null,
       },
@@ -572,6 +600,7 @@ export const placeRows = (
           node.reviewStatus === "APPROVED" ? null : "Under review",
         ]),
         href: `/places/${node.id}`,
+        look: { kind: "place", placeId: node.id },
         thumb: { kind: "icon", icon: "place" },
         rating: node.rating ?? null,
       }),
@@ -689,7 +718,12 @@ export const peopleRows = (
       ...(relation === "FRIEND"
         ? { href: `/users/${encodeURIComponent(node.userId)}` }
         : {
-            person: { userId: node.userId, name: node.displayName, relation },
+            person: {
+              userId: node.userId,
+              name: node.displayName,
+              relation,
+              requestId: node.pendingRequestId ?? null,
+            },
           }),
     };
   });
