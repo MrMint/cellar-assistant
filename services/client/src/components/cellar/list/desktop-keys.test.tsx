@@ -42,10 +42,35 @@ mock.module("next/navigation", () => ({
 mock.module("next/image", () => ({
   default: (props: { alt: string }) => <span data-alt={props.alt} />,
 }));
+/** The writes the keys send, by operation name (F-144). */
+const sent: { op: string; vars: Record<string, unknown> }[] = [];
+const opName = (doc: unknown): string =>
+  (doc as { definitions?: { name?: { value?: string } }[] }).definitions?.[0]
+    ?.name?.value ?? "";
 mock.module("urql", () => ({
   useQuery: () => [{ data: undefined, fetching: false }, () => {}],
-  useMutation: () => [{}, async () => ({ data: undefined })],
-  useClient: () => ({}),
+  useMutation: (doc: unknown) => [
+    {},
+    async (vars: Record<string, unknown>) => {
+      sent.push({ op: opName(doc), vars });
+      return { data: undefined };
+    },
+  ],
+  useClient: () => ({
+    query: (doc: unknown, vars: Record<string, unknown>) => ({
+      toPromise: async () => {
+        sent.push({ op: opName(doc), vars });
+        return {
+          data: {
+            item: {
+              __typename: "QueryItemSuccess",
+              data: { __typename: "Beer", id: vars.itemId, myReview: null },
+            },
+          },
+        };
+      },
+    }),
+  }),
 }));
 // C2's pane, as a stand-in: this test is about the list's keys, not its body.
 mock.module("@/components/item/ItemPane", () => ({
@@ -175,6 +200,29 @@ describe("desktop cellar keys", () => {
 
     await press("Backspace");
     assert.equal(selected(), null);
+  });
+
+  test("F favourites the selected bottle, 1 to 5 rate it (F-144)", async () => {
+    sent.length = 0;
+    await press("f");
+    assert.deepEqual(sent, [], "nothing selected: nothing sent");
+    await press("ArrowRight");
+    await press("f");
+    assert.deepEqual(sent.at(-1), {
+      op: "SetItemFavorite",
+      vars: { itemId: "i1", type: "BEER", favorited: true },
+    });
+    await press("4");
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 10));
+    });
+    const rated = sent.at(-1);
+    assert.equal(rated?.op, "AddItemReview");
+    assert.equal(rated?.vars.itemId, "i1");
+    assert.equal(
+      (rated?.vars.input as { score?: number } | undefined)?.score,
+      4,
+    );
   });
 
   test("a click on a tile opens the pane, not the page", async () => {

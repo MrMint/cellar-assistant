@@ -66,6 +66,12 @@ export const LIST_KEYS = [
   "Backspace",
   "o",
   "t",
+  "f",
+  "1",
+  "2",
+  "3",
+  "4",
+  "5",
 ] as const;
 
 /** How many columns a grid element draws (1 for anything else). */

@@ -39,9 +39,15 @@ describe("list keys", () => {
 
   test("every key the list answers is one the keys dialog shows", () => {
     const shown = KEY_ROWS.map((row) => row.keys).join(" ");
-    for (const key of ["J", "K", "Enter", "⌫", "O", "T"]) {
+    for (const key of ["J", "K", "Enter", "⌫", "O", "T", "F", "1 5"]) {
       assert.ok(shown.includes(key), `${key} is in the keys dialog`);
     }
     assert.ok(LIST_KEYS.includes("Backspace"));
+    for (const key of ["f", "1", "2", "3", "4", "5"] as const) {
+      assert.ok(
+        (LIST_KEYS as readonly string[]).includes(key),
+        `${key} is a list key`,
+      );
+    }
   });
 });
