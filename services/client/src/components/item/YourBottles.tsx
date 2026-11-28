@@ -250,13 +250,13 @@ export function YourBottles({
                       aria-current={selected ? "page" : undefined}
                       aria-label={`${bottleStateLine(bottle)}, ${cellar}`}
                       className={cn(
-                        "truncate text-ink",
+                        "line-clamp-2 text-ink",
                         expanded ? "t-title" : "t-head",
                       )}
                     >
                       {bottleStateLine(bottle)}
                     </Link>
-                    <span className="t-cap truncate text-ink-2">
+                    <span className="t-cap line-clamp-2 text-ink-2">
                       {cellar}
                       {date !== null && <> · {date}</>}
                     </span>

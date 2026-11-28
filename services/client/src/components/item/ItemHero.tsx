@@ -26,6 +26,7 @@ export function ItemHero({
   picture,
   stateLine,
   bleed = true,
+  pane = false,
 }: {
   itemId: string;
   type: ApiItemType;
@@ -41,6 +42,8 @@ export function ItemHero({
   stateLine?: ReactNode;
   /** Runs edge to edge under the bar on a phone; off in the desktop pane. */
   bleed?: boolean;
+  /** In the desktop pane, whose own photo is the picture: words only (F-5). */
+  pane?: boolean;
 }) {
   const phrases = subtitle.filter(
     (phrase): phrase is string =>
@@ -52,25 +55,31 @@ export function ItemHero({
   return (
     <header
       data-testid="item-hero"
-      className="flex flex-col gap-4 md:flex-row md:items-end md:gap-6"
+      className={
+        pane
+          ? "flex flex-col gap-4"
+          : "flex flex-col gap-4 md:flex-row md:items-end md:gap-6"
+      }
     >
-      <div
-        data-slot="item-hero-picture"
-        className={
-          bleed
-            ? "relative -mx-4 -mt-4 overflow-hidden md:mx-0 md:mt-0 md:w-64 md:shrink-0 md:rounded-lg"
-            : "relative w-40 shrink-0 overflow-hidden rounded-lg"
-        }
-      >
-        {picture}
-        {bleed && (
-          // The fade into the page under the photo (phone only).
-          <span
-            aria-hidden
-            className="pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-linear-to-b from-transparent to-background md:hidden"
-          />
-        )}
-      </div>
+      {!pane && (
+        <div
+          data-slot="item-hero-picture"
+          className={
+            bleed
+              ? "relative -mx-4 -mt-4 overflow-hidden md:mx-0 md:mt-0 md:w-64 md:shrink-0 md:rounded-lg"
+              : "relative w-40 shrink-0 overflow-hidden rounded-lg"
+          }
+        >
+          {picture}
+          {bleed && (
+            // The fade into the page under the photo (phone only).
+            <span
+              aria-hidden
+              className="pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-linear-to-b from-transparent to-background md:hidden"
+            />
+          )}
+        </div>
+      )}
       <div className="flex min-w-0 flex-1 flex-col gap-1.5">
         <div className="flex items-start gap-2">
           {/* B05: where a card's title lands (named for this page's path). */}

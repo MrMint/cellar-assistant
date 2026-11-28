@@ -206,6 +206,7 @@ export function ItemPageView({
           subtitle={item.subTitlePhrases}
           picture={picture}
           bleed={!pane}
+          pane={pane}
           stateLine={
             selected === null || !selected.isOwner ? undefined : (
               <p data-testid="selected-bottle" className="t-cap text-ink-2">

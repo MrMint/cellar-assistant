@@ -170,7 +170,7 @@ export const AddReview = ({
             type="button"
             onClick={openEditor}
             aria-label={editing ? "Change your rating" : "Rate it"}
-            className="-m-1 rounded-md p-1 outline-none focus-visible:outline-2 focus-visible:outline-act-ink"
+            className="-mx-1 inline-flex min-h-11 items-center rounded-md px-1 outline-none focus-visible:outline-2 focus-visible:outline-act-ink"
           >
             <Stars value={myReview?.score ?? null} size="lg" />
           </button>

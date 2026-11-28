@@ -106,6 +106,17 @@ const bottle = (over: Partial<PageProps["bottles"][number]> = {}) => ({
   ...over,
 });
 
+describe("ItemPageView in the desktop pane (F-5)", () => {
+  const html = page({ pane: true });
+  test("draws no second hero: the pane's own photo is the only picture", () => {
+    assert.ok(!html.includes('data-slot="item-hero-picture"'));
+    assert.ok(html.includes("Dragonwell"));
+  });
+  test("the title has the pane's full width, not a column beside a photo", () => {
+    assert.ok(!/<header[^>]*md:flex-row/.test(html));
+  });
+});
+
 describe("ItemPageView (X09: one item page)", () => {
   const html = page({
     tierLists: [
