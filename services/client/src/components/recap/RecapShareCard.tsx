@@ -204,33 +204,14 @@ function EndFace({
     <>
       <Overline text="The end" />
       <Title text={`That’s your ${recapPeriodShort(period)}`} />
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 28 }}>
+      {/* F-188: the board stacks the title, then one line per count. */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
         {card.stats.map((stat) => (
           <div
             key={stat.label}
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              width: 440,
-              padding: "36px 40px",
-              borderRadius: 16,
-              border: `2px solid ${color.line}`,
-              background: color.surface1,
-            }}
+            style={{ display: "flex", fontSize: 52, color: color.ink2 }}
           >
-            <div
-              style={{
-                display: "flex",
-                fontSize: 120,
-                lineHeight: 1,
-                fontWeight: 700,
-              }}
-            >
-              {String(stat.value)}
-            </div>
-            <div style={{ display: "flex", fontSize: 40, color: color.ink2 }}>
-              {stat.label}
-            </div>
+            {`${String(stat.value)} ${stat.label}`}
           </div>
         ))}
       </div>

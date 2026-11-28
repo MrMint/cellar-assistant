@@ -344,7 +344,7 @@ describe("the bottle route: the item page with that bottle selected (X09)", () =
       bottles: [],
     });
     assert.match(html, />Finished</);
-    assert.match(html, />Restore to cellar</);
+    assert.match(html, />Put back</);
     assert.doesNotMatch(html, /aria-label="Steep from Home"/);
   });
 

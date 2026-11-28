@@ -1,7 +1,9 @@
 import { ICON_STROKE, People } from "@/components/app/icons";
 import { formatScore } from "@/components/app/Score";
+import type { ApiItemType } from "@/components/cellar-api/itemTypes";
 import { ratingSummary } from "@/components/common/rating/rating";
 import { cn } from "@/lib/utils";
+import { FriendsRatingsCell } from "./friends/FriendsRatingsSheet";
 import type { TasteCell } from "./item-page-model";
 
 /**
@@ -20,10 +22,20 @@ export const tasteCellLabel = (cell: TasteCell): string =>
  * percentage or prediction: each figure is an average of reviews somebody
  * wrote (design §3.7). Your own stars sit under it, on the page.
  *
- * Each part is a link down the page — yours to your review, the other two
- * to the reviews — so the header is also the way to rate.
+ * Each part is a link down the page — yours to your review, Everyone to the
+ * reviews — so the header is also the way to rate. Friends, once a friend
+ * has rated it, opens the Friends' ratings sheet instead (F-154,
+ * Cellars-Pour); with no item to read it for, it stays a link.
  */
-export function TasteHeader({ cells }: { cells: readonly TasteCell[] }) {
+export function TasteHeader({
+  cells,
+  itemId,
+  itemType,
+}: {
+  cells: readonly TasteCell[];
+  itemId?: string;
+  itemType?: ApiItemType;
+}) {
   const you = cells.find((cell) => cell.key === "you");
   const others = cells.filter((cell) => cell.key !== "you");
   return (
@@ -43,39 +55,65 @@ export function TasteHeader({ cells }: { cells: readonly TasteCell[] }) {
         </a>
       )}
       <span className="flex min-w-0 items-center gap-4">
-        {others.map((cell) => (
-          <a
-            key={cell.key}
-            href={cell.href}
-            aria-label={tasteCellLabel(cell)}
-            data-cell={cell.key}
-            className={cn(LINK, "t-cap gap-1.5 text-ink-2")}
-          >
-            {cell.key === "friends" ? (
-              <span aria-hidden>Friends</span>
-            ) : (
-              <People
-                aria-hidden
-                strokeWidth={ICON_STROKE}
-                className="size-4 text-ink-3"
-              />
-            )}
-            <span
-              aria-hidden
-              className={cn(
-                "t-head tabular leading-none",
-                cell.value === null ? "text-ink-3" : "text-ink",
+        {others.map((cell) => {
+          const body = (
+            <>
+              {cell.key === "friends" ? (
+                <span aria-hidden>Friends</span>
+              ) : (
+                <People
+                  aria-hidden
+                  strokeWidth={ICON_STROKE}
+                  className="size-4 text-ink-3"
+                />
               )}
-            >
-              {cell.value === null ? "–" : formatScore(cell.value)}
-            </span>
-            {cell.key === "everyone" && cell.value !== null && (
-              <span aria-hidden className="tabular text-ink-3">
-                ({countOf(cell.note)})
+              <span
+                aria-hidden
+                className={cn(
+                  "t-head tabular leading-none",
+                  cell.value === null ? "text-ink-3" : "text-ink",
+                )}
+              >
+                {cell.value === null ? "–" : formatScore(cell.value)}
               </span>
-            )}
-          </a>
-        ))}
+              {cell.key === "everyone" && cell.value !== null && (
+                <span aria-hidden className="tabular text-ink-3">
+                  ({countOf(cell.note)})
+                </span>
+              )}
+            </>
+          );
+          const className = cn(LINK, "t-cap gap-1.5 text-ink-2");
+          if (
+            cell.key === "friends" &&
+            cell.value !== null &&
+            itemId !== undefined &&
+            itemType !== undefined
+          ) {
+            return (
+              <FriendsRatingsCell
+                key={cell.key}
+                itemId={itemId}
+                itemType={itemType}
+                label={tasteCellLabel(cell)}
+                className={className}
+              >
+                {body}
+              </FriendsRatingsCell>
+            );
+          }
+          return (
+            <a
+              key={cell.key}
+              href={cell.href}
+              aria-label={tasteCellLabel(cell)}
+              data-cell={cell.key}
+              className={className}
+            >
+              {body}
+            </a>
+          );
+        })}
       </span>
     </nav>
   );

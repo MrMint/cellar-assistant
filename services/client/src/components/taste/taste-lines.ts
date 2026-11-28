@@ -50,20 +50,10 @@ export const agreementLine = (counts: AgreementCounts): string => {
 };
 
 /**
- * A stored style value for display. Free text ("Nebbiolo") passes through;
- * an enum-shaped value ("WASHED", "LIGHT_ROAST") reads as words.
+ * A stored style value for display (F-186): the contract's one rule, so a
+ * lowercase `black` reads "Black" here exactly as it does in the taste line.
  */
-export const styleLabel = (value: string): string =>
-  /^[A-Z0-9_]+$/.test(value)
-    ? value
-        .toLowerCase()
-        .split("_")
-        .filter((part) => part !== "")
-        .map((part, index) =>
-          index === 0 ? part.charAt(0).toUpperCase() + part.slice(1) : part,
-        )
-        .join(" ")
-    : value;
+export { styleLabel } from "@cellar-assistant/contracts/taste";
 
 /** Bar widths for "What it's built from": the most-rated type is full. */
 export const typeBarWidths = (

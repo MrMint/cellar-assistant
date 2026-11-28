@@ -87,7 +87,7 @@ function Thumb({ entry }: { entry: SharedTierListEntryView }) {
 
 function EntryRow({ entry }: { entry: RankedEntry<SharedTierListEntryView> }) {
   return (
-    <li className="flex items-center gap-3 border-b border-hair py-3 last:border-b-0">
+    <li className="flex items-center gap-3 rounded-lg border border-edge bg-card p-3">
       <Thumb entry={entry} />
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
         <div className="flex min-w-0 items-center gap-2">
@@ -100,11 +100,18 @@ function EntryRow({ entry }: { entry: RankedEntry<SharedTierListEntryView> }) {
         </div>
         {entry.location !== null && (
           <p className="t-cap m-0 flex min-w-0 items-center gap-1 text-ink-2">
-            <Place
-              aria-hidden
-              strokeWidth={ICON_STROKE}
-              className="size-3.5 shrink-0 text-ink-3"
-            />
+            {isItemType(entry.entryType) ? (
+              <TypeGlyph
+                type={entry.entryType}
+                className="size-3.5 shrink-0 text-ink-3"
+              />
+            ) : (
+              <Place
+                aria-hidden
+                strokeWidth={ICON_STROKE}
+                className="size-3.5 shrink-0 text-ink-3"
+              />
+            )}
             <span className="truncate">{displayLocation(entry.location)}</span>
           </p>
         )}
@@ -176,7 +183,7 @@ export function SharedTierListView({
                   {group.entries.length}
                 </span>
               </h2>
-              <ol className="m-0 flex list-none flex-col p-0">
+              <ol className="m-0 flex list-none flex-col gap-2 p-0">
                 {group.entries.map((entry) => (
                   <EntryRow key={entry.id} entry={entry} />
                 ))}

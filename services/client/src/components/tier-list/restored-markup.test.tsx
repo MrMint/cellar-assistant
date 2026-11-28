@@ -185,13 +185,10 @@ describe("TierListViewPage (restored header and tabs)", () => {
     assert.match(html, /<button[^>]*>.*Edit order<\/button>/);
     assert.match(html, /<button[^>]*>.*Add a place<\/button>/);
     // L40: the place list's Map opens the map filtered to it.
-    assert.match(
-      html,
-      /aria-label="Map"[^>]*href="\/map\?list=tl-1"|href="\/map\?list=tl-1"[^>]*aria-label="Map"/,
-    );
+    assert.match(html, /href="\/map\?list=tl-1"[^>]*>(<svg.*?<\/svg>)?Map</);
     assert.doesNotMatch(html, /tierLists=/);
     // F-22: Details opens L2's sheet on the page, not the edit route.
-    assert.match(html, /aria-label="Details"/);
+    assert.match(html, /<button[^>]*>(<svg.*?<\/svg>)?Details<\/button>/);
     assert.doesNotMatch(html, /href="\/tier-lists\/tl-1\/edit"/);
     assert.match(html, />Rankings</);
     assert.match(html, />Insights</);

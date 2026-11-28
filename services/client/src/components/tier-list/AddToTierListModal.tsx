@@ -344,7 +344,7 @@ export function AddToTierListModal({
                 <legend className="t-body mb-2 p-0 text-ink-2">
                   Not rated yet · pick a band
                 </legend>
-                <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none]">
+                <div className="flex flex-wrap gap-2">
                   {BANDS.map(({ band: value, name }) => {
                     const on = pickedBand === value;
                     return (

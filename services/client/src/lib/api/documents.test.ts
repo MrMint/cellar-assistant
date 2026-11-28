@@ -71,6 +71,7 @@ import * as lovedRecipes from "@/components/favorites/loved-recipes";
 import * as friendFragments from "@/components/friend/fragments";
 import * as homeQueries from "@/components/home/queries";
 import * as itemFragments from "@/components/item/fragments";
+import * as itemFriendsRatings from "@/components/item/friends/friends-ratings";
 import * as itemCardFragments from "@/components/item/ItemCard/fragments";
 import * as itemSeenAt from "@/components/item/seen-at";
 import * as makeBrewQueries from "@/components/make/brew-queries";
@@ -125,6 +126,7 @@ const MODULES: Readonly<Record<string, Record<string, unknown>>> = {
   "components/home/queries.ts": homeQueries,
   "components/item/ItemCard/fragments.ts": itemCardFragments,
   "components/item/fragments.ts": itemFragments,
+  "components/item/friends/friends-ratings.ts": itemFriendsRatings,
   "components/item/seen-at.ts": itemSeenAt,
   "components/make/brew-queries.ts": makeBrewQueries,
   "components/map/queries.ts": mapQueries,
