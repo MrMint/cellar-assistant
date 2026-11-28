@@ -46,18 +46,20 @@ import {
 import PhoneInput from "react-phone-number-input/input";
 import { AIDraftField } from "@/components/app/AIDraftField";
 import { IconButton } from "@/components/app/IconButton";
-import { Back, MyLocation } from "@/components/app/icons";
+import { Check, Close, Place } from "@/components/app/icons";
 import { notify } from "@/components/app/notify";
 import { useNavigate } from "@/components/app/useNavigate";
+import { KIND_ICON } from "@/components/capture/NewPlaceSheet";
+import { NEW_PLACE_KINDS } from "@/components/capture/new-place";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Field, FieldError, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { Separator } from "@/components/ui/separator";
 import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
+import { feedback } from "@/lib/feedback";
 import { isDrafted } from "@/lib/forms/ai-draft";
+import { cn } from "@/lib/utils";
 import {
   type CreatePlaceInput,
   type DuplicatePlace,
@@ -100,6 +102,11 @@ const CATEGORY_OPTIONS: CategoryOption<UserPlaceCategory>[] = [
     tier: "Retail",
   })),
 ];
+
+/** The six kinds' categories (the chips), apart from the rest. */
+const KIND_SLUGS: ReadonlySet<string> = new Set(
+  NEW_PLACE_KINDS.map((kind) => kind.category),
+);
 
 const WEBSITE_PROTOCOL_RE = /^https?:\/\//i;
 
@@ -227,6 +234,10 @@ export function CreatePlaceForm({
   const [serverError, setServerError] = useState<string | null>(null);
   const [duplicates, setDuplicates] = useState<DuplicatePlace[]>([]);
   const [duplicatesConfirmed, setDuplicatesConfirmed] = useState(false);
+  /** F-200: the debounced duplicate check is pending or in flight. */
+  const [checking, setChecking] = useState(false);
+  /** F-200: "More details" — open from the start when editing. */
+  const [detailsOpen, setDetailsOpen] = useState(editing);
   const [addressLoading, setAddressLoading] = useState(!editing);
   /** What the pin's reverse geocode filled in — the "From pin" marks' draft. */
   const [pinDraft, setPinDraft] = useState<
@@ -340,9 +351,11 @@ export function CreatePlaceForm({
     if (trimmed.length < 3) {
       setDuplicates([]);
       setDuplicatesConfirmed(false);
+      setChecking(false);
       return;
     }
 
+    setChecking(true);
     duplicateCheckTimer.current = setTimeout(async () => {
       try {
         const { duplicates: checked } = await checkDuplicatePlacesAction(
@@ -361,6 +374,8 @@ export function CreatePlaceForm({
       } catch {
         // Silently ignore duplicate check errors
         setDuplicatesConfirmed(true);
+      } finally {
+        setChecking(false);
       }
     }, 500);
 
@@ -518,26 +533,59 @@ export function CreatePlaceForm({
   };
 
   const loading = isSubmitting || isPending;
+  const categoriesValue = watch("categories");
+  const awaitingChoice = duplicates.length > 0 && !duplicatesConfirmed;
+  const named = nameValue.trim().length >= 3;
+  const pickKind = (slug: string) => {
+    feedback("toggle");
+    const others = categoriesValue.filter(
+      (option) => !KIND_SLUGS.has(option.value),
+    );
+    const on = categoriesValue.some((option) => option.value === slug);
+    setValue(
+      "categories",
+      on ? others : [...categoryOptionsFor([slug]), ...others],
+      { shouldDirty: true, shouldValidate: errors.categories !== undefined },
+    );
+  };
+  const address = [watch("street_address"), watch("locality")]
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .join(", ");
+  const pinLine = addressLoading
+    ? "Loading address..."
+    : editing
+      ? address || "No address yet"
+      : `From the pin · ${address || "no address found"}`;
+  const detailsId = `${fieldId}-details`;
+  // A field "More details" holds is wrong: open it so the error shows.
+  const onInvalid = (invalid: Partial<Record<keyof FormFields, unknown>>) => {
+    if (Object.keys(invalid).some((name) => name !== "name")) {
+      setDetailsOpen(true);
+    }
+  };
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)}>
-      <div className="flex flex-col gap-5">
-        {/* Back button + location preview */}
-        <div className="flex flex-row items-center gap-2">
+    <form
+      onSubmit={handleSubmit(onSubmit, onInvalid)}
+      data-slot="create-place-form"
+    >
+      <div className="flex flex-col gap-4">
+        {/* F-200 (Places-Place 25 to 28): the board's sheet, top to bottom. */}
+        <div className="flex items-center gap-2">
+          <p className="t-body m-0 min-w-0 flex-1 text-ink-2">
+            {editing
+              ? "Fix it, then send it for review again"
+              : "At the map’s centre pin"}
+          </p>
           <IconButton
             aria-label={editing ? "Back to place" : "Back to map"}
-            variant="outline"
-            size="sm"
             onClick={() =>
               navigate.push(edit ? `/places/${edit.placeId}` : "/map")
             }
           >
-            <Back />
+            <Close />
           </IconButton>
-          <Badge variant="secondary" className="tabular">
-            <MyLocation aria-hidden />
-            {latitude.toFixed(5)}, {longitude.toFixed(5)}
-          </Badge>
         </div>
 
         {/* X27: why a rejected place was refused, above the fields to fix */}
@@ -550,48 +598,6 @@ export function CreatePlaceForm({
             </AlertDescription>
           </Alert>
         )}
-
-        {/* Google Places suggestions */}
-        {!googlePlacesDismissed && (
-          <GooglePlaceSuggestions
-            places={googlePlaces}
-            loading={googlePlacesLoading}
-            onSelect={handleGooglePlaceSelect}
-            onDismiss={handleGoogleDismiss}
-          />
-        )}
-
-        {/* Google autocomplete search (shown after suggestions dismissed) */}
-        {!editing && googlePlacesDismissed && !selectedGooglePlaceId && (
-          <GooglePlaceSearch
-            latitude={latitude}
-            longitude={longitude}
-            onSelect={handleGoogleAutocompleteSuggestionSelect}
-            disabled={enriching}
-          />
-        )}
-
-        {/* Pre-filled indicator */}
-        {selectedGooglePlaceId && (
-          <Badge variant="secondary" className="text-success">
-            Pre-filled from Google
-          </Badge>
-        )}
-
-        {/* Enriching indicator */}
-        {enriching && (
-          <Badge variant="secondary">
-            <Spinner />
-            Fetching place details...
-          </Badge>
-        )}
-
-        {/* Duplicate check */}
-        <DuplicatePlaceCheck
-          duplicates={duplicates}
-          onSelectExisting={handleSelectExisting}
-          onConfirmNew={handleConfirmNew}
-        />
 
         {/* Server error */}
         {serverError && (
@@ -613,13 +619,17 @@ export function CreatePlaceForm({
           }}
           render={({ field }) => (
             <Field data-invalid={!!errors.name || undefined}>
-              <FieldLabel htmlFor={idOf("name")}>Name *</FieldLabel>
+              <FieldLabel htmlFor={idOf("name")} className="sr-only">
+                Name
+              </FieldLabel>
               <Input
                 {...field}
                 id={idOf("name")}
                 aria-invalid={!!errors.name || undefined}
                 aria-describedby={errorOf("name")}
-                placeholder="e.g. The Rusty Barrel"
+                autoComplete="off"
+                placeholder="Name, as it’s signed"
+                className="h-12 text-base"
               />
               {errors.name && (
                 <FieldError id={errorOf("name")}>
@@ -630,237 +640,378 @@ export function CreatePlaceForm({
           )}
         />
 
-        {/* Categories */}
-        <Controller
-          name="categories"
-          control={control}
-          rules={{
-            validate: (v) => v.length > 0 || "Select at least one category",
-          }}
-          render={({ field }) => (
-            <Field data-invalid={!!errors.categories || undefined}>
-              <FieldLabel htmlFor={idOf("categories")}>Categories *</FieldLabel>
-              <CategoryMultiSelect
-                id={idOf("categories")}
-                options={CATEGORY_OPTIONS}
-                value={field.value}
-                onChange={field.onChange}
-                onBlur={field.onBlur}
-                invalid={!!errors.categories}
-                describedBy={errorOf("categories")}
-                placeholder="Select categories..."
-              />
-              {errors.categories && (
-                <FieldError id={errorOf("categories")}>
-                  {errors.categories.message}
-                </FieldError>
+        {/* Is it already on the map? */}
+        {awaitingChoice ? (
+          <DuplicatePlaceCheck
+            duplicates={duplicates}
+            onSelectExisting={handleSelectExisting}
+            onConfirmNew={handleConfirmNew}
+          />
+        ) : (
+          named && (
+            <p
+              role="status"
+              className="t-body m-0 flex items-center gap-2 text-ink-2"
+            >
+              {checking ? (
+                <>
+                  <Spinner className="size-4 text-glyph" />
+                  Looking nearby
+                </>
+              ) : (
+                <>
+                  <Check aria-hidden className="size-4 text-glyph" />
+                  {duplicates.length > 0
+                    ? "It’s a new place"
+                    : "Nothing like it nearby"}
+                </>
               )}
-            </Field>
-          )}
-        />
-
-        <Separator />
-
-        {/* Address section */}
-        <div className="flex flex-row items-center gap-2">
-          <h2 className="t-body font-semibold text-ink">Address</h2>
-          {addressLoading && (
-            <Badge variant="secondary">
-              <Spinner />
-              Loading address...
-            </Badge>
-          )}
-        </div>
-        {pinAddressNotFound(addressLoading, pinDraft) && (
-          <p className="t-cap">
-            Couldn't find an address for this pin. Add it below if you know it.
-          </p>
+            </p>
+          )
         )}
 
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <Controller
-            name="street_address"
-            control={control}
-            render={({ field }) => (
-              <AIDraftField
-                source="pin"
-                drafted={fromPin("street_address")}
-                className="sm:col-span-2"
-              >
-                <Field>
-                  <FieldLabel htmlFor={idOf("street_address")}>
-                    Street Address
-                  </FieldLabel>
-                  <Input
-                    {...field}
-                    id={idOf("street_address")}
-                    placeholder="123 Main St"
+        {/* The six kinds; the rest are under More details. */}
+        <div className="flex flex-col gap-1">
+          <fieldset className="m-0 grid min-w-0 grid-cols-3 gap-2 border-0 p-0">
+            <legend className="sr-only">Kind</legend>
+            {NEW_PLACE_KINDS.map((kind) => {
+              const on = categoriesValue.some(
+                (option) => option.value === kind.category,
+              );
+              const Glyph = KIND_ICON[kind.label];
+              return (
+                <button
+                  key={kind.category}
+                  type="button"
+                  aria-pressed={on}
+                  onClick={() => pickKind(kind.category)}
+                  className={cn(
+                    "t-body flex h-11 items-center justify-center gap-2 rounded-md border transition-[color,background-color,border-color,transform] active:scale-97 motion-reduce:active:scale-100 outline-none focus-visible:outline-2 focus-visible:outline-act-ink",
+                    on
+                      ? "border-edge-2 bg-sel text-ink"
+                      : "border-edge text-ink-2",
+                  )}
+                >
+                  <Glyph
+                    aria-hidden
+                    className={cn("size-5", on ? "text-ink" : "text-glyph")}
                   />
-                </Field>
-              </AIDraftField>
-            )}
-          />
+                  {kind.label}
+                </button>
+              );
+            })}
+          </fieldset>
+          {errors.categories && !detailsOpen && (
+            <p className="t-cap m-0 text-danger">{errors.categories.message}</p>
+          )}
+        </div>
 
-          <Controller
-            name="locality"
-            control={control}
-            render={({ field }) => (
-              <AIDraftField source="pin" drafted={fromPin("locality")}>
-                <Field>
-                  <FieldLabel htmlFor={idOf("locality")}>City</FieldLabel>
-                  <Input {...field} id={idOf("locality")} placeholder="City" />
-                </Field>
-              </AIDraftField>
-            )}
-          />
+        {/* The pin's address, and More details */}
+        <div className="flex min-h-11 items-center gap-2">
+          <Place aria-hidden className="size-5 shrink-0 text-glyph" />
+          <span className="t-body min-w-0 flex-1 truncate text-ink-2">
+            {pinLine}
+          </span>
+          <Button
+            type="button"
+            variant="quiet"
+            aria-expanded={detailsOpen}
+            aria-controls={detailsId}
+            onClick={() => setDetailsOpen((open) => !open)}
+          >
+            {detailsOpen ? "Fewer details" : "More details"}
+          </Button>
+        </div>
 
-          <Controller
-            name="region"
-            control={control}
-            render={({ field }) => (
-              <AIDraftField source="pin" drafted={fromPin("region")}>
-                <Field>
-                  <FieldLabel htmlFor={idOf("region")}>State/Region</FieldLabel>
-                  <Input {...field} id={idOf("region")} placeholder="State" />
-                </Field>
-              </AIDraftField>
-            )}
-          />
+        <div
+          id={detailsId}
+          hidden={!detailsOpen}
+          className="flex flex-col gap-4"
+        >
+          {/* Google Places suggestions */}
+          {!googlePlacesDismissed && (
+            <GooglePlaceSuggestions
+              places={googlePlaces}
+              loading={googlePlacesLoading}
+              onSelect={handleGooglePlaceSelect}
+              onDismiss={handleGoogleDismiss}
+            />
+          )}
 
-          <Controller
-            name="postcode"
-            control={control}
-            render={({ field }) => (
-              <AIDraftField source="pin" drafted={fromPin("postcode")}>
-                <Field>
-                  <FieldLabel htmlFor={idOf("postcode")}>
-                    Postal Code
-                  </FieldLabel>
-                  <Input {...field} id={idOf("postcode")} placeholder="12345" />
-                </Field>
-              </AIDraftField>
-            )}
-          />
+          {/* Google autocomplete search (shown after suggestions dismissed) */}
+          {!editing && googlePlacesDismissed && !selectedGooglePlaceId && (
+            <GooglePlaceSearch
+              latitude={latitude}
+              longitude={longitude}
+              onSelect={handleGoogleAutocompleteSuggestionSelect}
+              disabled={enriching}
+            />
+          )}
 
+          {selectedGooglePlaceId && (
+            <p className="t-cap m-0 flex items-center gap-1 text-ink-2">
+              <Check aria-hidden className="size-4 text-glyph" />
+              Pre-filled from Google
+            </p>
+          )}
+          {enriching && (
+            <p className="t-cap m-0 flex items-center gap-1 text-ink-2">
+              <Spinner className="size-4" />
+              Fetching place details...
+            </p>
+          )}
+
+          {/* Categories */}
           <Controller
-            name="country_code"
+            name="categories"
             control={control}
             rules={{
-              validate: (value) => {
-                const trimmed = value.trim();
-                if (!trimmed) return true;
-                return (
-                  toSupportedCountryCode(trimmed) != null ||
-                  "Use a valid 2-letter country code"
-                );
-              },
+              validate: (v) => v.length > 0 || "Pick a kind",
             }}
             render={({ field }) => (
-              <AIDraftField source="pin" drafted={fromPin("country_code")}>
-                <Field data-invalid={!!errors.country_code || undefined}>
-                  <FieldLabel htmlFor={idOf("country_code")}>
-                    Country Code
-                  </FieldLabel>
-                  <Input
-                    {...field}
-                    id={idOf("country_code")}
-                    aria-invalid={!!errors.country_code || undefined}
-                    aria-describedby={errorOf("country_code")}
-                    value={field.value}
-                    onChange={(event) =>
-                      field.onChange(
-                        event.target.value.toUpperCase().slice(0, 2),
-                      )
-                    }
-                    placeholder="US"
+              <Field data-invalid={!!errors.categories || undefined}>
+                <FieldLabel htmlFor={idOf("categories")}>Categories</FieldLabel>
+                <CategoryMultiSelect
+                  id={idOf("categories")}
+                  options={CATEGORY_OPTIONS}
+                  value={field.value}
+                  onChange={field.onChange}
+                  onBlur={field.onBlur}
+                  invalid={!!errors.categories}
+                  describedBy={errorOf("categories")}
+                  placeholder="Any other kinds"
+                />
+                {errors.categories && (
+                  <FieldError id={errorOf("categories")}>
+                    {errors.categories.message}
+                  </FieldError>
+                )}
+              </Field>
+            )}
+          />
+
+          {/* Address */}
+          <h2 className="t-head m-0 text-ink">Address</h2>
+          {pinAddressNotFound(addressLoading, pinDraft) && (
+            <p className="t-cap m-0 text-ink-2">
+              Couldn’t find an address for this pin. Add it below if you know
+              it.
+            </p>
+          )}
+
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <Controller
+              name="street_address"
+              control={control}
+              render={({ field }) => (
+                <AIDraftField
+                  source="pin"
+                  drafted={fromPin("street_address")}
+                  className="sm:col-span-2"
+                >
+                  <Field>
+                    <FieldLabel htmlFor={idOf("street_address")}>
+                      Street address
+                    </FieldLabel>
+                    <Input {...field} id={idOf("street_address")} />
+                  </Field>
+                </AIDraftField>
+              )}
+            />
+
+            <Controller
+              name="locality"
+              control={control}
+              render={({ field }) => (
+                <AIDraftField source="pin" drafted={fromPin("locality")}>
+                  <Field>
+                    <FieldLabel htmlFor={idOf("locality")}>City</FieldLabel>
+                    <Input {...field} id={idOf("locality")} />
+                  </Field>
+                </AIDraftField>
+              )}
+            />
+
+            <Controller
+              name="region"
+              control={control}
+              render={({ field }) => (
+                <AIDraftField source="pin" drafted={fromPin("region")}>
+                  <Field>
+                    <FieldLabel htmlFor={idOf("region")}>
+                      State or region
+                    </FieldLabel>
+                    <Input {...field} id={idOf("region")} />
+                  </Field>
+                </AIDraftField>
+              )}
+            />
+
+            <Controller
+              name="postcode"
+              control={control}
+              render={({ field }) => (
+                <AIDraftField source="pin" drafted={fromPin("postcode")}>
+                  <Field>
+                    <FieldLabel htmlFor={idOf("postcode")}>
+                      Postal code
+                    </FieldLabel>
+                    <Input {...field} id={idOf("postcode")} />
+                  </Field>
+                </AIDraftField>
+              )}
+            />
+
+            <Controller
+              name="country_code"
+              control={control}
+              rules={{
+                validate: (value) => {
+                  const trimmed = value.trim();
+                  if (!trimmed) return true;
+                  return (
+                    toSupportedCountryCode(trimmed) != null ||
+                    "Use a valid 2-letter country code"
+                  );
+                },
+              }}
+              render={({ field }) => (
+                <AIDraftField source="pin" drafted={fromPin("country_code")}>
+                  <Field data-invalid={!!errors.country_code || undefined}>
+                    <FieldLabel htmlFor={idOf("country_code")}>
+                      Country code
+                    </FieldLabel>
+                    <Input
+                      {...field}
+                      id={idOf("country_code")}
+                      aria-invalid={!!errors.country_code || undefined}
+                      aria-describedby={errorOf("country_code")}
+                      value={field.value}
+                      onChange={(event) =>
+                        field.onChange(
+                          event.target.value.toUpperCase().slice(0, 2),
+                        )
+                      }
+                      placeholder="US"
+                    />
+                    {errors.country_code && (
+                      <FieldError id={errorOf("country_code")}>
+                        {errors.country_code.message}
+                      </FieldError>
+                    )}
+                  </Field>
+                </AIDraftField>
+              )}
+            />
+          </div>
+
+          {/* Contact */}
+          <h2 className="t-head m-0 text-ink">Contact</h2>
+
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <Controller
+              name="phone"
+              control={control}
+              rules={{
+                validate: (value) => {
+                  if (!value || value.replace(/\D/g, "").length <= 3) {
+                    return true;
+                  }
+                  return (
+                    isValidPhoneNumber(value) || "Enter a valid phone number"
+                  );
+                },
+              }}
+              render={({ field }) => (
+                <Field data-invalid={!!errors.phone || undefined}>
+                  <FieldLabel htmlFor={idOf("phone")}>Phone</FieldLabel>
+                  <PhoneInput
+                    id={idOf("phone")}
+                    inputComponent={Input}
+                    aria-invalid={!!errors.phone || undefined}
+                    aria-describedby={errorOf("phone")}
+                    country={phoneCountry}
+                    international
+                    withCountryCallingCode
+                    value={field.value || undefined}
+                    onChange={(value) => field.onChange(value ?? "")}
+                    onBlur={field.onBlur}
+                    name={field.name}
                   />
-                  {errors.country_code && (
-                    <FieldError id={errorOf("country_code")}>
-                      {errors.country_code.message}
+                  {errors.phone && (
+                    <FieldError id={errorOf("phone")}>
+                      {errors.phone.message}
                     </FieldError>
                   )}
                 </Field>
-              </AIDraftField>
-            )}
-          />
-        </div>
+              )}
+            />
 
-        <Separator />
+            <Controller
+              name="website"
+              control={control}
+              rules={{
+                validate: (value) =>
+                  !value.trim() ||
+                  normalizeWebsite(value) != null ||
+                  "Enter a valid URL",
+              }}
+              render={({ field }) => (
+                <Field data-invalid={!!errors.website || undefined}>
+                  <FieldLabel htmlFor={idOf("website")}>Website</FieldLabel>
+                  <Input
+                    {...field}
+                    id={idOf("website")}
+                    aria-invalid={!!errors.website || undefined}
+                    aria-describedby={errorOf("website")}
+                    inputMode="url"
+                    onBlur={(event) => {
+                      field.onBlur();
+                      const normalized = normalizeWebsite(event.target.value);
+                      if (normalized) {
+                        setValue("website", normalized, {
+                          shouldDirty: true,
+                          shouldValidate: true,
+                        });
+                      }
+                    }}
+                  />
+                  {errors.website && (
+                    <FieldError id={errorOf("website")}>
+                      {errors.website.message}
+                    </FieldError>
+                  )}
+                </Field>
+              )}
+            />
+          </div>
 
-        {/* Contact info */}
-        <h2 className="t-body font-semibold text-ink">Contact (optional)</h2>
-
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          {/* Description */}
           <Controller
-            name="phone"
+            name="description"
             control={control}
             rules={{
-              validate: (value) => {
-                if (!value || value.replace(/\D/g, "").length <= 3) return true;
-                return (
-                  isValidPhoneNumber(value) || "Enter a valid phone number"
-                );
+              maxLength: {
+                value: 1000,
+                message: "Description must be under 1000 characters",
               },
             }}
             render={({ field }) => (
-              <Field data-invalid={!!errors.phone || undefined}>
-                <FieldLabel htmlFor={idOf("phone")}>Phone</FieldLabel>
-                <PhoneInput
-                  id={idOf("phone")}
-                  inputComponent={Input}
-                  aria-invalid={!!errors.phone || undefined}
-                  aria-describedby={errorOf("phone")}
-                  country={phoneCountry}
-                  international
-                  withCountryCallingCode
-                  value={field.value || undefined}
-                  onChange={(value) => field.onChange(value ?? "")}
-                  onBlur={field.onBlur}
-                  name={field.name}
-                  placeholder="+1 555 123 4567"
-                />
-                {errors.phone && (
-                  <FieldError id={errorOf("phone")}>
-                    {errors.phone.message}
-                  </FieldError>
-                )}
-              </Field>
-            )}
-          />
-
-          <Controller
-            name="website"
-            control={control}
-            rules={{
-              validate: (value) =>
-                !value.trim() ||
-                normalizeWebsite(value) != null ||
-                "Enter a valid URL",
-            }}
-            render={({ field }) => (
-              <Field data-invalid={!!errors.website || undefined}>
-                <FieldLabel htmlFor={idOf("website")}>Website</FieldLabel>
-                <Input
+              <Field data-invalid={!!errors.description || undefined}>
+                <FieldLabel htmlFor={idOf("description")}>
+                  Description
+                </FieldLabel>
+                <Textarea
                   {...field}
-                  id={idOf("website")}
-                  aria-invalid={!!errors.website || undefined}
-                  aria-describedby={errorOf("website")}
-                  inputMode="url"
-                  placeholder="https://example.com"
-                  onBlur={(event) => {
-                    field.onBlur();
-                    const normalized = normalizeWebsite(event.target.value);
-                    if (normalized) {
-                      setValue("website", normalized, {
-                        shouldDirty: true,
-                        shouldValidate: true,
-                      });
-                    }
-                  }}
+                  id={idOf("description")}
+                  aria-invalid={!!errors.description || undefined}
+                  aria-describedby={errorOf("description")}
+                  rows={2}
+                  className="max-h-28"
                 />
-                {errors.website && (
-                  <FieldError id={errorOf("website")}>
-                    {errors.website.message}
+                {errors.description && (
+                  <FieldError id={errorOf("description")}>
+                    {errors.description.message}
                   </FieldError>
                 )}
               </Field>
@@ -868,56 +1019,24 @@ export function CreatePlaceForm({
           />
         </div>
 
-        {/* Description */}
-        <Controller
-          name="description"
-          control={control}
-          rules={{
-            maxLength: {
-              value: 1000,
-              message: "Description must be under 1000 characters",
-            },
-          }}
-          render={({ field }) => (
-            <Field data-invalid={!!errors.description || undefined}>
-              <FieldLabel htmlFor={idOf("description")}>
-                Description (optional)
-              </FieldLabel>
-              <Textarea
-                {...field}
-                id={idOf("description")}
-                aria-invalid={!!errors.description || undefined}
-                aria-describedby={errorOf("description")}
-                rows={2}
-                className="max-h-28"
-                placeholder="A brief description of the place..."
-              />
-              {errors.description && (
-                <FieldError id={errorOf("description")}>
-                  {errors.description.message}
-                </FieldError>
-              )}
-            </Field>
-          )}
-        />
-
-        {/* Submit */}
-        <Button
-          type="submit"
-          disabled={loading || (duplicates.length > 0 && !duplicatesConfirmed)}
-          aria-busy={loading || undefined}
-          size="lg"
-          className="mt-2"
-        >
-          {loading && <Spinner />}
-          {editing ? "Send for review" : "Add Place"}
-        </Button>
-
-        {duplicates.length > 0 && !duplicatesConfirmed && (
-          <p className="t-cap text-center text-ink-2">
-            Please review the similar places above before submitting
+        {/* Why Add is waiting, then Add here */}
+        {(checking || awaitingChoice) && (
+          <p className="t-body m-0 text-center text-ink-2">
+            {awaitingChoice
+              ? "Open it, or say it’s new"
+              : "Checking for it nearby"}
           </p>
         )}
+        <Button
+          type="submit"
+          disabled={loading || checking || awaitingChoice}
+          aria-busy={loading || undefined}
+          size="lg"
+          className="w-full"
+        >
+          {loading && <Spinner />}
+          {editing ? "Send for review" : "Add here"}
+        </Button>
       </div>
     </form>
   );

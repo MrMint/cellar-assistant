@@ -184,9 +184,12 @@ describe("create place (restored)", () => {
         onConfirmNew={() => {}}
       />,
     );
-    assert.match(html, /We found similar places nearby/);
-    assert.match(html, /This is it/);
-    assert.match(html, /None of these — create new place/);
+    // F-200 (Places-Place 26): "Already on the map?", the match as one row
+    // that opens it, and "It's a new place".
+    assert.match(html, />Already on the map\?</);
+    assert.match(html, />Rusty Barrel</);
+    assert.match(html, /Bar · At the pin/);
+    assert.match(html, />It’s a new place</);
     // It renders inside CreatePlaceForm's <form>: a button without
     // type="button" would submit (and create) the place on either choice.
     const buttons = html.match(/<button[^>]*>/g) ?? [];
@@ -215,25 +218,37 @@ describe("create place (restored)", () => {
     assert.match(html, /Rusty Barrel/);
   });
 
-  test("the old form: labels, address chips and Add Place", () => {
+  test("F-200: the board's layout — name, kinds, the pin's line, More details, Add here", () => {
     const html = render(<CreatePlaceForm latitude={43.07} longitude={-89.4} />);
     for (const label of [
-      "Name \\*",
-      "Categories \\*",
-      "Street Address",
+      "Name",
+      "Categories",
+      "Street address",
       "City",
-      "State/Region",
-      "Postal Code",
-      "Country Code",
+      "State or region",
+      "Postal code",
+      "Country code",
       "Phone",
       "Website",
-      "Description \\(optional\\)",
+      "Description",
     ]) {
       assert.match(html, new RegExp(`>${label}<`), label);
     }
-    assert.match(html, /43\.07000, -89\.40000/);
+    // The six kinds, as toggles in a "Kind" group, none picked yet.
+    assert.match(html, /<legend[^>]*>Kind<\/legend>/);
+    for (const kind of ["Coffee", "Food", "Bar", "Beer", "Wine", "Shop"]) {
+      assert.match(
+        html,
+        new RegExp(`<button type="button" aria-pressed="false"[^>]*>.*?${kind}</button>`),
+        kind,
+      );
+    }
+    // The pin's line while its address loads, and the details folded away.
     assert.match(html, /Loading address\.\.\./);
-    assert.match(html, />Add Place</);
+    assert.match(html, /aria-expanded="false"[^>]*>More details</);
+    assert.match(html, /<div id="[^"]+-details" hidden=""/);
+    assert.match(html, />Add here</);
+    assert.doesNotMatch(html, /Add Place|-89\.40000/);
     // Joy's FormControl wired label to input itself; ui/field does not, and
     // the e2e finds every field by its label. Each label must name a control.
     const fors = Array.from(html.matchAll(/<label[^>]*\sfor="([^"]+)"/g));
@@ -245,7 +260,7 @@ describe("create place (restored)", () => {
         id,
       );
     }
-    // The only submit in the form is Add Place.
+    // The only submit in the form is Add here.
     assert.deepEqual(html.match(/type="submit"/g), ['type="submit"']);
   });
 

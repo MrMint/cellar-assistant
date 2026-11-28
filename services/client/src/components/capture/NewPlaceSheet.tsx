@@ -42,7 +42,8 @@ import {
 import { distanceFromYou } from "./place/place-words";
 
 /** Each of the six kinds' glyph (Capture-Place 04). */
-const KIND_ICON = {
+/** The six kinds' glyphs (Capture-Place 04; the map's create form too). */
+export const KIND_ICON = {
   Coffee: CoffeeGlyph,
   Food: FoodGlyph,
   Bar: Cocktail,
