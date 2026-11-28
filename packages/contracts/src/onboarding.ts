@@ -27,6 +27,7 @@
  */
 import type { ActorDescriptor } from "./actors.ts";
 import type { Ctx } from "./ctx.ts";
+import type { ReadTarget } from "./files.ts";
 import type { ItemRef, ItemType } from "./items.ts";
 
 /**
@@ -54,6 +55,12 @@ export const ONBOARDING_STATUSES = [
   // met or not — a bottle that is not a cellar item yet, counted on the cellar
   // it is aimed at. `confirm` from here follows the normal path.
   "NEEDS_DETAILS",
+  // H-133 (F-65): a draft its owner deleted (`discardDraft`). Nothing was
+  // created from it, and no draft list or count reads it again: they all read
+  // `NEEDS_DETAILS`. Kept as a row rather than deleted, like every other
+  // closed status, so a late `confirm` from another tab is refused rather
+  // than recreating the session.
+  "DISCARDED",
 ] as const;
 export type OnboardingStatus = (typeof ONBOARDING_STATUSES)[number];
 
@@ -428,7 +435,45 @@ export type ItemOnboardingActorInterface = {
     ctx: Ctx,
     input: SuggestNewItemDetailsInput,
   ): Promise<ItemDetailSuggestions>;
+  /**
+   * H-133 (F-65): delete a draft — "Delete draft" on Needs details. Owner
+   * only (someone else's is absent, `NotFoundError`). Its status becomes
+   * `DISCARDED`: nothing is created, and it leaves every draft list and count.
+   * A filed session (`CONFIRMED`, `MATCHED`) is a `ConflictError`, since its
+   * bottle exists. Idempotent. After it, `saveDraft` and `confirm` are refused.
+   */
+  discardDraft(ctx: Ctx): Promise<ItemOnboardingDto>;
+  /**
+   * H-133 (F-71): a browser GET URL for each draft's picture in
+   * `filter.onboardingIds`, aligned, in one turn — a page of Needs details is
+   * one call, not one file query per row. Addressed at
+   * {@link draftImageBatchActorId} (the viewer's own id) and refused for any
+   * other viewer. An id is signed only when it names one of the viewer's own
+   * onboardings whose picture is a verified file the viewer uploaded;
+   * anything else is `null`, never an error. At most
+   * {@link DRAFT_IMAGE_BATCH_MAX_IDS} ids.
+   */
+  draftImageUrls(
+    ctx: Ctx,
+    filter: DraftImageBatchFilter,
+  ): Promise<readonly (ReadTarget | null)[]>;
 };
+
+/** The drafts one {@link ItemOnboardingActorInterface.draftImageUrls} signs. */
+export type DraftImageBatchFilter = {
+  readonly onboardingIds: readonly string[];
+};
+
+/** The most ids one {@link DraftImageBatchFilter} may carry. */
+export const DRAFT_IMAGE_BATCH_MAX_IDS = 100;
+
+/**
+ * The `ItemOnboardingActor` key a viewer's draft-picture batch runs at: the
+ * viewer's own id, which names no onboarding, so a batch queues only behind
+ * that viewer's own batches (`avatarBatchActorId`'s rule).
+ */
+export const draftImageBatchActorId = (viewerId: string): string =>
+  viewerId.toLowerCase();
 
 /**
  * Delivered by the outbox from `OnboardingReprocessJobActor` — never by a
@@ -459,6 +504,10 @@ export const ItemOnboardingActorDescriptor: ActorDescriptor<
     confirm: { modelBacked: true },
     // One status write; no model, no outbox.
     closeAsMatched: {},
+    // One status write; no model, no outbox (H-133).
+    discardDraft: {},
+    // One select, signed in process (H-133).
+    draftImageUrls: {},
     // `start`'s vision call again, with the person waiting on it (§8.5's
     // exception, for the same reason and in the same actor).
     rereadLabel: { timeoutMs: 120_000, modelBacked: true },

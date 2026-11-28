@@ -25,7 +25,9 @@ import type {
   SaveDraftInput as SaveDraftInputType,
 } from "@cellar-assistant/contracts";
 import {
+  DRAFT_IMAGE_BATCH_MAX_IDS,
   DraftsCollectionActorDescriptor,
+  draftImageBatchActorId,
   ItemOnboardingActorDescriptor,
   itemActorId,
   ONBOARDING_STATUSES,
@@ -35,6 +37,7 @@ import {
   VINTAGE_ANSWERS,
   viewerCollectionActorId,
 } from "@cellar-assistant/contracts";
+import DataLoader from "dataloader";
 import type { ApiContext } from "../context.ts";
 import { builder } from "./builder.ts";
 import { ItemInterface, ItemTypeEnum } from "./item.ts";
@@ -49,9 +52,47 @@ const OnboardingStatusEnum = builder.enumType("OnboardingStatus", {
     "`getItemDefaults` wrote; `CONFIRMED` and `FAILED` are B2 additions for " +
     "two states the old flow had nowhere to record. `MATCHED` closes a " +
     "session whose bottle was an item the catalogue already held " +
-    "(`closeItemOnboarding`): nothing was created from it.",
+    "(`closeItemOnboarding`): nothing was created from it. `NEEDS_DETAILS` " +
+    "is a draft set aside with Finish later (`saveDraft`); `DISCARDED` is a " +
+    "draft its owner deleted (`discardDraft`), listed and counted nowhere.",
   values: ONBOARDING_STATUSES,
 });
+
+/**
+ * H-133 (F-71): one `draftImageUrls` call per request for every draft
+ * picture the response shows (the avatar batch's shape, F-89): a page of
+ * Needs details is one actor turn, not one file query per row. Keyed by the
+ * request, so a loader never outlives it or crosses viewers.
+ */
+const draftImageBatchByRequest = new WeakMap<
+  ApiContext,
+  DataLoader<string, string | null>
+>();
+
+const draftImageUrlOf = (
+  context: ApiContext,
+  onboarding: ItemOnboardingDto,
+): Promise<string | null> | null => {
+  const viewerId = context.ctx.viewerId;
+  if (onboarding.imageId === null || viewerId === null) return null;
+  let loader = draftImageBatchByRequest.get(context);
+  if (loader === undefined) {
+    loader = new DataLoader<string, string | null>(
+      async (onboardingIds) => {
+        const targets = await context
+          .actor(
+            ItemOnboardingActorDescriptor,
+            draftImageBatchActorId(viewerId),
+          )
+          .draftImageUrls({ onboardingIds });
+        return onboardingIds.map((_id, index) => targets[index]?.url ?? null);
+      },
+      { maxBatchSize: DRAFT_IMAGE_BATCH_MAX_IDS },
+    );
+    draftImageBatchByRequest.set(context, loader);
+  }
+  return loader.load(onboarding.id);
+};
 
 const VintageAnswerEnum = builder.enumType("VintageAnswer", {
   description:
@@ -133,6 +174,15 @@ export const ItemOnboardingType = builder
       imageId: t.exposeID("imageId", {
         nullable: true,
         description: "SV-B: a saved draft's picture, a `files.id`.",
+      }),
+      imageUrl: t.string({
+        nullable: true,
+        description:
+          "H-133 (F-71): a browser URL for `imageId`, signed with every other " +
+          "draft picture in this response in one batch. Null when the draft " +
+          "has no picture, or its file is not a verified upload of yours.",
+        resolve: (onboarding, _args, context) =>
+          draftImageUrlOf(context, onboarding),
       }),
       draftFields: t.field({
         type: "JSON",
@@ -446,6 +496,25 @@ builder.mutationField("saveDraft", (t) =>
           confirmedFields: args.input.confirmedFields,
           vintageAnswer: args.input.vintageAnswer,
         } satisfies SaveDraftInputType),
+  }),
+);
+
+builder.mutationField("discardDraft", (t) =>
+  t.field({
+    type: ItemOnboardingType,
+    description:
+      "H-133 (F-65): delete a saved draft. Its status becomes `DISCARDED`: " +
+      "nothing is created, and it leaves `needsDetails`, `needsDetailsCount` " +
+      "and every other draft count. Yours alone: someone else's is a " +
+      "`NotFoundError`. A filed session (`CONFIRMED`, `MATCHED`) is a " +
+      "`ConflictError`. Idempotent; `saveDraft` and `confirmItemOnboarding` " +
+      "refuse a discarded draft.",
+    errors: {},
+    args: { onboardingId: t.arg.id({ required: true }) },
+    resolve: (_root, args, context) =>
+      context
+        .actor(ItemOnboardingActorDescriptor, String(args.onboardingId))
+        .discardDraft(),
   }),
 );
 
