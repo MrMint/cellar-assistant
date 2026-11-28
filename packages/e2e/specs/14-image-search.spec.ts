@@ -242,9 +242,11 @@ test("onboarding: the front-label photo is matched against the catalogue beside 
 
   // No match (a test pattern), or photo search not offered: the search runs
   // beside the read and never holds it — the draft card opens either way.
-  await expect(
-    primary.getByRole("main").getByRole("button", { name: "Add", exact: true }),
-  ).toBeVisible({ timeout: 120_000 });
+  // The draft's footer carries the primary ("N left to check", disabled, until
+  // the floor fields are filled), so the footer is what says the card opened.
+  await expect(primary.locator('[data-slot="draft-footer"]')).toBeVisible({
+    timeout: 120_000,
+  });
   if (!imageSearch) {
     expect(
       matchRequests,

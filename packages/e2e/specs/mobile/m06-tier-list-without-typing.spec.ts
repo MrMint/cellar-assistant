@@ -203,9 +203,15 @@ test("a list started from your ratings lands pre-banded", async ({ page }) => {
     await expect(start, "no Start with your ratings").toBeChecked({
       timeout: 15_000,
     });
+    // The switch's own line says what it will add: "Best 100 of 165 beers",
+    // or "12 beers" (`fromRatingsLine`); each lands in the band you gave it.
     await expect(
-      page.getByText(/you've rated, each in the band/),
-    ).toBeVisible();
+      page.locator("label", { hasText: "From my ratings" }),
+    ).toContainText(
+      template.ratedCount > 100
+        ? /Best 100 of [\d,]+ /
+        : new RegExp(`${template.ratedCount} `),
+    );
     await page.getByRole("button", { name: "Create" }).tap();
 
     await expect(page).toHaveURL(/\/tier-lists\/[0-9a-f-]{36}/, {
