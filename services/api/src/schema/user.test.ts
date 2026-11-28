@@ -162,6 +162,30 @@ describe("profile picture (SV-D, MC-avatar)", () => {
     });
   });
 
+  it("F-89: one presign per picture per request, however many rows show it", async () => {
+    const { invoke, calls } = stubSidecar({
+      "UserActor.getProfile": (actorId) => ({
+        ...profile(actorId, "Bob"),
+        avatarFileId: FILE,
+      }),
+      "FileActor.presignRead": () => ({
+        url: "https://files.example.test/signed",
+        expiresAt: "2026-11-27T00:30:00.000Z",
+      }),
+    });
+    const result = await run(
+      `{ a: user(id: "${BOB}") { ... on UserProfile { avatarUrl } }
+         b: user(id: "${BOB}") { ... on UserProfile { avatarUrl } }
+         c: user(id: "${BOB}") { ... on UserProfile { avatarUrl } } }`,
+      testContext(invoke, alice),
+    );
+    expect(result.errors).toBeUndefined();
+    expect(result.data?.c).toEqual({
+      avatarUrl: "https://files.example.test/signed",
+    });
+    expect(calls.filter((c) => c.actorType === "FileActor")).toHaveLength(1);
+  });
+
   it("falls back to user.image with no picture, and when the picture cannot be read", async () => {
     for (const avatarFileId of [null, FILE]) {
       const { invoke } = stubSidecar({

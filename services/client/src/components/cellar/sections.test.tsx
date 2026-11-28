@@ -137,7 +137,7 @@ describe("Cellars · Bar (D1)", () => {
     assert.match(html, /<nav\b[^>]*aria-label="Cellar"/);
     assert.deepEqual(
       CELLAR_SEGMENTS.map((s) => `${s.label} -> ${s.href}`),
-      ["Cellars -> /cellars", "Bar -> /recipes"],
+      ["Cellars -> /cellars", "Your bar -> /recipes"],
     );
     assert.match(
       html,

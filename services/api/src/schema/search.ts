@@ -525,6 +525,15 @@ const UserSearchResult = builder
           "Set on an `includeConnected` search only (X12); null otherwise.",
         resolve: (hit) => hit.relation ?? null,
       }),
+      pendingRequestId: t.id({
+        nullable: true,
+        description:
+          "F-43: the open friend request's id when `relation` is " +
+          "REQUEST_SENT or REQUEST_RECEIVED, for `rejectFriendRequest` " +
+          "(Cancel) or `acceptFriendRequest` (Accept) with no lookup. Null " +
+          "otherwise, and on a default search.",
+        resolve: (hit) => hit.pendingRequestId ?? null,
+      }),
     }),
   });
 

@@ -68,6 +68,14 @@ export type ItemDefaultsResult = {
   readonly confidence: number;
   /** A brand name for `BrandRegistryActor.resolve`, if the label showed one. */
   readonly brandName?: string | null;
+  /**
+   * F-77: the kind of drink the label is for, as the model read it, or
+   * `null` when it named none. When it differs from the request's
+   * `itemType`, `defaults` is empty: the label was read against the wrong
+   * kind's vocabulary, so nothing of it is kept, and the caller can read it
+   * again as this kind rather than refuse it.
+   */
+  readonly detectedItemType?: ItemType | null;
 };
 
 export type ItemDefaultsProvider = (

@@ -43,10 +43,48 @@ export const TASTE_ARCHETYPE_KEYS = [
 
 export type TasteArchetypeKey = (typeof TASTE_ARCHETYPE_KEYS)[number];
 
+/**
+ * Stored style values whose words are not the plain reading of the enum: the
+ * item page's own spellings (`formatTeaCategory`, `formatSakeServingTemperature`).
+ */
+const STYLE_LABEL_OVERRIDES: Readonly<Record<string, string>> = {
+  pu_erh: "Pu-erh",
+  mate: "Maté",
+  atsu_kan: "Atsu-kan",
+  jo_kan: "Jo-kan",
+  nuru_kan: "Nuru-kan",
+  hitohada_kan: "Hitohada-kan",
+  rei_shu: "Rei-shu",
+  yuki_hie: "Yuki-hie",
+};
+
+/**
+ * A stored style value as a person reads it (F-50): the one label the taste
+ * line, the Rated highest rows and the recap's Styles chips all print.
+ * `INDIA_PALE_ALE` and `india_pale_ale` → `India pale ale`, `black` →
+ * `Black`, `pu_erh` → `Pu-erh`. Free text that already carries a capital
+ * ("Nebbiolo", "Saint-Julien") is left as written. The client's
+ * `styleLabel` (taste-lines.ts) is the same sentence-case rule, and leaves
+ * a label already in this form alone.
+ */
+export const styleLabel = (raw: string): string => {
+  const trimmed = raw.trim();
+  const key = trimmed.toLowerCase();
+  const override = STYLE_LABEL_OVERRIDES[key];
+  if (override !== undefined) return override;
+  const isEnum = /^[A-Z0-9_]+$/.test(trimmed) || /^[a-z0-9_]+$/.test(trimmed);
+  if (!isEnum && trimmed !== key) return trimmed;
+  const words = (isEnum ? key.split("_") : key.split(/\s+/)).filter(
+    (word) => word !== "",
+  );
+  const sentence = words.join(" ");
+  return sentence.charAt(0).toUpperCase() + sentence.slice(1);
+};
+
 /** One style you have rated at least {@link ARCHETYPE_MIN_STYLE_RATINGS} times. */
 export type TasteStyleDto = {
   readonly type: ItemType;
-  /** The item's style value as stored (a variety, a beer style, a process). */
+  /** The item's style (a variety, a beer style, a process), as {@link styleLabel} prints it. */
   readonly label: string;
   readonly count: number;
   /** Mean of your scores for it, 0.5–5. */

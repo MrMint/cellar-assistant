@@ -117,6 +117,17 @@ const loadProfiles = async (
  * `FileActor` decides who may read the file (`canSeeProfile`), so a viewer
  * who could not see it gets the fallback, never an error for the whole row.
  */
+/**
+ * F-89: the presign for each picture, once per request. A page that shows
+ * one person many times (a feed, search hits beside a friends list) used to
+ * activate their `FileActor` and presign once per row. Keyed by the request's
+ * context object, so nothing outlives the request or crosses viewers.
+ */
+const presignedThisRequest = new WeakMap<
+  ApiContext,
+  Map<string, Promise<string | null>>
+>();
+
 export const avatarUrlOf = async (
   context: ApiContext,
   profile: {
@@ -124,7 +135,24 @@ export const avatarUrlOf = async (
     readonly avatarUrl: string | null;
   },
 ): Promise<string | null> => {
-  if (profile.avatarFileId === null) return profile.avatarUrl;
+  const fileId = profile.avatarFileId;
+  if (fileId === null) return profile.avatarUrl;
+  const memo = presignedThisRequest.get(context) ?? new Map();
+  presignedThisRequest.set(context, memo);
+  const key = `${fileId}\u0000${profile.avatarUrl ?? ""}`;
+  const known = memo.get(key);
+  if (known !== undefined) return await known;
+  const url = presignAvatar(context, fileId, profile.avatarUrl);
+  memo.set(key, url);
+  return await url;
+};
+
+const presignAvatar = async (
+  context: ApiContext,
+  avatarFileId: string,
+  avatarUrl: string | null,
+): Promise<string | null> => {
+  const profile = { avatarFileId, avatarUrl };
   try {
     return (
       await context

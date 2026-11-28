@@ -457,6 +457,108 @@ describe.skipIf(skip)("RecipeGroupsCollectionActor", () => {
     });
   });
 
+  it("F-88: carries communityPickId in the projection, by RecipeGroupActor's rule", async () => {
+    await withTestDb(async (db) => {
+      const viewer = await seedUser(db);
+      const author = await seedUser(db);
+      const voters = [
+        await seedUser(db),
+        await seedUser(db),
+        await seedUser(db),
+        await seedUser(db),
+      ];
+      const tag = `zzz-pick-${crypto.randomUUID().slice(0, 8)}`;
+      const put = async (
+        groupId: string,
+        name: string,
+        options: {
+          privacy?: "PUBLIC" | "PRIVATE";
+          isDraft?: boolean;
+          createdAt: string;
+          ups: number;
+          selfVote?: boolean;
+        },
+      ) => {
+        const id = await seedRecipe(db, {
+          name,
+          createdById: author,
+          privacy: options.privacy ?? "PUBLIC",
+          isDraft: options.isDraft ?? false,
+          recipeGroupId: groupId,
+        });
+        await db.execute(sql`
+          update public.recipes set created_at = ${options.createdAt}::timestamptz
+          where id = ${id}::uuid
+        `);
+        for (const voter of voters.slice(0, options.ups)) {
+          await db.execute(sql`
+            insert into public.recipe_votes (recipe_id, user_id, vote_type)
+            values (${id}::uuid, ${voter}::uuid, 'upvote')
+          `);
+        }
+        if (options.selfVote === true) {
+          await db.execute(sql`
+            insert into public.recipe_votes (recipe_id, user_id, vote_type)
+            values (${id}::uuid, ${author}::uuid, 'upvote')
+          `);
+        }
+        return id;
+      };
+      // Oldest wins a tie; the author's own vote and a draft never count.
+      const tie = await seedGroup(db, author, { name: `${tag} a tie` });
+      const older = await put(tie, `${tag} older`, {
+        createdAt: "2026-01-01",
+        ups: 3,
+      });
+      await put(tie, `${tag} newer`, { createdAt: "2026-02-01", ups: 3 });
+      await put(tie, `${tag} draft`, {
+        createdAt: "2025-01-01",
+        ups: 4,
+        isDraft: true,
+      });
+      await put(tie, `${tag} self`, {
+        createdAt: "2025-06-01",
+        ups: 2,
+        selfVote: true,
+      });
+      // The pick is over the whole group, named only to who may see it.
+      const secret = await seedGroup(db, author, { name: `${tag} b secret` });
+      const hiddenPick = await put(secret, `${tag} private`, {
+        privacy: "PRIVATE",
+        createdAt: "2026-01-01",
+        ups: 4,
+      });
+      await put(secret, `${tag} public`, { createdAt: "2026-02-01", ups: 3 });
+      // Below the floor: no pick.
+      const thin = await seedGroup(db, author, { name: `${tag} c thin` });
+      await put(thin, `${tag} two`, { createdAt: "2026-01-01", ups: 2 });
+
+      const actor = await activate(
+        createActor(
+          RecipeGroupsCollectionActor,
+          recipeGroupsCollectionActorId(BY_NAME),
+          db,
+        ),
+      );
+      const picks = async (ctx: ReturnType<typeof userCtx>) => {
+        const page = await actor.list(ctx, BY_NAME, pageArgs({ first: 100 }));
+        return page.entries
+          .filter((entry) => entry.node.name.startsWith(tag))
+          .map((entry) => [entry.node.name, entry.node.communityPickId]);
+      };
+      expect(await picks(userCtx(viewer, "r"))).toEqual([
+        [`${tag} a tie`, older],
+        [`${tag} b secret`, null],
+        [`${tag} c thin`, null],
+      ]);
+      expect(await picks(userCtx(author, "r"))).toEqual([
+        [`${tag} a tie`, older],
+        [`${tag} b secret`, hiddenPick],
+        [`${tag} c thin`, null],
+      ]);
+    });
+  });
+
   /**
    * UI parity G11 — the item page's "Used in Recipes", an unrecorded drop:
    * the rows naming each item, by recipe name, for a page of items at once.

@@ -137,6 +137,15 @@ export function activeTab(pathname: string): TabKey | undefined {
 }
 
 /**
+ * The tab the tab bar and the rail draw as current. Recipes sit under
+ * Cellars for the trail (`activeTab`, breadcrumbs), but the Recipes boards
+ * light only More there (F-171, W3-5), so no tab is drawn current on them.
+ */
+export function litTab(pathname: string): TabKey | undefined {
+  return isUnder(pathname, "/recipes") ? undefined : activeTab(pathname);
+}
+
+/**
  * Where ＋ goes (X06): the full-screen capture surface — the camera, with the
  * mode row Bottle · Menu · Recipe opening on the last mode used. It replaced
  * X01's chooser sheet; a place is added from the map.

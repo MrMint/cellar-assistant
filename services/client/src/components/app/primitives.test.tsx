@@ -160,7 +160,7 @@ describe("AppShell: the content area per route", () => {
     });
   });
   test("X10: the search sheet is full screen — no tab bar on /search alone", () => {
-    assert.equal(contentLayout("/search").tabBar, false);
+    assert.equal(contentLayout("/search").tabBar, true, "FR-2: the board wins");
     assert.equal(contentLayout("/").tabBar, true);
     assert.equal(contentLayout("/searching").tabBar, true);
   });

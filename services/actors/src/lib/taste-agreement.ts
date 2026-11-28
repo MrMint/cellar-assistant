@@ -12,6 +12,7 @@ import {
   ARCHETYPE_MIN_RATINGS,
   ARCHETYPE_MIN_STYLE_RATINGS,
   type ItemType,
+  styleLabel,
   type TasteAgreementTypeDto,
   type TasteArchetypeDto,
   type TasteArchetypeKey,
@@ -71,8 +72,11 @@ export const styleStats = (
     { type: ItemType; label: string; scores: number[] }
   >();
   for (const rating of ratings) {
-    const label = rating.style?.trim();
-    if (label === undefined || label === "") continue;
+    const raw = rating.style?.trim();
+    if (raw === undefined || raw === "") continue;
+    // F-50: grouped and named by the label a person reads, so a raw enum
+    // never reaches the taste line, and one style stored two ways is one row.
+    const label = styleLabel(raw);
     const key = `${rating.type}\u0000${label}`;
     const group = groups.get(key) ?? { type: rating.type, label, scores: [] };
     group.scores.push(rating.score);

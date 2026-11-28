@@ -25,6 +25,7 @@ import {
   BREADTH_STAMP_TIERS,
   RECAP_CARD_CHIP_LIMIT,
   RECAP_CARD_THRESHOLDS,
+  styleLabel,
 } from "@cellar-assistant/contracts";
 
 const TYPE_LABELS: Readonly<Record<ItemType, string>> = {
@@ -106,8 +107,9 @@ const breadthOf = (rows: readonly RecapLogRow[]): Breadth => {
       breadth.types.add(row.itemType, TYPE_LABELS[row.itemType]);
       if (row.style !== null && row.style.trim() !== "") {
         breadth.styles.add(
-          `${row.itemType}:${norm(row.style)}`,
-          displayValue(row.style),
+          `${row.itemType}:${norm(styleLabel(row.style))}`,
+          // F-50: the taste profile's style label, not the region casing.
+          styleLabel(row.style),
         );
       }
       if (row.region !== null && row.region.trim() !== "") {

@@ -644,6 +644,12 @@ export type UserSearchHit = {
    * no one but `NONE`s and leaves it absent.
    */
   readonly relation?: PersonRelation;
+  /**
+   * F-43: the open friend request's id when `relation` is `REQUEST_SENT` or
+   * `REQUEST_RECEIVED` (what `rejectFriendRequest` / `acceptFriendRequest`
+   * take); absent otherwise.
+   */
+  readonly pendingRequestId?: string;
 };
 
 export type UserSearchActorInterface = {

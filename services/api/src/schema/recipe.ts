@@ -716,7 +716,8 @@ RecipeGroupType.implement({
         "never moves `canonicalRecipeId`.",
       resolve: async (group, _args, context) => {
         if (group.communityPickId !== undefined) return group.communityPickId;
-        // A collection projection does not compute it: ask the group.
+        // The /recipes projection carries it (F-88); any other DTO without
+        // it asks the group.
         try {
           const full = await context
             .actor(RecipeGroupActorDescriptor, group.id)

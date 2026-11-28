@@ -12633,6 +12633,7 @@ export const graphcacheSchema: MinifiedIntrospection = {
               ofType: { kind: "SCALAR", name: "String" },
             },
           },
+          { name: "pendingRequestId", type: { kind: "SCALAR", name: "ID" } },
           { name: "relation", type: { kind: "ENUM", name: "PersonRelation" } },
           {
             name: "userId",
