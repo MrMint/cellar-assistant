@@ -1,0 +1,45 @@
+# Fails a pull request that changes what runs in production under a commit type release-please
+# does not release (`chore:`, `docs:`, `refactor:`, `chore(deps):`, …). Without it such a PR
+# merges and then sits undeployed: the frontend ships only from a release, and nothing says that
+# no release is coming. #751 and #752 did exactly that (2026-11-28). The rule, and what counts as
+# deployed, is tools/releasable.ts; its tests run in harness-ci.
+#
+# Make the `releasable` check required in the main ruleset, or it only advises.
+#
+# Hardening: `pull_request`, never `pull_request_target` — the job runs this repository's own
+# script on the PR's checkout with a read-only token, and the title and labels reach it through
+# the environment, never interpolated into the script.
+name: releasable
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, edited, synchronize, reopened, labeled, unlabeled]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: releasable-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  releasable:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+
+      - name: Would release-please release this PR?
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
+        run: node tools/releasable.ts
