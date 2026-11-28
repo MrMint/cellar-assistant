@@ -144,10 +144,11 @@ test("a sealed bottle pours: the first pour opens it, and Undo seals it again", 
   await page.goto(`/cellars/${cellarId}/teas/${bottleId}`);
   await expect(page.getByRole("heading", { name: teaName })).toBeVisible();
 
-  // Before the bottle is opened, Pour is the page's primary action — in the
-  // thumb zone, above the tab bar, without scrolling.
-  const bar = page.getByRole("toolbar", { name: "Item actions" });
-  const pour = bar.getByRole("button", { name: "Steep", exact: true });
+  // The item page has no bottom bar now: Pour is the bottle row's own
+  // action ("Steep from <cellar>"), before the bottle is opened too, since
+  // the first pour opens it. Scrolled to, it is on screen above the tab bar.
+  const pour = page.getByRole("button", { name: /^Steep from /, exact: false });
+  await pour.scrollIntoViewIfNeeded();
   await expect(pour).toBeVisible({ timeout: 20_000 });
   const viewport = page.viewportSize();
   expect((await edgesOf(pour)).bottom).toBeLessThanOrEqual(
@@ -256,10 +257,7 @@ test("the last pour: Finished, then the rating, then the band it reads as", asyn
   expect(set.updateCellarItem.__typename).toBe("CellarItem");
 
   await page.goto(`/cellars/${cellarId}/teas/${bottleId}`);
-  await page
-    .getByRole("toolbar", { name: "Item actions" })
-    .getByRole("button", { name: "Steep", exact: true })
-    .click();
+  await page.getByRole("button", { name: /^Steep from / }).click();
   const sheet = page.getByRole("dialog", { name: "Steep" });
   await sheet.getByRole("radio", { name: /^The rest/ }).click();
   await sheet.getByRole("button", { name: "Steep the last of it" }).click();
