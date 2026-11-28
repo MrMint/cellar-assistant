@@ -1,7 +1,13 @@
 import type { Page } from "@playwright/test";
 import { createCellar, unique } from "../fixtures/data.ts";
 import { deleteCellarWithContents } from "../fixtures/db.ts";
-import { bodyText, expect, test, watch } from "../fixtures/test.ts";
+import {
+  bodyText,
+  expect,
+  test,
+  visibleOnly,
+  watch,
+} from "../fixtures/test.ts";
 
 /**
  * X09's one item page: the item URL, the edit form, and the **bottle** URL —
@@ -151,7 +157,11 @@ test("the item page: hero, taste header, fact sheet, Your bottles, the ⋯ menu"
     .filter({ has: primary.locator("time") })
     .first()
     .click();
-  await expect(primary.getByText("E2 lovely")).toBeVisible();
+  // The review text is also in the reviews list below; "Your rating" is the
+  // one this line is about (F-24: two matches fail strict mode).
+  await expect(
+    primary.getByTestId("your-rating").getByText("E2 lovely"),
+  ).toBeVisible();
   // One review per viewer: the rating block opens on the viewer's own.
   await expect(
     primary
@@ -177,7 +187,7 @@ test("the item page: hero, taste header, fact sheet, Your bottles, the ⋯ menu"
     await expect(menu.getByRole("button", { name, exact: true })).toBeVisible();
   }
   await expect(
-    menu.getByRole("button", { name: /^Add (to|another)/ }),
+    menu.getByRole("button", { name: /^Add (a|another) bottle$/ }),
   ).toBeVisible();
   // On the item URL no bottle is named, so there is nothing to delete.
   await expect(
@@ -257,10 +267,11 @@ test("the bottle URL is the item page with that bottle selected: pour it (which 
   await bottles
     .getByRole("button", { name: `Steep from ${cellarName}` })
     .click();
-  const sheet = primary.getByRole("dialog", { name: "Pour" });
-  await sheet.getByRole("button", { name: /^Cup/ }).click();
-  await sheet.getByRole("button", { name: "Pour 3 g" }).click();
-  await expect(primary.getByText("Remaining: 97%")).toBeVisible({
+  // The sheet is the tea's own word ("Steep"); a preset is an option row.
+  const sheet = primary.getByRole("dialog", { name: "Steep" });
+  await sheet.getByRole("radio", { name: /^Cup/ }).click();
+  await sheet.getByRole("button", { name: "Steep 3 g" }).click();
+  await expect(primary.getByText("Steeped 3 g · 97% left")).toBeVisible({
     timeout: 20_000,
   });
 
@@ -281,13 +292,16 @@ test("the bottle URL is the item page with that bottle selected: pour it (which 
 
   // Check in, the row's primary: a check-in with an Undo.
   await bottles.getByRole("button", { name: "Check in", exact: true }).click();
-  await expect(primary.getByText("Checked in", { exact: true })).toBeVisible({
+  // The toast and the log's new entry both say it.
+  await expect(
+    visibleOnly(primary.getByText("Checked in", { exact: true })).first(),
+  ).toBeVisible({
     timeout: 20_000,
   });
 
   await overflowAction(primary, "Delete this bottle");
   await primary
-    .getByRole("dialog", { name: /^Delete this/ })
+    .getByRole("alertdialog", { name: /^Delete this/ })
     .getByRole("button", { name: "Delete", exact: true })
     .click();
   await expect(primary).toHaveURL(new RegExp(`/cellars/${cellarId}/items$`), {
@@ -306,8 +320,15 @@ test("the log outlives the bottle: the item page still lists it", async ({
   await expect(
     log.locator('[data-slot="drink-log-entry"]').first(),
   ).toBeVisible({ timeout: 20_000 });
-  // …and the tin is gone from Your tins (the section is not drawn).
-  await expect(primary.getByRole("heading", { name: "Your tins" })).toHaveCount(
+  // …and the tin is gone from Your tins: on the item URL the section is still
+  // drawn (it offers "Add a bottle"), but it lists no bottle to act on.
+  const tins = primary.locator("section", {
+    has: primary.getByRole("heading", { name: "Your tins" }),
+  });
+  await expect(tins.getByRole("button", { name: /^Steep from / })).toHaveCount(
     0,
   );
+  await expect(
+    tins.getByRole("button", { name: /^Log a drink from / }),
+  ).toHaveCount(0);
 });
