@@ -19,6 +19,11 @@
  * list's Kinds, Where and Passport (F2b's `StatTile`), then what else the
  * model wrote. The sparkle and its words mark the AI, never a colour
  * (DECISIONS 40a).
+ *
+ * F-182: the owner's READY card carries "Rewrite" (F-86,
+ * `rewriteTierListInsights`): the working card shows from the tap until a
+ * new write lands, and a refusal — it counts against the AI allowance — is
+ * "Limit reached" with the reset, like the first write's.
  */
 
 import { useRouter } from "next/navigation";
@@ -27,9 +32,11 @@ import { AI, ICON_STROKE, Schedule } from "@/components/app/icons";
 import type { ApiItemType } from "@/components/cellar-api/itemTypes";
 import { AiStatus } from "@/components/common/AiStatus";
 import { Timestamp } from "@/components/common/Timestamp";
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TryThisNext } from "@/components/want-to-try/TryThisNext";
 import type { AiOutcome } from "@/lib/ai/outcome";
+import { feedback } from "@/lib/feedback";
 import { useTierListActions } from "../actions";
 import { TryNextCards } from "../TryNextCards";
 import type { TierListInsightsData } from "../types";
@@ -48,6 +55,7 @@ import {
   shouldRequestInsights,
 } from "./insights-view";
 import { PalatePassport } from "./PalatePassport";
+import { useRewriteInsights } from "./useRewriteInsights";
 
 const POLL_INTERVAL_MS = 15_000;
 const MAX_POLLS = 8;
@@ -108,6 +116,13 @@ export function TierListInsightsPanel({
   /** The request's refusal, when it was refused (MC-quota). */
   const [refusal, setRefusal] = useState<AiOutcome | null>(null);
   const tierListId = grounded?.tierListId ?? null;
+  const rewriteInsights = useRewriteInsights();
+  /** F-182: the write a Rewrite started from (its `generatedAt`), or null. */
+  const [rewritingFrom, setRewritingFrom] = useState<string | null>(null);
+  const rewriting =
+    rewritingFrom !== null &&
+    status === "READY" &&
+    ai?.generatedAt === rewritingFrom;
 
   // L12: the owner's first open of an IDLE list of 3+ writes it — once.
   useEffect(() => {
@@ -134,9 +149,32 @@ export function TierListInsightsPanel({
     isOwner,
   });
   const view =
-    refusal === null
-      ? computed
-      : { generating: false, poll: false, notice: refusal, hint: null };
+    refusal !== null
+      ? { generating: false, poll: false, notice: refusal, hint: null }
+      : rewriting
+        ? // Until the refresh shows PENDING, poll as the working card would.
+          { generating: true, poll: true, notice: null, hint: null }
+        : computed;
+  const canRewrite =
+    isOwner &&
+    tierListId !== null &&
+    status === "READY" &&
+    ai !== null &&
+    !view.generating;
+  const rewrite = async () => {
+    if (!canRewrite || tierListId === null || ai === null) return;
+    feedback("press");
+    setRefusal(null);
+    setRewritingFrom(ai.generatedAt);
+    const result = await rewriteInsights(tierListId);
+    if (result.success) {
+      router.refresh();
+      return;
+    }
+    setRewritingFrom(null);
+    feedback("refuse");
+    setRefusal(insightsLimitNotice(result.failure));
+  };
   const shouldPoll = view.poll;
 
   // Poll only while the server says an answer is on its way, and never more
@@ -211,9 +249,23 @@ export function TierListInsightsPanel({
         </section>
       ) : ai !== null ? (
         <section className="flex flex-col gap-2 rounded-md border border-edge bg-card p-4">
-          <WrittenByAi>
-            Written by AI · <Timestamp iso={ai.generatedAt} precision="date" />
-          </WrittenByAi>
+          <div className="flex items-center justify-between gap-2">
+            <WrittenByAi>
+              Written by AI ·{" "}
+              <Timestamp iso={ai.generatedAt} precision="date" />
+            </WrittenByAi>
+            {canRewrite && (
+              <Button
+                type="button"
+                variant="quiet"
+                size="sm"
+                className="t-head -my-2 -mr-2"
+                onClick={() => void rewrite()}
+              >
+                Rewrite
+              </Button>
+            )}
+          </div>
           {ai.archetype && <h3 className="t-title text-ink">{ai.archetype}</h3>}
           <p className="t-body text-ink">
             {ai.archetypeDescription ?? ai.palateProfile}

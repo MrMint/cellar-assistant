@@ -408,6 +408,29 @@ export const RequestTierListInsightsMutation = graphql(
   [ActorErrorFieldsFragment],
 );
 
+/**
+ * F-182: "Rewrite" on a READY Insights card (F-86). Counts against the
+ * viewer's AI allowance; a refusal is a typed error (USER_CAP), said as
+ * "Limit reached".
+ */
+export const RewriteTierListInsightsMutation = graphql(
+  `
+    mutation RewriteTierListInsights($tierListId: ID!) {
+      rewriteTierListInsights(tierListId: $tierListId) {
+        __typename
+        ... on TierList {
+          id
+          insightsStatus
+          insightsFailureReason
+          insightsRetryAt
+        }
+        ...ActorErrorFields
+      }
+    }
+  `,
+  [ActorErrorFieldsFragment],
+);
+
 /** D4: put back the undone edit `expectedSeq` names — `undo`'s mirror. */
 export const RedoTierListEditMutation = graphql(
   `
