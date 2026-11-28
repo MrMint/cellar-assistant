@@ -401,8 +401,11 @@ fp() { (cd "$1" && find "$2" -type f ! -name '*.md' -print0 | LC_ALL=C sort -z |
 do_export() {
   if [ ! -d "$NEW_DIR" ]; then
     local tmp="$NEW_DIR.tmp.$$"
-    rm -rf "$tmp" && mkdir -p "$tmp" || return 1
-    git -C "$MIRROR" archive --format=tar "$TARGET" | tar -x -C "$tmp" || { rm -rf "$tmp"; return 1; }
+    # The tree is the images' build context, and COPY keeps its modes: under
+    # the script's umask 077 it lands in the image as root-owned 0700, which
+    # the image's own USER cannot read. A release tree holds no secrets.
+    (umask 022 && rm -rf "$tmp" && mkdir -p "$tmp") || return 1
+    (umask 022 && git -C "$MIRROR" archive --format=tar "$TARGET" | tar -x -C "$tmp") || { rm -rf "$tmp"; return 1; }
     mv "$tmp" "$NEW_DIR" || return 1
   fi
   local otel dapr
