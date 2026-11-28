@@ -21,6 +21,7 @@ import {
   tierListEntryFromNode,
 } from "./adapter";
 import { dateFromYear, formLayout, yearFromDate } from "./itemFormLayout";
+import { tasteScore } from "./TasteHeader";
 
 const core = { name: "X", description: null, country: "FRANCE" };
 
@@ -166,6 +167,29 @@ describe("rows", () => {
     });
     assert.equal(review.user.displayName, "Unknown user");
     assert.equal(review.text, null);
+  });
+
+  test("F-151: myReview carries when you rated it, for the line under Your rating", () => {
+    assert.equal(
+      myReviewFromRow({
+        id: "r",
+        score: 4,
+        text: null,
+        updatedAt: "2026-11-03T18:00:00.000Z",
+      })?.ratedAt,
+      "2026-11-03T18:00:00.000Z",
+    );
+    assert.equal(
+      myReviewFromRow({ id: "r", score: 4, text: null })?.ratedAt,
+      null,
+    );
+  });
+
+  test("F-151: the taste header's scores are one decimal, always", () => {
+    assert.equal(tasteScore(4), "4.0");
+    assert.equal(tasteScore(4.25), "4.3");
+    assert.equal(tasteScore(3.96), "4.0");
+    assert.equal(tasteScore(5.4), "5.0");
   });
 
   test("myReview: null stays null", () => {

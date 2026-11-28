@@ -353,13 +353,32 @@ export const reviewFromRow = (row: ReviewSource): Review => {
   };
 };
 
-/** `Item.myReview` → `AddReview`'s pre-fill. */
+/**
+ * `Item.myReview` → `AddReview`'s pre-fill, and (F-151) when you last rated
+ * it, for "Your rating · Nov 3".
+ */
 export const myReviewFromRow = (
-  row: { id: string; score: number; text?: unknown } | null | undefined,
-): { id: string; score: number; text: string | null } | null =>
+  row:
+    | { id: string; score: number; text?: unknown; updatedAt?: unknown }
+    | null
+    | undefined,
+): MyReview | null =>
   row === null || row === undefined
     ? null
-    : { id: row.id, score: row.score, text: richTextFromReviewText(row.text) };
+    : {
+        id: row.id,
+        score: row.score,
+        text: richTextFromReviewText(row.text),
+        ratedAt: typeof row.updatedAt === "string" ? row.updatedAt : null,
+      };
+
+export type MyReview = {
+  id: string;
+  score: number;
+  text: string | null;
+  /** F-151: when you last rated it; null when the read did not say. */
+  ratedAt?: string | null;
+};
 
 export type CellarSource = {
   id: string;
@@ -542,7 +561,7 @@ export type ItemView = {
   reviews: Review[];
   reviewsEndCursor: string | null;
   reviewsHasNextPage: boolean;
-  myReview: { id: string; score: number; text: string | null } | null;
+  myReview: MyReview | null;
   /** X09's taste header: everyone's average (`Item.score`)… */
   everyone: ScoreSummary;
   /** …and the viewer's friends' (`Item.friendsScore`). */

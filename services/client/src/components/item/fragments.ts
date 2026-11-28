@@ -122,6 +122,8 @@ export const ItemPageItemFragment = graphql(
       id
       score
       text
+      # F-151: the date under Your rating.
+      updatedAt
     }
     reviews(first: 20) {
       totalCount

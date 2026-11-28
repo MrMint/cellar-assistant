@@ -1,10 +1,17 @@
 import { ICON_STROKE, People } from "@/components/app/icons";
-import { formatScore } from "@/components/app/Score";
 import type { ApiItemType } from "@/components/cellar-api/itemTypes";
-import { ratingSummary } from "@/components/common/rating/rating";
+import { RATING_MAX, ratingSummary } from "@/components/common/rating/rating";
+import { Timestamp } from "@/components/common/Timestamp";
 import { cn } from "@/lib/utils";
 import { FriendsRatingsCell } from "./friends/FriendsRatingsSheet";
 import type { TasteCell } from "./item-page-model";
+
+/**
+ * F-151: a taste-header score, always to one decimal ("4.0", not "4"), as
+ * the board draws it, clamped to the scale.
+ */
+export const tasteScore = (value: number): string =>
+  (Math.round(Math.min(RATING_MAX, Math.max(0, value)) * 10) / 10).toFixed(1);
 
 /**
  * What a screen reader hears for one cell: "Friends: rated 4.2 out of 5,
@@ -31,10 +38,13 @@ export function TasteHeader({
   cells,
   itemId,
   itemType,
+  ratedAt = null,
 }: {
   cells: readonly TasteCell[];
   itemId?: string;
   itemType?: ApiItemType;
+  /** F-151: when you rated it ("Your rating · Nov 3"); null for no date. */
+  ratedAt?: string | null;
 }) {
   const you = cells.find((cell) => cell.key === "you");
   const others = cells.filter((cell) => cell.key !== "you");
@@ -52,6 +62,12 @@ export function TasteHeader({
           className={cn(LINK, "t-cap font-semibold text-ink-2")}
         >
           Your rating
+          {you.value !== null && ratedAt !== null && (
+            <span className="num font-normal">
+              {" · "}
+              <Timestamp iso={ratedAt} precision="date" />
+            </span>
+          )}
         </a>
       )}
       <span className="flex min-w-0 items-center gap-4">
@@ -74,7 +90,7 @@ export function TasteHeader({
                   cell.value === null ? "text-ink-3" : "text-ink",
                 )}
               >
-                {cell.value === null ? "–" : formatScore(cell.value)}
+                {cell.value === null ? "–" : tasteScore(cell.value)}
               </span>
               {cell.key === "everyone" && cell.value !== null && (
                 <span aria-hidden className="tabular text-ink-3">
