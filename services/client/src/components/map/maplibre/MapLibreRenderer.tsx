@@ -13,6 +13,7 @@ import {
 } from "react-map-gl/maplibre";
 import { Add, Decrease, ICON_STROKE, MyLocation } from "@/components/app/icons";
 import { GlassDisc } from "@/components/app/overlays/GlassDisc";
+import { afterHistorySettles } from "@/components/app/overlays/layers";
 import { useNavigate } from "@/components/app/useNavigate";
 import { breakpointUp, useMediaQuery } from "@/hooks/useMediaQuery";
 import { feedback } from "@/lib/feedback";
@@ -58,12 +59,13 @@ import { useMapPlaceSelection } from "../hooks/useMapPlaceSelection";
 import { useMapSearchParams } from "../hooks/useMapSearchParams";
 import { useSearchParamsSync } from "../hooks/useSearchParamsSync";
 import { useViewportInsets } from "../hooks/useViewportInsets";
+import { AddPlaceSheet } from "../places/AddPlaceSheet";
+import { mapPaddingFor } from "../places/add-place-sheet";
 import { CenterPinOverlay } from "../places/CenterPinOverlay";
 import {
   PlaceDetailsDrawer,
   type PlaceDetailsDrawerRef,
 } from "../places/PlaceDetailsDrawer";
-import { createPlaceHref } from "../places/search-empty-state";
 import type { PlaceResult } from "../types";
 import { getDrawerOffset } from "../utils/layout";
 import { basemapStyle, MAP_CANVAS_BACKGROUND } from "./basemap";
@@ -83,6 +85,9 @@ interface MapLibreRendererProps {
   userId: string;
   cachedLocation?: CachedLocation | null;
 }
+
+/** FS-1: how long the map rests before the sheet's pin moves to it. */
+const PIN_SETTLE_MS = 400;
 
 /** The map's own height, measured: the dock's detents come from it. */
 function useHeightOf(element: HTMLElement | null): number {
@@ -175,8 +180,15 @@ export function MapLibreRenderer({
   const paletteRef = useRef(palette);
   paletteRef.current = palette;
 
-  /** N22: the searched name the pin drop carries into the create form. */
-  const pendingPlaceNameRef = useRef<string | null>(null);
+  /** N22: the searched name Add a place carries into the sheet's form. */
+  const [addName, setAddName] = useState("");
+  /** FS-1: where the sheet's pin stands — the map's settled (padded) centre. */
+  const [pinAt, setPinAt] = useState<{
+    latitude: number;
+    longitude: number;
+  } | null>(null);
+  /** FS-1: the sheet's size along the edge it covers, for the map's padding. */
+  const [sheetPx, setSheetPx] = useState(0);
 
   // Initial flight + view state
   const { initialViewState, isLocationReady } = useMapInitialFlight({
@@ -364,6 +376,16 @@ export function MapLibreRenderer({
     setMapReady(true);
   }, [mapActions, handleBoundsChange]);
 
+  const isPlacingRef = useRef(isPlacing);
+  isPlacingRef.current = isPlacing;
+  const pinTimerRef = useRef<ReturnType<typeof setTimeout>>(null);
+  useEffect(
+    () => () => {
+      if (pinTimerRef.current) clearTimeout(pinTimerRef.current);
+    },
+    [],
+  );
+
   const handleMoveEnd = useCallback(() => {
     const map = mapRef.current?.getMap();
     if (!map) return;
@@ -376,6 +398,15 @@ export function MapLibreRenderer({
       west: b.getWest(),
     });
     mapActions.setZoom(map.getZoom());
+    // FS-1: the sheet's pin follows the map; the form re-drafts from it
+    // (its lookups cost quota, so once the map has rested, not per nudge).
+    if (isPlacingRef.current) {
+      if (pinTimerRef.current) clearTimeout(pinTimerRef.current);
+      pinTimerRef.current = setTimeout(() => {
+        const center = map.getCenter();
+        setPinAt({ latitude: center.lat, longitude: center.lng });
+      }, PIN_SETTLE_MS);
+    }
   }, [handleBoundsChange, mapActions]);
 
   const flyToPlace = useCallback(
@@ -493,37 +524,75 @@ export function MapLibreRenderer({
     }
   }, [userLocation, geolocation, mapActions]);
 
-  const handleConfirmPinLocation = useCallback(() => {
-    const center = mapRef.current?.getCenter();
-    if (center) {
-      mapActions.exitPinPlacement();
-      const name = pendingPlaceNameRef.current;
-      pendingPlaceNameRef.current = null;
-      navigate.push(
-        createPlaceHref({
-          latitude: center.lat,
-          longitude: center.lng,
-          name,
-        }),
-      );
-    }
-  }, [mapActions, navigate]);
-
-  // However the pin drop ends (Confirm reads the name first; Cancel, or the
-  // controls' own toggle), a searched name must not leak into the next one.
+  // FS-1: Add a place is a sheet over the live map. While it is up the map
+  // is padded by the sheet, so the pin (at the padded centre) and
+  // `getCenter()` agree; the pin's first spot is wherever the map stood.
   useEffect(() => {
-    if (!isPlacing) pendingPlaceNameRef.current = null;
+    const map = mapRef.current?.getMap();
+    if (!map || !mapReady) return;
+    const padding = mapPaddingFor(isDesktop, isPlacing ? sheetPx : 0);
+    const now = map.getPadding();
+    if (
+      now.top === padding.top &&
+      now.bottom === padding.bottom &&
+      now.left === padding.left &&
+      now.right === padding.right
+    ) {
+      return;
+    }
+    map.easeTo({ padding, duration: 250 });
+  }, [isPlacing, isDesktop, sheetPx, mapReady]);
+  useEffect(() => {
+    if (!isPlacing) {
+      setPinAt(null);
+      setAddName("");
+      return;
+    }
+    const center = mapRef.current?.getCenter();
+    if (center) setPinAt({ latitude: center.lat, longitude: center.lng });
   }, [isPlacing]);
 
-  // N22: Add a place drops a pin at the map's centre; a search that found
-  // nothing carries its words into the create form as the name.
+  // N22: Add a place opens the sheet at the map's centre; a search that found
+  // nothing carries its words into the form as the name.
   const { query: listQuery, clearSearch } = list;
   const handleAddPlace = useCallback(() => {
-    pendingPlaceNameRef.current = listQuery || null;
+    setAddName(listQuery);
     if (listQuery !== "") clearSearch();
     setPeekId(null);
+    // One thing over the map at a time: the open place gives way.
+    if (mapUI.isDrawerOpen) handleCloseDrawer();
     mapActions.enterPinPlacement();
-  }, [listQuery, clearSearch, mapActions]);
+  }, [
+    listQuery,
+    clearSearch,
+    mapActions,
+    mapUI.isDrawerOpen,
+    handleCloseDrawer,
+  ]);
+
+  // FS-1: `/map?add=1` (a capture sheet's "Add a place") opens the sheet
+  // once the map is up.
+  const { add: addRequested, clearAdd } = searchParams;
+  useEffect(() => {
+    if (!addRequested || !mapReady) return;
+    // The URL first: the sheet's layer pushes a Back entry as it opens, and a
+    // URL write still queued then is dropped (see FS-2's selection hook).
+    void clearAdd().then(() => mapActions.enterPinPlacement());
+  }, [addRequested, mapReady, clearAdd, mapActions]);
+
+  // A created place (or the existing one the duplicate check offered) opens
+  // on the map: the sheet goes, and `?placeId=` deep-links to it.
+  const { setPlaceId } = searchParams;
+  const handleAddedPlace = useCallback(
+    (placeId: string) => {
+      mapActions.exitPinPlacement();
+      mapActions.refreshPlaces();
+      // The sheet's layer takes its Back entry off as it closes: the place's
+      // `?placeId=` lands on the map's own entry once that pop has.
+      afterHistorySettles(() => setPlaceId(placeId, { history: "push" }));
+    },
+    [mapActions, setPlaceId],
+  );
 
   // F-33 / F-34: take the map to some of your places.
   const showPoints = useCallback(
@@ -819,11 +888,19 @@ export function MapLibreRenderer({
           />
         )}
 
-        {/* Pin placement overlay */}
+        {/* FS-1: Add a place — the pin over the live map, the sheet beside */}
         {isPlacing && (
-          <CenterPinOverlay
-            onConfirm={handleConfirmPinLocation}
+          <CenterPinOverlay padding={mapPaddingFor(isDesktop, sheetPx)} />
+        )}
+        {isPlacing && pinAt !== null && (
+          <AddPlaceSheet
+            latitude={pinAt.latitude}
+            longitude={pinAt.longitude}
+            initialName={addName}
+            desktop={isDesktop}
             onCancel={mapActions.exitPinPlacement}
+            onOpenPlace={handleAddedPlace}
+            onSize={setSheetPx}
           />
         )}
 

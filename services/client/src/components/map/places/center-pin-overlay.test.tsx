@@ -13,7 +13,7 @@ const RAW_COLOUR =
 describe("CenterPinOverlay (L23)", () => {
   test("no raw colour classes; the pin's base dot is the scrim token", () => {
     const html = renderToStaticMarkup(
-      <CenterPinOverlay onConfirm={() => {}} onCancel={() => {}} />,
+      <CenterPinOverlay padding={{ top: 0, bottom: 320, left: 0, right: 0 }} />,
     );
     const classes = Array.from(html.matchAll(/class="([^"]*)"/g)).map(
       (match) => match[1] ?? "",
@@ -24,5 +24,8 @@ describe("CenterPinOverlay (L23)", () => {
       classes.some((value) => /\bbg-scrim\b/.test(value)),
       "the base dot uses bg-scrim",
     );
+    // FS-1: the pin alone; the Add a place sheet holds the form.
+    assert.doesNotMatch(html, /Confirm Location/);
+    assert.match(html, /bottom:320px/);
   });
 });

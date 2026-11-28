@@ -73,6 +73,7 @@ import {
   pinAddressDraft,
   pinAddressNotFound,
 } from "../adapter";
+import { repinAddress } from "./add-place-sheet";
 import {
   CategoryMultiSelect,
   type CategoryOption,
@@ -182,6 +183,15 @@ interface CreatePlaceFormProps {
   initialName?: string;
   /** X27: edit this place under review instead of creating one. */
   edit?: PlaceEditTarget;
+  /**
+   * FS-1: hosted in the map's Add a place sheet. The sheet draws its own
+   * header and close, the pin follows the live map (so the address re-drafts
+   * as it moves), and opening a place stays on the map instead of navigating.
+   */
+  sheet?: {
+    onCancel: () => void;
+    onOpenPlace: (placeId: string) => void;
+  };
 }
 
 /**
@@ -211,6 +221,7 @@ export function CreatePlaceForm({
   longitude,
   initialName = "",
   edit,
+  sheet,
 }: CreatePlaceFormProps) {
   const editing = edit !== undefined;
   const navigate = useNavigate();
@@ -267,6 +278,7 @@ export function CreatePlaceForm({
   const {
     control,
     handleSubmit,
+    getValues,
     setValue,
     watch,
     formState: { isSubmitting, errors },
@@ -296,8 +308,12 @@ export function CreatePlaceForm({
   const countryCodeValue = watch("country_code");
   const phoneCountry = toSupportedCountryCode(countryCodeValue) ?? "US";
 
+  // The draft the last pin wrote, for re-drafting when the pin moves (FS-1).
+  const pinDraftRef = useRef<Partial<Record<PinAddressField, string>>>({});
+
   // Auto-fill address from reverse geocode + fetch Google nearby places on
-  // mount — a new place only: an edit starts from the place's own values.
+  // mount, and again whenever the sheet's pin moves — a new place only: an
+  // edit starts from the place's own values.
   useEffect(() => {
     if (editing) return;
     let cancelled = false;
@@ -307,9 +323,12 @@ export function CreatePlaceForm({
       .then((result) => {
         if (cancelled) return;
         const draft = pinAddressDraft(result);
-        for (const [key, value] of Object.entries(draft)) {
+        // What the person typed stays; what the last pin wrote moves with it.
+        const writes = repinAddress(pinDraftRef.current, getValues(), draft);
+        for (const [key, value] of Object.entries(writes)) {
           setValue(key as PinAddressField, value);
         }
+        pinDraftRef.current = draft;
         setPinDraft(draft);
       })
       .finally(() => {
@@ -336,6 +355,7 @@ export function CreatePlaceForm({
     editing,
     latitude,
     longitude,
+    getValues,
     setValue,
     reverseGeocodeAction,
     googleNearbySearchAction,
@@ -386,12 +406,15 @@ export function CreatePlaceForm({
     };
   }, [nameValue, latitude, longitude, checkDuplicatePlacesAction, edit]);
 
-  const handleSelectExisting = useCallback(
+  const onOpenPlace = sheet?.onOpenPlace;
+  const openPlace = useCallback(
     (placeId: string) => {
-      navigate.push(`/map?placeId=${placeId}`);
+      if (onOpenPlace) onOpenPlace(placeId);
+      else navigate.push(`/map?placeId=${placeId}`);
     },
-    [navigate],
+    [navigate, onOpenPlace],
   );
+  const handleSelectExisting = openPlace;
 
   const handleConfirmNew = useCallback(() => {
     setDuplicatesConfirmed(true);
@@ -521,7 +544,7 @@ export function CreatePlaceForm({
               ? undefined
               : "Only you can see it until it's been checked.",
         });
-        navigate.push(`/map?placeId=${result.placeId}`);
+        openPlace(result.placeId);
       } else {
         setServerError(result.error ?? "Something went wrong.");
         if (result.duplicates?.length) {
@@ -571,22 +594,25 @@ export function CreatePlaceForm({
       data-slot="create-place-form"
     >
       <div className="flex flex-col gap-4">
-        {/* F-200 (Places-Place 25 to 28): the board's sheet, top to bottom. */}
-        <div className="flex items-center gap-2">
-          <p className="t-body m-0 min-w-0 flex-1 text-ink-2">
-            {editing
-              ? "Fix it, then send it for review again"
-              : "At the map’s centre pin"}
-          </p>
-          <IconButton
-            aria-label={editing ? "Back to place" : "Back to map"}
-            onClick={() =>
-              navigate.push(edit ? `/places/${edit.placeId}` : "/map")
-            }
-          >
-            <Close />
-          </IconButton>
-        </div>
+        {/* F-200 (Places-Place 25 to 28): the board's sheet, top to bottom.
+            In the map's sheet (FS-1) the sheet draws this row itself. */}
+        {!sheet && (
+          <div className="flex items-center gap-2">
+            <p className="t-body m-0 min-w-0 flex-1 text-ink-2">
+              {editing
+                ? "Fix it, then send it for review again"
+                : "At the map’s centre pin"}
+            </p>
+            <IconButton
+              aria-label={editing ? "Back to place" : "Back to map"}
+              onClick={() =>
+                navigate.push(edit ? `/places/${edit.placeId}` : "/map")
+              }
+            >
+              <Close />
+            </IconButton>
+          </div>
+        )}
 
         {/* X27: why a rejected place was refused, above the fields to fix */}
         {edit?.reviewStatus === "REJECTED" && (

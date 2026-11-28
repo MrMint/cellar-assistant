@@ -79,6 +79,10 @@ export function useMapSearchParams() {
   // Deep-link to a specific place (e.g. after creating one)
   const [placeId, setPlaceId] = useQueryState("placeId", parseAsString);
 
+  // FS-1: `/map?add=1` opens the Add a place sheet over the map (the
+  // capture sheets' "Add a place", `/map/create-place` without a pin).
+  const [add, setAdd] = useQueryState("add", parseAsBoolean);
+
   // Global search defaults to true — semantic search ignores viewport bounds
   const [globalSearch, setGlobalSearchRaw] = useQueryState(
     "global",
@@ -115,6 +119,8 @@ export function useMapSearchParams() {
     /** L40 / F-191: the `?list=<id>` a list's Map link carries, or null. */
     list,
     placeId,
+    /** FS-1: open the Add a place sheet on arrival. */
+    add: add === true,
     globalSearch,
     kinds: kindsFromUrl(rawKinds),
 
@@ -135,6 +141,7 @@ export function useMapSearchParams() {
       value: string | null,
       options?: { history?: "push" | "replace" },
     ) => setPlaceId(value, options),
+    clearAdd: () => setAdd(null, { history: "replace" }),
     setKinds: (value: FilterKind[]) =>
       setKinds(value.length > 0 ? value : null),
     setGlobalSearch: (value: boolean) =>
