@@ -239,6 +239,18 @@ export type AddCellarItemInput = {
  * `null` clears it. Price is one pair: give both, or clear the amount (which
  * clears the currency with it).
  */
+/**
+ * F-79: Undo for `removeItem` — the bottle as it was, by its own id and with
+ * its own `createdAt`, so it returns to its place in the newest-first list
+ * rather than on top as a new add. The logs `removeItem` detached are not
+ * relinked: `check_ins` is `CheckInActor`'s to write.
+ */
+export type RestoreCellarItemInput = AddCellarItemInput & {
+  readonly cellarItemId: string;
+  /** The removed row's `createdAt`; not in the future. */
+  readonly createdAt: string;
+};
+
 export type BottleFreshnessInput = {
   readonly [K in keyof BottleFreshness]?: BottleFreshness[K];
 };
@@ -279,6 +291,14 @@ export const CELLAR_ITEM_SORTS = [
   // X04: the Finished diary — the bottle finished most recently first, then
   // the rest newest first.
   "FINISHED_DESC",
+  // F-79: the Arrange sheet's orders, read fresh per call like NAME_ASC. A
+  // bottle with no key (no brand, no style, not rated by you) sorts last;
+  // ties go by name. Maker is the primary brand; style is the card's
+  // descriptor (a wine's variety, a beer's or spirit's style, a coffee's
+  // roast, a sake's or tea's category); rating is the viewer's own score.
+  "MAKER_ASC",
+  "STYLE_ASC",
+  "RATING_DESC",
 ] as const;
 
 export type CellarItemSort = (typeof CELLAR_ITEM_SORTS)[number];
@@ -557,6 +577,12 @@ export type CellarActorInterface = {
     input: UpdateCellarItemInput,
   ): Promise<CellarItemDto>;
   removeItem(ctx: Ctx, cellarItemId: string): Promise<RemovedCellarItem>;
+  /**
+   * F-79: put a removed bottle back. Creator or co-owner, as `addItem`;
+   * idempotent on `cellarItemId` (a bottle still here is returned as is);
+   * an id now in another cellar is a `ConflictError`.
+   */
+  restoreItem(ctx: Ctx, input: RestoreCellarItemInput): Promise<CellarItemDto>;
   setItemPercentage(
     ctx: Ctx,
     cellarItemId: string,
@@ -696,6 +722,7 @@ export const CellarActorDescriptor: ActorDescriptor<
     addItem: {},
     updateItem: {},
     removeItem: {},
+    restoreItem: {},
     setItemPercentage: {},
     openItem: {},
     emptyItem: {},

@@ -4,7 +4,11 @@
  * `ItemOnboarding` fields. The actors are stubbed; what is pinned here is
  * the wiring — which actor, which key, which arguments.
  */
-import { ConflictError, NotFoundError } from "@cellar-assistant/contracts";
+import {
+  ConflictError,
+  NotFoundError,
+  ValidationError,
+} from "@cellar-assistant/contracts";
 import { execute, parse } from "graphql";
 import { describe, expect, it } from "vitest";
 import { stubSidecar, testContext } from "../testing.ts";
@@ -156,6 +160,29 @@ describe("needsDetails / needsDetailsCount (SV-B)", () => {
     ]);
   });
 
+  it("a malformed cellarId is the list's ValidationError, not a blank response (F-74)", async () => {
+    const { invoke } = stubSidecar({
+      "DraftsCollectionActor.needsDetails": () => {
+        throw new ValidationError('cellarId must be a UUID, got "x"');
+      },
+      "DraftsCollectionActor.needsDetailsCount": () => {
+        throw new ValidationError('cellarId must be a UUID, got "x"');
+      },
+    });
+    const result = await run(
+      `{
+         needsDetails(cellarId: "x") { __typename }
+         needsDetailsCount(cellarId: "x")
+       }`,
+      testContext(invoke, viewer),
+    );
+    expect(result.errors).toBeUndefined();
+    expect(result.data).toEqual({
+      needsDetails: { __typename: "ValidationError" },
+      needsDetailsCount: 0,
+    });
+  });
+
   it("is empty for an anonymous viewer, with no actor call", async () => {
     const { invoke, calls } = stubSidecar({});
     const result = await run(
@@ -168,6 +195,23 @@ describe("needsDetails / needsDetailsCount (SV-B)", () => {
       needsDetailsCount: 0,
     });
     expect(calls).toEqual([]);
+  });
+});
+
+describe("Viewer.unconfirmedBottleCount (F-76)", () => {
+  it("asks the viewer's DraftsCollectionActor", async () => {
+    const { invoke, calls } = stubSidecar({
+      "DraftsCollectionActor.unconfirmedBottleCount": () => 3,
+    });
+    const result = await run(
+      "{ me { unconfirmedBottleCount } }",
+      testContext(invoke, viewer),
+    );
+    expect(result.errors).toBeUndefined();
+    expect(result.data).toEqual({ me: { unconfirmedBottleCount: 3 } });
+    expect(calls.map((c) => [c.actorId, c.method])).toEqual([
+      [viewer.id, "unconfirmedBottleCount"],
+    ]);
   });
 });
 

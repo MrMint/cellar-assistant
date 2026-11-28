@@ -76,6 +76,7 @@
 import { randomUUID } from "node:crypto";
 import type {
   ActorCategory,
+  ConfirmItemFieldsInput,
   ConfirmOnboardingInput,
   ConfirmOnboardingResult,
   CreateItemInput,
@@ -111,7 +112,6 @@ import {
   isOnboardingStatus,
   isVintageAnswer,
   itemActorId,
-  itemAttributeEntries,
   itemAttributeKeys,
   normalizeBrandName,
   requireItemAttributes,
@@ -291,39 +291,6 @@ export const confirmedFieldsOf = (value: unknown): string[] => {
     );
   }
   return out;
-};
-
-/**
- * Whether a draft meets the floor `confirm` demands: a name, and every
- * attribute `requireItemAttributes` requires. The vintage answer is folded in
- * the way `confirm`'s payload carries it — `NON_VINTAGE` is an explicit
- * `null`, `UNANSWERED` an absent key (which the floor refuses), and `VINTAGE`
- * needs the year itself.
- */
-export const draftMeetsFloor = (
-  itemType: ItemType,
-  fields: SaveDraftFields,
-  vintageAnswer: VintageAnswer,
-): boolean => {
-  if ((fields.name ?? "") === "") return false;
-  const bag: Record<string, unknown> = { ...(fields.attributes ?? {}) };
-  for (const [field, attribute] of itemAttributeEntries(itemType)) {
-    if (attribute.nonVintage !== true) continue;
-    if (vintageAnswer === "NON_VINTAGE") bag[field] = null;
-    else if (vintageAnswer === "UNANSWERED" || bag[field] === null) {
-      delete bag[field];
-    }
-  }
-  try {
-    requireItemAttributes(itemType, {
-      name: fields.name ?? "",
-      [ITEM_ATTRIBUTE_KEY[itemType]]: bag,
-    });
-    return true;
-  } catch (error) {
-    if (error instanceof ValidationError) return false;
-    throw error;
-  }
 };
 
 export const onboardingRowToDto = (row: OnboardingRow): ItemOnboardingDto => ({
@@ -734,9 +701,9 @@ export class ItemOnboardingActor
    *
    * Owner only (`requireVisible`: someone else's draft is absent). The cellar
    * it is aimed at is authorized like `confirm`'s, against the onboarding's
-   * owner, because `confirm` from this row later falls back to it. A draft
-   * missing a floor field becomes `NEEDS_DETAILS`; one whose floor is met
-   * keeps its status (a `NEEDS_DETAILS` draft stays listed until `confirm`).
+   * owner, because `confirm` from this row later falls back to it. Every
+   * saved draft becomes `NEEDS_DETAILS`, floor met or not (FR-1), and stays
+   * listed until `confirm`.
    * A closed session — `CONFIRMED`, `MATCHED` — is refused: its bottle is
    * filed already. Writes no outbox row: nothing downstream exists yet.
    */
@@ -763,14 +730,11 @@ export class ItemOnboardingActor
     }
     const fields = draftFieldsOf(input.fields);
     const confirmedFields = confirmedFieldsOf(input.confirmedFields);
-    const itemType = onboardingRowToDto(row).itemType;
-    const status: OnboardingStatus = draftMeetsFloor(
-      itemType,
-      fields,
-      input.vintageAnswer,
-    )
-      ? statusOf(row.status)
-      : "NEEDS_DETAILS";
+    // FR-1: every draft set aside is listed until it is finished or deleted,
+    // whatever the floor says. Beer, coffee, sake and tea need only a name to
+    // confirm, so a floor check here hid a named one from Needs details; what
+    // it still lacks (maker, strength, vintage) is the client's fuller list.
+    const status: OnboardingStatus = "NEEDS_DETAILS";
 
     await this.tx(async (tx) => {
       await tx
@@ -1102,6 +1066,34 @@ export class ItemOnboardingActor
       confidence: result.confidence,
       model: result.model,
     };
+  }
+
+  /**
+   * F-75: the fields the creator confirmed on the item's edit page, added to
+   * the session's `confirmed_fields` so `Item.unconfirmedFields` (and Home's
+   * "n to check") stop pointing at them. `#requireCorrectable`'s gate: the
+   * session is the caller's and the item is the one it created. A set union,
+   * so a repeat is a no-op and nothing is ever un-confirmed.
+   */
+  async confirmItemFields(
+    ctx: Ctx,
+    input: ConfirmItemFieldsInput,
+  ): Promise<ItemOnboardingDto> {
+    const { row } = await this.#requireCorrectable(ctx, input.item);
+    const confirmedFields = confirmedFieldsOf([
+      ...row.confirmedFields,
+      ...confirmedFieldsOf(input.fields),
+    ]);
+    if (confirmedFields.length !== row.confirmedFields.length) {
+      await this.tx(async (tx) => {
+        await tx
+          .update(itemOnboardings)
+          .set({ confirmedFields, updatedAt: new Date() })
+          .where(eq(itemOnboardings.id, this.key));
+      });
+      await this.reload();
+    }
+    return onboardingRowToDto(this.requireAggregate().row);
   }
 
   /**
