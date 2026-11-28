@@ -21,13 +21,13 @@ import { FinishOneSheet } from "./FinishOneSheet";
 import type { LoadedDraft } from "./load";
 import {
   bottlesLine,
+  chipWord,
   confirmInput,
   type Draft,
   type DraftRow,
   type Edits,
   type FinishPlan,
   finishPlan,
-  NEED_CHIP,
   type Need,
   needCounts,
   restoreInput,
@@ -420,7 +420,7 @@ export function NeedsDetailsScreen({
                 count={n}
                 onClick={() => setFilter(filter === need ? null : need)}
               >
-                {NEED_CHIP[need]}
+                {chipWord(need, rows)}
               </FilterChip>
             ))}
           </div>

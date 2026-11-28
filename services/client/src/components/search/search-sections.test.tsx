@@ -368,3 +368,17 @@ describe("addFriendOutcome", () => {
     assert.equal(ADD_FRIEND_SETTLED["already-friends"], "Friend");
   });
 });
+
+describe("searchPlaceGlyph (F-184)", () => {
+  test("a coffee place gets the map list's kind glyph, not the plain pin", async () => {
+    const { searchPlaceGlyph } = await import("./SearchSections");
+    const { Place } = await import("@/components/app/icons");
+    const { placeGlyph } = await import("@/components/map/core/PlaceFilters");
+    assert.equal(
+      searchPlaceGlyph({ description: "Coffee Shop · 0.4 km" }),
+      placeGlyph({ primary_category: "coffee_shop", categories: [] }),
+    );
+    assert.notEqual(searchPlaceGlyph({ description: "Coffee Shop" }), Place);
+    assert.equal(searchPlaceGlyph({}), Place);
+  });
+});

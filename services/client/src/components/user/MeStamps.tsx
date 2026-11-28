@@ -76,10 +76,7 @@ export function MeStampsView({
           className="m-0 grid list-none grid-cols-4 justify-items-center gap-2 px-3.5 py-4"
         >
           {stamps.map((stamp) => (
-            <li
-              key={stamp.kind}
-              className="flex [&>[data-slot=recap-stamp]]:size-[72px]"
-            >
+            <li key={stamp.kind} className="flex w-full min-w-0 justify-center">
               <RecapStamp stamp={stamp} size="sm" />
             </li>
           ))}

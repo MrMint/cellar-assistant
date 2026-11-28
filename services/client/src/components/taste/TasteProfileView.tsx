@@ -31,6 +31,9 @@ import { agreementCounts, nodes } from "./taste-lines";
  * Every number here is the server's. Agreement is a count, hidden below the
  * server's gate, and the compare itself is on the friend's profile (S1).
  */
+/** F-14: the board's small bar title (t-head), not the large page title. */
+const BAR_TITLE = <h1 className="t-head truncate text-ink">Taste profile</h1>;
+
 export function TasteProfileView() {
   const [{ data, error, fetching }, reexecute] = useQuery({
     query: TasteProfileQuery,
@@ -43,7 +46,7 @@ export function TasteProfileView() {
   if (data === undefined) {
     return (
       <Page wide>
-        <AppBar title="Taste profile" parent="/me" />
+        <AppBar title={BAR_TITLE} parent="/me" />
         {fetching || error === undefined ? (
           <TasteProfileBlocks />
         ) : (
@@ -57,7 +60,7 @@ export function TasteProfileView() {
   if (!profile.ok) {
     return (
       <Page wide>
-        <AppBar title="Taste profile" parent="/me" />
+        <AppBar title={BAR_TITLE} parent="/me" />
         <ProfileError onRetry={retry} />
       </Page>
     );
@@ -81,7 +84,7 @@ export function TasteProfileView() {
 
   return (
     <Page wide>
-      <AppBar title="Taste profile" parent="/me" />
+      <AppBar title={BAR_TITLE} parent="/me" />
       <div className="grid gap-6 md:grid-cols-2 md:items-start md:gap-8">
         <div className="flex flex-col gap-6">
           <ArchetypeCard

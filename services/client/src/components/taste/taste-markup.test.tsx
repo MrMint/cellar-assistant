@@ -183,3 +183,11 @@ describe("TasteProfileView", () => {
     assert.ok(text.includes("Try again"));
   });
 });
+
+describe("TasteProfileView header (F-14)", () => {
+  test("the bar title is the board's small t-head, not the large t-title", () => {
+    const html = render(answering(PROFILE), <TasteProfileView />);
+    assert.match(html, /<h1 class="t-head[^"]*"[^>]*>Taste profile<\/h1>/);
+    assert.doesNotMatch(html, /<h1 class="t-title/);
+  });
+});

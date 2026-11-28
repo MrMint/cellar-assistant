@@ -576,3 +576,18 @@ describe("ItemForm edit mode keeps the database's required rule (gap #14b)", () 
     assert.match(html, /<form[^>]*novalidate/i);
   });
 });
+
+describe("taste header: friend average once (FS-5, F-151)", () => {
+  test("everyone's figure is dropped when it is the friends' own", () => {
+    const same = page({
+      item: {
+        ...tea,
+        friends: { average: 4.3, count: 3 },
+        everyone: { average: 4.3, count: 3 },
+      },
+    });
+    const header = same.slice(same.indexOf('data-testid="taste-header"'));
+    assert.match(header, /aria-label="Friends: rated 4.3/);
+    assert.doesNotMatch(header, /aria-label="Everyone:/);
+  });
+});

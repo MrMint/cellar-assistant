@@ -47,7 +47,19 @@ export function TasteHeader({
   ratedAt?: string | null;
 }) {
   const you = cells.find((cell) => cell.key === "you");
-  const others = cells.filter((cell) => cell.key !== "you");
+  const friends = cells.find((cell) => cell.key === "friends");
+  // F-151: when everyone's figure is the friends' own (same average, same
+  // count), it is one number said twice; the header says it once.
+  const others = cells.filter(
+    (cell) =>
+      cell.key !== "you" &&
+      !(
+        cell.key === "everyone" &&
+        friends?.value != null &&
+        cell.value === friends.value &&
+        countOf(cell.note) === countOf(friends.note)
+      ),
+  );
   return (
     <nav
       aria-label="Ratings"

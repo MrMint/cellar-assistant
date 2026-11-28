@@ -332,3 +332,21 @@ describe("InviteSheet content (H-121, F-93)", async () => {
     assert.ok(decodeURIComponent(mail).includes(url));
   });
 });
+
+describe("MeStampsView labels (FS-3)", async () => {
+  const { MeStampsView } = await import("./MeStamps");
+  test("each stamp's item fills its grid cell so its label cannot run into the next", () => {
+    const markup = render(
+      <MeStampsView
+        stamps={
+          [
+            { kind: "STYLES", tier: 1, count: 12 },
+            { kind: "RECIPES", tier: 1, count: 3 },
+          ] as never
+        }
+        now={new Date("2026-11-27T12:00:00Z")}
+      />,
+    );
+    assert.match(markup, /<li class="flex w-full min-w-0 justify-center"/);
+  });
+});

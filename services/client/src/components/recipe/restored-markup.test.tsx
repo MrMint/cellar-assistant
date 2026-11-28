@@ -435,3 +435,23 @@ describe("RecipeDetails for its author (X15)", () => {
     assert.doesNotMatch(page, /Review draft|can see it|>Change</);
   });
 });
+
+describe("RecipesIndexLayout (FS-4)", () => {
+  test("two columns from lg: mine on the left, the grid section on the right", async () => {
+    const { RecipesIndexLayout, RecipesMine } = await import(
+      "./RecipesIndexLayout"
+    );
+    const html = renderToStaticMarkup(
+      <RecipesIndexLayout>
+        <RecipesMine>x</RecipesMine>
+      </RecipesIndexLayout>,
+    );
+    assert.match(html, /data-slot="recipes-index"/);
+    assert.match(html, /data-slot="recipes-mine"/);
+    assert.match(
+      html,
+      /lg:\[&amp;&gt;\[data-slot=recipe-group-search\]\]:grid /,
+    );
+    assert.match(html, /recipes-mine\]\+section\]:col-start-2/);
+  });
+});
