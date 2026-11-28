@@ -166,6 +166,22 @@ describe("PlacePickerSheet", () => {
     );
   });
 
+  test("the results carry the quiet Google line (F-229, FR-15)", async () => {
+    await render({});
+    const line = document.querySelector('[data-testid="google-attribution"]');
+    assert.equal(line?.textContent, "Place details from Google");
+    assert.ok(line?.classList.contains("t-cap"));
+    assert.ok(line?.classList.contains("text-ink-3"));
+  });
+
+  test("no results, no Google line", async () => {
+    await render({ guess: null, nearby: [] });
+    assert.equal(
+      document.querySelector('[data-testid="google-attribution"]'),
+      null,
+    );
+  });
+
   test("a tap files under the place tapped, not the guess", async () => {
     const chosen: unknown[] = [];
     await render({ onChoose: (place) => chosen.push(place) });
@@ -209,5 +225,9 @@ describe("PlacePickerSheet", () => {
     assert.deepEqual(searches, ["ruby"]);
     assert.match(document.body.textContent ?? "", /No place matches “ruby”/);
     assert.equal(rows().length, 0);
+    assert.equal(
+      document.querySelector('[data-testid="google-attribution"]'),
+      null,
+    );
   });
 });
