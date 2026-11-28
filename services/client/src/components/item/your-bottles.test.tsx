@@ -77,6 +77,8 @@ const { createRoot } = await import("react-dom/client");
 const { YourBottles } = await import("./YourBottles");
 const { ItemActionsProvider } = await import("./ItemActions");
 const { DeleteBottleDialog } = await import("./DeleteBottleDialog");
+const { PaneRefreshProvider } = await import("./parts/pane-refresh");
+const { useItemActions } = await import("./ItemActions");
 
 let container: HTMLElement;
 let root: ReturnType<typeof createRoot>;
@@ -324,5 +326,43 @@ describe("Delete this bottle (Cellars-Bottles 22)", () => {
     });
     assert.deepEqual(updates.at(-1), { cellarId: "c-1", cellarItemId: "b-1" });
     assert.deepEqual(toasts, ["Bottle deleted"]);
+  });
+});
+
+describe("ItemActions changed (H-105)", () => {
+  test("after a pour or log, the pane re-reads through useRefreshAfterWrite", async () => {
+    let paneReads = 0;
+    const Probe = () => {
+      const actions = useItemActions();
+      return (
+        <button type="button" data-testid="probe" onClick={actions?.changed}>
+          go
+        </button>
+      );
+    };
+    await act(async () => {
+      root.render(
+        <PaneRefreshProvider
+          value={() => {
+            paneReads += 1;
+          }}
+        >
+          <ItemActionsProvider
+            subject={{ itemType: "TEA", itemId: "t-1", itemName: "Sencha" }}
+            defaultBottle={null}
+          >
+            <Probe />
+          </ItemActionsProvider>
+        </PaneRefreshProvider>,
+      );
+      await settle();
+    });
+    await act(async () => {
+      document
+        .querySelector<HTMLButtonElement>('[data-testid="probe"]')
+        ?.click();
+      await settle();
+    });
+    assert.equal(paneReads, 1);
   });
 });

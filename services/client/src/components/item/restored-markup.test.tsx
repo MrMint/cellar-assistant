@@ -106,6 +106,29 @@ const bottle = (over: Partial<PageProps["bottles"][number]> = {}) => ({
   ...over,
 });
 
+describe("the stars button (F-149)", () => {
+  test("its tap target is 44 px tall", () => {
+    const html = page({
+      item: { ...tea, myReview: { id: "r", score: 4, text: null } },
+    });
+    assert.match(
+      html,
+      /<button[^>]*aria-label="Change your rating"[^>]*min-h-11|<button[^>]*min-h-11[^>]*aria-label="Change your rating"/,
+    );
+  });
+});
+
+describe("ItemPageView in the desktop pane (F-5)", () => {
+  const html = page({ pane: true });
+  test("draws no second hero: the pane's own photo is the only picture", () => {
+    assert.ok(!html.includes('data-slot="item-hero-picture"'));
+    assert.ok(html.includes("Dragonwell"));
+  });
+  test("the title has the pane's full width, not a column beside a photo", () => {
+    assert.ok(!/<header[^>]*md:flex-row/.test(html));
+  });
+});
+
 describe("ItemPageView (X09: one item page)", () => {
   const html = page({
     tierLists: [
