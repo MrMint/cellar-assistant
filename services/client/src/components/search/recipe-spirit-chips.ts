@@ -1,4 +1,5 @@
 import { barKindLabel } from "@cellar-assistant/contracts/bar";
+import { ActorErrorFieldsFragment } from "@/lib/api/errors";
 import { graphql } from "@/lib/api/graphql";
 
 /**
@@ -8,7 +9,8 @@ import { graphql } from "@/lib/api/graphql";
  */
 export const RECIPE_SPIRIT_COUNTS_SIZE = 50;
 
-export const RecipeBaseSpiritCountsQuery = graphql(`
+export const RecipeBaseSpiritCountsQuery = graphql(
+  `
   query RecipeBaseSpiritCounts(
     $first: Int!
     $category: RecipeCategory
@@ -24,9 +26,12 @@ export const RecipeBaseSpiritCountsQuery = graphql(`
           }
         }
       }
+      ...ActorErrorFields
     }
   }
-`);
+`,
+  [ActorErrorFieldsFragment],
+);
 
 export type SpiritChip = {
   readonly value: string;
