@@ -235,6 +235,62 @@ describe("friend invites", () => {
     });
   });
 
+  it("F-81: the inviter's uploaded picture, presigned like every avatar", async () => {
+    const FILE = "44444444-4444-4444-8444-444444444444";
+    const { invoke, calls } = stubSidecar({
+      "UserActor.previewFriendInvite": () => ({
+        inviterId: INVITER,
+        inviterDisplayName: "Riley",
+        inviterAvatarUrl: "https://example.test/oauth.png",
+        status: "SIGNED_OUT",
+      }),
+      "UserActor.getProfile": (actorId) => ({
+        id: actorId,
+        displayName: "Riley",
+        avatarUrl: "https://example.test/oauth.png",
+        avatarFileId: FILE,
+        locale: "en",
+        email: null,
+      }),
+      "FileActor.presignRead": () => ({
+        url: "https://files.example.test/riley",
+        expiresAt: "2026-11-27T00:30:00.000Z",
+      }),
+    });
+    const result = await run(
+      `{ friendInvitePreview(token: "${token}") { ... on FriendInvitePreview {
+           inviterAvatarUrl } } }`,
+      testContext(invoke, null),
+    );
+    expect(result.errors).toBeUndefined();
+    expect(result.data?.friendInvitePreview).toEqual({
+      inviterAvatarUrl: "https://files.example.test/riley",
+    });
+    expect(calls.find((c) => c.actorType === "FileActor")?.actorId).toBe(FILE);
+  });
+
+  it("F-81: falls back to the stored image when the profile cannot be read", async () => {
+    const { invoke } = stubSidecar({
+      "UserActor.previewFriendInvite": () => ({
+        inviterId: INVITER,
+        inviterDisplayName: "Riley",
+        inviterAvatarUrl: "https://example.test/oauth.png",
+        status: "SIGNED_OUT",
+      }),
+      "UserActor.getProfile": () => {
+        throw new NotFoundError(`UserActor(${INVITER}) has no row`);
+      },
+    });
+    const result = await run(
+      `{ friendInvitePreview(token: "${token}") { ... on FriendInvitePreview {
+           inviterAvatarUrl } } }`,
+      testContext(invoke, null),
+    );
+    expect(result.data?.friendInvitePreview).toEqual({
+      inviterAvatarUrl: "https://example.test/oauth.png",
+    });
+  });
+
   it("a malformed token is NotFound without touching any actor", async () => {
     const { invoke, calls } = stubSidecar({});
     const result = await run(

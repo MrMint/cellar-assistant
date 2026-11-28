@@ -61,6 +61,7 @@ import { ItemTypeEnum } from "./item.ts";
 import { connectionFromPage, toPageArgs } from "./pagination.ts";
 import { RecipeTypeEnum } from "./recipe.ts";
 import { TierListEntryTypeEnum } from "./tier-list.ts";
+import { avatarUrlForUser } from "./user.ts";
 import { Viewer } from "./viewer.ts";
 
 /** A presigned URL for a file something public points at, or `null`. */
@@ -341,7 +342,18 @@ const FriendInvitePreviewType = builder
     fields: (t) => ({
       inviterId: t.exposeID("inviterId"),
       inviterDisplayName: t.exposeString("inviterDisplayName"),
-      inviterAvatarUrl: t.exposeString("inviterAvatarUrl", { nullable: true }),
+      inviterAvatarUrl: t.string({
+        nullable: true,
+        description:
+          "The inviter's picture: an uploaded one presigned (F-81), else " +
+          "their stored image. Resolved as every other avatar is.",
+        resolve: (preview, _args, context) =>
+          avatarUrlForUser(
+            context,
+            preview.inviterId,
+            preview.inviterAvatarUrl,
+          ),
+      }),
       status: t.field({
         type: FriendInviteStatusEnum,
         resolve: (preview) => preview.status,
