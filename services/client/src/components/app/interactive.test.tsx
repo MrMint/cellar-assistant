@@ -1042,10 +1042,6 @@ describe("AppBar", () => {
       container.querySelector("h1")?.parentElement?.className ?? "",
       /sr-only/,
     );
-    // F-47: a flex-1 spacer that is not sr-only keeps ⋯ at the right.
-    const spacer = container.querySelector("h1")?.parentElement?.parentElement;
-    assert.match(spacer?.className ?? "", /flex-1/);
-    assert.doesNotMatch(spacer?.className ?? "", /sr-only/);
   });
 
   test("sticky: the bar shadow comes once the scroller has moved", async () => {

@@ -350,3 +350,14 @@ describe("F-173: the glyphs the later rows swap in", () => {
     }
   });
 });
+
+describe("F-47: the photo-tone AppBar", () => {
+  test("the title is sr-only inside a flex-1 spacer, so ⋯ stays right", async () => {
+    const { readFileSync } = await import("node:fs");
+    const src = readFileSync(new URL("../AppBar.tsx", import.meta.url), "utf8");
+    assert.match(
+      src,
+      /<div className="min-w-0 flex-1">\s*<div className=\{cn\(photo && "sr-only"\)\}>/,
+    );
+  });
+});
