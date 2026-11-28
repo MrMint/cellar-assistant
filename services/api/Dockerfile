@@ -12,10 +12,10 @@
 #
 # Runtime is `bun src/index.ts` (see services/api/package.json's "start"
 # script). There is deliberately no `tsc` / bundle stage: both runtimes execute
-# the TypeScript source directly — Bun transpiles it, Node 24 type-strips it —
+# the TypeScript source directly — Bun transpiles it, Node 26 type-strips it —
 # and type *checking* is a CI concern (stack-ci.yaml), not a runtime one.
 #
-# ## Phase 5a: why the base image is still node:24-bookworm-slim
+# ## Phase 5a: why the base image is still node:26-bookworm-slim
 #
 # The obvious move when a service starts running on Bun is to rebase onto
 # `oven/bun:1.4.2-slim`, which is smaller (275MB vs 351MB + a 79MB bun binary
@@ -29,7 +29,7 @@
 #     revert `services/api/src/runtime.test.ts` exists to catch in the test
 #     lane. An A/B you cannot trust is worse than no A/B.
 #  2. **OS patches and the runtime version stay on separate axes.**
-#     node:24-bookworm-slim is a Docker Official Image rebuilt on Debian
+#     node:26-bookworm-slim is a Docker Official Image rebuilt on Debian
 #     security updates independently of anything this repo pins; oven/bun is a
 #     vendor image whose OS refresh rides bun's release cadence. Keeping the OS
 #     on the DOI and pinning only the bun *binary* means a Debian CVE is fixed
@@ -42,7 +42,7 @@
 # The image needs nothing else — no compiler, no native rebuild step — so the
 # ~79MB is the whole cost of keeping both runtimes present.
 
-FROM node:24-bookworm-slim AS base
+FROM node:26-bookworm-slim AS base
 WORKDIR /workspace
 # Bun is now the package manager AND the runtime, so the binary belongs in
 # `base` — both the `deps` stage and the runtime stage inherit it. (It used to
@@ -53,7 +53,7 @@ WORKDIR /workspace
 # services/actors' otherwise-identical stage once lost its corepack pin,
 # silently fetched a floating package manager and could not build
 # protobufjs/esbuild.
-COPY --from=oven/bun:1.4.2 /usr/local/bin/bun /usr/local/bin/bun
+COPY --from=oven/bun:1.4.5 /usr/local/bin/bun /usr/local/bin/bun
 
 # ---- deps: install with the workspace visible, production deps only -------
 FROM base AS deps
@@ -119,7 +119,7 @@ USER node
 #     docker run ... <image> node src/index.ts      # or: bun run start:node
 #
 # and in compose, `command: ["node", "src/index.ts"]`. That is the A/B lane —
-# keep it working. Because `node` here is the real Node 24 (see the base-image
+# keep it working. Because `node` here is the real Node 26 (see the base-image
 # note at the top of this file), `process.versions.bun` is `undefined` on that
 # path and defined on this one, which is how you check which you got rather
 # than trusting the command line.

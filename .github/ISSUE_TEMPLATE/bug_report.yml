@@ -71,7 +71,7 @@ body:
     attributes:
       label: Before submitting
       options:
-        - label: I am on Node 24.14.0 and Bun 1.4.2, or the problem does not depend on them.
+        - label: I am on Node 26.13.1 and Bun 1.4.5, or the problem does not depend on them.
           required: false
         - label: I searched existing issues.
           required: false

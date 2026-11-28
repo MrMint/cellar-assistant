@@ -98,10 +98,10 @@ x-node-app: &node-app
   # The layer is cached after the first `stack:up`; the copy is one binary.
   build:
     dockerfile_inline: |
-      FROM node:24-bookworm-slim
-      COPY --from=oven/bun:1.4.2 /usr/local/bin/bun /usr/local/bin/bun
+      FROM node:26-bookworm-slim
+      COPY --from=oven/bun:1.4.5 /usr/local/bin/bun /usr/local/bin/bun
   # Source is mounted, not baked: apps run straight off the workspace with
-  # Node 24's built-in TypeScript type stripping, so there is no build step and
+  # Node 26's built-in TypeScript type stripping, so there is no build step and
   # no image to rebuild on every edit. The isolated store's node_modules
   # symlinks resolve to
   # real paths inside the mount, which is what keeps type stripping legal (Node
@@ -111,7 +111,7 @@ x-node-app: &node-app
   restart: unless-stopped
 
 x-daprd: &daprd
-  image: daprio/daprd:1.18.4
+  image: daprio/daprd:1.19.2
   # Each sidecar is a normal container on the compose network rather than
   # sharing its app's network namespace. `network_mode: "service:<app>"` also
   # works, but then restarting the app tears down the namespace the sidecar is
@@ -173,7 +173,8 @@ services:
   # digest. Production overrides it with `MINIO_IMAGE`, the client image with
   # `MC_IMAGE`.
   #
-  # Measured against this pin (RELEASE.2026-09-16T00-00-00Z):
+  # Measured against RELEASE.2026-09-16T00-00-00Z, and re-checked on the
+  # current pin (RELEASE.2026-11-12T00-00-00Z, 2026-11-27) except the x-amz rule:
   #   - The binary is `silo`. The entrypoint maps a leading `server` (or
   #     `minio`) to `silo server`, so the `command:` below is unchanged.
   #   - MINIO_ROOT_USER / MINIO_ROOT_PASSWORD and the other MINIO_* variables
@@ -193,7 +194,7 @@ services:
   #     2026-09). The browser PUT sends only `content-type`, pinned by
   #     services/client/src/lib/api/files.test.ts.
   minio:
-    image: ${MINIO_IMAGE:-docker.io/pgsty/silo:RELEASE.2026-09-16T00-00-00Z@sha256:635197cb9f36d01bee221d34d1c7d7960f6a95c48b0b6c01d99cd13bdae51a46}
+    image: ${MINIO_IMAGE:-docker.io/pgsty/silo:RELEASE.2026-11-12T00-00-00Z@sha256:c20d112390b9a9ce8c11b8af95ad35bcaa62f4759663c09c936cd8d2b511f329}
     command: ["server", "/data", "--console-address", ":9001"]
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-cellar}
@@ -250,7 +251,7 @@ services:
   # still `mc`, and every command below behaved the same against silo when
   # measured.
   minio-init:
-    image: ${MC_IMAGE:-docker.io/pgsty/mc:RELEASE.2026-09-16T00-00-00Z@sha256:cfc83108c3abb371f8fb84d99c1fdc88f8c237e022409b0081fb7c0a3be634dd}
+    image: ${MC_IMAGE:-docker.io/pgsty/mc:RELEASE.2026-11-12T00-00-00Z@sha256:b532278b7a3747dbab6fe45eebb40a653efa704e6758e24e9d9ec54fc96c1800}
     depends_on:
       minio:
         condition: service_healthy
@@ -290,7 +291,7 @@ services:
   # moved out of the actor state store into this service in Dapr 1.15, which is
   # why it is not optional here even though no state store is declared.
   placement:
-    image: daprio/placement:1.18.4
+    image: daprio/placement:1.19.2
     command:
       - "/placement"
       - "--port=50005"
@@ -299,7 +300,7 @@ services:
     restart: unless-stopped
 
   scheduler:
-    image: daprio/scheduler:1.18.4
+    image: daprio/scheduler:1.19.2
     user: "0:0"
     command:
       - "/scheduler"
@@ -702,9 +703,9 @@ services:
       # would make `eval "$(bun run dev:env)"; bun run stack:up` publish this
       # container on the port that shell's own dev server wants.
       - "${BIND_ADDR:-127.0.0.1}:${CLIENT_PORT:-3003}:3000"
-    # `node` is the real Node 24 in this image (the base is node:24-slim — the
+    # `node` is the real Node 26 in this image (the base is node:26-slim — the
     # whole reason the Dockerfile does not use an oven/bun base), so the
-    # healthcheck needs no curl, which node:24-bookworm-slim does not ship.
+    # healthcheck needs no curl, which node:26-bookworm-slim does not ship.
     # /sign-in is the same page the Playwright suite lands on first.
     healthcheck:
       test:
@@ -751,7 +752,7 @@ services:
   # Production has neither this nor the client (Vercel serves the frontend):
   # both are profiled out in docker-compose.prod.yml.
   client-files-loopback:
-    image: node:24-bookworm-slim
+    image: node:26-bookworm-slim
     network_mode: "service:client"
     command:
       - node
@@ -774,8 +775,8 @@ services:
   # and its Prometheus scrapes the Dapr runtime's own metrics (see the
   # prometheus.yaml mount below).
   otel-lgtm:
-    # PINNED — now to 0.35.0 (Grafana 13.2.2, Loki 3.7.8, Prometheus 3.15.0,
-    # Tempo 3.0.3), bumped 2026-10-05 through the checklist below
+    # PINNED — now to 0.41.1 (Grafana 13.3.1, Loki 3.7.10, Prometheus 3.16.0,
+    # Tempo 3.1.1), bumped 2026-11-27 through the checklist below
     # (deploy-loki.md §9.5). Why it is pinned at all is the history that
     # follows, written about the previous pin, 0.32.1.
     #
@@ -794,7 +795,7 @@ services:
     # ./grafana/otel-lgtm/prometheus.yaml from the NEW image (that file's
     # header says how). The retention flags below are CLI flags of the bundled
     # servers and are worth re-checking against the new versions' `-help`.
-    image: grafana/otel-lgtm:0.35.0
+    image: grafana/otel-lgtm:0.41.1
     ports:
       - "${BIND_ADDR:-127.0.0.1}:${GRAFANA_PORT:-3010}:3000"
     volumes:

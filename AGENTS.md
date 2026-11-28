@@ -1,6 +1,6 @@
 # Repository guide for coding agents
 
-This is a bun workspace (bun 1.4.2 — pnpm is gone). **The root is not a
+This is a bun workspace (bun 1.4.5 — pnpm is gone). **The root is not a
 package** — it carries orchestration scripts, the one `bun.lock` and the
 toolchain config, and no application code. Everything that builds or runs
 lives in `services/*` or `packages/*`.
@@ -99,8 +99,8 @@ schema, apps, seed, a real sign-in, and the presigned-image path, each step asse
 `docs/architecture/local-dev-stacks.md` ("Quick start"). Read the rest of this section when you
 want to know *why* a line says what it says; don't work through it by hand.
 
-- Node 24 (pinned in `.nvmrc`), Docker. **Enforced at install time, not in every shell.**
-  `package.json` now has an `engines` field (`>=24.14.0 <25.0.0`), and
+- Node 26 (pinned in `.nvmrc`), Docker. **Enforced at install time, not in every shell.**
+  `package.json` now has an `engines` field (`>=26.13.1 <27.0.0`), and
   `scripts/check-node-version.mjs` checks `.nvmrc` against the running Node and fails loudly on a
   mismatch. It runs as the root's `preinstall` hook for a plain `bun install` — but **`bun install
   --filter` (every CI leg) skips root lifecycle scripts entirely**, measured under bun 1.4.2 and
@@ -121,11 +121,11 @@ want to know *why* a line says what it says; don't work through it by hand.
   `packages/db/transform/test-db.sh`. `bun run dev:seed` and `bun run dev:bootstrap` resolve a
   satisfying Node out of fnm/nvm/volta/asdf themselves, without touching your machine-wide
   default.
-- Bun 1.4.2 is pinned via `packageManager` in the root `package.json`; check `bun --version`
+- Bun 1.4.5 is pinned via `packageManager` in the root `package.json`; check `bun --version`
   against it before assuming a version mismatch is something else (see "Bun, not pnpm" above for
   why Homebrew alone won't keep it current).
 - Dapr runtime binaries, for the per-worktree dev lane below:
-  `dapr init --slim --runtime-version 1.18.3` (installs `daprd`/`placement`/`scheduler` to
+  `dapr init --slim --runtime-version 1.19.2` (installs `daprd`/`placement`/`scheduler` to
   `~/.dapr/bin`; starts nothing). `dev:doctor -- --fix` runs this for you.
 - A `.env`: `infra/.env` (gitignored) needs at least a `BETTER_AUTH_SECRET`, or the actor host
   exits on boot. `dev:doctor -- --fix` copies `infra/.env.example` and generates one. The value
@@ -379,7 +379,7 @@ progress).
 All three read as ordinary defects in your change. Check them before you debug code:
 
 1. **The wrong Node.** Seven actors tests fail as plain assertion failures under Node 20 instead
-   of the pinned 24 — see "Prerequisites" above and `bun run dev:doctor`, which probes whether the
+   of the pinned 26 — see "Prerequisites" above and `bun run dev:doctor`, which probes whether the
    `node` on `PATH` can strip types. (This was unverifiable end to end while reason 2 made global
    setup throw first. Reason 2 is fixed; the Node 20 failure has not been re-measured since.)
 2. **The shared test-database race — fixed as of 2026-09-20, and listed here so you stop
@@ -432,7 +432,7 @@ database `db:migrate` has not reached, printing each missing migration
 (`services/actors/src/lib/boot-preflight.ts`), and on the shared lane the migrations it checks
 are the working tree's. So **run `db:migrate` against the shared database before any restart of
 `cellar-stack-actors-1`** — `node packages/db/src/migrate/cli.ts --url
-postgres://cellar:cellar@localhost:5433/cellar --status`, then without `--status`, under Node 24
+postgres://cellar:cellar@localhost:5433/cellar --status`, then without `--status`, under Node 26
 (`local-dev-stacks.md`, "Which services run your working tree"). Measured 2026-09-28: it was 4
 behind while the running host still served, so the next restart would have stayed down. And
 `~/Library/Caches/ms-playwright/` is **machine-wide and fixed-path**, shared by every worktree:

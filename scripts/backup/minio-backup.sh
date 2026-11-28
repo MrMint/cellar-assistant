@@ -34,7 +34,7 @@ set -euo pipefail
 # the silo fork. Its binary is still `mc`. `minio/mc` was deleted from
 # Docker Hub in 2026-09. Override with MC_IMAGE (one variable, both
 # scripts, and the compose file).
-MC_IMAGE="${MC_IMAGE:-docker.io/pgsty/mc:RELEASE.2026-09-16T00-00-00Z@sha256:cfc83108c3abb371f8fb84d99c1fdc88f8c237e022409b0081fb7c0a3be634dd}"
+MC_IMAGE="${MC_IMAGE:-docker.io/pgsty/mc:RELEASE.2026-11-12T00-00-00Z@sha256:b532278b7a3747dbab6fe45eebb40a653efa704e6758e24e9d9ec54fc96c1800}"
 MC_MODE="${MC_MODE:-docker}"
 MC_NETWORK="${MC_NETWORK:-cellar-stack_default}"
 MC_ENDPOINT="${MC_ENDPOINT:-http://minio:9000}"          # docker mode: the service DNS name

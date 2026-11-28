@@ -585,7 +585,7 @@ require_daprd() {
   (it does NOT need \`dapr init\`'s shared control plane — placement and
   scheduler are per-stack containers). Install the binaries only:
 
-      dapr init --slim --runtime-version 1.18.4
+      dapr init --slim --runtime-version 1.19.2
 
   That writes daprd/placement/scheduler to ~/.dapr/bin and starts nothing."
 }
@@ -1162,10 +1162,10 @@ d_cont() { printf '        %s\n' "$*"; }
 # ---------------------------------------------------------------------------
 # Node: the capability, not the version string.
 #
-# `.nvmrc` pins 24.14.0 and `package.json` has `engines`, but nothing enforces
+# `.nvmrc` pins 26.13.1 and `package.json` has `engines`, but nothing enforces
 # either in a shell that already has node_modules — and fnm's `--use-on-cd` does
 # not fire in a non-interactive shell, which is every shell an agent or a hook
-# gets. On this machine that means Node 20 by default while 24.14.0 sits
+# gets. On this machine that means Node 20 by default while 26.13.1 sits
 # installed in fnm's store.
 #
 # What the repo actually depends on is Node's built-in TypeScript type
@@ -1520,7 +1520,7 @@ doctor_dapr() {
     fi
   else
     d_fail "no daprd binary at $DAPRD_BIN — this lane runs the sidecars as host processes"
-    d_hint "dapr init --slim --runtime-version ${want:-1.18.4}   (installs binaries, starts nothing)"
+    d_hint "dapr init --slim --runtime-version ${want:-1.19.2}   (installs binaries, starts nothing)"
   fi
   if command -v dapr >/dev/null 2>&1; then
     d_ok "dapr CLI $(dapr --version 2>/dev/null | sed -n 's/CLI version: *//p' | tr -d ' \r') (runs the Multi-App Run file)"
@@ -2549,7 +2549,7 @@ cmd_doctor() {
       local want
       want="$(sed -n 's|.*image:[[:space:]]*daprio/daprd:\([0-9.]*\).*|\1|p' "$COMPOSE_BASE" | head -1)"
       say "installing the Dapr slim binaries (starts nothing)"
-      dapr init --slim --runtime-version "${want:-1.18.4}" || warn "dapr init --slim failed"
+      dapr init --slim --runtime-version "${want:-1.19.2}" || warn "dapr init --slim failed"
     fi
   fi
   doctor_run "$fix"

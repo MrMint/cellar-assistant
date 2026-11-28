@@ -24,7 +24,7 @@
 # mirror image: client and schema in, api/actors/db/policy source out,
 # contracts' src/ only (see the build stage), every manifest kept.
 #
-# ## Why the base image is still node:24-bookworm-slim
+# ## Why the base image is still node:26-bookworm-slim
 #
 # The same measured reason as services/{api,actors}/Dockerfile, and it is not a
 # style choice: **in the `oven/bun` images `node` is a symlink to bun**
@@ -37,12 +37,12 @@
 # So the OS and Node come from the Docker Official Image and only the bun
 # binary is pinned, by copying the one static binary out of the official image.
 
-FROM node:24-bookworm-slim AS base
+FROM node:26-bookworm-slim AS base
 WORKDIR /workspace
 # Bun is both the package manager and the runtime here, so the binary lives in
 # `base` and every later stage inherits it. Corepack cannot pin bun; keep this
 # tag equal to the root package.json's `packageManager`.
-COPY --from=oven/bun:1.4.2 /usr/local/bin/bun /usr/local/bin/bun
+COPY --from=oven/bun:1.4.5 /usr/local/bin/bun /usr/local/bin/bun
 
 # ---- deps: install with the whole workspace visible -------------------------
 FROM base AS deps
@@ -114,7 +114,7 @@ ENV FILES_S3_PUBLIC_URL=${FILES_S3_PUBLIC_URL}
 # (`bun run --bun next build`). `--bun` is the load-bearing word: without it bun
 # would hand the `next` bin's shebang to node. The Node fallback is
 # `build:node` (`next build`) and works in this image because `node` here is the
-# real Node 24 — see the base-image note at the top.
+# real Node 26 — see the base-image note at the top.
 #
 # The copy step first, because this RUN calls `next build` directly rather than
 # through the `build` script that would otherwise do it: maplibre-gl v6's worker

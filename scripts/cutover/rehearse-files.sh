@@ -45,7 +45,7 @@ S3_PORT="${REHEARSAL_S3_PORT:-9100}"
 S3_ACCESS_KEY="${REHEARSAL_S3_ACCESS_KEY:-cellar}"
 S3_SECRET_KEY="${REHEARSAL_S3_SECRET_KEY:-cellar-dev-secret}"
 
-export PATH="${NODE_BIN:-$HOME/.local/share/fnm/node-versions/v24.14.0/installation/bin}:$PATH"
+export PATH="${NODE_BIN:-$HOME/.local/share/fnm/node-versions/v26.13.1/installation/bin}:$PATH"
 
 dst() {
   docker exec -i -e PGPASSWORD="$DST_PASSWORD" "$DST_CONTAINER" \

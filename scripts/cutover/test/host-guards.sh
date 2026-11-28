@@ -17,12 +17,12 @@
 #
 #   scripts/cutover/test/host-guards.sh
 #
-# Needs: docker, Node 24 as `node` (preflight's host checks), and the compose
+# Needs: docker, Node 26 as `node` (preflight's host checks), and the compose
 # stack's Postgres (same defaults and overrides as files-phase.sh):
 #
 #   CUT_TEST_PG_CONTAINER  cellar-stack-postgres-1   CUT_TEST_PG_PORT  5433
 #   CUT_TEST_PG_USER       cellar      CUT_TEST_PG_PASSWORD  cellar
-#   CUT_TEST_DEBIAN_IMAGE  node:24-bookworm-slim     (GNU coreutils for J)
+#   CUT_TEST_DEBIAN_IMAGE  node:26-bookworm-slim     (GNU coreutils for J)
 #
 # It creates one `cutguard_src_*` database (dropped on exit) and removes only
 # containers of PG_CLIENT_IMAGE that did not exist when it started.
@@ -44,7 +44,7 @@ PG="${CUT_TEST_PG_CONTAINER:-cellar-stack-postgres-1}"
 PG_PORT="${CUT_TEST_PG_PORT:-5433}"
 PG_USER="${CUT_TEST_PG_USER:-cellar}"
 PG_PASSWORD="${CUT_TEST_PG_PASSWORD:-cellar}"
-DEBIAN_IMAGE="${CUT_TEST_DEBIAN_IMAGE:-node:24-bookworm-slim}"
+DEBIAN_IMAGE="${CUT_TEST_DEBIAN_IMAGE:-node:26-bookworm-slim}"
 # Read from cutover.sh itself, so the case tests the default it ships.
 # shellcheck disable=SC2016  # a literal `${` in the pattern, not an expansion
 IMG="$(sed -n 's/^PG_CLIENT_IMAGE="\${PG_CLIENT_IMAGE:-\(.*\)}"$/\1/p' "$CUT")"

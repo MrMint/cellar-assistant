@@ -28,7 +28,7 @@
  */
 import type { ExecutionResult } from "graphql";
 import { GraphQLError, getOperationAST } from "graphql";
-import type { Plugin, YogaLogger } from "graphql-yoga";
+import { Logger, type Plugin } from "graphql-yoga";
 import { errorClassOf, fieldOf, isMaskedError } from "./error-class.ts";
 import { reportLimitRefused, reportUnexpectedErrors } from "./events.ts";
 import { requestIdFor } from "./request-id.ts";
@@ -137,17 +137,51 @@ const reportLogged = (args: readonly unknown[]): void => {
  * already reported with its request id, which is the common case: the
  * telemetry plugin sees every execution error before the masker does.
  *
- * Yoga's core calls only `error` (masked errors, and a thrown non-`Error`) and
- * `debug` (request-parsing chatter). `warn` goes the same way as `error`, so a
- * plugin's warning cannot print text either; `info`/`debug` are dropped, as
- * Yoga's default level already drops `debug`.
+ * Since Yoga 6 the logger is a `@graphql-hive/logger` `Logger`, and Yoga's
+ * core calls `log.error({ err })` (masked errors, and a thrown non-`Error`)
+ * and `log.debug`/`log.info` (request chatter). This is a subclass rather
+ * than a `LogWriter` because the base `log` serialises its attributes before
+ * any writer sees them: a `GraphQLError` arrives as its `toJSON()` output,
+ * with neither its class nor its identity, so neither redaction rule below
+ * could be applied. Overriding `log` sees the arguments as Yoga passed them.
+ * `warn` goes the same way as `error`, so a plugin's warning cannot print
+ * text either; `trace`/`debug`/`info` are dropped. `child` returns this same
+ * logger: Yoga's request-id plugin calls it on every request, and the base
+ * `child` would build a plain, printing `Logger`.
  */
-export const redactingYogaLogger: YogaLogger = {
-  debug: () => {},
-  info: () => {},
-  warn: (...args: unknown[]) => reportLogged(args),
-  error: (...args: unknown[]) => reportLogged(args),
+type LogLevel = "trace" | "debug" | "info" | "warn" | "error";
+
+/** The values a `log` call carries: an attrs object's values, then the rest. */
+const loggedValues = (args: readonly unknown[]): unknown[] => {
+  const [first, ...rest] = args;
+  const head = typeof first === "function" ? (first as () => unknown)() : first;
+  const values =
+    typeof head === "object" &&
+    head !== null &&
+    !(head instanceof Error) &&
+    Object.getPrototypeOf(head) === Object.prototype
+      ? Object.values(head)
+      : Array.isArray(head)
+        ? head
+        : [head];
+  return [...values, ...rest];
 };
+
+class RedactingYogaLogger extends Logger {
+  constructor() {
+    super({ level: "warn" });
+  }
+
+  override child(): Logger {
+    return this;
+  }
+
+  override log(level: LogLevel, ...args: unknown[]): void {
+    if (level === "warn" || level === "error") reportLogged(loggedValues(args));
+  }
+}
+
+export const redactingYogaLogger: Logger = new RedactingYogaLogger();
 
 export const useTelemetry = (): Plugin => ({
   onExecute({ args }) {

@@ -941,7 +941,7 @@ describe.skipIf(skip)("outbox: declared compensations (onDead)", () => {
       const { id } = await runBatchRow(db, MAX_ATTEMPTS);
       await db.update(outbox).set({ status: "dead" }).where(eq(outbox.id, id));
       const backfill = () =>
-        db.execute(sql`
+        db.execute<Record<string, unknown>>(sql`
           with reclaimed as (
             select id, target_actor, target_id, method, payload, status,
                    case when last_error like 'reclaimed:%' then 'reclaim'

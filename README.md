@@ -76,13 +76,13 @@ lives under `services/*` or `packages/*`.
 
 | Requirement | Version | Notes |
 |---|---|---|
-| Node | **24.14.0** | Pinned in `.nvmrc`; `engines` enforces `>=24.14.0 <25`. |
-| Bun | **1.4.2** | Pinned in `packageManager`. Not npm, not pnpm, not yarn. |
+| Node | **26.13.1** | Pinned in `.nvmrc`; `engines` enforces `>=26.13.1 <27`. |
+| Bun | **1.4.5** | Pinned in `packageManager`. Not npm, not pnpm, not yarn. |
 | Docker | any recent | Runs Postgres, MinIO, Grafana and the Dapr control plane. |
 | Dapr CLI | 1.18.4 binaries | `dapr init --slim --runtime-version 1.18.4` — installs `daprd`, `placement` and `scheduler` to `~/.dapr/bin` and starts nothing. |
 
 Homebrew's `bun` formula lags behind real releases. Use `bun upgrade`, and
-check `bun --version` reports `1.4.2` before assuming a problem is something
+check `bun --version` reports `1.4.5` before assuming a problem is something
 else.
 
 ### Install and start
