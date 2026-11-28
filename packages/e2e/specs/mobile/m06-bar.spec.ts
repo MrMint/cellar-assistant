@@ -157,7 +157,7 @@ test("Love replaces the heart", async ({ page }) => {
 
 test("a pantry toggle moves the recipe to Make now", async ({ page }) => {
   await page.goto("/recipes/bar/pantry");
-  const limes = page.locator('[data-pantry-kind="lime"]');
+  const limes = visibleOnly(page.locator('[data-pantry-kind="lime"]')).first();
   // Visible first: under the loading shell (X24) the streamed chip is already
   // in the DOM, hidden, so its attribute matches before it has a box.
   await expect(limes).toBeVisible();
@@ -176,13 +176,15 @@ test("a pantry toggle moves the recipe to Make now", async ({ page }) => {
 
   await page.goto("/recipes/bar");
   await expect(page.getByRole("radio", { name: /Make now/ })).toBeVisible();
-  const makeNow = page.getByTestId("make-now");
+  const makeNow = visibleOnly(page.getByTestId("make-now")).first();
   await expect(makeNow.getByRole("link", { name, exact: true })).toBeVisible();
   // A drink you can make carries Make straight into Make mode.
   await expect(
     makeNow.getByRole("link", { name: `Make ${name}`, exact: true }),
   ).toHaveAttribute("href", /\/make$/);
-  await expect(page.getByTestId("bar-readiness")).toContainText(/\d+ ready/);
+  await expect(
+    visibleOnly(page.getByTestId("bar-readiness")).first(),
+  ).toContainText(/\d+ ready/);
 
   // No horizontal scroll at phone width.
   const overflow = await page.evaluate(

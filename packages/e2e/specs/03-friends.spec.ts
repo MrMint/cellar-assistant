@@ -7,7 +7,13 @@ import {
   friendIds,
   unique,
 } from "../fixtures/data.ts";
-import { ACCOUNTS, bodyText, expect, test } from "../fixtures/test.ts";
+import {
+  ACCOUNTS,
+  bodyText,
+  expect,
+  settleNetwork,
+  test,
+} from "../fixtures/test.ts";
 
 /**
  * Friend request → accept, and the cellar-visibility rule on both sides of it.
@@ -88,6 +94,9 @@ test.describe("friend request and acceptance", () => {
       "user search did not return the other test account",
     ).toBeVisible({ timeout: 20_000 });
     await add.click();
+    // The request has to reach the server before the lists are read again:
+    // clearing the search on top of it showed an empty Sent once under load.
+    await settleNetwork(secondary);
 
     // The search clears back to the lists, where the request is under Sent
     // with its quiet Cancel (Social-Friends 19).
