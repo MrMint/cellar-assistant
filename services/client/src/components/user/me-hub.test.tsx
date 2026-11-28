@@ -293,3 +293,42 @@ describe("MeStamps (H-122, F-133)", async () => {
     assert.match(textOf(markup), /Stamps count new styles/);
   });
 });
+
+// H-121 / F-93: the invite sheet (share-pages.test.tsx is another stream's;
+// this bucket owns InviteFriendsCard but not that file, FR-19).
+describe("InviteSheet content (H-121, F-93)", async () => {
+  const { InviteSheetContent, inviteMailto } = await import(
+    "../share/InviteFriendsCard"
+  );
+  const url = "https://cellar.example/invite/tok";
+  const sheet = (canShare: boolean) =>
+    render(
+      <InviteSheetContent
+        url={url}
+        failed={false}
+        canShare={canShare}
+        onDone={() => {}}
+        onRetry={() => {}}
+        onReset={() => {}}
+      />,
+    );
+
+  test("Done in the header, before the code", () => {
+    const markup = sheet(false);
+    const done = markup.search(/<button[^>]*>Done<\/button>/);
+    assert.ok(done >= 0, "no Done button");
+    assert.ok(done < markup.indexOf("QR code for"));
+  });
+
+  test("a More ways row even without the system share sheet, then Reset link", () => {
+    const words = textOf(sheet(false));
+    assert.equal(words.match(/More ways/g)?.length, 1);
+    assert.ok(words.indexOf("More ways") < words.indexOf("Reset link"));
+  });
+
+  test("without a share sheet, More ways is an email carrying the link", () => {
+    const mail = inviteMailto(url);
+    assert.match(mail, /^mailto:\?subject=Join%20me/);
+    assert.ok(decodeURIComponent(mail).includes(url));
+  });
+});
