@@ -1,12 +1,13 @@
 "use client";
 
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import { ChevronRight, ICON_STROKE } from "@/components/app/icons";
 import { notify } from "@/components/app/notify";
 import { SegmentedControl } from "@/components/app/SegmentedControl";
 import { UserAvatar } from "@/components/app/UserAvatar";
 import { useGeolocation } from "@/components/map/hooks/useGeolocation";
 import {
+  isStandalone,
   openInstallSheet,
   useInstallOffer,
 } from "@/components/pwa/install-offer";
@@ -17,6 +18,7 @@ import { useThemeChoice } from "@/lib/theme/client";
 import { EditProfileSheet } from "./EditProfileSheet";
 import type { EditableProfile } from "./ProfileEditor";
 import { SignOutButton } from "./SignOutButton";
+import { WhoSeesCellars } from "./WhoSeesCellars";
 
 const APPEARANCE = [
   { value: "dark", label: "Dark" },
@@ -149,6 +151,11 @@ export function SettingsView({ profile }: { profile: EditableProfile | null }) {
   const sound = useFeedbackSettings();
   const install = useInstallOffer();
   const [editing, setEditing] = useState(false);
+  // Where the browser can't install the app the row stays, with how to do it
+  // by hand (H-93); it goes only once the app is installed. After mount, so
+  // the server's markup and the first client render agree.
+  const [installed, setInstalled] = useState(true);
+  useEffect(() => setInstalled(isStandalone(window)), []);
 
   return (
     <>
@@ -200,12 +207,22 @@ export function SettingsView({ profile }: { profile: EditableProfile | null }) {
           />
         </Block>
         <LocationRow />
-        {install.kind !== null && (
+        <WhoSeesCellars />
+        {install.kind !== null ? (
           <DoorRow
             label="Install the app"
             subtitle="Opens full screen, like any app"
             onPress={openInstallSheet}
           />
+        ) : (
+          !installed && (
+            <div className="flex min-h-14 flex-col justify-center px-3.5 py-2">
+              <span className="t-body text-ink">Install the app</span>
+              <span className="t-cap text-ink-2">
+                In your browser's menu, choose Install or Add to Home Screen
+              </span>
+            </div>
+          )
         )}
         <SignOutButton />
       </div>

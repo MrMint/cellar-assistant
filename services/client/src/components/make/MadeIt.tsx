@@ -74,12 +74,13 @@ export function MadeIt({
       className="mx-auto flex min-h-full w-full max-w-xl flex-col bg-background"
     >
       <div className="flex justify-center bg-gradient-to-b from-raised to-background px-4 pt-8 pb-6">
-        <div className="size-40 overflow-hidden rounded-md border border-edge">
+        <div className="size-40 overflow-hidden rounded-md">
           <LabelPlate
             type="SPIRIT"
             face="recipe"
             plate={{ name: recipe.name }}
             labelled
+            className="bg-transparent"
           />
         </div>
       </div>

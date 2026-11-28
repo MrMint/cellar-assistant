@@ -37,6 +37,7 @@ import {
   type PinnedTierList,
 } from "./me-hub-data";
 import { PressLink } from "./PressLink";
+import { BOLD_LABEL } from "./section-label";
 
 export type MeLink = {
   label: string;
@@ -343,7 +344,11 @@ export function MeHub({
       {/* ux-c M4 slot: fetches its own data, renders nothing until then. */}
       <MeStamps />
       {ME_SECTIONS.map((section) => (
-        <InsetSection key={section.label} label={section.label}>
+        <InsetSection
+          key={section.label}
+          label={section.label}
+          className={BOLD_LABEL}
+        >
           {section.label === "People" &&
             extras.requests.map((request) => (
               <MeRequestRow key={request.id} request={request} />
@@ -412,7 +417,11 @@ export function MeHubShell() {
           <Skeleton className="rounded-md" />
         </ShellBlocks>
         {ME_SECTIONS.map((section) => (
-          <InsetSection key={section.label} label={section.label}>
+          <InsetSection
+            key={section.label}
+            label={section.label}
+            className={BOLD_LABEL}
+          >
             {section.links.map((link) => (
               <Fragment key={link.href}>
                 {link.href === "/rankings" && (

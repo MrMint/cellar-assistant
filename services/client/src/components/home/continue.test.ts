@@ -40,6 +40,7 @@ describe("openBottleFromNode", () => {
     );
     assert.ok(bottle);
     assert.equal(bottle.style, "RED");
+    assert.equal(bottle.styleName, "Red");
     assert.equal(bottle.cellarName, "Garage");
     assert.match(bottle.title, /^2016 /);
     assert.equal(openLifeFor(bottle)?.label, "red wine");
@@ -79,6 +80,11 @@ describe("openBottleFromNode", () => {
       const bottle = openBottleFromNode(node({ ...base, ...fields }));
       assert.ok(bottle, String(fields.type));
       assert.equal(bottle.style, style, String(fields.type));
+      assert.equal(
+        bottle.styleName?.includes("_") ?? false,
+        false,
+        String(fields.type),
+      );
       assert.equal(openLifeFor(bottle)?.label ?? null, label);
     }
   });

@@ -97,7 +97,7 @@ export function ContinueSection({
                     </PressLink>
                   }
                   maker={bottle.maker}
-                  style={bottle.style}
+                  style={bottle.styleName}
                   glyph={itemTypeTokens[bottle.type].glyph}
                   photoUrl={bottle.photoUrl}
                   plate={

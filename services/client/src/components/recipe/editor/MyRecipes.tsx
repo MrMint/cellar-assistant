@@ -17,6 +17,7 @@ import { PRIVACY_WHO, type RecipePrivacy } from "./recipe-draft";
 export type MyRecipeRow = {
   readonly id: string;
   readonly name: string;
+  readonly type?: string;
   readonly privacy: string;
   readonly isDraft: boolean;
   readonly ingredientCount: number;
@@ -179,7 +180,11 @@ export function MyRecipes({
                 key={row.id}
                 leading={
                   <span className="relative block size-10 overflow-hidden rounded-md bg-raised">
-                    <RecipeThumb type="cocktail" name={row.name} />
+                    <RecipeThumb
+                      type={row.type === "food" ? "food" : "cocktail"}
+                      name={row.name}
+                      glyphOnly
+                    />
                   </span>
                 }
                 title={
