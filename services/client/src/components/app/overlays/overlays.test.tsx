@@ -361,3 +361,34 @@ describe("F-47: the photo-tone AppBar", () => {
     );
   });
 });
+
+describe("fix-b29: desktop pane and kit parts", () => {
+  test("H-116: the pane's chevrons point left and right", async () => {
+    const { DesktopPane } = await import("./DesktopPane");
+    const markup = renderToStaticMarkup(
+      <DesktopPane open onClose={() => {}} title="Pane" onNext={() => {}}>
+        <p>body</p>
+      </DesktopPane>,
+    );
+    assert.match(markup, /lucide-chevron-left/);
+    assert.match(markup, /lucide-chevron-right/);
+    assert.doesNotMatch(markup, /lucide-chevron-(up|down)/);
+  });
+
+  test("H-117: a count cell draws its glyph", async () => {
+    const { CountFilters } = await import("../parts/CountStrip");
+    const { WineGlyph } = await import("../parts/glyphs");
+    const markup = renderToStaticMarkup(
+      <CountFilters
+        aria-label="Show only"
+        cells={[
+          { value: "WINE", label: "Wine", count: 3, glyph: WineGlyph },
+          { value: "BEER", label: "Beer", count: 2 },
+        ]}
+        value={null}
+        onValueChange={() => {}}
+      />,
+    );
+    assert.equal(markup.match(/<svg/g)?.length, 1);
+  });
+});

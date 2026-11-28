@@ -1,13 +1,15 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import type { MouseEvent } from "react";
+import { type MouseEvent, useState } from "react";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { HapticOverlay } from "@/lib/feedback";
 import { cn } from "@/lib/utils";
+import { Keyboard } from "./icons";
 import { Link } from "./Link";
 import { ADD_KEYS, LEADING_TABS, ME_TAB, type Tab, TRAILING_TABS } from "./nav";
 import { KeyTooltip } from "./overlays/Kbd";
+import { KeysDialog } from "./overlays/KeysDialog";
 import { isMoreRoute, MoreMenu } from "./overlays/MoreMenu";
 import { PRESS_CLASS, pressFeedback } from "./overlays/press";
 import { CaptureButton, MeTab, useTabTap } from "./TabBar";
@@ -56,6 +58,34 @@ function RailLink({
   );
 }
 
+/** H-116: the rail's Keys entry, which opens the keys dialog (`?`). */
+function KeysButton() {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <KeyTooltip label="Keys" keys="?">
+        <button
+          type="button"
+          aria-haspopup="dialog"
+          {...pressFeedback()}
+          onClick={() => setOpen(true)}
+          className={cn(
+            "t-micro relative flex w-16 flex-col items-center justify-center gap-1 rounded-md py-1.5 text-ink-3 outline-none hover:text-ink focus-visible:ring-2 focus-visible:ring-ring",
+            PRESS_CLASS,
+          )}
+        >
+          <span className="flex h-8 w-13 items-center justify-center rounded-lg">
+            <Keyboard aria-hidden className="size-6" strokeWidth={1.75} />
+          </span>
+          <span>Keys</span>
+          <HapticOverlay />
+        </button>
+      </KeyTooltip>
+      <KeysDialog open={open} onOpenChange={setOpen} />
+    </>
+  );
+}
+
 /**
  * From `md` up (KIT § 3 Desktop): the 88 rail that replaces the tab bar —
  * Cellars, Search, Map, Add (teal, 48 × 40), Lists, More, and Me at the foot.
@@ -95,7 +125,8 @@ export function SideRail({ className }: { className?: string }) {
         </span>
         {TRAILING_TABS.map(item)}
         <MoreMenu variant="rail" active={isMoreRoute(pathname)} />
-        <div className="mt-auto">
+        <div className="mt-auto flex flex-col items-center gap-3">
+          <KeysButton />
           <MeTab variant="rail" active={active === ME_TAB.key} onTap={onTap} />
         </div>
       </nav>
