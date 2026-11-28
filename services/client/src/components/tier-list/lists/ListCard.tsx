@@ -27,7 +27,7 @@ import {
 import { cn } from "@/lib/utils";
 import {
   type BandStrip as BandStripData,
-  bandStrip,
+  bandStripFromCounts,
   kindNoun,
   shortDate,
 } from "./model";
@@ -176,10 +176,7 @@ export function ListCard({
 }) {
   const privacy = PRIVACY[list.privacy] ?? PRIVACY.PRIVATE;
   const PrivacyIcon = privacy.icon;
-  const strip = bandStrip(
-    list.bands.edges.map((edge) => edge.node.band),
-    list.itemCount,
-  );
+  const strip = bandStripFromCounts(list.bandCounts);
   const count = kindNoun(list.listType, list.itemCount);
   const privacyGlyph = (
     <>

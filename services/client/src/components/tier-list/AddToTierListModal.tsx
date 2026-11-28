@@ -21,7 +21,7 @@
 
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
-import { useQuery } from "urql";
+import { useClient, useQuery } from "urql";
 import {
   Add,
   Check,
@@ -49,8 +49,14 @@ import { useTierListActions } from "./actions";
 import { entryTypeOf, tierListOptionsFor } from "./adapter";
 import type { TierListEntityType } from "./constants";
 import { bandForScore } from "./history";
-import { kindNoun, kindOne, rankOf, rankOnAppend } from "./lists/model";
-import { ListRanksQuery } from "./lists/queries";
+import {
+  kindNoun,
+  kindOne,
+  rankFromBandCounts,
+  rankOf,
+  rankOnAppend,
+} from "./lists/model";
+import { ListBandCountsQuery, ListRanksQuery } from "./lists/queries";
 import {
   ENTITY_ENTRIES_PAGE_SIZE,
   GetTierListsForItemQuery,
@@ -111,6 +117,7 @@ export function AddToTierListModal({
   entityName,
 }: AddToTierListModalProps) {
   const router = useRouter();
+  const client = useClient();
   const { addItemToTierListAction, addTierListAction, undoAction } =
     useTierListActions();
   const isPlace = entityType === "place";
@@ -246,7 +253,29 @@ export function AddToTierListModal({
               : rankOnAppend(list.bands, list.itemCount, band);
           router.refresh();
           onClose();
-          added(tierListId, listName, band, rank, result.editSeq ?? null);
+          // F-181: past the 100 entries the picker holds, the #n comes from
+          // the list's own bandCounts (F-85) read now the add has landed,
+          // never from the capped page; a failed read says no #n.
+          const exact =
+            rank !== null || list === undefined
+              ? rank
+              : await client
+                  .query(
+                    ListBandCountsQuery,
+                    { id: tierListId },
+                    { requestPolicy: "network-only" },
+                  )
+                  .toPromise()
+                  .then((read) => {
+                    const counted = unwrapResult(
+                      read.data?.tierList,
+                      "TierList",
+                    );
+                    return counted.ok
+                      ? rankFromBandCounts(counted.data.bandCounts, band)
+                      : null;
+                  });
+          added(tierListId, listName, band, exact, result.editSeq ?? null);
         } else {
           fail(result.error ?? "Couldn’t add it · try again");
         }
@@ -263,6 +292,7 @@ export function AddToTierListModal({
       addItemToTierListAction,
       added,
       lists,
+      client,
     ],
   );
 
