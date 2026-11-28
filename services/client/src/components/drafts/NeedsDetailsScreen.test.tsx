@@ -54,6 +54,22 @@ window.matchMedia = ((query: string) => {
   } as unknown as MediaQueryList;
 }) as typeof window.matchMedia;
 
+// Every row is on screen: an observed thumb is in view at once.
+globalThis.IntersectionObserver = class {
+  constructor(private readonly callback: IntersectionObserverCallback) {}
+  observe(target: Element) {
+    this.callback(
+      [{ isIntersecting: true, target } as IntersectionObserverEntry],
+      this as unknown as IntersectionObserver,
+    );
+  }
+  unobserve() {}
+  disconnect() {}
+  takeRecords() {
+    return [];
+  }
+} as unknown as typeof IntersectionObserver;
+
 type Sent = { operationName: string; variables: Record<string, unknown> };
 const sent: Sent[] = [];
 /** The server's answer to a save: the draft, or not found (not yours). */
@@ -176,6 +192,7 @@ const MORE_NEW = {
   itemType: "BEER",
   displayName: "Harbour Pale",
   draftFields: { name: "Harbour Pale" },
+  imageId: "f-more",
 };
 
 const DRAFTS = [
@@ -495,6 +512,14 @@ describe("NeedsDetailsScreen", () => {
       "Harbour Pale",
     ]);
     assert.equal(more(), undefined, "no further page");
+    // F-71: a "Show more" row reads its own photo once it is in view.
+    await flush(30);
+    assert.ok(
+      sent.some(
+        (s) => s.operationName === "DraftImage" && s.variables.id === "f-more",
+      ),
+      "the later page's photo is read",
+    );
   });
 
   const openDraft = async (title: string) =>
