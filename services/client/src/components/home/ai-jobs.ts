@@ -159,6 +159,18 @@ export const failedLine = (job: AiJob): string => {
   }
 };
 
+/**
+ * F-32: the tray's one row for failures folded together — only list
+ * insights fold, so "No insights for 4 lists yet".
+ */
+export const failedGroupLine = (jobs: readonly AiJob[]): string => {
+  const [first] = jobs;
+  if (first === undefined) return "";
+  return jobs.length === 1
+    ? failedLine(first)
+    : `No insights for ${jobs.length} lists yet`;
+};
+
 export type JobToast = {
   readonly message: string;
   readonly description: string | null;
