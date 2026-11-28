@@ -1,6 +1,14 @@
 "use client";
 
-import { createContext, type ReactNode, useContext } from "react";
+import {
+  createContext,
+  type ReactNode,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import { useQuery } from "urql";
 import {
   FRIEND_REQUESTS_PAGE,
@@ -21,8 +29,61 @@ export type ShellViewer = {
 /** Exported for tests and the kit gallery, which draw the shell without the API. */
 export const ShellViewerContext = createContext<ShellViewer>({});
 
-/** The viewer the shell draws; empty outside `ShellViewerProvider`. */
-export const useShellViewer = (): ShellViewer => useContext(ShellViewerContext);
+/**
+ * The friend-request count, held outside React context. The provider sits
+ * above every page, and its read answers after mount, often while React is
+ * still hydrating the page's streamed `loading.tsx` boundary. A context change
+ * then makes React client-render that boundary instead of hydrating it, which
+ * leaves the server's copy in a hidden `S:n` div beside the client's: two of
+ * everything on the page for a few hundred ms (m10-make, the F-24 rows). A
+ * store changes only the components that read it.
+ */
+type RequestsStore = {
+  get: () => number | undefined;
+  set: (count: number) => void;
+  subscribe: (onChange: () => void) => () => void;
+};
+
+const makeRequestsStore = (): RequestsStore => {
+  let value: number | undefined;
+  const listeners = new Set<() => void>();
+  return {
+    get: () => value,
+    set: (count) => {
+      if (count === value) return;
+      value = count;
+      listeners.forEach((onChange) => {
+        onChange();
+      });
+    },
+    subscribe: (onChange) => {
+      listeners.add(onChange);
+      return () => {
+        listeners.delete(onChange);
+      };
+    },
+  };
+};
+
+const RequestsStoreContext = createContext<RequestsStore | null>(null);
+const noSubscribe = () => () => {};
+const noCount = (): number | undefined => undefined;
+
+/**
+ * The viewer the shell draws; empty outside `ShellViewerProvider`. Under the
+ * provider, `requests` comes from its store; without one (tests, the kit
+ * gallery) it is whatever `ShellViewerContext` was given.
+ */
+export const useShellViewer = (): ShellViewer => {
+  const viewer = useContext(ShellViewerContext);
+  const store = useContext(RequestsStoreContext);
+  const requests = useSyncExternalStore(
+    store?.subscribe ?? noSubscribe,
+    store?.get ?? noCount,
+    noCount,
+  );
+  return store === null ? viewer : { ...viewer, requests };
+};
 
 /** The API caps `first` at 100; past that the badge reads "99+". */
 const REQUESTS_PAGE = FRIEND_REQUESTS_PAGE;
@@ -48,7 +109,8 @@ export const meLabel = (requests: number | undefined): string =>
 /**
  * Provides the viewer to the tab bar and rail, and reads the friend requests
  * waiting on them for the Me badge. Mount inside the GraphQL provider. A
- * failed read draws no badge, never an error.
+ * failed read draws no badge, never an error. The context value stays the
+ * same object when the read answers (see `RequestsStore`).
  */
 export function ShellViewerProvider({
   displayName,
@@ -59,15 +121,23 @@ export function ShellViewerProvider({
   avatarUrl?: string | null;
   children: ReactNode;
 }) {
+  const [store] = useState(makeRequestsStore);
+  const viewer = useMemo(
+    () => ({ displayName, avatarUrl }),
+    [displayName, avatarUrl],
+  );
   const [{ data }] = useQuery({
     query: MeHubQuery,
     variables: { pinned: PINNED_TIER_LISTS, requests: REQUESTS_PAGE },
     requestPolicy: "cache-and-network",
   });
   const requests = pendingRequests(data);
+  useEffect(() => store.set(requests), [store, requests]);
   return (
-    <ShellViewerContext.Provider value={{ displayName, avatarUrl, requests }}>
-      {children}
+    <ShellViewerContext.Provider value={viewer}>
+      <RequestsStoreContext.Provider value={store}>
+        {children}
+      </RequestsStoreContext.Provider>
     </ShellViewerContext.Provider>
   );
 }
