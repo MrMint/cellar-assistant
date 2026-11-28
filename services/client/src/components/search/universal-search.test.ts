@@ -123,6 +123,8 @@ describe("rows", () => {
       title: "Barolo 2016",
       description: "Nebbiolo",
       href: "/wines/w1",
+      // F-42: the desktop pane opens the item's page body.
+      look: { kind: "item", itemId: "w1", itemType: "WINE" },
       thumb: { kind: "item", itemType: "WINE" },
       score: 4.5,
     });
