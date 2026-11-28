@@ -606,3 +606,58 @@ describe("Viewer.lovedCounts (F-87)", () => {
     expect(calls[0]?.args[2]).toEqual(["WINE"]);
   });
 });
+
+describe("account settings (H-119 / FR-21)", () => {
+  it("me.settings reads the viewer's own actor, and only it", async () => {
+    const { invoke, calls } = stubSidecar({
+      "UserActor.settings": () => ({ defaultCellarPrivacy: "FRIENDS" }),
+    });
+    const result = await run(
+      "{ me { settings { defaultCellarPrivacy } } }",
+      testContext(invoke, alice),
+    );
+    expect(result.errors).toBeUndefined();
+    expect(result.data?.me).toEqual({
+      settings: { defaultCellarPrivacy: "FRIENDS" },
+    });
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toMatchObject({
+      actorType: "UserActor",
+      actorId: alice.id,
+      method: "settings",
+    });
+  });
+
+  it("setDefaultCellarPrivacy writes the viewer's own actor; anonymous is refused with no call", async () => {
+    const { invoke, calls } = stubSidecar({
+      "UserActor.setDefaultCellarPrivacy": (_actorId, _ctx, input) => ({
+        defaultCellarPrivacy: (input as { privacy: string }).privacy,
+      }),
+    });
+    const set = await run(
+      `mutation { setDefaultCellarPrivacy(privacy: PUBLIC) {
+         __typename ... on UserSettings { defaultCellarPrivacy } } }`,
+      testContext(invoke, alice),
+    );
+    expect(set.errors).toBeUndefined();
+    expect(set.data?.setDefaultCellarPrivacy).toEqual({
+      __typename: "UserSettings",
+      defaultCellarPrivacy: "PUBLIC",
+    });
+    expect(calls[0]).toMatchObject({
+      actorId: alice.id,
+      method: "setDefaultCellarPrivacy",
+    });
+    expect(calls[0]?.args[1]).toEqual({ privacy: "PUBLIC" });
+
+    const anonymous = await run(
+      `mutation { setDefaultCellarPrivacy(privacy: PUBLIC) { __typename } }`,
+      testContext(invoke),
+    );
+    expect(
+      (anonymous.data?.setDefaultCellarPrivacy as { __typename: string })
+        ?.__typename,
+    ).not.toBe("UserSettings");
+    expect(calls).toHaveLength(1);
+  });
+});

@@ -177,6 +177,10 @@ export const cellarItems = pgTable("cellar_items", {
 	priceAmount: numeric("price_amount", { precision: 10, scale: 2, mode: 'number' }),
 	priceCurrency: char("price_currency", { length: 3 }),
 	location: text(),
+	// B15C (F-150 / H-103): the level the bottle had when it was finished,
+	// so "Put back" restores it. Set by `CellarActor.emptyItem`, cleared when
+	// the bottle is put back. Null: never finished, or finished from 0.
+	levelBeforeEmpty: numeric("level_before_empty", { mode: 'number' }),
 	type: text().generatedAlwaysAs(sql`
 CASE
     WHEN (beer_id IS NOT NULL) THEN 'BEER'::text
@@ -190,7 +194,7 @@ END`),
 	index("idx_cellar_items_cellar_id").using("btree", table.cellarId.asc().nullsLast()),
 	index("idx_cellar_items_sake_id").using("btree", table.sakeId.asc().nullsLast()),
 	index("idx_cellar_items_tea_id").using("btree", table.teaId.asc().nullsLast()),
-check("cellar_items_source_type_check", sql`(source_type = ANY (ARRAY['manual'::text, 'menu_discovery'::text, 'menu_scan'::text, 'import'::text]))`),check("Ensure exactly one item Id", sql`(num_nonnulls(beer_id, wine_id, spirit_id, coffee_id, sake_id, tea_id) = 1)`),check("Percentage remaining between 0 and 100", sql`((percentage_remaining >= (0)::numeric) AND (percentage_remaining <= (100)::numeric))`),check("cellar_items_drink_window", sql`((drink_from IS NULL) OR (drink_until IS NULL) OR (drink_from <= drink_until))`),check("cellar_items_price_amount_nonnegative", sql`((price_amount IS NULL) OR (price_amount >= (0)::numeric))`),check("cellar_items_price_currency_with_amount", sql`((price_amount IS NULL) = (price_currency IS NULL))`),check("cellar_items_location_length", sql`((location IS NULL) OR (char_length(location) <= 80))`),]);
+check("cellar_items_source_type_check", sql`(source_type = ANY (ARRAY['manual'::text, 'menu_discovery'::text, 'menu_scan'::text, 'import'::text]))`),check("Ensure exactly one item Id", sql`(num_nonnulls(beer_id, wine_id, spirit_id, coffee_id, sake_id, tea_id) = 1)`),check("Percentage remaining between 0 and 100", sql`((percentage_remaining >= (0)::numeric) AND (percentage_remaining <= (100)::numeric))`),check("cellar_items_drink_window", sql`((drink_from IS NULL) OR (drink_until IS NULL) OR (drink_from <= drink_until))`),check("cellar_items_price_amount_nonnegative", sql`((price_amount IS NULL) OR (price_amount >= (0)::numeric))`),check("cellar_items_price_currency_with_amount", sql`((price_amount IS NULL) = (price_currency IS NULL))`),check("cellar_items_location_length", sql`((location IS NULL) OR (char_length(location) <= 80))`),check("cellar_items_level_before_empty_range", sql`((level_before_empty IS NULL) OR ((level_before_empty > (0)::numeric) AND (level_before_empty <= (100)::numeric)))`),]);
 
 export const cellarOwners = pgTable("cellar_owners", {
 	userId: uuid("user_id").notNull().references(() => user.id, { onDelete: "restrict", onUpdate: "restrict" } ),
@@ -1261,6 +1265,16 @@ export const user = pgTable("user", {
 	uniqueIndex("user_email_key").using("btree", table.email.asc().nullsLast()),
 	index("user_avatar_file_id_idx").using("btree", table.avatarFileId.asc().nullsLast()),
 ]);
+
+// B15C (H-119 / FR-21): account-level settings, one row per user, written by
+// UserActor only. `default_cellar_privacy` is what `CellarActor.create` uses
+// when no privacy is given; it never rewrites an existing cellar. No row is
+// the column default (PRIVATE). No `updated_at`: nothing reads one, and a
+// new updated_at table owes a trigger (updated-at-triggers.test.ts).
+export const userSettings = pgTable("user_settings", {
+	userId: uuid("user_id").primaryKey().references(() => user.id, { onDelete: "cascade", onUpdate: "restrict" } ),
+	defaultCellarPrivacy: permissionType("default_cellar_privacy").default("PRIVATE").notNull(),
+});
 
 export const userPlaceInteractions = pgTable("user_place_interactions", {
 	id: uuid().defaultRandom().primaryKey(),

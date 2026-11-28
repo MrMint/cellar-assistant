@@ -160,6 +160,7 @@ import type {
   SetAvatarInput,
   SetBarPantryItemInput,
   SetBrewPrefsInput,
+  SetDefaultCellarPrivacyInput,
   SetFavoriteResult,
   SetRecipeLoveResult,
   SetWantToTryResult,
@@ -167,6 +168,7 @@ import type {
   UserActorInterface,
   UserCountsDto,
   UserProfileDto,
+  UserSettingsDto,
   WantToTryEntryDto,
   WantToTryKind,
   WantToTryTarget,
@@ -185,6 +187,7 @@ import {
   NotFoundError,
   offsetPage,
   PANTRY_KINDS,
+  PERMISSION_TYPES,
   PROFILE_NOT_SHARED,
   requireReverseEdgeBatch,
   UserActorDescriptor,
@@ -202,6 +205,7 @@ import {
   recipeFavorites,
   recipes,
   userPlaceInteractions,
+  userSettings,
   user as userTable,
   wantToTry,
 } from "@cellar-assistant/db";
@@ -694,6 +698,45 @@ export class UserActor
     this.requireAggregate();
     this.#requireSelf(ctx, "remove this profile picture");
     return this.#writeProfile(ctx, { avatarFileId: null });
+  }
+
+  /** H-119 / FR-21: self only. No row is the column default, PRIVATE. */
+  async settings(ctx: Ctx): Promise<UserSettingsDto> {
+    this.requireAggregate();
+    this.#requireSelf(ctx, "read these settings");
+    const [row] = await this.db
+      .select({ privacy: userSettings.defaultCellarPrivacy })
+      .from(userSettings)
+      .where(eq(userSettings.userId, this.key));
+    return { defaultCellarPrivacy: row?.privacy ?? "PRIVATE" };
+  }
+
+  /**
+   * H-119 / FR-21: self only. The default a NEW cellar takes when created
+   * without a privacy (`CellarActor.create`); no existing cellar is touched.
+   */
+  async setDefaultCellarPrivacy(
+    ctx: Ctx,
+    input: SetDefaultCellarPrivacyInput,
+  ): Promise<UserSettingsDto> {
+    this.requireAggregate();
+    this.#requireSelf(ctx, "change these settings");
+    const privacy = input.privacy;
+    if (!(PERMISSION_TYPES as readonly string[]).includes(privacy)) {
+      throw new ValidationError(
+        `not a cellar privacy: ${JSON.stringify(privacy)}`,
+      );
+    }
+    await this.tx(async (tx) => {
+      await tx
+        .insert(userSettings)
+        .values({ userId: this.key, defaultCellarPrivacy: privacy })
+        .onConflictDoUpdate({
+          target: userSettings.userId,
+          set: { defaultCellarPrivacy: privacy },
+        });
+    });
+    return { defaultCellarPrivacy: privacy };
   }
 
   async #writeProfile(ctx: Ctx, patch: ProfilePatch): Promise<UserProfileDto> {

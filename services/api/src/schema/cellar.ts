@@ -254,6 +254,17 @@ export const CellarItemType = builder
       openAt: t.expose("openAt", { type: "DateTime", nullable: true }),
       emptyAt: t.expose("emptyAt", { type: "DateTime", nullable: true }),
       percentageRemaining: t.exposeFloat("percentageRemaining"),
+      levelBeforeEmpty: t.field({
+        type: "Float",
+        nullable: true,
+        description:
+          "F-150 (H-103): the level this bottle had when it was finished — " +
+          "what Put back restores. `updateCellarItem(emptyAt: null)` with " +
+          "no `percentageRemaining` puts it back at this level itself. Null " +
+          "when not finished, or finished from 0.",
+        // Older DTOs (a stub, a cached payload) may not carry it.
+        resolve: (cellarItem) => cellarItem.levelBeforeEmpty ?? null,
+      }),
       displayImageId: t.exposeID("displayImageId", { nullable: true }),
       sourceType: t.field({
         type: CellarItemSourceEnum,

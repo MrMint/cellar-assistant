@@ -2838,6 +2838,68 @@ describe("brew prefs (ux-c L08) — the viewer's own, nobody else's", () => {
   });
 });
 
+describe.skipIf(skip)(
+  "account settings (H-119 / FR-21): the owner's only",
+  () => {
+    afterAll(closeTestDb);
+
+    it("reads PRIVATE with no row, and the owner can set it", async () => {
+      await withTestDb(async (db) => {
+        const alice = await seedUser(db);
+        const actor = await userActor(alice, db);
+        const ctx = userCtx(alice, "r");
+        expect(await actor.settings(ctx)).toEqual({
+          defaultCellarPrivacy: "PRIVATE",
+        });
+        expect(
+          await actor.setDefaultCellarPrivacy(ctx, { privacy: "FRIENDS" }),
+        ).toEqual({ defaultCellarPrivacy: "FRIENDS" });
+        expect(
+          await actor.setDefaultCellarPrivacy(ctx, { privacy: "PUBLIC" }),
+        ).toEqual({ defaultCellarPrivacy: "PUBLIC" });
+        expect((await actor.settings(ctx)).defaultCellarPrivacy).toBe("PUBLIC");
+      });
+    });
+
+    it("a stranger or a friend can neither read nor write it", async () => {
+      await withTestDb(async (db) => {
+        const alice = await seedUser(db);
+        const bob = await seedUser(db);
+        const actor = await userActor(alice, db);
+        await actor.setDefaultCellarPrivacy(userCtx(alice, "r"), {
+          privacy: "FRIENDS",
+        });
+        await expect(actor.settings(userCtx(bob, "r"))).rejects.toThrow(
+          ForbiddenError,
+        );
+        await expect(
+          actor.setDefaultCellarPrivacy(userCtx(bob, "r"), {
+            privacy: "PUBLIC",
+          }),
+        ).rejects.toThrow(ForbiddenError);
+        await expect(actor.settings(anonymousCtx("r"))).rejects.toThrow(
+          ForbiddenError,
+        );
+        expect(
+          (await actor.settings(userCtx(alice, "r"))).defaultCellarPrivacy,
+        ).toBe("FRIENDS");
+      });
+    });
+
+    it("refuses a value that is not a privacy", async () => {
+      await withTestDb(async (db) => {
+        const alice = await seedUser(db);
+        const actor = await userActor(alice, db);
+        await expect(
+          actor.setDefaultCellarPrivacy(userCtx(alice, "r"), {
+            privacy: "EVERYONE" as never,
+          }),
+        ).rejects.toThrow(ValidationError);
+      });
+    });
+  },
+);
+
 /* -------------------------------------------------------------------------- */
 /* Static guard — §2.1's "no AI or external call inside a UserActor turn"      */
 /* -------------------------------------------------------------------------- */

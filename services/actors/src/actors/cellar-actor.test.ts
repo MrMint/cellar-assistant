@@ -32,7 +32,7 @@ import {
   userCtx,
   ValidationError,
 } from "@cellar-assistant/contracts";
-import { cellars, checkIns } from "@cellar-assistant/db";
+import { cellars, checkIns, userSettings } from "@cellar-assistant/db";
 import { eq, sql } from "@cellar-assistant/db/orm";
 import { ActorId, DaprClient } from "@dapr/dapr";
 import { afterAll, describe, expect, it, vi } from "vitest";
@@ -378,6 +378,49 @@ describe.skipIf(skip)("CellarActor (B1)", () => {
           coOwnerIds: [coOwner],
           itemCount: 0,
         });
+      });
+    });
+
+    it("no privacy given is the creator's account default (H-119 / FR-21)", async () => {
+      await withTestDb(async (db) => {
+        const owner = await seedUser(db);
+        const other = await seedUser(db);
+        // No settings row: PRIVATE, as before.
+        const firstId = randomUUID();
+        const first = await activate(newCellarActor(firstId, db));
+        expect(
+          (await first.create(userCtx(owner, "r"), { name: "A" })).privacy,
+        ).toBe("PRIVATE");
+
+        await db.insert(userSettings).values({
+          userId: owner,
+          defaultCellarPrivacy: "FRIENDS",
+        });
+        const second = await activate(newCellarActor(randomUUID(), db));
+        expect(
+          (await second.create(userCtx(owner, "r"), { name: "B" })).privacy,
+        ).toBe("FRIENDS");
+        // An explicit privacy wins over the default.
+        const third = await activate(newCellarActor(randomUUID(), db));
+        expect(
+          (
+            await third.create(userCtx(owner, "r"), {
+              name: "C",
+              privacy: "PUBLIC",
+            })
+          ).privacy,
+        ).toBe("PUBLIC");
+        // Someone else's default is not the creator's.
+        const theirs = await activate(newCellarActor(randomUUID(), db));
+        expect(
+          (await theirs.create(userCtx(other, "r"), { name: "D" })).privacy,
+        ).toBe("PRIVATE");
+        // The existing cellar is untouched by the new default.
+        const [kept] = await db
+          .select({ privacy: cellars.privacy })
+          .from(cellars)
+          .where(eq(cellars.id, firstId));
+        expect(kept?.privacy).toBe("PRIVATE");
       });
     });
 
@@ -739,6 +782,55 @@ describe.skipIf(skip)("CellarActor (B1)", () => {
         expect(back.emptyAt).toBeNull();
         expect(back.openAt).toBe(opened.openAt);
         expect(back.percentageRemaining).toBe(30);
+      });
+    });
+
+    it("Put back restores the level it was finished at (F-150 / H-103)", async () => {
+      await withTestDb(async (db) => {
+        const scenario = await seedScenario(db, "PRIVATE");
+        const ctx = userCtx(scenario.owner, "r");
+        await scenario.actor.openItem(ctx, scenario.itemId);
+        await scenario.actor.setItemPercentage(ctx, scenario.itemId, 40);
+
+        const emptied = await scenario.actor.emptyItem(ctx, scenario.itemId);
+        expect(emptied.percentageRemaining).toBe(0);
+        expect(emptied.levelBeforeEmpty).toBe(40);
+        // The kept level survives a fresh activation: it is in the row.
+        const fresh = await activate(newCellarActor(scenario.cellarId, db));
+        const read = await fresh.item(ctx, scenario.itemId);
+        expect(read.levelBeforeEmpty).toBe(40);
+
+        // Put back with no level: the server puts back the kept one.
+        const back = await fresh.updateItem(ctx, scenario.itemId, {
+          emptyAt: null,
+        });
+        expect(back.emptyAt).toBeNull();
+        expect(back.percentageRemaining).toBe(40);
+        expect(back.levelBeforeEmpty).toBeNull();
+      });
+    });
+
+    it("a level the caller names wins over the kept one, and a bottle finished from 0 keeps none", async () => {
+      await withTestDb(async (db) => {
+        const scenario = await seedScenario(db, "PRIVATE");
+        const ctx = userCtx(scenario.owner, "r");
+        await scenario.actor.setItemPercentage(ctx, scenario.itemId, 70);
+        await scenario.actor.emptyItem(ctx, scenario.itemId);
+        const named = await scenario.actor.updateItem(ctx, scenario.itemId, {
+          emptyAt: null,
+          percentageRemaining: 25,
+        });
+        expect(named.percentageRemaining).toBe(25);
+        expect(named.levelBeforeEmpty).toBeNull();
+
+        await scenario.actor.setItemPercentage(ctx, scenario.itemId, 0);
+        const zero = await scenario.actor.emptyItem(ctx, scenario.itemId);
+        expect(zero.levelBeforeEmpty).toBeNull();
+        const full = await scenario.actor.updateItem(ctx, scenario.itemId, {
+          emptyAt: null,
+        });
+        // Nothing kept: the level stays as it was saved (0), for the caller to set.
+        expect(full.percentageRemaining).toBe(0);
       });
     });
 

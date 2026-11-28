@@ -52,7 +52,11 @@ import {
 } from "../lib/testing.ts";
 import { imageSetKey, NO_IMAGES, setEmbeddingModel } from "../lib/vectors.ts";
 import type { VerifyFile } from "./item-actor.ts";
-import { embeddingTextFor, ItemActor } from "./item-actor.ts";
+import {
+  embeddingTextFor,
+  ItemActor,
+  REVIEW_RESTORE_WINDOW_MS,
+} from "./item-actor.ts";
 
 const daprClient = (): DaprClient =>
   new DaprClient({ daprHost: "127.0.0.1", daprPort: "3502" });
@@ -1741,6 +1745,154 @@ describe.skipIf(skip)("ItemActor (B2)", () => {
         await expect(actor.friendsScore(anonymousCtx("r"))).rejects.toThrow(
           ForbiddenError,
         );
+      });
+    });
+  });
+
+  describe("friendsReviews (F-154 / H-106: the Friends' ratings sheet)", () => {
+    it("lists friends' newest reviews only — never a non-friend's, never the viewer's", async () => {
+      await withTestDb(async (db) => {
+        const { owner, friend, stranger, actor } = await seedScenario(db);
+        const second = await seedUser(db);
+        await seedFriendship(db, second, owner);
+        await actor.addReview(userCtx(owner, "r"), { score: 5 });
+        await actor.addReview(userCtx(friend, "r"), { score: 2 });
+        await actor.addReview(userCtx(friend, "r"), { score: 4 });
+        const fromSecond = await actor.addReview(userCtx(second, "r"), {
+          score: 3,
+        });
+        await actor.addReview(userCtx(stranger, "r"), { score: 0.5 });
+
+        const result = await actor.friendsReviews(userCtx(owner, "r"), page);
+        const authors = result.entries.map((entry) => entry.node.userId);
+        expect(authors).toHaveLength(2);
+        expect(new Set(authors)).toEqual(new Set([friend, second]));
+        expect(authors).not.toContain(stranger);
+        expect(authors).not.toContain(owner);
+        expect(result.entries.map((entry) => entry.node.id)).toContain(
+          fromSecond.id,
+        );
+        // The sheet and the number beside it agree.
+        const score = await actor.friendsScore(userCtx(owner, "r"));
+        expect(score.count).toBe(result.entries.length);
+
+        // The stranger has no friends: nothing, not everyone's.
+        const strangers = await actor.friendsReviews(
+          userCtx(stranger, "r"),
+          page,
+        );
+        expect(strangers.entries).toEqual([]);
+      });
+    });
+
+    it("pages", async () => {
+      await withTestDb(async (db) => {
+        const { owner, friend, actor } = await seedScenario(db);
+        const second = await seedUser(db);
+        await seedFriendship(db, owner, second);
+        await actor.addReview(userCtx(friend, "r"), { score: 2 });
+        await actor.addReview(userCtx(second, "r"), { score: 3 });
+        const first = await actor.friendsReviews(
+          userCtx(owner, "r"),
+          pageArgs({ first: 1 }),
+        );
+        expect(first.entries).toHaveLength(1);
+        expect(first.hasNextPage).toBe(true);
+      });
+    });
+
+    it("refuses an anonymous viewer", async () => {
+      await withTestDb(async (db) => {
+        const { actor } = await seedScenario(db);
+        await expect(
+          actor.friendsReviews(anonymousCtx("r"), page),
+        ).rejects.toThrow(ForbiddenError);
+      });
+    });
+  });
+
+  describe("review restore (F-148 / H-102: Undo of Remove my rating)", () => {
+    const ORIGINAL = "2020-03-04T05:06:07.000Z";
+
+    /** A review by `author`, backdated, behind a fresh activation. */
+    const backdatedReview = async (
+      db: DbOrTx,
+      ref: ItemRef,
+      author: string,
+    ): Promise<{ id: string; actor: ItemActor }> => {
+      const seeded = await activate(newItemActor(actorIdFor(ref), db));
+      const review = await seeded.addReview(userCtx(author, "r"), {
+        score: 4,
+      });
+      await db.execute(sql`
+        update public.item_reviews set created_at = ${ORIGINAL}::timestamptz
+        where id = ${review.id}::uuid`);
+      return {
+        id: review.id,
+        actor: await activate(newItemActor(actorIdFor(ref), db)),
+      };
+    };
+
+    it("puts back the viewer's own just-removed review with its id and createdAt", async () => {
+      await withTestDb(async (db) => {
+        const { owner, ref } = await seedScenario(db);
+        const { id, actor } = await backdatedReview(db, ref, owner);
+        await actor.deleteReview(userCtx(owner, "r"), id);
+        const restored = await actor.addReview(userCtx(owner, "r"), {
+          reviewId: id,
+          score: 4,
+        });
+        expect(restored.id).toBe(id);
+        expect(restored.createdAt).toBe(ORIGINAL);
+        expect((await actor.myReview(userCtx(owner, "r")))?.createdAt).toBe(
+          ORIGINAL,
+        );
+      });
+    });
+
+    it("restores once: a second remove-and-add after the first restore keeps the original too, but a new id never backdates", async () => {
+      await withTestDb(async (db) => {
+        const { owner, ref } = await seedScenario(db);
+        const { id, actor } = await backdatedReview(db, ref, owner);
+        await actor.deleteReview(userCtx(owner, "r"), id);
+        const fresh = await actor.addReview(userCtx(owner, "r"), { score: 1 });
+        expect(fresh.id).not.toBe(id);
+        expect(fresh.createdAt).not.toBe(ORIGINAL);
+      });
+    });
+
+    it("never backdates someone else's review: another viewer re-using the removed id gets a fresh stamp", async () => {
+      await withTestDb(async (db) => {
+        const { owner, stranger, ref } = await seedScenario(db);
+        const { id, actor } = await backdatedReview(db, ref, owner);
+        await actor.deleteReview(userCtx(owner, "r"), id);
+        const taken = await actor.addReview(userCtx(stranger, "r"), {
+          reviewId: id,
+          score: 1,
+        });
+        expect(taken.userId).toBe(stranger);
+        expect(taken.createdAt).not.toBe(ORIGINAL);
+        // ...and the tombstone is not spent on them either way: the author's
+        // own undo after a stranger took the id is the id's idempotent hit.
+      });
+    });
+
+    it("a review deleted outside this window is an ordinary new one", async () => {
+      await withTestDb(async (db) => {
+        const { owner, ref } = await seedScenario(db);
+        const { id, actor } = await backdatedReview(db, ref, owner);
+        await actor.deleteReview(userCtx(owner, "r"), id);
+        const realNow = Date.now;
+        Date.now = () => realNow() + REVIEW_RESTORE_WINDOW_MS + 1;
+        try {
+          const late = await actor.addReview(userCtx(owner, "r"), {
+            reviewId: id,
+            score: 4,
+          });
+          expect(late.createdAt).not.toBe(ORIGINAL);
+        } finally {
+          Date.now = realNow;
+        }
       });
     });
   });

@@ -31,6 +31,7 @@ import type {
   SetFavoriteResult,
   UpdateProfileInput,
   UserProfileDto,
+  UserSettingsDto,
 } from "@cellar-assistant/contracts";
 import {
   AVATAR_BATCH_MAX_IDS,
@@ -48,7 +49,7 @@ import {
 import DataLoader from "dataloader";
 import type { ApiContext } from "../context.ts";
 import { builder } from "./builder.ts";
-import { FriendRequestStatusEnum } from "./enums.ts";
+import { FriendRequestStatusEnum, PermissionTypeEnum } from "./enums.ts";
 import { ItemInterface, ItemTypeEnum } from "./item.ts";
 import { connectionFromPage, toPageArgs } from "./pagination.ts";
 import { type PatchPolicy, patch } from "./patch.ts";
@@ -678,6 +679,52 @@ builder.mutationField("removeAvatar", (t) =>
     errors: {},
     resolve: (_root, _args, context) =>
       myActor(context, "remove your profile picture").removeAvatar(),
+  }),
+);
+
+/* -------------------------------------------------------------------------- */
+/* H-119 / FR-21: account settings                                            */
+/* -------------------------------------------------------------------------- */
+
+const UserSettingsType = builder
+  .objectRef<UserSettingsDto>("UserSettings")
+  .implement({
+    description:
+      "The viewer's own account settings (H-119). Only the viewer can read " +
+      "or change them.",
+    fields: (t) => ({
+      defaultCellarPrivacy: t.field({
+        type: PermissionTypeEnum,
+        description:
+          'Settings, "Who sees your cellars": the privacy a NEW cellar ' +
+          "gets when `createCellar` is given none. Changing it never " +
+          "changes an existing cellar. PRIVATE until set.",
+        resolve: (settings) => settings.defaultCellarPrivacy,
+      }),
+    }),
+  });
+
+builder.objectField(Viewer, "settings", (t) =>
+  t.field({
+    type: UserSettingsType,
+    description: "The viewer's own account settings (H-119).",
+    resolve: (viewer, _args, context) =>
+      context.actor(UserActorDescriptor, viewer.id).settings(),
+  }),
+);
+
+builder.mutationField("setDefaultCellarPrivacy", (t) =>
+  t.field({
+    type: UserSettingsType,
+    description:
+      "H-119 / FR-21: the privacy new cellars get by default. Existing " +
+      "cellars keep their own.",
+    args: { privacy: t.arg({ type: PermissionTypeEnum, required: true }) },
+    errors: {},
+    resolve: (_root, args, context) =>
+      myActor(context, "change your settings").setDefaultCellarPrivacy({
+        privacy: args.privacy,
+      }),
   }),
 );
 

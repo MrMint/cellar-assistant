@@ -117,6 +117,7 @@ export const tables = {
   tier_lists: t.tierLists,
   user: t.user,
   user_place_interactions: t.userPlaceInteractions,
+  user_settings: t.userSettings,
   verification: t.verification,
   want_to_try: t.wantToTry,
   wine_style: t.wineStyle,

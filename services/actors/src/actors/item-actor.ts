@@ -335,6 +335,9 @@ const imageRowToDto = (type: ItemType, row: ItemImageRow): ItemImageDto => ({
   updatedAt: iso(row.updatedAt),
 });
 
+/** F-148: how long a deleted review can be put back with its `createdAt`. */
+export const REVIEW_RESTORE_WINDOW_MS = 15 * 60 * 1000;
+
 const reviewRowToDto = (type: ItemType, row: ItemReviewRow): ItemReviewDto => ({
   id: row.id,
   itemId: REVIEWS.refOf(row)?.id ?? "",
@@ -386,6 +389,21 @@ export class ItemActor
   readonly #verifyFile: VerifyFile;
   readonly #embed: EmbedDocument;
   readonly #embedImage: EmbedImage;
+  /**
+   * F-148 (H-102): the reviews this activation deleted in the last
+   * {@link REVIEW_RESTORE_WINDOW_MS}, by id — who wrote each and when, so an
+   * Undo of "Remove my rating" (`addReview` with the same `reviewId`, by the
+   * same viewer) puts back the review it removed, `createdAt` included, and
+   * Recap does not count it as new. Nothing a caller sends can set a
+   * `createdAt`: only a tombstone this actor wrote can, and only for its own
+   * author. In memory on purpose — a restore after the activation is gone (or
+   * the window has passed) is an ordinary new review, which is what every
+   * Undo was before this.
+   */
+  readonly #removedReviews = new Map<
+    string,
+    { readonly userId: string; readonly createdAt: Date; readonly at: number }
+  >();
 
   constructor(
     daprClient: DaprClient,
@@ -601,8 +619,32 @@ export class ItemActor
   async friendsScore(ctx: Ctx): Promise<ItemScoreDto> {
     const aggregate = this.#requireItem();
     requireSignedIn(ctx, "view an item score");
+    return scoreOf(await this.#friendsNewestReviews(ctx, aggregate));
+  }
+
+  /**
+   * F-154 (H-106): the reviews behind {@link friendsScore} — one per friend,
+   * their newest, newest first — for the item page's Friends' ratings sheet.
+   * The same friend set, read the same way (fresh, from the viewer's own
+   * `friends` rows), so the sheet and the number beside it never disagree and
+   * a non-friend's review never appears. The viewer's own is not in it.
+   */
+  async friendsReviews(ctx: Ctx, page: PageArgs): Promise<Page<ItemReviewDto>> {
+    const aggregate = this.#requireItem();
+    requireSignedIn(ctx, "view item reviews");
+    const rows = await this.#friendsNewestReviews(ctx, aggregate);
+    return offsetPage(
+      rows.map((row) => reviewRowToDto(aggregate.ref.type, row)),
+      page,
+    );
+  }
+
+  async #friendsNewestReviews(
+    ctx: Ctx,
+    aggregate: Extract<ItemAggregate, { kind: "item" }>,
+  ): Promise<ItemReviewRow[]> {
     const viewer = ctx.viewerId;
-    if (viewer === null) return scoreOf([]);
+    if (viewer === null) return [];
     const friendIds = new Set(
       friendIdsOf(viewer, await friendshipsOf(this.db, viewer)),
     );
@@ -610,12 +652,11 @@ export class ItemActor
     // (`item_reviews` has no one-per-user constraint; the cache is newest
     // first), so a friend who reviewed twice is not counted twice.
     const seen = new Set<string>();
-    const counted = aggregate.reviews.filter((row) => {
+    return aggregate.reviews.filter((row) => {
       if (!friendIds.has(row.userId) || seen.has(row.userId)) return false;
       seen.add(row.userId);
       return true;
     });
-    return scoreOf(counted);
   }
 
   /**
@@ -1190,6 +1231,7 @@ export class ItemActor
     }
 
     const score = requireScore(input.score);
+    const restored = this.#takeRemovedReview(reviewId, userId);
     await this.tx(async (tx) => {
       await tx
         .insert(itemReviews)
@@ -1198,6 +1240,7 @@ export class ItemActor
           userId,
           score,
           text: parseReviewText(input.text),
+          ...(restored === null ? {} : { createdAt: restored }),
           ...REVIEWS.values(aggregate.ref),
         })
         .onConflictDoNothing({ target: itemReviews.id });
@@ -1265,8 +1308,31 @@ export class ItemActor
     await this.tx(async (tx) => {
       await tx.delete(itemReviews).where(eq(itemReviews.id, reviewId));
     });
+    this.#removedReviews.set(reviewId, {
+      userId: row.userId,
+      createdAt: row.createdAt,
+      at: Date.now(),
+    });
     await this.reload();
     return { id: reviewId };
+  }
+
+  /**
+   * F-148: the original `createdAt` of `reviewId` if this activation deleted
+   * it within the window and `userId` wrote it — consumed, so it restores
+   * once — else `null`. Someone else re-using the id gets a fresh stamp.
+   */
+  #takeRemovedReview(reviewId: string, userId: string): Date | null {
+    const now = Date.now();
+    for (const [id, entry] of this.#removedReviews) {
+      if (now - entry.at > REVIEW_RESTORE_WINDOW_MS) {
+        this.#removedReviews.delete(id);
+      }
+    }
+    const entry = this.#removedReviews.get(reviewId);
+    if (entry === undefined || entry.userId !== userId) return null;
+    this.#removedReviews.delete(reviewId);
+    return entry.createdAt;
   }
 
   /* ---------------------------------------------------------------------- */
