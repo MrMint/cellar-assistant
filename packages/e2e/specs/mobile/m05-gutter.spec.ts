@@ -6,7 +6,12 @@ import {
   horizontalOverflow,
   type Probe,
 } from "../../fixtures/mobile-rules.ts";
-import { Gql, settleNetwork } from "../../fixtures/test.ts";
+import {
+  Gql,
+  searchBox,
+  settleNetwork,
+  visibleOnly,
+} from "../../fixtures/test.ts";
 
 /**
  * N20 · a 16 pt gutter and no sideways scroll at 375 (observation 15,
@@ -59,27 +64,24 @@ type Target = {
   path: () => string;
   /** What has to be on screen before measuring means anything. */
   ready: (page: Page) => Locator;
-  /** X10: the search sheet is full screen, with no tab bar to wait for. */
-  sheet?: boolean;
 };
 
 const targets: Target[] = [
   {
     name: "a cellar's items (observation 15)",
     path: () => `/cellars/${cellarId}/items`,
-    ready: (page) => page.getByText(/add item/i).first(),
+    ready: (page) => page.getByRole("link", { name: /add a bottle/i }).first(),
   },
   {
     name: "the cellars index",
     path: () => "/cellars",
-    ready: (page) => page.locator(`a[href="/cellars/${cellarId}/items"]`),
+    ready: (page) =>
+      visibleOnly(page.locator(`a[href="/cellars/${cellarId}/items"]`)).first(),
   },
   {
     name: "the search sheet",
     path: () => "/search",
-    ready: (page) =>
-      page.getByRole("searchbox").or(page.getByRole("textbox")).first(),
-    sheet: true,
+    ready: (page) => searchBox(page),
   },
   {
     name: "Home (X10)",
@@ -195,7 +197,8 @@ for (const target of targets) {
     await page.goto(target.path());
     await expect(target.ready(page)).toBeVisible();
     await settleNetwork(page);
-    if (target.sheet !== true) await bottomNav(page);
+    // FR-2: the tab bar shows on /search too, so every target has one to tag.
+    await bottomNav(page);
 
     const { viewportWidth, clipped, probes } = await measure(page);
     expect(viewportWidth).toBe(375);

@@ -12,8 +12,10 @@ import { deletePlace, insertPlace } from "../fixtures/db.ts";
 import {
   bodyText,
   expect,
+  searchBox,
   settleNetwork,
   test,
+  visibleOnly,
   watch,
 } from "../fixtures/test.ts";
 
@@ -96,8 +98,6 @@ test("semantic item search returns ranked results", async ({ api }) => {
  * The restored box: no visible label (an `aria-label` since N01), no submit
  * button, an animated placeholder.
  */
-const searchBox = (page: import("@playwright/test").Page) =>
-  page.getByRole("textbox").first();
 
 test("the search page on a desktop: Look in, Photo, no Scan — and no quick-link chips (X01, X10)", async ({
   api,
@@ -177,15 +177,17 @@ test("Home's collection line counts only cellars you own or co-own (G36)", async
     const total = Object.values(
       after.itemCounts as Record<string, number>,
     ).reduce((a, b) => a + b, 0);
-    const cellars =
-      after.cellarCount === 1
-        ? "your cellar"
-        : `your ${after.cellarCount} cellars`;
-    const line =
-      total === 0
-        ? "Your collection awaits. Start by adding your first item."
-        : `${total} ${total === 1 ? "bottle" : "bottles"} in ${cellars}`;
-    await expect(primary.getByText(line, { exact: true })).toBeVisible();
+    // Home's line is the bottle count alone now (`home/landing.ts`); the
+    // cellar count it once carried is asserted through the API above, and a
+    // new person's Home draws no count at all.
+    if (total === 0) {
+      await expect(primary.getByText(/^[\d,]+ bottles?$/)).toHaveCount(0);
+    } else {
+      const line = `${total.toLocaleString("en-US")} ${total === 1 ? "bottle" : "bottles"}`;
+      await expect(
+        primary.getByText(line, { exact: true }).first(),
+      ).toBeVisible();
+    }
   } finally {
     await deleteCellars("primary", [mine]);
     await deleteCellars("secondary", [theirs]);
@@ -527,7 +529,9 @@ test("Home's Nearby Places renders from the geolocation cookie, nearest first (X
       `/map?placeId=${near.id}`,
     );
     await expect(cards.nth(1)).toContainText(far.name);
-    await expect(primary.getByText("View all on map")).toBeVisible();
+    await expect(
+      visibleOnly(primary.getByText("View all on map")).first(),
+    ).toBeVisible();
     expect(noise.pageErrors, "Home threw").toEqual([]);
   } finally {
     await deletePlace(near.id);
@@ -573,25 +577,26 @@ test("the search sheet and Home draw their box and field once the app runs (L1)"
   expect(noise.pageErrors, "the search page or Home threw").toEqual([]);
 });
 
-test("Close then Back does not reopen the search sheet (leftovers 9)", async ({
+test("Back from the search sheet returns to the page you came from (leftovers 9, FR-2)", async ({
   primary,
 }) => {
-  // Close is the phone sheet's; from md the sidebar stays and there is none.
+  // FR-2: the Close control is gone (the tab bar shows on /search), so what
+  // is left of leftovers 9 is that Back leaves the sheet for the page that
+  // opened it, and stays out of /search.
   await primary.setViewportSize({ width: 390, height: 844 });
   await primary.goto("/");
   await primary
     .getByRole("link", { name: "Search bottles, places and recipes" })
     .click();
   await expect(primary).toHaveURL(/\/search/);
-  const box = searchBox(primary);
-  await box.fill("gin");
-  await expect(primary).toHaveURL(/\/search\?q=gin/);
-  await primary.getByRole("button", { name: "Close search" }).click();
-  await expect(primary).not.toHaveURL(/\/search/);
+  await expect(
+    primary.getByRole("button", { name: "Close search" }),
+  ).toHaveCount(0);
+  await expect(searchBox(primary)).toBeVisible();
   await primary.goBack();
-  // Close replaced the sheet's entry, so Back stays out of `/search`.
   await primary.waitForLoadState("domcontentloaded");
   await expect(primary).not.toHaveURL(/\/search/);
+  await expect(primary).toHaveURL(/\/$/);
 });
 
 test("a text search has a Brands section, its See all into /brands (D1, D10)", async ({
@@ -617,12 +622,13 @@ test("a text search has a Brands section, its See all into /brands (D1, D10)", a
   await expect(brands.getByRole("heading", { name: /^Brands\b/ })).toBeVisible({
     timeout: 30_000,
   });
-  await expect(brands.locator(`a[href="/brands/${brand.id}"]`)).toBeVisible();
+  await expect(
+    visibleOnly(brands.locator(`a[href="/brands/${brand.id}"]`)).first(),
+  ).toBeVisible();
   expect(noise.pageErrors, "the search page threw").toEqual([]);
 
-  // `/brands?q=` opens with the term already searched.
+  // `/brands?q=` is a redirect into search with the term already typed
+  // (`app/(authenticated)/brands/page.tsx`).
   await primary.goto(`/brands?q=${encodeURIComponent(brand.name)}`);
-  await expect(
-    primary.getByRole("textbox", { name: "Search brands" }),
-  ).toHaveValue(brand.name);
+  await expect(searchBox(primary)).toHaveValue(brand.name);
 });
