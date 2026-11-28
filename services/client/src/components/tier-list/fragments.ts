@@ -29,26 +29,6 @@
 
 import { graphql } from "@/lib/api/graphql";
 
-/** Tier list card for the index page grid: creator and item count. */
-export const TierListCardFragment = graphql(`
-  fragment TierListCard on TierList @_unmask {
-    __typename
-    id
-    name
-    description
-    privacy
-    listType
-    itemCount
-    createdAt
-    createdById
-    createdBy {
-      id
-      displayName
-      avatarUrl
-    }
-  }
-`);
-
 /** The header fields the detail page and the edit form read. */
 export const TierListCoreFragment = graphql(`
   fragment TierListCore on TierList @_unmask {

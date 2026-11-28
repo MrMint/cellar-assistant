@@ -17,14 +17,7 @@
 
 import { useRouter } from "next/navigation";
 import { parseAsStringLiteral, useQueryState } from "nuqs";
-import {
-  type ReactElement,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActionBar } from "@/components/app/ActionBar";
 import { AppBar } from "@/components/app/AppBar";
 import { BottomSheet } from "@/components/app/BottomSheet";
@@ -56,11 +49,6 @@ import { ListShareSheet } from "@/components/share/ListShareSheet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 import { feedback } from "@/lib/feedback";
 import { type AddEntryCandidate, AddEntryModal } from "./AddEntryModal";
 import { useTierListActions } from "./actions";
@@ -94,15 +82,8 @@ const privacyLabels: Record<string, { icon: AppIcon; label: string }> = {
   PUBLIC: { icon: Public, label: "Public" },
 };
 
-/** A header action's hover hint; on touch its `aria-label` names it. */
-function Hint({ label, children }: { label: string; children: ReactElement }) {
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>{children}</TooltipTrigger>
-      <TooltipContent>{label}</TooltipContent>
-    </Tooltip>
-  );
-}
+const ACTION =
+  "t-cap flex min-h-11 min-w-14 flex-col items-center justify-center gap-0.5 px-3 text-ink-2";
 
 const TRIGGER =
   "t-head h-full rounded-sm text-ink-2 data-[state=active]:bg-card data-[state=active]:text-ink";
@@ -484,7 +465,7 @@ export function TierListViewPage({
           className="gap-3"
         >
           <div className="flex flex-wrap items-center gap-2">
-            <TabsList className="h-11 min-w-0 flex-1 rounded-md bg-raised p-1">
+            <TabsList className="h-11 group-data-[orientation=horizontal]/tabs:h-11 min-w-0 flex-1 rounded-md bg-raised p-1">
               <TabsTrigger value="rankings" className={TRIGGER}>
                 Rankings
               </TabsTrigger>
@@ -492,53 +473,54 @@ export function TierListViewPage({
                 Insights
               </TabsTrigger>
             </TabsList>
-            <div className="flex shrink-0 gap-1">
+            {/* F-14: the board's labelled group, Map · Share · Details,
+                one bordered strip beside the tabs. */}
+            <fieldset
+              aria-label="List actions"
+              className="m-0 flex shrink-0 divide-x divide-line overflow-hidden rounded-md border border-line"
+            >
               {/* L40: a place list opens on the map, filtered to it. */}
               {data.listType === "place" && (
-                <Hint label="Map">
-                  <IconButton asChild variant="outline" aria-label="Map">
-                    <Link
-                      href={`/map?list=${encodeURIComponent(data.id)}`}
-                      underline="none"
-                      onClick={() => feedback("press")}
-                    >
-                      <MapIcon />
-                    </Link>
-                  </IconButton>
-                </Hint>
+                <Link
+                  href={`/map?list=${encodeURIComponent(data.id)}`}
+                  underline="none"
+                  onClick={() => feedback("press")}
+                  className={ACTION}
+                >
+                  <MapIcon aria-hidden className="size-5" />
+                  Map
+                </Link>
               )}
               {/* X17: a PRIVATE list's owner still gets Share, which says how
                   to make the list shareable (tierListShareBlock) instead of
                   handing out a link only they can open. */}
               {(data.privacy !== "PRIVATE" || data.isOwner) && (
-                <Hint label="Share">
-                  <IconButton
-                    variant="outline"
-                    aria-label="Share"
-                    onClick={() => {
-                      feedback("press");
-                      setShareOpen(true);
-                    }}
-                  >
-                    <Share />
-                  </IconButton>
-                </Hint>
+                <button
+                  type="button"
+                  className={ACTION}
+                  onClick={() => {
+                    feedback("press");
+                    setShareOpen(true);
+                  }}
+                >
+                  <Share aria-hidden className="size-5" />
+                  Share
+                </button>
               )}
               {data.isOwner && (
-                <Hint label="Details">
-                  <IconButton
-                    variant="outline"
-                    aria-label="Details"
-                    onClick={() => {
-                      feedback("press");
-                      setDetailsOpen(true);
-                    }}
-                  >
-                    <Edit />
-                  </IconButton>
-                </Hint>
+                <button
+                  type="button"
+                  className={ACTION}
+                  onClick={() => {
+                    feedback("press");
+                    setDetailsOpen(true);
+                  }}
+                >
+                  <Edit aria-hidden className="size-5" />
+                  Details
+                </button>
               )}
-            </div>
+            </fieldset>
           </div>
           <TabsContent value="rankings" className="flex flex-col gap-3">
             {!isEmpty && (

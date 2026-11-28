@@ -26,7 +26,6 @@ import { ItemCardFragment } from "@/components/item/ItemCard/fragments";
 import { ActorErrorFieldsFragment } from "@/lib/api/errors";
 import { graphql } from "@/lib/api/graphql";
 import {
-  TierListCardFragment,
   TierListCoreFragment,
   TierListEditFragment,
   TierListEditHistoryFragment,
@@ -44,39 +43,6 @@ export const tierListPageSize = (
 export const TIER_LIST_ITEMS_PAGE_SIZE = 100;
 /** `Item/Place.tierListEntries` reaches at most 100 rows. */
 export const ENTITY_ENTRIES_PAGE_SIZE = 100;
-
-/**
- * One page of one `/tier-lists` section — Yours, From friends or Discover
- * (`section`, decision D2); without one, every list the viewer may see.
- */
-export const GetTierListsQuery = graphql(
-  `
-    query GetTierLists(
-      $first: Int!
-      $after: String
-      $section: CollectionSection
-    ) {
-      myTierLists(first: $first, after: $after, section: $section) {
-        __typename
-        ... on TierListConnection {
-          totalCount
-          pageInfo {
-            hasNextPage
-            endCursor
-          }
-          edges {
-            cursor
-            node {
-              ...TierListCard
-            }
-          }
-        }
-        ...ActorErrorFields
-      }
-    }
-  `,
-  [TierListCardFragment, ActorErrorFieldsFragment],
-);
 
 /** One tier list with a page of its entries, `band desc, position asc`. */
 export const GetTierListQuery = graphql(
@@ -139,42 +105,6 @@ export const TierListViewerQuery = graphql(`
     }
   }
 `);
-
-/**
- * One page of the viewer's **own** lists (`section: MINE`, X11), with just
- * what an "own lists of this type" picker needs — the map's tier-list filter
- * and the "Add to Tier List" modal. `useAllMyTierLists` walks every page
- * before either narrows by type.
- */
-export const MyTierListOptionsPageQuery = graphql(
-  `
-    query MyTierListOptionsPage($first: Int!, $after: String) {
-      me {
-        id
-      }
-      myTierLists(first: $first, after: $after, section: MINE) {
-        __typename
-        ... on TierListConnection {
-          pageInfo {
-            hasNextPage
-            endCursor
-          }
-          edges {
-            node {
-              __typename
-              id
-              name
-              listType
-              createdById
-            }
-          }
-        }
-        ...ActorErrorFields
-      }
-    }
-  `,
-  [ActorErrorFieldsFragment],
-);
 
 /** "Add to Tier List" modal for an item: where the item already is. */
 export const GetTierListsForItemQuery = graphql(
