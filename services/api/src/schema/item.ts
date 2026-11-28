@@ -35,6 +35,7 @@ import type {
   ItemReviewDto,
   ItemScoreDto,
   ItemType,
+  Page,
   UnlinkedItemBrand,
   UpdateGenericItemInput as UpdateGenericItemInputType,
   UpdateItemInput as UpdateItemInputType,
@@ -182,6 +183,13 @@ export const ItemReviewType = builder
       updatedAt: t.expose("updatedAt", { type: "DateTime" }),
     }),
   });
+
+const NO_REVIEWS: Page<ItemReviewDto> = {
+  entries: [],
+  hasNextPage: false,
+  hasPreviousPage: false,
+  totalCount: 0,
+};
 
 const ItemReviewConnection = builder.connectionObject(
   { type: ItemReviewType, name: "ItemReviewConnection" },
@@ -398,6 +406,25 @@ export const ItemInterface = builder.loadableInterface("Item", {
           await context
             .actor(ItemActorDescriptor, itemActorId(item))
             .images(toPageArgs(args)),
+        ),
+    }),
+
+    friendsReviews: t.field({
+      type: ItemReviewConnection,
+      description:
+        "F-154 (H-106): the reviews `friendsScore` averages — one per " +
+        "friend, their newest, newest first — for the Friends' ratings " +
+        "sheet. The friend set is resolved inside the actor from your own " +
+        "`friends` rows, so a non-friend's review never appears; yours is " +
+        "not in it. Empty for an anonymous viewer.",
+      args: t.arg.connectionArgs(),
+      resolve: async (item, args, context) =>
+        connectionFromPage(
+          context.ctx.viewerId === null
+            ? NO_REVIEWS
+            : await context
+                .actor(ItemActorDescriptor, itemActorId(item))
+                .friendsReviews(toPageArgs(args)),
         ),
     }),
 

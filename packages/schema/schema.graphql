@@ -610,6 +610,29 @@ type Beer implements Item {
   favoriteCount: Int!
 
   """
+  F-154 (H-106): the reviews `friendsScore` averages — one per friend, their newest, newest first — for the Friends' ratings sheet. The friend set is resolved inside the actor from your own `friends` rows, so a non-friend's review never appears; yours is not in it. Empty for an anonymous viewer.
+  """
+  friendsReviews(
+    """
+    An `edge.cursor` from a previous page. Opaque and owned by the actor that minted it: cursors are not interchangeable between fields.
+    """
+    after: String
+
+    """**Not supported.** See `last`. Paging is forward-only."""
+    before: String
+
+    """
+    How many edges to return, 1 to 100 inclusive; defaults to 20. Over the cap is a `VALIDATION` error, not a silent clamp.
+    """
+    first: Int
+
+    """
+    **Not supported.** Present because the Relay spec puts it here; passing it is a `VALIDATION` error rather than a silently forward page. Paging is forward-only — use `first`/`after`.
+    """
+    last: Int
+  ): ItemReviewConnection!
+
+  """
   X09: the item page's taste header, Friends — the same average as `score`, over your friends' reviews only (one each, their newest; never yours). The friend set is resolved inside the actor from your own `friends` rows; nothing here names a user. `average` null with no friend reviews.
   """
   friendsScore: ItemScore!
@@ -1400,6 +1423,11 @@ type CellarItem {
   """
   item: Item!
 
+  """
+  F-150 (H-103): the level this bottle had when it was finished — what Put back restores. `updateCellarItem(emptyAt: null)` with no `percentageRemaining` puts it back at this level itself. Null when not finished, or finished from 0.
+  """
+  levelBeforeEmpty: Float
+
   """Where it lives: 'Rack B, row 3'. Owners only."""
   location: String
 
@@ -1699,6 +1727,29 @@ type Coffee implements Item {
   How many users have favourited this item. One batched `UserActor` call per request. 0 for an anonymous viewer, who cannot read items.
   """
   favoriteCount: Int!
+
+  """
+  F-154 (H-106): the reviews `friendsScore` averages — one per friend, their newest, newest first — for the Friends' ratings sheet. The friend set is resolved inside the actor from your own `friends` rows, so a non-friend's review never appears; yours is not in it. Empty for an anonymous viewer.
+  """
+  friendsReviews(
+    """
+    An `edge.cursor` from a previous page. Opaque and owned by the actor that minted it: cursors are not interchangeable between fields.
+    """
+    after: String
+
+    """**Not supported.** See `last`. Paging is forward-only."""
+    before: String
+
+    """
+    How many edges to return, 1 to 100 inclusive; defaults to 20. Over the cap is a `VALIDATION` error, not a silent clamp.
+    """
+    first: Int
+
+    """
+    **Not supported.** Present because the Relay spec puts it here; passing it is a `VALIDATION` error rather than a silently forward page. Paging is forward-only — use `first`/`after`.
+    """
+    last: Int
+  ): ItemReviewConnection!
 
   """
   X09: the item page's taste header, Friends — the same average as `score`, over your friends' reviews only (one each, their newest; never yours). The friend set is resolved inside the actor from your own `friends` rows; nothing here names a user. `average` null with no friend reviews.
@@ -3047,6 +3098,29 @@ interface Item {
   How many users have favourited this item. One batched `UserActor` call per request. 0 for an anonymous viewer, who cannot read items.
   """
   favoriteCount: Int!
+
+  """
+  F-154 (H-106): the reviews `friendsScore` averages — one per friend, their newest, newest first — for the Friends' ratings sheet. The friend set is resolved inside the actor from your own `friends` rows, so a non-friend's review never appears; yours is not in it. Empty for an anonymous viewer.
+  """
+  friendsReviews(
+    """
+    An `edge.cursor` from a previous page. Opaque and owned by the actor that minted it: cursors are not interchangeable between fields.
+    """
+    after: String
+
+    """**Not supported.** See `last`. Paging is forward-only."""
+    before: String
+
+    """
+    How many edges to return, 1 to 100 inclusive; defaults to 20. Over the cap is a `VALIDATION` error, not a silent clamp.
+    """
+    first: Int
+
+    """
+    **Not supported.** Present because the Relay spec puts it here; passing it is a `VALIDATION` error rather than a silently forward page. Paging is forward-only — use `first`/`after`.
+    """
+    last: Int
+  ): ItemReviewConnection!
 
   """
   X09: the item page's taste header, Friends — the same average as `score`, over your friends' reviews only (one each, their newest; never yours). The friend set is resolved inside the actor from your own `friends` rows; nothing here names a user. `average` null with no friend reviews.
@@ -4563,6 +4637,11 @@ type Mutation {
     waterTempC: Int
   ): SetBrewPrefsResult!
   setCellarItemPercentage(cellarId: ID!, cellarItemId: ID!, percentageRemaining: Float!): SetCellarItemPercentageResult!
+
+  """
+  H-119 / FR-21: the privacy new cellars get by default. Existing cellars keep their own.
+  """
+  setDefaultCellarPrivacy(privacy: PermissionType!): SetDefaultCellarPrivacyResult!
 
   """
   Who else was there, after the fact: the complete set of friends who drank with you (not a change list). Only on your own entry of a drink you logged. A friend added gets an entry of their own in the same occasion; one left out loses the entry you wrote for them — unless they have added to it, which is a `ConflictError`.
@@ -7415,6 +7494,29 @@ type Sake implements Item {
   favoriteCount: Int!
 
   """
+  F-154 (H-106): the reviews `friendsScore` averages — one per friend, their newest, newest first — for the Friends' ratings sheet. The friend set is resolved inside the actor from your own `friends` rows, so a non-friend's review never appears; yours is not in it. Empty for an anonymous viewer.
+  """
+  friendsReviews(
+    """
+    An `edge.cursor` from a previous page. Opaque and owned by the actor that minted it: cursors are not interchangeable between fields.
+    """
+    after: String
+
+    """**Not supported.** See `last`. Paging is forward-only."""
+    before: String
+
+    """
+    How many edges to return, 1 to 100 inclusive; defaults to 20. Over the cap is a `VALIDATION` error, not a silent clamp.
+    """
+    first: Int
+
+    """
+    **Not supported.** Present because the Relay spec puts it here; passing it is a `VALIDATION` error rather than a silently forward page. Paging is forward-only — use `first`/`after`.
+    """
+    last: Int
+  ): ItemReviewConnection!
+
+  """
   X09: the item page's taste header, Friends — the same average as `score`, over your friends' reviews only (one each, their newest; never yours). The friend set is resolved inside the actor from your own `friends` rows; nothing here names a user. `average` null with no friend reviews.
   """
   friendsScore: ItemScore!
@@ -7705,6 +7807,8 @@ type SetBrewPrefsPayload {
 union SetBrewPrefsResult = BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | SetBrewPrefsPayload | ValidationError
 
 union SetCellarItemPercentageResult = BudgetExceededError | CellarItem | ConflictError | ForbiddenError | NotFoundError | ValidationError
+
+union SetDefaultCellarPrivacyResult = BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | UserSettings | ValidationError
 
 union SetDrinkLogCompanionsResult = BudgetExceededError | ConflictError | ForbiddenError | ItemCheckIn | NotFoundError | ValidationError
 
@@ -8034,6 +8138,29 @@ type Spirit implements Item {
   How many users have favourited this item. One batched `UserActor` call per request. 0 for an anonymous viewer, who cannot read items.
   """
   favoriteCount: Int!
+
+  """
+  F-154 (H-106): the reviews `friendsScore` averages — one per friend, their newest, newest first — for the Friends' ratings sheet. The friend set is resolved inside the actor from your own `friends` rows, so a non-friend's review never appears; yours is not in it. Empty for an anonymous viewer.
+  """
+  friendsReviews(
+    """
+    An `edge.cursor` from a previous page. Opaque and owned by the actor that minted it: cursors are not interchangeable between fields.
+    """
+    after: String
+
+    """**Not supported.** See `last`. Paging is forward-only."""
+    before: String
+
+    """
+    How many edges to return, 1 to 100 inclusive; defaults to 20. Over the cap is a `VALIDATION` error, not a silent clamp.
+    """
+    first: Int
+
+    """
+    **Not supported.** Present because the Relay spec puts it here; passing it is a `VALIDATION` error rather than a silently forward page. Paging is forward-only — use `first`/`after`.
+    """
+    last: Int
+  ): ItemReviewConnection!
 
   """
   X09: the item page's taste header, Friends — the same average as `score`, over your friends' reviews only (one each, their newest; never yours). The friend set is resolved inside the actor from your own `friends` rows; nothing here names a user. `average` null with no friend reviews.
@@ -8646,6 +8773,29 @@ type Tea implements Item {
   favoriteCount: Int!
   flavorProfile: String
   form: String
+
+  """
+  F-154 (H-106): the reviews `friendsScore` averages — one per friend, their newest, newest first — for the Friends' ratings sheet. The friend set is resolved inside the actor from your own `friends` rows, so a non-friend's review never appears; yours is not in it. Empty for an anonymous viewer.
+  """
+  friendsReviews(
+    """
+    An `edge.cursor` from a previous page. Opaque and owned by the actor that minted it: cursors are not interchangeable between fields.
+    """
+    after: String
+
+    """**Not supported.** See `last`. Paging is forward-only."""
+    before: String
+
+    """
+    How many edges to return, 1 to 100 inclusive; defaults to 20. Over the cap is a `VALIDATION` error, not a silent clamp.
+    """
+    first: Int
+
+    """
+    **Not supported.** Present because the Relay spec puts it here; passing it is a `VALIDATION` error rather than a silently forward page. Paging is forward-only — use `first`/`after`.
+    """
+    last: Int
+  ): ItemReviewConnection!
 
   """
   X09: the item page's taste header, Friends — the same average as `score`, over your friends' reviews only (one each, their newest; never yours). The friend set is resolved inside the actor from your own `friends` rows; nothing here names a user. `average` null with no friend reviews.
@@ -9531,6 +9681,16 @@ type UserSearchResult {
   userId: ID!
 }
 
+"""
+The viewer's own account settings (H-119). Only the viewer can read or change them.
+"""
+type UserSettings {
+  """
+  Settings, "Who sees your cellars": the privacy a NEW cellar gets when `createCellar` is given none. Changing it never changes an existing cellar. PRIVATE until set.
+  """
+  defaultCellarPrivacy: PermissionType!
+}
+
 """Input the actor rejected before touching the database."""
 type ValidationError implements ActorError & Error {
   """
@@ -9798,6 +9958,9 @@ type Viewer {
     limit: Int
   ): ActivityEntryConnection!
   role: ViewerRole!
+
+  """The viewer's own account settings (H-119)."""
+  settings: UserSettings!
 
   """
   X16: for each of the seven list types, how many of them you have rated — what `createTierList(startFrom: RATINGS)` would start with.
@@ -10100,6 +10263,29 @@ type Wine implements Item {
   How many users have favourited this item. One batched `UserActor` call per request. 0 for an anonymous viewer, who cannot read items.
   """
   favoriteCount: Int!
+
+  """
+  F-154 (H-106): the reviews `friendsScore` averages — one per friend, their newest, newest first — for the Friends' ratings sheet. The friend set is resolved inside the actor from your own `friends` rows, so a non-friend's review never appears; yours is not in it. Empty for an anonymous viewer.
+  """
+  friendsReviews(
+    """
+    An `edge.cursor` from a previous page. Opaque and owned by the actor that minted it: cursors are not interchangeable between fields.
+    """
+    after: String
+
+    """**Not supported.** See `last`. Paging is forward-only."""
+    before: String
+
+    """
+    How many edges to return, 1 to 100 inclusive; defaults to 20. Over the cap is a `VALIDATION` error, not a silent clamp.
+    """
+    first: Int
+
+    """
+    **Not supported.** Present because the Relay spec puts it here; passing it is a `VALIDATION` error rather than a silently forward page. Paging is forward-only — use `first`/`after`.
+    """
+    last: Int
+  ): ItemReviewConnection!
 
   """
   X09: the item page's taste header, Friends — the same average as `score`, over your friends' reviews only (one each, their newest; never yours). The friend set is resolved inside the actor from your own `friends` rows; nothing here names a user. `average` null with no friend reviews.

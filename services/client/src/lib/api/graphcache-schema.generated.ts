@@ -816,6 +816,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
             type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
           },
           {
+            name: "friendsReviews",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "ItemReviewConnection" },
+            },
+          },
+          {
             name: "friendsScore",
             type: {
               kind: "NON_NULL",
@@ -1628,6 +1635,7 @@ export const graphcacheSchema: MinifiedIntrospection = {
               ofType: { kind: "INTERFACE", name: "Item" },
             },
           },
+          { name: "levelBeforeEmpty", type: { kind: "SCALAR", name: "Float" } },
           { name: "location", type: { kind: "SCALAR", name: "String" } },
           { name: "myLog", type: { kind: "OBJECT", name: "BottleLogSummary" } },
           { name: "openAt", type: { kind: "SCALAR", name: "DateTime" } },
@@ -2110,6 +2118,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
           {
             name: "favoriteCount",
             type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
+          {
+            name: "friendsReviews",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "ItemReviewConnection" },
+            },
           },
           {
             name: "friendsScore",
@@ -3784,6 +3799,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
           {
             name: "favoriteCount",
             type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
+          {
+            name: "friendsReviews",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "ItemReviewConnection" },
+            },
           },
           {
             name: "friendsScore",
@@ -5900,6 +5922,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
             type: {
               kind: "NON_NULL",
               ofType: { kind: "UNION", name: "SetCellarItemPercentageResult" },
+            },
+          },
+          {
+            name: "setDefaultCellarPrivacy",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "UNION", name: "SetDefaultCellarPrivacyResult" },
             },
           },
           {
@@ -10143,6 +10172,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
             type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
           },
           {
+            name: "friendsReviews",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "ItemReviewConnection" },
+            },
+          },
+          {
             name: "friendsScore",
             type: {
               kind: "NON_NULL",
@@ -10442,6 +10478,18 @@ export const graphcacheSchema: MinifiedIntrospection = {
           { kind: "OBJECT", name: "ConflictError" },
           { kind: "OBJECT", name: "ForbiddenError" },
           { kind: "OBJECT", name: "NotFoundError" },
+          { kind: "OBJECT", name: "ValidationError" },
+        ],
+      },
+      {
+        kind: "UNION",
+        name: "SetDefaultCellarPrivacyResult",
+        possibleTypes: [
+          { kind: "OBJECT", name: "BudgetExceededError" },
+          { kind: "OBJECT", name: "ConflictError" },
+          { kind: "OBJECT", name: "ForbiddenError" },
+          { kind: "OBJECT", name: "NotFoundError" },
+          { kind: "OBJECT", name: "UserSettings" },
           { kind: "OBJECT", name: "ValidationError" },
         ],
       },
@@ -11041,6 +11089,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
           {
             name: "favoriteCount",
             type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
+          {
+            name: "friendsReviews",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "ItemReviewConnection" },
+            },
           },
           {
             name: "friendsScore",
@@ -11772,6 +11827,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
           },
           { name: "flavorProfile", type: { kind: "SCALAR", name: "String" } },
           { name: "form", type: { kind: "SCALAR", name: "String" } },
+          {
+            name: "friendsReviews",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "ItemReviewConnection" },
+            },
+          },
           {
             name: "friendsScore",
             type: {
@@ -12824,6 +12886,20 @@ export const graphcacheSchema: MinifiedIntrospection = {
       },
       {
         kind: "OBJECT",
+        name: "UserSettings",
+        fields: [
+          {
+            name: "defaultCellarPrivacy",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "ENUM", name: "PermissionType" },
+            },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
         name: "ValidationError",
         fields: [
           {
@@ -12988,6 +13064,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
             type: {
               kind: "NON_NULL",
               ofType: { kind: "ENUM", name: "ViewerRole" },
+            },
+          },
+          {
+            name: "settings",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "UserSettings" },
             },
           },
           {
@@ -13221,6 +13304,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
           {
             name: "favoriteCount",
             type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
+          {
+            name: "friendsReviews",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "ItemReviewConnection" },
+            },
           },
           {
             name: "friendsScore",

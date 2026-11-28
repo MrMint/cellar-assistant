@@ -154,6 +154,8 @@ export const TABLE_WRITERS = {
   bar_pantry_items: "UserActor",
   recipe_favorites: "UserActor",
   friend_invites: "UserActor",
+  // B15C (H-119): account settings — the default privacy of a new cellar.
+  user_settings: "UserActor",
 
   item_onboardings: "ItemOnboardingActor",
   barcodes: "BarcodeActor",

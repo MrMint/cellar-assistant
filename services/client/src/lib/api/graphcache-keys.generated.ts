@@ -257,6 +257,7 @@ export const KEYLESS_TYPES = [
   "UserSearchConnection",
   "UserSearchEdge",
   "UserSearchResult",
+  "UserSettings",
   "ValidationError",
   "ViewerCounts",
   "WantToTryConnection",

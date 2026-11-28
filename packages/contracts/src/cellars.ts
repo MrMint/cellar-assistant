@@ -154,6 +154,12 @@ export type CellarItemDto = BottleFreshness & {
   readonly emptyAt: string | null;
   /** `numeric(0–100)`, as a number. */
   readonly percentageRemaining: number;
+  /**
+   * F-150 (H-103): the level the bottle had when it was finished — what
+   * "Put back" (`updateItem(emptyAt: null)` with no level) restores. Null
+   * when it is not finished, or was finished from 0.
+   */
+  readonly levelBeforeEmpty?: number | null;
   readonly displayImageId: string | null;
   readonly sourceType: CellarItemSource | null;
   readonly sourcePlaceId: string | null;

@@ -42,7 +42,7 @@ import type { ActorDescriptor } from "./actors.ts";
 import type { AiCapabilities } from "./ai.ts";
 import type { BarKind } from "./bar.ts";
 import type { Ctx } from "./ctx.ts";
-import type { FriendRequestStatus } from "./enums.ts";
+import type { FriendRequestStatus, PermissionType } from "./enums.ts";
 import { type ItemRef, isItemType, itemActorId } from "./items.ts";
 import type { Page, PageArgs } from "./page.ts";
 import type {
@@ -103,6 +103,19 @@ export type UserCountsDto = {
 
 export type SetAvatarInput = {
   readonly fileId: string;
+};
+
+/**
+ * H-119 / FR-21: account-level settings. `defaultCellarPrivacy` is the
+ * privacy `CellarActor.create` gives a new cellar when none is asked for;
+ * changing it never rewrites an existing cellar.
+ */
+export type UserSettingsDto = {
+  readonly defaultCellarPrivacy: PermissionType;
+};
+
+export type SetDefaultCellarPrivacyInput = {
+  readonly privacy: PermissionType;
 };
 
 /** The mutable half. Every field is optional; omitted means unchanged. */
@@ -402,6 +415,16 @@ export type UserActorInterface = {
   setAvatar(ctx: Ctx, input: SetAvatarInput): Promise<UserProfileDto>;
   /** Self only. Clears the picture; the profile falls back to `user.image`. */
   removeAvatar(ctx: Ctx): Promise<UserProfileDto>;
+  /**
+   * H-119 / FR-21. Self only, read and write: a stranger (or friend) is
+   * `ForbiddenError`. No settings row reads as PRIVATE, the column default.
+   */
+  settings(ctx: Ctx): Promise<UserSettingsDto>;
+  /** Self only. New cellars only; existing cellars keep their privacy. */
+  setDefaultCellarPrivacy(
+    ctx: Ctx,
+    input: SetDefaultCellarPrivacyInput,
+  ): Promise<UserSettingsDto>;
 
   friends(ctx: Ctx, page: PageArgs): Promise<Page<FriendDto>>;
   friendRequests(
@@ -612,6 +635,8 @@ export const UserActorDescriptor: ActorDescriptor<UserActorInterface> = {
     updateProfile: {},
     setAvatar: {},
     removeAvatar: {},
+    settings: {},
+    setDefaultCellarPrivacy: {},
     friends: {},
     friendRequests: {},
     sendFriendRequest: {},

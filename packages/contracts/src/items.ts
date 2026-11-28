@@ -463,7 +463,12 @@ export type AttachItemImageInput = {
 export type AddItemReviewInput = {
   readonly score: number;
   readonly text?: string | null;
-  /** Mint it to make the call idempotent (§8.4). */
+  /**
+   * Mint it to make the call idempotent (§8.4). F-148: the id of the
+   * viewer's own review they just deleted puts that review back with its
+   * original `createdAt` (Undo of "Remove my rating"); there is no
+   * `createdAt` input, so nothing else can backdate a review.
+   */
   readonly reviewId?: string | null;
 };
 
@@ -639,6 +644,13 @@ export type ItemActorInterface = {
    */
   friendsScore(ctx: Ctx): Promise<ItemScoreDto>;
   /**
+   * F-154 (H-106): the reviews `friendsScore` averages — one per friend,
+   * their newest, newest first — paged, for the Friends' ratings sheet. The
+   * same friend set, read the same way, so a non-friend's review never
+   * appears and the viewer's own is not in it.
+   */
+  friendsReviews(ctx: Ctx, page: PageArgs): Promise<Page<ItemReviewDto>>;
+  /**
    * UI parity G7: the viewer's own newest review of this item, or `null` —
    * the old card's gold star (`user_reviews` aggregate) and the tier-list
    * row's score. Read from the reviews this actor already holds. Anonymous is
@@ -724,6 +736,7 @@ export const ItemActorDescriptor: ActorDescriptor<ItemActorInterface> = {
     reviews: {},
     score: {},
     friendsScore: {},
+    friendsReviews: {},
     myReview: {},
     reviewBy: {},
     // Each enqueues `regenerateVector` (N08): the item's brands are part of

@@ -740,3 +740,71 @@ describe("Item.favoriteCount / Item.myReview (UI parity G6, G7)", () => {
     expect(calls.map((call) => call.method)).toEqual(["get"]);
   });
 });
+
+/* -------------------------------------------------------------------------- */
+/* F-154 (H-106): Item.friendsReviews                                          */
+/* -------------------------------------------------------------------------- */
+
+describe("Item.friendsReviews (F-154 / H-106)", () => {
+  const friendReview = {
+    id: "r2",
+    itemId: "w1",
+    itemType: "WINE",
+    userId: "22222222-2222-4222-8222-222222222222",
+    score: 3.5,
+    text: null,
+    createdAt: "2026-09-08T00:00:00.000Z",
+    updatedAt: "2026-09-08T00:00:00.000Z",
+  };
+
+  it("is the actor's friends page, as a connection", async () => {
+    const { invoke, calls } = stubSidecar({
+      "ItemActor.get": (actorId) => ITEMS[actorId as keyof typeof ITEMS],
+      "ItemActor.friendsReviews": () => ({
+        entries: [{ cursor: "offset:0", node: friendReview }],
+        hasNextPage: false,
+        hasPreviousPage: false,
+        totalCount: 1,
+      }),
+    });
+    const result = await run(
+      `{ item(type: WINE, id: "w1") { ... on QueryItemSuccess { data {
+           friendsReviews(first: 10) { totalCount edges { node { id userId score } } }
+         } } } }`,
+      testContext(invoke, viewer),
+    );
+    expect(result.errors).toBeUndefined();
+    expect(result.data?.item).toEqual({
+      data: {
+        friendsReviews: {
+          totalCount: 1,
+          edges: [
+            { node: { id: "r2", userId: friendReview.userId, score: 3.5 } },
+          ],
+        },
+      },
+    });
+    const friendCalls = calls.filter(
+      (call) => call.method === "friendsReviews",
+    );
+    expect(friendCalls).toHaveLength(1);
+    expect(friendCalls[0]).toMatchObject({ actorId: "wine:w1" });
+  });
+
+  it("anonymous: empty, with no actor call", async () => {
+    const { invoke, calls } = stubSidecar({
+      "ItemActor.get": (actorId) => ITEMS[actorId as keyof typeof ITEMS],
+    });
+    const result = await run(
+      `{ item(type: WINE, id: "w1") { ... on QueryItemSuccess { data {
+           friendsReviews(first: 10) { totalCount edges { node { id } } }
+         } } } }`,
+      testContext(invoke),
+    );
+    expect(result.errors).toBeUndefined();
+    expect(result.data?.item).toEqual({
+      data: { friendsReviews: { totalCount: 0, edges: [] } },
+    });
+    expect(calls.some((call) => call.method === "friendsReviews")).toBe(false);
+  });
+});

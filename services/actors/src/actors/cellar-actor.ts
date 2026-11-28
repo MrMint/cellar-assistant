@@ -158,6 +158,7 @@ import {
   cellarOwners,
   cellars,
   checkIns,
+  userSettings,
 } from "@cellar-assistant/db";
 import { and, eq, inArray, sql } from "@cellar-assistant/db/orm";
 import {
@@ -766,13 +767,19 @@ export class CellarActor
     }
     const name = requireName(input.name);
     const coOwnerIds = normaliseOwners(input.coOwnerIds ?? [], creator);
+    // H-119 / FR-21: no privacy given is the creator's account default
+    // (`user_settings`, UserActor's — read fresh, never cached, §1.3); no
+    // settings row is the column default, PRIVATE. Only a new cellar reads
+    // it: nothing here or anywhere rewrites an existing cellar's privacy.
+    const privacy =
+      input.privacy ?? (await this.#defaultPrivacyOf(creator)) ?? undefined;
 
     await this.tx(async (tx) => {
       await tx.insert(cellars).values({
         id: this.key,
         name,
         createdById: creator,
-        ...(input.privacy === undefined ? {} : { privacy: input.privacy }),
+        ...(privacy === undefined ? {} : { privacy }),
       });
       if (coOwnerIds.length > 0) {
         await tx
@@ -782,6 +789,14 @@ export class CellarActor
     });
     await this.reload();
     return this.#toDto(this.requireAggregate());
+  }
+
+  async #defaultPrivacyOf(userId: string): Promise<PermissionType | null> {
+    const [row] = await this.db
+      .select({ privacy: userSettings.defaultCellarPrivacy })
+      .from(userSettings)
+      .where(eq(userSettings.userId, userId));
+    return row?.privacy ?? null;
   }
 
   /**
@@ -1062,6 +1077,18 @@ export class CellarActor
     }
     if (input.emptyAt !== undefined) {
       patch.emptyAt = parseInstant(input.emptyAt, "emptyAt");
+      // F-150 (H-103): "Put back" — un-finishing a bottle — restores the
+      // level it was finished at unless the caller names one, and either
+      // way the kept level is spent.
+      if (patch.emptyAt === null && current.emptyAt !== null) {
+        if (
+          input.percentageRemaining === undefined &&
+          current.levelBeforeEmpty !== null
+        ) {
+          patch.percentageRemaining = Number(current.levelBeforeEmpty);
+        }
+        patch.levelBeforeEmpty = null;
+      }
     }
     const destination = await this.#moveDestination(ctx, input.cellarId);
     if (destination === null) return this.#patchItem(id, patch);
@@ -1123,10 +1150,15 @@ export class CellarActor
     const item = this.#requireItem(cellarItemId);
     if (item.emptyAt !== null) return toItemDto(item, null);
     const now = new Date();
+    const level = Number(item.percentageRemaining);
     return this.#patchItem(item.id, {
       emptyAt: now,
       openAt: item.openAt ?? now,
       percentageRemaining: 0,
+      // F-150 (H-103): keep the level it was finished at, so "Put back"
+      // (`updateItem(emptyAt: null)`) restores it. A bottle finished from 0
+      // keeps nothing and comes back full, as before.
+      levelBeforeEmpty: level > 0 ? level : null,
     });
   }
 
@@ -1457,6 +1489,8 @@ const toItemDto = (
   priceAmount: row.priceAmount === null ? null : Number(row.priceAmount),
   priceCurrency: row.priceCurrency,
   location: row.location,
+  levelBeforeEmpty:
+    row.levelBeforeEmpty === null ? null : Number(row.levelBeforeEmpty),
 });
 
 /**
