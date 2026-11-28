@@ -27,6 +27,8 @@ import {
 } from "./adapter";
 import { FavoritesQuery } from "./fragments";
 import { LovedSegment } from "./LovedSegment";
+import { LovedSubtitle } from "./LovedSubtitle";
+import { type LovedCounts, lovedFilterCounts } from "./loved-counts";
 
 /**
  * One loved drink as the kit's cellar tile (Shell-Me, Loved): photo or
@@ -81,6 +83,8 @@ interface FavoritesClientProps {
   /** The server's first page, for the filter it was rendered with. */
   initialPage: Page<FavoriteGridRow>;
   initialTypes: ApiItemType[];
+  /** F-135: `me.lovedCounts` for the subtitle and chips; null shows none. */
+  counts?: LovedCounts | null;
 }
 
 /**
@@ -103,6 +107,7 @@ interface FavoritesClientProps {
 export function FavoritesClient({
   initialPage,
   initialTypes,
+  counts = null,
 }: FavoritesClientProps) {
   const { types, setTypes } = useTypesFilterState();
 
@@ -144,12 +149,17 @@ export function FavoritesClient({
     <div className="flex flex-col gap-4">
       {/* Reached from the Me hub (D1): Back goes there on a cold open. */}
       <AppBar title="Loved" parent="/me" />
+      <LovedSubtitle counts={counts} />
       {/* X18: Loved holds recipes too (D9); this is the drinks half. Straight
           under the bar, where the recipes half draws it, so the segment does
           not move under the thumb when it switches halves. */}
       <LovedSegment value="drinks" />
       <div className="flex flex-row gap-4">
-        <CellarItemsFilter types={types} onTypesChange={setTypes} />
+        <CellarItemsFilter
+          types={types}
+          counts={lovedFilterCounts(counts)}
+          onTypesChange={setTypes}
+        />
       </div>
       {list.failure !== null && <ApiError error={list.failure} title="Loved" />}
       <VirtualGrid
