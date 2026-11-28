@@ -277,7 +277,7 @@ function RecapFrame({
   const shareIndex = atEnd ? cards.length : index;
   const shareAlt =
     current !== undefined
-      ? `${recapCardCopy(current).overline}: ${recapCardCopy(current).big} ${recapCardCopy(current).title.replace("\n", " ")}`
+      ? `${recapCardCopy(current).overline}: ${recapCardCopy(current).big} ${recapCardCopy(current).title.replace(/\n/g, " ")}`
       : `That’s your ${short}`;
 
   const shareButton = (label: string, className?: string) => (

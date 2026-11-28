@@ -329,7 +329,10 @@ describe("InviteSheet content (H-121, F-93)", async () => {
   test("without a share sheet, More ways is an email carrying the link", () => {
     const mail = inviteMailto(url);
     assert.match(mail, /^mailto:\?subject=Join%20me/);
-    assert.ok(decodeURIComponent(mail).includes(url));
+    assert.equal(
+      new URL(mail).searchParams.get("body"),
+      `Add me as a friend on Cellar Assistant: ${url}`,
+    );
   });
 });
 

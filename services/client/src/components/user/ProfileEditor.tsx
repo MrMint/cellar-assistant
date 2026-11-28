@@ -144,7 +144,7 @@ export function ProfileEditor({
       }}
     >
       <div className="flex flex-col items-center gap-3">
-        {preview !== null ? (
+        {preview?.startsWith("blob:") ? (
           // A local blob: next/image has nothing to optimise in it.
           // biome-ignore lint/performance/noImgElement: a blob: preview of the chosen file.
           <img
