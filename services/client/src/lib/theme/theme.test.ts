@@ -14,8 +14,8 @@ import {
   THEME_COLOR,
   THEME_SCRIPT,
   type ThemeChoice,
-  themeAttribute,
   themeCookie,
+  themeHtmlProps,
 } from "./index";
 
 const jar = (value?: string) => ({
@@ -35,12 +35,17 @@ describe("readThemeChoice (server)", () => {
     assert.equal(readThemeChoice(jar("sepia")), "phone");
     assert.equal(parseThemeChoice(""), "phone");
   });
-  test("the attribute the server renders: Phone renders dark until the script runs", () => {
-    assert.equal(themeAttribute("dark"), "dark");
-    assert.equal(themeAttribute("light"), "light");
-    assert.equal(themeAttribute("phone"), "dark");
-    assert.equal(resolveTheme("phone", true), "light");
-    assert.equal(resolveTheme("dark", true), "dark");
+  test("the server renders the choice, never data-theme (CA-1)", () => {
+    // React owns every <html> attribute the layout renders and patches it on
+    // each router.refresh(). Phone can't be resolved on the server, so a
+    // server-rendered data-theme would overwrite the pre-paint value: Light
+    // -> Phone (OS light) -> refresh went dark. data-theme is the script's
+    // and setThemeChoice's alone.
+    for (const choice of ["dark", "light", "phone"] as const) {
+      const props = themeHtmlProps(choice);
+      assert.deepEqual(props, { "data-theme-choice": choice });
+      assert.equal("data-theme" in props, false);
+    }
   });
   test("the cookie: one year, the whole site", () => {
     const c = themeCookie("light");
@@ -124,7 +129,7 @@ describe("THEME_SCRIPT (pre-paint)", () => {
     assert.equal(page.theme(), "light");
   });
 
-  test("a page with no cookie access keeps the server's attribute", () => {
+  test("a page with no cookie access does not throw (`:root` stays dark)", () => {
     assert.doesNotThrow(() =>
       new Function("document", "window", THEME_SCRIPT)({}, {}),
     );
@@ -136,9 +141,10 @@ describe("the root layout wires it", () => {
     new URL("../../app/layout.tsx", import.meta.url),
     "utf8",
   );
-  test("<html data-theme> comes from the cookie, and the script is first in <head>", () => {
+  test("<html> carries the cookie's choice but no data-theme, and the script is first in <head>", () => {
     assert.match(layout, /readThemeChoice\(await cookies\(\)\)/);
-    assert.match(layout, /data-theme=\{themeAttribute\(choice\)\}/);
+    assert.match(layout, /\{\.\.\.themeHtmlProps\(choice\)\}/);
+    assert.doesNotMatch(layout, /data-theme=/);
     assert.match(
       layout,
       /<head>\s*<script[\s\S]*?__html: THEME_SCRIPT[\s\S]*?\/>\s*<AppleSplashScreens/,
