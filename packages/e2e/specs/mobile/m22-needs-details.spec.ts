@@ -93,7 +93,7 @@ test("Needs details lists the draft, filters it, and finishes it with an Undo", 
   await expect(sheet.getByRole("button", { name: "Not now" })).toBeVisible();
 
   // Every need filled, so the Save completes the draft.
-  await sheet.getByLabel("Winery").fill("M22 Cellars");
+  await sheet.getByRole("combobox", { name: "Brand" }).fill("M22 Cellars");
   await sheet.getByLabel("Style").selectOption({ index: 1 });
   await sheet.getByLabel("Strength").fill("13.5");
   await sheet.getByRole("button", { name: "No vintage" }).click();

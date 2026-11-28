@@ -68,7 +68,7 @@ async function holdGraphql(
 const TABS = [
   {
     from: "/me",
-    tab: "Cellar",
+    tab: "Cellars",
     path: "/cellars",
     content: '[data-slot="cellar-card"]',
   },
@@ -83,7 +83,7 @@ const TABS = [
     // X10: Home is `/` ("Today"), and its search field is a link into the
     // search sheet — the shell draws it as plain text, so the link is the page.
     from: "/cellars",
-    tab: "Home",
+    tab: "Search",
     path: "/",
     content: 'a[aria-label="Search bottles, places and recipes"]',
   },
@@ -99,7 +99,10 @@ for (const { from, tab, path, content } of TABS) {
     await expect(link).toBeVisible();
     // Let the viewport prefetches land: they are what makes the shell
     // instant, and holding them is not what this measures.
-    await page.waitForLoadState("networkidle");
+    // /me keeps a request open, so the wait is bounded, not required.
+    await page
+      .waitForLoadState("networkidle", { timeout: 8_000 })
+      .catch(() => undefined);
     await holdNavigation(page, path);
 
     await link.tap();
@@ -173,7 +176,7 @@ test.describe("a place", () => {
 
   test("Love flips on the tap, before the write answers", async ({ page }) => {
     await page.goto(`/places/${place.id}`);
-    const love = page.getByRole("button", { name: /^Love(d)?$/ }).first();
+    const love = page.getByRole("button", { name: /^Love / }).first();
     await expect(love).toBeVisible({ timeout: 20_000 });
     await expect(love).toHaveAttribute("aria-pressed", "false");
 
@@ -190,7 +193,6 @@ test.describe("a place", () => {
     await expect(love).toHaveAttribute("aria-pressed", "true", {
       timeout: 1_000,
     });
-    await expect(love).toHaveText("Loved");
     expect(
       Date.now() - tappedAt,
       "the flip came before the held write could have answered",

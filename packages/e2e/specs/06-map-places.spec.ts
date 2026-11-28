@@ -140,22 +140,17 @@ test("creates a place through the form", async ({ primary }) => {
     timeout: 30_000,
   });
 
-  await primary.getByLabel("Name *").fill(placeName);
-
-  // "Categories *" is a multi-select Autocomplete grouped Venues / Retail.
-  await primary.getByLabel("Categories *").click();
-  await primary.getByRole("option", { name: "Wine Bar" }).click();
-  await primary.keyboard.press("Escape");
-
-  await primary.getByLabel("City").fill("Madison");
-  await primary.getByLabel("Country Code").fill("US");
+  // F-200 / H-139: the name is one field and the kind is a toggle; the
+  // address fields the pin filled stay as they are.
+  await primary.getByLabel("Name", { exact: true }).fill(placeName);
+  await primary.getByRole("button", { name: "Wine", exact: true }).click();
 
   const createRequest = primary.waitForRequest(
     (request) =>
       request.url().includes("/api/graphql") &&
       /mutation MapCreatePlace\b/.test(request.postData() ?? ""),
   );
-  await primary.getByRole("button", { name: "Add Place" }).click();
+  await primary.getByRole("button", { name: "Add here" }).click();
 
   // Record the id the moment it exists, before the server has done anything
   // with it (see the module doc): from here on the `afterAll` can clean up

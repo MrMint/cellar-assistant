@@ -57,13 +57,21 @@ test("a photographed label is uploaded and read honestly", async ({
     "the captured label never reached startItemOnboarding",
   ).toMatch(/^[0-9a-f-]{36}$/);
 
+  // No AI provider answers on this stack (lead ruling): the draft form opens
+  // empty with the honest "That didn't go through" alert, and the primary
+  // button waits on the floor ("N left to check") instead of reading a label.
+  await expect(primary.locator('[data-slot="draft-footer"]')).toBeVisible({
+    timeout: 120_000,
+  });
   await expect(
     primary
-      .getByRole("main")
-      .getByRole("button", { name: /^Add (bottle|to catalog)$/ }),
-  ).toBeVisible({ timeout: 120_000 });
-  await expect(
-    primary.getByRole("alert").filter({ hasText: "Nothing to read" }),
+      .getByRole("alert")
+      .filter({ hasText: "That didn\u2019t go through" })
+      .or(
+        primary
+          .getByRole("alert")
+          .filter({ hasText: "That didn't go through" }),
+      ),
     "a test pattern was read as a label",
   ).toBeVisible();
   expect(await primary.getByLabel("Name").inputValue()).toBe("");

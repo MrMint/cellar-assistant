@@ -126,18 +126,17 @@ test("adds entries to it", async ({ api, primary }) => {
     // search had even been sent.
     const results = dialog.getByRole("list", { name: "Search results" });
     await expect(results.getByRole("listitem")).toHaveCount(0);
-    await dialog
-      .getByPlaceholder("Search wines by name or description")
-      .fill(item.name);
-    // Not search-as-you-type: every query embeds the phrase first. Wait for
-    // *this* search's answer, not for text that may already be on screen.
+    // H-83: the field searches as you type (debounced), no Search button;
+    // every query still embeds the phrase first. Wait for *this* search's answer, not for text that may already be on screen.
     const searched = primary.waitForResponse(
       (response) =>
         response.url().includes("/api/graphql") &&
         /query TierListItemPicker\b/.test(response.request().postData() ?? ""),
       { timeout: 25_000 },
     );
-    await dialog.getByRole("button", { name: "Search", exact: true }).click();
+    await dialog
+      .getByPlaceholder("Search wines by name or description")
+      .fill(item.name);
     await searched;
     // Lexical retrieval (N08) brings back every "E2 Wine …" for any one of
     // their names, so pick the row that *is* this item, not the first row.
@@ -156,6 +155,16 @@ test("adds entries to it", async ({ api, primary }) => {
     // list" rows are disabled. Ticking it arms the sheet's one action.
     await row.first().getByRole("checkbox").click();
     await dialog.getByRole("button", { name: "Add 1 entry" }).click();
+    // F-175: nothing lands in Unrated unasked — an unrated pick is asked its
+    // band (an empty band needs no further questions).
+    // An empty band has nothing to compare with ("Place it" lands it); a
+    // band with an entry asks which is liked more, and Skip puts it last.
+    await primary.getByRole("radio", { name: /^Outstanding/ }).click();
+    await primary
+      .getByRole("button", { name: "Place it", exact: true })
+      .or(primary.getByRole("button", { name: /^Skip, put it at the end of / }))
+      .click();
+    await primary.getByRole("button", { name: "Done", exact: true }).click();
     // A successful add closes the dialog and refreshes the board.
     await expect(dialog).toBeHidden({ timeout: 20_000 });
   }

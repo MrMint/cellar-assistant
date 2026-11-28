@@ -10,10 +10,9 @@ import { expect, test } from "../../fixtures/mobile.ts";
  *    and back down without the sheet moving or closing. Only at scrollTop 0
  *    does a downward drag belong to the sheet.
  *
- * The sheet is the map's Filters (MapFilter is a BottomSheet on a phone,
- * L15): it needs no data, so nothing is created. The second test shortens the
- * viewport to 390×320 so even the filters every user sees overflow the sheet
- * and its body scrolls.
+ * The sheets are Map options and a cellar's Arrange (see `settleSheet`);
+ * nothing is created. The second test shortens the viewport to 390×320 so the
+ * Arrange sheet overflows and its body scrolls.
  */
 
 type Point = { x: number; y: number };
@@ -50,22 +49,52 @@ async function touchDrag(
   await cdp.detach();
 }
 
-async function openFilters(page: Page): Promise<Locator> {
-  await page.goto("/map");
-  const more = page.getByRole("button", { name: "More filters" });
-  await expect(more, "the map's filter bar never rendered").toBeVisible({
-    timeout: 30_000,
-  });
-  await more.click();
-  const sheet = page.getByRole("dialog", { name: "Filters" });
+/**
+ * The map's old Filters sheet is gone (the chips are inline now, Map board
+ * 15), so the two sheets this spec drags are the ones a phone really opens:
+ * Map options (short, no data) and the cellar list's Arrange sheet (long
+ * enough to scroll in a short viewport).
+ */
+async function settleSheet(page: Page, name: string): Promise<Locator> {
+  const sheet = page.getByRole("dialog", { name });
   await expect(sheet).toBeVisible();
-  await expect(
-    sheet,
-    "the Filters sheet should be vaul's BottomSheet",
-  ).toHaveAttribute("data-slot", "bottom-sheet");
+  await expect(sheet, "the sheet should be vaul's BottomSheet").toHaveAttribute(
+    "data-slot",
+    "bottom-sheet",
+  );
   // vaul ignores drags for its first 500 ms (the open transition).
   await page.waitForTimeout(700);
   return sheet;
+}
+
+async function openMapOptions(page: Page): Promise<Locator> {
+  await page.goto("/map");
+  const options = page.getByRole("button", { name: "Map options" });
+  await expect(options, "the map's search row never rendered").toBeVisible({
+    timeout: 30_000,
+  });
+  // The location prompt can sit over the map; set it aside.
+  const later = page.getByRole("button", { name: "Not now" });
+  if (await later.isVisible()) await later.click();
+  await options.click();
+  return settleSheet(page, "Map");
+}
+
+async function openArrange(page: Page): Promise<Locator> {
+  await page.goto("/cellars");
+  const cellar = page
+    .locator('main a[href^="/cellars/"]:not([href="/cellars/add"])')
+    .filter({ visible: true });
+  await expect(cellar.first(), "the seeded account has a cellar").toBeVisible({
+    timeout: 30_000,
+  });
+  await cellar.first().click();
+  const arrange = page.getByRole("button", { name: /^Arrange: / });
+  await expect(arrange, "the cellar list never rendered").toBeVisible({
+    timeout: 30_000,
+  });
+  await arrange.click();
+  return settleSheet(page, "Arrange");
 }
 
 const centreOf = async (locator: Locator): Promise<Point> => {
@@ -78,8 +107,8 @@ const centreOf = async (locator: Locator): Promise<Point> => {
 };
 
 test("a sheet dragged down far enough closes", async ({ page, noise }) => {
-  const sheet = await openFilters(page);
-  const title = sheet.getByRole("heading", { name: "Filters" });
+  const sheet = await openMapOptions(page);
+  const title = sheet.getByRole("heading", { name: "Map" });
   const start = await centreOf(title);
   const viewport = page.viewportSize()?.height ?? 844;
 
@@ -96,12 +125,10 @@ test("a list inside a sheet scrolls without dismissing it", async ({
   page,
   noise,
 }) => {
-  // 320 tall: the sheet caps at 90dvh (288 px), and after its title and
-  // footer the body is shorter than the filters that always render (Minimum
-  // Rating and Visit Status, 185 px). The Tier Lists section only appears for
-  // a user with tier lists, so a taller viewport made this depend on data.
+  // 320 tall: the sheet caps at 90dvh (288 px), shorter than Arrange's Show,
+  // Group and Sort lists, so the body scrolls.
   await page.setViewportSize({ width: 390, height: 320 });
-  const sheet = await openFilters(page);
+  const sheet = await openArrange(page);
   const body = sheet.locator(".overflow-y-auto").first();
   const metrics = await body.evaluate((el) => ({
     scrollHeight: el.scrollHeight,

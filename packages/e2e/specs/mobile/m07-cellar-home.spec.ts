@@ -111,7 +111,7 @@ test.beforeAll(async () => {
     if (home === undefined || cart === undefined) throw new Error("no cellars");
 
     const lapsangOpen = await add(home, "lapsang");
-    await add(home, "lapsang");
+    const lapsangTwin = await add(home, "lapsang");
     await add(home, "jasmine");
     const sencha = await add(home, "sencha");
     await add(cart, "lapsang");
@@ -135,6 +135,31 @@ test.beforeAll(async () => {
          }
        }`,
       { cellarId: home, id: lapsangOpen },
+      "openCellarItem",
+      "CellarItem",
+    );
+    // The tile's lead is whichever of the two the list order puts first
+    // (A to Z ties are not stable), so both bottles of the pair are open at
+    // 20% and the count strip and the badge read the same either way.
+    await mutate(
+      api,
+      `mutation P($cellarId: ID!, $id: ID!) {
+         setCellarItemPercentage(cellarId: $cellarId, cellarItemId: $id, percentageRemaining: 20) {
+           __typename ... on Error { message }
+         }
+       }`,
+      { cellarId: home, id: lapsangTwin },
+      "setCellarItemPercentage",
+      "CellarItem",
+    );
+    await mutate(
+      api,
+      `mutation O($cellarId: ID!, $id: ID!) {
+         openCellarItem(cellarId: $cellarId, cellarItemId: $id) {
+           __typename ... on Error { message }
+         }
+       }`,
+      { cellarId: home, id: lapsangTwin },
       "openCellarItem",
       "CellarItem",
     );
