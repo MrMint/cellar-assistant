@@ -264,3 +264,32 @@ describe("MeHub", () => {
     assert.equal(bare.split("sam@example.test").length - 1, 1);
   });
 });
+
+describe("MeStamps (H-122, F-133)", async () => {
+  const { MeStampsView } = await import("./MeStamps");
+  const stamp = (kind: string, count: number) =>
+    ({ kind, tier: 1, count }) as never;
+  const now = new Date("2026-11-27T12:00:00Z");
+
+  test('a bold "Stamps" head with the "3 of 4" count beside it', () => {
+    const markup = render(
+      <MeStampsView
+        stamps={[stamp("STYLES", 12), stamp("REGIONS", 5), stamp("RECIPES", 3)]}
+        now={now}
+      />,
+    );
+    // BOLD_LABEL: the head is t-head in ink, not the muted overline.
+    assert.match(
+      markup,
+      /data-slot="inset-section"[^>]*class="[^"]*h2\]:t-head [^"]*h2\]:text-ink"[^>]*>.*?>Stamps<\/h2>/,
+    );
+    assert.match(textOf(markup), /3 of 4/);
+    assert.equal(markup.match(/data-slot="recap-stamp"/g)?.length, 3);
+  });
+
+  test("no stamps yet: no count, the recap row says what stamps are", () => {
+    const markup = render(<MeStampsView stamps={[]} now={now} />);
+    assert.doesNotMatch(textOf(markup), /of 4/);
+    assert.match(textOf(markup), /Stamps count new styles/);
+  });
+});
