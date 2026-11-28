@@ -167,6 +167,27 @@ describe("MyRecipes — the top of the Bar (X15)", () => {
     assert.doesNotMatch(html, /Recipe d</);
   });
 
+  test("Drafts counts every draft, with Show all past the first page (F-109)", () => {
+    const rows = ["a", "b"].map((id) => ({
+      id,
+      name: `Draft ${id}`,
+      privacy: "PRIVATE",
+      isDraft: true,
+      ingredientCount: 2,
+    }));
+    const html = render(<MyRecipes rows={rows} draftsTotal={25} />);
+    assert.match(html, />Drafts 25</);
+    assert.match(html, /Show all 25/);
+  });
+
+  test("a failed drafts read says so, with Try again (F-109)", () => {
+    const html = render(<MyRecipes rows={[]} draftsFailure="You're offline" />);
+    assert.match(html, /aria-label="Your drafts"/);
+    assert.match(html, /role="alert"/);
+    assert.match(html, /Couldn(?:'|&#x27;)t load your drafts/);
+    assert.match(html, />Try again</);
+  });
+
   test("nothing at all when you have written nothing", () => {
     assert.equal(render(<MyRecipes rows={[]} />), "");
   });
