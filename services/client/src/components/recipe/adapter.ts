@@ -114,6 +114,8 @@ export type RecipeDetailsItem = {
   is_draft?: boolean;
   /** X15: the author — who may edit or delete it. */
   created_by_id?: string | null;
+  /** The author's name, for "<name>'s friends" on a share (F-108). */
+  created_by_name?: string | null;
   instructions: RecipeInstruction[];
   ingredients: RecipeIngredient[];
   /** D9: Love replaces the old heart. */
@@ -377,6 +379,7 @@ export const recipeDetailsFromNode = (
   privacy: node.privacy,
   is_draft: node.isDraft,
   created_by_id: node.createdBy?.id ?? null,
+  created_by_name: node.createdBy?.displayName ?? null,
   instructions: node.instructions.edges.map((edge) =>
     instructionFromNode(edge.node),
   ),

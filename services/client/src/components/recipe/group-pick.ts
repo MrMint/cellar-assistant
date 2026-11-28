@@ -24,10 +24,10 @@ export const shownVersion = (
   communityPickId: string | null | undefined,
   versions: readonly GroupVersionRef[],
 ): ShownVersion => {
-  if (
-    communityPickId != null &&
-    versions.some((version) => version.id === communityPickId)
-  ) {
+  // The API names the pick across every version, not just the page the
+  // caller loaded, and nulls it for a viewer who may not see it
+  // (`communityPickId`), so it needs no check against `versions` (F-107).
+  if (communityPickId != null) {
     return { id: communityPickId, isPick: true };
   }
   let original: GroupVersionRef | undefined;

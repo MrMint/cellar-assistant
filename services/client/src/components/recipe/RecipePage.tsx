@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { cache, type ReactNode } from "react";
-import { ErrorState } from "@/components/app/EmptyState";
 import { readFragment } from "@/lib/api/graphql";
 import { isNotFound, unwrapResult } from "@/lib/api/result";
 import { apiServerQuery } from "@/lib/api/urql-server";
@@ -13,6 +12,7 @@ import {
   RecipePageQuery,
 } from "./queries";
 import { RecipeDetails } from "./RecipeDetails";
+import { RecipeReadError } from "./RecipeReadError";
 
 /** One recipe read per request, for the page and its title (X21). */
 const loadRecipePage = cache((recipeId: string) =>
@@ -60,12 +60,7 @@ export async function RecipePage({
   const result = unwrapResult(data.recipe, "Recipe");
   if (!result.ok) {
     if (isNotFound(result.error)) notFound();
-    return (
-      <ErrorState
-        title="Couldn't open this recipe"
-        reason={result.error.message}
-      />
-    );
+    return <RecipeReadError reason={result.error.message} parent={parent} />;
   }
 
   const group = result.data.recipeGroup ?? null;

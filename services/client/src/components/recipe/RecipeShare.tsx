@@ -11,11 +11,26 @@ import { recipeShareBlock } from "@/lib/share/share-rules";
 export const recipeShareText = (recipeName: string): string =>
   `${recipeName}: the recipe, on Cellar Assistant`;
 
-/** Who the link opens for, under the sheet's title (Recipes-Page 07, 08). */
-export const recipeShareSubtitle = (privacy: string | undefined): string =>
-  privacy === "FRIENDS"
-    ? "Share · your friends can open it"
-    : "Share · anyone with the link";
+/**
+ * Who the link opens for, under the sheet's title (Recipes-Page 07, 08). A
+ * friends-only recipe opens for its author's friends, so someone sharing
+ * another person's recipe is told whose friends (F-108).
+ */
+export const recipeShareSubtitle = (
+  privacy: string | undefined,
+  {
+    isOwner = true,
+    authorName,
+  }: { isOwner?: boolean; authorName?: string | null } = {},
+): string => {
+  if (privacy !== "FRIENDS") return "Share · anyone with the link";
+  if (isOwner) return "Share · your friends can open it";
+  const whose =
+    authorName != null && authorName.trim() !== ""
+      ? `${authorName.trim()}’s`
+      : "the author’s";
+  return `Share · ${whose} friends can open it`;
+};
 
 /** A recipe's shared page: L2's `/share/recipes/<id>`, public when the recipe is. */
 export const recipeShareUrl = (origin: string, recipeId: string): string =>
@@ -72,12 +87,17 @@ export function RecipeShareSheet({
   recipeId,
   recipeName,
   privacy,
+  isOwner = true,
+  authorName,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   recipeId: string;
   recipeName: string;
   privacy?: string;
+  /** Whether the viewer wrote it: "your friends" only for the author. */
+  isOwner?: boolean;
+  authorName?: string | null;
 }) {
   const origin = useOrigin();
   return (
@@ -85,7 +105,7 @@ export function RecipeShareSheet({
       open={open}
       onOpenChange={onOpenChange}
       title={recipeName}
-      subtitle={recipeShareSubtitle(privacy)}
+      subtitle={recipeShareSubtitle(privacy, { isOwner, authorName })}
       url={recipeShareUrl(origin, recipeId)}
     />
   );
