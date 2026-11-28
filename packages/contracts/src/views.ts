@@ -119,21 +119,23 @@ export type MapPlace = {
    */
   readonly reviewStatus: PlaceReviewStatus;
   /**
-   * F-82 (the owner's pin layer). `places.review_count`: how many ratings
+   * F-82 (the owner's pin layer). Optional only so marker fixtures written
+   * before it stay valid; `MapActor` always sets all three.
+   * `places.review_count`: how many ratings
    * `rating` stands on — `0` when none.
    */
-  readonly ratingCount: number;
+  readonly ratingCount?: number;
   /**
    * F-82: the viewer's own best band (0–5) for this place across every tier
    * list they created, or null when it is on none of theirs (and always for
    * an anonymous viewer). Another person's band never reaches this field.
    */
-  readonly myBand: number | null;
+  readonly myBand?: number | null;
   /**
    * F-82: the place's first mirrored Google photo (lowest `display_order`
    * with stored bytes), as a `FileActor` id — the API resolves it to a URL.
    */
-  readonly photoFileId: string | null;
+  readonly photoFileId?: string | null;
 };
 
 /** One cluster bubble: a position and a count, and nothing else is drawn. */

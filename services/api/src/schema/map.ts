@@ -120,13 +120,15 @@ const MapPlaceType = builder.objectRef<MapPlace>("MapPlace").implement({
         "markers, never clustered — and appear on nobody else's map.",
       resolve: (place) => reviewStatusOut(place.reviewStatus),
     }),
-    ratingCount: t.exposeInt("ratingCount", {
+    ratingCount: t.int({
+      resolve: (place) => place.ratingCount ?? 0,
       description:
         "F-82: how many ratings `rating` stands on (`places.review_count`); " +
         "0 when none.",
     }),
-    myBand: t.exposeInt("myBand", {
+    myBand: t.int({
       nullable: true,
+      resolve: (place) => place.myBand ?? null,
       description:
         "F-82: the viewer's own best band (0–5) for this place across the " +
         "tier lists they created — the owner's pin rank. Null when it is on " +
@@ -140,7 +142,7 @@ const MapPlaceType = builder.objectRef<MapPlace>("MapPlace").implement({
         "marker that selects it, so ask for `photo { url }` only on the pins " +
         "or rows you draw a photo for.",
       resolve: (place, _args, context) =>
-        place.photoFileId === null
+        place.photoFileId === null || place.photoFileId === undefined
           ? null
           : context.actor(FileActorDescriptor, place.photoFileId).get(),
     }),
