@@ -2,11 +2,14 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useClient, useQuery } from "urql";
+import { More } from "@/components/app/icons";
 import { Link } from "@/components/app/Link";
+import { GlassDisc } from "@/components/app/overlays/GlassDisc";
 import type { ApiItemType } from "@/components/cellar-api/itemTypes";
 import { itemPageHref } from "./adapter";
 import { ItemPageQuery } from "./fragments";
 import { ItemPageView } from "./ItemPageView";
+import { ItemMenu } from "./parts/ItemMenu";
 import { type ItemPageData, loadItemPageData } from "./parts/load-item-page";
 import { PaneRefreshProvider, paneQuery } from "./parts/pane-refresh";
 
@@ -15,7 +18,16 @@ export type ItemPaneProps = {
   itemType: ApiItemType;
   /** The cellar the pane opened from, when it opened from one. */
   cellarId?: string;
+  /**
+   * H-115: the item's read, when the pane's owner lifted it (so `⋯` in the
+   * desktop pane's own glass discs, `ItemPaneMenu`, shares it). Without one
+   * the pane reads for itself and keeps its own `⋯`.
+   */
+  source?: ItemPaneSource;
 };
+
+/** What the pane reads: its state, and the re-run a write calls. */
+export type ItemPaneSource = { state: State; refresh: () => void };
 
 type State =
   | { phase: "loading" }
@@ -23,13 +35,14 @@ type State =
   | { phase: "ready"; data: ItemPageData };
 
 /**
- * The item's body inside the desktop pane (MC-panes, L32): the item page's
- * own sections (`ItemPageView`, `pane`) at pane width — no bar and no bleed,
- * the menu as a plain `⋯` — read in the browser with urql's `useQuery` and
- * the page's own loader (`loadItemPageData`), so the pane and the page never
- * disagree. C1 mounts it in F2a's `DesktopPane`.
+ * The item's read for the pane, lifted so a menu beside the pane can use it
+ * (H-115). `pause` keeps a pane that was handed a source from reading twice.
  */
-export function ItemPane({ itemId, itemType, cellarId }: ItemPaneProps) {
+export function useItemPaneSource(
+  itemId: string,
+  itemType: ApiItemType,
+  pause = false,
+): ItemPaneSource {
   // urql's own hook, so only the answer for the current item lands (the
   // no-to-promise rule). F-156: the lists then read past their first 100
   // through the same client (`paneQuery`; a stale answer is dropped by
@@ -40,6 +53,7 @@ export function ItemPane({ itemId, itemType, cellarId }: ItemPaneProps) {
     query: ItemPageQuery,
     variables: { itemId, type: itemType },
     requestPolicy: "cache-and-network",
+    pause,
   });
   const [state, setState] = useState<State>({ phase: "loading" });
   const refresh = useCallback(
@@ -76,10 +90,37 @@ export function ItemPane({ itemId, itemType, cellarId }: ItemPaneProps) {
     };
   }, [client, data, error, itemId, itemType]);
 
+  return { state, refresh };
+}
+
+/**
+ * The item's body inside the desktop pane (MC-panes, L32): the item page's
+ * own sections (`ItemPageView`, `pane`) at pane width — no bar and no bleed,
+ * the menu as a plain `⋯` — read in the browser with urql's `useQuery` and
+ * the page's own loader (`loadItemPageData`), so the pane and the page never
+ * disagree. C1 mounts it in F2a's `DesktopPane`.
+ */
+export function ItemPane({
+  itemId,
+  itemType,
+  cellarId,
+  source,
+}: ItemPaneProps) {
+  const own = useItemPaneSource(itemId, itemType, source !== undefined);
+  const { state, refresh } = source ?? own;
   if (state.phase === "ready") {
     return (
       <PaneRefreshProvider value={refresh}>
-        <div data-testid="item-pane">
+        <div
+          data-testid="item-pane"
+          // H-115: with the menu in the pane's discs, ItemTop's own `⋯` row
+          // (the first child of the pane body) is not drawn.
+          className={
+            source === undefined
+              ? undefined
+              : "[&_[data-testid=item-pane-body]>:first-child]:hidden"
+          }
+        >
           <ItemPageView
             {...state.data}
             selected={null}
@@ -116,5 +157,43 @@ export function ItemPane({ itemId, itemType, cellarId }: ItemPaneProps) {
         </>
       )}
     </div>
+  );
+}
+
+/**
+ * H-115: the item's `⋯` as a glass disc for `DesktopPane`'s `more` slot,
+ * with the item's menu, from the read the pane's owner lifted.
+ */
+export function ItemPaneMenu({ source }: { source: ItemPaneSource }) {
+  const [open, setOpen] = useState(false);
+  const { state, refresh } = source;
+  const data = state.phase === "ready" ? state.data : null;
+  return (
+    <>
+      <GlassDisc
+        aria-label="More actions"
+        aria-haspopup="dialog"
+        disabled={data === null}
+        onClick={() => setOpen(true)}
+      >
+        <More aria-hidden />
+      </GlassDisc>
+      {data !== null && (
+        <PaneRefreshProvider value={refresh}>
+          <ItemMenu
+            open={open}
+            onOpenChange={setOpen}
+            itemId={data.item.itemId}
+            itemType={data.item.type}
+            itemName={data.item.name}
+            editHref={data.editHref}
+            addableCellars={data.addableCellars}
+            held={data.bottles.length}
+            selected={null}
+            myReview={data.item.myReview}
+          />
+        </PaneRefreshProvider>
+      )}
+    </>
   );
 }

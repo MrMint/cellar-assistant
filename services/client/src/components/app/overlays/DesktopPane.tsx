@@ -4,7 +4,7 @@ import { motion, useReducedMotion } from "motion/react";
 import { type ReactNode, useEffect, useLayoutEffect, useRef } from "react";
 import { distance, tween } from "@/lib/motion";
 import { cn } from "@/lib/utils";
-import { ChevronDown, ChevronUp, Close, Expand } from "../icons";
+import { ChevronLeft, ChevronRight, Close, Expand } from "../icons";
 import { GlassDisc } from "./GlassDisc";
 import { useOverlayLayer } from "./layers";
 
@@ -28,7 +28,7 @@ export type DesktopPaneProps = {
 /**
  * The desktop pane (KIT § 3; kit-desktop): 440 wide beside the grid,
  * replacing the quick look from `md` up. A 320 photo with glass discs (close,
- * up, down on the left; expand, more on the right), then the owner's body.
+ * previous, next (left, right) on the left; expand, more on the right), then the owner's body.
  * Esc or back closes it when it is on top, and focus goes back to the tile
  * it opened from. The owner places it in its row (C1, P1).
  */
@@ -88,14 +88,14 @@ export function DesktopPane({
             disabled={onPrevious === undefined}
             onClick={onPrevious}
           >
-            <ChevronUp aria-hidden />
+            <ChevronLeft aria-hidden />
           </GlassDisc>
           <GlassDisc
             aria-label="Next"
             disabled={onNext === undefined}
             onClick={onNext}
           >
-            <ChevronDown aria-hidden />
+            <ChevronRight aria-hidden />
           </GlassDisc>
           <span className="flex-1" />
           {onExpand !== undefined && (

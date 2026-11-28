@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/popover";
 import { Spinner } from "@/components/ui/spinner";
 import { unwrapResult } from "@/lib/api/result";
+import { feedback } from "@/lib/feedback";
 import { cn } from "@/lib/utils";
 
 type BrandOption = {
@@ -33,6 +34,8 @@ interface BrandPickerProps {
   value: string;
   onChange: (brandName: string) => void;
   disabled?: boolean;
+  /** H-134: the field's label; "Brand" unless it names something else. */
+  label?: string;
 }
 
 /**
@@ -55,7 +58,12 @@ interface BrandPickerProps {
  * where free solo keeps what was typed, and it renders a `<label>` of its
  * own beside the field's.
  */
-export function BrandPicker({ value, onChange, disabled }: BrandPickerProps) {
+export function BrandPicker({
+  value,
+  onChange,
+  disabled,
+  label = "Brand",
+}: BrandPickerProps) {
   const id = useId();
   const inputId = `${id}-input`;
   const listId = `${id}-list`;
@@ -149,7 +157,7 @@ export function BrandPicker({ value, onChange, disabled }: BrandPickerProps) {
       data-disabled={disabled ? true : undefined}
       className="gap-2 text-foreground"
     >
-      <FieldLabel htmlFor={inputId}>Brand</FieldLabel>
+      <FieldLabel htmlFor={inputId}>{label}</FieldLabel>
       <Popover
         open={listOpen}
         onOpenChange={(next) => {
@@ -257,6 +265,19 @@ export function BrandPicker({ value, onChange, disabled }: BrandPickerProps) {
         <FieldDescription id={noteId}>
           “{trimmedInput}” will be added as a new brand.
         </FieldDescription>
+      )}
+      {showNewBrandNote && options.length === 0 && !disabled && (
+        // H-134: no brand matched, so the way back is one tap.
+        <button
+          type="button"
+          onClick={() => {
+            feedback("tick");
+            clear();
+          }}
+          className="t-body min-h-11 self-start rounded-md text-act-ink outline-none focus-visible:outline-2 focus-visible:outline-act-ink focus-visible:outline-offset-2"
+        >
+          Clear search
+        </button>
       )}
     </Field>
   );
