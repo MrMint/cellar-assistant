@@ -76,6 +76,15 @@ export const FriendTierListRowFragment = graphql(`
     name
     itemCount
     privacy
+    listType
+    bands: items(first: 25) {
+      edges {
+        node {
+          id
+          band
+        }
+      }
+    }
   }
 `);
 
@@ -292,3 +301,15 @@ export const PersonQuery = graphql(
 `,
   [ActorErrorFieldsFragment],
 );
+
+/** F-94: "Friend of …" on a profile you may not open. */
+export const MutualFriendsQuery = graphql(`
+  query MutualFriends($userId: ID!) {
+    mutualFriends(userId: $userId) {
+      count
+      first {
+        displayName
+      }
+    }
+  }
+`);

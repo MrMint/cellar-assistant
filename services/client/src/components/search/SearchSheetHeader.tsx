@@ -46,6 +46,17 @@ export function SearchSheetHeader() {
   );
 }
 
+/**
+ * `/search`'s heading (F-103, FR-2): the shell shows the tab bar here now,
+ * and Recipes-Search draws no top bar and no Close, so the page's one h1 is
+ * for screen readers only at every width. `SearchSheetHeader` above is no
+ * longer mounted; its Close is retired with the sheet (hand-off: remove it
+ * and its `home-markup.test.tsx` case).
+ */
+export function SearchHeading() {
+  return <h1 className="sr-only">Search</h1>;
+}
+
 /** What an empty search sheet says: what the box looks through. */
 export function SearchHint() {
   return (

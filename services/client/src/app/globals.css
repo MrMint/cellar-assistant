@@ -12,8 +12,7 @@
  * - `@theme inline` maps them onto shadcn's semantic names and the app's own
  *   roles, which is what makes `bg-primary`, `text-ink-3`, `bg-surface-1` …
  * - NAMING TRAP: shadcn's `accent` is the hover/pressed surface, NOT the
- *   action colour. Action is `primary` (or `act`), teal. `brass` is a shim
- *   onto gold until its last use is gone (L27).
+ *   action colour. Action is `primary` (or `act`), teal.
  */
 @import "tailwindcss";
 @import "tw-animate-css";
@@ -216,10 +215,6 @@
   --color-ink-1: var(--ca-ink-1);
   --color-ink-2: var(--ca-ink-2);
   --color-ink-3: var(--ca-ink-3);
-  /* Shim (L27): stars stay gold while the action fill turns teal. Goes when
-     the last *-brass use does. */
-  --color-brass: var(--ca-gold);
-  --color-on-brass: var(--ca-on-accent);
   --color-brand: var(--ca-brand);
   --color-brand-ink: var(--ca-brand-ink);
   --color-ai: var(--ca-ai);

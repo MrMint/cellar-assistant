@@ -8,8 +8,11 @@ import {
   Ranked,
 } from "@/components/app/icons";
 import { Link } from "@/components/app/Link";
+import { TypeGlyph } from "@/components/app/TypeChip";
 import { ApiError } from "@/components/cellar-api/ApiError";
+import type { ApiItemType } from "@/components/cellar-api/itemTypes";
 import { CloneTierListButton } from "@/components/taste/CloneTierListButton";
+import { BandStrip } from "@/components/tier-list/lists/ListCard";
 import { Button } from "@/components/ui/button";
 import type { Page } from "@/lib/paging/paged-connection";
 import {
@@ -154,11 +157,18 @@ export function FriendTierLists({
       <ul className="flex flex-col gap-2">
         {paged.rows.map((row) => (
           <li key={row.id} className={CARD}>
-            <Ranked
-              aria-hidden
-              strokeWidth={ICON_STROKE}
-              className="size-5 shrink-0 text-glyph"
-            />
+            {row.listType !== undefined && isItemType(row.listType) ? (
+              <TypeGlyph
+                type={row.listType.toUpperCase() as ApiItemType}
+                className="size-5"
+              />
+            ) : (
+              <Ranked
+                aria-hidden
+                strokeWidth={ICON_STROKE}
+                className="size-5 shrink-0 text-glyph"
+              />
+            )}
             <span className="flex min-w-0 flex-1 flex-col">
               <Link
                 href={row.href}
@@ -173,6 +183,9 @@ export function FriendTierLists({
                   {row.description}
                 </span>
               )}
+              {row.strip !== undefined && (
+                <BandStrip strip={row.strip} className="mt-1.5" />
+              )}
             </span>
             <span className="relative z-10 shrink-0">
               <CloneTierListButton tierListId={row.id} name={row.name} />
@@ -184,6 +197,16 @@ export function FriendTierLists({
     </ProfileSection>
   );
 }
+
+const KINDS: readonly string[] = [
+  "wine",
+  "beer",
+  "spirit",
+  "sake",
+  "coffee",
+  "tea",
+];
+const isItemType = (value: string) => KINDS.includes(value.toLowerCase());
 
 /** Their cellars you may open, 20 at a time. */
 export function FriendCellars({

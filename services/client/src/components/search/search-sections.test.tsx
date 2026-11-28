@@ -278,7 +278,12 @@ describe("SearchSections", () => {
                 key: "u1",
                 title: "Alberta",
                 thumb: { kind: "avatar", url: null, name: "Alberta" },
-                person: { userId: "u1", name: "Alberta", relation: "NONE" },
+                person: {
+                  userId: "u1",
+                  name: "Alberta",
+                  relation: "NONE",
+                  requestId: null,
+                },
               },
               {
                 key: "u2",
@@ -288,6 +293,7 @@ describe("SearchSections", () => {
                   userId: "u2",
                   name: "Alonzo",
                   relation: "REQUEST_SENT",
+                  requestId: "req-2",
                 },
               },
               {
@@ -298,6 +304,7 @@ describe("SearchSections", () => {
                   userId: "u3",
                   name: "Alma",
                   relation: "REQUEST_RECEIVED",
+                  requestId: "req-3",
                 },
               },
             ],

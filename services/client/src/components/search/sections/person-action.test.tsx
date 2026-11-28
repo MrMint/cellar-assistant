@@ -1,7 +1,9 @@
 /**
- * A person row's Cancel request (Recipes-Search 26; KIT § 4 "Toast or
- * confirm"; F-97): it acts at once, says so in a toast, and the toast's Undo
- * sends the request again. urql, the request lookup and the toast are stood in.
+ * A person row's actions (Recipes-Search 25–28; KIT § 4 "Toast or confirm"):
+ * Cancel request is held until its Undo toast closes, through
+ * `friend/undoable-write` (F-97, H-91), so Undo sends nothing; Cancel and
+ * Accept use the row's own `pendingRequestId` with no lookup (F-105). urql
+ * and the toast are stood in.
  */
 import { mock } from "bun:test";
 import assert from "node:assert/strict";
@@ -24,13 +26,22 @@ window.matchMedia = ((query: string) => ({
 })) as unknown as typeof window.matchMedia;
 
 const calls: { name: string; variables: unknown }[] = [];
-const toasts: { message: string; undo?: () => void }[] = [];
+type Toast = {
+  message: string;
+  undo?: () => void;
+  onAutoClose?: () => void;
+  onClose?: () => void;
+};
+const toasts: Toast[] = [];
 const ok: Record<string, unknown> = {
   SendFriendRequest: {
     sendFriendRequest: { __typename: "FriendRequest", id: "r-again" },
   },
   RejectFriendRequestAction: {
     rejectFriendRequest: { __typename: "RejectFriendRequestPayload" },
+  },
+  AcceptFriendRequestAction: {
+    acceptFriendRequest: { __typename: "AcceptFriendRequestPayload" },
   },
 };
 
@@ -52,15 +63,9 @@ mock.module("urql", () => ({
     ];
   },
 }));
-mock.module("./person-requests", () => ({
-  usePendingRequest: (direction: string | null) => ({
-    id: direction === null ? null : "r-1",
-    fetching: false,
-  }),
-}));
 mock.module("@/components/app/notify", () => ({
-  notify: (message: string, options: { undo?: () => void } = {}) => {
-    toasts.push({ message, undo: options.undo });
+  notify: (message: string, options: Omit<Toast, "message"> = {}) => {
+    toasts.push({ message, ...options });
     return message;
   },
   dismissNotification: () => {},
@@ -105,29 +110,85 @@ const settle = async (run: () => void) => {
   });
 };
 
-describe("PersonAction · Cancel request (F-97)", () => {
-  test("cancel says so in a toast whose Undo sends the request again", async () => {
+describe("PersonAction · Cancel request (F-97, H-91)", () => {
+  test("Cancel is held: the row turns at once, Undo sends nothing", async () => {
     await act(async () =>
       root.render(
-        <PersonAction userId="u-5" name="Demo Five" relation="REQUEST_SENT" />,
+        <PersonAction
+          userId="u-5"
+          name="Demo Five"
+          relation="REQUEST_SENT"
+          requestId="r-1"
+        />,
       ),
     );
     await settle(() => button("Cancel the request to Demo Five").click());
 
-    assert.deepEqual(calls, [
-      { name: "RejectFriendRequestAction", variables: { requestId: "r-1" } },
-    ]);
+    assert.deepEqual(calls, []);
     const [toast] = toasts;
     assert.equal(toast?.message, "Request to Demo Five canceled");
-    assert.equal(typeof toast?.undo, "function");
     assert.ok(button("Add Demo Five as a friend"));
 
     await settle(() => toast?.undo?.());
-    assert.deepEqual(calls.at(-1), {
-      name: "SendFriendRequest",
-      variables: { userId: "u-5" },
-    });
+    assert.deepEqual(calls, []);
     assert.ok(button("Cancel the request to Demo Five"));
+    // The toast closing after its Undo sends nothing either.
+    await settle(() => toast?.onClose?.());
+    assert.deepEqual(calls, []);
+  });
+
+  test("the cancel goes when its toast closes, with the row's own id", async () => {
+    await act(async () =>
+      root.render(
+        <PersonAction
+          userId="u-7"
+          name="Demo Seven"
+          relation="REQUEST_SENT"
+          requestId="r-7"
+        />,
+      ),
+    );
+    await settle(() => button("Cancel the request to Demo Seven").click());
+    await settle(() => toasts[0]?.onAutoClose?.());
+    assert.deepEqual(calls, [
+      { name: "RejectFriendRequestAction", variables: { requestId: "r-7" } },
+    ]);
+  });
+
+  test("leaving the page sends a cancel still held", async () => {
+    await act(async () =>
+      root.render(
+        <PersonAction
+          userId="u-8"
+          name="Demo Eight"
+          relation="REQUEST_SENT"
+          requestId="r-8"
+        />,
+      ),
+    );
+    await settle(() => button("Cancel the request to Demo Eight").click());
+    await act(async () => root.render(<span />));
+    await act(async () => new Promise((r) => setTimeout(r, 20)));
+    assert.deepEqual(calls, [
+      { name: "RejectFriendRequestAction", variables: { requestId: "r-8" } },
+    ]);
+  });
+
+  test("Add friend while a cancel is held takes it back, no write", async () => {
+    await act(async () =>
+      root.render(
+        <PersonAction
+          userId="u-9"
+          name="Demo Nine"
+          relation="REQUEST_SENT"
+          requestId="r-9"
+        />,
+      ),
+    );
+    await settle(() => button("Cancel the request to Demo Nine").click());
+    await settle(() => button("Add Demo Nine as a friend").click());
+    assert.deepEqual(calls, []);
+    assert.ok(button("Cancel the request to Demo Nine"));
   });
 
   test("Undo on Add's toast cancels without a second undo toast", async () => {
@@ -140,7 +201,41 @@ describe("PersonAction · Cancel request (F-97)", () => {
     const [sent] = toasts;
     assert.equal(sent?.message, "Request sent to Demo Six");
     await settle(() => sent?.undo?.());
-    assert.equal(calls.at(-1)?.name, "RejectFriendRequestAction");
+    assert.deepEqual(calls.at(-1), {
+      name: "RejectFriendRequestAction",
+      variables: { requestId: "r-again" },
+    });
     assert.equal(toasts.length, 1);
+  });
+});
+
+describe("PersonAction · Accept (F-105)", () => {
+  test("accepts the row's own pendingRequestId, with no lookup", async () => {
+    await act(async () =>
+      root.render(
+        <PersonAction
+          userId="u-3"
+          name="Demo Three"
+          relation="REQUEST_RECEIVED"
+          requestId="r-3"
+        />,
+      ),
+    );
+    await settle(() => button("Accept Demo Three's request").click());
+    assert.deepEqual(calls, [
+      { name: "AcceptFriendRequestAction", variables: { requestId: "r-3" } },
+    ]);
+  });
+
+  test("no id on the row: Cancel and Accept cannot be tapped", async () => {
+    await act(async () =>
+      root.render(
+        <PersonAction userId="u-4" name="Demo Four" relation="REQUEST_SENT" />,
+      ),
+    );
+    assert.equal(
+      button("Cancel the request to Demo Four").hasAttribute("disabled"),
+      true,
+    );
   });
 });

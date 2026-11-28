@@ -13,6 +13,7 @@
  * action would have to forward `Set-Cookie` by hand.
  */
 
+import { CircleAlert } from "lucide-react";
 import { type FormEvent, useCallback, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { buttonVariants } from "@/components/ui/button-variants";
@@ -49,6 +50,17 @@ import { useLanding } from "./useLanding";
  *     so the form is for a minority and is not the first thing on the page.
  *   - `disabled` — social buttons and the note for former password users.
  */
+/** The server says "Invalid email or password"; the board says it plainly
+ * and leaves both labels neutral (the glyph and the words carry the error). */
+function signInErrorLine(
+  error: { message: string; code?: string } | null,
+): string | null {
+  if (error === null) return null;
+  return error.code === "INVALID_EMAIL_OR_PASSWORD"
+    ? "That email and password don't match"
+    : error.message;
+}
+
 export function SignInApiClient({
   returnTo,
   passwordMode = "enabled",
@@ -84,7 +96,7 @@ export function SignInApiClient({
 
   const submitting = pending || landing;
   const busy = submitting || redirectingTo !== null;
-  const formError = error?.message ?? null;
+  const formError = signInErrorLine(error ?? null);
 
   const passwordForm = (
     <form onSubmit={handleSubmit} className="flex flex-col gap-4">
@@ -95,7 +107,7 @@ export function SignInApiClient({
         name="email"
         autoComplete="email"
         required
-        invalid={formError !== null}
+        aria-invalid={formError !== null || undefined}
         disabled={busy}
       />
       <AuthField
@@ -105,8 +117,18 @@ export function SignInApiClient({
         name="password"
         autoComplete="current-password"
         required
-        invalid={formError !== null}
-        message={formError}
+        aria-invalid={formError !== null || undefined}
+        description={
+          formError === null ? undefined : (
+            <span
+              role="alert"
+              className="flex items-center gap-1.5 text-destructive"
+            >
+              <CircleAlert aria-hidden className="size-4 shrink-0" />
+              {formError}
+            </span>
+          )
+        }
         disabled={busy}
       />
       <Button type="submit" disabled={busy} aria-busy={submitting || undefined}>

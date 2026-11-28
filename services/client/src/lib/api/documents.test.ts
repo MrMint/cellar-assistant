@@ -88,6 +88,7 @@ import * as recipeEditorDocuments from "@/components/recipe/editor/documents";
 import * as recipeFragments from "@/components/recipe/fragments";
 import * as recipeQueries from "@/components/recipe/queries";
 import * as searchQueries from "@/components/search/queries";
+import * as recipeSpiritChips from "@/components/search/recipe-spirit-chips";
 import * as universalSearch from "@/components/search/universal-search";
 import { SECTION_LIMITS } from "@/components/search/universal-search";
 import * as shareQueries from "@/components/share/queries";
@@ -143,6 +144,7 @@ const MODULES: Readonly<Record<string, Record<string, unknown>>> = {
   "components/recipe/fragments.ts": recipeFragments,
   "components/recipe/queries.ts": recipeQueries,
   "components/search/queries.ts": searchQueries,
+  "components/search/recipe-spirit-chips.ts": recipeSpiritChips,
   "components/search/universal-search.ts": universalSearch,
   "components/share/queries.ts": shareQueries,
   "components/taste/compare/queries.ts": tasteCompareQueries,
