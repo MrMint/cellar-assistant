@@ -38,6 +38,7 @@ const draft = {
   backLabelImageId: null,
   defaults: null,
   rawDefaults: null,
+  detectedItemType: null,
   aiModel: null,
   confidence: null,
   lastReprocessResult: null,
@@ -307,5 +308,29 @@ describe("Item.unconfirmedFields (SV-B)", () => {
     expect(result.errors).toBeUndefined();
     expect(result.data?.item).toEqual({ data: { unconfirmedFields: [] } });
     expect(calls.filter((c) => c.method === "unconfirmedFields")).toEqual([]);
+  });
+});
+
+describe("ItemOnboarding.detectedItemType (F-77)", () => {
+  it("answers the kind the label read found", async () => {
+    const { invoke } = stubSidecar({
+      "ItemOnboardingActor.saveDraft": () => ({
+        ...draft,
+        detectedItemType: "BEER",
+      }),
+    });
+    const result = await run(
+      `mutation { saveDraft(input: {
+        onboardingId: "${ONBOARDING_ID}", cellarId: "${CELLAR_ID}",
+        fields: { name: "x" }, confirmedFields: ["name"], vintageAnswer: NON_VINTAGE
+      }) { __typename ... on ItemOnboarding { itemType detectedItemType } } }`,
+      testContext(invoke, viewer),
+    );
+    expect(result.errors).toBeUndefined();
+    expect(result.data?.saveDraft).toEqual({
+      __typename: "ItemOnboarding",
+      itemType: "WINE",
+      detectedItemType: "BEER",
+    });
   });
 });

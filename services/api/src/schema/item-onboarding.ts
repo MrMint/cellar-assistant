@@ -92,6 +92,16 @@ export const ItemOnboardingType = builder
         resolve: (onboarding) =>
           onboarding.defaults === null ? null : JSON.parse(onboarding.defaults),
       }),
+      detectedItemType: t.field({
+        type: ItemTypeEnum,
+        nullable: true,
+        description:
+          "F-77: the kind the label read says this label is for, or null " +
+          "when it named none. When it differs from `itemType`, `defaults` " +
+          "is empty and the client can read the label again as this kind — " +
+          "the kind follows the shot.",
+        resolve: (onboarding) => onboarding.detectedItemType,
+      }),
       aiModel: t.exposeString("aiModel", { nullable: true }),
       confidence: t.exposeFloat("confidence", {
         nullable: true,
