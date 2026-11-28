@@ -230,6 +230,7 @@ check "order: config hashes are 16 hex" eq "$(grep -cE '^(OTEL_LGTM|DAPR)_CONFIG
 check "order: hash matches the workflow's function" eq "$(grep '^DAPR_CONFIG_HASH=' "$D/state/release.env" | cut -d= -f2)" \
   "$(cd "$D/releases/$C2" && find infra/dapr -type f ! -name '*.md' -print0 | LC_ALL=C sort -z | xargs -0 sha256sum | sha256sum | cut -c1-16)"
 check "order: state/current is the release" eq "$(cd "$D/state/current" && pwd -P)" "$(cd "$D/releases/$C2" && pwd -P)"
+check "export: the release tree is readable by the image's USER (not 0700)" eq "$(find "$D/releases/$C2" ! -perm -o=r | wc -l | tr -d ' ')" 0
 check "order: a hand-made src directory is left alone" test ! -L "$D/src"
 check "order: status says deployed" eq "$(st .check.outcome)/$(st .last_attempt.result)/$(st .last_success.sha)" "deployed/ok/$C2"
 check "order: log file written" has "$D/logs/pull-deploy.log" "deployed $C2"

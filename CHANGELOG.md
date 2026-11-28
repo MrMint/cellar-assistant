@@ -2,6 +2,78 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## 1.0.0 (2026-11-28)
+
+
+### Features
+
+* **actors:** per-user AI period cap, myQuota, and requestInsights (SV-A) ([b378d34](https://github.com/MrMint/cellar-assistant/commit/b378d343b2c58611d50b8ad348a19a7d1f8f1a8b))
+* **api:** myAiQuota and requestTierListInsights, BUDGET_USER_CAPS period grammar, quota demo seed (SV-A) ([8e79f4d](https://github.com/MrMint/cellar-assistant/commit/8e79f4d6439b6019c76a7f7adcf5f85a2810a8e2))
+* **api:** saveDraft, needsDetails connection, needsDetailsCount, Item.unconfirmedFields (SV-B MC-drafts) ([b4c0e41](https://github.com/MrMint/cellar-assistant/commit/b4c0e413ee4102eb9e0a5709e7a6745361637f46))
+* **auth:** Shell-Entry sign-in and sign-up — providers first, Show toggle, Create an account ([fa64f61](https://github.com/MrMint/cellar-assistant/commit/fa64f6105ffb8803cd9854f8648c29dd6b8c5ee6))
+* **cellars:** move a bottle to another cellar with updateCellarItem(cellarId) (SV-B, MC-move) ([087b06f](https://github.com/MrMint/cellar-assistant/commit/087b06ff1d10a5f26a74c281b8fc3c6a74e30124))
+* **client:** kit tokens in dark and light, the theme setting, Inter only ([07b4d70](https://github.com/MrMint/cellar-assistant/commit/07b4d70ac00ccdad4cd45a2f79864946d8bea5f0))
+* **client:** motion tokens, lib/feedback (haptics + sound) and the sounds offline ([8442e8b](https://github.com/MrMint/cellar-assistant/commit/8442e8b23ffa25dd8a7e70f993780b3b3cb2b703))
+* **crumbs:** the first crumb names the rail item (Search for /) ([66c0eec](https://github.com/MrMint/cellar-assistant/commit/66c0eec9b992c9c1f2420e026b53b335a902573f))
+* **dev:** bun run dev:seed:demo — a large synthetic demo dataset ([987681b](https://github.com/MrMint/cellar-assistant/commit/987681bc957e17e1beeb4fcdbffd569599c8482e))
+* **dev:** bun run dev:seed:demo — a large synthetic demo dataset ([313b3ff](https://github.com/MrMint/cellar-assistant/commit/313b3ff1acb137004a0d255ad80bdf9d994fccff))
+* **drafts:** saved Needs-details drafts in item_onboardings, listed by DraftsCollectionActor (SV-B, MC-drafts) ([eda695e](https://github.com/MrMint/cellar-assistant/commit/eda695e1ff3f91a43bfe8b77692afea82dd5bcb9))
+* **drink-log:** feedback on the log sheet's own buttons ([1d744eb](https://github.com/MrMint/cellar-assistant/commit/1d744eb6c0ad99605bda4f214f4b93e23d810e5f))
+* **drink-log:** the log sheet as drawn — score, note and tags, then Who/When/Where/Photo ([1f7a3b0](https://github.com/MrMint/cellar-assistant/commit/1f7a3b057aa8f41ac900885b5f7b1fd4085a751a))
+* **home:** friends feed on the kit's activity cards, with All/Rated/Ranked/Added chips ([a810766](https://github.com/MrMint/cellar-assistant/commit/a8107663b23d90e774b983df6a4e4da35c4b2d27))
+* **home:** nearby on the kit's place rows, the place you're at first; loading shell in Home's columns ([59fbaae](https://github.com/MrMint/cellar-assistant/commit/59fbaaef0ffedfe509aef212a0d240036454398c))
+* **home:** Nearby reads "Near &lt;place&gt;" and "n from you" (CROSS-LOT distance origin); first-crumb test ([200f875](https://github.com/MrMint/cellar-assistant/commit/200f875b97fe1bec074344da641c8a4d2ae5beaf))
+* **invite:** Shell-Entry invite — Join, Accept with Undo, dead link ([0077341](https://github.com/MrMint/cellar-assistant/commit/00773412654ebb1ab14a53754e97af773b1f71e7))
+* **item:** Edit details, the two helpers side by side, kit tokens ([2e48be9](https://github.com/MrMint/cellar-assistant/commit/2e48be95c13c6bf1f6ec83b9a257616668b88abf))
+* **item:** ItemCard on kit tokens and Stars; t-* type in owned files (L26) ([f4f060f](https://github.com/MrMint/cellar-assistant/commit/f4f060f88002fb92f8d8928da2138cbacc335ce2))
+* **item:** taste header as a compare row, freshness sheet as drawn ([b35068c](https://github.com/MrMint/cellar-assistant/commit/b35068c6e442d8352a222bbece672e047dd4e37a))
+* **me:** Loved as kit cellar tiles; Want to try in Drinks, Places and Recipes sections ([1d9d393](https://github.com/MrMint/cellar-assistant/commit/1d9d393160ad49a6da72e6f5a2b6efeccf9c7947))
+* **me:** the Shell-Me hub — number tiles, Lists and People with counts, Accept in place, Settings row ([251a720](https://github.com/MrMint/cellar-assistant/commit/251a7206ca261e59793405f3da0cad700b0d1f13))
+* **pwa:** Shell-Entry install sheet — steps, Later, Stop asking with Undo, opened from Settings ([5c47349](https://github.com/MrMint/cellar-assistant/commit/5c47349816e1b774b43dd3e87535c756bc21fa67))
+* **recap:** totals and periods with activity (MC-recap) ([8a64943](https://github.com/MrMint/cellar-assistant/commit/8a6494397c68e6ce710d10900b750f20d536de0c))
+* **recipes:** community pick label on a recipe group (MC-pick) ([6d73ff0](https://github.com/MrMint/cellar-assistant/commit/6d73ff03de88dd6725ea87f05c1613690b7a2e02))
+* **seed:** demo-seed-social exports seed(ctx: DemoSeedContext) for SV-B's loader ([c95dbab](https://github.com/MrMint/cellar-assistant/commit/c95dbab56694905e9103dd9dfad5fdd902731cde))
+* **seed:** demo-seed-social, the community pick and Test Two's shared ratings (L36) ([9d3cb37](https://github.com/MrMint/cellar-assistant/commit/9d3cb37b22d8737eccdf8f9356bb3596c7d6ec98))
+* **seed:** needs-details drafts in two cellars, optional quota/social/avatar seed modules (SV-B) ([dca7e53](https://github.com/MrMint/cellar-assistant/commit/dca7e53b96c7f4cf26ced556b6e39135f90bd3cd))
+* **taste:** side-by-side compare rows with a friend (MC-compare) ([8062362](https://github.com/MrMint/cellar-assistant/commit/80623622a76c8eac9b26cc459a2a3cc3d73fe4ff))
+
+
+### Bug Fixes
+
+* clear the remaining CodeQL alerts in files [#675](https://github.com/MrMint/cellar-assistant/issues/675) touches ([dcdf15c](https://github.com/MrMint/cellar-assistant/commit/dcdf15cb31f619c81ef3dc0c48bde0e569f3da5c))
+* **client:** c3's guard-test findings ([7546154](https://github.com/MrMint/cellar-assistant/commit/7546154176db44bd8ed6d10357388fdf6126f7b4))
+* **client:** haptics read reduced motion from useReducedMotion, not matchMedia ([30fa450](https://github.com/MrMint/cellar-assistant/commit/30fa45013248761ae2f65aadbf3c9e30b476ab4d))
+* **client:** the three CodeQL alerts on [#749](https://github.com/MrMint/cellar-assistant/issues/749) ([cc50bd4](https://github.com/MrMint/cellar-assistant/commit/cc50bd4f782cf194c936015eedfd6163d9b1d97d))
+* **deploy:** pull-deploy exports the release tree world-readable ([df79081](https://github.com/MrMint/cellar-assistant/commit/df79081ae60c291f77c825c7a39c7848d3bab423))
+* **deploy:** pull-deploy exports the release tree world-readable ([40a1c91](https://github.com/MrMint/cellar-assistant/commit/40a1c91295dbc613e2925ced898599faa8c19f62))
+* **home:** the count line formats without toLocale* (hydration-safety) ([c2b05c9](https://github.com/MrMint/cellar-assistant/commit/c2b05c94f174e266596601070513f9594a23db39))
+* **item:** pane reads through useQuery; bottle dates through Timestamp ([ac74800](https://github.com/MrMint/cellar-assistant/commit/ac74800917b0b2966883fe08a000cef23d92f9a2))
+* **me:** stamps recap row on kit tokens; setAvatar through useMutation ([ec62c5f](https://github.com/MrMint/cellar-assistant/commit/ec62c5f33627b07f41239d7effb37bf466ef4b34))
+* **shell:** tab bar sits on the page surface, not the photo glass ([2502f7a](https://github.com/MrMint/cellar-assistant/commit/2502f7aba61d6e53decac57d318c82bed7c3cb5b))
+* **test:** CodeQL findings on [#675](https://github.com/MrMint/cellar-assistant/issues/675) — crypto randomness in e2e, fixpoint tag stripping ([993172d](https://github.com/MrMint/cellar-assistant/commit/993172ddf4addf155485d5fbeae65903f69bf9ca))
+* **test:** strip markup by scanning, not regex replace (CodeQL on [#675](https://github.com/MrMint/cellar-assistant/issues/675)) ([7122ddd](https://github.com/MrMint/cellar-assistant/commit/7122ddd644955a7635ef5e06ca29394dc60a1a82))
+* **tokens:** tab bar height is the kit's 64, not 49 (H-6 from [#683](https://github.com/MrMint/cellar-assistant/issues/683)) ([b425465](https://github.com/MrMint/cellar-assistant/commit/b425465d086f345e9b9bc116cd5c2ba5ebf9435d))
+* **ux-c:** drinking-window axis ends on the last real date (W-6) ([675b80b](https://github.com/MrMint/cellar-assistant/commit/675b80b3aef99507028825b8461e8f3983177292))
+* **ux-c:** fback — browser Back types the traversal inside Next's own transition (E-6, W-9) ([0767bfc](https://github.com/MrMint/cellar-assistant/commit/0767bfc256dab6de2eba71f3a33f1c5f5b7e4a3c))
+* **ux-c:** fmorph — only the pressed card carries the title morph name (W-8, H-23); fixes keep coords.accuracy (H-22) ([6a0b2a0](https://github.com/MrMint/cellar-assistant/commit/6a0b2a04b086bb688a7955bbbf82f050c21c8bf9))
+* **ux-c:** fshell — nav-history records in the layout phase (E-6, W-9); m09/m08/m07-pour spec fixes (E-7, E-5, E-3); sealed rows keep list-row (H-19); drop rebuyOffer body (H-20) ([e758b84](https://github.com/MrMint/cellar-assistant/commit/e758b84bd4d84e35bb8b417844710001bad25aff))
+* **ux-c:** new-place sheet shows the fix's accuracy when the caller has it (W-16) ([4836379](https://github.com/MrMint/cellar-assistant/commit/483637938a79982953ec3d852b19f0df7595c874))
+* **ux-c:** search opens focused (W-12); accepted request leaves Incoming, request toast (W-13) ([18c21a5](https://github.com/MrMint/cellar-assistant/commit/18c21a5929c8c2c04fb9c09ee2c871c97f18f692))
+* **ux-c:** Seen at refreshes after a log (W-14) and keeps its scan prompt when empty (W-15) ([494ab54](https://github.com/MrMint/cellar-assistant/commit/494ab54e7ac5b549c3145c469099c414a4486b56))
+* **ux-c:** steep guide adds the board's re-steep line where the table has one (W-23) ([da198ef](https://github.com/MrMint/cellar-assistant/commit/da198efe17d412d84a823a7aeec71205525ccda4))
+* **ux-c:** success sheet says Add another after a typed-in add (W-21) ([064f2ae](https://github.com/MrMint/cellar-assistant/commit/064f2ae623337d00ab806e22ce4b7dc71869a39f))
+* **ux-c:** tea and coffee pages use their own words: tin/bag, Steep/Brew, cup, Best by (W-20) ([de5c100](https://github.com/MrMint/cellar-assistant/commit/de5c1008bbfd0df78d28c913e3a0947d0faea76f))
+* **ux-c:** W-1 Compare is not offered for an unrated pick, and an empty band saves only on a tap ([ef6ce8d](https://github.com/MrMint/cellar-assistant/commit/ef6ce8db8030c0c465a0c1a290239805e27c4cbc))
+* **ux-c:** W-10 the tier list page has Back, like every other pushed page ([557fca8](https://github.com/MrMint/cellar-assistant/commit/557fca8d030902fc5ebb132ebeca746ebe9bd8df))
+* **ux-c:** W-17 recap chips cased as the item page prints them; W-18 a stamp reads as a tier (3+) ([3c73e1b](https://github.com/MrMint/cellar-assistant/commit/3c73e1bee4dc04adae168e01ee4be86676852180))
+* **ux-c:** W-19 a cloned list is named as a copy, with its owner (Sam's reds (from Sam)) ([7dabd77](https://github.com/MrMint/cellar-assistant/commit/7dabd77b47297734f6aacd76f77223bd16a3380d))
+* **ux-c:** W-22 an insights job that produced nothing is a calm line on Home, not an error card ([78c69d9](https://github.com/MrMint/cellar-assistant/commit/78c69d9a8e6793d743db74fb7698127e53f86997))
+
+
+### Reverts
+
+* **bar:** leave ItemCocktails.tsx to the lead (check.json owns names it without .tsx) ([e3b0152](https://github.com/MrMint/cellar-assistant/commit/e3b0152225dc98f3588e0f51d85f8dd0152a7963))
+
 ## [0.59.0](https://github.com/MrMint/cellar-assistant/compare/v0.58.5...v0.59.0) (2026-10-08)
 
 
