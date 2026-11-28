@@ -733,7 +733,7 @@ export class UserActor
         .values({ userId: this.key, defaultCellarPrivacy: privacy })
         .onConflictDoUpdate({
           target: userSettings.userId,
-          set: { defaultCellarPrivacy: privacy, updatedAt: new Date() },
+          set: { defaultCellarPrivacy: privacy },
         });
     });
     return { defaultCellarPrivacy: privacy };

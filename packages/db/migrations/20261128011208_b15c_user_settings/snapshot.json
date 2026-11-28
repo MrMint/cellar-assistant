@@ -1,7 +1,7 @@
 {
   "version": "8",
   "dialect": "postgres",
-  "id": "4531e37d-f75b-47f3-a64d-200d0fd34e54",
+  "id": "45e220d6-eaa7-4d08-81b8-59fcb9fa65e8",
   "prevIds": [
     "b46474db-1e0d-40d5-ae05-ad7f2b2d8585"
   ],
@@ -9620,19 +9620,6 @@
       "generated": null,
       "identity": null,
       "name": "default_cellar_privacy",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "user_settings"
-    },
-    {
-      "type": "timestamp with time zone",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": "now()",
-      "generated": null,
-      "identity": null,
-      "name": "updated_at",
       "entityType": "columns",
       "schema": "public",
       "table": "user_settings"

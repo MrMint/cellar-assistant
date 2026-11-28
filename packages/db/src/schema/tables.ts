@@ -1269,11 +1269,11 @@ export const user = pgTable("user", {
 // B15C (H-119 / FR-21): account-level settings, one row per user, written by
 // UserActor only. `default_cellar_privacy` is what `CellarActor.create` uses
 // when no privacy is given; it never rewrites an existing cellar. No row is
-// the column default (PRIVATE).
+// the column default (PRIVATE). No `updated_at`: nothing reads one, and a
+// new updated_at table owes a trigger (updated-at-triggers.test.ts).
 export const userSettings = pgTable("user_settings", {
 	userId: uuid("user_id").primaryKey().references(() => user.id, { onDelete: "cascade", onUpdate: "restrict" } ),
 	defaultCellarPrivacy: permissionType("default_cellar_privacy").default("PRIVATE").notNull(),
-	updatedAt: timestamp("updated_at", { withTimezone: true }).default(sql`now()`).notNull(),
 });
 
 export const userPlaceInteractions = pgTable("user_place_interactions", {
