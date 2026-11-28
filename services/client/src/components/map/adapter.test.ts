@@ -90,6 +90,40 @@ describe("mapItemsFromBrowse", () => {
     assert.equal(cluster.cluster_count, 12);
     assert.deepEqual(cluster.cluster_center.coordinates, [3, 4]);
   });
+
+  test("F-196: the owner's band, the rating count and the photo reach the pin", () => {
+    const [mine, theirs] = mapItemsFromBrowse(
+      [
+        {
+          __typename: "MapPlace",
+          id: "mine",
+          name: "Mine",
+          categories: ["cafe"],
+          rating: 4.6,
+          ratingCount: 210,
+          myBand: 4,
+          photo: { url: "https://files.example/p.jpg" },
+          location: { lng: 1, lat: 2 },
+        },
+        {
+          __typename: "MapPlace",
+          id: "theirs",
+          name: "Theirs",
+          categories: ["cafe"],
+          ratingCount: 0,
+          myBand: null,
+          photo: null,
+          location: { lng: 1, lat: 2 },
+        },
+      ],
+      { bounds },
+    ) as PlaceResult[];
+    assert.equal(mine?.my_band, 4);
+    assert.equal(mine?.rating_count, 210);
+    assert.equal(mine?.photo_url, "https://files.example/p.jpg");
+    assert.equal(theirs?.my_band, undefined);
+    assert.equal(theirs?.photo_url, undefined);
+  });
 });
 
 describe("semanticResultsFrom", () => {

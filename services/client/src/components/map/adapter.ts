@@ -114,6 +114,9 @@ export type MapEntryNode = {
   readonly confidence?: number | null;
   readonly isVerified?: boolean | null;
   readonly reviewStatus?: "PENDING" | "APPROVED" | "REJECTED" | null;
+  readonly ratingCount?: number | null;
+  readonly myBand?: number | null;
+  readonly photo?: { readonly url?: string | null } | null;
   readonly location?: LngLat | null;
   readonly clusterId?: number;
   readonly count?: number;
@@ -135,8 +138,8 @@ export function mapItemsFromBrowse(
       typeof node.id === "string" &&
       node.location
     ) {
-      items.push(
-        placeResultFromNode(
+      items.push({
+        ...placeResultFromNode(
           {
             id: node.id,
             name: node.name ?? "",
@@ -150,7 +153,11 @@ export function mapItemsFromBrowse(
           },
           searchParams,
         ),
-      );
+        // F-196: what the owner's pin draws.
+        my_band: orUndefined(node.myBand),
+        rating_count: orUndefined(node.ratingCount),
+        photo_url: orUndefined(node.photo?.url),
+      });
     } else if (
       node.__typename === "MapCluster" &&
       typeof node.clusterId === "number" &&

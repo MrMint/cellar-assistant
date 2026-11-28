@@ -10,6 +10,7 @@ import {
   placeKind,
   placesInView,
   placeWhere,
+  quickLookIndex,
 } from "./map-places";
 
 const place = (
@@ -149,5 +150,31 @@ describe("directionsOf (ruling 5)", () => {
     const d = directionsOf(place("a", "cafe", [-88.1, 43.2]));
     expect(d.label).toBe("Directions to the pin");
     expect(d.href).toContain("destination=43.2%2C-88.1");
+  });
+});
+
+describe("quickLookIndex (F-193)", () => {
+  const items: MapDataItem[] = [
+    place("far", "cafe", [0.9, 0.9]),
+    place("mid", "cafe", [0.5, 0.5]),
+    place("near", "cafe", [0.1, 0.1]),
+  ];
+
+  it("keeps the open card on its place when a location fix re-sorts the list", () => {
+    // Opened before the first fix: the 3rd row is "near".
+    const before = placesInView(items, null, null);
+    const peeked = before[2]?.id ?? null;
+    expect(peeked).toBe("near");
+    // The fix lands and the list sorts nearest first: "near" is now 1st.
+    const after = placesInView(items, null, { latitude: 0, longitude: 0 });
+    expect(after[2]?.id).toBe("far");
+    const index = quickLookIndex(after, peeked);
+    expect(index).toBe(0);
+    expect(after[index ?? -1]?.id).toBe("near");
+  });
+
+  it("is null when nothing is open or the place left the list", () => {
+    expect(quickLookIndex(placesInView(items, null), null)).toBeNull();
+    expect(quickLookIndex(placesInView(items, null), "gone")).toBeNull();
   });
 });

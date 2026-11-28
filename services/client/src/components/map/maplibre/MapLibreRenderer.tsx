@@ -15,6 +15,7 @@ import { Add, Decrease, ICON_STROKE, MyLocation } from "@/components/app/icons";
 import { GlassDisc } from "@/components/app/overlays/GlassDisc";
 import { useNavigate } from "@/components/app/useNavigate";
 import { breakpointUp, useMediaQuery } from "@/hooks/useMediaQuery";
+import { feedback } from "@/lib/feedback";
 import type { CachedLocation } from "@/lib/geo-cookie/parse";
 import { useResolvedTheme } from "@/lib/theme/client";
 import { cn } from "@/lib/utils";
@@ -25,8 +26,16 @@ import { MapBottomStack } from "../core/MapBottomStack";
 import { MapErrorBanner } from "../core/MapErrorBanner";
 import { MapPlacesColumn, MapPlacesDock } from "../core/MapPlaces";
 import { MapShell } from "../core/MapShell";
-import { matchesKinds } from "../core/map-places";
+import { matchesKinds, quickLookIndex } from "../core/map-places";
+import {
+  edgeOf,
+  extentOf,
+  firstView,
+  moveTo,
+  type OwnPoint,
+} from "../core/own-places";
 import { PlaceQuickLook } from "../core/PlaceQuickLook";
+import { EdgeCounts } from "../desktop/EdgeCounts";
 import { MapPlacePane } from "../desktop/MapPlacePane";
 import {
   LOCATION_DENIED_MESSAGE,
@@ -61,6 +70,8 @@ import { basemapStyle, MAP_CANVAS_BACKGROUND } from "./basemap";
 import { INTERACTIVE_LAYER_IDS } from "./constants";
 import { useMapBoundsML } from "./hooks/useMapBoundsML";
 import { useMapInteraction } from "./hooks/useMapInteraction";
+import { OwnerPins } from "./OwnerPins";
+import { splitOwnerPins } from "./owner-pins";
 import { POISymbolLayer } from "./POISymbolLayer";
 import { type MapTheme, mapPalette } from "./palette";
 import { SelectedPlaceLayer } from "./SelectedPlaceLayer";
@@ -174,6 +185,8 @@ export function MapLibreRenderer({
     userLocation,
     locationLoading,
     cachedLocation,
+    // F-191: a list's link opens on the list, not on you.
+    suppressFlight: searchParams.list !== null,
   });
 
   // Place selection ↔ URL coordination
@@ -200,11 +213,18 @@ export function MapLibreRenderer({
     if (list.query !== "") setDetent("full");
   }, [list.query]);
 
-  // The quick look's place, by its index in the list (phone).
-  const [peek, setPeek] = useState<number | null>(null);
+  // The quick look's place, held by id (phone): the list re-sorts on every
+  // location fix, so an index could swap the open card (F-193).
+  const [peekId, setPeekId] = useState<string | null>(null);
+  const peek = quickLookIndex(list.places, peekId);
+  const setPeek = useCallback(
+    (index: number | null) =>
+      setPeekId(index === null ? null : (list.places[index]?.id ?? null)),
+    [list.places],
+  );
   // Open page lands on `?placeId=` (the drawer): the quick look gives way.
   useEffect(() => {
-    if (searchParams.placeId) setPeek(null);
+    if (searchParams.placeId) setPeekId(null);
   }, [searchParams.placeId]);
 
   const placeHref = useCallback(
@@ -237,6 +257,8 @@ export function MapLibreRenderer({
           ),
     [mapItems, list.kinds],
   );
+  // F-196: the owner's ranked places draw as photo pins; the rest as symbols.
+  const pins = useMemo(() => splitOwnerPins(pinItems), [pinItems]);
 
   // ── Sync effects ─────────────────────────────────────────────────────
 
@@ -378,9 +400,8 @@ export function MapLibreRenderer({
   const openPlace = useCallback(
     (place: PlaceResult) => {
       if (!isDesktop) {
-        const index = list.places.findIndex((p) => p.id === place.id);
-        if (index >= 0) {
-          setPeek(index);
+        if (list.places.some((p) => p.id === place.id)) {
+          setPeekId(place.id);
           return;
         }
       }
@@ -500,9 +521,78 @@ export function MapLibreRenderer({
   const handleAddPlace = useCallback(() => {
     pendingPlaceNameRef.current = listQuery || null;
     if (listQuery !== "") clearSearch();
-    setPeek(null);
+    setPeekId(null);
     mapActions.enterPinPlacement();
   }, [listQuery, clearSearch, mapActions]);
+
+  // F-33 / F-34: take the map to some of your places.
+  const showPoints = useCallback(
+    (points: readonly OwnPoint[]) => {
+      const extent = extentOf(points);
+      const map = mapRef.current;
+      if (extent === null || !map) return;
+      const move = moveTo(extent);
+      if (move.kind === "center") {
+        map.flyTo({
+          center: [move.longitude, move.latitude],
+          zoom: Math.max(map.getZoom(), 14),
+          duration: 600,
+        });
+        return;
+      }
+      const { west, south, east, north } = move.bounds;
+      map.fitBounds(
+        [
+          [west, south],
+          [east, north],
+        ],
+        {
+          duration: 600,
+          maxZoom: 15,
+          // The phone's dock rests over the map's lower part.
+          padding: isDesktop
+            ? 72
+            : {
+                top: 72,
+                left: 40,
+                right: 40,
+                bottom: Math.round((mapHeight || FALLBACK_MAP_HEIGHT) * 0.45),
+              },
+        },
+      );
+    },
+    [isDesktop, mapHeight],
+  );
+
+  // F-33 / F-191: the first view, once your places are known. Located, the
+  // map stays on you (the beyond chip points at the rest); not located, or
+  // opened from a list's link, it opens on them. A place link wins.
+  const firstViewDoneRef = useRef(false);
+  const { own } = list;
+  const located = userLocation !== null || cachedLocation != null;
+  const openedOnList = searchParams.list !== null;
+  const openedOnPlace = searchParams.placeId !== null;
+  useEffect(() => {
+    if (firstViewDoneRef.current || !mapReady || !own.loaded) return;
+    firstViewDoneRef.current = true;
+    if (openedOnPlace) return;
+    const move = firstView({
+      extent: extentOf(own.points),
+      located,
+      list: openedOnList,
+    });
+    if (move !== null) showPoints(own.points);
+  }, [mapReady, own, located, openedOnList, openedOnPlace, showPoints]);
+
+  // F-34 (desktop/Places): on a list's link, "Show nearby places" adds every
+  // other place to the list's on the map; off, the list's alone again.
+  const [nearOn, setNearOn] = useState(false);
+  const listTierIds = searchParams.tierLists;
+  const listTierKey = listTierIds.join(",");
+  useEffect(() => {
+    if (!openedOnList) return;
+    mapActions.setTierListIds(nearOn ? [] : listTierKey.split(","));
+  }, [nearOn, openedOnList, listTierKey, mapActions]);
 
   const handleMapTheme = useCallback(
     (theme: MapTheme) => mapActions.setDarkMode(theme === "dark"),
@@ -541,6 +631,7 @@ export function MapLibreRenderer({
       if (place) openPlace(place);
     },
     onAddPlace: handleAddPlace,
+    onShowBeyond: () => showPoints(list.beyond.points),
   };
 
   // Desktop: the open place, and its neighbours in the list.
@@ -600,7 +691,7 @@ export function MapLibreRenderer({
         >
           {iconsLoaded && (
             <POISymbolLayer
-              items={pinItems}
+              items={pins.rest}
               filters={filters}
               wantToGo={wantToGo}
               palette={palette}
@@ -610,11 +701,24 @@ export function MapLibreRenderer({
 
           {iconsLoaded && (
             <SelectedPlaceLayer
-              selectedPlace={mapUI.selectedPlace}
+              // An owner's pin shows its own selected state (F-196).
+              selectedPlace={
+                pins.owner.some(
+                  (pin) => pin.place.id === mapUI.selectedPlace?.id,
+                )
+                  ? null
+                  : mapUI.selectedPlace
+              }
               wantToGo={wantToGo}
               palette={palette}
             />
           )}
+
+          <OwnerPins
+            pins={pins.owner}
+            selectedId={mapUI.selectedPlace?.id ?? null}
+            onOpen={openPlace}
+          />
 
           {userLocation && (
             <UserLocationLayer location={userLocation} palette={palette} />
@@ -637,6 +741,37 @@ export function MapLibreRenderer({
               {errorCard}
               {prePrompt}
             </MapBottomStack>
+            {list.query === "" && bounds && (
+              <EdgeCounts
+                edges={list.beyond.edges}
+                onShow={(edge) =>
+                  showPoints(
+                    list.beyond.points.filter(
+                      (point) => edgeOf(point, bounds) === edge,
+                    ),
+                  )
+                }
+              />
+            )}
+            {openedOnList && (
+              <button
+                type="button"
+                data-slot="map-nearby"
+                aria-pressed={nearOn}
+                onClick={() => {
+                  feedback("tick");
+                  setNearOn((on) => !on);
+                }}
+                className={cn(
+                  "t-cap absolute top-3 left-3 z-[12] inline-flex h-11 items-center rounded-full border px-4 shadow-md outline-none focus-visible:outline-2 focus-visible:outline-act-ink",
+                  nearOn
+                    ? "border-act-ink bg-surface-1 text-act-ink"
+                    : "border-edge bg-surface-1/90 text-ink",
+                )}
+              >
+                {nearOn ? "Showing nearby places" : "Show nearby places"}
+              </button>
+            )}
             <div className="absolute right-4 bottom-10 z-[12] flex flex-col gap-2">
               <GlassDisc
                 aria-label="Zoom in"
@@ -731,7 +866,7 @@ export function MapLibreRenderer({
           index={peek ?? 0}
           open={peek !== null}
           onOpenChange={(open) => {
-            if (!open) setPeek(null);
+            if (!open) setPeekId(null);
           }}
           onIndexChange={setPeek}
           hrefFor={placeHref}
