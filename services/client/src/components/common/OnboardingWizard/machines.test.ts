@@ -54,6 +54,7 @@ const run = ({
   storedFrontLabel = undefined as string | undefined,
   resumePhoto = undefined as string | undefined,
   draftCellarId = undefined as string | undefined,
+  readAs = undefined as ApiItemType | undefined,
 }) => {
   const filed: InsertCellarItemInput[] = [];
   const closed: CloseOnboardingInput[] = [];
@@ -101,6 +102,7 @@ const run = ({
               ? {}
               : { frontLabelFileId: storedFrontLabel }),
             ...(draftCellarId === undefined ? {} : { draftCellarId }),
+            ...(readAs === undefined ? {} : { itemType: readAs }),
           };
         },
       ),
@@ -171,6 +173,21 @@ const settled = (actor: ReturnType<typeof run>["actor"]) =>
       s.matches("form") ||
       ["quickReview", "finalPrompt", "addFailed"].includes(String(s.value)),
   );
+
+describe("the kind follows the shot (F-227)", () => {
+  test("a read that moved to the label's kind goes on as that kind", async () => {
+    const { actor, searched } = run({ confidence: 0.5, readAs: "BEER" });
+    await settled(actor);
+    assert.equal(actor.getSnapshot().context.itemType, "BEER");
+    assert.equal(searched[0]?.itemType, "BEER");
+  });
+
+  test("a read that names no kind keeps the picked one", async () => {
+    const { actor } = run({ confidence: 0.5 });
+    await settled(actor);
+    assert.equal(actor.getSnapshot().context.itemType, "WINE");
+  });
+});
 
 describe("matching (N19)", () => {
   test("the read goes to the catalogue lookup, declined items excluded", async () => {

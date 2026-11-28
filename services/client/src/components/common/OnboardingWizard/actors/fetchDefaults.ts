@@ -43,15 +43,19 @@ import type { DefaultValuesResult, FetchDefaultsInput } from "./types";
  * `BarcodeActor.ensure` never refuses on a type difference
  * (`lib/items/barcode.ts` §2). A typed code takes the other path.
  */
-export const readDefaults = async ({
-  urqlClient,
-  itemType,
-  itemOnboardingId,
-  barcode,
-  frontLabelFileId,
-  backLabelFileId,
-  resumed,
-}: FetchDefaultsInput): Promise<DefaultValuesResult> => {
+export const readDefaults = async (
+  {
+    urqlClient,
+    itemType,
+    itemOnboardingId,
+    barcode,
+    frontLabelFileId,
+    backLabelFileId,
+    resumed,
+  }: FetchDefaultsInput,
+  /** F-227: false on the re-read, so a kind is followed at most once. */
+  follow = true,
+): Promise<DefaultValuesResult> => {
   const response = await urqlClient
     .mutation(OnboardingStartMutation, {
       onboardingId: itemOnboardingId,
@@ -88,6 +92,32 @@ export const readDefaults = async ({
     };
   }
   const onboarding = readFragment(ItemOnboardingFragment, result.data);
+  // F-227: the kind follows the shot. The label says it is another kind
+  // (F-77; null on a session stored before it, which keeps the picked kind),
+  // so it was read against the wrong kind's words: read it again as that
+  // kind, once, in a session of its own (this one keeps its kind, and a
+  // completed session answers as it stands). A saved draft keeps its kind.
+  const detected = result.data.detectedItemType ?? null;
+  if (
+    resumed !== true &&
+    sent &&
+    detected !== null &&
+    detected !== itemType &&
+    follow
+  ) {
+    const moved = await readDefaults(
+      {
+        urqlClient,
+        itemType: detected,
+        itemOnboardingId: crypto.randomUUID(),
+        barcode,
+        frontLabelFileId,
+        backLabelFileId,
+      },
+      false,
+    );
+    return { ...moved, itemType: detected };
+  }
   const read = formDefaultsFromOnboarding(itemType, onboarding.defaults);
   // F-59: a saved draft reopens on what the person typed, in its own cellar.
   const draftCellarId = resumed === true ? result.data.cellarId : null;
