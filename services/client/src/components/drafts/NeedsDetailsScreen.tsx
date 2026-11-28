@@ -34,6 +34,7 @@ import {
   rowOf,
 } from "./needs";
 import {
+  CloseNeedsDetailsDraftMutation,
   ConfirmNeedsDetailsDraftMutation,
   NeedsDetailsQuery,
   SaveNeedsDetailsDraftMutation,
@@ -41,10 +42,13 @@ import {
 
 type Row = DraftRow & { imageUrl?: string | null };
 
-/** A filed draft waiting out its Undo before it becomes a bottle. */
+/**
+ * A draft waiting out its Undo: a filed one before it becomes a bottle
+ * (`plan`), or a deleted one before its session is closed (`plan` null).
+ */
 type Pending = {
   readonly row: Row;
-  readonly plan: FinishPlan;
+  readonly plan: FinishPlan | null;
   readonly index: number;
 };
 
@@ -78,6 +82,7 @@ export function NeedsDetailsScreen({
 }) {
   const [, runSave] = useMutation(SaveNeedsDetailsDraftMutation);
   const [, runConfirm] = useMutation(ConfirmNeedsDetailsDraftMutation);
+  const [, runClose] = useMutation(CloseNeedsDetailsDraftMutation);
   const router = useRouter();
   const [rows, setRows] = useState<Row[]>(() =>
     drafts.map((draft) => rowWith(draft, draft.imageUrl)),
@@ -113,15 +118,32 @@ export function NeedsDetailsScreen({
     setCount((n) => n + 1);
   }, []);
 
-  /** File one draft whose Undo ran out. A refusal puts its row back. */
+  /**
+   * Act on one draft whose Undo ran out: file it, or close a deleted one. A
+   * refusal puts its row back.
+   */
   const confirm = useCallback(
     (id: string) => {
       const entry = pending.current.get(id);
       if (entry === undefined) return;
       pending.current.delete(id);
+      const { plan } = entry;
+      if (plan === null) {
+        void runClose({ onboardingId: id }).then((result) => {
+          const closed = unwrapResult(
+            result.data?.closeItemOnboarding,
+            "ItemOnboarding",
+          );
+          if (!closed.ok) {
+            putBack(entry);
+            notify(`Couldn't delete ${entry.row.title}`, { tone: "error" });
+          }
+        });
+        return;
+      }
       void runConfirm({
         onboardingId: id,
-        input: confirmInput(entry.plan),
+        input: confirmInput(plan),
       }).then((result) => {
         const filed = unwrapResult(
           result.data?.confirmItemOnboarding,
@@ -133,7 +155,7 @@ export function NeedsDetailsScreen({
         }
       });
     },
-    [runConfirm, putBack],
+    [runConfirm, runClose, putBack],
   );
 
   const confirmAll = useCallback(() => {
@@ -151,7 +173,8 @@ export function NeedsDetailsScreen({
 
   const save = async (row: Row, edits: Edits) => {
     const plan = finishPlan(row.draft, edits);
-    if (plan.needs.length === row.needs.length) {
+    // A draft with nothing left ("Ready to add") files as it is (F-66).
+    if (row.needs.length > 0 && plan.needs.length === row.needs.length) {
       feedback("refuse");
       setError("Fill in one field, or Not now.");
       return;
@@ -178,7 +201,9 @@ export function NeedsDetailsScreen({
 
     const index = rows.findIndex((r) => r.draft.id === row.draft.id);
     const at = visible.findIndex((r) => r.draft.id === row.draft.id);
-    const next = visible.slice(at + 1)[0] ?? null;
+    // On to the next bottle, round to the top from the last one (F-67).
+    const next =
+      visible.slice(at + 1)[0] ?? visible.slice(0, Math.max(0, at))[0] ?? null;
     const node = saved.data;
     const updated = rowWith(
       {
@@ -217,7 +242,59 @@ export function NeedsDetailsScreen({
           setRows((current) =>
             current.map((r) => (r.draft.id === id ? row : r)),
           );
-        void runSave({ input: restoreInput(row.draft) });
+        void runSave({ input: restoreInput(row.draft) }).then((result) => {
+          const restored = unwrapResult(
+            result.data?.saveDraft,
+            "ItemOnboarding",
+          );
+          if (restored.ok) return;
+          // F-70: too late (it was filed when the page was left), or not
+          // sent: say so, and show the draft as the server holds it.
+          feedback("refuse");
+          const filed = restored.error.code === "CONFLICT";
+          setRows((current) =>
+            filed
+              ? current.filter((r) => r.draft.id !== id)
+              : current.map((r) => (r.draft.id === id ? updated : r)),
+          );
+          notify(
+            filed
+              ? `Couldn't undo · ${row.title} is in your cellar`
+              : "Couldn't undo. Try again.",
+            { tone: "error" },
+          );
+        });
+      },
+      onAutoClose: () => confirm(id),
+      onClose: () => confirm(id),
+    });
+  };
+
+  /**
+   * F-65: delete a draft. The row goes now with "Draft deleted · Undo"; the
+   * session is closed only when Undo runs out (or the page is left), since a
+   * closed one cannot be put back.
+   */
+  const discard = (row: Row) => {
+    // The sheet's Button gives the press cue.
+    setError(null);
+    // One toast at a time: the last one's Undo ends here.
+    confirmAll();
+    const index = rows.findIndex((r) => r.draft.id === row.draft.id);
+    const at = visible.findIndex((r) => r.draft.id === row.draft.id);
+    const next =
+      visible.slice(at + 1)[0] ?? visible.slice(0, Math.max(0, at))[0] ?? null;
+    pending.current.set(row.draft.id, { row, plan: null, index });
+    setRows((current) => current.filter((r) => r.draft.id !== row.draft.id));
+    setCount((n) => Math.max(0, n - 1));
+    setOpenId(next?.draft.id ?? null);
+    const id = row.draft.id;
+    notify("Draft deleted", {
+      id: SAVE_TOAST,
+      undo: () => {
+        const entry = pending.current.get(id);
+        pending.current.delete(id);
+        if (entry !== undefined) putBack(entry);
       },
       onAutoClose: () => confirm(id),
       onClose: () => confirm(id),
@@ -411,6 +488,10 @@ export function NeedsDetailsScreen({
         saving={saving}
         error={error}
         onSave={(row, edits) => void save(row, edits)}
+        onDelete={(row) => {
+          const target = rows.find((r) => r.draft.id === row.draft.id);
+          if (target !== undefined) discard(target);
+        }}
         onOpenChange={(open) => {
           if (!open) {
             setOpenId(null);

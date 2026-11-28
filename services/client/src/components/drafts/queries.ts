@@ -130,3 +130,24 @@ export const ConfirmNeedsDetailsDraftMutation = graphql(
 `,
   [ActorErrorFieldsFragment],
 );
+
+/**
+ * Delete a draft (F-65): the session closes as `MATCHED`, which creates
+ * nothing and leaves Needs details (it lists only `NEEDS_DETAILS`). A closed
+ * session refuses `saveDraft`, so Undo is the wait before this is sent.
+ */
+export const CloseNeedsDetailsDraftMutation = graphql(
+  `
+  mutation CloseNeedsDetailsDraft($onboardingId: ID!) {
+    closeItemOnboarding(onboardingId: $onboardingId) {
+      __typename
+      ... on ItemOnboarding {
+        id
+        status
+      }
+      ...ActorErrorFields
+    }
+  }
+`,
+  [ActorErrorFieldsFragment],
+);

@@ -9,6 +9,7 @@ import {
 } from "@/components/app/parts/Field";
 import { ResponsiveDialog } from "@/components/app/ResponsiveDialog";
 import { TypeGlyph } from "@/components/app/TypeChip";
+import { BrandPicker } from "@/components/brand/BrandPicker";
 import {
   humanizeReferenceValue,
   ITEM_FORM_RULES,
@@ -56,6 +57,7 @@ export function FinishOneSheet({
   saving,
   error,
   onSave,
+  onDelete,
   onOpenChange,
 }: {
   row: (DraftRow & { imageUrl?: string | null }) | null;
@@ -64,6 +66,8 @@ export function FinishOneSheet({
   saving: boolean;
   error: string | null;
   onSave: (row: DraftRow, edits: Edits) => void;
+  /** Delete this draft (F-65); the list offers Undo. */
+  onDelete: (row: DraftRow) => void;
   onOpenChange: (open: boolean) => void;
 }) {
   const [edits, setEdits] = useState<Edits>({});
@@ -123,17 +127,15 @@ export function FinishOneSheet({
           </FormField>
         );
       case "maker":
+        // Capture-Place ruling 6: the brand picker (F-72). It carries its own
+        // label ("Brand"); the kind's word is a hand-off to its owner.
         return (
-          <FormField key={need} label={spec.maker} htmlFor={idOf(need)}>
-            <Input
-              id={idOf(need)}
-              value={edits.maker ?? ""}
-              onChange={(event) => set({ maker: event.target.value })}
-              placeholder={`Type the ${spec.maker.toLowerCase()}`}
-              autoComplete="off"
-              maxLength={200}
-            />
-          </FormField>
+          <BrandPicker
+            key={need}
+            value={edits.maker ?? ""}
+            onChange={(maker) => set({ maker })}
+            disabled={saving}
+          />
         );
       case "style":
         return (
@@ -285,14 +287,26 @@ export function FinishOneSheet({
             {error}
           </p>
         )}
-        <Link
-          href={resumeHref(row)}
-          underline="none"
-          className="t-cap self-start py-3 text-act-ink"
-          onClick={() => feedback("press")}
-        >
-          All fields
-        </Link>
+        <div className="flex items-center justify-between gap-3">
+          <Link
+            href={resumeHref(row)}
+            underline="none"
+            className="t-cap py-3 text-act-ink"
+            onClick={() => feedback("press")}
+          >
+            All fields
+          </Link>
+          {/* Button fires its own press cue. */}
+          <Button
+            variant="quiet"
+            size="sm"
+            onClick={() => onDelete(row)}
+            disabled={saving}
+            className="text-danger"
+          >
+            Delete draft
+          </Button>
+        </div>
       </div>
     </ResponsiveDialog>
   );
