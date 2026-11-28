@@ -2,10 +2,12 @@ import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { AppBar } from "@/components/app/AppBar";
 import { Page } from "@/components/app/Page";
-import { PersonQuery } from "@/components/profile/queries";
+import { ApiError } from "@/components/cellar-api/ApiError";
+import { LockedProfile } from "@/components/profile/LockedProfile";
+import { FriendshipQuery, PersonQuery } from "@/components/profile/queries";
 import { CompareView } from "@/components/taste/compare/CompareView";
 import { firstName } from "@/components/taste/compare/compare-lines";
-import { unwrapResult } from "@/lib/api/result";
+import { isNotFound, unwrapResult } from "@/lib/api/result";
 import { apiServerQuery } from "@/lib/api/urql-server";
 import { getServerUser } from "@/utilities/auth-server";
 
@@ -18,6 +20,10 @@ export const metadata: Metadata = { title: "Compare taste" };
  * the profile's agreement card opens it. From `md` up the same view is the
  * profile's own right column. The rows are the server's (MC-compare): a
  * non-friend gets none, so this page shows nothing of a stranger's.
+ *
+ * Friendship is asked first (`friendProfile`, F-56, FR-7): anyone who isn't
+ * a friend gets the profile's locked state — who they are, the lock and Add
+ * friend — and no compare read at all; an id that names nobody is a 404.
  */
 export default async function ComparePage({
   params,
@@ -27,10 +33,35 @@ export default async function ComparePage({
   const [{ userId }, viewer] = await Promise.all([params, getServerUser()]);
   if (userId.toLowerCase() === viewer.id.toLowerCase()) redirect("/me");
 
-  const data = await apiServerQuery(PersonQuery, { userId });
-  const person = unwrapResult(data.user, "UserProfile");
-  if (!person.ok) notFound();
-  const name = person.data.displayName;
+  const friendship = unwrapResult(
+    (await apiServerQuery(FriendshipQuery, { userId })).friendProfile,
+    "FriendProfile",
+  );
+  if (!friendship.ok) {
+    if (!isNotFound(friendship.error)) {
+      return (
+        <Page>
+          <AppBar parent={`/users/${userId}`} />
+          <ApiError error={friendship.error} title="Can’t compare right now" />
+        </Page>
+      );
+    }
+    const person = unwrapResult(
+      (await apiServerQuery(PersonQuery, { userId })).user,
+      "UserProfile",
+    );
+    if (!person.ok) notFound();
+    return (
+      <LockedProfile
+        person={{
+          userId: person.data.id,
+          name: person.data.displayName,
+          avatarUrl: person.data.avatarUrl ?? null,
+        }}
+      />
+    );
+  }
+  const name = friendship.data.user.displayName;
   return (
     <Page>
       <AppBar

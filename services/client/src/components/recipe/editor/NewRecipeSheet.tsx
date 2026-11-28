@@ -63,6 +63,11 @@ function RowBody({
  * library straight from the row — one tap — and reading starts the moment a
  * photo is chosen; Paste and Type open the composer. Whatever the AI reads
  * lands as a private draft in the editor, never as a published recipe (D22).
+ *
+ * A row that navigates leaves the sheet open: the new page unmounts it.
+ * Closing it in the click took the sheet's Back entry off (`history.back()`,
+ * `overlays/layers.ts`) before the router had pushed the editor's, which
+ * undid the navigation and left Type on /recipes (F-45).
  */
 export function NewRecipeSheet({
   open,
@@ -100,7 +105,6 @@ export function NewRecipeSheet({
                 }
                 feedback("success");
                 holdRecipePhoto(file);
-                onOpenChange(false);
                 navigate.push("/recipes/new?from=photo");
               }}
             />
@@ -128,7 +132,6 @@ export function NewRecipeSheet({
                   overlay
                   underline="none"
                   className="t-head text-ink"
-                  onClick={() => onOpenChange(false)}
                 >
                   Paste
                 </Link>
@@ -146,7 +149,6 @@ export function NewRecipeSheet({
                 overlay
                 underline="none"
                 className="t-head text-ink"
-                onClick={() => onOpenChange(false)}
               >
                 Type
               </Link>

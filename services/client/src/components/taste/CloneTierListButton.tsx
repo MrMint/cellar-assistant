@@ -1,6 +1,6 @@
 "use client";
 
-import { Copy } from "lucide-react";
+import { Check, Copy } from "lucide-react";
 import { useState } from "react";
 import { useMutation } from "urql";
 import { ICON_STROKE } from "@/components/app/icons";
@@ -15,6 +15,9 @@ import { CloneTierListMutation } from "./queries";
  * deletes the copy — the server's clone is one edit on a list nobody else
  * can see, so deleting it leaves nothing behind. The source is never
  * touched. A list you may not see answers like a missing one, and says so.
+ * Once copied the button gives way to "Copied" (the board's `canCopy:
+ * !copied`, F-92), so a second tap can't make a second copy; Undo gives Copy
+ * back.
  */
 export function CloneTierListButton({
   tierListId,
@@ -26,6 +29,7 @@ export function CloneTierListButton({
   const [, clone] = useMutation(CloneTierListMutation);
   const [, remove] = useMutation(DeleteTierListMutation);
   const [busy, setBusy] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   const onCopy = async () => {
     setBusy(true);
@@ -43,17 +47,32 @@ export function CloneTierListButton({
       return;
     }
     const copyId = result.data.id;
-    notify("Copied to your lists", {
+    setCopied(true);
+    notify(`Copied “${name}”`, {
       undo: () => {
         void remove({ id: copyId }).then((undo) => {
           const undone =
             undo.error === undefined &&
             unwrapResult(undo.data?.deleteTierList, "DeletedTierList").ok;
-          if (!undone) notify("Couldn't undo the copy", { tone: "error" });
+          if (undone) setCopied(false);
+          else notify("Couldn't undo the copy", { tone: "error" });
         });
       },
     });
   };
+
+  if (copied) {
+    return (
+      <span
+        role="status"
+        data-slot="tier-list-copied"
+        className="t-head inline-flex min-h-11 items-center gap-1.5 px-3 text-ink-2"
+      >
+        <Check aria-hidden strokeWidth={ICON_STROKE} className="size-5" />
+        Copied
+      </span>
+    );
+  }
 
   return (
     <Button

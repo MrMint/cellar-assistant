@@ -16,8 +16,10 @@ GlobalRegistrator.register({ url: "http://localhost/friends" });
 (
   globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
 ).IS_REACT_ACT_ENVIRONMENT = true;
+/** The width the page sees: false is a phone, true is `md` and up. */
+let wide = false;
 window.matchMedia = ((query: string) => ({
-  matches: false,
+  matches: wide,
   media: query,
   onchange: null,
   addEventListener: () => {},
@@ -41,6 +43,13 @@ const lists = {
 let searchTerm = "";
 const calls: { name: string; variables: unknown }[] = [];
 const toasts: string[] = [];
+type ToastOptions = {
+  undo?: () => void;
+  onAutoClose?: () => void;
+  onClose?: () => void;
+};
+/** Each toast's options, by message: its Undo and its close callbacks. */
+const raised = new Map<string, ToastOptions>();
 
 const ok: Record<string, unknown> = {
   SendFriendRequest: {
@@ -126,8 +135,9 @@ mock.module("next/navigation", () => ({
   useSearchParams: () => new URLSearchParams(),
 }));
 mock.module("@/components/app/notify", () => ({
-  notify: (message: string) => {
+  notify: (message: string, options: ToastOptions = {}) => {
     toasts.push(message);
+    raised.set(message, options);
     return message;
   },
   dismissNotification: () => {},
@@ -150,17 +160,42 @@ mock.module("./FriendPane", () => ({ FriendPane: () => null }));
 const { act } = await import("react");
 const { createRoot } = await import("react-dom/client");
 const { FriendsClient } = await import("./FriendsClient");
+const { handleAppKey } = await import("@/components/app/overlays/app-keys");
+
+const shell = {
+  navigate: () => {},
+  openKeys: () => {},
+  openMore: () => {},
+  focusSearch: () => false,
+};
+/** A key through the app element's dispatcher: whether the shell took it
+ * (and so prevented the browser's default). */
+const press = (key: string, target: EventTarget = document.body) =>
+  handleAppKey(
+    {
+      key,
+      metaKey: false,
+      ctrlKey: false,
+      altKey: false,
+      target,
+      preventDefault: () => {},
+    },
+    shell,
+    { armed: false },
+  );
 
 let container: HTMLElement;
 let root: ReturnType<typeof createRoot>;
 
 beforeEach(() => {
+  wide = false;
   lists.friends = [];
   lists.INCOMING = [];
   lists.OUTGOING = [];
   searchTerm = "";
   calls.length = 0;
   toasts.length = 0;
+  raised.clear();
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
@@ -180,6 +215,16 @@ const byLabel = (label: string) => {
 const click = async (el: HTMLElement) => {
   await act(async () => {
     el.click();
+    await new Promise((r) => setTimeout(r, 20));
+  });
+};
+
+/** Runs a toast's callback (its Undo, or its time running out). */
+const onToast = async (message: string, which: keyof ToastOptions) => {
+  const options = raised.get(message);
+  if (options === undefined) throw new Error(`no toast "${message}"`);
+  await act(async () => {
+    options[which]?.();
     await new Promise((r) => setTimeout(r, 20));
   });
 };
@@ -230,11 +275,15 @@ describe("/friends", () => {
     await render();
     await click(byLabel("Accept Demo Four"));
     await click(byLabel("Decline Demo Three"));
+    await onToast("Declined Demo Three’s request", "onAutoClose");
     assert.deepEqual(calls, [
       { name: "AcceptFriendRequestAction", variables: { requestId: "r-b" } },
       { name: "RejectFriendRequestAction", variables: { requestId: "r-a" } },
     ]);
-    assert.deepEqual(toasts, ["Demo Four is your friend"]);
+    assert.deepEqual(toasts, [
+      "Demo Four is your friend",
+      "Declined Demo Three’s request",
+    ]);
   });
 
   test("Cancel on a sent request cancels that one only", async () => {
@@ -244,6 +293,7 @@ describe("/friends", () => {
     ];
     await render();
     await click(byLabel("Cancel request to Demo Eight"));
+    await onToast("Request to Demo Eight canceled", "onClose");
     assert.deepEqual(calls, [
       { name: "RejectFriendRequestAction", variables: { requestId: "r-2" } },
     ]);
@@ -257,5 +307,71 @@ describe("/friends", () => {
       { name: "SendFriendRequest", variables: { userId: "u-6" } },
     ]);
     assert.deepEqual(toasts, ["Request sent to Demo Six"]);
+  });
+
+  // F-90 (CD-3): the list's keys are desktop keys. On a phone they are the
+  // browser's (arrows scroll), and Enter on a focused button presses it.
+  test("on a phone the arrows and Enter stay the browser's", async () => {
+    lists.friends = [
+      { since: "2026-10-01T00:00:00Z", user: person("u-2", "Test Two") },
+    ];
+    await render();
+    assert.equal(press("ArrowDown"), false);
+    assert.equal(press("ArrowUp"), false);
+    assert.equal(press("Enter"), false);
+  });
+
+  test("Enter on a focused button presses it, at every width", async () => {
+    wide = true;
+    lists.friends = [
+      { since: "2026-10-01T00:00:00Z", user: person("u-2", "Test Two") },
+    ];
+    lists.INCOMING = [
+      { id: "r-in", status: "PENDING", user: person("u-3", "Demo Three") },
+    ];
+    await render();
+    assert.equal(press("Enter", byLabel("Accept Demo Three")), false);
+    assert.equal(press("ArrowDown"), true, "the desktop list keeps J/K");
+  });
+
+  // F-91 (CD-4): Decline and Cancel each end in a toast with Undo, and the
+  // write waits for it (only the other person could undo a decline).
+  test("Decline hides the request, and Undo brings it back unsent", async () => {
+    lists.INCOMING = [
+      { id: "r-a", status: "PENDING", user: person("u-3", "Demo Three") },
+    ];
+    await render();
+    await click(byLabel("Decline Demo Three"));
+    assert.deepEqual(toasts, ["Declined Demo Three’s request"]);
+    assert.deepEqual(calls, [], "nothing is sent while Undo is offered");
+    assert.equal(
+      container.querySelector('button[aria-label="Decline Demo Three"]'),
+      null,
+    );
+    await onToast("Declined Demo Three’s request", "undo");
+    await onToast("Declined Demo Three’s request", "onClose");
+    assert.deepEqual(calls, []);
+    byLabel("Decline Demo Three");
+  });
+
+  test("Cancel request hides it with Undo; leaving the page sends it", async () => {
+    lists.OUTGOING = [
+      { id: "r-2", status: "PENDING", user: person("u-8", "Demo Eight") },
+    ];
+    await render();
+    await click(byLabel("Cancel request to Demo Eight"));
+    assert.deepEqual(toasts, ["Request to Demo Eight canceled"]);
+    assert.deepEqual(calls, []);
+    assert.equal(
+      container.querySelector(
+        'button[aria-label="Cancel request to Demo Eight"]',
+      ),
+      null,
+    );
+    await act(async () => root.unmount());
+    root = createRoot(container);
+    assert.deepEqual(calls, [
+      { name: "RejectFriendRequestAction", variables: { requestId: "r-2" } },
+    ]);
   });
 });

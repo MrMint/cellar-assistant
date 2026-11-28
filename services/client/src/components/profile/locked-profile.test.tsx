@@ -31,7 +31,12 @@ const lists: { OUTGOING: Row[]; INCOMING: Row[] } = {
   INCOMING: [],
 };
 const calls: { name: string; variables: unknown }[] = [];
-const toasts: { message: string; undo?: () => void }[] = [];
+type ToastOptions = {
+  undo?: () => void;
+  onAutoClose?: () => void;
+  onClose?: () => void;
+};
+const toasts: ({ message: string } & ToastOptions)[] = [];
 let refreshed = 0;
 
 const row = (id: string, userId: string): Row => ({
@@ -119,8 +124,8 @@ mock.module("next/navigation", () => ({
   useSearchParams: () => new URLSearchParams(),
 }));
 mock.module("@/components/app/notify", () => ({
-  notify: (message: string, options?: { undo?: () => void }) => {
-    toasts.push({ message, undo: options?.undo });
+  notify: (message: string, options?: ToastOptions) => {
+    toasts.push({ message, ...options });
     return message;
   },
   dismissNotification: () => {},
@@ -197,13 +202,33 @@ describe("LockedProfile (Social-Friends 17, 18)", () => {
     lists.OUTGOING = [row("r-9", "u-9"), row("r-2", "u-2"), row("r-8", "u-8")];
     await act(async () => root.render(<LockedProfile person={person} />));
     await click(button("Cancel request"));
+    // F-91: the toast offers Undo, and the write waits for it to pass.
+    assert.equal(toasts[0]?.message, "Request to Test Two canceled");
+    assert.deepEqual(calls, []);
+    button("Add friend");
+    await act(async () => {
+      toasts[0]?.onAutoClose?.();
+      await new Promise((r) => setTimeout(r, 20));
+    });
     assert.deepEqual(calls, [
       {
         name: "RejectFriendRequestAction",
         variables: { requestId: "r-2" },
       },
     ]);
-    button("Add friend");
+  });
+
+  test("Undo on the canceled toast keeps the request, unsent", async () => {
+    lists.OUTGOING = [row("r-2", "u-2")];
+    await act(async () => root.render(<LockedProfile person={person} />));
+    await click(button("Cancel request"));
+    await act(async () => {
+      toasts[0]?.undo?.();
+      toasts[0]?.onClose?.();
+      await new Promise((r) => setTimeout(r, 20));
+    });
+    assert.deepEqual(calls, []);
+    button("Cancel request");
   });
 
   test("Undo on the sent toast cancels the request just sent", async () => {
@@ -218,6 +243,19 @@ describe("LockedProfile (Social-Friends 17, 18)", () => {
       name: "RejectFriendRequestAction",
       variables: { requestId: "r-new" },
     });
+  });
+
+  test("Add friend while a cancel waits keeps the request, with no second ask", async () => {
+    lists.OUTGOING = [row("r-2", "u-2")];
+    await act(async () => root.render(<LockedProfile person={person} />));
+    await click(button("Cancel request"));
+    await click(button("Add friend"));
+    await act(async () => {
+      toasts[0]?.onClose?.();
+      await new Promise((r) => setTimeout(r, 20));
+    });
+    assert.deepEqual(calls, []);
+    button("Cancel request");
   });
 
   test("when they asked you, Accept takes their request and no other", async () => {
