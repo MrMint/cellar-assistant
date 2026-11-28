@@ -94,17 +94,16 @@ test("a new place is saved at once, and only its creator can see it", async ({
   await expect(page.getByText("Loading address...")).toBeHidden({
     timeout: 30_000,
   });
-  await page.getByLabel("Name *").fill(placeName);
-  await page.getByLabel("Categories *").click();
-  await page.getByRole("option", { name: "Wine Bar" }).click();
-  await page.keyboard.press("Escape");
+  // F-200 / H-139: the name is one field, and the kind is a toggle.
+  await page.getByLabel("Name", { exact: true }).fill(placeName);
+  await page.getByRole("button", { name: "Wine", exact: true }).click();
 
   const created = page.waitForRequest(
     (request) =>
       request.url().includes("/api/graphql") &&
       /mutation MapCreatePlace\b/.test(request.postData() ?? ""),
   );
-  await page.getByRole("button", { name: "Add Place" }).click();
+  await page.getByRole("button", { name: "Add here" }).click();
   const request = await created;
   placeId = request.postDataJSON()?.variables?.input?.placeId;
   expect(placeId).toMatch(/^[0-9a-f-]{36}$/);
@@ -207,10 +206,10 @@ test("rejected: the reason, then Edit & resubmit sends it back for review", asyn
   await expect(page.getByTestId("edit-rejection-reason")).toContainText(
     "Looks like a private home.",
   );
-  await expect(page.getByLabel("Name *")).toHaveValue(placeName);
+  await expect(page.getByLabel("Name", { exact: true })).toHaveValue(placeName);
 
   placeName = `${placeName} Wine Room`;
-  await page.getByLabel("Name *").fill(placeName);
+  await page.getByLabel("Name", { exact: true }).fill(placeName);
   const resubmitted = page.waitForResponse(
     (response) =>
       response.url().includes("/api/graphql") &&

@@ -19,7 +19,7 @@ const searchBox = (page: Page) =>
   page.getByRole("searchbox").or(page.getByRole("textbox")).first();
 
 const section = (page: Page, name: string) =>
-  page.locator(`[data-search-section="${name}"]`);
+  page.locator(`[data-search-section="${name}"]`).filter({ visible: true });
 
 type Fixture = {
   cellarId: string;
@@ -208,7 +208,9 @@ test("a search that matches nothing is one empty state with one action", async (
 }) => {
   const nothing = unique("zqxj nothing");
   await page.goto(`/search?q=${encodeURIComponent(nothing)}`);
-  await expect(page.getByText(`Nothing matches “${nothing}”`)).toBeVisible({
+  await expect(
+    page.getByText(`Nothing matches “${nothing}”`).filter({ visible: true }),
+  ).toBeVisible({
     timeout: 30_000,
   });
   await expect(
@@ -237,17 +239,18 @@ test("People finds a friend or someone to add, never yourself", async ({
   // Connected (a link into Friends), not yet (Add friend), or a request
   // either way (Cancel request / Accept) — this account's friendship with the
   // other is other specs' business.
-  const row = people
-    .locator("[data-search-row]")
-    .filter({ hasText: name })
-    .first();
-  const addButton = row.getByRole("button", {
+  // The person row is one link when you are friends (its status line reads
+  // "Friend"), and carries an action beside it otherwise.
+  const addButton = people.getByRole("button", {
     name: `Add ${name} as a friend`,
   });
-  const pending = row.getByRole("button", {
+  const pending = people.getByRole("button", {
     name: new RegExp(`^(Cancel the request to|Accept) ${name}`),
   });
-  const friendsLink = row.getByRole("link", { name });
+  const friendsLink = people
+    .getByRole("link")
+    .filter({ hasText: name })
+    .filter({ hasText: "Friend" });
   expect(
     (await addButton.count()) +
       (await pending.count()) +

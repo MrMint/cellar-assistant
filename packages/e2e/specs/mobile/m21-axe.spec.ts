@@ -369,10 +369,12 @@ async function targetSizeIn(page: Page, selector: string): Promise<Finding[]> {
   }));
 }
 
-test("touch targets: the item page's actions and the bottle page's Pour sheet pass target-size", async ({
+test("touch targets: the item page's tins and the bottle page's Steep sheet pass target-size", async ({
   page,
 }) => {
-  const toolbar = '[role="toolbar"][aria-label="Item actions"]';
+  // There is no Item actions bar any more: the actions are on each tin's row,
+  // in the "Your tins" section.
+  const tins = "[data-e2e-tins]";
   for (const route of [
     `/teas/${ids.tea}`,
     `/cellars/${ids.cellar}/teas/${ids.bottle}`,
@@ -380,25 +382,27 @@ test("touch targets: the item page's actions and the bottle page's Pour sheet pa
     await test.step(route, async () => {
       await page.goto(route);
       await settled(page);
-      await expect(page.locator(toolbar)).toBeVisible();
+      // Axe takes a CSS selector, so tag the section by its heading first.
+      await page
+        .getByRole("heading", { name: "Your tins" })
+        .evaluate((h) => h.closest("section")?.setAttribute("data-e2e-tins", ""));
+      await expect(page.locator(tins).first()).toBeVisible();
       expect
-        .soft(await targetSizeIn(page, toolbar), `${route}: Item actions`)
+        .soft(await targetSizeIn(page, tins), `${route}: Your tins`)
         .toEqual([]);
     });
   }
-  // The bottle page's Pour opens the Pour sheet: its chips and submit. A tea's
-  // action reads "Steep" (W-20, components/drink-log/type-words.ts); the sheet is
-  // still the Pour sheet.
+  // A tea's action reads "Steep" (W-20); its sheet is "Steep" too.
   await page
-    .getByRole("toolbar", { name: "Item actions" })
-    .getByRole("button", { name: "Steep", exact: true })
+    .getByRole("button", { name: /^Steep from / })
+    .first()
     .click();
-  const sheet = page.getByRole("dialog", { name: "Pour" });
+  const sheet = page.getByRole("dialog", { name: "Steep" });
   await expect(sheet).toBeVisible();
   expect
     .soft(
       await targetSizeIn(page, '[role="dialog"]'),
-      "the Pour sheet: target-size",
+      "the Steep sheet: target-size",
     )
     .toEqual([]);
 });

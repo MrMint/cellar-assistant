@@ -165,7 +165,7 @@ test("places an entry in at most log2(n)+1 taps, then Undo removes it", async ({
   const api = await Gql.forAccount("primary");
   try {
     await page.goto(`/tier-lists/${listId}`);
-    await page.getByRole("button", { name: "Arrange", exact: true }).tap();
+    await page.getByRole("button", { name: "Edit order", exact: true }).tap();
     await page.getByRole("button", { name: "Add entry", exact: true }).tap();
     const sheet = page.getByRole("dialog", { name: "Add entry" });
     await expect(sheet).toBeVisible();
