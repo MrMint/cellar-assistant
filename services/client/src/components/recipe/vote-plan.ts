@@ -36,10 +36,18 @@ export const canVote = (
   authorId !== undefined &&
   viewerId !== authorId;
 
-/** The toast after a tap. */
-export const voteToast = (write: VoteWrite): string =>
+/**
+ * The toast after a tap, in the board's words (Recipes-Browse 17, 18, 20):
+ * "You voted up Negroni", "Vote taken back".
+ */
+export const voteToast = (write: VoteWrite, recipeName: string): string =>
   write.kind === "remove"
     ? "Vote taken back"
-    : write.voteType === "upvote"
-      ? "Voted up"
-      : "Voted down";
+    : `You voted ${write.voteType === "upvote" ? "up" : "down"} ${recipeName}`;
+
+/**
+ * One toast id per version, so a vote's toast replaces the one before it
+ * (taking back a vote no longer stacks on "You voted down", F-116).
+ */
+export const voteToastId = (recipeId: string): string =>
+  `recipe-vote-${recipeId}`;
