@@ -33,7 +33,7 @@
  * Worth knowing when reading the data: the legacy scanner wrote codes this
  * pattern would now reject. `barcodes` in the dev database holds a row whose
  * code is `"ANNO\n1822"` and another that is the empty string — OCR spill from
- * the Nhost-era flow, which validated nothing.
+ * the legacy scanner, which validated nothing.
  *
  * ## 2 · Why nothing here proposes a barcode *type*
  *

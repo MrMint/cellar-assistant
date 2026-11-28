@@ -3,7 +3,7 @@
  *
  * The old UI read `createdBy { displayName avatarUrl }`, `co_owners { user }`
  * and a review's or check-in's `user { … }` straight off the row, through
- * Hasura relationships. The new rows carry the ids (`createdById`,
+ * relationships. The new rows carry the ids (`createdById`,
  * `coOwnerIds`, `userId`); these fields turn each id into a `UserProfile`.
  *
  * ## Why this costs one batch, not one call per row

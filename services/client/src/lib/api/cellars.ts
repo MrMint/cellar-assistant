@@ -5,7 +5,7 @@
  * the fragments are shared across four routes, and gql.tada's fragment
  * composition wants the fragment in scope where the query is written.
  *
- * Read against `packages/schema/schema.graphql`, not against Hasura: there is
+ * Read against `packages/schema/schema.graphql`: there is
  * no `where`, no `_aggregate`, no `on_conflict`. Filtering is an argument or it
  * does not exist, counts are fields (`Cellar.itemCount`), and idempotency is a
  * client-minted id (`AddCellarItemInput.cellarItemId`, `checkIn(checkInId:)`).

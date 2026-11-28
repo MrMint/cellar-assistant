@@ -100,7 +100,7 @@ export type RecipeGroupSearchProps = {
  * with "Show more" for the next page — twelve cards a page does not need
  * windowing, and the page's own scroll is the one the thumb expects.
  *
- * `useOptimizedRecipeGroupSearch` (Hasura `_ilike`, offset paging, an LRU) →
+ * `useOptimizedRecipeGroupSearch` (`_ilike`, offset paging, an LRU) →
  * `recipeGroups(term:, category:, baseSpirit:)` through `usePagedConnection`:
  * cursor paging, a real `totalCount`, and only the newest answer lands. Two
  * old filters that never reached the query now do — the base spirit (the old

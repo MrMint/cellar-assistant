@@ -1,6 +1,5 @@
 /**
- * `VectorReembedJobActor` — the walk that makes a model change (and the
- * cutover) actually re-embed the stored vectors.
+ * `VectorReembedJobActor` — the walk that makes a model change actually re-embed the stored vectors.
  *
  * What is worth proving beyond "it called regenerateVector":
  *
@@ -270,7 +269,7 @@ describe.skipIf(skip)("VectorReembedJobActor", () => {
   /**
    * End to end: the real `regenerateVector` behind the seam records the
    * configured model, so the rows drop out of the walk — a second job finds
-   * nothing to do. This is the property the cutover depends on.
+   * nothing to do. This is the property a model change depends on.
    */
   it("leaves nothing stale: a second run after the first visits no row", async () => {
     await withTestDb(async (db) => {

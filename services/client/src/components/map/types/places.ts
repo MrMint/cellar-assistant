@@ -2,8 +2,7 @@
  * `82450ad1:src/types/places.ts`, restored beside the map types (its only
  * readers are here).
  *
- * `PlaceGooglePhoto.storageFileId` (an Nhost storage id fed to
- * `getNhostStorageUrl`) → `url`, the presigned `PlacePhoto.file.url` (drawn
+ * `PlaceGooglePhoto.storageFileId` (a storage file id) → `url`, the presigned `PlacePhoto.file.url` (drawn
  * through `next/image`, as before — see `next.config.mjs`, `imagesConfig`), plus the photo's
  * own `attributions`, which Google's terms require next to the image.
  * `PlaceEnrichment.photoReferences` is gone: the API mirrors the photos and

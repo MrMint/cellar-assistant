@@ -5,10 +5,6 @@ import { graphql } from "@/lib/api/graphql";
  * `/friends` — B4's `UserActor` friend methods and C3's
  * `FriendsCollectionActor`, against the new API (`services/api`).
  *
- * Written as a straight rewrite of the Nhost-era `fragments.ts` rather than an
- * edit to it, per the plan's "delete the replaced server actions" (§6 D2–D8).
- * D8 deleted the original along with `actions.ts`.
- *
  * `@_unmask` on `UserSummaryFragment` is gql.tada's own directive, stripped
  * before the request is sent — it just turns off fragment masking so callers
  * can read `user.displayName` directly instead of threading it through

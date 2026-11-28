@@ -8,10 +8,10 @@
  *
  * ## What survived the port from `functions/` and what did not
  *
- *  - **Tier-list insights** keeps the Nhost function's six-field output schema
+ *  - **Tier-list insights** keeps the original function's six-field output schema
  *    (`palateProfile`, `blindSpots`, `hotTake`, `archetype`,
  *    `archetypeDescription`, `recommendation`) and its voice, so an
- *    `ai_insights` row written by the new stack is the same shape the frontend
+ *    `ai_insights` row written here is the same shape the frontend
  *    already reads.
  *
  *    **B7b gave it back its raw material.** This paragraph used to say the
@@ -25,7 +25,7 @@
  *    every list whose `list_type` was not `place`, and it listed all six
  *    output fields as `required`. See `INSIGHTS_SCHEMA` for why the second was
  *    actively harmful.
- *  - **Item defaults keeps the enum-constrained schema** (X1b). The Nhost
+ *  - **Item defaults keeps the enum-constrained schema** (X1b). The original
  *    version generated its schema at runtime from ten reference tables
  *    (`shared-enums.ts`), so `style`, `country`, `roast_level` and friends were
  *    `enum`s the model could not miss. The port dropped that, on the grounds
@@ -231,7 +231,7 @@ const entryLine = (entry: InsightsEntry, index: number): string => {
 /**
  * B7b: built from resolved entries, not from `type` and a uuid.
  *
- * The shape follows the Nhost function's — identified rankings, then summary
+ * The shape follows the original function's — identified rankings, then summary
  * statistics, then the crowd-consensus contrast, then "what these are known
  * for" — because that prompt's substance is what §6 B7b asks to match. Two
  * deliberate differences: it handles all seven entry types rather than
@@ -1671,7 +1671,7 @@ export const PLACE_REVIEW_FLAGS = [
 /**
  * The review's output shape — and the one decision in this file worth arguing.
  *
- * **`approved` is the only required field.** The Nhost schema required five
+ * **`approved` is the only required field.** The original schema required five
  * (`approved`, `confidence_adjustment`, `enriched_description`,
  * `suggested_categories`, `flags`), and `required` is not a request: providers
  * compile it into the sampler's grammar, so the decoder *cannot* close the

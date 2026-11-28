@@ -7,14 +7,9 @@ import { withReturnTo } from "@/utilities/sanitize-return-to";
 /**
  * The viewer, for server components that only need identity.
  *
- * D2 added better-auth here as a *fallback* behind the Nhost session, so a
- * viewer still holding a live `nhostSession` kept seeing what they saw before.
- * D9 removed the Nhost half: `getServerSession()` is now the only source, and a
- * pre-migration `nhostSession` cookie means nothing to this app.
- *
- * The ids agree across that change — A6 migrated Nhost's `auth.users.id` (a
- * uuid) into better-auth unchanged, so `ServerUser.id` means the same thing it
- * always did.
+ * `getServerSession()` is the only source. Accounts imported in the 2026-10
+ * migration kept their uuids, so `ServerUser.id` means the same thing it always
+ * did.
  *
  * A page that is going to query GraphQL anyway does not need this: `me` on the
  * API answers from the token's own claims, in the same round trip. Use it for

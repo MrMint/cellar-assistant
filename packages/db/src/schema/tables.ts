@@ -66,8 +66,8 @@ export const apiUsageLog = pgTable("api_usage_log", {
 	// every reservation that carries an id. Without it that lookup was a scan of
 	// the endpoint's whole history (`idx_api_usage_log_service_created` narrows
 	// by service only). Partial, because most non-model rows carry no id.
-	// Placed where `drizzle-kit pull` sorts it, so cutover's baseline diff is
-	// empty rather than a reordering.
+	// Placed where `drizzle-kit pull` sorts it, so a pull diffed against this
+	// file is empty rather than a reordering.
 	index("idx_api_usage_log_reservation_id").using("btree", sql`(metadata ->> 'reservationId'::text)`).where(sql`((metadata ->> 'reservationId'::text) IS NOT NULL)`),
 	index("idx_api_usage_log_service_created").using("btree", table.service.asc().nullsLast(), table.createdAt.asc().nullsLast()),
 ]);
@@ -658,10 +658,9 @@ export const outbox = pgTable("outbox", {
 	index("outbox_delivering_idx").using("btree", table.updatedAt.asc().nullsLast()).where(sql`(status = 'delivering'::text)`),
 	// Listed in catalog-creation order, not alphabetically: `pull` renders
 	// indexes in the order Postgres returns them, and diffing a fresh pull
-	// against this file (packages/db/transform/README.md's cutover `baseline`
-	// phase) is line-for-line, so an alphabetical re-sort here would read as
-	// schema drift that isn't. `06_new_tables.sql` recreates this one; the
-	// other two are added later by the hand-written lane, hence this order.
+	// against this file is line-for-line, so an alphabetical re-sort here would
+	// read as schema drift that isn't. The baseline creates this one; the other
+	// two are added later by the hand-written lane, hence this order.
 	index("outbox_due_idx").using("btree", table.runAfter.asc().nullsLast(), table.seq.asc().nullsLast()).where(sql`(status = 'pending'::text)`),
 	// The `WHERE NOT EXISTS` guard in `enqueueOutboxOnce`, which runs on the hot
 	// path of every tier-list mutation. Partial for the same reason: it indexes
@@ -675,13 +674,12 @@ check("outbox_status_check", sql`(status = ANY (ARRAY['pending'::text, 'deliveri
 // migration's DDL. The FK is the plain `.references()` form — not a named
 // `foreignKey()` builder — because that is the only form `pull` ever renders
 // for a single-column FK (README.md's "Hand-edits" section, HAND-EDIT #7);
-// a builder call here made the cutover's
-// baseline diff (transform/README.md) fail on syntax alone, verified against
-// a from-scratch build. The live constraint's own name is aligned to match
-// what this declaration's default naming implies, not the other way around —
-// see migrations/20260926150000_outbox_dead_letter_acks_fkey_align, the same
-// treatment transform/07_align_constraint_names.sql gives every other
-// single-column FK, just arriving from a table `07` runs too early to see.
+// a builder call here made a pull diffed against this file fail on syntax
+// alone, verified against a from-scratch build. The live constraint's own name
+// is aligned to match what this declaration's default naming implies, not the
+// other way around — see
+// migrations/20260926150000_outbox_dead_letter_acks_fkey_align, the naming
+// every other single-column FK already has in the baseline.
 export const outboxDeadLetterAcks = pgTable("outbox_dead_letter_acks", {
 	outboxId: uuid("outbox_id").primaryKey().references(() => outbox.id, { onDelete: "cascade" } ),
 	targetActor: text("target_actor").notNull(),

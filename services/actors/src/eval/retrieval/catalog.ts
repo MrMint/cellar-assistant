@@ -21,7 +21,7 @@
  *  - attributes stored as vocabulary codes (`SCOTCH`, `PILSENER_PILSNER_PILS`,
  *    `junmai_daiginjo`) — what the embedded text spelled verbatim before N08.
  *
- * Every value here is a real vocabulary value in the transformed database
+ * Every value here is a real vocabulary value in the built database
  * (`wine_style`, `spirit_type`, `country`, …); `fixtures.test.ts` checks the
  * bag keys against `ITEM_TYPE_SPECS` and that every expected key in the
  * queries and menus names an entry here.

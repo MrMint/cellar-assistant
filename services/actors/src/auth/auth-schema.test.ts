@@ -36,7 +36,7 @@ const expected = getAuthTables(auth.options);
  * camelCase). The property is what the adapter uses, and what the first half of
  * the check below asserts. The column underneath it is `drizzle-kit pull`'s
  * business — snake_case of the same name, straight out of
- * `packages/db/transform/13_better_auth_tables.sql` — and is checked separately
+ * `./auth-tables.sql` and `packages/db/baseline/schema.sql` — and is checked separately
  * so a re-pull against a *renamed column* is caught too, not just a renamed
  * property.
  */
@@ -104,7 +104,7 @@ describe("better-auth ⇄ Drizzle schema", () => {
     expect(problems).toEqual([]);
   });
 
-  it("keeps the three columns carried over from Nhost's auth.users", () => {
+  it("keeps the three app-specific user columns", () => {
     // `role`, `locale` and `disabled` are `additionalFields` declared
     // `input: false` in `./auth.ts`. They are not part of better-auth's core
     // user model, so nothing but this notices if a re-pull loses them.
@@ -118,8 +118,7 @@ describe("better-auth ⇄ Drizzle schema", () => {
   });
 
   it("keeps every id column a uuid", () => {
-    // What made X2's foreign-key repoint a constraint swap rather than a
-    // column-type migration (A6b; `packages/db/transform/14`).
+    // The 31 `public.*` foreign keys to `"user"(id)` are `uuid` columns.
     for (const [model, table] of Object.entries(authSchema)) {
       const columns = getTableColumns(table) as Record<
         string,

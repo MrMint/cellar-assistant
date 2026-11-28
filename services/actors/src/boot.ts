@@ -22,8 +22,7 @@
  *     installs nothing and leaves each seam throwing its own `unconfigured*`
  *     error. A set-but-incomplete `AI_PROVIDER` **throws here**, before any
  *     actor is registered or the server starts, so the host never serves on a
- *     stub — the opposite of the Nhost `refreshPlaces` factory's
- *     `console.warn` and mock data.
+ *     stub, never a `console.warn` and mock data.
  *  2. **Overture** — `installOverture()`, the same three-outcome contract for
  *     the BigQuery source `OvertureReloadJobActor` reads (C4b).
  *  3. **Actors** — every `ACTOR_REGISTRY` entry, registered once, in order.

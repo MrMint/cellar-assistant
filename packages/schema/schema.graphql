@@ -1012,9 +1012,7 @@ type BrandSearchResult {
   name: String!
 }
 
-"""
-The `brand_types` Postgres enum (`brands.brand_type`). Keyed on `id` in the pre-A3 Hasura table this enum replaces.
-"""
+"""The `brand_types` Postgres enum (`brands.brand_type`)."""
 enum BrandType {
   brewery
   distillery
@@ -2470,7 +2468,7 @@ interface Error {
 }
 
 """
-One `files` row — the table that replaced Nhost's `storage.files`. Readable by its uploader, and by anyone when something public references it (a public `item_image`, a place photo).
+One `files` row: an uploaded object's metadata. Readable by its uploader, and by anyone when something public references it (a public `item_image`, a place photo).
 """
 type File {
   bucket: String!
@@ -2995,7 +2993,7 @@ enum IngredientRole {
 }
 
 """
-The `instruction_types` Postgres enum (`recipe_instructions.instruction_type`). Keyed on `id` in the pre-A3 Hasura table this enum replaces.
+The `instruction_types` Postgres enum (`recipe_instructions.instruction_type`).
 """
 enum InstructionType {
   chill

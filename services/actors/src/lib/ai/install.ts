@@ -15,10 +15,10 @@
  * `AI_BUDGET_MAX_REQUESTS` or `OPENAI_COMPAT_FREE` also throws here. Empty is
  * not malformed: it means no overrides.
  *
- * The third row is the one the old stack got wrong. `functions/refreshPlaces/
- * _services/factory.ts` answered "credentials missing" with a `console.warn`
- * and a mock service reading `wisconsin-places.json`, in production, and
- * everything downstream carried on. An operator who sets `AI_PROVIDER` has said
+ * The third row is the one a silent fallback gets wrong: answering
+ * "credentials missing" with a `console.warn` and a mock service serves fake
+ * data in production, and everything downstream carries on (`config.ts` has
+ * the example). An operator who sets `AI_PROVIDER` has said
  * what they want; the only honest response to "…but the key is missing" is to
  * stop. `no-silent-fallback.test.ts` holds all three rows.
  */

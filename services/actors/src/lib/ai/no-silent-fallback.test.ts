@@ -4,7 +4,7 @@
  *
  * ## The bug this file exists to prevent
  *
- * It already shipped once, on the Nhost side, and it is still there:
+ * It already shipped once, in the previous backend (`82450ad1`):
  *
  * ```ts
  * // functions/refreshPlaces/_services/factory.ts
@@ -503,7 +503,7 @@ const dataImports = (files: readonly Scanned[]): string[] =>
       .map((specifier) => `${file} imports ${specifier}`),
   );
 
-const ENV_SWITCHES = ["NODE_ENV", "NHOST_LOCAL", "VERCEL_ENV"];
+const ENV_SWITCHES = ["NODE_ENV", "VERCEL_ENV"];
 
 /** `x.NODE_ENV`, and — through the checker — `x["NODE_ENV"]` or `x[k]`. */
 const envReads = (

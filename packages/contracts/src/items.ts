@@ -212,7 +212,7 @@ export type ItemImageDto = {
   readonly id: string;
   readonly itemId: string;
   readonly itemType: ItemType;
-  /** `files.id`. B2 repointed this FK off `storage.files` (A8's outcome note). */
+  /** `files.id`. */
   readonly fileId: string;
   /** Who uploaded it. */
   readonly userId: string;

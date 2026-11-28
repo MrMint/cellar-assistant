@@ -64,7 +64,7 @@
  *
  * `content_updated_at` used to be bumped by `update_tier_list_content_
  * timestamp()`, a trigger on `tier_list_items` INSERT/UPDATE/DELETE, which fed
- * a Hasura event trigger that called the `generateTierListInsights` function.
+ * an event trigger that called the `generateTierListInsights` function.
  * Here, `addItem`, `removeItem` and `reorderBand` bump `content_updated_at`
  * and enqueue an outbox row targeting this actor's own `generateInsights` in
  * the *same* transaction as the row change (§1.4) — `update` (the header-only

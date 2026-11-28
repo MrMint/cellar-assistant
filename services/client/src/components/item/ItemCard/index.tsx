@@ -95,10 +95,10 @@ export const shownFavoriteCount = (
  * same sections, same order, same rules for when each shows.
  *
  * Four substitutions from the restore, each listed in
- * `src/components/LEGACY-RESTORE.md`:
+ * `docs/archive/nhost-migration/LEGACY-RESTORE.md`:
  *
- * 1. **The image** is `next/image` on the presigned `displayImageUrl` rather
- *    than on a Nhost storage URL — same props as before. Presigned reads are
+ * 1. **The image** is `next/image` on the presigned `displayImageUrl` — same
+ *    props as before. Presigned reads are
  *    stable per window now, so the optimizer's cache can hit
  *    (`next.config.mjs`, `imagesConfig`).
  * 2. **The favourite toggle** is `setFavorite` (one mutation that sets the

@@ -71,9 +71,9 @@ test("the offline page is public, so the worker never precaches a redirect", () 
   assert.equal(matcher().test("/~offline"), false);
 });
 
-test("the dead Nhost auth pages are no longer carved out of the gate", () => {
-  // `/forgot-password` and `/verify` never existed on this stack (D19);
-  // exempting them only made two 404s reachable signed out.
+test("pages that do not exist are not carved out of the gate", () => {
+  // There is no `/forgot-password` or `/verify` (D19); exempting them would
+  // only make two 404s reachable signed out.
   const runs = matcher();
   assert.equal(runs.test("/forgot-password"), true);
   assert.equal(runs.test("/verify"), true);

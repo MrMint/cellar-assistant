@@ -104,7 +104,7 @@ describe("runtimeCaching", () => {
     assert.equal(route("/api/graphql", { method: "POST" }), undefined);
   });
 
-  test("the dead Nhost /v1 rules are gone from the worker", () => {
+  test("no worker rule names a /v1 endpoint, which this app does not serve", () => {
     const source = [
       readFileSync(
         fileURLToPath(new URL("./runtime-caching.ts", import.meta.url)),

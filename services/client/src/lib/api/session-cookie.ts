@@ -59,9 +59,8 @@ const serialize = (entries: CookieEntry[]): string | null =>
  * A `Cookie` header carrying **only** better-auth's cookies.
  *
  * Forwarding the browser's whole cookie jar to the actors app would send it
- * analytics cookies, and — until every viewer's browser has expired it — the
- * legacy `nhostSession`, which held a live Hasura access token. Neither belongs
- * there, so the filter is a privacy boundary, not tidiness. It is an allowlist
+ * analytics cookies, and any other session cookie sharing the origin, which
+ * may hold a live access token. Neither belongs there, so the filter is a privacy boundary, not tidiness. It is an allowlist
  * rather than a denylist for the same reason: a cookie nobody thought about is
  * dropped, not forwarded.
  */

@@ -4,7 +4,7 @@
 #
 # A session loads its agent roles, hooks, skills, CLAUDE.md and AGENTS.md from its own checkout, once,
 # at start. A checkout far behind main gives the session the old harness, with nothing to say so.
-# Measured 2026-11-22: the primary checkout sat 109 commits behind origin/main, still on the Nhost-era
+# Measured 2026-11-22: the primary checkout sat 109 commits behind origin/main, still on a months-old
 # CLAUDE.md and the nextjs-* personas, with none of the build roles. Every session started there ran
 # without them.
 #

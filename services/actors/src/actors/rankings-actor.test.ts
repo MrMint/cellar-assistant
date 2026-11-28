@@ -8,9 +8,8 @@
  * Two halves.
  *
  * **The aggregation is reproduced, and proved against the original.** The
- * `item_scores` native query is still declared in
- * `82450ad1:nhost/metadata/databases/databases.yaml`, so `runNativeQuery` below executes
- * its SQL verbatim — the same `AVG`, `COUNT`, `CASE` and `cardinality`
+ * original `item_scores` native query (as of `82450ad1`) is kept below, and
+ * `runNativeQuery` executes its SQL verbatim — the same `AVG`, `COUNT`, `CASE` and `cardinality`
  * branch — and the tests assert the actor's projection equals it row for row.
  * That is a differential test, not a restatement: if the port drifts, the
  * comparison fails rather than both sides moving together.
@@ -64,10 +63,10 @@ type NativeRow = {
 };
 
 /**
- * `item_scores`, verbatim from `82450ad1:nhost/metadata/databases/databases.yaml`, with
+ * `item_scores`, verbatim as of `82450ad1`, with
  * the client's `order_by: {score: desc, count: desc}` and `limit: 200`.
  *
- * The `{{reviewers}}` placeholder is a Hasura native-query argument; here it is
+ * The `{{reviewers}}` placeholder was a native-query argument; here it is
  * a bound `uuid[]` parameter passed as a `{…}` literal, because Drizzle's `sql`
  * flattens a JS array into one placeholder per element (C1's fixture trap).
  *

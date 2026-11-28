@@ -1,4 +1,4 @@
-# CI for the post-Nhost backend stack only: services/api, services/actors, the
+# CI for the backend stack only: services/api, services/actors, the
 # five library packages, and infra/*.
 # The Next.js app (services/client) and the browser suite (packages/e2e) are
 # covered elsewhere and are not built or tested here. The `paths` negations
@@ -24,16 +24,11 @@ name: stack-ci
 #                     pin (both "Check the pinned tool versions" steps)
 #   bun.lock          what `--frozen-lockfile` installs; the cache key
 #   bunfig.toml       install settings (minimumReleaseAge, …)
-#   .nvmrc            setup-node's version; scripts/check-node-version.mjs;
-#                     services/actors/src/auth/migrate-users.test.ts reads it
+#   .nvmrc            setup-node's version; scripts/check-node-version.mjs
 #   scripts/check-node-version.mjs, scripts/check-blocked-builds.mjs,
 #   scripts/deploy/**, scripts/ci/**
 #                     run as steps, by path (the last two from the compose
 #                     and images jobs)
-#   scripts/cutover/**
-#                     the services/actors leg's "Cutover harness" steps run
-#                     scripts/cutover/test/files-phase.sh and
-#                     host-guards.sh, which drive cutover.sh and read its SQL
 #   tsconfig.base.json  extended by all seven matrix projects' tsconfig
 #   biome.json, .gitignore
 #                     the lint job; biome.json sets `vcs.useIgnoreFile`, so
@@ -48,9 +43,8 @@ name: stack-ci
 # Deliberately NOT listed, because nothing here reads them: `turbo.json` (no
 # step invokes turbo — each leg runs its own package's `typecheck`/`test`
 # script in its own directory; add it if a step ever calls `turbo`), the rest
-# of `scripts/`, and `nhost/` (frozen history nothing reads; every build,
-# here and locally, restores packages/db/transform/nhost-schema.sql, which
-# `packages/**` covers).
+# and the rest of `scripts/`. Every database build, here and locally, restores
+# packages/db/baseline/schema.sql, which `packages/**` covers.
 on:
   push:
     branches: [main]
@@ -90,7 +84,6 @@ on:
       - "scripts/check-blocked-builds.mjs"
       - "scripts/deploy/**"
       - "scripts/ci/**"
-      - "scripts/cutover/**"
       - "tsconfig.base.json"
       - "biome.json"
       - ".gitignore"
@@ -117,7 +110,6 @@ on:
       - "scripts/check-blocked-builds.mjs"
       - "scripts/deploy/**"
       - "scripts/ci/**"
-      - "scripts/cutover/**"
       - "tsconfig.base.json"
       - "biome.json"
       - ".gitignore"
@@ -143,8 +135,7 @@ env:
 jobs:
   check:
     runs-on: ubuntu-latest
-    # Where `packages/db/transform/test-db.sh` finds Postgres and its source
-    # dump. Job-level because the vitest globalSetup runs the same script again
+    # Where `packages/db/baseline/test-db.sh` finds Postgres. Job-level because the vitest globalSetup runs the same script again
     # inside the Test step (a no-op once the template's fingerprint matches).
     #
     # DST_CONTAINER, DST_USER and DST_PASSWORD are deliberately *not* set here:
@@ -153,8 +144,6 @@ jobs:
     # `name: cellar-stack` is hardcoded there for exactly this reason (a
     # `services:` service container's name is generated per job and cannot be
     # written down; a compose-started one is stable and known ahead of time).
-    env:
-      DUMP: ${{ github.workspace }}/packages/db/transform/nhost-schema.sql
     strategy:
       fail-fast: false
       matrix:
@@ -210,7 +199,7 @@ jobs:
       #    (`process.versions.bun` set, `execPath` the bun binary) and the step
       #    goes green on the wrong runtime. Dropping setup-node would not break
       #    the schema leg; it would quietly move it to bun, and the same is true
-      #    of `migrate:users` / `migrate:files` / `db:seed` wherever they run.
+      #    of `db:seed` wherever they run.
       - uses: actions/setup-node@v7
         with:
           node-version-file: .nvmrc
@@ -321,16 +310,14 @@ jobs:
       # Does tables.ts match the migrations? `drizzle-kit check` (the snapshot
       # chain) is only half of it: `drizzle-kit generate` against a scratch
       # copy of migrations/ must write nothing, or tables.ts changed without
-      # the migration it implies. Until this step that question was first asked
-      # by scripts/cutover/cutover.sh's `baseline` phase — during the
-      # production freeze. No database; see the script's header.
+      # the migration it implies. No database; see the script's header.
       - name: Schema drift (drizzle-kit check + generate into a scratch copy)
         if: matrix.project == 'packages/db'
         working-directory: packages/db
         run: bun run db:drift
 
       # X4 · real Postgres for the two legs that need it: services/actors' A6
-      # tests (better-auth sign-in, OAuth linking, the user migration script)
+      # tests (better-auth sign-in, OAuth linking)
       # and its database-backed actor suite; and packages/db's
       # `src/migrate/cli.test.ts` — `db:migrate`'s advisory lock and read-back,
       # which skipped on this leg until it had a server (DB_TEST_ADMIN_URL on
@@ -342,12 +329,8 @@ jobs:
       # until the compose healthcheck (`pg_isready`) passes.
       #
       # The services/actors leg starts MinIO too, and runs `minio-init` (the
-      # `cellar-files` bucket), so the three suites that talk to a real object
-      # store run here instead of skipping: scripts/migrate-files.live.test.ts
-      # (the file migration's CLI, made REQUIRED below by
-      # FILES_S3_LIVE_REQUIRED=1), src/lib/s3-presign.live.test.ts, and the
-      # cutover harness step. Until this, all three had only ever run on a
-      # laptop with `bun run stack:up`.
+      # `cellar-files` bucket), so the live object-store suites
+      # (src/lib/s3-*.live.test.ts) run here instead of skipping.
       - name: Start Postgres (infra/postgres)
         if: matrix.project == 'packages/db'
         run: docker compose -f infra/docker-compose.yml up -d --build --wait postgres
@@ -359,22 +342,16 @@ jobs:
           docker compose -f infra/docker-compose.yml run --rm minio-init
 
       # X3 · the actors suite owns its database. It is built by
-      # `packages/db/transform/test-db.sh` — the transform, then `db:migrate`
-      # for every migration (packages/db/src/migrate/), never
+      # `packages/db/baseline/test-db.sh` — the checked-in baseline, then
+      # `db:migrate` for every migration (packages/db/src/migrate/), never
       # `drizzle-kit migrate`, which cannot replay the introspected baseline
       # (packages/db/README.md). The same script the harness's vitest
       # globalSetup runs locally; here it runs as its own step so a build
       # failure reads as a build failure rather than 589 skipped tests.
-      #
-      # X4 · `$DUMP` is the checked-in schema-only baseline
-      # (`packages/db/transform/nhost-schema.sql`, see that directory's
-      # README), not a live Nhost dump — there is no Nhost container in CI —
-      # so this always runs with `--no-dump` and never conditionally skips.
-      # An unbuildable database is a failure here, same as everywhere else:
-      # no more `ACTORS_TEST_DB_OPTIONAL` escape hatch.
+      # An unbuildable database is a failure here, same as everywhere else.
       - name: Build the actors test database
         if: matrix.project == 'services/actors'
-        run: packages/db/transform/test-db.sh --no-dump
+        run: packages/db/baseline/test-db.sh
 
       # Each project's own `test` script, and that indirection is load-bearing.
       # Six of the seven are `bun run --bun vitest run`: the `--bun` is what
@@ -402,30 +379,11 @@ jobs:
           # Postgres) until this leg started one. Empty on every other leg,
           # none of which runs that file.
           DB_TEST_ADMIN_URL: ${{ matrix.project == 'packages/db' && 'postgres://cellar:cellar@localhost:5433/postgres' || '' }}
-          # scripts/migrate-files.live.test.ts skips itself when no MinIO
-          # answers on localhost:9100; set, an unreachable MinIO FAILS it
-          # instead. Only the services/actors leg has one (step above).
+          # src/lib/s3-cors.live.test.ts skips itself when no MinIO answers on
+          # localhost:9100; set, an unreachable MinIO FAILS it instead. Only the
+          # services/actors leg has one (step above).
           FILES_S3_LIVE_REQUIRED: ${{ matrix.project == 'services/actors' && '1' || '' }}
         run: bun run test
-
-      # The real scripts/cutover/cutover.sh — its `files` phase in every mode
-      # (storage-api against a stub of hasura-storage, s3, rows-only, the
-      # docker runner), its refusals, and `dump`/`restore` of a custom-format
-      # archive including a truncated one — against scratch databases and
-      # buckets in the Postgres and MinIO started above. Its defaults are this
-      # compose stack's names. It asserts; a case that does not hold fails it.
-      - name: Cutover harness (scripts/cutover/test/files-phase.sh)
-        if: matrix.project == 'services/actors'
-        run: scripts/cutover/test/files-phase.sh
-
-      # What the 2026-10-04 rehearsal on Loki found that no macOS run could:
-      # the default PG_CLIENT_IMAGE booting a server instead of psql/pg_dump
-      # (`SRC_DSN=… preflight`/`dump` against a scratch Nhost-shaped database),
-      # GNU join refusing smoke's whole-line-sorted input, and a missing `bunx`
-      # surfacing at phase 10 instead of before phase 1. Same Postgres as above.
-      - name: Cutover harness (scripts/cutover/test/host-guards.sh)
-        if: matrix.project == 'services/actors'
-        run: scripts/cutover/test/host-guards.sh
 
       # Leaves no container behind on a self-hosted runner. `if: always()`
       # because a failed Test step must not skip cleanup.
@@ -572,7 +530,7 @@ jobs:
 #           hand; wiring it into CI needs the compose stack to be fast enough and
 #           is cheapest to add once there is something worth asserting. That leg
 #           is also where A4's harness tests should run for real. X3 built the
-#           database side of that: `packages/db/transform/test-db.sh` gives the
+#           database side of that: `packages/db/baseline/test-db.sh` gives the
 #           run its own `cellar_test`, and the "Build the actors test database"
 #           step above (X4) now runs it for real in every services/actors run,
 #           against the Postgres the "Start Postgres" step brings up.

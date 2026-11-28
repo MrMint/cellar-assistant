@@ -7,7 +7,7 @@ import { defineConfig, devices } from "@playwright/test";
  * `http://localhost:3003`, or a host dev server via `E2E_BASE_URL` — against
  * the compose stack
  * (`bun run stack:up`): `services/api` on 3001, `services/actors` on 3002,
- * Postgres on 5433. Nothing here talks to Nhost.
+ * Postgres on 5433.
  *
  * ## This suite runs on Node, not Bun — and that is deliberate
  *
@@ -143,9 +143,7 @@ export default defineConfig({
    * Note for agents: `AGENTS.md` forbids starting `bun run dev` / `bun run
    * build`. Use the stack, or report the suite as blocked — do not start one.
    *
-   * `baseURL` stays `localhost`, not `host.docker.internal`. That older address
-   * was an artifact of the Nhost stack's CORS allowlist
-   * (`82450ad1:nhost/overlays/local.json`), and it is actively wrong now: Playwright
+   * `baseURL` stays `localhost`, not `host.docker.internal`: Playwright
    * runs on the host, reaching a published container port, and better-auth
    * rejects a mismatched `Origin` with `MISSING_OR_NULL_ORIGIN` (403).
    *

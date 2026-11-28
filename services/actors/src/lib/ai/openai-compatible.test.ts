@@ -1,6 +1,6 @@
 /**
  * The OpenAI-compatible provider — the local-dev path of the standing decision
- * in `docs/architecture/e4-decisions.md` §12 (local = vLLM on the Mac, deployed
+ * in `docs/archive/nhost-migration/e4-decisions.md` §12 (local = vLLM on the Mac, deployed
  * = Gemini on Vertex).
  *
  * No credentials and no network; the transport is injected, exactly as in
@@ -231,8 +231,7 @@ describe("structured output preserves optionality", () => {
   it("holds for every real production schema, not just a contrived one", () => {
     // These five are what the seams actually send. `prompts.ts` curated each
     // `required` list deliberately — `PLACE_REVIEW_SCHEMA`, for instance,
-    // requires only `approved`, where the Nhost schema required five fields
-    // and got nulls back for them.
+    // requires only `approved` (see `prompts.ts` for why).
     const production = {
       INSIGHTS_SCHEMA,
       MENU_EXTRACTION_SCHEMA,

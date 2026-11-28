@@ -13,7 +13,7 @@
  * ## The exclusion set is not a join, deliberately
  *
  * Today's query expresses the exclusions as four nested `_not`s inside one
- * Hasura `where`, because `users`, `friends` and `friend_requests` were all in
+ * `where`, because `users`, `friends` and `friend_requests` were all in
  * one database. A6 broke that by moving identity to better-auth's `user` table
  * in a second database; X2 put them back in one, so the join is expressible
  * again — and this actor still does not write it. `ProfileStore` is the whole

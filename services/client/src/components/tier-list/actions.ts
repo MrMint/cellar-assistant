@@ -9,7 +9,7 @@
  *
  * Substitutions:
  *
- * - Hasura `insert_/update_/delete_*_by_pk` → the named commands in
+ * - `insert_/update_/delete_*_by_pk` → the named commands in
  *   `queries.ts`, each a result union; a typed error's `message` is the
  *   `error`. `getOptionalServerUser` goes: the API answers `ForbiddenError`
  *   for a signed-out caller itself.

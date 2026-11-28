@@ -16,6 +16,6 @@ exclude_paths:
   - "**/*.generated.ts"
   # drizzle-kit migration snapshots.
   - "packages/db/migrations/**/snapshot.json"
-  # Checked-in `pg_dump` of the legacy Nhost schema (X4 baseline); a fixture
-  # for the transform, not SQL this repo authors.
-  - "packages/db/transform/nhost-schema.sql"
+  # Checked-in schema-only `pg_dump` every database is built from; generated,
+  # not SQL this repo authors.
+  - "packages/db/baseline/schema.sql"

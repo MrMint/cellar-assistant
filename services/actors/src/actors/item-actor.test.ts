@@ -460,7 +460,7 @@ describe.skipIf(skip)("ItemActor (B2)", () => {
         });
 
         // `canSeeItemImage` is `is_public OR mine` — friendship is not a
-        // branch, which is today's Hasura rule verbatim.
+        // branch.
         expect((await actor.images(userCtx(owner, "r"), page)).totalCount).toBe(
           1,
         );
@@ -1316,7 +1316,7 @@ describe.skipIf(skip)("ItemActor (B2)", () => {
           .where(eq(itemVectors.wineId, ref.id));
 
       /**
-       * The cutover case. Every migrated vector has no recorded identity, and
+       * The imported-vector case. A vector with no recorded identity, and
        * its `updated_at` is newer than the item row, so the timestamp alone
        * called it fresh and a re-embed after the model change did nothing.
        */
@@ -1334,7 +1334,7 @@ describe.skipIf(skip)("ItemActor (B2)", () => {
             { model: MODEL, images: NO_IMAGES },
           ]);
 
-          // What a transformed legacy row looks like.
+          // What an imported row looks like.
           await db.execute(sql`
             update public.item_vectors
             set embedding_model = null, embedding_images = null

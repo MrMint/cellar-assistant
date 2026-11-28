@@ -72,22 +72,19 @@ unmaintained, since `next dev` only ever writes the one in its own project direc
 below is the actual project guide, for any agent; `CLAUDE.md` beside this file imports it with `@AGENTS.md` and adds only Claude Code-specific
 sections: compaction and multi-agent builds.
 
-## The backend is Dapr actors, not Nhost/Hasura
+## The backend: Dapr actors, a GraphQL gateway, one Postgres
 
-This repo migrated off Nhost/Hasura onto the stack in `docs/architecture/target-stack.md`.
+The stack is described in `docs/architecture/target-stack.md`.
 `services/actors` (Dapr actors via `@dapr/dapr`, plus better-auth mounted in-process) is now the
 **only** process with a Postgres connection. `services/api` (graphql-yoga + Pothos) holds no
 database credentials and asserts as much on boot; it verifies better-auth's JWTs against the JWKS
 `services/actors` publishes. Database: PostgreSQL 18 (postgis, pgvector, pg_trgm, pgcrypto; no
 RLS), db/user `cellar` by default (`infra/docker-compose.yml`).
 
-Commit references in these docs (short shas such as `da1f77af`) point to the migration's
-development history, which was squashed into a single commit when the branch was first published;
+Commit references in these docs (short shas such as `da1f77af`) may point to the 2026-10
+migration's development history, which was squashed into a single commit when the branch was first published;
 the full history is kept privately as an archive. A sha that doesn't resolve in this repository is
 one of those.
-
-There is no local Nhost stack any more — not in this worktree, not on the dev machine. Rollback is a
-checkout of `82450ad1`; see "Nhost: retired, and how rollback works" at the end of this file.
 
 ## Prerequisites
 
@@ -109,16 +106,14 @@ want to know *why* a line says what it says; don't work through it by hand.
   `node_modules` and just runs `bun test` / `bun run typecheck` with the wrong Node on `PATH`
   (fnm's auto-switch not wired into a non-interactive shell, say): some tests shell out to
   `process.execPath` to run a `.ts` file directly and rely on native type stripping, so under
-  Node 20 they fail as seven ordinary-looking assertion failures rather than as an environment
-  error (`services/actors/src/auth/migrate-users.test.ts`). Check `node -v` before you believe a
-  red suite — or just run `bun run dev:doctor`, which probes whether the `node` on `PATH` can
-  strip types at all and then says which commands that breaks. Two mitigations landed since:
-  that test file now asserts the Node version up front when it is not running under Bun, and the
-  suites themselves run under `bun run --bun vitest run`, where `process.execPath` is bun and
-  types are stripped natively. What a wrong Node still breaks is anything invoking `node`
-  directly — `bun run db:seed` (now guarded by `check-node-version.mjs`, so it fails with that
-  message), `migrate:users`, `migrate:files`, and the `node "$SEED"` step inside
-  `packages/db/transform/test-db.sh`. `bun run dev:seed` and `bun run dev:bootstrap` resolve a
+  Node 20 they fail as ordinary-looking assertion failures rather than as an environment
+  error. Check `node -v` before you believe a red suite — or just run `bun run dev:doctor`,
+  which probes whether the `node` on `PATH` can strip types at all and then says which commands
+  that breaks. The suites themselves now run under `bun run --bun vitest run`, where
+  `process.execPath` is bun and types are stripped natively. What a wrong Node still breaks is
+  anything invoking `node` directly — `bun run db:seed` (guarded by `check-node-version.mjs`, so
+  it fails with that message) and the `node "$SEED"` step inside
+  `packages/db/baseline/test-db.sh`. `bun run dev:seed` and `bun run dev:bootstrap` resolve a
   satisfying Node out of fnm/nvm/volta/asdf themselves, without touching your machine-wide
   default.
 - Bun 1.4.2 is pinned via `packageManager` in the root `package.json`; check `bun --version`
@@ -159,7 +154,7 @@ Three reasons, so the rule can be applied with judgement instead of cargo-culted
    `node_modules/next/dist/server/lib/generate-agent-files.js`), and a `next build` probe in this
    repo silently mutated `services/client/tsconfig.json` — added paths and reformatted it. Compare
    `next typegen`, which rewrites the root `tsconfig.json`'s `jsx` from `preserve` to `react-jsx`
-   (`docs/architecture/migration-plan.md`). The edit lands as an uncommitted change in whatever
+   (`docs/archive/nhost-migration/migration-plan.md`). The edit lands as an uncommitted change in whatever
    the user was doing, and in a worktree shared by several agents it is nobody's and everybody's.
 2. **Port 3000 is the user's.** Their dev server lives there all day; a second one either fails to
    bind or steals the port.
@@ -240,7 +235,7 @@ command — force it directly with `bun run --filter @cellar-assistant/schema bu
 - Client components: `makeApiClient()` from `services/client/src/lib/api/urql-client.ts`.
 - Server components: `makeApiServerClient()` / `runApiOperation()` from
   `services/client/src/lib/api/urql-server-client.ts`.
-- Auth is better-auth, not Nhost: session-cookie and JWT handling live in
+- Auth is better-auth: session-cookie and JWT handling live in
   `services/client/src/lib/api/auth-client.ts`, `session-cookie.ts` and `token.ts`.
 
 ## Next.js App Router
@@ -252,7 +247,7 @@ command — force it directly with `bun run --filter @cellar-assistant/schema bu
   interface: generic components live in `services/client/src/components/item-api/`
   (`ItemDetail.tsx`, `ItemEditForm.tsx`, ...), not per-type component folders.
   Adding a seventh type is 39 files, measured at `be70bccf` and split into what typecheck and the
-  tests flag and what nothing does — `docs/architecture/migration-plan.md` §9.1.
+  tests flag and what nothing does — `docs/archive/nhost-migration/migration-plan.md` §9.1.
 
 ## State management
 
@@ -378,15 +373,14 @@ progress).
 
 All three read as ordinary defects in your change. Check them before you debug code:
 
-1. **The wrong Node.** Seven actors tests fail as plain assertion failures under Node 20 instead
-   of the pinned 24 — see "Prerequisites" above and `bun run dev:doctor`, which probes whether the
-   `node` on `PATH` can strip types. (This was unverifiable end to end while reason 2 made global
-   setup throw first. Reason 2 is fixed; the Node 20 failure has not been re-measured since.)
+1. **The wrong Node.** A test that shells out to `node` to run a `.ts` file fails as a plain
+   assertion failure under Node 20 instead of the pinned 24 — see "Prerequisites" above and
+   `bun run dev:doctor`, which probes whether the `node` on `PATH` can strip types.
 2. **The shared test-database race — fixed as of 2026-09-20, and listed here so you stop
    suspecting it.** Two agents running a suite at once used to collide on the fixed-name
    `cellar_test_template`, surfacing as `duplicate key … pg_namespace_nspname_index,
    Key (nspname)=(public)`, a throw inside `_initializeGlobalSetup`, or `\unrestrict: wrong key`
-   from `packages/db/transform/test-db.sh`. Two changes closed it: `test-db.sh` takes an
+   from `packages/db/baseline/test-db.sh`. Two changes closed it: `test-db.sh` takes an
    **advisory lock**, which makes concurrent *builds* safe, and each run now clones into its own
    database named `_run_<pid>_<epoch>` (`services/actors/src/lib/test-db-setup.ts`) rather than
    sharing one. The fixed name survives for the *template*, which is shared deliberately — a lock
@@ -478,7 +472,7 @@ than after.
   `git stash apply <sha>` (not `pop`), found via `git stash list --format='%H %gs'`.
 - **The test database was the third instance and is now the one that got fixed** — kept here
   because the fix is the useful part. `cellar_test_template` is still shared and still
-  fixed-name, but nothing races on it any more: `packages/db/transform/test-db.sh` takes an
+  fixed-name, but nothing races on it any more: `packages/db/baseline/test-db.sh` takes an
   advisory lock around building it, and each run clones into its own `_run_<pid>_<epoch>`
   database. The distinction is the lesson, and it generalises to the other instances on this
   list: **a lock can protect a shared resource while you are building it, and cannot protect one
@@ -537,42 +531,22 @@ than after.
 
 ---
 
-## Nhost: retired, and how rollback works
+## Schema changes and deploys
 
-The pre-migration Nhost/Hasura stack is **gone from the dev machine** as of 2026-10-05: its
-containers and volumes (including `epic-burnell-4b4be9-postgres-1`), the `nhost` CLI and its state,
-and the `mcp-nhost` server. Any instruction to run `nhost up`, `nhost dev hasura …`, `hasura
-metadata …` or an `mcp__mcp-nhost__*` tool is dead; the `nhost-hasura-admin` agent and the
-`.mcp.json` entry were removed with it.
-
-- **The rollback of record is a checkout of `82450ad1`** (`docs/architecture/e4-decisions.md`
-  decision 11) — the pre-migration commit, which still has `functions/` and a complete `nhost/`.
-  Never plan a rollback around this branch: `functions/` was deleted at `51881a0c`, so `nhost up`
-  here could never start the whole stack even when the CLI existed.
-- **Nhost Cloud no longer deploys from `main`, and is not ours to touch.** The repository was
-  disconnected from the Nhost project on 2026-10-05, before the migration merged, so the project
-  stays frozen at `82450ad1` as the rollback target until it is deleted (`e4-decisions.md`
-  decision 15). Nothing in this repository configured it, so nothing here can show it either way:
-  the check is that a commit on `main` carries no `nhost` check-run
-  (`gh api repos/MrMint/cellar-assistant/commits/<sha>/check-runs --jq '[.check_runs[].app.slug]'`).
-  **Merging a release-please PR is still a production deploy, deliberately:** it fast-forwards
-  `production`, which Vercel builds as Production, and that is now the frontend's deploy path.
 - **Schema changes** are a migration in `packages/db/migrations` (`drizzle-kit generate` output, or
   the hand-written lane), reviewed like any other code change, and applied ONLY by `db:migrate`
   (`packages/db/src/migrate/cli.ts`, which keeps the `cellar_meta.schema_migrations` ledger):
   `bun run dev:migrate` for this worktree's stack, `bun run db:migrate --url <dsn> [--status]` for
   any other. Never `drizzle-kit migrate`/`push` — `packages/db/README.md` says why. Production gets
   it from the deploy, before the new images start (`docs/architecture/deploy-loki.md` §4.1).
-- **Every database is built from the checked-in baseline.** `packages/db/transform/run.sh` and
-  `test-db.sh` restore `packages/db/transform/nhost-schema.sql` (X4) by default and need no Nhost;
-  `--no-dump` is still accepted and means the same thing. A fresh dump is `SRC_CONTAINER=<pg> …
-  --dump`, against a legacy Postgres you brought up yourself (from the `82450ad1` checkout) — there
-  is no default container name. `scripts/cutover/cutover.sh` likewise needs exactly one of
-  `SRC_DSN` / `SRC_CONTAINER` for its `preflight` and `dump` phases, the only two that need a live
-  Nhost database at all (`e4-decisions.md` decision 11).
-- **`nhost/` is frozen history.** Nothing executable reads it; what remains are provenance comments
-  (`nhost/metadata/…`, `nhost/migrations/…`) in actor and contract sources, which `82450ad1` also
-  resolves. Don't add to it or build against it.
+- **Every database is built from the checked-in baseline**, `packages/db/baseline/schema.sql`:
+  `packages/db/baseline/build.sh` restores it and runs `db:migrate`, and `test-db.sh` beside it
+  builds the test template the same way. The baseline is frozen; never edit it.
+- **Merging a release-please PR is a production deploy, deliberately:** it fast-forwards
+  `production`, which Vercel builds as Production, and that is the frontend's deploy path.
+
+The 2026-10 migration onto this stack is archived in `docs/archive/nhost-migration/` (frozen; never
+edit it). The pre-migration tree is commit `82450ad1`.
 
 <!-- BEGIN:turborepo-agent-rules -->
 

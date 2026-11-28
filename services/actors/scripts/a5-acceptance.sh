@@ -11,7 +11,7 @@
 # dying between a commit and a delivery, and a reminder outliving the process
 # that registered it. That is what this script is for.
 #
-# Requires: `bun run stack:up`, a transformed database, and ACTORS_PROBE_ALLOW_KILL=1
+# Requires: `bun run stack:up`, a built database, and ACTORS_PROBE_ALLOW_KILL=1
 # in the actors container (the dev compose sets it).
 #
 # Every job and outbox row a test creates is deleted when the script exits.

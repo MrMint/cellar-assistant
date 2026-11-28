@@ -34,7 +34,7 @@ const isReferenceKey = (key: EnumKey): key is ReferenceSource =>
 /**
  * `82450ad1:src/hooks/useEnum.ts`, over the new data layer.
  *
- * The old hook read Hasura enum tables through `EnumProvider` (server data)
+ * The old hook read enum tables through `EnumProvider` (server data)
  * and fell back to a client query. Here the ten reference tables come from
  * `useReferenceOptions` — one aliased `referenceData` operation that URQL
  * caches and every form on the page shares, with the second country page

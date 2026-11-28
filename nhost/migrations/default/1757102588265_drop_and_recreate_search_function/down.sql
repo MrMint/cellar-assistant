@@ -1,1 +1,0 @@
--- This would restore the original function but it's complex

@@ -1,7 +1,7 @@
 /**
  * Read a connection to its end, from a first page already in hand.
  *
- * The old UI read most lists unbounded (a Hasura relationship has no page),
+ * The old UI read most lists unbounded (a relationship had no page),
  * and where a restored view shows a whole list — "Wineries", a bottle's
  * check-in picker, a brand's items grouped by type — a capped first page is a
  * silent cap: the rows after it simply never appear. A server component calls

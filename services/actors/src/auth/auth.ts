@@ -1,5 +1,5 @@
 /**
- * better-auth for the new stack (plan A6).
+ * better-auth (plan A6).
  *
  * Runs inside `services/actors` — the only process with database credentials —
  * mounted on the actor host's HTTP server at `/api/auth/*` (see `./mount.ts`).
@@ -186,10 +186,9 @@ export const createAuth = (config: AuthConfig, shared?: AuthDb) => {
     advanced: {
       database: {
         // The id columns are `uuid` (`packages/db/src/schema/tables.ts`),
-        // matching the `auth.users.id` that 31 `public.*` foreign keys used to
-        // point at — which is what let X2 repoint them at `"user"(id)` with no
-        // cast (`packages/db/transform/14_repoint_user_fks.sql`). Migrated rows
-        // keep their Nhost UUID; new rows get a fresh one.
+        // matching the 31 `public.*` foreign keys that reference `"user"(id)`.
+        // Accounts imported in the 2026-10 migration keep the UUID they came
+        // with; new rows get a fresh one.
         //
         // A function, not the built-in `"uuid"`: on Postgres that setting makes
         // the adapter omit the id column and rely on a database
@@ -248,7 +247,7 @@ export const createAuth = (config: AuthConfig, shared?: AuthDb) => {
     emailAndPassword: {
       enabled: config.passwordMode !== "disabled",
       disableSignUp: config.passwordMode !== "enabled",
-      // Matches the outgoing stack: nhost.toml sets passwordMinLength = 9.
+      // Minimum password length is 9.
       minPasswordLength: 9,
       password: createPassword({ rehash }),
     },
@@ -283,8 +282,8 @@ export const createAuth = (config: AuthConfig, shared?: AuthDb) => {
         // `requireLocalEmailVerified` is left at its default (true), which
         // blocks the classic pre-hijack (attacker registers victim@… with a
         // password, victim later signs in with Google and lands in the
-        // attacker's account). A migrated user whose Nhost `email_verified`
-        // was false therefore signs in with their password and verifies the
+        // attacker's account). A user imported in the 2026-10 migration
+        // with an unverified email therefore signs in with their password and verifies the
         // address before OAuth will link — they are not locked out.
       },
     },
@@ -330,9 +329,7 @@ export const createAuth = (config: AuthConfig, shared?: AuthDb) => {
       },
       session: {
         create: {
-          // Nhost's `auth.users.disabled` was enforced by hasura-auth. Not
-          // carrying it over would be a regression, so no session is issued
-          // for a disabled user by any method.
+          // No session is issued for a disabled user, by any method.
           before: async (session) => {
             const rows = await db
               .select({ disabled: userTable.disabled })
@@ -350,7 +347,6 @@ export const createAuth = (config: AuthConfig, shared?: AuthDb) => {
            * `/get-session` and `/token` (whose `sessionMiddleware` goes through
            * `getSession`) both extend `expiresAt` once `updateAge` has passed,
            * so a session disabled mid-life could live on indefinitely.
-           * hasura-auth refused refresh for a disabled user, and so does this.
            *
            * `getSession` sets `ctx.context.session` to the row it loaded —
            * user included, from the same query — before it calls

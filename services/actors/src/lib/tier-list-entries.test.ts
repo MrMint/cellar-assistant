@@ -4,7 +4,7 @@
  * This module is the whole of what B7b bought: the insights prompt used to
  * render every ranked row as the bare word `place`, and the six fields it asks
  * the model for are all claims about what was ranked. So what is asserted here
- * is **substance** — that a resolved entry carries the things the old Nhost
+ * is **substance** — that a resolved entry carries the things the original
  * prompt consumed (name, categories, location, editorial summary, public
  * rating, price level) and that an item carries its closed-vocabulary columns.
  *

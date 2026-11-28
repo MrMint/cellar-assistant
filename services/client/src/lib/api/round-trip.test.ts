@@ -288,7 +288,7 @@ describe("D1 round trip", () => {
         method: "POST",
         headers: {
           "content-type": "application/json",
-          cookie: `${cookieHeader() ?? ""}; nhostSession=must-not-travel`,
+          cookie: `${cookieHeader() ?? ""}; otherSession=must-not-travel`,
         },
         body: JSON.stringify({ query: "{ me { id } }" }),
       }),
@@ -306,7 +306,7 @@ describe("D1 round trip", () => {
 
     const toActors = seen.find((call) => call.url.endsWith("/api/auth/token"));
     assert.ok(toActors !== undefined);
-    assert.ok(!(toActors.headers.get("cookie") ?? "").includes("nhostSession"));
+    assert.ok(!(toActors.headers.get("cookie") ?? "").includes("otherSession"));
   });
 
   step("7 · no session is anonymous, not an error", async () => {

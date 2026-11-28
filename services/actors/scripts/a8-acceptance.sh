@@ -12,7 +12,7 @@
 # binding. That is what this script is for.
 #
 # Requires: `bun run stack:up` and the actors app registered with FileActor
-# (src/index.ts). No transformed database is required beyond what `bun run
+# (src/index.ts). No built database is required beyond what `bun run
 # stack:up` already produces — this only exercises `files`, which is empty by
 # default.
 #

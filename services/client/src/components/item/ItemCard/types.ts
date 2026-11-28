@@ -5,7 +5,7 @@
  *
  * Two fields changed shape, because what fed them changed:
  *
- * - `displayImageId` → `displayImageUrl`. The old card turned a Nhost file id
+ * - `displayImageId` → `displayImageUrl`. The old card turned a storage file id
  *   into a public URL itself; the new API hands back a presigned
  *   `ItemImage.file.url` instead, so the adapter supplies the URL.
  * - `favoriteId` → `isFavorite`. The old toggle deleted a favourite *row* by

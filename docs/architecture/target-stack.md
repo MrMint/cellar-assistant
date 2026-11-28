@@ -1,10 +1,8 @@
-# Target stack — post-Nhost, post-Hasura
+# Target stack
 
 **Status:** technology decisions locked 2026-09-07; design questions settled 2026-09-08.
-**Migration built — 74 of 75 workstreams closed as of 2026-09-18; only `E4` (cutover execution)
-remains.** This header said "Migration not started" until 2026-09-19, which was false for weeks:
-the stack described below is the one that runs. See [`migration-plan.md`](./migration-plan.md) for
-what was built.
+The stack described below is the one that runs. The plan that built it is archived in
+[`docs/archive/nhost-migration/`](../archive/nhost-migration/).
 **Audience:** anyone (human or agent) working on this stack. §§1–6 describe what runs today, §7 the
 runtime traps that bite while you do, §8 the things already rejected — check §8 before proposing.
 
@@ -30,13 +28,8 @@ locked decision, raise it — don't quietly build something else.
 | Observability | Dapr OTLP → Grafana all-in-one (`otel-lgtm`) | Same compose file. Secrets from `.env`. Pinned to `0.35.0`, data on the `otel-lgtm-data` volume with 30/30/14-day retention, login required in prod, Dapr runtime metrics scraped — `deploy-loki.md` §9. |
 | Client types | gql.tada | Fed by `printSchema` to a checked-in `schema.graphql`. |
 
-**Gone:** Nhost (all services), Hasura GraphQL Engine, `hasura-auth`, `hasura-storage`, Hasura
-Actions, Event Triggers, metadata, permissions, native queries, GraphQL subscriptions (replaced by
-polling), Postgres RLS (never adopted; see §6.2).
-
-`hasura-auth` and `hasura-storage` are *Hasura clients* — they manage `auth.users` and
-`storage.files` through Hasura's API. They cannot survive leaving Hasura, which is why auth and
-storage both had to be re-decided rather than carried over.
+**Not in the stack:** GraphQL subscriptions (polling instead) and Postgres RLS (never adopted;
+see §6.2).
 
 ---
 
@@ -192,24 +185,23 @@ preserved exactly, or images 404 in a way that looks like an application bug.
 
 ## 5. Migrations
 
-`drizzle-kit` is the migration authority. Baseline the transformed database with the v1 kit's
-`pull --init`, then move forward with generated migrations.
+`drizzle-kit` is the migration authority. Every database starts from the checked-in
+baseline (`packages/db/baseline/schema.sql`) and moves forward with generated migrations.
 
 **A hand-written SQL lane is permanent, not exceptional.** Use
 `drizzle-kit generate --custom --name=<thing>` — it emits an empty versioned migration for raw SQL
 that sits alongside the generated ones. It is required for:
 
 - The four `SETOF` search functions (`search_places_hybrid`, `search_places_adaptive_cluster`,
-  `search_category_vectors`, `find_duplicate_places`) — kept as SQL at cutover, weights passed
+  `search_category_vectors`, `find_duplicate_places`) — kept as SQL, weights passed
   from TypeScript
 - The pgvector distance helpers (`STABLE` functions taking `(row, halfvec)`)
 - `geography` columns
 - Column-level `GRANT`s
 
-**Cutover scope:** the cutover transforms everything that is mechanical — better-auth and `files`
-tables, the enum split (`migration-plan.md` §4), removal of every Hasura artifact, trigger logic
-moved into actors, `*_jobs` tables replaced by `jobs` + `outbox`. The one deliberate exception is
-the item-table consolidation, deferred behind the `Item` interface.
+**Schema shape:** better-auth and `files` tables, the enum split (archived `migration-plan.md`
+§4), trigger logic in actors, `*_jobs` tables replaced by `jobs` + `outbox`. The one deliberate
+exception is the item-table consolidation, still deferred behind the `Item` interface.
 
 ---
 
@@ -353,13 +345,11 @@ the review's question ids, kept so transcripts can be cross-referenced.
 - **Q26 — Presigned upload with attach-and-verify** (§4).
 - **Q27 — Repo layout** in plan §8.1; actor interfaces in `packages/contracts`.
 
-### 6.6 Scope and cutover
+### 6.6 Scope
 - **Q13 — Full migration;** the eight functions with no caller are ported as unexposed actor
-  methods tagged for post-cutover deletion.
-- **Q31 — Not a minimal cutover.** Transform everything mechanical at cutover (§5); iterate on
-  design problems after.
-- **Q32 — Rollback** is redeploying the pre-cutover frontend against Nhost; data written to
-  Loki in between is abandoned. Nhost stays up read-only for 30 days.
+  methods tagged for deletion.
+- **Q31 — Not a minimal migration.** Everything mechanical moved at once (§5); design problems
+  are iterated on after.
 - **Q12 — Verification baseline** in plan §7.
 
 ---
@@ -369,12 +359,6 @@ the review's question ids, kept so transcripts can be cross-referenced.
 Empirically established, each by hitting it. Do not discover these again. Every one is a
 property of the **current** stack — Dapr, the actor host, Loki — and every one fails *silently*
 if you get it wrong, which is why they are written down rather than left to a test.
-
-**This section used to also carry a register of live authorization defects in the legacy
-Nhost stack.** It was removed on 2026-09-19 and does not live in this repository: the
-repository is public, `nhost/metadata/` is already published on `origin/main` in raw form,
-and a triaged register over public raw data is a sharper instrument than either the raw data
-or nothing. The register is with the maintainer. Do not re-derive it here.
 
 - **Only one Dapr state store can serve all actors**, and actor state should always carry
   `ttlInSeconds`. The declared store is `state.in-memory` and no actor writes to it (A4 enforces
@@ -556,9 +540,8 @@ Don't re-propose these without new information.
 | One-transaction cross-aggregate writes | Tempting because Postgres is shared; breaks single-writer and stales peer caches; agents would widen the exception. |
 | `FriendshipActor` keyed by user pair | Cleaner lock boundary, rejected in favour of `UserActor` owning edges. |
 | Singleton `SearchActor` | Serializes all searches; keyed-by-hash instead. |
-| Preserving Hasura's schema shape | No users to protect; re-implementing `where`/`_aggregate`/`on_conflict` fights the actor read model. |
+| A generated-CRUD schema shape (`where`/`_aggregate`/`on_conflict`) | No external consumers to protect; re-implementing those operators fights the actor read model. |
 | GraphQL subscriptions | Two existed; polling removes pub/sub from the stack. |
-| Minimal cutover | Rejected in favour of chasing the end state; only the item consolidation is deferred. |
 | SDL-first + graphql-codegen | Reasonable fallback, but Pothos is better once actors define the resolver shape. |
 | Kysely / `kysely-codegen` / `drizzle-graphql` / `grats` / `garph` / `gqtx` / graphile-worker | Superseded by the choices above; details in the 2026-09-07 comparison artifacts. |
 | A project-owned Pothos generator | Would be a worse PostGraphile with no docs and a bus factor of one. |
@@ -567,6 +550,6 @@ Don't re-propose these without new information.
 
 ## 9. Related documents
 
-- [`migration-plan.md`](./migration-plan.md) — actor catalog, writer map, workstreams, cutover runbook
+- [`migration-plan.md`](../archive/nhost-migration/migration-plan.md) (archived) — actor catalog, writer map, workstreams
 - RLS spike results — session artifact, 2026-09-07
-- Nhost exit analysis and Hasura destination comparison — session artifacts, 2026-09-07
+- Backend platform and GraphQL-layer comparison — session artifacts, 2026-09-07

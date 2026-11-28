@@ -14,7 +14,7 @@ const DB = "auth_test_signin";
 const BASE = "http://localhost:3002";
 const PASSWORD = "123456789";
 
-/** The shape `scripts/migrate-users.ts` writes for a password user. */
+/** A password user imported in the 2026-10 migration: a bcrypt hash. */
 const seedMigratedUser = async (
   url: string,
   args: {
@@ -101,7 +101,7 @@ describe("better-auth: migrated bcrypt sign-in, JWT and JWKS", () => {
 
   beforeAll(async () => {
     url = await resetScratchDatabase(DB);
-    // Cost 10, the same as hasura-auth's.
+    // Cost 10, the cost the imported hashes carry.
     const hash = await bcryptHash(PASSWORD, 10);
     expect(isBcryptHash(hash)).toBe(true);
     await seedMigratedUser(url, {

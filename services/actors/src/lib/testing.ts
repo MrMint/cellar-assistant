@@ -8,15 +8,14 @@
  *
  * What is **not** faked is Postgres. §1.3 makes the database the only truth, so
  * a test against a stub database tests nothing. Every test here runs against
- * the real transformed schema, inside a transaction that is always rolled back.
+ * the real schema, inside a transaction that is always rolled back.
  *
  * ## Getting the database
  *
  * The suite owns its database. `vitest.config.ts` runs
- * `packages/db/transform/test-db.sh` before any test file loads; that builds
- * `cellar_test_template` the way a development database is built (a schema-only
- * dump of Nhost, the numbered transform files, the hand-written SQL lane, then
- * the ten reference tables from `scripts/reference-data.json`) and recreates
+ * `packages/db/baseline/test-db.sh` before any test file loads; that builds
+ * `cellar_test_template` the way a development database is built (the
+ * checked-in baseline, every migration, then the ten reference tables from `scripts/reference-data.json`) and recreates
  * `cellar_test` from it as a template clone. `ACTORS_TEST_DATABASE_URL` defaults
  * to that database.
  *
@@ -36,8 +35,8 @@
  *
  * ```bash
  * bun run stack:up                         # postgres on 5433
- * packages/db/transform/test-db.sh         # what vitest runs for you
- * packages/db/transform/test-db.sh --rebuild   # after an Nhost migration
+ * packages/db/baseline/test-db.sh         # what vitest runs for you
+ * packages/db/baseline/test-db.sh --rebuild   # after a schema change
  * ```
  *
  * ## Writing an actor test
@@ -72,8 +71,7 @@ import { isCanonicalUuid } from "./delivery.ts";
 import { derivedUuid } from "./derived-uuid.ts";
 
 /**
- * The stack's Postgres (`infra/docker-compose.yml`), holding the transformed
- * baseline. Not Nhost's, which is on 5432 and is read-only reference.
+ * The stack's Postgres (`infra/docker-compose.yml`), holding the baseline.
  *
  * The database name is deliberately **not** `cellar`: see the header. A URL
  * whose database name starts with `cellar_test` is one the test run owns and
@@ -109,7 +107,7 @@ export const closeTestDb = async (): Promise<void> => {
 
 const SETUP = [
   "  bun run stack:up",
-  "  packages/db/transform/test-db.sh",
+  "  packages/db/baseline/test-db.sh",
   "",
   "`drizzle-kit migrate` cannot replay the introspected baseline; the",
   "transform is how a development database is built (packages/db/README.md).",
@@ -121,14 +119,14 @@ const SETUP = [
 /**
  * Decide, once per test file, whether the database is usable.
  *
- * Unreachable or un-transformed is **always a failure**: a silently skipped
+ * Unreachable or unbuilt is **always a failure**: a silently skipped
  * suite is how a test stops being evidence, and a green check that ran fewer
  * tests than it claims is worse than no check at all. There used to be an
  * `ACTORS_TEST_DB_OPTIONAL=1` escape hatch that turned this into a skip —
  * CI set it because it could not build the database yet, which hid 589
  * database-backed tests behind a passing suite (X4). CI now builds a real
  * database (see `.github/workflows/stack-ci.yaml` and
- * `packages/db/transform/README.md`'s checked-in baseline), so there is no
+ * `packages/db/baseline/schema.sql`), so there is no
  * longer a legitimate reason for this to skip anywhere: the return type keeps
  * the `{ skip, reason }` shape the 47 call sites already destructure, but
  * `skip` is now always `false` when this resolves at all — it never resolves
@@ -153,7 +151,7 @@ export const resolveTestDatabase = async (): Promise<{
   if (reason === null) return { skip: false, reason: null };
 
   throw new Error(
-    `No transformed database at ${testDatabaseUrl()}: ${reason}\n\n${SETUP}`,
+    `No built test database at ${testDatabaseUrl()}: ${reason}\n\n${SETUP}`,
   );
 };
 
@@ -253,13 +251,10 @@ const unique = (): string => {
  * A user row, for the 31 application tables with a foreign key to the identity
  * table.
  *
- * That table is better-auth's `user` since X2 — one identity row, in this
- * database, written here by the harness the same way better-auth writes it. It
- * used to be `auth.users`, which also meant seeding an `auth.roles` row first
- * because `default_role` was a foreign key into a table the schema-only dump
- * left empty. Both of those are gone: the promise the old comment made ("when
- * that FK is repointed, this helper changes and nothing that calls it has to")
- * is what this edit is.
+ * That table is better-auth's `user` — one identity row, in this database,
+ * written here by the harness the same way better-auth writes it. Callers
+ * never name the table, so a change to it changes this helper and
+ * nothing that calls it.
  *
  * No `account` row is created. Nothing an actor does looks at credentials —
  * sign-in is `services/actors/src/auth`'s, and it has its own scratch databases.

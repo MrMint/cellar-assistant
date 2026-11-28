@@ -10,7 +10,7 @@
  *
  * ## The visibility predicate is `canSeeTierList`, and it must not drift
  *
- * Three places in the new stack decide who may see a tier list, and a
+ * Three places decide who may see a tier list, and a
  * disagreement between them is exactly `target-stack.md` §7's live hole:
  * B7's `TierListActor` gates a single list, C1's `lib/tier-list-visibility.ts`
  * reduces a *filter* before it reaches the map SQL, and this reduces the

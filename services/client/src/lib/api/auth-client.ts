@@ -9,8 +9,7 @@
  * `better-auth` is a dependency of `services/actors`, not of this app. There is
  * one lockfile at the workspace root now (`sharedWorkspaceLockfile: true`), so
  * adding it here rewrites that shared lockfile and touches every project's
- * resolution — a bigger blast radius than this file's surface is worth, and one
- * D1 would not take while a dev server was live against the old stack. The surface below is deliberately shaped like
+ * resolution — a bigger blast radius than this file's surface is worth. The surface below is deliberately shaped like
  * `createAuthClient()`'s (`{ data, error }` results, `signIn.email`,
  * `signIn.social`, `signUp.email`, `signOut`, `useSession`) so that swapping
  * in the real client later is a change to this file and nothing else.

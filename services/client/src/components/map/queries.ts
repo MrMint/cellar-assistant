@@ -1,7 +1,7 @@
 /**
  * Every GraphQL document the restored map, place, create-place, scan and
  * discovery components use — the successor of
- * `82450ad1:src/components/map/queries.ts`, of the Hasura queries in
+ * `82450ad1:src/components/map/queries.ts`, of the queries in
  * `82450ad1:src/app/(authenticated)/map/{actions,place-actions}.ts`,
  * `82450ad1:src/app/actions/menuScanning.ts`, `places/queries.ts` and
  * `shared/fragments/place-fragments.ts`.

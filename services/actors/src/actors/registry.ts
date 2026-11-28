@@ -336,8 +336,8 @@ export const ACTOR_REGISTRY: readonly RegistryEntry[] = [
   // `job -> entity` edge rather than one per row.
   entry(OvertureReloadJobActor, OvertureReloadJobActorDescriptor),
   // The re-embed walk: every `item_vectors` / `recipe_vectors` row another
-  // embedding made, re-embedded by its own `ItemActor` / `RecipeActor`. The
-  // cutover step after the switch to `gemini-embedding-2`.
+  // embedding made, re-embedded by its own `ItemActor` / `RecipeActor`. Run
+  // after a switch of embedding model, as after `gemini-embedding-2`.
   entry(VectorReembedJobActor, VectorReembedJobActorDescriptor),
   // C3 (§2.2, §1.5). Nine collection actors: they write nothing (§1.1), hold
   // nothing between turns (each list is one keyset-paged query), and declare

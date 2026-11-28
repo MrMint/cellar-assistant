@@ -35,8 +35,8 @@
  * A second trigger, `trigger_recipe_group_embedding_update`, fired `BEFORE
  * UPDATE` on `recipe_groups` and bumped `updated_at` when
  * `canonical_recipe_id` changed, with a comment saying the actual embedding
- * work "will be handled by a separate function". `packages/db/transform/03_…`
- * records its destination as **outbox-driven**, and this is it: when the
+ * work "will be handled by a separate function". Its destination is
+ * **outbox-driven**, and this is it: when the
  * canonical moves, every recipe in the group gets a `RecipeActor.
  * regenerateVector` row in the same transaction. Every one of them needs it,
  * because a recipe's embedding text includes its group's *name* — which is
@@ -44,8 +44,8 @@
  *
  * ## `recipe_votes` had no authorization rule at all
  *
- * `docs/architecture/target-stack.md` §7 lists it: no permissions in Hasura
- * metadata, written with the admin secret. B6's rule, matching the one it
+ * `docs/architecture/target-stack.md` §7 lists it: no permissions,
+ * written with the admin secret. B6's rule, matching the one it
  * chose for `recipe_reviews`:
  *
  *   - **cast / change a vote** — any signed-in user, on a recipe *in this
@@ -563,8 +563,8 @@ export class RecipeGroupActor
   }
 
   /**
-   * Creator only. Not in §2.1's method list — added because today's Hasura
-   * metadata *does* grant `recipe_groups` update to the creator, and dropping
+   * Creator only. Not in §2.1's method list — added because the creator
+   * had always been granted `recipe_groups` update, and dropping
    * a permission that exists is a behaviour regression rather than a
    * simplification. Flagged in the B6 report.
    *

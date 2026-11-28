@@ -8,7 +8,7 @@ import { getNextPlaceholder } from "@/utilities";
 import { AddPhotoModal } from "./AddPhoto";
 
 export type ItemImageProps = {
-  /** Presigned `ItemImage.file.url` — was a Nhost `file_id`. */
+  /** Presigned `ItemImage.file.url`. */
   url?: string | null;
   placeholder?: string | null;
   /**
@@ -25,7 +25,7 @@ export type ItemImageProps = {
 /**
  * `82450ad1:src/components/item/ItemImage.tsx`, restored.
  *
- * The presigned read goes through `next/image` as the Nhost URL did — read
+ * The presigned read goes through `next/image` — read
  * URLs are stable per window now (`next.config.mjs`, `imagesConfig`). One
  * addition: a URL that fails to load (aged out in a long-open tab) falls back
  * to the item's LabelPlate, which replaced the type's clip art (N28).

@@ -1,7 +1,7 @@
 /**
  * `Cellar.itemCounts` → the old `CellarItemsFilter` `counts` prop.
  *
- * The old filter took `{ beers, wines, … }` straight from six Hasura
+ * The old filter took `{ beers, wines, … }` straight from six
  * `items_aggregate(where: { empty_at: { _is_null: true }, type })` aliases.
  * API wave A's `Cellar.itemCounts: ItemTypeCounts` (G1) counts the same thing
  * — non-empty bottles per type, decision 4 — under singular keys. A caller

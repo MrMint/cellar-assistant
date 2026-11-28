@@ -108,8 +108,7 @@ describe("ItemCard", () => {
       "separator",
       "4.3",
     ]);
-    // The presigned photo goes through the optimizer, as the old card's Nhost
-    // URL did: 400 px at 1x, the next configured size (828) at 2x, never the
+    // The presigned photo goes through the optimizer: 400 px at 1x, the next configured size (828) at 2x, never the
     // original bytes.
     const photo = "https://files.test/x.jpg?sig=1";
     assert.ok(html.includes(`src="${optimizedSrc(photo, 828)}"`), html);

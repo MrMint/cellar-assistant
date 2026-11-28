@@ -15,7 +15,7 @@
  *
  * D15 added six back that the restored form had dropped (`wine_shop`,
  * `vineyard`, `taproom`, `coffee_roaster`, `tea_shop`, `izakaya`;
- * `docs/architecture/ui-parity-decisions.md` decision 16 records the drop).
+ * `docs/archive/nhost-migration/ui-parity-decisions.md` decision 16 records the drop).
  * Slugs, never labels: the column and the form both hold slugs.
  */
 export const PLACE_CATEGORY_TIERS = {

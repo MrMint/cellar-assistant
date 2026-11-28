@@ -17,9 +17,8 @@
  *   `brand(id:)`, a result union, with `itemLinks` (G24 — the links
  *   themselves, primary first, each carrying `isPrimary` and its `item`),
  *   `places`, `parentBrand` and `childBrands`.
- * - `BrandPlaces`, the separate defensive read for a relationship not every
- *   Hasura deployment tracked → `places` on the same document; it always
- *   exists now.
+ * - `BrandPlaces`, a separate defensive read → `places` on the same
+ *   document.
  *
  * ## Page sizes differ because the edges cost different things
  *

@@ -427,13 +427,11 @@ export const readAuthConfig = (): AuthConfig => {
     discord,
   });
   return {
-    // X2: the *main* database. It was a separate one (`auth_dev`) while A3 was
-    // rebuilding `packages/db`; the variable survives the merge because it is
-    // still a credential in its own right — `services/api` asserts that neither this
-    // nor `DATABASE_URL` ever reaches it (`services/api/src/config.ts`) — and because
-    // `scripts/migrate-users.ts` needs to name the target database separately
-    // from the Nhost source it reads. In the actor host itself the value is only
-    // a fallback: `createAuth` is handed the shared pool.
+    // The *main* database. A variable of its own because it is a credential in
+    // its own right — `services/api` asserts that neither this nor
+    // `DATABASE_URL` ever reaches it (`services/api/src/config.ts`). In the
+    // actor host the value is only a fallback: `createAuth` is handed the
+    // shared pool.
     databaseUrl: required("AUTH_DATABASE_URL"),
     secret,
     baseUrl: process.env.BETTER_AUTH_URL ?? "http://localhost:3002",

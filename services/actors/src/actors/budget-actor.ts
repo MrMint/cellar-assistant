@@ -42,7 +42,7 @@
  * longer *depend* on the key. That is also what would make keying this actor
  * per kind, or dropping the hop altogether, a routing change rather than a
  * correctness one — `docs/architecture/actor-keys.md` measures both and
- * defers them to after cutover.
+ * defers them.
  *
  * ## Fails closed, unlike the helper it replaces
  *

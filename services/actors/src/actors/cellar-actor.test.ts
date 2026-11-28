@@ -13,7 +13,7 @@
  *      the foreign key rejects rolls the rename back with it.
  *
  * (3) is the one that needs a real database to mean anything, which is why the
- * harness runs against the transformed schema inside a rolled-back transaction
+ * harness runs against the real schema inside a rolled-back transaction
  * rather than against a stub (`src/lib/testing.ts`).
  */
 import { randomUUID } from "node:crypto";
@@ -291,8 +291,7 @@ describe.skipIf(skip)("CellarActor (B1)", () => {
         const ctx = userCtx(coOwner, "r2");
         expect((await scenario.actor.get(ctx)).coOwnerIds).toEqual([coOwner]);
         // The consequence of gating `checkIns` on the cellar rather than on
-        // friendship: co-owners see each other's history. The Hasura rule
-        // this replaces could not express that.
+        // friendship: co-owners see each other's history.
         expect((await scenario.actor.checkIns(ctx, page)).entries).toHaveLength(
           1,
         );

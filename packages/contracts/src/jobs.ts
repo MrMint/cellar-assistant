@@ -590,9 +590,8 @@ export const OVERTURE_RELOAD_JOB_ACTOR_TYPE = "OvertureReloadJobActor";
 
 /**
  * Source rows per batch, and therefore rows per `PlaceActor` bulk turn and per
- * upsert statement. The old Nhost pair used 5000 from BigQuery split into
- * GraphQL mutations of 500; a batch here is one fetch, one statement and one
- * cursor commit, so the two numbers collapse into this one.
+ * upsert statement. A batch is one fetch, one statement and one cursor
+ * commit, so fetch size and write size are the same number.
  */
 export const OVERTURE_RELOAD_BATCH_SIZE = 500;
 export const OVERTURE_RELOAD_MAX_BATCH_SIZE = 2_000;
@@ -721,7 +720,7 @@ export type VectorReembedJobActorInterface =
   };
 
 /**
- * Operator tooling: `start` is admin-only. The cutover step after
+ * Operator tooling: `start` is admin-only. The re-embed step after
  * `gemini-embedding-2` (and after any later model change): every migrated
  * vector's `embedding_model` is NULL, so every one is re-embedded.
  */

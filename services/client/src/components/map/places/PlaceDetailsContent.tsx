@@ -3,7 +3,7 @@
 /**
  * `82450ad1:src/components/map/places/PlaceDetailsContent.tsx`, restored —
  * the map drawer's body. Save / Mark Visited arrive as `setInteraction`
- * (`recordPlaceInteraction` via `usePlaceDetails`) instead of two Hasura
+ * (`recordPlaceInteraction` via `usePlaceDetails`) instead of two
  * upserts with a client-computed visit count; photos are presigned reads through `next/image`;
  * Google's attribution blocks print with "Place details from Google" (FR-15).
  *

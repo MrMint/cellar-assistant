@@ -91,8 +91,7 @@ export const isScannedItemType = (value: string): value is ScannedItemType =>
  * §2.1: "AI verification in the 0.4–0.9 band."
  *
  * Confidence here is a *similarity*, not a distance: `1 - distance / 2` over
- * pgvector's cosine distance, which is the conversion the Nhost pipeline used
- * and the one `item_match_suggestions.confidence_score` (`numeric(3,2)`)
+ * pgvector's cosine distance, which is the conversion `item_match_suggestions.confidence_score` (`numeric(3,2)`)
  * stores. Below `MIN` a candidate is dropped; at or above `AUTO` it is
  * suggested as-is; between the two it is put to the verifier.
  */

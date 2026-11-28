@@ -2,7 +2,7 @@
  * The restored item pages' documents — the new-schema successor of the six
  * per-type `82450ad1:src/components/{wine,beer,…}/fragments.ts` files.
  *
- * Old Hasura selection → new field:
+ * Old (`82450ad1`) selection → new field:
  *
  * - `{t}s_by_pk` core + per-type columns → `item(id:, type:)` with
  *   `...ItemCore` / `...ItemAttributes` (sake's and tea's extra columns are

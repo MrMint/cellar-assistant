@@ -30,7 +30,7 @@ export type RecipeReviewsProps = {
 
 /**
  * `82450ad1:src/components/recipe/RecipeReviews.tsx`, restored. It never
- * rendered a review in production — `recipe_reviews` had no Hasura
+ * rendered a review in production — `recipe_reviews` had no read
  * permission — so this is its first real data.
  *
  * Author via `RecipeReview.user` (G4). The date is `common/Timestamp` rather

@@ -38,7 +38,7 @@ export async function recipePageMetadata(recipeId: string): Promise<Metadata> {
 
 /**
  * One recipe as `RecipeDetails`, read on the server — what the old detail page
- * and the old group page each did with their own Hasura query.
+ * and the old group page each did with their own query.
  *
  * `NotFoundError` covers "no such recipe" and "not yours to see" alike
  * (§1.6), so both are a 404; the old detail page printed "Recipe not found"

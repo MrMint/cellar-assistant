@@ -5,8 +5,7 @@
  * concerned, and it is where the session cookie becomes a bearer token: the
  * browser never holds a JWT, and the API never sees a cookie.
  *
- * Unlike the Nhost proxy it replaces, a request with no session is **not**
- * rejected. `services/api` treats an absent `Authorization` header as an anonymous
+ * A request with no session is **not** rejected. `services/api` treats an absent `Authorization` header as an anonymous
  * viewer and lets the actors decide what that viewer may see (plan §1.6), so
  * refusing here would override an authorization decision that is not this
  * layer's to make.

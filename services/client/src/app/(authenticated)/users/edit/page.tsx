@@ -15,9 +15,7 @@ export const metadata: Metadata = { title: "Edit profile" };
  * `me` can still come back `null` even though `(authenticated)/layout.tsx` has
  * already resolved a session: the layout's `/get-session` call and this query's
  * JWT are two round trips, and a session that expires or is revoked between
- * them lands here. D8 wrote this branch for a different reason — the layout
- * gated on the *Nhost* session then, so a viewer could get past it with no
- * better-auth session at all — and D9 kept it because the narrow race is real.
+ * them lands here.
  */
 export default async function EditProfile() {
   const data = await apiServerQuery(MyProfileQuery);

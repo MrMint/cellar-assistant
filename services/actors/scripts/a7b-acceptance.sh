@@ -13,7 +13,7 @@
 # — and that is what this script is for. It calls `invokeActor` from
 # `services/api/src/dapr.ts` itself, so what it asserts is what a resolver gets.
 #
-# Requires: `bun run stack:up`, a transformed database, and an actors host
+# Requires: `bun run stack:up`, a built database, and an actors host
 # built from a tree whose outbox allow-list declares `PingActor.ping` as a
 # probe target (the `ordering` test says so if it does not).
 #

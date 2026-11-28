@@ -2,8 +2,8 @@
  * The rules for reading a connection to its end on the client — without
  * React, so they can be tested the way `paged-connection.ts` is.
  *
- * The old UI read some lists unbounded (a Hasura relationship or a
- * subscription has no page): `/friends`' three lists, and the co-owner picker
+ * The old UI read some lists unbounded (a relationship or a
+ * subscription had no page): `/friends`' three lists, and the co-owner picker
  * on the cellar forms. The API pages at 100, so a client view that shows the
  * whole list walks it — {@link nextWalkStep} decides, after each answer,
  * whether to ask for the next page. {@link visibleRows} keeps a refresh from

@@ -3,7 +3,7 @@
  *
  * ## What was lost, and what this puts back
  *
- * The Nhost `*_defaults` actions built their output schema at runtime from ten
+ * The original `*_defaults` actions built their output schema at runtime from ten
  * reference tables, so `style`, `country`, `roast_level` and friends were
  * `enum`s the model could not miss. The port dropped that (`prompts.ts` used to
  * say so in its own header) because reaching `ReferenceDataActor` for them
@@ -295,7 +295,7 @@ export const requireInVocabulary = (
  * line too, and a reference table that grows past fifty stops being an `enum`
  * on its own.
  *
- * The Nhost provider hit the same wall and stripped *every* enum on Vertex
+ * The original provider hit the same wall and stripped *every* enum on Vertex
  * (`functions/_utils/ai-providers/vertex-ai.ts`, `82450ad1`: "large enum
  * arrays cause INVALID_ARGUMENT"), then fuzzy-matched the answer back
  * (`performEnumMatch`). This keeps the small enums, which Ollama compiles into
@@ -369,7 +369,7 @@ export const COUNTRY_ALIASES: Readonly<Record<string, string>> = {
  *
  * Exact first, then by {@link compactKey} (case, accents, spaces and
  * punctuation ignored), then through `aliases`. Nothing fuzzier than that.
- * The Nhost matcher took any candidate scoring 70 or more, and that is how a
+ * The original matcher took any candidate scoring 70 or more, and that is how a
  * near miss becomes a wrong country nobody asked for. An answer that matches
  * nothing becomes `null`: the field arrives blank, and the person with the
  * bottle fills it in. A value outside the vocabulary is never returned.

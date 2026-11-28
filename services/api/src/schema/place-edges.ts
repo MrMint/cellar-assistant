@@ -2,7 +2,7 @@
  * Map, place and menu-scan edges — UI parity wave C (G16, G18, G19, G20).
  *
  * The old map drawer, tier-list board, scan page and `/discoveries` read each
- * of these straight off a Hasura row: `places.user_place_interactions`,
+ * of these straight off a row: `places.user_place_interactions`,
  * `place_menu_items.{wine,beer,…}`, `place_menu_items(where menu_scan_id)`,
  * `item_match_suggestions.place_menu_item { place }`. Here each is a field on
  * the object, answered by the actor that owns (or may read) the rows.

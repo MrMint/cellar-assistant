@@ -265,7 +265,7 @@ describe("the backfill migration", () => {
       const stored = after.get(id);
       if (expected === "kept") expect(stored).toBe(name);
       else expect(stored).toBe(`member-${id.replaceAll("-", "").slice(0, 6)}`);
-      // migrate-users.ts applies the same rule in TypeScript; the two agree.
+      // displayNameForExistingUser is the same rule in TypeScript; the two agree.
       expect(displayNameForExistingUser({ id, name, email })).toBe(stored);
     }
   });

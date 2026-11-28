@@ -46,10 +46,9 @@ export const builder = new SchemaBuilder<{
   DefaultEdgesNullability: false;
   DefaultNodeNullability: false;
   /**
-   * Pothos v4 defaults fields to nullable. The schema this replaces (Hasura's)
-   * was non-null wherever the column was, and every D workstream is porting
-   * queries against it — defaulting to nullable would add a null check to
-   * every field the frontend reads. Nullability is declared, not inherited.
+   * Pothos v4 defaults fields to nullable. Fields here are non-null wherever
+   * the column is, so the frontend does not need a null check on every field
+   * it reads. Nullability is declared, not inherited.
    */
   DefaultFieldNullability: false;
 }>({

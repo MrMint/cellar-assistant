@@ -86,7 +86,7 @@ test("filters the request's own cookies when none is supplied", async () => {
 
   await forwardRequest({
     request: new Request("http://localhost:3000/api/auth/get-session", {
-      headers: { cookie: "nhostSession=leak; better-auth.session_token=keep" },
+      headers: { cookie: "otherSession=leak; better-auth.session_token=keep" },
     }),
     targetUrl: "http://localhost:3002/api/auth/get-session",
     fetchImpl,

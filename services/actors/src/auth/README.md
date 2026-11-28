@@ -17,70 +17,35 @@ plugin's 15-minute EdDSA tokens against `/api/auth/jwks`
 | Ids | `uuid` columns, `crypto.randomUUID()` values — see below |
 | Database | the main one. Same pool as every actor (X2) |
 
-## One database (X2 — done)
+## One database
 
-A6 ran better-auth in its own `auth_dev` database so it could land while A3 was
-rebuilding `packages/db`. That was a scheduling convenience, not a design
-decision, and X2 undid it. What the checklist below asked for, and what actually
-happened:
+better-auth's five tables live in the main database beside every other table,
+and share its pool (`createAuth(config, actorDb())` in `src/index.ts`). Their
+DDL is in `packages/db/baseline/schema.sql`, and `drizzle-kit pull` keeps the
+definitions in `packages/db/src/schema/tables.ts`; a hand-written copy would be a
+second source of truth for a table set whose property names are a hard contract
+with better-auth. `authSchema` is assembled in `packages/db/src/schema/index.ts`
+and re-exported from `./index.ts` here; `./auth-schema.test.ts` checks it
+against better-auth's own `getAuthTables()`, which is what makes a re-pull safe.
+`./auth-tables.sql` is the same DDL as a fixture for `testing.ts`.
 
-1. **Move `schema.ts` into `packages/db/src/schema/` and re-export it from
-   `tables`; delete `drizzle.auth.config.ts`; fold
-   `migrations/0000_better_auth_tables/migration.sql` into
-   `packages/db/migrations`.** Done, but not by moving the file. The five tables
-   are created by `packages/db/transform/13_better_auth_tables.sql` — the same
-   lane that creates `files`, `jobs` and `outbox` — and the baseline is taken
-   over the database that lane built, so `drizzle-kit pull` writes the
-   definitions into `tables.ts` and the DDL into the baseline migration. A
-   hand-written copy would have been a second source of truth for a table set
-   whose property names are a hard contract with better-auth. `authSchema` is
-   assembled in `packages/db/src/schema/index.ts` and re-exported from
-   `./index.ts` here; `./auth-schema.test.ts` checks it against better-auth's
-   own `getAuthTables()`, which is what makes a re-pull safe.
-   `drizzle.auth.config.ts`, `./schema.ts`, `./migrations/` and the
-   `auth:generate` / `auth:push` scripts are gone.
-2. **`TABLE_WRITERS` needs an explicit non-actor exemption; decide the shape
-   there.** The verb is `infrastructure:better-auth`, alongside B10's
-   `infrastructure:outbox` ("everything writes it") and
-   `infrastructure:migrations` ("nothing writes it"). This one means "something
-   that is not an actor writes it, and no actor may" — so unlike `outbox` it is
-   *not* writable from anywhere: `BETTER_AUTH_WRITER_MODULES` confines it to
-   `auth/` and B4's `lib/profile-store.ts`. `auth/` is no longer excluded from
-   the containment scan, so a write to a *domain* table from in here is now
-   caught too.
-3. **Point `AUTH_DATABASE_URL` at the main database and share the pool.** Done.
-   `createAuth(config, actorDb())` in `src/index.ts`; the variable survives
-   because `services/api` asserts on boot that no database credential reaches it and
-   because `scripts/migrate-users.ts` needs to name a target separately from its
-   Nhost source.
-4. **Re-point the 188 `public.*` foreign keys.** **The count was 31, not 188.**
-   188 is the number of foreign keys in the whole Nhost database; 31 of them are
-   in `public` and reference `auth.users`, across 28 tables, and 8 more live
-   inside `auth` and went with the schema. A3 had the right figure all along
-   (`transform/README.md`: "31 application tables have a foreign key to
-   `auth.users`"). Everything else about this item held: A6b's `text` → `uuid`
-   conversion made every swap a plain `DROP CONSTRAINT` / `ADD CONSTRAINT` with
-   no cast and no column-type change. `transform/14_repoint_user_fks.sql` does
-   it from the catalog, and renames each constraint to the name Drizzle derives
-   from the new referenced table (`…_users_id_fkey` → `…_user_id_fkey`) — which
-   the checklist did not mention and `07_align_constraint_names.sql` cannot do,
-   because it runs seven steps earlier.
-5. **Drop the `auth` schema, after `migrate-users.ts` has run.**
-   `transform/15_drop_auth_schema.sql`, which refuses if any `auth.users` row
-   has no `"user"` row.
-6. **Re-run `pull --init` scoped to `public` alone.** Done;
-   `schemaFilter: ["public"]` is now correct, because nothing in `public`
-   references anything outside it.
+`TABLE_WRITERS` marks these tables `infrastructure:better-auth`, alongside
+`infrastructure:outbox` ("everything writes it") and
+`infrastructure:migrations` ("nothing writes it"). This one means "something
+that is not an actor writes it, and no actor may" — so unlike `outbox` it is
+*not* writable from anywhere: `BETTER_AUTH_WRITER_MODULES` confines it to
+`auth/` and `lib/profile-store.ts`. `auth/` is not excluded from the
+containment scan, so a write to a *domain* table from in here is caught too.
 
-`migrate-users.ts` is unchanged and still idempotent against the merged
-database: a second run reports `changed 0` and leaves every `xmin` untouched.
-bcrypt sign-in and the transparent scrypt upgrade are untouched.
+`AUTH_DATABASE_URL` points at the main database. It is still a variable of its
+own because it is a credential in its own right: `services/api` asserts on boot
+that neither it nor `DATABASE_URL` reaches that process.
 
 ## Decisions
 
 **bcrypt is preserved, and upgraded on use.** `password.ts` overrides
 `emailAndPassword.password.verify`: an anchored modular-crypt pattern
-(`$2[abxy]?$NN$` + 53 chars) identifies a hasura-auth hash and it is checked
+(`$2[abxy]?$NN$` + 53 chars) identifies an imported bcrypt hash and it is checked
 with bcrypt; anything else goes to better-auth's scrypt verifier. `hash` is
 **not** overridden — bcrypt is a read path only, so every new or changed
 password is scrypt.
@@ -99,8 +64,6 @@ upgrade cannot affect the outcome:
   sign-in takes the identical bcrypt path. The failure mode is "try again next
   time", never "locked out".
 - Concurrent sign-ins race harmlessly — the loser's UPDATE matches zero rows.
-- `scripts/migrate-users.ts` never overwrites a non-NULL `account.password`,
-  so a re-import cannot revert an upgraded hash.
 
 **OAuth relinks by email, but only on a verified email — both sides.**
 `accountLinking.enabled` is on and `trustedProviders` is deliberately **empty**,
@@ -108,12 +71,11 @@ so a provider that does not assert `email_verified` can never take over a local
 account. `requireLocalEmailVerified` is left at its default (`true`), which
 blocks the pre-hijack attack: register `victim@…` with a password, wait for the
 victim to sign in with Google, inherit their account. The cost is that a
-migrated user whose Nhost `email_verified` was `false` must sign in with their
-password (which still works) and verify the address before OAuth will link.
-Users who already used OAuth on Nhost are unaffected: their
-`auth.user_providers` row migrates to an `account` row with the same
-`(provider_id, account_id)`, so they match exactly and never reach the
-linking-by-email branch at all.
+user imported in the 2026-10 migration with an unverified email must sign in
+with their password (which still works) and verify the address before OAuth
+will link. Imported users who already had a social login are unaffected: their
+`account` row carries the same `(provider_id, account_id)`, so they match
+exactly and never reach the linking-by-email branch at all.
 
 **Password auth has three modes; production is `signin-only`.**
 `AUTH_PASSWORD_MODE` (`config.ts`, default `enabled`):
@@ -137,9 +99,9 @@ because in 1.7.3 `enabled` gates only `/sign-in/email` and `/sign-up/email` —
 (nobody could join); `disabled` with none refuses to boot (nobody could sign
 in). Tests: `password-mode.test.ts`.
 
-**Migrated password users keep their account by signing in with Google or
+**Imported password users keep their account by signing in with Google or
 Discord — not Facebook.** A credential user whose address is verified (all 20
-migrated production users are) and who signs in with Google or Discord on the
+imported production users are) and who signs in with Google or Discord on the
 same address is linked into the same user row, keeping the credential account
 beside the new one. `credential-linking.test.ts` drives each provider's own
 `getUserInfo` with only the network stubbed, because `emailVerified` is decided
@@ -150,20 +112,18 @@ never links by email in 1.7.3.** Adding `facebook` to `trustedProviders` would
 fix that by letting any Facebook account claim any local account with a
 matching address, which is the takeover the empty list exists to prevent; it is
 deliberately not done. A password user whose only social login is Facebook
-keeps signing in with their password under `signin-only`. Users who already had
-a Facebook identity on Nhost are unaffected — they match on the migrated
+keeps signing in with their password under `signin-only`. Imported users who
+already had a Facebook identity are unaffected — they match on their
 `(provider_id, account_id)` and never reach linking by email.
 
-**Nhost OAuth tokens are not migrated.** They were issued to Nhost's client
-ids; A6 registers new OAuth applications, so they are useless under the new
-client. Only the identity binding moves.
+**Imported accounts carry no OAuth tokens.** The 2026-10 migration moved only
+the identity binding; the tokens were issued to other client ids and are
+useless to this app's OAuth applications.
 
 **Ids are `uuid` columns holding UUIDs.** Every primary key — `user.id`,
 `session.id`, `account.id`, `verification.id`, `jwks.id` — and both id foreign
 keys (`session.user_id`, `account.user_id`) are Postgres `uuid`, matching the
-`auth.users.id` that 31 `public.*` foreign keys pointed at. That is what made
-the re-point in step 4 above a constraint swap rather than a column-type
-migration.
+`user_id` columns of the 31 `public.*` foreign keys that reference `"user"`.
 
 `advanced.database.generateId` is a function returning `crypto.randomUUID()`,
 not the built-in `"uuid"` — on Postgres that setting makes the adapter omit the
@@ -172,7 +132,7 @@ do not have, so id policy stays in the application. Supplying the value
 explicitly works against `uuid` columns because Drizzle represents `uuid` as a
 JS string and node-postgres sends it as an untyped parameter, which Postgres
 resolves to `uuid`; better-auth sees the ids as the strings it expects
-throughout. Migrated users keep their Nhost UUID.
+throughout. Imported users keep the UUID they were imported with.
 
 Not every id-shaped column is a UUID, and these stay `text` on purpose:
 `session.token`, `account.account_id` (a provider's own opaque id — only for
@@ -185,8 +145,8 @@ the column holds, and the claim set is closed rather than "the whole user row".
 `role`, `locale` and `disabled` are all declared `input: false`, so a sign-up
 body cannot set them. Both are covered by tests in `auth.test.ts`.
 
-**Nhost's `disabled` flag is enforced, including on sessions that already
-exist.** hasura-auth checked it at sign-in and at refresh. Here:
+**The `disabled` flag is enforced, including on sessions that already
+exist.**
 `databaseHooks.session.create.before` refuses a new session; setting
 `"user".disabled` to true deletes the user's sessions in the same transaction
 (trigger, `packages/db/migrations/…_disabled_user_ends_sessions`, which also
@@ -201,12 +161,11 @@ true` is the supported path, and the trigger is why it is enough.
 returned and searched for every signed-in viewer; the email is not. Sign-up —
 email or OAuth — stores a neutral `member-xxxxxx` handle when the name is blank
 or email-shaped (`user.create.before`), better-auth's `/update-user` refuses one
-(`user.update.before`), `UserActor.updateProfile` refuses one, and
-`scripts/migrate-users.ts` plus the backfill migration
-`…_display_names_are_not_emails` rewrite imported and existing rows (name equal
-to the address, empty, or containing an email) to a handle derived from the
-user id. hasura-auth, and this app's sign-up form until 2026-09-28, defaulted
-the name to the address.
+(`user.update.before`), `UserActor.updateProfile` refuses one, and the
+backfill migration `…_display_names_are_not_emails` rewrote existing rows (name
+equal to the address, empty, or containing an email) to a handle derived from
+the user id. This app's sign-up form defaulted the name to the address until
+2026-09-28.
 
 **Rate limiting keys on the real client.** better-auth's limiter (on in
 production) reads the client address from `x-cellar-client-ip` only, which
@@ -302,14 +261,8 @@ present, so a missing secret disables it rather than half-configuring it.
 ## Commands
 
 ```sh
-# The tables come from the transform, like every other table:
-packages/db/transform/run.sh                 # 13 creates them, 14 repoints, 15 drops `auth`
-
-# Nhost auth.users + auth.user_providers -> user + account. Idempotent; run it
-# between transform step 13 and step 14 when there is real data to move.
-AUTH_DATABASE_URL=postgres://cellar:cellar@localhost:5433/cellar \
-SOURCE_DATABASE_URL=postgres://postgres:postgres@localhost:5432/local \
-  bun run --filter @cellar-assistant/actors migrate:users [--dry-run] [--update-existing]
+# The tables come from the baseline, like every other table:
+packages/db/baseline/build.sh
 
 # A development environment from nothing: reference rows plus the two test
 # accounts, signed up through /api/auth/sign-up/email so their hashes are native

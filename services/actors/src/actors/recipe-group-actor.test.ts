@@ -4,7 +4,7 @@
  * What this file is built to prove:
  *
  *   1. **the `recipe_votes` authorization gap is closed.** `target-stack.md`
- *      §7 records that `recipe_votes` has no permissions in Hasura metadata at
+ *      §7 records that `recipe_votes` had no permissions at
  *      all. The rule B6 chose is enforced *by construction* — every vote path
  *      addresses `(recipeId, ctx.viewerId)` and no method takes a user id — so
  *      the proof is behavioural: a second user voting on the same recipe adds

@@ -9,8 +9,7 @@
  * `resolve()` call for the *same* name lands on the *same* Dapr activation —
  * "Dapr runs one turn at a time per actor id" (§1.5) is the primary
  * serialization mechanism. The `brands_unique_lower_name` index
- * (`82450ad1:nhost/migrations/default/1773700000000_brands_dedup_and_unique_name_index`)
- * is the tripwire behind it, for the (defence-in-depth) case that guarantee is
+ * (`packages/db/baseline/schema.sql`) is the tripwire behind it, for the (defence-in-depth) case that guarantee is
  * ever violated — see `services/actors/src/actors/brand-registry-actor.ts`.
  *
  * **These DTOs are the wire shape, not the row shape** (see `items.ts`'s note

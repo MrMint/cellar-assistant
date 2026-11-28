@@ -45,7 +45,7 @@ import { useHasMounted, useHydratedReducedMotion } from "./useHasMounted";
  *   dropped by URQL rather than by a hand-kept id. The old skip is kept:
  *   with server data and no filter, nothing is fetched until the live
  *   position differs from the cookie's.
- * - **The photo** is the presigned `file { url }` instead of a Nhost storage
+ * - **The photo** is the presigned `file { url }` instead of a storage
  *   URL built from a file id; same `next/image` props.
  * - **The filters** are labelled `FilterChip`s (the type's glyph and its
  *   word), where the old ones were bare icons in a Joy `ToggleButtonGroup`

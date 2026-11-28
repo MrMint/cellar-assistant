@@ -1,11 +1,11 @@
 /**
  * `/search`'s discovery section — UI parity G31, restored at the user's
- * request (`docs/architecture/ui-parity-decisions.md`).
+ * request (`docs/archive/nhost-migration/ui-parity-decisions.md`).
  *
  * The old page (`82450ad1:src/app/(authenticated)/search/page.tsx`) rendered
  * two strips under the quick links, and both had a client-shaped hole:
  *
- * - **Recent Activity** asked Hasura for `item_reviews` and `tier_list_items`
+ * - **Recent Activity** asked for `item_reviews` and `tier_list_items`
  *   with `user_id _in $userIds`, `$userIds` assembled in the browser from the
  *   friend list. Any id could go in it, and the tier-list query had no privacy
  *   filter at all — a friend's PRIVATE list showed up, name and all.

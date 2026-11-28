@@ -538,7 +538,7 @@ export type ReadUrlWindowSettings = {
  *
  * Was a day. Every rollover is a new `url=` for every image, and so a fresh
  * optimizer transformation on Vercel for every image × width anyone views —
- * daily, where the Nhost-era stable URLs re-transformed once a month. Six days
+ * daily, where URLs stable for a month would re-transform once a month. Six days
  * is as long as SigV4 allows with the minimum validity on top
  * ({@link SIGV4_MAX_EXPIRY_SECONDS}); the cost is the URL lifetime below.
  */

@@ -120,25 +120,21 @@ const NO_SURFACE: Readonly<Record<string, string>> = {
     "`PlaceActor.create` / `editUnshared` write; `review` is `system`-only, " +
     "and its verdict reaches clients as `Place.reviewStatus`.",
   PlaceRefreshJobActor:
-    "Operator tooling. `start` is admin-only and its Hasura predecessor " +
-    "(`refresh_places`) was `role: admin` too, so no user page needs it. " +
+    "Operator tooling. `start` is admin-only, so no user page needs it. " +
     "Nothing starts it today — see this file's outcome note; when an admin " +
     "console exists, this entry should become a field instead.",
   OnboardingReprocessJobActor:
     "Operator tooling, and the strongest case for staying unexposed: it " +
-    "re-runs a vision model over *other users'* onboardings, and its " +
-    "predecessor `reprocessOnboardingBatch` had no Hasura action at all.",
+    "re-runs a vision model over *other users'* onboardings.",
   OvertureReloadJobActor:
     "Operator tooling (C4b). `start` is admin-only and additionally refuses " +
-    "unless a BigQuery source is installed at boot; its predecessor " +
-    "`refreshPlaces` was an admin-secret HTTP function with no Hasura " +
-    "action. It rewrites the reference half of every place row, so it wants " +
+    "unless a BigQuery source is installed at boot. It rewrites the reference half of every place row, so it wants " +
     "an operator console rather than a public field — the same conclusion " +
     "`PlaceRefreshJobActor` reached.",
   VectorReembedJobActor:
     "Operator tooling. `start` is admin-only and spends an embedding call " +
     "on every item/recipe vector whose `embedding_model` is not the " +
-    "configured one; it is the cutover step after the switch to " +
+    "configured one; it is the re-embed step after the switch to " +
     "gemini-embedding-2 (every migrated vector's model is NULL). Like " +
     "`PlaceRefreshJobActor`, it wants an operator console, not a public field.",
 };

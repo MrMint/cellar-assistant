@@ -92,7 +92,7 @@
       // Turborepo 2.x runs tasks in STRICT env mode: a task sees only what is
       // named here, plus globalEnv and turbo's own passthrough list. TMPDIR is
       // not on that list — measured by printing `env` from inside
-      // `packages/db/transform/test-db.sh` under `turbo run test` (unset) and
+      // `packages/db/baseline/test-db.sh` under `turbo run test` (unset) and
       // from a shell (/var/folders/.../T/). Anything reading ${TMPDIR:-/tmp}
       // therefore resolved to a different path under turbo than by hand, which
       // is how the shared test-database dump ended up existing twice with two

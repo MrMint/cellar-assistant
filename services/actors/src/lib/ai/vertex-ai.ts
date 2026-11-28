@@ -1,7 +1,7 @@
 /**
  * Vertex AI — `aiplatform.googleapis.com`, service-account OAuth.
  *
- * The production provider on the Nhost side, and the one this repository holds
+ * The production provider, and the one this repository holds
  * no credentials for. Ported to the same contract as the other two and
  * unit-tested end to end against an injected transport with a throwaway RSA key
  * generated inside the test, so the signing path is exercised without any
@@ -16,8 +16,8 @@
  *
  * ## Locations
  *
- * Gemini 3 models are served from the `global` endpoint, which is why the Nhost
- * factory hardcoded `location: "global"` and why that is this port's default.
+ * Gemini 3 models are served from the `global` endpoint, which is why
+ * `location: "global"` is this provider's default.
  * The embedding models differ by family, and `embeddingLocation` applies the
  * answer to the embedding call alone:
  *

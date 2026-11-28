@@ -17,9 +17,7 @@ export const AUTH_BASE_PATH = "/api/auth";
 /**
  * The Next route that proxies GraphQL to `services/api`.
  *
- * D1 built it at `/api/graphql-next` so it could sit beside the Hasura proxy
- * that owned `/api/graphql`; D9 deleted that proxy and moved this one onto the
- * name. It is written down once here, and `src/proxy.ts`'s matcher must keep
+ * It is written down once here, and `src/proxy.ts`'s matcher must keep
  * excluding it — `src/lib/api/proxy-matcher.test.ts` checks that it does.
  */
 export const GRAPHQL_PROXY_PATH = "/api/graphql";

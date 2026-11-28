@@ -41,9 +41,9 @@ on:
       - "packages/e2e/**"
       # The two root scripts this workflow runs (as steps, and through the
       # root `preinstall`). Not `scripts/**`: nothing in services/client or
-      # packages/e2e reads scripts/{ai,backup,ci,cutover,deploy,stack}, and the
-      # wildcard started the ~4 min `next build` image job on every deploy- or
-      # cutover-script edit.
+      # packages/e2e reads scripts/{ai,backup,ci,deploy,stack}, and the
+      # wildcard started the ~4 min `next build` image job on every deploy-script
+      # edit.
       - "scripts/check-node-version.mjs"
       - "scripts/check-blocked-builds.mjs"
       - "package.json"

@@ -1,9 +1,9 @@
 /**
  * The tier-list queries and mutations — the successor of
- * `82450ad1:src/components/tier-list/queries.ts` and of the Hasura mutations
+ * `82450ad1:src/components/tier-list/queries.ts` and of the mutations
  * that lived in `82450ad1:src/app/actions/tierLists.ts`.
  *
- * - `tier_lists(order_by: updated_at desc)` (everything Hasura's permissions
+ * - `tier_lists(order_by: updated_at desc)` (everything the old permissions
  *   let through) → `myTierLists`, which is `canSeeTierList` server-side, most
  *   recently changed first, paged by cursor (100 a page).
  * - `tier_lists_by_pk` → `tierList(id:)`, a result union whose
@@ -172,7 +172,7 @@ export const GetTierListsForPlaceQuery = graphql(
 );
 
 // ---------------------------------------------------------------------------
-// Mutations (the old server actions' Hasura documents)
+// Mutations (the old server actions' documents)
 // ---------------------------------------------------------------------------
 
 export const AddTierListMutation = graphql(

@@ -18,8 +18,8 @@ import { MAP_TILES_CACHE, WASM_CACHE } from "./cache-names";
  * That is what this module fixes. `sw.ts` used to list its own rules *after*
  * `...defaultCache`, so none of them ever ran:
  *
- *   - the `/v1/graphql` and `/v1/auth` rules named Nhost's endpoints, which
- *     this app has not called since the migration (GraphQL is `/api/graphql`,
+ *   - the `/v1/graphql` and `/v1/auth` rules named endpoints this app does
+ *     not serve (GraphQL is `/api/graphql`,
  *     a POST the worker does not cache; auth is `/api/auth/*`, which
  *     `defaultCache` already sends to the network). Deleted.
  *   - the font, image and `/_next/image` rules duplicated rules `defaultCache`

@@ -1,4 +1,4 @@
-# The post-Nhost stack (docs/architecture/target-stack.md).
+# The application stack (docs/architecture/target-stack.md).
 #
 #   bun run stack:up           docker compose -f infra/docker-compose.yml up
 #   bun run stack:down
@@ -8,7 +8,7 @@
 # never share containers or volumes.
 #
 # Ports (defaults; override in infra/.env) stay off Postgres's default 5432 —
-# the pre-migration Nhost stack held it, and a host Postgres may — and leave
+# a host Postgres may hold it — and leave
 # 3000 to the user's own `bun run dev`:
 #
 #   3001  services/api          GraphQL at /graphql, liveness at /healthz
@@ -364,11 +364,10 @@ services:
       # correct from both sides.
       FILES_S3_INTERNAL_ENDPOINT: minio
       FILES_S3_INTERNAL_PORT: "9000"
-      # A6 · better-auth. X2 merged its five tables into the main database, so
-      # this is the same URL as DATABASE_URL above and the same pool serves
-      # both. It stays a separate variable because it is separately a
-      # credential — `services/api` asserts on boot that neither reaches it — and
-      # because `scripts/migrate-users.ts` names source and target separately.
+      # A6 · better-auth. Its five tables are in the main database, so this is
+      # the same URL as DATABASE_URL above and the same pool serves both. It
+      # stays a separate variable because it is separately a credential —
+      # `services/api` asserts on boot that neither reaches it.
       AUTH_DATABASE_URL: postgres://${POSTGRES_USER:-cellar}:${POSTGRES_PASSWORD:-cellar}@postgres:5432/${POSTGRES_DB:-cellar}
       # A5 · structured events to the collector below, which routes logs into
       # Loki. `{service_name="actors", event_name="outbox.dead_letter"}` is the

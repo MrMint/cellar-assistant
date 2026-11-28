@@ -11,7 +11,7 @@ test("recognises both the plain and __Secure- cookie spellings", () => {
   assert.ok(isAuthCookieName("better-auth.session_token"));
   assert.ok(isAuthCookieName("__Secure-better-auth.session_token"));
   assert.ok(isAuthCookieName("better-auth.state"));
-  assert.equal(isAuthCookieName("nhostSession"), false);
+  assert.equal(isAuthCookieName("otherSession"), false);
 });
 
 test("parses a Cookie header without decoding values", () => {
@@ -35,16 +35,16 @@ test("drops malformed pairs rather than inventing valueless cookies", () => {
   assert.deepEqual(parseCookieHeader(""), []);
 });
 
-test("forwards only better-auth cookies, never the Nhost session", () => {
+test("forwards only better-auth cookies, never another app's session", () => {
   const header = authCookieHeaderFrom(
-    'nhostSession={"accessToken":"secret"}; better-auth.session_token=t%3D; _vercel_jwt=x; better-auth.state=s',
+    'otherSession={"accessToken":"secret"}; better-auth.session_token=t%3D; _vercel_jwt=x; better-auth.state=s',
   );
   assert.equal(header, "better-auth.session_token=t%3D; better-auth.state=s");
-  assert.ok(header !== null && !header.includes("nhostSession"));
+  assert.ok(header !== null && !header.includes("otherSession"));
 });
 
 test("returns null rather than an empty header when nothing matches", () => {
-  assert.equal(authCookieHeaderFrom("nhostSession=x"), null);
+  assert.equal(authCookieHeaderFrom("otherSession=x"), null);
   assert.equal(authCookieHeaderFrom(null), null);
 });
 

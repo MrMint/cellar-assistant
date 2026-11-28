@@ -41,7 +41,7 @@ import { builder } from "./builder.ts";
 
 export const FileType = builder.objectRef<FileDto>("File").implement({
   description:
-    "One `files` row — the table that replaced Nhost's `storage.files`. " +
+    "One `files` row: an uploaded object's metadata. " +
     "Readable by its uploader, and by anyone when something public " +
     "references it (a public `item_image`, a place photo).",
   fields: (t) => ({

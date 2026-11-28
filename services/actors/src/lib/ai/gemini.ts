@@ -3,9 +3,8 @@
  *
  * `google-ai` (the Generative Language API, API-key auth) and `vertex-ai`
  * (`aiplatform.googleapis.com`, OAuth) take the *same* `generateContent`
- * payload and differ only in host, auth and the embedding endpoint. On the
- * Nhost side these were two files with the schema converter duplicated between
- * them; here it is written once.
+ * payload and differ only in host, auth and the embedding endpoint. The schema
+ * converter is written once for both.
  */
 import { ConflictError } from "@cellar-assistant/contracts";
 import { isRecord } from "./http.ts";
@@ -22,8 +21,7 @@ import type {
  * JSON Schema draft-7 → Gemini's OpenAPI subset.
  *
  * Gemini requires **uppercase** type names and understands only
- * STRING/INTEGER/NUMBER/BOOLEAN/ARRAY/OBJECT. `propertyOrdering` is carried
- * through from the Nhost converter: it makes the model emit fields in a stable
+ * STRING/INTEGER/NUMBER/BOOLEAN/ARRAY/OBJECT. `propertyOrdering` is set: it makes the model emit fields in a stable
  * order, which measurably improves structured extraction.
  */
 export const toGeminiSchema = (schema: JsonSchema): Record<string, unknown> => {
@@ -73,7 +71,7 @@ export const toGeminiSchema = (schema: JsonSchema): Record<string, unknown> => {
       };
     default:
       // An untyped node. Gemini rejects a schema with no type, and a silent
-      // widening to STRING is what the Nhost converter did; keep that, because
+      // widening to STRING is the choice here, because
       // the alternative is a 400 the caller cannot act on.
       return { type: "STRING" };
   }
@@ -87,7 +85,7 @@ export const toGeminiSchema = (schema: JsonSchema): Record<string, unknown> => {
  * image. Gemini decodes according to `mime_type` rather than sniffing, and
  * `files.mime_type` is client-supplied and unvalidated, so a PNG or an iPhone
  * HEIC went up announced as JPEG. That is now the deployed path
- * (`docs/architecture/e4-decisions.md` §12), so it is detected rather than
+ * (`docs/archive/nhost-migration/e4-decisions.md` §12), so it is detected rather than
  * assumed, and an unidentifiable or unsupported image raises rather than
  * shipping a guess — see `image-mime.ts`.
  */

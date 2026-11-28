@@ -13,9 +13,9 @@
  * nothing else touches a vector whose item never changes, and after a model
  * change that is nearly all of them.
  *
- * **It is the cutover step.** Every migrated vector's `embedding_model` is
- * NULL (legacy `gemini-embedding-2-preview`, which nobody recorded), so a run
- * after the first deploy re-embeds all of them with the configured model. It
+ * A vector imported in the 2026-10 migration has a NULL `embedding_model`
+ * (`gemini-embedding-2-preview`, which nobody recorded), so a run re-embeds it
+ * with the configured model. It
  * is also what to run after any later change of embedding model or provider.
  *
  * ## The walk (§8.4)

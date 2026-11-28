@@ -312,7 +312,7 @@ const instructionFromNode = (
 
 /**
  * "Variation of" and "Other variations" — the old `canonical_recipe` and
- * `recipe_variations` relationships, which Hasura never exposed. From the
+ * `recipe_variations` relationships, which the old API never exposed. From the
  * group: the canonical, when it is not this recipe; and every other version.
  */
 export const variationsFromGroup = (

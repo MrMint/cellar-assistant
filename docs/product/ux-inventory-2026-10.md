@@ -209,7 +209,7 @@ There are 66 page.tsx under (authenticated), plus `/`, `/sign-in`, `/sign-up` an
   - a manual recipe create/edit form;
   - an avatar or profile.
 - **e2e runs DESKTOP ONLY** (1440×900), so no mobile viewport is tested.
-- **Open decisions** in `docs/architecture/ui-parity-decisions.md` §"Awaiting the user", items 1–20. In brief:
+- **Open decisions** in `docs/archive/nhost-migration/ui-parity-decisions.md` §"Awaiting the user", items 1–20. In brief:
   - 1–6: new-only features that were kept;
   - 7–11: features that were dropped (gallery, brand link, check-ins list, semantic recipe search, search tabs, the place notes panel);
   - 12–16: behaviour choices (empty bottles counted, geolocation on load, lock is UI-only);
@@ -225,4 +225,4 @@ Key files:
 - OnboardingWizard/{machines.ts,ItemOnboarding.tsx,index.tsx}
 - providers/ThemeRegistry.tsx
 - actors lib/ai/{seams,install,config}.ts
-- docs/architecture/ui-parity-{decisions,inventory}.md, components/LEGACY-RESTORE.md
+- docs/archive/nhost-migration/{ui-parity-decisions,ui-parity-inventory,LEGACY-RESTORE}.md

@@ -26,11 +26,7 @@
  * `RecipePhotoJobActor.result` to read the stage cursor. A poll that only
  * needs `status` never pays for it. Both land on the same activation.
  *
- * ## The owner defect this replaces, and why nothing here can reopen it
- *
- * The legacy `processRecipePhoto` action had an authorization defect in how it
- * chose a recipe's owner. It is still live in the legacy production stack, so
- * its details are withheld until that stack is retired.
+ * ## The recipe's owner never comes from the client
  *
  * **A job acts as the user who started it.** `JobActor.start` writes
  * `jobs.created_by` from `ctx.viewerId`; `#ownerContext` reads it back and

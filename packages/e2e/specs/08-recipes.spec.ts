@@ -15,7 +15,7 @@ import {
  * composer behind "Write a review".
  *
  * Most of that UI never loaded in production (`recipe_votes` and
- * `recipe_reviews` had no Hasura permissions), so these are its first
+ * `recipe_reviews` had no permissions), so these are its first
  * end-to-end runs. The fixture is built, never hunted for: two versions in
  * one group is the only shape where a vote means anything, and B6's
  * `canonicalRecipeId` stays null until a vote breaks the tie. Recipes have no

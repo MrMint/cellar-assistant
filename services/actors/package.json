@@ -11,8 +11,6 @@
     "lint": "biome lint .",
     "start": "bun src/index.ts",
     "start:node": "node src/index.ts",
-    "migrate:users": "node scripts/migrate-users.ts",
-    "migrate:files": "node scripts/migrate-files.ts",
     "db:seed": "node scripts/seed.ts"
   },
   "dependencies": {

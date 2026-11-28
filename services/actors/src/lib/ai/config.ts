@@ -3,8 +3,9 @@
  *
  * ## The failure mode this module is designed against
  *
- * `functions/refreshPlaces/_services/factory.ts` — still on the Nhost side, and
- * the reason X1 was written the way it was — contains this:
+ * The previous backend's place-data factory (`82450ad1`,
+ * `functions/refreshPlaces/_services/factory.ts`) — the reason X1 was written
+ * the way it was — contained this:
  *
  * ```ts
  * if (!hasCredentials) {
@@ -213,8 +214,8 @@ export const DEFAULT_AI_REQUEST_TIMEOUT_MS = 120_000;
  *
  * **Changed 2026-10-04, ahead of a retirement.** The previous defaults
  * (`gemini-2.5-flash-lite`, `-2.5-flash`, `-2.5-pro`) retire on Vertex on
- * 2026-10-20 (the "Model versions and lifecycle" page). Production's Nhost
- * functions had already moved on (`82450ad1`,
+ * 2026-10-20 (the "Model versions and lifecycle" page). Production's previous
+ * backend had already moved on (`82450ad1`,
  * `functions/_utils/ai-providers/vertex-ai.ts`), so the port had regressed.
  * Google's own replacement column names these:
  *
@@ -441,7 +442,7 @@ export const readAIProviderConfig = (
           env,
           "OPENAI_COMPAT",
           // No default is right for every server, so these name the sanctioned
-          // local pair (docs/architecture/e4-decisions.md §12) and are wrong
+          // local pair (docs/archive/nhost-migration/e4-decisions.md §12) and are wrong
           // loudly rather than quietly: a model string the server does not
           // serve comes back as a 404 naming the model it was asked for.
           {
@@ -555,12 +556,10 @@ const requireServedEmbeddingLocation = (
 /**
  * A service-account key, from a file path or inline JSON.
  *
- * The Nhost factory had a third lane — fetch the key out of the
- * `admin_credentials` table with the Hasura admin secret. It is not ported:
- * that table does not exist in the transformed schema, §1.3 makes Postgres the
- * truth for *domain* rows and not for secrets, and the lane meant every cold
- * provider construction did a GraphQL round trip against an admin-credentialled
- * client. Deployment secrets belong in the environment.
+ * There is no lane that reads the key out of a database table: §1.3 makes
+ * Postgres the truth for *domain* rows and not for secrets, and such a lane
+ * would make every cold provider construction a round trip with an
+ * admin credential. Deployment secrets belong in the environment.
  */
 const readServiceAccountKey = (
   env: Env,
@@ -572,9 +571,7 @@ const readServiceAccountKey = (
     throw new ConflictError(
       'the "vertex-ai" provider needs a service-account key: set ' +
         "GOOGLE_APPLICATION_CREDENTIALS to a key file path, or " +
-        "GOOGLE_APPLICATION_CREDENTIALS_JSON to the key itself. " +
-        "(The Nhost lane that read the key out of `admin_credentials` is not " +
-        "ported — see this file's note.)",
+        "GOOGLE_APPLICATION_CREDENTIALS_JSON to the key itself.",
     );
   }
 

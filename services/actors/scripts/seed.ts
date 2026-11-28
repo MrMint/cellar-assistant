@@ -1,5 +1,5 @@
 /**
- * `bun run db:seed` — A9. Replaces `nhost up --apply-seeds` for the new stack.
+ * `bun run db:seed` — A9. Reference data and the two test accounts.
  *
  *   DATABASE_URL=postgres://cellar:cellar@localhost:5433/cellar \
  *   BETTER_AUTH_URL=http://localhost:3002 \
@@ -21,25 +21,14 @@
  * NOTHING`, and a sign-up for an email that already exists is treated as
  * "already seeded", not an error. Re-running this script is always safe.
  *
- * ## Why the reference data is not read from `82450ad1:nhost/seeds/default/*.sql`
+ * ## Where the reference data comes from
  *
- * That is where the migration plan (§6 A9) says to read it from, and it is
- * wrong for this repository: `82450ad1:nhost/seeds/default/*.sql` holds sample
- * fixture data (a couple of test cellars and items) and has never held the
- * ten reference tables. Their rows were inserted by *migrations*
- * (`82450ad1:nhost/migrations/default/*_insert_into_public_*​/up.sql` and similar —
- * `country`, `wine_variety`, `beer_style`, … each got their rows from a
- * one-off `INSERT` migration, not a seed file), which is also why
- * `packages/db/transform/run.sh`'s **schema-only** dump of local Nhost
- * carries the ten tables' *shape* across but none of their *rows* — schema-only
- * dumps never include data, regardless of how the live database came to hold
- * it. `reference-data.json` is a point-in-time export of local Nhost's actual
- * `SELECT value, comment FROM <table> ORDER BY value` for all ten tables
- * (197 countries, 55 wine varieties, … — see the migration plan's own
- * "`country` (197 rows)" aside), captured once so this script — and every
- * later environment that runs it — has no runtime dependency on Nhost still
- * existing. Do not regenerate it from `82450ad1:nhost/seeds/`; there is nothing there
- * to regenerate it from.
+ * `reference-data.json` is a point-in-time export of the ten reference tables
+ * (`SELECT value, comment FROM <table> ORDER BY value`: 197 countries, 55 wine
+ * varieties, …), captured once. The baseline (`packages/db/baseline/schema.sql`)
+ * is schema-only, so it carries the tables' *shape* but none of their *rows*;
+ * this file is the one source of the rows. Edit it, not a database, to change
+ * them.
  */
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -66,12 +55,10 @@ const TEST_PASSWORD = "123456789";
 /**
  * The two development accounts, with **fixed ids**.
  *
- * The ids are the ones these accounts have had since Nhost — `migrate-users.ts`
- * preserves a user's uuid, so a migrated environment and a seeded one now agree.
- * They are pinned because things outside this script name them: `packages/e2e/fixtures/
- * accounts.ts` asserts on `ACCOUNTS.secondary.id` in the friends flow, and D2's
- * hand-inserted `cellar.auth.users` rows (which X2 removed the need for) carried
- * exactly these values. A random id per `db:seed` would make every such fixture
+ * The ids are the ones these accounts have always had, so an imported
+ * environment and a seeded one agree. They are pinned because things outside
+ * this script name them: `packages/e2e/fixtures/accounts.ts` asserts on
+ * `ACCOUNTS.secondary.id` in the friends flow. A random id per `db:seed` would make every such fixture
  * a coin toss.
  *
  * better-auth mints its own id on sign-up and there is no hook to seed one, so
@@ -292,7 +279,7 @@ const pinId = async (
  *
  * `signUp` sets the name only when it *creates* the account; an account that
  * already existed keeps whatever it had. That used to be harmless, and it hid
- * a coincidence: the shared stack's two accounts came across from Nhost named
+ * a coincidence: the shared stack's two accounts were imported named
  * `test@test.com` / `test2@test.com`, and `packages/e2e`'s friends spec
  * searches for `ACCOUNTS.primary.displayName` ("Test"), which an email
  * happens to contain. The display-name backfill
@@ -338,9 +325,9 @@ const seedTestAccounts = async (): Promise<void> => {
 /**
  * `--reference-only` runs step 1 and stops.
  *
- * X3's `packages/db/transform/test-db.sh` seeds the test template this way: the
- * ten reference tables are foreign-key targets and a schema-only dump carries
- * none of their rows, but step 2 signs its accounts up over HTTP against a
+ * `packages/db/baseline/test-db.sh` seeds the test template this way: the
+ * ten reference tables are foreign-key targets and the schema-only baseline
+ * carries none of their rows, but step 2 signs its accounts up over HTTP against a
  * running `actors` service, which a test database has no business needing.
  * Reading the rows from here rather than from a second copy of
  * `reference-data.json` is the point — one source, one insert path.

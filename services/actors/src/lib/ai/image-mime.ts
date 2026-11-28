@@ -16,7 +16,7 @@
  * label every image with it. Gemini does not ignore `mime_type` — it decodes
  * according to it — so a PNG or an iPhone HEIC announced as JPEG is either
  * rejected with an opaque upstream error or decoded wrongly, and this is now
- * the **deployed** path (`docs/architecture/e4-decisions.md` §12). A
+ * the **deployed** path (`docs/archive/nhost-migration/e4-decisions.md` §12). A
  * mislabelled image that *nearly* works is the silent-wrong-answer shape this
  * whole directory is written against, so an unidentifiable or unsupported
  * image raises instead.
@@ -277,9 +277,8 @@ export const describeImages = (images: readonly Uint8Array[]): string => {
  * The first bytes, hex, for an error message.
  *
  * Twelve bytes: enough to show a magic number, far short of anything that
- * could reconstruct a menu photo or a wine label. `ollama.ts` records that the
- * Nhost provider logged whole prompts and responses, and that these images are
- * user content.
+ * could reconstruct a menu photo or a wine label. These images are user content,
+ * and no provider logs prompts or responses (`ollama.ts`).
  */
 const signature = (bytes: Uint8Array): string => {
   if (bytes.byteLength === 0) return "no bytes at all";

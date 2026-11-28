@@ -917,10 +917,10 @@ cmd_check_images() {
 
 # ---------------------------------------------------------------------------
 # `db:clone` — a fresh per-worktree Postgres is empty, and this repository's
-# schema comes from the cutover transform of an Nhost dump
-# (`packages/db/transform/run.sh`), not from a replayable migration chain. The
-# quickest working database for a new worktree is therefore a copy of one that
-# already works.
+# schema is built by restoring a baseline and migrating it
+# (`packages/db/baseline/build.sh`), not by replaying a migration chain from
+# zero. The quickest working database for a new worktree is therefore a copy of
+# one that already works.
 # ---------------------------------------------------------------------------
 cmd_db_clone() {
   local from="cellar-stack" schema_only=0
@@ -1170,7 +1170,7 @@ d_cont() { printf '        %s\n' "$*"; }
 #
 # What the repo actually depends on is Node's built-in TypeScript type
 # stripping: `node scripts/seed.ts` (`bun run db:seed`) and the `node "$SEED"`
-# call inside `packages/db/transform/test-db.sh` both hand a `.ts` file to
+# call inside `packages/db/baseline/test-db.sh` both hand a `.ts` file to
 # whatever `node` is on PATH. So this probes the capability by running a tiny
 # `.ts` file, and only uses the version numbers to explain the result.
 #
@@ -1435,7 +1435,7 @@ doctor_toolchain() { # doctor_toolchain FIX
   elif [ -n "$GOOD_NODE" ]; then
     d_warn "node on PATH is v$PATH_NODE_VERSION; .nvmrc pins $NVMRC_VERSION$([ "$PATH_NODE_STRIPS" -eq 0 ] && printf ' and this one cannot strip TypeScript types' || true)"
     d_cont "bites: \`bun run db:seed\` (node scripts/seed.ts) and the \`node \$SEED\` step inside"
-    d_cont "       packages/db/transform/test-db.sh — both fail with an ESM loader error that"
+    d_cont "       packages/db/baseline/test-db.sh — both fail with an ESM loader error that"
     d_cont "       names neither Node nor the version."
     d_cont "does NOT bite: the test suites. They run under \`bun run --bun vitest run\`, where"
     d_cont "       process.execPath is bun and types are stripped natively."
@@ -1618,7 +1618,7 @@ doctor_config() { # doctor_config FIX
     d_ok "no stray .env inside the workspace (bun would auto-load one from the process cwd)"
   fi
   [ -f "$REPO_ROOT/.secrets" ] \
-    && d_info ".secrets present — legacy Nhost session material, never read or printed by this lane"
+    && d_info ".secrets present — never read or printed by this lane"
 
   # --- Compose-lane addresses leaking into the host lane ------------------
   # `dapr run` hands the caller's environment to both apps, and the host lane
@@ -2282,12 +2282,10 @@ print("images" if vision and p.get("media_marker") else ("novision" if not visio
 # What `bun run test` needs that is not in this worktree.
 #
 # The actors suite's vitest `globalSetup` builds `cellar_test` through
-# `packages/db/transform/test-db.sh`, whose DST_CONTAINER default is
+# `packages/db/baseline/test-db.sh`, whose DST_CONTAINER default is
 # `cellar-stack-postgres-1` — the SHARED lane, not this worktree's Postgres.
 # So "run the tests" has a prerequisite that lives outside this stack entirely,
-# and it fails in a way that does not name it. (The template build used to
-# re-dump a legacy Nhost container too; it restores the checked-in
-# `nhost-schema.sql` baseline now, so that second prerequisite is gone.)
+# and it fails in a way that does not name it.
 # ---------------------------------------------------------------------------
 doctor_test_suite() {
   d_section "test suite prerequisites"
@@ -2304,13 +2302,13 @@ doctor_test_suite() {
       d_ok "cellar_test_template exists — \`bun run test\` clones it (seconds) instead of rebuilding"
       d_info "that template is SHARED between worktrees, but concurrent runs no longer fight over"
       d_cont "it: each run clones its own cellar_test_..._run_<pid>_<epoch> database and the"
-      d_cont "build is serialised on a Postgres advisory lock (packages/db/transform/test-db.sh)."
-      d_cont "What is still shared is the template's FINGERPRINT — two worktrees whose transform"
-      d_cont "files differ each rebuild it (3s) when they alternate. \`dev:bootstrap --tests\`"
+      d_cont "build is serialised on a Postgres advisory lock (packages/db/baseline/test-db.sh)."
+      d_cont "What is still shared is the template's FINGERPRINT — two worktrees whose migrations"
+      d_cont "differ each rebuild it (seconds) when they alternate. \`dev:bootstrap --tests\`"
       d_cont "builds in this worktree's own Postgres when it can, which avoids even that."
     else
       d_info "no cellar_test_template in $dst — the first \`bun run test\` BUILDS it (seconds), from the"
-      d_cont "checked-in baseline packages/db/transform/nhost-schema.sql; nothing else needs to be up"
+      d_cont "checked-in baseline packages/db/baseline/schema.sql; nothing else needs to be up"
     fi
   else
     d_warn "test-database host \"$dst\" is NOT running — the actors suite's globalSetup fails before"
@@ -2381,7 +2379,7 @@ newer_sources() { # newer_sources DIR REFERENCE_FILE
   [ -d "$1" ] || return 0
   find "$1" \
     \( -name node_modules -o -name .next -o -name .git -o -name .stack \
-       -o -name .turbo -o -name dist -o -name .nhost -o -name artifacts \) -prune \
+       -o -name .turbo -o -name dist -o -name artifacts \) -prune \
     -o -type f \( -name '*.ts' -o -name '*.tsx' -o -name '*.mts' -o -name '*.js' \
        -o -name '*.mjs' -o -name '*.json' -o -name '*.yaml' -o -name '*.yml' \
        -o -name '*.graphql' -o -name '*.sql' \) \
@@ -2753,22 +2751,21 @@ cmd_bootstrap() {
       say "empty database — cloning the schema and data from compose project \"$src\""
       cmd_db_clone --from "$src"
     else
-      # No donor. The schema's source of truth is the cutover transform of an
-      # Nhost dump (there is no replayable migration chain), so build it: run.sh
-      # restores the checked-in baseline (nhost-schema.sql) and needs no Nhost.
+      # No donor, so build it: build.sh restores the checked-in baseline
+      # (packages/db/baseline/schema.sql) and applies every migration.
       say "empty database and no running cellar-* Postgres to clone from;"
-      say "building the schema with packages/db/transform/run.sh (checked-in Nhost baseline)"
+      say "building the schema with packages/db/baseline/build.sh (checked-in baseline)"
       DST_CONTAINER="$pg" DST_USER="$PG_USER" DST_PASSWORD="$PG_PASSWORD" DST_DB="$PG_DB" \
         PATH="$(node_path_prefix)" \
-        "$REPO_ROOT/packages/db/transform/run.sh" \
-        || die "transform/run.sh failed (above). It restores packages/db/transform/nhost-schema.sql
+        "$REPO_ROOT/packages/db/baseline/build.sh" \
+        || die "baseline/build.sh failed (above). It restores packages/db/baseline/schema.sql
   into $pg and needs nothing else up. Or start any other worktree's stack and re-run with
   --from <its compose project>."
     fi
   fi
 
   # Whichever way the schema arrived — left alone, cloned, or built — bring it
-  # up to this tree's migrations. A no-op when run.sh just did it.
+  # up to this tree's migrations. A no-op when build.sh just did it.
   say "db:migrate (the migration ledger)"
   run_migrate || die "db:migrate refused or failed against $PG_DB (above). Nothing else was started.
   A refusal names the migration and why; \`bun run dev:migrate -- --status\` repeats it read-only."
@@ -2826,10 +2823,9 @@ cmd_bootstrap() {
     else
       local mine tmpl
       mine="$(project_container "$COMPOSE_PROJECT_NAME" postgres)"
-      # Any Postgres can build the template now: test-db.sh restores the
-      # checked-in baseline (packages/db/transform/nhost-schema.sql) rather than
-      # dumping a legacy Nhost container, so the shared lane is only a fallback
-      # for a stack with no Postgres of its own.
+      # Any Postgres can build the template: test-db.sh restores the
+      # checked-in baseline (packages/db/baseline/schema.sql), so the shared
+      # lane is only a fallback for a stack with no Postgres of its own.
       if [ -n "$mine" ]; then
         dst="$mine"
         tmpl="$(psql_in "$mine" postgres "select 1 from pg_database where datname='cellar_test_template'")"

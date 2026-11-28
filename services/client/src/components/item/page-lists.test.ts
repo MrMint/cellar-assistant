@@ -1,6 +1,6 @@
 /**
  * The item and bottle pages' lists are read to the end, as the old pages'
- * unbounded Hasura relationships were (parity gap #8): the follow-up reads
+ * unbounded relationships were (parity gap #8): the follow-up reads
  * page with `after`, merge in order, and a failed follow-up keeps the rows
  * already read.
  */

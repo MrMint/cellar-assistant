@@ -32,8 +32,7 @@ import { tables } from "./index.ts";
  * not when its formatting does.
  *
  * **Asserted against the declaration, not a database.** The declaration is what
- * `scripts/cutover/cutover.sh`'s `baseline` phase diffs a `drizzle-kit pull`
- * against, and a test that only queried a database would pass against one built
+ * `db:drift` checks the migrations against, and a test that only queried a database would pass against one built
  * before `20260920005733_teas_country_fk` and say nothing about the schema the
  * repo ships.
  */

@@ -63,7 +63,7 @@ export const PRIVACY_OPTIONS = [
  *   `cellar_owners`) → `createCellar` / `updateCellar`. `updateCellar` takes
  *   the **complete** co-owner set and diffs it server-side (`da1f77af`), so a
  *   co-owner can save a rename — the old delete-and-reinsert was creator-only
- *   under Hasura and always failed for them (§7).
+ *   and always failed for them (§7).
  * - The typed error's `message` replaces the caught exception's.
  *
  * The Joy multi-`Select` for co-owners is `CoOwnerPicker` (a combobox over a

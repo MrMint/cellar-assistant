@@ -703,7 +703,7 @@ describe.skipIf(skip)("FileActor (A8)", () => {
    * undisplayable to anyone but the person who uploaded it — and `item_image`
    * rows are visible when `is_public` (§2.1). The allowance is *derived* from
    * the referencing tables rather than stored on `files`, so nothing needs
-   * backfilling at cutover.
+   * backfilling.
    * ---------------------------------------------------------------- */
   describe("presignRead: who may read (A7c)", () => {
     const attachImage = async (

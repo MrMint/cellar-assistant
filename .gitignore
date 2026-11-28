@@ -59,7 +59,6 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 .secrets
-.nhost
 
 .secrets
 
@@ -149,7 +148,7 @@ id_ed25519
 .claude/settings.local.json
 
 # Database dumps, backups and scratch output — never committed (the production
-# backup and cutover dumps hold real user data).
+# backups hold real user data).
 *.dump
 *.custom
 backups/

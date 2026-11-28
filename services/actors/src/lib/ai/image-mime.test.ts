@@ -3,7 +3,7 @@
  *
  * This exists because `gemini.ts` labelled **every** image `image/jpeg` from a
  * flat constant, and that is now the deployed path
- * (`docs/architecture/e4-decisions.md` §12). Gemini decodes according to the
+ * (`docs/archive/nhost-migration/e4-decisions.md` §12). Gemini decodes according to the
  * `mime_type` it is told rather than sniffing, and `files.mime_type` is
  * client-supplied and unvalidated (`FileActor.create` stores
  * `input.contentType ?? null` with no allow-list anywhere), so the bytes are
