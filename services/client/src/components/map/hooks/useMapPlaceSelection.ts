@@ -1,6 +1,7 @@
 "use client";
 
 import { type RefObject, useCallback, useEffect, useRef } from "react";
+import { afterHistorySettles } from "@/components/app/overlays/layers";
 import type { PlaceDetailsDrawerRef } from "../places/PlaceDetailsDrawer";
 import type { PlaceResult } from "../types";
 import { useMapActions, useMapUI } from "./useMapMachine";
@@ -53,11 +54,21 @@ export function useMapPlaceSelection({
 
   const handleSelectPlace = useCallback(
     (place: PlaceResult) => {
-      if (!isDesktop) {
-        detailDrawerRef.current?.setMiddle();
-      }
-      mapActions.selectPlace(place);
       isManualSelectionRef.current = true;
+      if (isDesktop) {
+        // FS-2: the desktop pane is an overlay layer, which pushes its own
+        // Back entry the moment it opens. nuqs queues its write for a tick
+        // and drops the queue on a push that is not its own, so opening the
+        // pane first lost `?placeId=` and read as Back: the pane closed as
+        // it opened. Write the URL first (replace: the pane's entry is the
+        // one Back pops), then open the pane on it.
+        void setPlaceIdRef
+          .current(place.id, { history: "replace" })
+          .then(() => mapActions.selectPlace(place));
+        return;
+      }
+      detailDrawerRef.current?.setMiddle();
+      mapActions.selectPlace(place);
       setPlaceIdRef.current(place.id, {
         history: isDrawerOpenRef.current ? "replace" : "push",
       });
@@ -70,8 +81,15 @@ export function useMapPlaceSelection({
     // Always use nuqs to clear placeId (shallow replaceState).
     // Avoids window.history.back() which triggers a Next.js soft navigation
     // and can cause the entire map component tree to remount.
+    if (isDesktop) {
+      // The pane's layer takes its entry back off as it closes; clear the
+      // URL on the page's own entry once that pop has landed, or the pop
+      // would bring `?placeId=` back (F-136's rule).
+      afterHistorySettles(() => setPlaceIdRef.current(null));
+      return;
+    }
     setPlaceIdRef.current(null);
-  }, [mapActions]);
+  }, [mapActions, isDesktop]);
 
   // Sync: browser back removes placeId → close drawer
   const previousPlaceIdRef = useRef(searchParams.placeId);
