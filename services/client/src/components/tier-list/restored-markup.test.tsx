@@ -59,6 +59,7 @@ const data = {
   privacy: "FRIENDS",
   listType: "place",
   isOwner: true,
+  createdById: "me",
   itemCount: items.length,
   items,
   history: null,
@@ -189,7 +190,9 @@ describe("TierListViewPage (restored header and tabs)", () => {
       /aria-label="Map"[^>]*href="\/map\?list=tl-1"|href="\/map\?list=tl-1"[^>]*aria-label="Map"/,
     );
     assert.doesNotMatch(html, /tierLists=/);
-    assert.match(html, /href="\/tier-lists\/tl-1\/edit"/);
+    // F-22: Details opens L2's sheet on the page, not the edit route.
+    assert.match(html, /aria-label="Details"/);
+    assert.doesNotMatch(html, /href="\/tier-lists\/tl-1\/edit"/);
     assert.match(html, />Rankings</);
     assert.match(html, />Insights</);
     assert.match(html, /placeholder="Search this list"/);
