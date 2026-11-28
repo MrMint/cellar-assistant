@@ -1,6 +1,5 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import {
   createContext,
   type ReactNode,
@@ -13,6 +12,7 @@ import { LogDrinkSheet } from "@/components/drink-log/LogDrinkSheet";
 import type { LogSubject } from "@/components/drink-log/log-draft";
 import { useDrinkLogFeedback } from "@/components/drink-log/useDrinkLogFeedback";
 import { type PourBottle, PourSheet } from "@/components/pour/PourSheet";
+import { useRefreshAfterWrite } from "./parts/pane-refresh";
 
 /** The bottle a drink is poured from, when there is one. */
 export type LogBottle = {
@@ -70,7 +70,7 @@ export function ItemActionsProvider({
   defaultBottle: LogBottle | null;
   children: ReactNode;
 }) {
-  const router = useRouter();
+  const refresh = useRefreshAfterWrite();
   const [open, setOpen] = useState(false);
   const [bottle, setBottle] = useState<LogBottle | null>(null);
   const [logVersion, setLogVersion] = useState(0);
@@ -79,8 +79,8 @@ export function ItemActionsProvider({
 
   const onChanged = useCallback(() => {
     setLogVersion((version) => version + 1);
-    router.refresh();
-  }, [router]);
+    refresh();
+  }, [refresh]);
   const onSaved = useDrinkLogFeedback({
     itemName: subject.itemName,
     onChanged,
