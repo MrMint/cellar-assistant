@@ -15,6 +15,7 @@ import {
   type SearchSection,
   searchUnanswered,
   sectionAnswered,
+  sectionsToRead,
   semanticSearchFrom,
 } from "./universal-search";
 
@@ -31,8 +32,8 @@ const settle = <T,>(section: string, pending: Promise<T>) =>
 /**
  * `/search?q=` (X12): the six sections' searches side by side, then one
  * render, so the page settles once instead of six times under the reader's
- * thumb. With `?in=` only that section is read (plus the bottles read, which
- * carries the AI capability line, when it is the one opened).
+ * thumb. With `?in=` only that section is read (`sectionsToRead`: Drinks
+ * reads Your bottles too, to leave out what you own).
  *
  * Places are searched around the viewer's last known position (the
  * geolocation cookie the map and Home write) when there is one; without it
@@ -47,7 +48,8 @@ export async function UniversalSearchResults({
 }) {
   const location = await getGeolocationFromCookie();
   const bounds = location === null ? null : boundsAround(location);
-  const wants = (section: SearchSection) => focus === null || focus === section;
+  const reads = sectionsToRead(focus);
+  const wants = (section: SearchSection) => reads.includes(section);
   const term = query;
 
   const [bottles, items, places, recipes, people, brands] = await Promise.all([
@@ -109,7 +111,11 @@ export async function UniversalSearchResults({
   ]);
 
   const data = { bottles, items, places, recipes, people, brands };
-  const asked = SEARCH_SECTIONS.filter(wants);
+  // Only what the view shows is asked: Drinks' bottles read is not a
+  // section of its own there.
+  const asked = SEARCH_SECTIONS.filter(
+    (section) => focus === null || section === focus,
+  );
   return (
     <SearchSections
       query={query}

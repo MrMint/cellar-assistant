@@ -137,7 +137,16 @@ describe("confirmInputFrom", () => {
     assert.equal(input.brandName, null);
     assert.equal(input.attributes.vintage, "2015-01-01");
     assert.equal(input.attributes.style, "RED");
-    assert.ok(!("cellarId" in input), "the bottle is filed as its own step");
+  });
+
+  test("F-54: a saved draft's cellar is never filed by the server too", () => {
+    // Absent `cellarId` means "the draft's own cellar" to confirm, which then
+    // files a bottle there, and the machine's `addItemToCellar` files a second.
+    // `null` means "file nothing": the form's own step is the only filing.
+    const { values } = formDefaultsFromOnboarding("WINE", wineDefaults);
+    const input = confirmInputFrom("WINE", values, "");
+    assert.equal("cellarId" in input, true);
+    assert.equal(input.cellarId, null);
   });
 });
 

@@ -24,6 +24,7 @@ import {
   searchUnanswered,
   sectionAnswered,
   sectionFromParam,
+  sectionsToRead,
   seeAllHref,
   semanticSearchFrom,
   totalLabel,
@@ -641,5 +642,63 @@ describe("distance from you", () => {
         ) - 111,
       ) < 1,
     );
+  });
+});
+
+describe("fix round (R1)", () => {
+  const recipeHit = (recipeId: string, groupId: string | null) => ({
+    node: {
+      recipeId,
+      name: `${recipeId} v1`,
+      description: null,
+      type: "cocktail",
+      recipeGroupId: groupId,
+      distance: null,
+      recipe: {
+        id: recipeId,
+        imageUrl: null,
+        recipeGroup: groupId === null ? null : { id: groupId, name: groupId },
+        makeability: null,
+      },
+    },
+  });
+
+  test("F-104: groups folded from one page of a longer list read 'n+'", () => {
+    const rows = recipeRows({
+      recipeSearch: {
+        __typename: "RecipeSearchConnection",
+        totalCount: 45,
+        totalIsLowerBound: false,
+        edges: [
+          recipeHit("r1", "g1"),
+          recipeHit("r2", "g1"),
+          recipeHit("r3", null),
+        ],
+      },
+    } as never);
+    assert.equal(rows.total, 2);
+    assert.equal(totalLabel(rows), "2+");
+  });
+
+  test("F-104: every hit in hand, folded, is an exact count of groups", () => {
+    const rows = recipeRows({
+      recipeSearch: {
+        __typename: "RecipeSearchConnection",
+        totalCount: 3,
+        totalIsLowerBound: false,
+        edges: [
+          recipeHit("r1", "g1"),
+          recipeHit("r2", "g1"),
+          recipeHit("r3", null),
+        ],
+      },
+    } as never);
+    assert.equal(totalLabel(rows), "2");
+  });
+
+  test("F-98: See all on Drinks still reads your bottles, to leave them out", () => {
+    assert.deepEqual(sectionsToRead(null), [...SEARCH_SECTIONS]);
+    assert.deepEqual(sectionsToRead("items"), ["bottles", "items"]);
+    assert.deepEqual(sectionsToRead("places"), ["places"]);
   });
 });

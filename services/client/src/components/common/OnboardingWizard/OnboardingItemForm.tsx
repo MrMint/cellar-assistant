@@ -45,7 +45,12 @@ import {
 } from "@/lib/forms/ai-draft";
 import { cn } from "@/lib/utils";
 import { createOnboardedItem } from "./actors/createItem";
-import { type OnboardingDefaults, saveBlocker, skippedNotes } from "./adapter";
+import {
+  type ExistingItem,
+  type OnboardingDefaults,
+  saveBlocker,
+  skippedNotes,
+} from "./adapter";
 import {
   asksVintage,
   confirmedFieldsFrom,
@@ -55,6 +60,9 @@ import {
   saveOnboardingDraft,
 } from "./draft-save";
 import { SaveDraftMutation } from "./queries";
+import { TypeAheadRow } from "./TypeAheadRow";
+
+const NO_IDS: readonly string[] = [];
 
 type OnboardingItemFormProps = {
   type: ApiItemType;
@@ -80,6 +88,15 @@ type OnboardingItemFormProps = {
    */
   declinedMatch?: { name: string; brandName?: string; summary?: string };
   onUseDeclined?: () => void;
+  /**
+   * F-60 (board add-bottle-17): the catalog item the typed name points at,
+   * offered under Name with "Add". Without it, no row.
+   */
+  onUseTypedMatch?: (match: ExistingItem) => void;
+  /** The bottle goes into a cellar (the row says "Add", else "Use"). */
+  inCellar?: boolean;
+  /** Items the person declined: the row never offers them again. */
+  declinedItemIds?: readonly string[];
 };
 
 /**
@@ -125,6 +142,9 @@ export const OnboardingItemForm = ({
   onSavedForLater,
   declinedMatch,
   onUseDeclined,
+  onUseTypedMatch,
+  inCellar = false,
+  declinedItemIds = NO_IDS,
 }: OnboardingItemFormProps) => {
   const client = useClient();
   const [, executeSaveDraft] = useMutation(SaveDraftMutation);
@@ -330,9 +350,12 @@ export const OnboardingItemForm = ({
     .filter((value) => value.trim() !== "")
     .join(" · ");
   const verb = cellarId === null ? "Add to catalog" : "Add bottle";
+  // F-60: typed in (nothing read), the primary counts the open floor fields
+  // as the board's "3 left to check"; after a read it keeps its verb.
+  const typedLeft = drafted.size === 0 ? openFloor.length : 0;
   const busy = isSubmitting || savingLater;
   const field = (path: string, children: ReactNode) => (
-    <div data-path={path} {...touchOn(path)}>
+    <div data-path={path} className="relative" {...touchOn(path)}>
       <AIDraftField
         source="label"
         drafted={drafted.has(path) && !touched.has(path)}
@@ -342,6 +365,16 @@ export const OnboardingItemForm = ({
       >
         {children}
       </AIDraftField>
+      {/* F-60 (board add-bottle-17): a floor field still open, with no
+          read behind it, is marked plainly; the footer counts them. */}
+      {openFloor.includes(path) && !drafted.has(path) && (
+        <span
+          data-slot="floor-mark"
+          className="t-micro pointer-events-none absolute top-0 right-0 inline-flex h-5 items-center rounded-sm bg-raised px-1.5 text-ink"
+        >
+          Check this
+        </span>
+      )}
     </div>
   );
 
@@ -414,6 +447,16 @@ export const OnboardingItemForm = ({
                     control={control}
                     disabled={busy}
                   />,
+                )}
+                {entry.kind === "name" && onUseTypedMatch !== undefined && (
+                  <TypeAheadRow
+                    type={type}
+                    name={current.name ?? ""}
+                    inCellar={inCellar}
+                    excludeItemIds={declinedItemIds}
+                    disabled={busy}
+                    onAdd={onUseTypedMatch}
+                  />
                 )}
                 {entry.kind === "description" &&
                   field(
@@ -517,8 +560,8 @@ export const OnboardingItemForm = ({
                 onClick={openFloor.length > 0 ? jumpToOpen : undefined}
               >
                 {isSubmitting && <Spinner aria-hidden />}
-                {verb}
-                {toCheck.length > 0 && (
+                {typedLeft > 0 ? `${typedLeft} left to check` : verb}
+                {typedLeft === 0 && toCheck.length > 0 && (
                   <span className="t-cap rounded-sm bg-background/20 px-1.5 py-0.5">
                     {toCheckLabel(toCheck.length)}
                   </span>

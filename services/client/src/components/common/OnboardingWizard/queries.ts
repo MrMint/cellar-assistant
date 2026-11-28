@@ -17,6 +17,7 @@
 import { ItemCardFragment } from "@/components/item/ItemCard/fragments";
 import { ActorErrorFieldsFragment } from "@/lib/api/errors";
 import { graphql } from "@/lib/api/graphql";
+import { ItemOnboardingFragment } from "@/lib/api/items";
 
 /**
  * Items sharing one scanned code. A real code names one product and a few
@@ -177,4 +178,30 @@ export const SaveDraftMutation = graphql(
   }
 `,
   [ActorErrorFieldsFragment],
+);
+
+/**
+ * `StartItemOnboardingMutation` (`lib/api/items.ts`) plus, for F-59, the
+ * row's own cellar and what the person typed before "Finish later"
+ * (`saveDraft`'s `fields`, as `draftFieldsFrom` wrote them): on a resumed
+ * `/add?draft=` session the same one call reads the draft back.
+ */
+export const OnboardingStartMutation = graphql(
+  `
+  mutation OnboardingStart(
+    $input: StartItemOnboardingInput!
+    $onboardingId: ID
+  ) {
+    startItemOnboarding(input: $input, onboardingId: $onboardingId) {
+      __typename
+      ... on ItemOnboarding {
+        ...ItemOnboardingRow
+        cellarId
+        draftFields
+      }
+      ...ActorErrorFields
+    }
+  }
+`,
+  [ItemOnboardingFragment, ActorErrorFieldsFragment],
 );

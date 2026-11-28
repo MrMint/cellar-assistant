@@ -2,12 +2,14 @@ import { fromPromise } from "xstate";
 import { captureDrafts } from "@/components/capture/drafts";
 import { aiOutcome } from "@/lib/ai/outcome";
 import { readFragment } from "@/lib/api/graphql";
-import {
-  ItemOnboardingFragment,
-  StartItemOnboardingMutation,
-} from "@/lib/api/items";
+import { ItemOnboardingFragment } from "@/lib/api/items";
 import { unwrapResult } from "@/lib/api/result";
-import { emptyDefaults, formDefaultsFromOnboarding } from "../adapter";
+import {
+  emptyDefaults,
+  formDefaultsFromDraft,
+  formDefaultsFromOnboarding,
+} from "../adapter";
+import { OnboardingStartMutation } from "../queries";
 import type { DefaultValuesResult, FetchDefaultsInput } from "./types";
 
 /**
@@ -48,9 +50,10 @@ export const readDefaults = async ({
   barcode,
   frontLabelFileId,
   backLabelFileId,
+  resumed,
 }: FetchDefaultsInput): Promise<DefaultValuesResult> => {
   const response = await urqlClient
-    .mutation(StartItemOnboardingMutation, {
+    .mutation(OnboardingStartMutation, {
       onboardingId: itemOnboardingId,
       input: {
         itemType,
@@ -85,8 +88,15 @@ export const readDefaults = async ({
     };
   }
   const onboarding = readFragment(ItemOnboardingFragment, result.data);
+  const read = formDefaultsFromOnboarding(itemType, onboarding.defaults);
+  // F-59: a saved draft reopens on what the person typed, in its own cellar.
+  const draftCellarId = resumed === true ? result.data.cellarId : null;
   return {
-    defaults: formDefaultsFromOnboarding(itemType, onboarding.defaults),
+    defaults:
+      resumed === true
+        ? formDefaultsFromDraft(itemType, read, result.data.draftFields)
+        : read,
+    ...(draftCellarId === null ? {} : { draftCellarId }),
     itemOnboardingId: onboarding.id,
     confidence: onboarding.confidence ?? 0,
     // A resumed draft sends no ids; the session remembers what it read.

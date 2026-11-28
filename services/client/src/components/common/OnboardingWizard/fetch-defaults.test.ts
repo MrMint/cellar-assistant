@@ -78,7 +78,7 @@ describe("fetchDefaults with no AI provider", () => {
   test("still starts the session confirm needs, and says nothing", async () => {
     const { client, mutations } = stub(refusal("AI_UNCONFIGURED", "CONFLICT"));
     const result = await run(client);
-    assert.deepEqual(mutations, ["StartItemOnboarding"]);
+    assert.deepEqual(mutations, ["OnboardingStart"]);
     assert.equal(result.extractionError, undefined);
     assert.equal(result.confidence, 0);
   });
@@ -91,5 +91,88 @@ describe("fetchDefaults with no AI provider", () => {
       `${result.extractionError?.title} ${result.extractionError?.message}`,
       /AI_PROVIDER|ollama/,
     );
+  });
+});
+
+describe("fetchDefaults resuming a saved draft (F-59)", () => {
+  const draftId = "00000000-0000-4000-8000-000000000003";
+  const cellarB = "00000000-0000-4000-8000-0000000000bb";
+  const resumedClient = () => {
+    const mutations: string[] = [];
+    const client = {
+      mutation: (document: unknown) => {
+        mutations.push(nameOf(document));
+        return {
+          toPromise: async () => ({
+            data: {
+              startItemOnboarding: {
+                __typename: "ItemOnboarding",
+                id: draftId,
+                itemType: "WINE",
+                status: "NEEDS_DETAILS",
+                defaults: { name: "GUESSED NAME", wine: { style: "WHITE" } },
+                confidence: 0.4,
+                barcode: null,
+                barcodeType: null,
+                frontLabelImageId: null,
+                backLabelImageId: null,
+                aiModel: null,
+                userId: "u1",
+                createdAt: "2026-11-27T00:00:00Z",
+                updatedAt: "2026-11-27T00:00:00Z",
+                cellarId: cellarB,
+                draftFields: {
+                  name: "Hillside Garnacha",
+                  brandName: "Demo Valley Cellars",
+                  attributes: { style: "RED", vintage: "2019-01-01" },
+                },
+              },
+            },
+          }),
+        };
+      },
+    } as unknown as Client;
+    return { client, mutations };
+  };
+
+  test("what the person typed and the draft's cellar come back", async () => {
+    const { client } = resumedClient();
+    const result = await toPromise(
+      createActor(fetchDefaults, {
+        input: {
+          urqlClient: client,
+          itemType: "WINE",
+          itemOnboardingId: draftId,
+          resumed: true,
+        },
+      }).start(),
+    );
+    assert.equal(result.defaults.values.name, "Hillside Garnacha");
+    assert.equal(result.defaults.brandName, "Demo Valley Cellars");
+    assert.equal(result.defaults.values.attributes.style, "RED");
+    assert.equal(result.defaults.values.attributes.vintage, "2019");
+    assert.equal(result.draftCellarId, cellarB);
+    // Typed by the person: nothing of it is a guess to check.
+    assert.equal(result.defaults.confidences.name, undefined);
+  });
+
+  test("a fresh read takes neither the typed fields nor the cellar", async () => {
+    const { client, mutations } = resumedClient();
+    const result = await toPromise(
+      createActor(fetchDefaults, {
+        input: {
+          urqlClient: client,
+          itemType: "WINE",
+          itemOnboardingId: draftId,
+        },
+      }).start(),
+    );
+    assert.deepEqual(
+      mutations,
+      ["OnboardingStart"],
+      "one call, no second read",
+    );
+    assert.equal(result.draftCellarId, undefined);
+    assert.equal(result.defaults.values.attributes.style, "WHITE");
   });
 });

@@ -28,6 +28,8 @@ export type CaptureSurfaceProps = {
   cellars?: readonly AddableCellar[];
   /** `?draft=<id>`: reopen a bottle's read left running in the background. */
   resumeId?: string;
+  /** `?cellar=<id>` beside `?draft=`: the cellar that bottle was aimed at. */
+  resumeCellarId?: string;
   /** `?photo=<token>`: a photo carried in (`lib/capture/photo-handoff.ts`). */
   photoToken?: string;
 };
@@ -61,6 +63,7 @@ export function CaptureSurface({
   mode: explicitMode,
   cellars,
   resumeId,
+  resumeCellarId,
   photoToken,
 }: CaptureSurfaceProps) {
   const [resolved, setResolved] = useState<Resolved | null>(null);
@@ -126,6 +129,7 @@ export function CaptureSurface({
             chooseType
             cellars={cellars}
             resumeId={run === 0 ? resumeId : undefined}
+            resumeCellarId={run === 0 ? resumeCellarId : undefined}
             leading={leading}
             modeRow={modeRow}
             initialPhoto={resolved.photo}
