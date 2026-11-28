@@ -239,7 +239,9 @@ describe("create place (restored)", () => {
     for (const kind of ["Coffee", "Food", "Bar", "Beer", "Wine", "Shop"]) {
       assert.match(
         html,
-        new RegExp(`<button type="button" aria-pressed="false"[^>]*>.*?${kind}</button>`),
+        new RegExp(
+          `<button type="button" aria-pressed="false"[^>]*>.*?${kind}</button>`,
+        ),
         kind,
       );
     }
