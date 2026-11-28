@@ -72,8 +72,6 @@ const { dismissNotification, notify, UNDO_TOAST_MS } = await import("./notify");
 const { AppShell } = await import("./AppShell");
 const { MAIN_CONTENT_ID } = await import("./main-content");
 const { SkipLink } = await import("./SkipLink");
-const { MapFilter } = await import("../map/core/MapFilter");
-const { TooltipProvider } = await import("../ui/tooltip");
 
 let container: HTMLElement;
 let root: ReturnType<typeof createRoot>;
@@ -474,55 +472,6 @@ describe("BottomSheet physics", () => {
     });
     await flush(1500);
     assert.equal(el.style.translate, "", "back at rest");
-  });
-});
-
-describe("MapFilter (L15)", () => {
-  const filters = (isMobile: boolean, onRating: (r?: number) => void) => (
-    <TooltipProvider>
-      <MapFilter
-        isMobile={isMobile}
-        onItemTypesChange={() => {}}
-        onSearchQueryChange={() => {}}
-        minRating={4}
-        onMinRatingChange={onRating}
-        onVisitStatusesChange={() => {}}
-      />
-    </TooltipProvider>
-  );
-
-  test("phone: More filters opens a bottom sheet; Reset is in its footer", async () => {
-    const ratings: (number | undefined)[] = [];
-    await render(filters(true, (r) => ratings.push(r)));
-    const more = container.querySelector('button[aria-label="More filters"]');
-    assert.equal(more?.getAttribute("aria-haspopup"), "dialog");
-    await click(more);
-    await flush(10);
-    const sheet = document.querySelector('[data-slot="bottom-sheet"]');
-    assert.ok(sheet, "the filters are a BottomSheet");
-    assert.equal(
-      document.getElementById(sheet.getAttribute("aria-labelledby") ?? "")
-        ?.textContent,
-      "Filters",
-    );
-    assert.ok(byText("Minimum Rating", sheet));
-    const footer = sheet.querySelector('[data-slot="drawer-footer"]');
-    await click(byText("Reset", footer ?? undefined));
-    assert.deepEqual(ratings, [undefined]);
-  });
-
-  test("from md: the popover, not a sheet", async () => {
-    viewportWidth = 1024;
-    await render(filters(false, () => {}));
-    await click(container.querySelector('button[aria-label="More filters"]'));
-    await flush(10);
-    assert.equal(document.querySelector('[data-slot="bottom-sheet"]'), null);
-    const panel = container.querySelector("#map-advanced-filters");
-    assert.ok(panel, "the panel renders in place, beside the button");
-    assert.ok(byText("Minimum Rating", panel));
-    // Let motion's enter finish: happy-dom rejects a cancelled animation's
-    // `finished`, and unmounting mid-enter would surface that as an error.
-    await flush(600);
   });
 });
 

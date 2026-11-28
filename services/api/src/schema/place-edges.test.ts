@@ -698,3 +698,112 @@ describe("PlaceMenuItem.canCorrectMatch / forYou (X07)", () => {
     );
   });
 });
+
+describe("MapPlace.photo (H-135)", () => {
+  const PHOTO_A = "f0000001-0000-4000-8000-000000000001";
+  const PHOTO_B = "f0000002-0000-4000-8000-000000000002";
+  const PHOTO_C = "f0000003-0000-4000-8000-000000000003";
+  const marker = (
+    placeId: string,
+    myBand: number | null,
+    photoFileId: string | null,
+  ) => ({
+    kind: "place" as const,
+    placeId,
+    name: `Place ${placeId.slice(0, 2)}`,
+    location: { lng: -122.4, lat: 37.7 },
+    primaryCategory: "bar",
+    categories: ["bar"],
+    rating: 4,
+    confidence: null,
+    isVerified: false,
+    reviewStatus: "approved",
+    myBand,
+    photoFileId,
+  });
+  const photoRow = (id: string) => ({
+    id,
+    bucket: "cellar-files",
+    key: `place-photo/${id}`,
+    size: 4096,
+    mimeType: "image/jpeg",
+    etag: "abc",
+    uploadedBy: null,
+    verifiedAt: stamp,
+    metadata: {},
+    createdAt: stamp,
+    updatedAt: stamp,
+  });
+  // P1 and P3 are on the viewer's tier lists; P2, L1 and L2 are not, and
+  // each has a photo of its own.
+  const sidecar = () =>
+    stubSidecar({
+      "MapActor.browse": (_id, _ctx, _input, args) =>
+        page(
+          [
+            marker(P1, 4, PHOTO_A),
+            marker(P2, null, PHOTO_B),
+            marker(P3, 0, PHOTO_C),
+            marker(L1, null, PHOTO_A),
+            marker(L2, 3, null),
+          ],
+          args,
+        ),
+      "FileActor.get": (id) => photoRow(String(id)),
+      "FileActor.presignRead": (id) => ({
+        url: `https://files.test/${String(id)}`,
+        expiresAt: stamp,
+      }),
+    });
+
+  const DOC = `{ mapBrowse(first: 10, bounds: { west: -123, south: 37, east: -122, north: 38 }) {
+    ... on MapEntryConnection { edges { node {
+      ... on MapPlace { placeId: id myBand photo { id url } }
+    } } }
+  } }`;
+
+  type Node = { placeId: string; photo: { id: string; url: string } | null };
+  const nodesOf = (result: Awaited<ReturnType<typeof run>>): Node[] =>
+    (
+      result.data as {
+        mapBrowse: { edges: { node: Node }[] };
+      }
+    ).mapBrowse.edges.map((edge) => edge.node);
+
+  it("a place on none of the viewer's lists gets null, with no file read", async () => {
+    const { invoke, calls } = sidecar();
+    const result = await run(DOC, testContext(invoke, viewer));
+    expect(result.errors).toBeUndefined();
+    const photos = Object.fromEntries(
+      nodesOf(result).map((node) => [node.placeId, node.photo?.id ?? null]),
+    );
+    expect(photos).toEqual({
+      [P1]: PHOTO_A,
+      [P2]: null,
+      [P3]: PHOTO_C,
+      [L1]: null,
+      [L2]: null,
+    });
+    const read = callsTo(calls, "get")
+      .filter((call) => call.actorType === "FileActor")
+      .map((call) => call.actorId);
+    expect(read).not.toContain(PHOTO_B);
+    expect(callsTo(calls, "presignRead").map((c) => c.actorId)).not.toContain(
+      PHOTO_B,
+    );
+  });
+
+  it("the ranked places' photos are read once each, in one batch per request", async () => {
+    const { invoke, calls } = sidecar();
+    const result = await run(DOC, testContext(invoke, viewer));
+    expect(result.errors).toBeUndefined();
+    const read = callsTo(calls, "get")
+      .filter((call) => call.actorType === "FileActor")
+      .map((call) => call.actorId)
+      .sort();
+    expect(read).toEqual([PHOTO_A, PHOTO_C].sort());
+    expect(
+      nodesOf(result).find((node) => node.placeId === P1)?.photo?.url,
+    ).toBe(`https://files.test/${PHOTO_A}`);
+  });
+});

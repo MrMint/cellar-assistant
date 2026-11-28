@@ -3,7 +3,20 @@ import { describe, test } from "node:test";
 import { DETAIL_PANEL_WIDTH, drawerOffsetFor } from "./layout";
 
 describe("drawerOffsetFor", () => {
-  test("measured desktop: the panel covers the map's first 400 px, whatever the rail", () => {
+  test("the desktop panel is the kit's 440 px DesktopPane (F-194)", () => {
+    assert.equal(DETAIL_PANEL_WIDTH, 440);
+    assert.deepEqual(
+      drawerOffsetFor({
+        isDesktop: true,
+        hasSidebar: true,
+        viewportHeight: 900,
+        insets: { left: 80, bottom: 0 },
+      }),
+      [220, 0],
+    );
+  });
+
+  test("measured desktop: the panel covers the map's first 440 px, whatever the rail", () => {
     // The map starts beside the 80 px SideRail; so does the panel.
     assert.deepEqual(
       drawerOffsetFor({

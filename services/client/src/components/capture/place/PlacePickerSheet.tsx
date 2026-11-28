@@ -60,6 +60,18 @@ function PlaceChoice({
 }
 
 /**
+ * FR-15 (F-229): the same quiet line the place page carries
+ * (`GoogleAttribution`), under the picker's results — kit caption, ink-3.
+ */
+function GoogleLine() {
+  return (
+    <p className="t-cap m-0 text-ink-3" data-testid="google-attribution">
+      Place details from Google
+    </p>
+  );
+}
+
+/**
  * The place picker sheet (Capture-Place 01 to 03): "Where's this menu
  * from?", a search, the places near you nearest first (the guess leads while
  * it is a candidate), and "Add a place". Distances say "from you" (ruling
@@ -142,20 +154,23 @@ export function PlacePickerSheet({
               <p className="t-head m-0 text-ink">{noMatchLine(query)}</p>
             </div>
           ) : (
-            <ul
-              aria-label="Places found"
-              className="m-0 flex list-none flex-col p-0"
-            >
-              {found.map((place) => (
-                <PlaceChoice
-                  key={place.id}
-                  place={place}
-                  category={place.primaryCategory}
-                  line={foundLine(place.primaryCategory, place.locality)}
-                  onChoose={onChoose}
-                />
-              ))}
-            </ul>
+            <div className="flex flex-col gap-1">
+              <ul
+                aria-label="Places found"
+                className="m-0 flex list-none flex-col p-0"
+              >
+                {found.map((place) => (
+                  <PlaceChoice
+                    key={place.id}
+                    place={place}
+                    category={place.primaryCategory}
+                    line={foundLine(place.primaryCategory, place.locality)}
+                    onChoose={onChoose}
+                  />
+                ))}
+              </ul>
+              {found.length > 0 && <GoogleLine />}
+            </div>
           )
         ) : near.length === 0 ? (
           <p className="t-cap m-0 text-ink-2">
@@ -175,6 +190,7 @@ export function PlacePickerSheet({
                 />
               ))}
             </ul>
+            <GoogleLine />
           </section>
         )}
       </div>

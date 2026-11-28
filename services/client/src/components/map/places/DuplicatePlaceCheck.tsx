@@ -1,9 +1,11 @@
 "use client";
 
-import { ICON_STROKE, Place } from "@/components/app/icons";
-import { Badge } from "@/components/ui/badge";
+import { ChevronRight } from "@/components/app/icons";
 import { Button } from "@/components/ui/button";
+import { feedback } from "@/lib/feedback";
 import type { DuplicatePlace } from "../actions";
+import { categoryWords, distanceWords } from "../core/map-places";
+import { placeGlyph } from "../core/PlaceFilters";
 
 interface DuplicatePlaceCheckProps {
   duplicates: DuplicatePlace[];
@@ -11,6 +13,22 @@ interface DuplicatePlaceCheckProps {
   onConfirmNew: () => void;
 }
 
+/** "Cocktail bar · 130 m from the pin", or "Here" when it is on the pin. */
+export function duplicateLine(dup: DuplicatePlace): string {
+  const distance = distanceWords(dup.distance_m);
+  return [
+    categoryWords(dup.primary_category ?? undefined),
+    distance === "Here" ? "At the pin" : `${distance} from the pin`,
+  ].join(" · ");
+}
+
+/**
+ * F-200 (Places-Place 26, "create found"): "Already on the map?" — each
+ * likely match is one row (kind glyph, name, kind and distance from the pin,
+ * a chevron) that opens it, and "It’s a new place" says it is not one of
+ * them. Every button is `type="button"`: this renders inside
+ * CreatePlaceForm's <form>, where a bare <button> would submit it.
+ */
 export function DuplicatePlaceCheck({
   duplicates,
   onSelectExisting,
@@ -19,71 +37,47 @@ export function DuplicatePlaceCheck({
   if (duplicates.length === 0) return null;
 
   return (
-    <div className="mb-4">
-      <p className="t-body mb-2 font-semibold text-ink">
-        We found similar places nearby. Is yours one of these?
-      </p>
-      <ul className="flex flex-col divide-y divide-line overflow-hidden rounded-lg bg-surface-1">
-        {duplicates.map((dup) => (
-          <li
-            key={dup.id}
-            className="flex flex-row items-center justify-between gap-2 px-4 py-3"
-          >
-            <div className="min-w-0 flex-1">
-              <div className="flex flex-row items-center gap-2">
-                <Place
-                  aria-hidden
-                  strokeWidth={ICON_STROKE}
-                  className="size-5 shrink-0 text-ink-2"
-                />
-                <span className="t-body truncate font-semibold text-ink">
-                  {dup.name}
+    <section
+      aria-labelledby="duplicate-place-check"
+      className="flex flex-col gap-3 rounded-lg border border-edge-2 bg-card p-3"
+    >
+      <h2 id="duplicate-place-check" className="t-head m-0 text-ink">
+        Already on the map?
+      </h2>
+      <ul className="m-0 flex list-none flex-col gap-1 p-0">
+        {duplicates.map((dup) => {
+          const Glyph = placeGlyph({
+            primary_category: dup.primary_category ?? "",
+            categories: [],
+          });
+          return (
+            <li key={dup.id}>
+              <button
+                type="button"
+                onClick={() => {
+                  feedback("press");
+                  onSelectExisting(dup.id);
+                }}
+                className="flex min-h-14 w-full items-center gap-3 rounded-md text-left outline-none transition-transform active:scale-97 focus-visible:outline-2 focus-visible:outline-act-ink motion-reduce:active:scale-100"
+              >
+                <span className="flex size-11 shrink-0 items-center justify-center rounded-md bg-raised">
+                  <Glyph aria-hidden className="size-6 text-glyph" />
                 </span>
-              </div>
-              <div className="mt-1 flex flex-row flex-wrap gap-1">
-                {dup.primary_category && (
-                  <Badge variant="secondary">
-                    {dup.primary_category.replace(/_/g, " ")}
-                  </Badge>
-                )}
-                <Badge variant="outline">
-                  {Math.round(dup.distance_m)}m away
-                </Badge>
-                <Badge
-                  variant="outline"
-                  className={dup.similarity > 0.7 ? "text-ink" : "text-ink-3"}
-                >
-                  {Math.round(dup.similarity * 100)}% match
-                </Badge>
-              </div>
-              {(dup.street_address || dup.locality) && (
-                <p className="t-cap mt-1 truncate">
-                  {[dup.street_address, dup.locality]
-                    .filter(Boolean)
-                    .join(", ")}
-                </p>
-              )}
-            </div>
-            {/* type="button": this renders inside CreatePlaceForm's <form>,
-                and a bare <button> there is a submit (Joy defaulted it). */}
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => onSelectExisting(dup.id)}
-            >
-              This is it
-            </Button>
-          </li>
-        ))}
+                <span className="flex min-w-0 flex-1 flex-col">
+                  <span className="t-head truncate text-ink">{dup.name}</span>
+                  <span className="t-cap truncate text-ink-2">
+                    {duplicateLine(dup)}
+                  </span>
+                </span>
+                <ChevronRight aria-hidden className="size-5 text-ink-2" />
+              </button>
+            </li>
+          );
+        })}
       </ul>
-      <Button
-        type="button"
-        variant="ghost"
-        onClick={onConfirmNew}
-        className="mt-2"
-      >
-        None of these — create new place
+      <Button type="button" variant="outline" size="lg" onClick={onConfirmNew}>
+        It’s a new place
       </Button>
-    </div>
+    </section>
   );
 }
