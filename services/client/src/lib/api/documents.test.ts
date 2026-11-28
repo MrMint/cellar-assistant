@@ -95,6 +95,7 @@ import * as tierListFragments from "@/components/tier-list/fragments";
 import * as tierListQueries from "@/components/tier-list/queries";
 import * as userFragments from "@/components/user/fragments";
 import * as meHubData from "@/components/user/me-hub-data";
+import * as whoSeesCellars from "@/components/user/WhoSeesCellars";
 import * as wantToTryQueries from "@/components/want-to-try/queries";
 import * as ai from "./ai.ts";
 import * as cellars from "./cellars.ts";
@@ -151,6 +152,7 @@ const MODULES: Readonly<Record<string, Record<string, unknown>>> = {
   "components/user/fragments.ts": userFragments,
   "components/want-to-try/queries.ts": wantToTryQueries,
   "components/user/me-hub-data.ts": meHubData,
+  "components/user/WhoSeesCellars.tsx": whoSeesCellars,
   "lib/api/ai.ts": ai,
   "lib/api/cellars.ts": cellars,
   "lib/api/errors.ts": errors,
