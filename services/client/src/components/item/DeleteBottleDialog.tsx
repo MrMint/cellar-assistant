@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
-import { useClient, useMutation } from "urql";
+import { useMutation, useQuery } from "urql";
 import { Delete } from "@/components/app/icons";
 import { notify } from "@/components/app/notify";
 import { ResponsiveDialog } from "@/components/app/ResponsiveDialog";
@@ -66,7 +66,13 @@ export function DeleteBottleDialog({
   const [error, setError] = useState<string | null>(null);
   const [, removeItem] = useMutation(RemoveItemFromCellarMutation);
   const [, restoreItem] = useMutation(RestoreCellarItemMutation);
-  const client = useClient();
+  // F-145: the whole bottle, read when the dialog opens, for the Undo.
+  const [bottleRead] = useQuery({
+    query: BottleForRestoreQuery,
+    variables: { cellarId, bottleId },
+    pause: !open,
+    requestPolicy: "network-only",
+  });
   const router = useRouter();
   const finish = useFinishBottle({ cellarId, cellarItemId: bottleId });
   const isFinishing = finish.state.phase === "finishing";
@@ -96,7 +102,7 @@ export function DeleteBottleDialog({
   const handleDelete = () => {
     startTransition(async () => {
       setError(null);
-      const restore = await readForRestore();
+      const restore = restoreFromRead();
       const response = await removeItem({ cellarId, cellarItemId: bottleId });
       const result = unwrapResult(
         response.data?.removeItemFromCellar,
@@ -133,25 +139,14 @@ export function DeleteBottleDialog({
     });
   };
 
-  /** The whole bottle, for its Undo; null when it cannot be read. */
-  const readForRestore = async () => {
-    try {
-      const read = await client
-        .query(
-          BottleForRestoreQuery,
-          { cellarId, bottleId },
-          { requestPolicy: "network-only" },
+  /** The whole bottle, for its Undo; null when it was not read. */
+  const restoreFromRead = () => {
+    const cellar = unwrapResult(bottleRead.data?.cellar, "Cellar");
+    return cellar.ok
+      ? restoreBottleVariables(
+          cellar.data.item as BottleRestoreRow | null | undefined,
         )
-        .toPromise();
-      const cellar = unwrapResult(read.data?.cellar, "Cellar");
-      return cellar.ok
-        ? restoreBottleVariables(
-            cellar.data.item as BottleRestoreRow | null | undefined,
-          )
-        : null;
-    } catch {
-      return null;
-    }
+      : null;
   };
 
   return (

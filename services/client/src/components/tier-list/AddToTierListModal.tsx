@@ -20,8 +20,8 @@
  */
 
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
-import { useClient, useQuery } from "urql";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useQuery } from "urql";
 import {
   Add,
   Check,
@@ -106,6 +106,44 @@ function EntryRank({
   return <RankChip rank={rank} band={chipBand} />;
 }
 
+type PendingRank = {
+  tierListId: string;
+  listName: string;
+  band: Band;
+  editSeq: number | null;
+};
+
+/**
+ * F-181: reads one list's `bandCounts` after an add and hands back the add's
+ * rank (null when the read fails), once. Renders nothing.
+ */
+function RankAfterAdd({
+  tierListId,
+  band,
+  onRank,
+}: {
+  tierListId: string;
+  band: number;
+  onRank: (rank: number | null) => void;
+}) {
+  const [{ data, error, fetching }] = useQuery({
+    query: ListBandCountsQuery,
+    variables: { id: tierListId },
+    requestPolicy: "network-only",
+  });
+  const said = useRef(false);
+  useEffect(() => {
+    if (said.current || fetching) return;
+    if (data === undefined && error === undefined) return;
+    said.current = true;
+    const counted = unwrapResult(data?.tierList, "TierList");
+    onRank(
+      counted.ok ? rankFromBandCounts(counted.data.bandCounts, band) : null,
+    );
+  }, [band, data, error, fetching, onRank]);
+  return null;
+}
+
 const ROW =
   "relative flex min-h-14 w-full items-center gap-4 rounded-md px-1 text-left outline-none transition-transform duration-(--ca-dur-micro) ease-standard focus-visible:outline-2 focus-visible:outline-act-ink focus-visible:outline-offset-2 active:scale-97 disabled:opacity-40 motion-reduce:active:scale-100 [@media(hover:hover)]:enabled:hover:bg-raised";
 
@@ -117,7 +155,8 @@ export function AddToTierListModal({
   entityName,
 }: AddToTierListModalProps) {
   const router = useRouter();
-  const client = useClient();
+  /** F-181: an add whose #n waits on the list's bandCounts. */
+  const [pendingRank, setPendingRank] = useState<PendingRank | null>(null);
   const { addItemToTierListAction, addTierListAction, undoAction } =
     useTierListActions();
   const isPlace = entityType === "place";
@@ -254,28 +293,18 @@ export function AddToTierListModal({
           router.refresh();
           onClose();
           // F-181: past the 100 entries the picker holds, the #n comes from
-          // the list's own bandCounts (F-85) read now the add has landed,
-          // never from the capped page; a failed read says no #n.
-          const exact =
-            rank !== null || list === undefined
-              ? rank
-              : await client
-                  .query(
-                    ListBandCountsQuery,
-                    { id: tierListId },
-                    { requestPolicy: "network-only" },
-                  )
-                  .toPromise()
-                  .then((read) => {
-                    const counted = unwrapResult(
-                      read.data?.tierList,
-                      "TierList",
-                    );
-                    return counted.ok
-                      ? rankFromBandCounts(counted.data.bandCounts, band)
-                      : null;
-                  });
-          added(tierListId, listName, band, exact, result.editSeq ?? null);
+          // the list's own bandCounts (F-85), read once the add has landed
+          // (`RankAfterAdd`), never from the capped page.
+          if (rank === null && list !== undefined) {
+            setPendingRank({
+              tierListId,
+              listName,
+              band,
+              editSeq: result.editSeq ?? null,
+            });
+            return;
+          }
+          added(tierListId, listName, band, rank, result.editSeq ?? null);
         } else {
           fail(result.error ?? "Couldn’t add it · try again");
         }
@@ -292,7 +321,6 @@ export function AddToTierListModal({
       addItemToTierListAction,
       added,
       lists,
-      client,
     ],
   );
 
@@ -347,205 +375,220 @@ export function AddToTierListModal({
   const kind = kindOne(entityType);
 
   return (
-    <ResponsiveDialog
-      open={open}
-      onOpenChange={(next) => {
-        if (!next) onClose();
-      }}
-      title="Add to a list"
-      description={entityName}
-      className="md:max-w-[440px]"
-    >
-      <div data-slot="add-to-list" className="flex flex-col gap-2 pb-1">
-        {fetching ? (
-          <div className="flex justify-center py-6">
-            <Spinner aria-hidden />
-            <span className="sr-only">Loading your lists</span>
-          </div>
-        ) : (
-          <>
-            {ratedBand !== null ? (
-              <p className="t-body m-0 flex min-h-11 items-center gap-3 text-ink-2">
-                <BandMarker band={ratedBand} />
-                {bandName(ratedBand)} · from your {isPlace ? "rating" : "stars"}
-              </p>
-            ) : (
-              <fieldset className="m-0 flex flex-col gap-2 border-0 p-0 pb-2">
-                <legend className="t-body mb-2 p-0 text-ink-2">
-                  Not rated yet · pick a band
-                </legend>
-                <div className="flex flex-wrap gap-2">
-                  {BANDS.map(({ band: value, name }) => {
-                    const on = pickedBand === value;
-                    return (
-                      <button
-                        key={value}
-                        type="button"
-                        aria-pressed={on}
-                        onClick={() => {
-                          feedback("tick");
-                          setPickedBand(value);
-                        }}
-                        className={cn(
-                          "t-head inline-flex h-11 shrink-0 items-center gap-2 whitespace-nowrap rounded-md border px-3.5 outline-none transition-transform duration-(--ca-dur-micro) ease-standard focus-visible:outline-2 focus-visible:outline-act-ink focus-visible:outline-offset-2 active:scale-97 motion-reduce:active:scale-100",
-                          on
-                            ? "border-edge-2 bg-sel text-ink"
-                            : "border-edge text-ink-2",
-                        )}
-                      >
-                        <BandMarker band={value} />
-                        {name}
-                      </button>
-                    );
-                  })}
-                </div>
-              </fieldset>
-            )}
+    <>
+      {pendingRank !== null && (
+        <RankAfterAdd
+          key={`${pendingRank.tierListId}:${pendingRank.editSeq ?? ""}`}
+          tierListId={pendingRank.tierListId}
+          band={pendingRank.band}
+          onRank={(rank) => {
+            const { tierListId, listName, band: landed, editSeq } = pendingRank;
+            setPendingRank(null);
+            added(tierListId, listName, landed, rank, editSeq);
+          }}
+        />
+      )}
+      <ResponsiveDialog
+        open={open}
+        onOpenChange={(next) => {
+          if (!next) onClose();
+        }}
+        title="Add to a list"
+        description={entityName}
+        className="md:max-w-[440px]"
+      >
+        <div data-slot="add-to-list" className="flex flex-col gap-2 pb-1">
+          {fetching ? (
+            <div className="flex justify-center py-6">
+              <Spinner aria-hidden />
+              <span className="sr-only">Loading your lists</span>
+            </div>
+          ) : (
+            <>
+              {ratedBand !== null ? (
+                <p className="t-body m-0 flex min-h-11 items-center gap-3 text-ink-2">
+                  <BandMarker band={ratedBand} />
+                  {bandName(ratedBand)} · from your{" "}
+                  {isPlace ? "rating" : "stars"}
+                </p>
+              ) : (
+                <fieldset className="m-0 flex flex-col gap-2 border-0 p-0 pb-2">
+                  <legend className="t-body mb-2 p-0 text-ink-2">
+                    Not rated yet · pick a band
+                  </legend>
+                  <div className="flex flex-wrap gap-2">
+                    {BANDS.map(({ band: value, name }) => {
+                      const on = pickedBand === value;
+                      return (
+                        <button
+                          key={value}
+                          type="button"
+                          aria-pressed={on}
+                          onClick={() => {
+                            feedback("tick");
+                            setPickedBand(value);
+                          }}
+                          className={cn(
+                            "t-head inline-flex h-11 shrink-0 items-center gap-2 whitespace-nowrap rounded-md border px-3.5 outline-none transition-transform duration-(--ca-dur-micro) ease-standard focus-visible:outline-2 focus-visible:outline-act-ink focus-visible:outline-offset-2 active:scale-97 motion-reduce:active:scale-100",
+                            on
+                              ? "border-edge-2 bg-sel text-ink"
+                              : "border-edge text-ink-2",
+                          )}
+                        >
+                          <BandMarker band={value} />
+                          {name}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </fieldset>
+              )}
 
-            {options.length > 0 && (
-              <ul className="m-0 flex list-none flex-col p-0">
-                {options.map((option) => {
-                  const entry = entries.find(
-                    (node) => node.tierListId === option.id,
-                  );
-                  const count = counts.get(option.id) ?? 0;
-                  const isAdding = addingToListId === option.id;
-                  const body = (
-                    <span className="flex min-w-0 flex-1 flex-col">
-                      <span className="t-body truncate text-ink">
-                        {option.name}
-                      </span>
-                      <span className="t-cap tabular text-ink-2">
-                        {kindNoun(entityType, count)}
-                      </span>
-                    </span>
-                  );
-                  if (entry !== undefined) {
-                    return (
-                      <li
-                        key={option.id}
-                        className="flex min-h-14 items-center gap-4 px-1"
-                      >
-                        {body}
-                        <EntryRank
-                          tierListId={option.id}
-                          entryId={entry.id}
-                          band={entry.band}
-                        />
-                        <Check
-                          strokeWidth={ICON_STROKE}
-                          className="size-5 shrink-0 text-act-ink"
-                          aria-label="On this list"
-                        />
-                      </li>
+              {options.length > 0 && (
+                <ul className="m-0 flex list-none flex-col p-0">
+                  {options.map((option) => {
+                    const entry = entries.find(
+                      (node) => node.tierListId === option.id,
                     );
-                  }
-                  return (
-                    <li key={option.id}>
-                      <button
-                        type="button"
-                        disabled={busy || band === null}
-                        aria-busy={isAdding || undefined}
-                        onClick={() => {
-                          feedback("tick");
-                          void handleAddToList(option.id, option.name);
-                        }}
-                        className={ROW}
-                      >
-                        {body}
-                        {isAdding ? (
-                          <Spinner aria-hidden />
-                        ) : (
-                          <Add
-                            aria-hidden
+                    const count = counts.get(option.id) ?? 0;
+                    const isAdding = addingToListId === option.id;
+                    const body = (
+                      <span className="flex min-w-0 flex-1 flex-col">
+                        <span className="t-body truncate text-ink">
+                          {option.name}
+                        </span>
+                        <span className="t-cap tabular text-ink-2">
+                          {kindNoun(entityType, count)}
+                        </span>
+                      </span>
+                    );
+                    if (entry !== undefined) {
+                      return (
+                        <li
+                          key={option.id}
+                          className="flex min-h-14 items-center gap-4 px-1"
+                        >
+                          {body}
+                          <EntryRank
+                            tierListId={option.id}
+                            entryId={entry.id}
+                            band={entry.band}
+                          />
+                          <Check
                             strokeWidth={ICON_STROKE}
                             className="size-5 shrink-0 text-act-ink"
+                            aria-label="On this list"
                           />
-                        )}
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
+                        </li>
+                      );
+                    }
+                    return (
+                      <li key={option.id}>
+                        <button
+                          type="button"
+                          disabled={busy || band === null}
+                          aria-busy={isAdding || undefined}
+                          onClick={() => {
+                            feedback("tick");
+                            void handleAddToList(option.id, option.name);
+                          }}
+                          className={ROW}
+                        >
+                          {body}
+                          {isAdding ? (
+                            <Spinner aria-hidden />
+                          ) : (
+                            <Add
+                              aria-hidden
+                              strokeWidth={ICON_STROKE}
+                              className="size-5 shrink-0 text-act-ink"
+                            />
+                          )}
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
 
-            {showCreate ? (
-              <form
-                className="flex flex-col gap-3 pt-2"
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  if (!busy) void handleCreateAndAdd();
-                }}
-              >
-                <label
-                  htmlFor="add-to-list-new-name"
-                  className="t-head text-ink"
+              {showCreate ? (
+                <form
+                  className="flex flex-col gap-3 pt-2"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    if (!busy) void handleCreateAndAdd();
+                  }}
                 >
-                  New {kind} list
-                </label>
-                <Input
-                  id="add-to-list-new-name"
-                  autoFocus
-                  autoComplete="off"
-                  value={newListName}
-                  onChange={(event) => setNewListName(event.target.value)}
+                  <label
+                    htmlFor="add-to-list-new-name"
+                    className="t-head text-ink"
+                  >
+                    New {kind} list
+                  </label>
+                  <Input
+                    id="add-to-list-new-name"
+                    autoFocus
+                    autoComplete="off"
+                    value={newListName}
+                    onChange={(event) => setNewListName(event.target.value)}
+                    disabled={busy}
+                  />
+                  <Button
+                    type="submit"
+                    className="h-11 w-full"
+                    disabled={busy || band === null}
+                  >
+                    {creating && <Spinner aria-hidden />}
+                    Create and add
+                  </Button>
+                </form>
+              ) : (
+                <button
+                  type="button"
                   disabled={busy}
-                />
-                <Button
-                  type="submit"
-                  className="h-11 w-full"
-                  disabled={busy || band === null}
+                  onClick={() => {
+                    feedback("tick");
+                    setShowCreate(true);
+                  }}
+                  className={ROW}
                 >
-                  {creating && <Spinner aria-hidden />}
-                  Create and add
-                </Button>
-              </form>
-            ) : (
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => {
-                  feedback("tick");
-                  setShowCreate(true);
-                }}
-                className={ROW}
-              >
-                <Add
-                  aria-hidden
-                  strokeWidth={ICON_STROKE}
-                  className="size-5 shrink-0 text-act-ink"
-                />
-                <span className="t-body text-ink">New {kind} list</span>
-              </button>
-            )}
+                  <Add
+                    aria-hidden
+                    strokeWidth={ICON_STROKE}
+                    className="size-5 shrink-0 text-act-ink"
+                  />
+                  <span className="t-body text-ink">New {kind} list</span>
+                </button>
+              )}
 
-            <div className="mt-2 border-edge border-t pt-2">
-              <Link
-                href="/tier-lists"
-                underline="none"
-                onClick={() => {
-                  feedback("tick");
-                  onClose();
-                }}
-                className={cn(ROW, "text-ink")}
-              >
-                <Lists
-                  aria-hidden
-                  strokeWidth={ICON_STROKE}
-                  className="size-5 shrink-0 text-act-ink"
-                />
-                <span className="t-body flex-1">All lists</span>
-                <ChevronRight
-                  aria-hidden
-                  strokeWidth={ICON_STROKE}
-                  className="size-5 shrink-0 text-ink-3"
-                />
-              </Link>
-            </div>
-          </>
-        )}
-      </div>
-    </ResponsiveDialog>
+              <div className="mt-2 border-edge border-t pt-2">
+                <Link
+                  href="/tier-lists"
+                  underline="none"
+                  onClick={() => {
+                    feedback("tick");
+                    onClose();
+                  }}
+                  className={cn(ROW, "text-ink")}
+                >
+                  <Lists
+                    aria-hidden
+                    strokeWidth={ICON_STROKE}
+                    className="size-5 shrink-0 text-act-ink"
+                  />
+                  <span className="t-body flex-1">All lists</span>
+                  <ChevronRight
+                    aria-hidden
+                    strokeWidth={ICON_STROKE}
+                    className="size-5 shrink-0 text-ink-3"
+                  />
+                </Link>
+              </div>
+            </>
+          )}
+        </div>
+      </ResponsiveDialog>
+    </>
   );
 }
 
