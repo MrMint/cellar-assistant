@@ -227,6 +227,7 @@ export function ItemPageView({
             friends: item.friends,
             everyone: item.everyone,
           })}
+          ratedAt={item.myReview?.ratedAt ?? null}
         />
         <AddReview
           itemId={item.itemId}

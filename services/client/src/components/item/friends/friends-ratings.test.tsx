@@ -2,8 +2,9 @@
  * F-154 (Cellars-Pour "Friends' ratings"): the taste header's Friends cell
  * opens a sheet of each friend's score, rather than linking down the page.
  *
- * urql is stood in for: `myFriends` answers two friends, `Item.reviews` three
- * reviews, one of them by someone who is not a friend.
+ * urql is stood in for: `Item.friendsReviews` answers your two friends'
+ * reviews (H-127: the server picks the friends, so the sheet makes one read
+ * and joins nothing).
  */
 import { mock } from "bun:test";
 import assert from "node:assert/strict";
@@ -39,12 +40,6 @@ const review = (id: string, userId: string, name: string, score: number) => ({
     },
   },
 });
-const friend = (id: string, name: string) => ({
-  node: {
-    since: "2026-01-01T00:00:00Z",
-    user: { id, displayName: name, avatarUrl: null },
-  },
-});
 const queried: string[] = [];
 mock.module("urql", () => ({
   useQuery: ({
@@ -59,33 +54,23 @@ mock.module("urql", () => ({
     const data =
       pause === true
         ? undefined
-        : name === "ItemFriendsRatingsFriends"
-          ? {
-              myFriends: {
-                __typename: "FriendConnection",
-                totalCount: 2,
-                pageInfo: { hasNextPage: false, endCursor: null },
-                edges: [friend("u-ana", "Ana"), friend("u-ben", "Ben")],
-              },
-            }
-          : {
-              item: {
-                __typename: "QueryItemSuccess",
-                data: {
-                  __typename: "Beer",
-                  id: "i-1",
-                  reviews: {
-                    totalCount: 3,
-                    pageInfo: { hasNextPage: false, endCursor: null },
-                    edges: [
-                      review("r-1", "u-ana", "Ana", 3.5),
-                      review("r-2", "u-zed", "Zed", 5),
-                      review("r-3", "u-ben", "Ben", 4.5),
-                    ],
-                  },
+        : {
+            item: {
+              __typename: "QueryItemSuccess",
+              data: {
+                __typename: "Beer",
+                id: "i-1",
+                friendsReviews: {
+                  totalCount: 2,
+                  pageInfo: { hasNextPage: false, endCursor: null },
+                  edges: [
+                    review("r-1", "u-ana", "Ana", 3.5),
+                    review("r-3", "u-ben", "Ben", 4.5),
+                  ],
                 },
               },
-            };
+            },
+          };
     return [{ data, fetching: false }, () => {}];
   },
 }));
@@ -144,21 +129,28 @@ const cells = [
 ] as const;
 
 describe("friendRatingRows", () => {
-  test("keeps friends' reviews only, best first, each to the friend's profile", () => {
-    const rows = friendRatingRows(
-      [
-        review("r-1", "u-ana", "Ana", 3.5).node,
-        review("r-2", "u-zed", "Zed", 5).node,
-        review("r-3", "u-ben", "Ben", 4.5).node,
-      ],
-      new Set(["u-ana", "u-ben"]),
-    );
+  test("best first, then by name, each to the friend's profile", () => {
+    const rows = friendRatingRows([
+      review("r-1", "u-ana", "Ana", 3.5).node,
+      review("r-2", "u-cat", "Cat", 4.5).node,
+      review("r-3", "u-ben", "Ben", 4.5).node,
+    ]);
     assert.deepEqual(
       rows.map((row) => [row.name, row.score, row.href]),
       [
         ["Ben", 4.5, "/users/u-ben"],
+        ["Cat", 4.5, "/users/u-cat"],
         ["Ana", 3.5, "/users/u-ana"],
       ],
+    );
+  });
+
+  test("a review whose author the read could not show is left out", () => {
+    assert.deepEqual(
+      friendRatingRows([
+        { ...review("r-1", "u-ana", "Ana", 3.5).node, user: null },
+      ]),
+      [],
     );
   });
 });
@@ -193,6 +185,8 @@ describe("the Friends cell (F-154)", () => {
       ["Ben 4.5", "/users/u-ben"],
       ["Ana 3.5", "/users/u-ana"],
     ]);
+    // H-127: one read, `Item.friendsReviews`, not a join of two capped ones.
+    assert.deepEqual([...new Set(queried)], ["ItemFriendsRatings"]);
   });
 
   test("with no friends' ratings the cell stays a quiet dash, not a button", async () => {

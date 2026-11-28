@@ -141,8 +141,9 @@ export async function removeMyRating(
       type,
       input: {
         // F-148: the same id, so Undo puts back the review that was removed
-        // rather than a new one. Its `createdAt` is still the server's new
-        // stamp: `AddItemReviewInput` takes none (a server hand-off).
+        // rather than a new one. The server keeps its `createdAt` too: the
+        // item actor remembers a review it deleted, for 15 minutes, and an
+        // `addItemReview` with that id by its author restores the stamp.
         reviewId: myReview.id,
         score: myReview.score,
         ...(myReview.text === null ? {} : { text: myReview.text }),
@@ -197,3 +198,28 @@ export async function checkInBottle(
   };
   return { ok: true, undo };
 }
+
+// ── Save the edit form ──────────────────────────────────────────────────
+
+/** "alcohol_content_percentage" and "alcoholContentPercentage" alike. */
+const fieldWord = (key: string): string =>
+  key
+    .replace(/^attributes\./, "")
+    .replace(/[_\s-]/g, "")
+    .toLowerCase();
+
+/**
+ * F-162 (H-128): `updateItem`'s `confirmedFields`. The guesses in
+ * `Item.unconfirmedFields` the person settled in the form ("Looks right", or
+ * edited), named as the server named them: it matches them word for word
+ * against the label read's guesses, and the form's paths are its own
+ * (`attributes.alcoholContentPercentage`). A path that was never a guess is
+ * not sent.
+ */
+export const confirmedFields = (
+  unconfirmed: readonly string[],
+  settled: ReadonlySet<string>,
+): string[] => {
+  const words = new Set(Array.from(settled, fieldWord));
+  return unconfirmed.filter((field) => words.has(fieldWord(field)));
+};

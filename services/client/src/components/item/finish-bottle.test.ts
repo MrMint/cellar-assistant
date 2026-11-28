@@ -247,11 +247,15 @@ describe("Put back (after the Undo toast is gone)", () => {
     assert.equal(finishReducer(finished, { type: "RESTORED" }), finished);
   });
 
-  test("a finished bottle (saved at 0) comes back full and stays opened", () => {
-    assert.deepEqual(restoreFinishedInput(0), {
+  test("a finished bottle (saved at 0) names no level, so the server puts back the one it kept (H-125)", () => {
+    assert.deepEqual(restoreFinishedInput(0), { emptyAt: null });
+    assert.deepEqual(restoreFinishedInput(0, 40), { emptyAt: null });
+    // Nothing kept (finished from 0, or before the server kept one): full.
+    assert.deepEqual(restoreFinishedInput(0, null), {
       emptyAt: null,
       percentageRemaining: 100,
     });
+    // A level the read still carries is put back as it is.
     assert.deepEqual(restoreFinishedInput(40), {
       emptyAt: null,
       percentageRemaining: 40,
@@ -275,7 +279,7 @@ describe("Put back (after the Undo toast is gone)", () => {
       },
     });
     await performRestore(deps({ ok: true }), 0);
-    assert.deepEqual(calls, ['{"emptyAt":null,"percentageRemaining":100}']);
+    assert.deepEqual(calls, ['{"emptyAt":null}']);
     assert.deepEqual(events, [{ type: "RESTORED" }]);
     assert.equal(refreshes, 1);
     await performRestore(deps({ ok: false, message: "gone" }), 0);

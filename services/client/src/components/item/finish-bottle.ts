@@ -150,17 +150,23 @@ export const undoFinishInput = (
 /**
  * `UpdateCellarItemInput` for "Put back". The board puts it back at the level
  * it had before it was finished, else full. `emptyCellarItem` saves the level
- * as 0 today, so the level before it is gone and the bottle comes back full
- * (F-150's server hand-off: keep the old level through a finish); a level the
- * read still carries is put back as it is. Its `openAt` stays: whether it was
- * opened before finishing is not recorded.
+ * as 0 and keeps the one before it (`CellarItem.levelBeforeEmpty`), and a put
+ * back that names no level gets that one back from the server (F-150, H-125).
+ * So a bottle the read shows at 0 names none, unless the read says nothing
+ * was kept (`levelBeforeEmpty: null`: finished from 0, or before the server
+ * kept one), when it comes back full; a level the read still carries is put
+ * back as it is. Its `openAt` stays: whether it was opened before finishing
+ * is not recorded.
  */
 export const restoreFinishedInput = (
   percentageRemaining: number,
-): { emptyAt: null; percentageRemaining: number } => ({
-  emptyAt: null,
-  percentageRemaining: percentageRemaining > 0 ? percentageRemaining : 100,
-});
+  levelBeforeEmpty?: number | null,
+): { emptyAt: null; percentageRemaining?: number } =>
+  percentageRemaining > 0
+    ? { emptyAt: null, percentageRemaining }
+    : levelBeforeEmpty === null
+      ? { emptyAt: null, percentageRemaining: 100 }
+      : { emptyAt: null };
 
 /** A write's outcome, as the commands need it. */
 export type WriteOutcome = { ok: true } | { ok: false; message: string };
@@ -208,8 +214,11 @@ export async function performUndo(
 export async function performRestore(
   deps: FinishDeps,
   percentageRemaining: number,
+  levelBeforeEmpty?: number | null,
 ): Promise<void> {
-  const outcome = await deps.update(restoreFinishedInput(percentageRemaining));
+  const outcome = await deps.update(
+    restoreFinishedInput(percentageRemaining, levelBeforeEmpty),
+  );
   if (!outcome.ok) {
     deps.dispatch({ type: "FAILED", message: outcome.message });
     return;
