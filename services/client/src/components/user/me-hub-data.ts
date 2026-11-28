@@ -301,3 +301,107 @@ export const meExtrasFromResult = (
       })),
   };
 };
+
+/** SDL `PermissionType`: who sees a cellar. */
+export type CellarPrivacy = "PRIVATE" | "FRIENDS" | "PUBLIC";
+
+/**
+ * Settings (Shell-Me 12) beyond this device: the account's default cellar
+ * privacy (FR-21, H-126) and this month's AI and Places use (FR-22, H-132).
+ * `20` is `myAiQuota`'s whole list (one row per AI kind, plus Places).
+ */
+export const SettingsQuery = graphql(
+  `
+  query Settings {
+    me {
+      id
+      settings {
+        defaultCellarPrivacy
+      }
+    }
+    myAiQuota(first: 20) {
+      __typename
+      ... on AiQuotaConnection {
+        edges {
+          node {
+            kind
+            service
+            used
+            limit
+            resetsAt
+          }
+        }
+      }
+      ...ActorErrorFields
+    }
+  }
+`,
+  [ActorErrorFieldsFragment],
+);
+
+/**
+ * "Who sees your cellars" (FR-21): the privacy a NEW cellar gets when it is
+ * made without one. It never changes a cellar that already exists.
+ */
+export const SetDefaultCellarPrivacyMutation = graphql(
+  `
+  mutation SetDefaultCellarPrivacy($privacy: PermissionType!) {
+    setDefaultCellarPrivacy(privacy: $privacy) {
+      __typename
+      ... on UserSettings {
+        defaultCellarPrivacy
+      }
+      ...ActorErrorFields
+    }
+  }
+`,
+  [ActorErrorFieldsFragment],
+);
+
+/** One allowance's use: calls counted of the cap, summed over its rows. */
+export type Use = { used: number; limit: number };
+
+export type SettingsData = {
+  /** Null until read (or when the read failed): the row shows no value. */
+  defaultCellarPrivacy: CellarPrivacy | null;
+  /** FR-22: AI use and Places use side by side; null where there is no row. */
+  usage: { ai: Use | null; places: Use | null };
+};
+
+export const EMPTY_SETTINGS: SettingsData = {
+  defaultCellarPrivacy: null,
+  usage: { ai: null, places: null },
+};
+
+const sumOf = (rows: readonly Use[]): Use | null =>
+  rows.length === 0
+    ? null
+    : rows.reduce(
+        (sum, row) => ({
+          used: sum.used + row.used,
+          limit: sum.limit + row.limit,
+        }),
+        { used: 0, limit: 0 },
+      );
+
+/**
+ * The Settings read → its rows. AI use is every AI kind together (each
+ * `AI_MODEL` row); Places is its one `GOOGLE_PLACES` row (F-230). A refused
+ * quota read leaves Usage out rather than showing zeros.
+ */
+export const settingsFromResult = (
+  data: ResultOf<typeof SettingsQuery> | null | undefined,
+): SettingsData => {
+  if (data === null || data === undefined) return EMPTY_SETTINGS;
+  const rows =
+    data.myAiQuota.__typename === "AiQuotaConnection"
+      ? data.myAiQuota.edges.map((edge) => edge.node)
+      : [];
+  return {
+    defaultCellarPrivacy: data.me?.settings.defaultCellarPrivacy ?? null,
+    usage: {
+      ai: sumOf(rows.filter((row) => row.service !== "GOOGLE_PLACES")),
+      places: sumOf(rows.filter((row) => row.service === "GOOGLE_PLACES")),
+    },
+  };
+};
