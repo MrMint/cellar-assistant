@@ -211,7 +211,7 @@ export function CellarList({
   const [paneOpen, setPaneOpen] = useState(false);
   const paneBottle =
     selected === null ? undefined : byKey.get(selected)?.bottle;
-  const keyWrites = useBottleKeyWrites();
+  const keyWrites = useBottleKeyWrites(paneBottle);
 
   const onPeek = useCallback(
     (key: string) => {

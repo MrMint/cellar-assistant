@@ -2,9 +2,10 @@
 
 import { useRouter } from "next/navigation";
 import { useCallback } from "react";
-import { useClient, useMutation } from "urql";
+import { useMutation, useQuery } from "urql";
 import { notify } from "@/components/app/notify";
 import { formatKitScore } from "@/components/app/parts/Stars";
+import { ActorErrorFieldsFragment } from "@/lib/api/errors";
 import { graphql } from "@/lib/api/graphql";
 import {
   AddItemReviewMutation,
@@ -16,7 +17,8 @@ import { feedback } from "@/lib/feedback";
 import type { ListBottle } from "./model";
 
 /** The viewer's own review of one item: what 1 to 5 update, or add. */
-export const CellarListMyReviewQuery = graphql(`
+export const CellarListMyReviewQuery = graphql(
+  `
   query CellarListMyReview($type: ItemType!, $itemId: ID!) {
     item(type: $type, id: $itemId) {
       __typename
@@ -31,22 +33,35 @@ export const CellarListMyReviewQuery = graphql(`
           }
         }
       }
+      ...ActorErrorFields
     }
   }
-`);
+`,
+  [ActorErrorFieldsFragment],
+);
 
 /**
  * The desktop list's F and 1 to 5 on the selected bottle (F-144, KIT § 3
  * keys): favourite (sets the opposite of what the tile shows, never flips
  * blind) and rate. Each answers with feedback and a toast, and the list is
- * read again so the tile shows it.
+ * read again so the tile shows it. The selected bottle's own review is read
+ * while it is selected, so a rating updates it rather than adding a second;
+ * a key pressed before that read answers is ignored.
  */
-export function useBottleKeyWrites(): {
+export function useBottleKeyWrites(selected: ListBottle | undefined): {
   favourite: (bottle: ListBottle) => void;
   rate: (bottle: ListBottle, score: number) => void;
 } {
   const router = useRouter();
-  const client = useClient();
+  const [mine, reread] = useQuery({
+    query: CellarListMyReviewQuery,
+    variables: {
+      type: selected?.type ?? "WINE",
+      itemId: selected?.itemId ?? "",
+    },
+    pause: selected === undefined,
+    requestPolicy: "cache-and-network",
+  });
   const [, setFavorite] = useMutation(SetFavoriteMutation);
   const [, addReview] = useMutation(AddItemReviewMutation);
   const [, updateReview] = useMutation(UpdateItemReviewMutation);
@@ -84,20 +99,11 @@ export function useBottleKeyWrites(): {
 
   const rate = useCallback(
     (bottle: ListBottle, score: number) => {
+      const item = unwrapResult(mine.data?.item, "QueryItemSuccess");
+      if (!item.ok || item.data.data.id !== bottle.itemId) return;
       feedback("tick");
+      const reviewId = item.data.data.myReview?.id ?? null;
       void (async () => {
-        const found = await client
-          .query(
-            CellarListMyReviewQuery,
-            {
-              type: bottle.type,
-              itemId: bottle.itemId,
-            },
-            { requestPolicy: "network-only" },
-          )
-          .toPromise();
-        const item = unwrapResult(found.data?.item, "QueryItemSuccess");
-        const reviewId = item.ok ? (item.data.data.myReview?.id ?? null) : null;
         const saved =
           reviewId === null
             ? unwrapResult(
@@ -131,10 +137,11 @@ export function useBottleKeyWrites(): {
         notify(`Rated ${formatKitScore(score)} · ${bottle.name}`, {
           tone: "success",
         });
+        reread({ requestPolicy: "network-only" });
         router.refresh();
       })();
     },
-    [client, addReview, updateReview, router],
+    [mine.data, reread, addReview, updateReview, router],
   );
 
   return { favourite, rate };

@@ -57,7 +57,7 @@ describe("nav: which tab is lit", () => {
     assert.equal(activeTab("/search"), "search");
     assert.equal(activeTab("/cellars"), "cellars");
     assert.equal(activeTab("/cellars/abc/items"), "cellars");
-    assert.equal(activeTab("/recipes/1"), undefined, "More lights (F-171)");
+    assert.equal(activeTab("/recipes/1"), "cellars");
     assert.equal(activeTab("/map"), "map");
     assert.equal(activeTab("/map/scans/s1"), "map");
     assert.equal(activeTab("/discoveries"), undefined, "X10 redirects it Home");

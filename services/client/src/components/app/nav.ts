@@ -33,8 +33,8 @@ export type Tab = {
   /** The desktop rail's key, shown in its tooltip ("G C", "/"). */
   keys: string;
   /**
-   * Path prefixes that light this tab, beyond `href` itself: brands light
-   * Cellars (recipes light More), places light Map, rankings light Lists, and the Me
+   * Path prefixes that light this tab, beyond `href` itself: recipes and
+   * brands light Cellars, places light Map, rankings light Lists, and the Me
    * hub's own pages (loved, want to try, friends, taste profile) light Me.
    */
   also: readonly string[];
@@ -54,8 +54,7 @@ export const TABS: readonly Tab[] = [
     href: "/cellars",
     icon: Cellar,
     keys: "G C",
-    // Not /recipes: the Recipes boards light only More there (F-171).
-    also: ["/brands"],
+    also: ["/recipes", "/brands"],
   },
   {
     key: "search",
@@ -135,6 +134,15 @@ export function activeTab(pathname: string): TabKey | undefined {
       isUnder(pathname, tab.href) ||
       tab.also.some((prefix) => isUnder(pathname, prefix)),
   )?.key;
+}
+
+/**
+ * The tab the tab bar and the rail draw as current. Recipes sit under
+ * Cellars for the trail (`activeTab`, breadcrumbs), but the Recipes boards
+ * light only More there (F-171, W3-5), so no tab is drawn current on them.
+ */
+export function litTab(pathname: string): TabKey | undefined {
+  return isUnder(pathname, "/recipes") ? undefined : activeTab(pathname);
 }
 
 /**

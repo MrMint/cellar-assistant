@@ -48,7 +48,30 @@ const opName = (doc: unknown): string =>
   (doc as { definitions?: { name?: { value?: string } }[] }).definitions?.[0]
     ?.name?.value ?? "";
 mock.module("urql", () => ({
-  useQuery: () => [{ data: undefined, fetching: false }, () => {}],
+  useQuery: ({
+    query,
+    variables,
+    pause,
+  }: {
+    query: unknown;
+    variables: { itemId?: string };
+    pause?: boolean;
+  }) => {
+    if (opName(query) !== "CellarListMyReview" || pause)
+      return [{ data: undefined, fetching: false }, () => {}];
+    return [
+      {
+        fetching: false,
+        data: {
+          item: {
+            __typename: "QueryItemSuccess",
+            data: { __typename: "Beer", id: variables.itemId, myReview: null },
+          },
+        },
+      },
+      () => {},
+    ];
+  },
   useMutation: (doc: unknown) => [
     {},
     async (vars: Record<string, unknown>) => {
@@ -56,21 +79,7 @@ mock.module("urql", () => ({
       return { data: undefined };
     },
   ],
-  useClient: () => ({
-    query: (doc: unknown, vars: Record<string, unknown>) => ({
-      toPromise: async () => {
-        sent.push({ op: opName(doc), vars });
-        return {
-          data: {
-            item: {
-              __typename: "QueryItemSuccess",
-              data: { __typename: "Beer", id: vars.itemId, myReview: null },
-            },
-          },
-        };
-      },
-    }),
-  }),
+  useClient: () => ({}),
 }));
 // C2's pane, as a stand-in: this test is about the list's keys, not its body.
 mock.module("@/components/item/ItemPane", () => ({
