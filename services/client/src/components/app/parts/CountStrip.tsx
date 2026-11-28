@@ -2,6 +2,7 @@
 
 import { feedback } from "@/lib/feedback";
 import { cn } from "@/lib/utils";
+import type { AppIcon } from "../icons";
 
 const COUNT = new Intl.NumberFormat("en-US");
 
@@ -60,6 +61,8 @@ export type CountCell<K extends string> = {
   /** The word under the number ("Beer", "Open"). */
   label: string;
   count: number;
+  /** H-117: the kind's glyph, drawn beside the number. */
+  glyph?: AppIcon;
 };
 
 /**
@@ -90,7 +93,12 @@ export function CountFilters<K extends string>({
   };
   const cellBody = (cell: CountCell<K>) => (
     <>
-      <span className="t-head tabular">{cell.count}</span>
+      <span className="flex items-center gap-1">
+        {cell.glyph !== undefined && (
+          <cell.glyph aria-hidden className="size-3.5 shrink-0 text-glyph" />
+        )}
+        <span className="t-head tabular">{cell.count}</span>
+      </span>
       <span className="t-micro">{cell.label}</span>
     </>
   );

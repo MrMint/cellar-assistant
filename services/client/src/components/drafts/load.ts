@@ -2,23 +2,12 @@ import "server-only";
 import { unwrapResult } from "@/lib/api/result";
 import { apiServerQuery } from "@/lib/api/urql-server";
 import type { Draft } from "./needs";
-import {
-  DraftImageQuery,
-  NeedsDetailsCellarQuery,
-  NeedsDetailsQuery,
-} from "./queries";
+import { NeedsDetailsCellarQuery, NeedsDetailsQuery } from "./queries";
 
 /** The API's page cap: one page holds every draft most people have. */
 export const NEEDS_DETAILS_PAGE = 100;
 
-/**
- * F-71: how many photos the page presigns on the server, a phone screen's
- * rows. Each is one `file(id)` read, so the rest are left to the row, which
- * reads its own when it scrolls into view (`DraftThumb`).
- */
-export const PRESIGNED_FIRST = 12;
-
-/** `imageUrl` undefined: not read yet, the row reads it when seen. */
+/** `imageUrl` is the server's presigned URL (F-71: one batch, in the page read). */
 export type LoadedDraft = Draft & { readonly imageUrl?: string | null };
 
 export type NeedsDetailsLoad = {
@@ -37,18 +26,6 @@ export const cellarParam = (value: string | string[] | undefined) => {
   const one = Array.isArray(value) ? value[0] : value;
   return one !== undefined && SESSION_ID.test(one) ? one : null;
 };
-
-/** A draft's photo URL, or null (no photo, or not readable). */
-export async function draftImageUrl(id: string | null): Promise<string | null> {
-  if (id === null) return null;
-  try {
-    const data = await apiServerQuery(DraftImageQuery, { id });
-    const file = unwrapResult(data.file, "File");
-    return file.ok ? file.data.url : null;
-  } catch {
-    return null;
-  }
-}
 
 /**
  * `/needs-details`: the viewer's saved drafts, newest first (one cellar's
@@ -77,14 +54,9 @@ export async function loadNeedsDetails(
     return { count: 0, drafts: [], endCursor: null, cellar, failed: true };
   }
   const nodes = page.data.edges.map(({ node }) => node);
-  const urls = await Promise.all(
-    nodes
-      .slice(0, PRESIGNED_FIRST)
-      .map((node) => draftImageUrl(node.imageId ?? null)),
-  );
   return {
     count: data.needsDetailsCount,
-    drafts: nodes.map((node, index) => ({
+    drafts: nodes.map((node) => ({
       id: node.id,
       itemType: node.itemType,
       cellarId: node.cellarId ?? null,
@@ -94,7 +66,7 @@ export async function loadNeedsDetails(
       confirmedFields: node.confirmedFields,
       vintageAnswer: node.vintageAnswer,
       imageId: node.imageId ?? null,
-      imageUrl: index < PRESIGNED_FIRST ? (urls[index] ?? null) : undefined,
+      imageUrl: node.imageUrl ?? null,
     })),
     endCursor: page.data.pageInfo.hasNextPage
       ? (page.data.pageInfo.endCursor ?? null)

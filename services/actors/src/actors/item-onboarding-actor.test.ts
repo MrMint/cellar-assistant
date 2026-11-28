@@ -17,6 +17,8 @@ import type { Ctx } from "@cellar-assistant/contracts";
 import {
   adminCtx,
   ConflictError,
+  DRAFT_IMAGE_BATCH_MAX_IDS,
+  draftImageBatchActorId,
   ForbiddenError,
   NotFoundError,
   systemCtx,
@@ -40,6 +42,7 @@ import { unconfiguredItemDefaults } from "../lib/item-defaults.ts";
 import {
   activate,
   closeTestDb,
+  createActor,
   deliveryCtx,
   refusalOf,
   resolveTestDatabase,
@@ -47,8 +50,13 @@ import {
   withTestDb,
 } from "../lib/testing.ts";
 import { CellarActor } from "./cellar-actor.ts";
+import { DraftsCollectionActor } from "./drafts-collection-actor.ts";
 import { ItemActor } from "./item-actor.ts";
-import type { BarcodeEnsurer, BrandResolver } from "./item-onboarding-actor.ts";
+import type {
+  BarcodeEnsurer,
+  BrandResolver,
+  ImageSigner,
+} from "./item-onboarding-actor.ts";
 import { ItemOnboardingActor } from "./item-onboarding-actor.ts";
 
 const daprClient = (): DaprClient =>
@@ -1978,3 +1986,233 @@ describe.skipIf(skip)("ItemOnboardingActor.confirmItemFields (F-75)", () => {
     });
   });
 });
+
+describe.skipIf(skip)("ItemOnboardingActor.discardDraft (H-133, F-65)", () => {
+  afterAll(closeTestDb);
+
+  /** An owner with a saved wine draft aimed at a cellar of theirs. */
+  const savedDraft = async (db: DbOrTx) => {
+    const owner = await seedUser(db);
+    await seedReferenceValues(db);
+    const cellarId = await seedCellar(db, owner);
+    const onboardingId = randomUUID();
+    const actor = await activate(newOnboardingActor(onboardingId, db));
+    const ctx = userCtx(owner, "r");
+    await actor.openDraft(ctx, { itemType: "WINE" });
+    await actor.saveDraft(ctx, {
+      cellarId,
+      fields: { name: "Demo Rioja" },
+      confirmedFields: [],
+      vintageAnswer: "UNANSWERED",
+    });
+    return { owner, cellarId, onboardingId, actor, ctx };
+  };
+  const statusOf = async (db: DbOrTx, id: string) =>
+    (
+      await db.execute<{ status: string }>(
+        sql`select status from public.item_onboardings where id = ${id}::uuid`,
+      )
+    ).rows[0]?.status;
+  const drafts = async (db: DbOrTx, owner: string) =>
+    activate(createActor(DraftsCollectionActor, owner, db));
+
+  it("discards the owner's draft: it leaves Needs details and every count, and nothing is created", async () => {
+    await withOnboardingDb(async (db) => {
+      const { owner, cellarId, onboardingId, actor, ctx } =
+        await savedDraft(db);
+      const collection = await drafts(db, owner);
+      expect(await collection.needsDetailsCount(ctx, {})).toBe(1);
+
+      const discarded = await actor.discardDraft(ctx);
+      expect(discarded.status).toBe("DISCARDED");
+      expect(await statusOf(db, onboardingId)).toBe("DISCARDED");
+      expect(await collection.needsDetails(ctx, {})).toEqual([]);
+      expect(await collection.needsDetailsCount(ctx, {})).toBe(0);
+      expect(await collection.needsDetailsCount(ctx, { cellarId })).toBe(0);
+      expect(await collection.unconfirmedBottleCount(ctx)).toBe(0);
+      expect(
+        await countOf(
+          db,
+          sql`select count(*)::int as n from public.wines where item_onboarding_id = ${onboardingId}::uuid`,
+        ),
+      ).toBe(0);
+      expect(
+        await countOf(
+          db,
+          sql`select count(*)::int as n from public.outbox where payload::text like ${`%${onboardingId}%`}`,
+        ),
+      ).toBe(0);
+      // Idempotent.
+      expect((await actor.discardDraft(ctx)).status).toBe("DISCARDED");
+    });
+  });
+
+  it("refuses a stranger as absent and leaves the draft listed", async () => {
+    await withOnboardingDb(async (db) => {
+      const { owner, onboardingId, actor, ctx } = await savedDraft(db);
+      const stranger = await seedUser(db);
+      await expect(
+        actor.discardDraft(userCtx(stranger, "r")),
+      ).rejects.toBeInstanceOf(NotFoundError);
+      expect(await statusOf(db, onboardingId)).toBe("NEEDS_DETAILS");
+      expect(await (await drafts(db, owner)).needsDetailsCount(ctx, {})).toBe(
+        1,
+      );
+    });
+  });
+
+  it("a discarded draft cannot be saved, confirmed or restarted back into the lists", async () => {
+    await withOnboardingDb(async (db) => {
+      const { owner, onboardingId, actor, ctx } = await savedDraft(db);
+      await actor.discardDraft(ctx);
+      await expect(
+        actor.saveDraft(ctx, {
+          fields: { name: "Again" },
+          confirmedFields: [],
+          vintageAnswer: "UNANSWERED",
+        }),
+      ).rejects.toBeInstanceOf(ConflictError);
+      await expect(
+        actor.confirm(ctx, {
+          name: "Demo Rioja",
+          attributes: { vintage: null, style: "RED" },
+        }),
+      ).rejects.toBeInstanceOf(ConflictError);
+      expect((await actor.start(ctx, { itemType: "WINE" })).status).toBe(
+        "DISCARDED",
+      );
+      expect(await statusOf(db, onboardingId)).toBe("DISCARDED");
+      expect(await (await drafts(db, owner)).needsDetailsCount(ctx, {})).toBe(
+        0,
+      );
+    });
+  });
+
+  it("refuses a filed session: its bottle exists already", async () => {
+    await withOnboardingDb(async (db) => {
+      const owner = await seedUser(db);
+      const onboardingId = randomUUID();
+      const actor = await activate(newOnboardingActor(onboardingId, db));
+      const ctx = userCtx(owner, "r");
+      await actor.openDraft(ctx, { itemType: "WINE" });
+      await actor.closeAsMatched(ctx);
+      await expect(actor.discardDraft(ctx)).rejects.toBeInstanceOf(
+        ConflictError,
+      );
+      expect(await statusOf(db, onboardingId)).toBe("MATCHED");
+    });
+  });
+});
+
+describe.skipIf(skip)(
+  "ItemOnboardingActor.draftImageUrls (H-133, F-71)",
+  () => {
+    afterAll(closeTestDb);
+
+    /** The batch actor, keyed at `viewer`, with a signer that counts calls. */
+    const batchActor = async (db: DbOrTx, viewer: string) => {
+      const signed: string[] = [];
+      const signImage: ImageSigner = async (key) => {
+        signed.push(key);
+        return `https://files.example/${key}`;
+      };
+      const actor = await activate(
+        new ItemOnboardingActor(
+          daprClient(),
+          new ActorId(draftImageBatchActorId(viewer)),
+          db,
+          unconfiguredItemDefaults,
+          async (_ctx, code) => ({ code }),
+          async () => {
+            throw new Error("no BrandRegistryActor in this test");
+          },
+          dbVerifyFile(db),
+          undefined,
+          signImage,
+        ),
+      );
+      return { actor, signed };
+    };
+    const seedDraftWithImage = async (
+      db: DbOrTx,
+      userId: string,
+      imageId: string | null,
+    ) => {
+      const id = randomUUID();
+      await db.execute(sql`
+      insert into public.item_onboardings (id, user_id, item_type, status, image_id, front_label_image_id)
+      values (${id}::uuid, ${userId}::uuid, 'WINE', 'NEEDS_DETAILS', ${imageId}::uuid, ${imageId}::uuid)
+    `);
+      return id;
+    };
+    const keyOf = async (db: DbOrTx, fileId: string) =>
+      (
+        await db.execute<{ key: string }>(
+          sql`select key from public.files where id = ${fileId}::uuid`,
+        )
+      ).rows[0]?.key;
+
+    it("signs a page of the viewer's draft pictures in one call, aligned, null where there is none", async () => {
+      await withOnboardingDb(async (db) => {
+        const owner = await seedUser(db);
+        const stranger = await seedUser(db);
+        const fileA = await seedVerifiedFile(db, owner);
+        const fileB = await seedVerifiedFile(db, owner);
+        const theirFile = await seedVerifiedFile(db, stranger);
+        const unverified = await seedUnverifiedFile(db, owner);
+        const a = await seedDraftWithImage(db, owner, fileA);
+        const b = await seedDraftWithImage(db, owner, fileB);
+        const noImage = await seedDraftWithImage(db, owner, null);
+        const theirs = await seedDraftWithImage(db, stranger, theirFile);
+        const notVerified = await seedDraftWithImage(db, owner, unverified);
+        const { actor, signed } = await batchActor(db, owner);
+
+        const urls = await actor.draftImageUrls(userCtx(owner, "r"), {
+          onboardingIds: [a, noImage, theirs, b.toUpperCase(), notVerified, a],
+        });
+        const keyA = await keyOf(db, fileA);
+        const keyB = await keyOf(db, fileB);
+        expect(urls.map((u) => u?.url ?? null)).toEqual([
+          `https://files.example/${keyA}`,
+          null,
+          null,
+          `https://files.example/${keyB}`,
+          null,
+          `https://files.example/${keyA}`,
+        ]);
+        expect(urls[0]?.expiresAt).toMatch(/^\d{4}-/);
+        // One signature per picture, none for anything the viewer cannot see.
+        expect(signed.sort()).toEqual([keyA, keyB].sort());
+      });
+    });
+
+    it("signs only for the viewer it is keyed by, and bounds the batch", async () => {
+      await withOnboardingDb(async (db) => {
+        const owner = await seedUser(db);
+        const stranger = await seedUser(db);
+        const { actor } = await batchActor(db, owner);
+        await expect(
+          actor.draftImageUrls(userCtx(stranger, "r"), { onboardingIds: [] }),
+        ).rejects.toBeInstanceOf(ForbiddenError);
+        await expect(
+          actor.draftImageUrls(userCtx(owner, "r"), {
+            onboardingIds: Array.from(
+              { length: DRAFT_IMAGE_BATCH_MAX_IDS + 1 },
+              () => randomUUID(),
+            ),
+          }),
+        ).rejects.toBeInstanceOf(ValidationError);
+        await expect(
+          actor.draftImageUrls(userCtx(owner, "r"), {
+            onboardingIds: ["not-a-uuid"],
+          }),
+        ).rejects.toBeInstanceOf(ValidationError);
+        expect(
+          await actor.draftImageUrls(userCtx(owner, "r"), {
+            onboardingIds: [],
+          }),
+        ).toEqual([]);
+      });
+    });
+  },
+);

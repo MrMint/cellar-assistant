@@ -123,7 +123,7 @@ describe("MeHub", () => {
     assert.match(pinned, /data-slot="row-count"[^>]*>4</);
   });
 
-  test("past BAND_STRIP_MAX entries a list draws no strip (it would be a sample)", () => {
+  test("H-131: a list past 100 entries still draws its strip (bandCounts counts every entry)", () => {
     const big = render(
       <MeHub
         user={user}
@@ -134,11 +134,16 @@ describe("MeHub", () => {
         }}
         extras={{
           ...EMPTY_ME_EXTRAS,
-          bands: { t1: [{ band: 5, count: 100 }] },
+          bands: {
+            t1: [
+              { band: 5, count: 100 },
+              { band: 2, count: 40 },
+            ],
+          },
         }}
       />,
     );
-    assert.ok(!big.includes('data-slot="band-strip"'));
+    assert.ok(big.includes('data-slot="band-strip"'));
   });
 
   test("X18: number tiles name each noun and leave out zeros; Logs has no list to open", () => {
@@ -257,5 +262,73 @@ describe("MeHub", () => {
     );
     assert.match(bare, /<h1\b[^>]*><a\b[^>]*>sam@example\.test<\/a><\/h1>/);
     assert.equal(bare.split("sam@example.test").length - 1, 1);
+  });
+});
+
+describe("MeStamps (H-122, F-133)", async () => {
+  const { MeStampsView } = await import("./MeStamps");
+  const stamp = (kind: string, count: number) =>
+    ({ kind, tier: 1, count }) as never;
+  const now = new Date("2026-11-27T12:00:00Z");
+
+  test('a bold "Stamps" head with the "3 of 4" count beside it', () => {
+    const markup = render(
+      <MeStampsView
+        stamps={[stamp("STYLES", 12), stamp("REGIONS", 5), stamp("RECIPES", 3)]}
+        now={now}
+      />,
+    );
+    // BOLD_LABEL: the head is t-head in ink, not the muted overline.
+    assert.match(
+      markup,
+      /data-slot="inset-section"[^>]*class="[^"]*h2\]:t-head [^"]*h2\]:text-ink"[^>]*>.*?>Stamps<\/h2>/,
+    );
+    assert.match(textOf(markup), /3 of 4/);
+    assert.equal(markup.match(/data-slot="recap-stamp"/g)?.length, 3);
+  });
+
+  test("no stamps yet: no count, the recap row says what stamps are", () => {
+    const markup = render(<MeStampsView stamps={[]} now={now} />);
+    assert.doesNotMatch(textOf(markup), /of 4/);
+    assert.match(textOf(markup), /Stamps count new styles/);
+  });
+});
+
+// H-121 / F-93: the invite sheet (share-pages.test.tsx is another stream's;
+// this bucket owns InviteFriendsCard but not that file, FR-19).
+describe("InviteSheet content (H-121, F-93)", async () => {
+  const { InviteSheetContent, inviteMailto } = await import(
+    "../share/InviteFriendsCard"
+  );
+  const url = "https://cellar.example/invite/tok";
+  const sheet = (canShare: boolean) =>
+    render(
+      <InviteSheetContent
+        url={url}
+        failed={false}
+        canShare={canShare}
+        onDone={() => {}}
+        onRetry={() => {}}
+        onReset={() => {}}
+      />,
+    );
+
+  test("Done in the header, before the code", () => {
+    const markup = sheet(false);
+    const done = markup.search(/<button[^>]*>Done<\/button>/);
+    assert.ok(done >= 0, "no Done button");
+    assert.ok(done < markup.indexOf("QR code for"));
+  });
+
+  test("a More ways row even without the system share sheet, then Reset link", () => {
+    const words = textOf(sheet(false));
+    assert.equal(words.match(/More ways/g)?.length, 1);
+    assert.ok(words.indexOf("More ways") < words.indexOf("Reset link"));
+  });
+
+  test("without a share sheet, More ways is an email carrying the link", () => {
+    const mail = inviteMailto(url);
+    assert.match(mail, /^mailto:\?subject=Join%20me/);
+    assert.ok(decodeURIComponent(mail).includes(url));
   });
 });

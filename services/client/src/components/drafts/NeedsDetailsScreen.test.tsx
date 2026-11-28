@@ -132,12 +132,12 @@ globalThis.fetch = (async (_url: unknown, init?: { body?: unknown }) => {
                     updatedAt: "2026-11-27T00:00:00Z",
                   },
         }
-      : operationName === "CloseNeedsDetailsDraft"
+      : operationName === "DiscardNeedsDetailsDraft"
         ? {
-            closeItemOnboarding: {
+            discardDraft: {
               __typename: "ItemOnboarding",
               id: variables.onboardingId,
-              status: "MATCHED",
+              status: "DISCARDED",
             },
           }
         : operationName === "ConfirmNeedsDetailsDraft"
@@ -193,6 +193,7 @@ const MORE_NEW = {
   displayName: "Harbour Pale",
   draftFields: { name: "Harbour Pale" },
   imageId: "f-more",
+  imageUrl: "u/f-more",
 };
 
 const DRAFTS = [
@@ -512,13 +513,16 @@ describe("NeedsDetailsScreen", () => {
       "Harbour Pale",
     ]);
     assert.equal(more(), undefined, "no further page");
-    // F-71: a "Show more" row reads its own photo once it is in view.
+    // F-71: the page carries each draft's photo URL; no per-draft read.
     await flush(30);
-    assert.ok(
-      sent.some(
-        (s) => s.operationName === "DraftImage" && s.variables.id === "f-more",
-      ),
-      "the later page's photo is read",
+    assert.equal(
+      sent.some((s) => s.operationName === "DraftImage"),
+      false,
+    );
+    assert.equal(
+      document.querySelector('img[src="u/f-more"]') !== null,
+      true,
+      "a Show more row shows its photo",
     );
   });
 
@@ -574,7 +578,7 @@ describe("NeedsDetailsScreen", () => {
     assert.match(sheetText(), /2 left/);
   });
 
-  test("F-65: Delete draft takes the row away, offers Undo, and closes it when Undo runs out", async () => {
+  test("F-65: Delete draft takes the row away, offers Undo, and discards it when Undo runs out", async () => {
     await render(screen());
     await openDraft("Dockside Rosé");
     await click(button("Delete draft"));
@@ -583,15 +587,15 @@ describe("NeedsDetailsScreen", () => {
     assert.match(document.body.textContent ?? "", /2 bottles/);
     assert.equal(toasts.at(-1)?.message, "Draft deleted");
     assert.equal(
-      ops("CloseNeedsDetailsDraft").length,
+      ops("DiscardNeedsDetailsDraft").length,
       0,
       "not until Undo ends",
     );
     await act(async () => toasts.at(-1)?.onAutoClose?.());
     await flush(20);
-    const closes = ops("CloseNeedsDetailsDraft");
-    assert.equal(closes.length, 1);
-    assert.equal(closes[0]?.variables.onboardingId, ROSE_ID);
+    const discards = ops("DiscardNeedsDetailsDraft");
+    assert.equal(discards.length, 1);
+    assert.equal(discards[0]?.variables.onboardingId, ROSE_ID);
   });
 
   test("F-65: Undo of a delete puts the draft back and writes nothing", async () => {
@@ -609,7 +613,7 @@ describe("NeedsDetailsScreen", () => {
     await act(async () => root.unmount());
     root = createRoot(container);
     await flush(20);
-    assert.equal(ops("CloseNeedsDetailsDraft").length, 0);
+    assert.equal(ops("DiscardNeedsDetailsDraft").length, 0);
   });
 
   test("F-70: Undo after the bottle was filed says it could not be undone", async () => {

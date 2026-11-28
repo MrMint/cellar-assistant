@@ -34,8 +34,8 @@ import {
   rowOf,
 } from "./needs";
 import {
-  CloseNeedsDetailsDraftMutation,
   ConfirmNeedsDetailsDraftMutation,
+  DiscardNeedsDetailsDraftMutation,
   NeedsDetailsQuery,
   SaveNeedsDetailsDraftMutation,
 } from "./queries";
@@ -82,8 +82,11 @@ export function NeedsDetailsScreen({
 }) {
   const [, runSave] = useMutation(SaveNeedsDetailsDraftMutation);
   const [, runConfirm] = useMutation(ConfirmNeedsDetailsDraftMutation);
-  const [, runClose] = useMutation(CloseNeedsDetailsDraftMutation);
+  const [, runDiscard] = useMutation(DiscardNeedsDetailsDraftMutation);
   const router = useRouter();
+  // A ref: a new router object must not re-run the leave-the-page effect.
+  const routerRef = useRef(router);
+  routerRef.current = router;
   const [rows, setRows] = useState<Row[]>(() =>
     drafts.map((draft) => rowWith(draft, draft.imageUrl)),
   );
@@ -119,7 +122,7 @@ export function NeedsDetailsScreen({
   }, []);
 
   /**
-   * Act on one draft whose Undo ran out: file it, or close a deleted one. A
+   * Act on one draft whose Undo ran out: file it, or discard a deleted one. A
    * refusal puts its row back.
    */
   const confirm = useCallback(
@@ -129,15 +132,18 @@ export function NeedsDetailsScreen({
       pending.current.delete(id);
       const { plan } = entry;
       if (plan === null) {
-        void runClose({ onboardingId: id }).then((result) => {
-          const closed = unwrapResult(
-            result.data?.closeItemOnboarding,
+        void runDiscard({ onboardingId: id }).then((result) => {
+          const discarded = unwrapResult(
+            result.data?.discardDraft,
             "ItemOnboarding",
           );
-          if (!closed.ok) {
+          if (!discarded.ok) {
             putBack(entry);
             notify(`Couldn't delete ${entry.row.title}`, { tone: "error" });
+            return;
           }
+          // The list and the count come from the server, so read them again.
+          routerRef.current.refresh();
         });
         return;
       }
@@ -155,7 +161,7 @@ export function NeedsDetailsScreen({
         }
       });
     },
-    [runConfirm, runClose, putBack],
+    [runConfirm, runDiscard, putBack],
   );
 
   const confirmAll = useCallback(() => {
@@ -272,8 +278,8 @@ export function NeedsDetailsScreen({
 
   /**
    * F-65: delete a draft. The row goes now with "Draft deleted · Undo"; the
-   * session is closed only when Undo runs out (or the page is left), since a
-   * closed one cannot be put back.
+   * draft is discarded only when Undo runs out (or the page is left), since a
+   * discarded one cannot be put back.
    */
   const discard = (row: Row) => {
     // The sheet's Button gives the press cue.
@@ -320,17 +326,20 @@ export function NeedsDetailsScreen({
       return;
     }
     const more = page.data.edges.map(({ node }) =>
-      rowWith({
-        id: node.id,
-        itemType: node.itemType,
-        cellarId: node.cellarId ?? null,
-        displayName: node.displayName ?? null,
-        displayMaker: node.displayMaker ?? null,
-        draftFields: node.draftFields,
-        confirmedFields: node.confirmedFields,
-        vintageAnswer: node.vintageAnswer,
-        imageId: node.imageId ?? null,
-      }),
+      rowWith(
+        {
+          id: node.id,
+          itemType: node.itemType,
+          cellarId: node.cellarId ?? null,
+          displayName: node.displayName ?? null,
+          displayMaker: node.displayMaker ?? null,
+          draftFields: node.draftFields,
+          confirmedFields: node.confirmedFields,
+          vintageAnswer: node.vintageAnswer,
+          imageId: node.imageId ?? null,
+        },
+        node.imageUrl ?? null,
+      ),
     );
     setRows((current) => {
       const seen = new Set(current.map((row) => row.draft.id));
@@ -436,7 +445,6 @@ export function NeedsDetailsScreen({
                   className="flex min-h-14 w-full items-center gap-3 py-2 text-left outline-none transition-transform active:scale-97 focus-visible:bg-raised motion-reduce:active:scale-100"
                 >
                   <DraftThumb
-                    imageId={row.draft.imageId}
                     imageUrl={row.imageUrl}
                     glyph={
                       <TypeGlyph

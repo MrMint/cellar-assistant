@@ -81,6 +81,7 @@ import type {
   ConfirmOnboardingResult,
   CreateItemInput,
   Ctx,
+  DraftImageBatchFilter,
   ItemDetailSuggestions,
   ItemLabelReading,
   ItemOnboardingActorInterface,
@@ -89,6 +90,7 @@ import type {
   ItemType,
   OnboardingStatus,
   OpenDraftInput,
+  ReadTarget,
   ReprocessResult,
   RereadLabelInput,
   SaveDraftFields,
@@ -104,6 +106,8 @@ import {
   barcodeActorId,
   CONFIRMED_FIELDS_MAX,
   ConflictError,
+  DRAFT_IMAGE_BATCH_MAX_IDS,
+  draftImageBatchActorId,
   ForbiddenError,
   ITEM_ATTRIBUTE_KEY,
   ITEM_TYPE_SPECS,
@@ -117,8 +121,8 @@ import {
   requireItemAttributes,
   ValidationError,
 } from "@cellar-assistant/contracts";
-import { itemOnboardings } from "@cellar-assistant/db";
-import { eq } from "@cellar-assistant/db/orm";
+import { files, itemOnboardings } from "@cellar-assistant/db";
+import { and, eq, inArray, isNotNull } from "@cellar-assistant/db/orm";
 import { isOwner } from "@cellar-assistant/policy";
 import type { ActorId, DaprClient } from "@dapr/dapr";
 import { absentRow, EntityActorBase } from "../lib/actor-base.ts";
@@ -130,6 +134,7 @@ import {
   requireVerifiedFile,
   type VerifyFile,
 } from "../lib/file-verification.ts";
+import { requireSignedIn } from "../lib/guards.ts";
 import { internal } from "../lib/internal-client.ts";
 import { ITEM_TABLES } from "../lib/item-bindings.ts";
 import type {
@@ -144,6 +149,13 @@ import {
 } from "../lib/item-suggestions.ts";
 import { enqueueOutbox } from "../lib/outbox.ts";
 import { OUTBOX_TARGETS } from "../lib/outbox-targets.ts";
+import {
+  filesS3Config,
+  presignedStableGetUrl,
+  readUrlWindowSettings,
+  type StableReadWindow,
+  stableReadWindow,
+} from "../lib/s3-presign.ts";
 import { isUuid, requireUuid } from "../lib/uuid.ts";
 import { isCellarOwner, loadCellarAccess } from "../lib/visibility.ts";
 
@@ -165,6 +177,19 @@ export type BrandResolver = (
   ctx: Ctx,
   name: string,
 ) => Promise<{ readonly id: string }>;
+
+/**
+ * H-133 (F-71): signs a browser GET URL for one stored object. Production
+ * signs in process, exactly as `FileActor.presignRead` does
+ * (`presignGetPublic` dials nothing); a test passes a fake.
+ */
+export type ImageSigner = (
+  key: string,
+  window: StableReadWindow,
+) => Promise<string>;
+
+const signImageInProcess: ImageSigner = (key, window) =>
+  presignedStableGetUrl(filesS3Config(), key, window);
 
 /**
  * `BarcodeActor(barcodeActorId(code, type))` — the canonical key, with the
@@ -363,6 +388,7 @@ export class ItemOnboardingActor
   readonly #resolveBrand: BrandResolver;
   readonly #verifyFile: VerifyFile;
   readonly #suggestionsProvider: ItemSuggestionsProvider;
+  readonly #signImage: ImageSigner;
 
   constructor(
     daprClient: DaprClient,
@@ -374,6 +400,8 @@ export class ItemOnboardingActor
     verifyFile: VerifyFile = daprVerifyFile,
     // Last, so every existing construction site keeps its meaning (X19).
     suggestionsProvider: ItemSuggestionsProvider = itemSuggestionsProvider(),
+    // H-133: after it, for the same reason.
+    signImage: ImageSigner = signImageInProcess,
   ) {
     super(daprClient, id, db);
     this.#defaultsProvider = defaultsProvider;
@@ -381,6 +409,7 @@ export class ItemOnboardingActor
     this.#resolveBrand = resolveBrand;
     this.#verifyFile = verifyFile;
     this.#suggestionsProvider = suggestionsProvider;
+    this.#signImage = signImage;
   }
 
   protected async loadAggregate(
@@ -573,7 +602,9 @@ export class ItemOnboardingActor
       if (
         existing.row.status === "CONFIRMED" ||
         existing.row.status === "MATCHED" ||
-        existing.row.status === "NEEDS_DETAILS"
+        existing.row.status === "NEEDS_DETAILS" ||
+        // H-133: nor may a resume bring a deleted draft back.
+        existing.row.status === "DISCARDED"
       ) {
         return onboardingRowToDto(existing.row);
       }
@@ -743,6 +774,9 @@ export class ItemOnboardingActor
         `onboarding ${this.key} is closed (${row.status}): its bottle is filed already`,
       );
     }
+    if (row.status === "DISCARDED") {
+      throw new ConflictError(`draft ${this.key} was deleted`);
+    }
     if (!isVintageAnswer(input.vintageAnswer)) {
       throw new ValidationError(
         "vintageAnswer must be VINTAGE, NON_VINTAGE or UNANSWERED",
@@ -805,6 +839,10 @@ export class ItemOnboardingActor
   ): Promise<ConfirmOnboardingResult> {
     const aggregate = this.requireAggregate();
     await this.requireVisible(ctx, aggregate);
+    // H-133: a deleted draft creates nothing, even from a tab still open on it.
+    if (aggregate.row.status === "DISCARDED") {
+      throw new ConflictError(`draft ${this.key} was deleted`);
+    }
 
     const itemType = onboardingRowToDto(aggregate.row).itemType;
     const name = input.name.trim();
@@ -1009,6 +1047,84 @@ export class ItemOnboardingActor
     });
     await this.reload();
     return onboardingRowToDto(this.requireAggregate().row);
+  }
+  /**
+   * H-133 (F-65): the owner deletes a draft (contract doc). Owner only, as
+   * absent for anyone else. A status write, not a row delete: an item row
+   * references its onboarding (`ON DELETE RESTRICT`), and a kept row is what
+   * lets a late `confirm` from another tab be refused instead of starting
+   * over. Every draft list and count reads `NEEDS_DETAILS`, so this leaves
+   * them all. Writes no outbox row: nothing downstream exists.
+   */
+  async discardDraft(ctx: Ctx): Promise<ItemOnboardingDto> {
+    const aggregate = this.requireAggregate();
+    await this.requireVisible(ctx, aggregate);
+    const { status } = aggregate.row;
+    if (status === "DISCARDED") return onboardingRowToDto(aggregate.row);
+    if (status === "CONFIRMED" || status === "MATCHED") {
+      throw new ConflictError(
+        `onboarding ${this.key} is closed (${status}): its bottle is filed already`,
+      );
+    }
+    await this.tx(async (tx) => {
+      await tx
+        .update(itemOnboardings)
+        .set({ status: "DISCARDED", updatedAt: new Date() })
+        .where(eq(itemOnboardings.id, this.key));
+    });
+    await this.reload();
+    return onboardingRowToDto(this.requireAggregate().row);
+  }
+
+  /**
+   * H-133 (F-71): one turn signs a page of draft pictures (contract doc). One
+   * statement finds which of the ids are the viewer's own onboardings whose
+   * picture is a verified file the viewer uploaded; each is signed in
+   * process under one window, so the URLs are the ones `FileActor.presignRead`
+   * hands out for the same file. Addressed at the viewer's own id, which names
+   * no onboarding, and refused for anyone else.
+   */
+  async draftImageUrls(
+    ctx: Ctx,
+    filter: DraftImageBatchFilter,
+  ): Promise<readonly (ReadTarget | null)[]> {
+    const viewer = requireSignedIn(ctx, "see draft pictures");
+    if (viewer === null || draftImageBatchActorId(viewer) !== this.key) {
+      throw new ForbiddenError(
+        `ItemOnboardingActor(${this.key}) signs draft pictures only for the viewer it is keyed by`,
+      );
+    }
+    if (filter.onboardingIds.length > DRAFT_IMAGE_BATCH_MAX_IDS) {
+      throw new ValidationError(
+        `draftImageUrls takes at most ${DRAFT_IMAGE_BATCH_MAX_IDS} ids, got ${filter.onboardingIds.length}`,
+      );
+    }
+    const ids = filter.onboardingIds.map((id) =>
+      requireUuid(String(id), "onboardingId").toLowerCase(),
+    );
+    if (ids.length === 0) return [];
+    const rows = await this.db
+      .select({ id: itemOnboardings.id, key: files.key })
+      .from(itemOnboardings)
+      .innerJoin(files, eq(files.id, itemOnboardings.imageId))
+      .where(
+        and(
+          inArray(itemOnboardings.id, [...new Set(ids)]),
+          eq(itemOnboardings.userId, viewer),
+          eq(files.uploadedBy, viewer),
+          isNotNull(files.verifiedAt),
+        ),
+      );
+    const window = stableReadWindow(new Date(), readUrlWindowSettings());
+    const expiresAt = window.expiresAt.toISOString();
+    const signed = new Map<string, ReadTarget>();
+    for (const row of rows) {
+      signed.set(row.id, {
+        url: await this.#signImage(row.key, window),
+        expiresAt,
+      });
+    }
+    return ids.map((id) => signed.get(id) ?? null);
   }
 
   /* ---------------------------------------------------------------------- */
@@ -1298,7 +1414,8 @@ export class ItemOnboardingActor
     const closed =
       aggregate.row.status === "CONFIRMED" ||
       aggregate.row.status === "MATCHED" ||
-      aggregate.row.status === "NEEDS_DETAILS";
+      aggregate.row.status === "NEEDS_DETAILS" ||
+      aggregate.row.status === "DISCARDED";
     await this.tx(async (tx) => {
       await tx
         .update(itemOnboardings)

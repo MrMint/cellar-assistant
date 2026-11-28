@@ -86,6 +86,8 @@ mock.module("@/components/item/ItemPane", () => ({
   ItemPane: ({ itemId }: { itemId: string }) => (
     <div data-testid="item-pane" data-item={itemId} />
   ),
+  ItemPaneMenu: () => null,
+  useItemPaneSource: () => ({ state: { phase: "loading" }, refresh: () => {} }),
 }));
 
 // happy-dom's Web Animations reject on cancel: motion jumps to its end.

@@ -176,7 +176,7 @@ const listSeed = (
         avatarUrl: null,
       },
       top: { edges: [] },
-      bands: { edges: [] },
+      bandCounts: [0, 0, 0, 0, 0, 0],
       ...row,
     })) as never[],
     endCursor: null,

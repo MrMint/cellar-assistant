@@ -334,3 +334,93 @@ describe("ItemOnboarding.detectedItemType (F-77)", () => {
     });
   });
 });
+
+describe("discardDraft (H-133, F-65)", () => {
+  it("sends the delete to the onboarding's own actor and answers the row", async () => {
+    const { invoke, calls } = stubSidecar({
+      "ItemOnboardingActor.discardDraft": () => ({
+        ...draft,
+        status: "DISCARDED",
+      }),
+    });
+    const result = await run(
+      `mutation {
+         discardDraft(onboardingId: "${ONBOARDING_ID}") {
+           __typename
+           ... on ItemOnboarding { id status }
+         }
+       }`,
+      testContext(invoke, viewer),
+    );
+    expect(result.errors).toBeUndefined();
+    expect(calls.map((c) => [c.actorType, c.actorId, c.method])).toEqual([
+      ["ItemOnboardingActor", ONBOARDING_ID, "discardDraft"],
+    ]);
+    expect(result.data?.discardDraft).toEqual({
+      __typename: "ItemOnboarding",
+      id: ONBOARDING_ID,
+      status: "DISCARDED",
+    });
+  });
+
+  it("puts a stranger's NotFound and a filed session's Conflict on the result union", async () => {
+    for (const [error, typename] of [
+      [new NotFoundError("ItemOnboardingActor(x) has no row"), "NotFoundError"],
+      [new ConflictError("closed"), "ConflictError"],
+    ] as const) {
+      const { invoke } = stubSidecar({
+        "ItemOnboardingActor.discardDraft": () => {
+          throw error;
+        },
+      });
+      const result = await run(
+        `mutation { discardDraft(onboardingId: "${ONBOARDING_ID}") { __typename } }`,
+        testContext(invoke, viewer),
+      );
+      expect(result.errors).toBeUndefined();
+      expect(result.data?.discardDraft).toEqual({ __typename: typename });
+    }
+  });
+});
+
+describe("ItemOnboarding.imageUrl (H-133, F-71)", () => {
+  it("signs every draft picture on the page in one batch at the viewer's key", async () => {
+    const withImage = (id: string, imageId: string | null) => ({
+      ...draft,
+      id,
+      imageId,
+    });
+    const A = "66666666-6666-4666-8666-00000000000a";
+    const B = "66666666-6666-4666-8666-00000000000b";
+    const C = "66666666-6666-4666-8666-00000000000c";
+    const { invoke, calls } = stubSidecar({
+      "DraftsCollectionActor.needsDetails": () => [
+        withImage(A, "77777777-7777-4777-8777-00000000000a"),
+        withImage(B, null),
+        withImage(C, "77777777-7777-4777-8777-00000000000c"),
+      ],
+      "ItemOnboardingActor.draftImageUrls": (_actorId, _ctx, filter) =>
+        (filter as { onboardingIds: string[] }).onboardingIds.map((id) =>
+          id === A ? { url: "https://files.example/a", expiresAt: "x" } : null,
+        ),
+    });
+    const result = await run(
+      `{ needsDetails(first: 10) {
+           ... on ItemOnboardingConnection { edges { node { id imageUrl } } }
+         } }`,
+      testContext(invoke, viewer),
+    );
+    expect(result.errors).toBeUndefined();
+    expect(result.data?.needsDetails).toEqual({
+      edges: [
+        { node: { id: A, imageUrl: "https://files.example/a" } },
+        { node: { id: B, imageUrl: null } },
+        { node: { id: C, imageUrl: null } },
+      ],
+    });
+    const batches = calls.filter((c) => c.method === "draftImageUrls");
+    expect(batches.map((c) => [c.actorId, c.args[1]])).toEqual([
+      [viewer.id, { onboardingIds: [A, C] }],
+    ]);
+  });
+});

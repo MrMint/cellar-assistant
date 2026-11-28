@@ -9,6 +9,7 @@
  * stamps (counts of distinct things only: styles, regions, kinds of drink,
  * recipes made) and the way into this month's recap.
  */
+import { BREADTH_STAMP_KINDS } from "@cellar-assistant/contracts/recap";
 import { useEffect, useState } from "react";
 import { useQuery } from "urql";
 import { ChevronRight, ICON_STROKE, Trophy } from "@/components/app/icons";
@@ -16,6 +17,7 @@ import { InsetSection, ListRow } from "@/components/app/Page";
 import { RecapStamp } from "@/components/recap/RecapStamp";
 import { recapPeriodLabel } from "@/components/recap/recap-copy";
 import {
+  type BreadthStampData,
   BreadthStampsQuery,
   stampsFromResult,
 } from "@/components/recap/recap-data";
@@ -33,13 +35,40 @@ function MeStampsLoaded() {
   const [result] = useQuery({ query: BreadthStampsQuery });
   const stamps = stampsFromResult(result.data);
   if (stamps === null) return null;
-  const now = new Date();
+  return <MeStampsView stamps={stamps} now={new Date()} />;
+}
+
+/**
+ * The section itself, from stamps already read: a bold "Stamps" head with
+ * how many of the four breadth stamps are earned ("3 of 4", F-133), the
+ * stamps four to a row with their nouns under them, then this month's recap.
+ */
+export function MeStampsView({
+  stamps,
+  now,
+}: {
+  stamps: readonly BreadthStampData[];
+  now: Date;
+}) {
   const label = recapPeriodLabel(
     { kind: "month", year: now.getFullYear(), month: now.getMonth() + 1 },
     now,
   );
   return (
-    <InsetSection label="Stamps" className={BOLD_LABEL}>
+    <InsetSection
+      label="Stamps"
+      className={BOLD_LABEL}
+      action={
+        stamps.length > 0 ? (
+          <span
+            data-slot="me-stamps-count"
+            className="t-cap tabular text-ink-2"
+          >
+            {`${stamps.length} of ${BREADTH_STAMP_KINDS.length}`}
+          </span>
+        ) : undefined
+      }
+    >
       {stamps.length > 0 && (
         <ul
           data-slot="me-stamps"
