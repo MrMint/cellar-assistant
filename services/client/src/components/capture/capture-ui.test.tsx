@@ -156,6 +156,7 @@ const { createRoot } = await import("react-dom/client");
 const { Client, Provider, fetchExchange } = await import("urql");
 const { SuccessSheet } = await import("./SuccessSheet");
 const { TypePicker } = await import("./TypePicker");
+const { CellarPicker } = await import("./CellarPicker");
 const { AddToCellarActions } = await import(
   "@/components/item/AddToCellarActions"
 );
@@ -267,6 +268,42 @@ describe("SuccessSheet (N21's real ending)", () => {
     // W-21: nothing was photographed, so nothing is snapped again.
     assert.ok(button("Add another"));
     assert.equal(button("Snap another"), undefined);
+  });
+});
+
+describe("CellarPicker New cellar (F-61, CC-5)", () => {
+  const cellars = [{ id: "c1", name: "Home Cellar" }];
+  const newCellarRow = () =>
+    [...document.querySelectorAll("a, button")].find(
+      (el) => el.textContent?.trim() === "New cellar",
+    );
+
+  test("mid-form, New cellar asks before it leaves the half-typed bottle", async () => {
+    await render(
+      <CellarPicker
+        cellars={cellars}
+        value="c1"
+        onValueChange={() => {}}
+        leaveWarning="What you've typed isn't saved."
+      />,
+    );
+    await click(button("Add to Home Cellar"));
+    const row = newCellarRow();
+    assert.equal(row?.tagName, "BUTTON", "not a plain link out");
+    await click(row);
+    const dialog = document.querySelector('[role="alertdialog"]');
+    assert.ok(dialog, "a confirm opens");
+    assert.match(dialog?.textContent ?? "", /isn't saved/);
+    assert.ok(button("Keep editing"));
+    assert.ok(button("Leave"));
+  });
+
+  test("with nothing typed, New cellar is still the plain link", async () => {
+    await render(
+      <CellarPicker cellars={cellars} value="c1" onValueChange={() => {}} />,
+    );
+    await click(button("Add to Home Cellar"));
+    assert.equal(newCellarRow()?.tagName, "A");
   });
 });
 

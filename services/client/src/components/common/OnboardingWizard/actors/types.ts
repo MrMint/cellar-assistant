@@ -74,6 +74,11 @@ export type FetchDefaultsInput = {
    * adopts it instead of asking again.
    */
   draft?: DraftMeta;
+  /**
+   * F-59: the session is a saved draft being finished, so what the person
+   * typed (`draftFields`) and the cellar it was aimed at are read back too.
+   */
+  resumed?: boolean;
 };
 
 /** X05/N21: the optional back label, read with the front under a new session. */
@@ -122,6 +127,8 @@ export interface DefaultValuesResult {
    * back (X06), and what its bottle's display image is attached from.
    */
   frontLabelFileId?: string;
+  /** F-59: the cellar a resumed draft was saved against, when it has one. */
+  draftCellarId?: string;
 }
 
 export type UploadItemImageInput = {

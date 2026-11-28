@@ -64,6 +64,8 @@ type Entry<T> = {
   readonly promise: Promise<T>;
   settled: Settled<T>;
   settledAt: number | null;
+  /** When the read was asked for, for {@link DraftStore.list}'s order. */
+  startedAt: number;
   onSettled: ((entry: DraftView<T>) => void) | null;
 };
 
@@ -90,6 +92,11 @@ export type DraftStore<T> = {
   background(id: string, onSettled: (draft: DraftView<T>) => void): boolean;
   /** They came back (or saved): no toast, and the memory can go. */
   release(id: string): void;
+  /**
+   * F-64: every draft still held (reading, or settled within the TTL),
+   * newest first — what the background pill lists beside the server's jobs.
+   */
+  list(): DraftView<T>[];
 };
 
 const view = <T>(entry: Entry<T>): DraftView<T> => ({
@@ -138,6 +145,7 @@ export const createDraftStore = <T>(
         promise,
         settled: { state: "reading" },
         settledAt: null,
+        startedAt: now(),
         onSettled: null,
       };
       entries.set(id, entry);
@@ -163,6 +171,15 @@ export const createDraftStore = <T>(
     },
     release(id) {
       entries.delete(id);
+    },
+    list() {
+      prune();
+      // Newest first; a re-tracked id keeps its Map slot, so order by time
+      // (ties: the later insertion first).
+      return Array.from(entries.values())
+        .reverse()
+        .sort((a, b) => b.startedAt - a.startedAt)
+        .map(view);
     },
   };
 };

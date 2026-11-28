@@ -285,6 +285,15 @@ function OpenSection({
           <Row key={row.key} section={section} row={row} />
         ))}
       </ul>
+      {/* F-99: See all holds one read's rows; when the total is more, it says
+          so and how to reach the rest, rather than ending as if complete. */}
+      {(model.total > model.rows.length || model.totalIsLowerBound) &&
+        model.rows.length > 0 && (
+          <p className="t-cap m-0 text-ink-2" data-search-capped>
+            The first {model.rows.length} of {totalLabel(model)}. Add a word to
+            narrow them.
+          </p>
+        )}
     </section>
   );
 }
@@ -353,6 +362,21 @@ export function SearchSections({
       <Notice
         glyph={<CloudOff aria-hidden strokeWidth={1.5} />}
         title="Search isn't answering"
+        action={<RetrySearchButton />}
+      />
+    );
+  }
+
+  // F-96: nothing found, but a section could not be searched: the page does
+  // not know there is no match there, so it says which, and offers no Add
+  // (the drink may well exist).
+  if (sections.length === 0 && failed.length > 0) {
+    return (
+      <Notice
+        glyph={<CloudOff aria-hidden strokeWidth={1.5} />}
+        title={`Couldn't search ${failed
+          .map((section) => SECTION_LABELS[section].toLowerCase())
+          .join(", ")}`}
         action={<RetrySearchButton />}
       />
     );

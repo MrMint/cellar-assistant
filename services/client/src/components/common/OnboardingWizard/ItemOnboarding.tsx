@@ -56,6 +56,7 @@ import { QuickAddCard } from "../QuickAddCard";
 import { emptyDefaults, finishedHref } from "./adapter";
 import { CatalogMatchPrompt } from "./CatalogMatchPrompt";
 import { catalogMatchSummary } from "./catalog-match";
+import { finishLaterToast } from "./draft-save";
 import { type OnboardingResult, OnboardingWizard } from "./index";
 import { MatchList } from "./MatchList";
 import { OnboardingMachine } from "./machines";
@@ -80,6 +81,12 @@ export type ItemOnboardingProps = {
   cellars?: readonly AddableCellar[];
   /** `?draft=<id>`: reopen a read left running in the background. */
   resumeId?: string;
+  /**
+   * `?cellar=<id>` beside `?draft=` (F-59): the cellar the bottle was aimed
+   * at when its read was left running, in place of the last used. One of
+   * `cellars`, or it is ignored.
+   */
+  resumeCellarId?: string;
   /** Before the title: the capture surface's Close (X06). */
   leading?: ReactNode;
   /**
@@ -172,6 +179,7 @@ const ItemOnboardingRun = ({
   typeExplicit = false,
   cellars,
   resumeId,
+  resumeCellarId,
   leading,
   modeRow,
   initialPhoto,
@@ -191,12 +199,15 @@ const ItemOnboardingRun = ({
   const pathname = usePathname();
 
   const resumeHref = useCallback(
-    (id: string, itemType: ApiItemType) => {
+    (id: string, itemType: ApiItemType, cellarId?: string) => {
       const query = new URLSearchParams({ draft: id });
       if (chooseType) query.set("type", itemType);
+      if (cellarId !== undefined && pinnedCellarId === undefined) {
+        query.set("cellar", cellarId);
+      }
       return `${pathname}?${query.toString()}`;
     },
-    [chooseType, pathname],
+    [chooseType, pathname, pinnedCellarId],
   );
 
   const [state, send] = useActor(OnboardingMachine, {
@@ -236,12 +247,27 @@ const ItemOnboardingRun = ({
       if (next !== type) send({ type: "SET_TYPE", itemType: next });
     }
     if (pinnedCellarId === undefined && cellars !== undefined) {
+      // F-59: a draft reopens on its own cellar (and the read's answer,
+      // for one saved with "Finish later", replaces this when it lands).
+      const resumed =
+        resumeId === undefined
+          ? undefined
+          : cellars.find((cellar) => cellar.id === resumeCellarId)?.id;
       send({
         type: "SET_CELLAR",
-        cellarId: defaultCellarId(null, prefs, cellars),
+        cellarId: resumed ?? defaultCellarId(null, prefs, cellars),
       });
     }
-  }, [chooseType, typeExplicit, resumeId, type, pinnedCellarId, cellars, send]);
+  }, [
+    chooseType,
+    typeExplicit,
+    resumeId,
+    resumeCellarId,
+    type,
+    pinnedCellarId,
+    cellars,
+    send,
+  ]);
 
   const handleOnComplete = useCallback(
     ({
@@ -450,7 +476,18 @@ const ItemOnboardingRun = ({
     if (context.cellarId !== undefined) {
       rememberCapturePrefs({ cellarId: context.cellarId });
     }
-    notify("Saved · Needs details");
+    const toast = finishLaterToast({
+      cellarName,
+      resumeHref: resumeHref(
+        context.itemOnboardingId,
+        itemType,
+        context.cellarId,
+      ),
+    });
+    // The form already fired feedback("success") for the save.
+    notify(toast.message, {
+      undo: () => navigate.push(toast.undoHref),
+    });
     navigate.push(
       context.cellarId === undefined
         ? "/needs-details"
@@ -536,6 +573,11 @@ const ItemOnboardingRun = ({
       cellars={cellars ?? []}
       value={context.cellarId ?? null}
       onValueChange={(cellarId) => send({ type: "SET_CELLAR", cellarId })}
+      leaveWarning={
+        state.matches("form")
+          ? "What you've typed isn't saved. Finish later keeps it in Needs details."
+          : undefined
+      }
     />
   ) : cellarName !== undefined ? (
     `Add to ${cellarName}`
@@ -814,6 +856,9 @@ const ItemOnboardingRun = ({
                   }
             }
             onUseDeclined={() => send({ type: "USE_DECLINED_MATCH" })}
+            onUseTypedMatch={(item) => send({ type: "USE_IMAGE_MATCH", item })}
+            inCellar={inCellar}
+            declinedItemIds={context.declinedItemIds}
           />
           <BottomSheet
             open={backOpen}
@@ -837,7 +882,10 @@ const ItemOnboardingRun = ({
       )}
 
       <SuccessSheet
-        open={state.value === "finalPrompt" && !shotFromCamera}
+        open={
+          (state.value === "finalPrompt" || state.value === "leaving") &&
+          !shotFromCamera
+        }
         itemType={itemType}
         itemName={context.itemName}
         cellarName={inCellar ? (cellarName ?? "your cellar") : undefined}

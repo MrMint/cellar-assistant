@@ -566,12 +566,21 @@ export const TierListItemPickerQuery = graphql(
 
 /**
  * Places by phrase, with no `bounds`: a tier list is not a viewport, and
- * `placeSearch` without bounds searches globally.
+ * `placeSearch` without bounds searches globally. `filterCategories` is the
+ * picker's "Cafés only" (F-180), null for every kind.
  */
 export const TierListPlacePickerQuery = graphql(
   `
-    query TierListPlacePicker($query: String!, $first: Int!) {
-      placeSearch(query: $query, first: $first) {
+    query TierListPlacePicker(
+      $query: String!
+      $first: Int!
+      $filterCategories: [String!]
+    ) {
+      placeSearch(
+        query: $query
+        first: $first
+        filterCategories: $filterCategories
+      ) {
         __typename
         ... on PlaceSearchConnection {
           edges {

@@ -200,3 +200,23 @@ export const differsFrom = (
       path !== "brandName" &&
       (snapshot[path] ?? "").trim() !== (flat[path] ?? "").trim(),
   );
+
+/**
+ * F-62: the toast after "Finish later" (board add-bottle-later-02: "1
+ * bottle added to Tosa HQ · Undo"). Undo reopens the draft where the person
+ * left it (`/add?draft=`, which reads back its fields and cellar): the save
+ * is kept, so nothing typed is lost either way.
+ */
+export const finishLaterToast = ({
+  cellarName,
+  resumeHref,
+}: {
+  cellarName: string | undefined;
+  resumeHref: string;
+}): { message: string; undoHref: string } => ({
+  message:
+    cellarName === undefined
+      ? "Saved to Needs details"
+      : `1 bottle added to ${cellarName}`,
+  undoHref: resumeHref,
+});

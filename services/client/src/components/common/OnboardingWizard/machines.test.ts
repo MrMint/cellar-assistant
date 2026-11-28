@@ -53,6 +53,7 @@ const run = ({
   labelSent = undefined as boolean | undefined,
   storedFrontLabel = undefined as string | undefined,
   resumePhoto = undefined as string | undefined,
+  draftCellarId = undefined as string | undefined,
 }) => {
   const filed: InsertCellarItemInput[] = [];
   const closed: CloseOnboardingInput[] = [];
@@ -99,6 +100,7 @@ const run = ({
             ...(storedFrontLabel === undefined
               ? {}
               : { frontLabelFileId: storedFrontLabel }),
+            ...(draftCellarId === undefined ? {} : { draftCellarId }),
           };
         },
       ),
@@ -586,11 +588,37 @@ describe("the real ending (N21's success sheet)", () => {
     actor.send({ type: "CREATED", itemId: "new" });
     const filed = await waitFor(actor, (s) => s.value === "finalPrompt");
     actor.send({ type: "OPEN_NOW" });
-    assert.equal(actor.getSnapshot().status, "done");
     assert.equal(
       pushed[0],
       `/cellars/cellar-1/wines/${filed.context.cellarItemId}`,
     );
+  });
+
+  test("F-36: Open it now keeps the success sheet up until the page changes", async () => {
+    // The sheet holds a history entry (overlays/layers.ts). Closing it in the
+    // same commit as the push takes that entry back off with history.back(),
+    // which lands before Next's pushState and undoes the navigation: the URL
+    // stayed on /add and the page emptied. Leaving keeps the sheet mounted.
+    const { actor, pushed } = run({ confidence: 0.5 });
+    await settled(actor);
+    actor.send({ type: "CREATED", itemId: "new" });
+    await waitFor(actor, (s) => s.value === "finalPrompt");
+    actor.send({ type: "OPEN_NOW" });
+    assert.equal(actor.getSnapshot().value, "leaving");
+    assert.equal(actor.getSnapshot().status, "active");
+    assert.equal(pushed.length, 1);
+  });
+
+  test("F-36: Done leaves the same way, and nothing sends twice", async () => {
+    const { actor, pushed } = run({ confidence: 0.5 });
+    await settled(actor);
+    actor.send({ type: "CREATED", itemId: "new" });
+    await waitFor(actor, (s) => s.value === "finalPrompt");
+    actor.send({ type: "DONE" });
+    actor.send({ type: "DONE" });
+    actor.send({ type: "OPEN_NOW" });
+    assert.equal(actor.getSnapshot().value, "leaving");
+    assert.equal(pushed.length, 1);
   });
 
   test("no Open it now without a cellar", async () => {
@@ -694,5 +722,37 @@ describe("background continuation (X05): a resumed draft", () => {
     const state = await settled(actor);
     assert.equal(state.context.displayImageDataUrl, "data:held");
     assert.equal(state.context.displayImageFileId, "stored-front");
+  });
+});
+
+describe("resuming a saved draft (F-59)", () => {
+  test("the read is told it resumes, and the draft's own cellar is used", async () => {
+    const { actor, read } = run({
+      confidence: 0.5,
+      inCellar: false,
+      resumeId: "onb-left",
+      draftCellarId: "cellar-b",
+    });
+    // The page's last-used default lands first, at mount.
+    actor.send({ type: "SET_CELLAR", cellarId: "cellar-a" });
+    await settled(actor);
+    assert.equal(read[0]?.resumed, true);
+    assert.equal(actor.getSnapshot().context.cellarId, "cellar-b");
+  });
+
+  test("a cellar the page pinned stays pinned", async () => {
+    const { actor } = run({
+      confidence: 0.5,
+      resumeId: "onb-left",
+      draftCellarId: "cellar-b",
+    });
+    await settled(actor);
+    assert.equal(actor.getSnapshot().context.cellarId, "cellar-1");
+  });
+
+  test("a fresh run is not a resume", async () => {
+    const { actor, read } = run({ confidence: 0.5 });
+    await settled(actor);
+    assert.equal(read[0]?.resumed ?? false, false);
   });
 });

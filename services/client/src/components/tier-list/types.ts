@@ -28,6 +28,8 @@ export interface TierListItemDisplay {
   viewerScore: number | null;
   publicRating: number | null;
   publicRatingCount: number | null;
+  /** F-15: the row's thumb, the item's or place's first photo. */
+  photoUrl?: string | null;
 }
 
 export interface TierListData {
@@ -37,6 +39,8 @@ export interface TierListData {
   privacy: string;
   listType: string;
   isOwner: boolean;
+  /** The maker: L2's details sheet guards on it (`canEditList`). */
+  createdById: string;
   itemCount: number;
   items: TierListItemDisplay[];
   /** D4: where Undo / Redo stand; null when the viewer is not the owner. */

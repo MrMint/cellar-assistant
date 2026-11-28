@@ -104,6 +104,19 @@ export const TierListItemFragment = graphql(`
         googleRating
         googleUserRatingsTotal
       }
+      photos(first: 1) {
+        edges {
+          node {
+            __typename
+            id
+            file {
+              __typename
+              id
+              url
+            }
+          }
+        }
+      }
     }
     item {
       __typename
@@ -114,6 +127,23 @@ export const TierListItemFragment = graphql(`
       myReview {
         id
         score
+      }
+      score {
+        average
+        count
+      }
+      images(first: 1) {
+        edges {
+          node {
+            __typename
+            id
+            file {
+              __typename
+              id
+              url
+            }
+          }
+        }
       }
       ... on Wine {
         wineVariety: variety

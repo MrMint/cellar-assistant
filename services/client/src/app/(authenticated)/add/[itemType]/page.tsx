@@ -33,10 +33,13 @@ export default async function AddItemTypePage({
   searchParams,
 }: {
   params: Promise<{ itemType: string }>;
-  searchParams: Promise<{ draft?: string | string[] }>;
+  searchParams: Promise<{
+    draft?: string | string[];
+    cellar?: string | string[];
+  }>;
 }) {
   const { itemType } = await params;
-  const { draft } = await searchParams;
+  const { draft, cellar } = await searchParams;
   const type = itemTypeFromSegment(itemType);
   if (type === null) notFound();
   const cellars = await loadAddableCellars();
@@ -47,6 +50,7 @@ export default async function AddItemTypePage({
         type={type}
         cellars={cellars}
         resumeId={typeof draft === "string" ? draft : undefined}
+        resumeCellarId={typeof cellar === "string" ? cellar : undefined}
         leading={<CaptureClose />}
       />
     </div>

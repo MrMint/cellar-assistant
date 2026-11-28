@@ -28,6 +28,34 @@ export const ADD_ENTRY_SECTIONS: readonly AddEntrySection[] = [
   "FRIENDS_RANKED",
 ];
 
+/**
+ * F-180: what "Cafés only" keeps — the map's coffee kinds
+ * (`map/core/map-places.ts`), as `places.categories` values.
+ */
+export const CAFE_CATEGORIES: readonly string[] = [
+  "coffee_shop",
+  "cafe",
+  "coffee_roastery",
+  "coffee_roaster",
+  "tea_house",
+  "bubble_tea",
+  "bakery",
+  "espresso_bar",
+];
+
+/** A row with no score, or a score below the bands, lands in Unrated. */
+export const isUnratedPick = (candidate: AddEntryCandidate): boolean =>
+  bandForScore(candidate.myScore) === 0;
+
+/** The band step's summary: "Rioja and 2 more". */
+export function picksSummary(picks: readonly AddEntryCandidate[]): string {
+  const [first, ...rest] = picks;
+  if (first === undefined) return "";
+  return rest.length === 0
+    ? first.name
+    : `${first.name} and ${rest.length} more`;
+}
+
 /** Rows a section shows before "Show N more". */
 export const SECTION_PREVIEW = 5;
 
