@@ -342,6 +342,8 @@ export type SearchRow = {
   readonly thumb: RowThumb;
   /** An item's score: the row's third line of stars. */
   readonly score?: number | null;
+  /** A place's raw primary category, for its kind glyph (F-184). */
+  readonly placeCategory?: string | null;
   /** A place's public rating, at the right with the people glyph. */
   readonly rating?: number | null;
   /** What the desktop pane shows for this row (F-42). */
@@ -603,6 +605,7 @@ export const placeRows = (
         look: { kind: "place", placeId: node.id },
         thumb: { kind: "icon", icon: "place" },
         rating: node.rating ?? null,
+        placeCategory: node.primaryCategory ?? null,
       }),
     );
   // Name-only filtering drops rows the API counted, so its count would

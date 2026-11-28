@@ -34,19 +34,12 @@ import {
 export { DESKTOP_PREVIEW_SIZE };
 
 /**
- * A place row's kind glyph, as the map list draws it (F-184). The row carries
- * the category as its description's first word group ("Coffee Shop · 0.4 km");
- * `formatPlaceCategory` is `formatEnum`, so lower-casing and underscoring it
- * gives the category back. Unknown or absent falls to the pin.
+ * A place row's kind glyph, as the map list draws it (F-184), from the
+ * place's own category. Without one it falls to the plain pin.
  */
-export function searchPlaceGlyph(row: Pick<SearchRow, "description">) {
-  const category = row.description?.split(" · ")[0]?.trim() ?? "";
-  if (category === "") return Place;
-  const glyph = placeGlyph({
-    primary_category: category.toLowerCase().replace(/\s+/g, "_"),
-    categories: [],
-  });
-  return glyph;
+export function searchPlaceGlyph(row: Pick<SearchRow, "placeCategory">) {
+  if (row.placeCategory == null || row.placeCategory === "") return Place;
+  return placeGlyph({ primary_category: row.placeCategory, categories: [] });
 }
 
 function PlaceResult({ row }: { row: SearchRow }) {
