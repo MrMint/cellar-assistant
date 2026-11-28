@@ -498,3 +498,74 @@ describe("place interactions", () => {
     expect(calls[0]?.args[1]).toEqual({ placeId: BOB, isVisited: true });
   });
 });
+
+/*
+ * F-87 (H-54): Loved's subtitle and count chips need per-type counts without
+ * paging every favourite. `me.lovedCounts` reads each one as a page of one
+ * from the actor that already counts it (`totalCount`), only for the fields
+ * asked for.
+ */
+describe("Viewer.lovedCounts (F-87)", () => {
+  const favouritesByType: Record<string, number> = {
+    WINE: 4,
+    BEER: 2,
+    SPIRIT: 0,
+    COFFEE: 1,
+    SAKE: 0,
+    TEA: 3,
+  };
+  const page = (totalCount: number) => ({
+    entries: [],
+    hasNextPage: totalCount > 0,
+    hasPreviousPage: false,
+    totalCount,
+  });
+
+  it("answers each item type, every drink and the loved recipes", async () => {
+    const { invoke, calls } = stubSidecar({
+      "FavoritesCollectionActor.list": (_id, _ctx, _page, types) => {
+        const only = types as readonly string[] | null;
+        return page(
+          only === null
+            ? 10
+            : only.reduce((sum, type) => sum + (favouritesByType[type] ?? 0), 0),
+        );
+      },
+      "UserActor.lovedRecipes": () => page(5),
+    });
+    const result = await run(
+      `{ me { lovedCounts { drinks recipes wine beer spirit coffee sake tea } } }`,
+      testContext(invoke, alice),
+    );
+    expect(result.errors).toBeUndefined();
+    expect(result.data?.me).toEqual({
+      lovedCounts: {
+        drinks: 10,
+        recipes: 5,
+        wine: 4,
+        beer: 2,
+        spirit: 0,
+        coffee: 1,
+        sake: 0,
+        tea: 3,
+      },
+    });
+    // A page of one per count: nothing is paged through to count it.
+    for (const call of calls) {
+      expect(call.args[1]).toMatchObject({ first: 1 });
+    }
+  });
+
+  it("asks only for the counts a query selects", async () => {
+    const { invoke, calls } = stubSidecar({
+      "FavoritesCollectionActor.list": () => page(4),
+    });
+    const result = await run(
+      `{ me { lovedCounts { wine } } }`,
+      testContext(invoke, alice),
+    );
+    expect(result.errors).toBeUndefined();
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.args[2]).toEqual(["WINE"]);
+  });
+});
