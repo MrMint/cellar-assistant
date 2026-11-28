@@ -139,13 +139,11 @@ const MapPlaceType = builder.objectRef<MapPlace>("MapPlace").implement({
     photo: t.loadable({
       type: FileType,
       nullable: true,
-      // The SDL text is F-82's, kept byte-for-byte so the checked-in
-      // `packages/schema/schema.graphql` (not this stream's) stays in step;
-      // its rewording is a hand-off. What it no longer says: H-135 below.
+      // H-141: kept in step with `packages/schema/schema.graphql`.
       description:
-        "F-82: the place's first mirrored Google photo. One actor call per " +
-        "marker that selects it, so ask for `photo { url }` only on the pins " +
-        "or rows you draw a photo for.",
+        "The place's first mirrored Google photo, for the viewer's own ranked " +
+        "pins only (a place on one of their tier lists, `myBand` set); null " +
+        "for every other place.",
       // H-135: only a place on the viewer's own tier lists (`myBand` set)
       // gets a photo — the owner's ranked pins, the only ones that draw one.
       // A box holds hundreds of markers, so every other one is null with no

@@ -3937,7 +3937,7 @@ type MapPlace {
   name: String!
 
   """
-  F-82: the place's first mirrored Google photo. One actor call per marker that selects it, so ask for `photo { url }` only on the pins or rows you draw a photo for.
+  The place's first mirrored Google photo, for the viewer's own ranked pins only (a place on one of their tier lists, `myBand` set); null for every other place.
   """
   photo: File
 

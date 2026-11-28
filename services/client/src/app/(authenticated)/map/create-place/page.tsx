@@ -34,7 +34,7 @@ export default async function CreatePlacePage({
 
   return (
     <div className="mx-auto max-w-[600px] px-4 py-4 md:py-8">
-      <h1 className="t-title mb-6 text-ink">Add a new place</h1>
+      <h1 className="t-title mb-6 text-ink">Add a place</h1>
       <CreatePlaceForm
         latitude={lat}
         longitude={lng}
