@@ -20,6 +20,10 @@ export type ShareSheetProps = {
   url: string;
   /** "Send to a friend", when the surface can (L34: each owner wires it). */
   onSendToFriend?: () => void;
+  /** Drawn above the code (H-104): a preview of what is shared. */
+  preview?: ReactNode;
+  /** Extra `<li>` rows after the built-in ones (F-174): an invite's own rows. */
+  footer?: ReactNode;
 };
 
 const noop = () => () => {};
@@ -81,13 +85,19 @@ export function ShareSheetBody({
   title,
   url,
   onSendToFriend,
+  preview,
+  footer,
   onDone,
-}: Pick<ShareSheetProps, "title" | "url" | "onSendToFriend"> & {
+}: Pick<
+  ShareSheetProps,
+  "title" | "url" | "onSendToFriend" | "preview" | "footer"
+> & {
   onDone?: () => void;
 }) {
   const canShare = useCanShare();
   return (
     <div data-slot="share-sheet" className="flex flex-col gap-4 pb-2">
+      {preview}
       <QrCode
         value={url}
         label={`QR code for ${title}`}
@@ -122,6 +132,7 @@ export function ShareSheetBody({
             }}
           />
         )}
+        {footer}
       </ul>
     </div>
   );
@@ -140,6 +151,8 @@ export function ShareSheet({
   subtitle,
   url,
   onSendToFriend,
+  preview,
+  footer,
 }: ShareSheetProps) {
   return (
     <ResponsiveDialog
@@ -152,6 +165,8 @@ export function ShareSheet({
         title={title}
         url={url}
         onSendToFriend={onSendToFriend}
+        preview={preview}
+        footer={footer}
         onDone={() => onOpenChange(false)}
       />
     </ResponsiveDialog>

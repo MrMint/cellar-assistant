@@ -20,13 +20,6 @@ export const NOT_FOUND_COPY: ShellCopy = {
   body: "It's gone, or it isn't shared with you.",
 };
 
-export const OFFLINE_COPY: ShellCopy = {
-  title: "You're offline",
-  // No page is kept for offline reading yet (that is roadmap L07), so the
-  // copy promises nothing about what is saved.
-  body: "Opening this page needs a connection. It will reload by itself as soon as you're back online.",
-};
-
 /**
  * What an error boundary says. Offline is the most common reason a page
  * fails on a phone and the one the viewer can do something about, so it gets

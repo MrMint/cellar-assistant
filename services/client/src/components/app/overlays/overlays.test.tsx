@@ -41,7 +41,8 @@ const { encode } = await import("uqr");
 const { QrCode, qrMatrix, qrPath } = await import("./QrCode");
 const { closeTopOnEscape, openLayers, resetLayers, useOverlayLayer } =
   await import("./layers");
-const { handleAppKey } = await import("./app-keys");
+const { handleAppKey, KEY_ROWS } = await import("./app-keys");
+const { ShareSheetBody } = await import("./ShareSheet");
 const { notify, pauseToasts, dismissNotification } = await import("../notify");
 const { tallSheetOpen } = await import("../Toaster");
 const { SHEET_INSET_PROPERTY, SHEET_OPEN_ATTRIBUTE } = await import(
@@ -288,5 +289,47 @@ describe("toasts", () => {
     assert.equal(tallSheetOpen(root, 800), false);
     root.style.setProperty(SHEET_INSET_PROPERTY, "600px");
     assert.equal(tallSheetOpen(root, 800), true);
+  });
+});
+
+describe("fix-b23 rows", () => {
+  test("H-92: the kit switch starts from the theme on screen", async () => {
+    const { onScreenKitTheme } = await import("../kit-gallery");
+    document.documentElement.dataset.theme = "light";
+    assert.equal(onScreenKitTheme(), "light");
+    document.documentElement.dataset.theme = "dark";
+    assert.equal(onScreenKitTheme(), "dark");
+    delete document.documentElement.dataset.theme;
+  });
+
+  test("F-169: the ⌫ row says what Backspace does on the cellar list", () => {
+    const row = KEY_ROWS.find((r) => r.keys === "⌫");
+    assert.equal(row?.does, "Clear the selection");
+  });
+
+  test("F-8: a sheet open but not yet measured sends the toast to the top", () => {
+    const root = document.createElement("div");
+    root.setAttribute(SHEET_OPEN_ATTRIBUTE, "");
+    assert.equal(tallSheetOpen(root, 800), true);
+  });
+
+  test("F-174 / H-104: ShareSheetBody draws an optional preview and footer", () => {
+    const html = renderToStaticMarkup(
+      React.createElement(ShareSheetBody, {
+        title: "Spring",
+        url: "https://example.test/x",
+        preview: React.createElement("p", null, "PREVIEW-SLOT"),
+        footer: React.createElement("li", null, "FOOTER-SLOT"),
+      }),
+    );
+    assert.ok(html.indexOf("PREVIEW-SLOT") < html.indexOf("Copy link"));
+    assert.ok(html.indexOf("FOOTER-SLOT") > html.indexOf("Copy link"));
+    const bare = renderToStaticMarkup(
+      React.createElement(ShareSheetBody, {
+        title: "Spring",
+        url: "https://example.test/x",
+      }),
+    );
+    assert.doesNotMatch(bare, /SLOT/);
   });
 });

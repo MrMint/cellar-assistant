@@ -160,7 +160,7 @@ export const KEY_ROWS: readonly { keys: string; does: string }[] = [
   { keys: "Enter", does: "Open in the pane" },
   { keys: "Esc", does: "Close what is on top" },
   { keys: "1 5", does: "Rate, 1 to 5" },
-  { keys: "⌫", does: "Clear my rating" },
+  { keys: "⌫", does: "Clear the selection" },
   { keys: "/", does: "Search" },
   { keys: "T", does: "Tiles or rows" },
   { keys: "M", does: "Map" },

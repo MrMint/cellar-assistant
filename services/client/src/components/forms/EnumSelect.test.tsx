@@ -67,6 +67,13 @@ describe("EnumSelect (restored)", () => {
     assert.equal(isDisabled(openTag(html, 'role="combobox"')), false);
   });
 
+  test("F-2: the field and trigger can shrink, so a long value never overflows 390", () => {
+    fetching = false;
+    const html = render(<Harness enumKey="wineStyle" />);
+    assert.match(openTag(html, 'data-slot="field"'), /\bmin-w-0\b/);
+    assert.match(openTag(html, 'role="combobox"'), /\bmin-w-0\b/);
+  });
+
   test("loading: Loading… placeholder and disabled", () => {
     fetching = true;
     const html = render(<Harness enumKey="wineStyle" />);

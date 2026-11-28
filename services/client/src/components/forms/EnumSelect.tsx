@@ -97,7 +97,7 @@ export function EnumSelect<
     <Field
       data-invalid={isInvalid || undefined}
       data-disabled={unavailable || undefined}
-      className="gap-2 text-foreground"
+      className="min-w-0 gap-2 text-foreground"
     >
       <FieldLabel htmlFor={id} className="gap-1">
         {label}
@@ -132,7 +132,7 @@ export function EnumSelect<
           // 16px on a phone like `ui/input` (`text-base md:text-sm`), not the
           // vendored trigger's 14px: the value read smaller than every input
           // in the same form.
-          className="w-full text-base md:text-sm"
+          className="w-full min-w-0 max-w-full text-base md:text-sm"
           // `disabled` is native here; aria-disabled keeps the anchor the
           // tests (and assistive tech, before hydration) read.
           aria-disabled={unavailable || undefined}
