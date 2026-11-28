@@ -2695,6 +2695,18 @@ export const graphcacheSchema: MinifiedIntrospection = {
       },
       {
         kind: "UNION",
+        name: "DiscardDraftResult",
+        possibleTypes: [
+          { kind: "OBJECT", name: "BudgetExceededError" },
+          { kind: "OBJECT", name: "ConflictError" },
+          { kind: "OBJECT", name: "ForbiddenError" },
+          { kind: "OBJECT", name: "ItemOnboarding" },
+          { kind: "OBJECT", name: "NotFoundError" },
+          { kind: "OBJECT", name: "ValidationError" },
+        ],
+      },
+      {
+        kind: "UNION",
         name: "DismissPlaceSuggestionsResult",
         possibleTypes: [
           { kind: "OBJECT", name: "BudgetExceededError" },
@@ -4463,6 +4475,7 @@ export const graphcacheSchema: MinifiedIntrospection = {
             type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "ID" } },
           },
           { name: "imageId", type: { kind: "SCALAR", name: "ID" } },
+          { name: "imageUrl", type: { kind: "SCALAR", name: "String" } },
           {
             name: "itemType",
             type: {
@@ -5649,6 +5662,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
             type: {
               kind: "NON_NULL",
               ofType: { kind: "UNION", name: "DetachItemImageResult" },
+            },
+          },
+          {
+            name: "discardDraft",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "UNION", name: "DiscardDraftResult" },
             },
           },
           {

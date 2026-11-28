@@ -100,6 +100,13 @@ export const MapBrowseQuery = graphql(
               confidence
               isVerified
               reviewStatus
+              # F-196: the owner's pins (photo, band, rating). The photo is
+              # one actor call per marker that has one mirrored.
+              ratingCount
+              myBand
+              photo {
+                url
+              }
               location {
                 lng
                 lat

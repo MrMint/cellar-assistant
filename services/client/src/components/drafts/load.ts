@@ -11,7 +11,15 @@ import {
 /** The API's page cap: one page holds every draft most people have. */
 export const NEEDS_DETAILS_PAGE = 100;
 
-export type LoadedDraft = Draft & { readonly imageUrl: string | null };
+/**
+ * F-71: how many photos the page presigns on the server, a phone screen's
+ * rows. Each is one `file(id)` read, so the rest are left to the row, which
+ * reads its own when it scrolls into view (`DraftThumb`).
+ */
+export const PRESIGNED_FIRST = 12;
+
+/** `imageUrl` undefined: not read yet, the row reads it when seen. */
+export type LoadedDraft = Draft & { readonly imageUrl?: string | null };
 
 export type NeedsDetailsLoad = {
   readonly count: number;
@@ -70,7 +78,9 @@ export async function loadNeedsDetails(
   }
   const nodes = page.data.edges.map(({ node }) => node);
   const urls = await Promise.all(
-    nodes.map((node) => draftImageUrl(node.imageId ?? null)),
+    nodes
+      .slice(0, PRESIGNED_FIRST)
+      .map((node) => draftImageUrl(node.imageId ?? null)),
   );
   return {
     count: data.needsDetailsCount,
@@ -84,7 +94,7 @@ export async function loadNeedsDetails(
       confirmedFields: node.confirmedFields,
       vintageAnswer: node.vintageAnswer,
       imageId: node.imageId ?? null,
-      imageUrl: urls[index] ?? null,
+      imageUrl: index < PRESIGNED_FIRST ? (urls[index] ?? null) : undefined,
     })),
     endCursor: page.data.pageInfo.hasNextPage
       ? (page.data.pageInfo.endCursor ?? null)

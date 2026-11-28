@@ -129,6 +129,12 @@ export interface DefaultValuesResult {
   frontLabelFileId?: string;
   /** F-59: the cellar a resumed draft was saved against, when it has one. */
   draftCellarId?: string;
+  /**
+   * F-227: the kind the label was read as when the read moved it off the
+   * picked one (F-77's `detectedItemType`): the wizard goes on as this kind,
+   * in the session `itemOnboardingId` names. Absent: the picked kind stands.
+   */
+  itemType?: ApiItemType;
 }
 
 export type UploadItemImageInput = {

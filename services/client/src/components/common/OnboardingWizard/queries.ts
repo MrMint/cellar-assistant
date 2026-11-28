@@ -198,6 +198,7 @@ export const OnboardingStartMutation = graphql(
         ...ItemOnboardingRow
         cellarId
         draftFields
+        detectedItemType
       }
       ...ActorErrorFields
     }

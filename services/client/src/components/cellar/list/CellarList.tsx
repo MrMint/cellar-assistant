@@ -15,9 +15,14 @@ import {
 import { CountFilters } from "@/components/app/parts/CountStrip";
 import { Stars } from "@/components/app/parts/Stars";
 import { SegmentedControl } from "@/components/app/SegmentedControl";
+import { itemTypeTokens } from "@/components/app/TypeChip";
 import { useNavigate } from "@/components/app/useNavigate";
 import type { ApiItemType } from "@/components/cellar-api/itemTypes";
-import { ItemPane } from "@/components/item/ItemPane";
+import {
+  ItemPane,
+  ItemPaneMenu,
+  useItemPaneSource,
+} from "@/components/item/ItemPane";
 import { SearchField } from "@/components/shell/SearchField";
 import { breakpointUp, useMediaQuery } from "@/hooks/useMediaQuery";
 import { feedback } from "@/lib/feedback";
@@ -104,6 +109,61 @@ const splitByMatch = (sections: ListSection[]): ListSection[] =>
       },
     ];
   });
+
+/**
+ * The desktop pane for one bottle (MC-panes). It reads the item itself and
+ * hands the read to both the pane's body and its glass `⋯` (H-115).
+ */
+function BottlePane({
+  bottle,
+  cellarId,
+  open,
+  onClose,
+  onPrevious,
+  onNext,
+  onExpand,
+}: {
+  bottle: ListBottle;
+  cellarId: string;
+  open: boolean;
+  onClose: () => void;
+  onPrevious?: () => void;
+  onNext?: () => void;
+  onExpand: () => void;
+}) {
+  const source = useItemPaneSource(bottle.itemId, bottle.type);
+  return (
+    <DesktopPane
+      open={open}
+      onClose={onClose}
+      title={bottle.name}
+      photo={
+        bottle.photoUrl ? (
+          <Image
+            src={bottle.photoUrl}
+            alt=""
+            fill
+            sizes="440px"
+            className="object-cover"
+          />
+        ) : (
+          <BottlePlate bottle={bottle} />
+        )
+      }
+      onPrevious={onPrevious}
+      onNext={onNext}
+      onExpand={onExpand}
+      more={<ItemPaneMenu source={source} />}
+    >
+      <ItemPane
+        itemId={bottle.itemId}
+        itemType={bottle.type}
+        cellarId={cellarId}
+        source={source}
+      />
+    </DesktopPane>
+  );
+}
 
 /**
  * The cellar list (C1; combined/Cellar-flow, areas/Cellars-Shelves,
@@ -388,7 +448,10 @@ export function CellarList({
               <CountFilters<"OPEN" | ApiItemType>
                 aria-label="Show only"
                 lead={counts.open}
-                cells={counts.kinds}
+                cells={counts.kinds.map((kind) => ({
+                  ...kind,
+                  glyph: itemTypeTokens[kind.value].glyph,
+                }))}
                 value={filter}
                 onValueChange={setFilter}
                 className="max-md:basis-full md:min-w-0 md:flex-1"
@@ -455,23 +518,11 @@ export function CellarList({
 
       {desktop && paneBottle !== undefined && (
         <div className="sticky top-0 -my-4 -mr-4 ml-4 h-dvh shrink-0">
-          <DesktopPane
+          <BottlePane
+            bottle={paneBottle}
+            cellarId={cellarId}
             open={paneOpen}
             onClose={() => setPaneOpen(false)}
-            title={paneBottle.name}
-            photo={
-              paneBottle.photoUrl ? (
-                <Image
-                  src={paneBottle.photoUrl}
-                  alt=""
-                  fill
-                  sizes="440px"
-                  className="object-cover"
-                />
-              ) : (
-                <BottlePlate bottle={paneBottle} />
-              )
-            }
             onPrevious={
               (byKey.get(paneBottle.key)?.index ?? 0) > 0
                 ? () => step(-1)
@@ -484,13 +535,7 @@ export function CellarList({
                 : undefined
             }
             onExpand={() => navigate.push(paneBottle.href)}
-          >
-            <ItemPane
-              itemId={paneBottle.itemId}
-              itemType={paneBottle.type}
-              cellarId={cellarId}
-            />
-          </DesktopPane>
+          />
         </div>
       )}
 

@@ -46,6 +46,7 @@ import {
   PlaceDetailsShell,
   type PlaceHero as PlaceHeroData,
 } from "./PlaceDetailsShell";
+import { PlaceEntryEdit, type PlaceEntryEditMode } from "./PlaceEntryEdit";
 import { PlaceHero } from "./PlaceHero";
 import { PlaceMenuItems } from "./PlaceMenuItems";
 import { PlaceReviewPanel } from "./PlaceReviewPanel";
@@ -89,6 +90,7 @@ export function PlaceDetails({
   const menuScanOffered = isOffered(useAiCapabilities(), "menuScan");
   const [listModalOpen, setListModalOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
+  const [entryMode, setEntryMode] = useState<PlaceEntryEditMode>(null);
   const navigate = useNavigate();
 
   const {
@@ -195,6 +197,17 @@ export function PlaceDetails({
       label: "Show on the map",
       onSelect: () => navigate.push(`/map?placeId=${placeData.id}`),
     },
+    // F-201: the entry Your rank shows, on one of the viewer's own lists.
+    ...(tierListEntries.length > 0
+      ? [
+          { label: "Change the band", onSelect: () => setEntryMode("band") },
+          {
+            label: "Remove from list",
+            onSelect: () => setEntryMode("remove"),
+            destructive: true,
+          },
+        ]
+      : []),
   ];
 
   const heart = (
@@ -396,6 +409,13 @@ export function PlaceDetails({
         entityName={placeData.name}
         userId={userId}
       />
+      <PlaceEntryEdit
+        placeName={placeData.name}
+        own={tierListEntries}
+        mode={entryMode}
+        onModeChange={setEntryMode}
+        onChanged={refetch}
+      />
     </>
   );
 
@@ -403,8 +423,12 @@ export function PlaceDetails({
     // A phone, and the pane at any width: one column.
     return (
       <Page>
-        {heroBlock}
-        {intro}
+        {/* F-35: the summary follows the hero's own meta line, not the
+            page's 24 px section gap on top of the hero's padding. */}
+        <div data-slot="place-head" className="flex flex-col">
+          {heroBlock}
+          {intro}
+        </div>
         {review}
         {closedNotice}
         {rank}

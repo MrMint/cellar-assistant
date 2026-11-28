@@ -8,9 +8,11 @@ import {
   type PlaceKind,
   placesInView,
 } from "../core/map-places";
+import { beyondView, type Edges, type OwnPoint } from "../core/own-places";
 import type { MapBounds, PlaceResult, UserLocation } from "../types";
 import { useMapData, useMapFilters } from "./useMapMachine";
 import { useMapSearchParams } from "./useMapSearchParams";
+import { useListChip, useOwnPlaces } from "./useOwnPlaces";
 import { useTierListFilter } from "./useTierListFilter";
 
 export type MapList = {
@@ -35,6 +37,12 @@ export type MapList = {
   clearSearch: () => void;
   globalSearch: boolean;
   setGlobalSearch: (global: boolean) => void;
+  /** F-191: the list a `/map?list=` link opened, named; else null. */
+  listName: string | null;
+  /** Your places (the list's, on a list link) wherever they are (F-33). */
+  own: { points: OwnPoint[]; loaded: boolean };
+  /** Yours outside the view, and past which edge (F-33, F-34). */
+  beyond: { total: number; edges: Edges; points: OwnPoint[] };
 };
 
 /**
@@ -59,6 +67,18 @@ export function useMapList({
     useMapData();
   const { isSemanticSearch, searchQuery } = useMapFilters();
   const { allTierListIds } = useTierListFilter(params.tierLists, userId);
+  const chip = useListChip(params.list);
+  // On a list link, the list's places; else every place list of yours.
+  const own = useOwnPlaces(
+    params.list !== null ? params.tierLists : allTierListIds,
+  );
+  const beyond = useMemo(
+    () =>
+      bounds === null
+        ? { total: 0, edges: { left: 0, right: 0, up: 0, down: 0 }, points: [] }
+        : beyondView(own.points, bounds),
+    [own.points, bounds],
+  );
   const [resetKey, setResetKey] = useState(0);
 
   const query = isSemanticSearch ? searchQuery.trim() : "";
@@ -106,5 +126,8 @@ export function useMapList({
     clearSearch,
     globalSearch: params.globalSearch,
     setGlobalSearch: params.setGlobalSearch,
+    listName: chip?.name ?? null,
+    own,
+    beyond,
   };
 }

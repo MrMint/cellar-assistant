@@ -193,6 +193,20 @@ export function placesInView(
 }
 
 /**
+ * The quick look's index for the place it holds open, by id (F-193): the
+ * list re-sorts on every location fix, so an index alone could swap the open
+ * card for another place. Null when nothing is open or it left the list.
+ */
+export function quickLookIndex(
+  places: readonly PlaceResult[],
+  id: string | null,
+): number | null {
+  if (id === null) return null;
+  const index = places.findIndex((place) => place.id === id);
+  return index >= 0 ? index : null;
+}
+
+/**
  * Where Directions goes (Places-Place ruling 5): the street address when
  * there is one, else the pin's coordinates, and the button says so.
  */
