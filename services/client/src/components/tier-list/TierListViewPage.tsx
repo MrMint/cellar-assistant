@@ -52,6 +52,7 @@ import { Link } from "@/components/app/Link";
 import { notify } from "@/components/app/notify";
 import { MorphTitle } from "@/components/app/RouteTransition";
 import { SegmentedControl } from "@/components/app/SegmentedControl";
+import { ListShareSheet } from "@/components/share/ListShareSheet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -61,9 +62,6 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { feedback } from "@/lib/feedback";
-import { absoluteUrl, canonicalPath } from "@/lib/share/routes";
-import { tierListShareBlock } from "@/lib/share/share-rules";
-import { useShareLink } from "@/lib/share/use-share-link";
 import { type AddEntryCandidate, AddEntryModal } from "./AddEntryModal";
 import { useTierListActions } from "./actions";
 import { itemTypeOfList, onListHrefs } from "./adapter";
@@ -77,6 +75,7 @@ import {
   type TierListHistoryView,
 } from "./history";
 import { TierListInsightsPanel } from "./insights/TierListInsightsPanel";
+import { ListDetailsSheet } from "./lists/ListSheets";
 import {
   type BoardOrder,
   TIER_LIST_EDIT_TOAST,
@@ -234,26 +233,11 @@ export function TierListViewPage({
     setAddOpen(true);
   }, []);
 
-  const share = useShareLink();
-  const handleShare = useCallback(async () => {
-    // X17: a PRIVATE list's link opens for its owner only, so a share would
-    // send everyone else to "doesn't exist or isn't shared with you".
-    const blocked = tierListShareBlock(data.privacy, data.isOwner);
-    if (blocked !== null) {
-      notify(blocked.message, { description: blocked.description });
-      return;
-    }
-    await share({
-      url: absoluteUrl(
-        window.location.origin,
-        canonicalPath({ kind: "tier-list", id: data.id }),
-      ),
-      title: data.name,
-      text: data.isOwner
-        ? `My ranking: ${data.name}`
-        : `${data.name} on Cellar Assistant`,
-    });
-  }, [data.id, data.name, data.privacy, data.isOwner, share]);
+  // F-22 / H-33: Share and Details are L2's sheets, on this page. The share
+  // sheet says who can open the link and lets the owner change it (X17's
+  // PRIVATE case included), so nothing is copied before the person sees that.
+  const [shareOpen, setShareOpen] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(false);
 
   /**
    * One step of the list's history. Its toast offers the opposite step, so
@@ -332,7 +316,7 @@ export function TierListViewPage({
    * gives it, Unrated without one.
    */
   const handleAdd = useCallback(
-    async (candidates: AddEntryCandidate[]) => {
+    async (candidates: AddEntryCandidate[], chosenBand?: number) => {
       if (candidates.length === 0) return;
       setAdding(true);
       setAddError(null);
@@ -341,7 +325,11 @@ export function TierListViewPage({
         candidates.map((candidate) => ({
           id: candidate.id,
           entityType: candidate.entityType,
-          band: bandForScore(candidate.myScore),
+          // F-175: the band step's answer places what your rating doesn't.
+          band:
+            bandForScore(candidate.myScore) === 0 && chosenBand !== undefined
+              ? chosenBand
+              : bandForScore(candidate.myScore),
         })),
       );
       setAdding(false);
@@ -527,7 +515,10 @@ export function TierListViewPage({
                   <IconButton
                     variant="outline"
                     aria-label="Share"
-                    onClick={handleShare}
+                    onClick={() => {
+                      feedback("press");
+                      setShareOpen(true);
+                    }}
                   >
                     <Share />
                   </IconButton>
@@ -535,14 +526,15 @@ export function TierListViewPage({
               )}
               {data.isOwner && (
                 <Hint label="Details">
-                  <IconButton asChild variant="outline" aria-label="Details">
-                    <Link
-                      href={`/tier-lists/${data.id}/edit`}
-                      underline="none"
-                      onClick={() => feedback("press")}
-                    >
-                      <Edit />
-                    </Link>
+                  <IconButton
+                    variant="outline"
+                    aria-label="Details"
+                    onClick={() => {
+                      feedback("press");
+                      setDetailsOpen(true);
+                    }}
+                  >
+                    <Edit />
                   </IconButton>
                 </Hint>
               )}
@@ -644,11 +636,30 @@ export function TierListViewPage({
         </div>
       </BottomSheet>
 
+      {(data.privacy !== "PRIVATE" || data.isOwner) && (
+        <ListShareSheet
+          open={shareOpen}
+          onOpenChange={setShareOpen}
+          tierListId={data.id}
+          name={data.name}
+          privacy={data.privacy}
+        />
+      )}
+      {data.isOwner && (
+        <ListDetailsSheet
+          open={detailsOpen}
+          onOpenChange={setDetailsOpen}
+          tierList={data}
+          viewerId={data.createdById}
+        />
+      )}
+
       <AddEntryModal
         key={addSession}
         open={addOpen}
         onClose={() => setAddOpen(false)}
-        onAdd={(candidates) => void handleAdd(candidates)}
+        onAdd={(candidates, band) => void handleAdd(candidates, band)}
+        bandCounts={bandCounts}
         busy={adding}
         error={addError}
         listType={data.listType}

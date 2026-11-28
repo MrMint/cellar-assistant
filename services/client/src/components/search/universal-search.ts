@@ -354,6 +354,33 @@ export type SectionModel = {
   readonly context?: string;
 };
 
+/**
+ * A read with no section count (barcode, photo): what it found, "n+" when the
+ * read was cut off at its limit or says there is more — a limit is never a
+ * total (CROSS-LOT; F-100).
+ */
+export const fetchedTotalLabel = (found: {
+  readonly shown: number;
+  readonly limit: number;
+  readonly totalCount?: number | null;
+  readonly totalIsLowerBound?: boolean;
+  readonly hasNextPage?: boolean;
+}): string => {
+  if (found.totalCount != null && !found.totalIsLowerBound)
+    return totalLabel({
+      total: Math.max(found.totalCount, found.shown),
+      totalIsLowerBound: false,
+    });
+  const cut =
+    found.totalIsLowerBound === true ||
+    found.hasNextPage === true ||
+    found.shown >= found.limit;
+  return totalLabel({
+    total: Math.max(found.totalCount ?? 0, found.shown),
+    totalIsLowerBound: cut,
+  });
+};
+
 /** "16", or "200+" when the API says the count is only a lower bound. */
 export const totalLabel = (model: {
   readonly total: number;
@@ -621,12 +648,16 @@ export const recipeRows = (
   });
   // The API counts recipes; the rows are groups. Fewer rows than hits means
   // the count names versions, so the section counts its groups instead.
+  // Groups folded from one page of a longer list are only the groups seen so
+  // far: more lie past the page, so the count is a lower bound (F-104).
   const counted = withTotal(rows, hits);
   return rows.length < hits.edges.length
     ? {
         ...counted,
         total: rows.length,
-        totalIsLowerBound: counted.totalIsLowerBound,
+        totalIsLowerBound:
+          counted.totalIsLowerBound ||
+          (hits.totalCount ?? 0) > hits.edges.length,
       }
     : counted;
 };
@@ -773,6 +804,19 @@ export const searchUnanswered = (
   data: SectionData,
 ): boolean =>
   asked.length > 0 && asked.every((section) => !sectionAnswered(section, data));
+
+/**
+ * The reads a view makes: every section, or the one See all opened — and,
+ * for Drinks, Your bottles too, so the drinks you own stay out of it and the
+ * count is the one All showed (ruling 1; F-98).
+ */
+export const sectionsToRead = (focus: SearchSection | null): SearchSection[] =>
+  SEARCH_SECTIONS.filter(
+    (section) =>
+      focus === null ||
+      section === focus ||
+      (focus === "items" && section === "bottles"),
+  );
 
 /** Whether a previewed section needs "See all": it holds more than it shows. */
 export const hasMore = (model: SectionModel): boolean =>

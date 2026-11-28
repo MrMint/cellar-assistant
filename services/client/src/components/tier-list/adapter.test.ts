@@ -82,6 +82,7 @@ describe("itemDisplayFromNode (the old page's per-row resolution)", () => {
       viewerScore: 4,
       publicRating: 4.6,
       publicRatingCount: 1234,
+      photoUrl: null,
     });
   });
 
@@ -138,6 +139,44 @@ describe("itemDisplayFromNode (the old page's per-row resolution)", () => {
     );
     assert.equal(row.ownerScore, null);
     assert.equal(row.viewerScore, 2.5);
+  });
+
+  test("F-15: an item row carries the crowd's rating and count, and its photo", () => {
+    const row = itemDisplayFromNode(
+      itemNode({
+        score: { average: 4.2, count: 37 },
+        images: {
+          edges: [{ node: { file: { url: "https://img.test/wine.jpg" } } }],
+        },
+      }),
+    );
+    assert.equal(row.publicRating, 4.2);
+    assert.equal(row.publicRatingCount, 37);
+    assert.equal(row.photoUrl, "https://img.test/wine.jpg");
+  });
+
+  test("F-15: nobody has rated it yet: no crowd rating, not a zero", () => {
+    const row = itemDisplayFromNode(
+      itemNode({ score: { average: null, count: 0 } }),
+    );
+    assert.equal(row.publicRating, null);
+    assert.equal(row.publicRatingCount, null);
+    assert.equal(row.photoUrl ?? null, null);
+  });
+
+  test("F-15: a place row carries its first photo", () => {
+    const base = placeNode().place ?? ({} as never);
+    const row = itemDisplayFromNode(
+      placeNode({
+        place: {
+          ...base,
+          photos: {
+            edges: [{ node: { file: { url: "https://img.test/bar.jpg" } } }],
+          },
+        },
+      }),
+    );
+    assert.equal(row.photoUrl, "https://img.test/bar.jpg");
   });
 
   test("X23: a friend's place list never passes your place rating off as theirs", () => {

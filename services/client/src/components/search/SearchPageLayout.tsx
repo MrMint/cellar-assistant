@@ -26,6 +26,8 @@ type SearchPageLayoutProps = {
   token?: SearchToken;
   /** `?in=`: the section the field looks in. */
   scope?: SearchSection | null;
+  /** `?with=`: the scan or photo sheet to open on arrival (F-102). */
+  openWith?: "barcode" | "photo" | null;
   /** The landing view's discovery section, or the results. */
   children: ReactNode;
 };
@@ -54,6 +56,7 @@ export function SearchPageLayout({
   landing,
   token = null,
   scope = null,
+  openWith = null,
   children,
 }: SearchPageLayoutProps) {
   return (
@@ -73,6 +76,7 @@ export function SearchPageLayout({
             urlQuery={urlQuery}
             token={token}
             scope={scope}
+            openWith={openWith}
           />
         </div>
         <SearchResultsRegion

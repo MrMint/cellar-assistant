@@ -105,10 +105,32 @@ export const closeSearch = (
   navigate.replace(origin ?? "/", { kind: "back" });
 };
 
-/** Where a text query goes: `/search?q=<trimmed>`, or `/search` when blank. */
-export const textSearchHref = (value: string): string => {
+/**
+ * Where a text query goes: `/search?q=<trimmed>`, or `/search` when blank.
+ * Typed in an opened section (`?in=`, See all or a Look in tile), it stays
+ * there: `?q=…&in=<scope>`, or the scoped landing `?in=<scope>` (F-95).
+ */
+export const textSearchHref = (
+  value: string,
+  scope: string | null = null,
+): string => {
   const query = value.trim();
-  return query === "" ? "/search" : `/search?q=${encodeURIComponent(query)}`;
+  const params = new URLSearchParams();
+  if (query !== "") params.set("q", query);
+  if (scope !== null) params.set("in", scope);
+  const search = params.toString().replaceAll("+", "%20");
+  return search === "" ? "/search" : `/search?${search}`;
+};
+
+/**
+ * `?with=`: the sheet a link asks the search page to open — Home's Scan
+ * (`scan`, the barcode sheet) and Photo (`photo`) — or null (F-102, H-45).
+ */
+export const scanModeFromParam = (
+  value: string | string[] | undefined,
+): "barcode" | "photo" | null => {
+  const raw = Array.isArray(value) ? value[0] : value;
+  return raw === "scan" ? "barcode" : raw === "photo" ? "photo" : null;
 };
 
 export type SearchNavigation = {
@@ -153,6 +175,7 @@ export const initialSearchNavState = (
 export const planTypingNavigation = (
   state: SearchNavState,
   value: string,
+  scope: string | null = null,
 ): SearchNavStep => {
   const query = value.trim();
   if (query === state.sentQuery) return { state, navigation: null };
@@ -169,7 +192,7 @@ export const planTypingNavigation = (
       inFlight: method,
       commitOnLand: false,
     },
-    navigation: { method, href: textSearchHref(query) },
+    navigation: { method, href: textSearchHref(query, scope) },
   };
 };
 
@@ -182,8 +205,9 @@ export const planTypingNavigation = (
 export const planCommitNavigation = (
   state: SearchNavState,
   value: string,
+  scope: string | null = null,
 ): SearchNavStep => {
-  const typed = planTypingNavigation(state, value);
+  const typed = planTypingNavigation(state, value, scope);
   if (typed.navigation === null && value.trim() !== state.sentQuery)
     return { state: { ...state, commitOnLand: true }, navigation: null };
   return {
@@ -214,10 +238,11 @@ export const landNavigation = (
 export const planLandedNavigation = (
   state: SearchNavState,
   value: string,
+  scope: string | null = null,
 ): SearchNavStep =>
   state.commitOnLand
-    ? planCommitNavigation({ ...state, commitOnLand: false }, value)
-    : planTypingNavigation(state, value);
+    ? planCommitNavigation({ ...state, commitOnLand: false }, value, scope)
+    : planTypingNavigation(state, value, scope);
 
 export type SearchUrlSync = {
   state: SearchNavState;

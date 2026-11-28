@@ -41,6 +41,11 @@ export const SearchImageQuery = graphql(
     itemSearch(imageFileId: $imageFileId, first: $first) {
       __typename
       ... on ItemSearchConnection {
+        totalCount
+        totalIsLowerBound
+        pageInfo {
+          hasNextPage
+        }
         edges {
           node {
             __typename
@@ -69,6 +74,10 @@ export const SearchBarcodeQuery = graphql(
       __typename
       ... on Barcode {
         items(first: $first) {
+          totalCount
+          pageInfo {
+            hasNextPage
+          }
           edges {
             node {
               ...ItemCard

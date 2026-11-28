@@ -20,6 +20,8 @@ type UseSearchQueryOptions = {
   navigate: (navigation: SearchNavigation) => void;
   /** A navigation is in flight (the transition is pending). */
   isNavigating: boolean;
+  /** `?in=`: the opened section typing stays in (F-95), or null. */
+  scope?: string | null;
 };
 
 /**
@@ -41,6 +43,7 @@ export function useSearchQuery({
   urlQuery,
   navigate,
   isNavigating,
+  scope = null,
 }: UseSearchQueryOptions) {
   const [value, setValue] = useState(urlQuery ?? "");
   const valueRef = useRef(value);
@@ -53,6 +56,11 @@ export function useSearchQuery({
   useEffect(() => {
     navigateRef.current = navigate;
   }, [navigate]);
+  // Read fresh by the timer too: a scope chip changes it under the box.
+  const scopeRef = useRef(scope);
+  useEffect(() => {
+    scopeRef.current = scope;
+  }, [scope]);
 
   const run = useCallback((step: SearchNavStep) => {
     navStateRef.current = step.state;
@@ -75,7 +83,7 @@ export function useSearchQuery({
       cancelDebounce();
       debounceRef.current = setTimeout(() => {
         debounceRef.current = undefined;
-        run(planTypingNavigation(navStateRef.current, next));
+        run(planTypingNavigation(navStateRef.current, next, scopeRef.current));
       }, SEARCH_DEBOUNCE_MS);
     },
     [cancelDebounce, run, update],
@@ -83,13 +91,19 @@ export function useSearchQuery({
 
   const commit = useCallback(() => {
     cancelDebounce();
-    run(planCommitNavigation(navStateRef.current, valueRef.current));
+    run(
+      planCommitNavigation(
+        navStateRef.current,
+        valueRef.current,
+        scopeRef.current,
+      ),
+    );
   }, [cancelDebounce, run]);
 
   const clear = useCallback(() => {
     cancelDebounce();
     update("");
-    run(planCommitNavigation(navStateRef.current, ""));
+    run(planCommitNavigation(navStateRef.current, "", scopeRef.current));
   }, [cancelDebounce, run, update]);
 
   useEffect(() => {
@@ -114,7 +128,7 @@ export function useSearchQuery({
       sync.state.inFlight === null &&
       debounceRef.current === undefined
     ) {
-      run(planLandedNavigation(sync.state, valueRef.current));
+      run(planLandedNavigation(sync.state, valueRef.current, scopeRef.current));
     }
   }, [urlQuery, isNavigating, run, update]);
 

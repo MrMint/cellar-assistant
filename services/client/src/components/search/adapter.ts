@@ -104,6 +104,8 @@ export type SearchParams = {
   activity?: string | string[];
   /** X12: the one section "See all" opened (`universal-search.ts`). */
   in?: string | string[];
+  /** Home's Scan / Photo: the sheet to open (`scanModeFromParam`). */
+  with?: string | string[];
 };
 
 export type SearchState = {
