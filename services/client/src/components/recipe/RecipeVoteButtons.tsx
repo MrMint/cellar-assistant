@@ -10,7 +10,13 @@ import { feedback } from "@/lib/feedback";
 import { cn } from "@/lib/utils";
 import { nextVoteState, type RecipeVoteType } from "./adapter";
 import { RemoveRecipeVoteMutation, VoteOnRecipeMutation } from "./queries";
-import { undoWrite, type VoteWrite, voteToast, voteWrite } from "./vote-plan";
+import {
+  undoWrite,
+  type VoteWrite,
+  voteToast,
+  voteToastId,
+  voteWrite,
+} from "./vote-plan";
 
 export type RecipeVoteButtonsProps = {
   recipeId: string;
@@ -141,10 +147,12 @@ export const RecipeVoteButtons = ({
     const write = voteWrite(before.userVote, clicked);
     if (!(await send(write, before))) return;
     const after = tallyAfter(before, write);
-    notify(voteToast(write), {
+    const id = voteToastId(recipeId);
+    notify(voteToast(write, recipeName), {
+      id,
       undo: () => {
         void send(undoWrite(before.userVote), after).then((ok) => {
-          if (ok) notify("Vote undone");
+          if (ok) notify("Vote undone", { id });
         });
       },
     });

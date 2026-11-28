@@ -16,6 +16,7 @@ import {
   requestWith,
   useAllFriendRequests,
 } from "@/components/friend/friend-lists";
+import { useUndoableWrite } from "@/components/friend/undoable-write";
 import { Button } from "@/components/ui/button";
 import { ProfileHeader, personCrumbs } from "./ProfileHeader";
 
@@ -41,6 +42,7 @@ export function LockedProfile({ person }: { person: LockedPerson }) {
   const [sendState, send] = useMutation(SendFriendRequestMutation);
   const [rejectState, reject] = useMutation(RejectFriendRequestMutation);
   const [acceptState, accept] = useMutation(AcceptFriendRequestMutation);
+  const { hold: holdWrite, drop: dropWrite } = useUndoableWrite();
 
   const listedSent = requestWith(outgoing.rows, person.userId);
   const sent = cancelled ? null : (sentId ?? listedSent?.id ?? null);
@@ -60,14 +62,38 @@ export function LockedProfile({ person }: { person: LockedPerson }) {
       "RejectFriendRequestPayload"
     ) {
       notify("Couldn't cancel the request", { tone: "error" });
-      return;
+      return false;
     }
     setSentId(null);
     setCancelled(true);
     refresh();
+    return true;
+  };
+
+  /** Cancel request: the door goes back to Add friend at once, and the
+   * write waits out the Undo toast (F-91, KIT § 4). */
+  const cancelWithUndo = (requestId: string) => {
+    setCancelled(true);
+    holdWrite(requestId, {
+      message: `Request to ${person.name} canceled`,
+      commit: () => {
+        void cancel(requestId).then((done) => {
+          if (!done) setCancelled(false);
+        });
+      },
+      restore: () => setCancelled(false),
+    });
   };
 
   const addFriend = async () => {
+    // A cancel still waiting out its Undo: the request was never withdrawn,
+    // so Add friend keeps it rather than asking the server twice.
+    const held = listedSent?.id ?? sentId;
+    if (held !== null && dropWrite(held)) {
+      setCancelled(false);
+      notify(`Request sent to ${person.name}`);
+      return;
+    }
     const result = await send({ userId: person.userId });
     const payload = result.data?.sendFriendRequest;
     if (payload?.__typename !== "FriendRequest") {
@@ -129,7 +155,7 @@ export function LockedProfile({ person }: { person: LockedPerson }) {
                 variant="quiet"
                 disabled={busy}
                 aria-busy={rejectState.fetching || undefined}
-                onClick={() => void cancel(sent)}
+                onClick={() => cancelWithUndo(sent)}
               >
                 Cancel request
               </Button>

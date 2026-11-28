@@ -250,6 +250,32 @@ export const FriendCellarsPageQuery = graphql(
  * non-friend's page can offer Add friend. One `NotFoundError` for an id that
  * names nobody, so the page cannot say more than that.
  */
+/**
+ * Whether the viewer and `userId` are friends, and who they are — the
+ * compare page's gate (F-56, FR-7, L11): `friendProfile` answers a friend and
+ * one `NOT_FOUND` for anyone else. None of the profile's sections is read.
+ */
+export const FriendshipQuery = graphql(
+  `
+  query Friendship($userId: ID!) {
+    friendProfile(userId: $userId) {
+      __typename
+      ... on FriendProfile {
+        id
+        user {
+          __typename
+          id
+          displayName
+          avatarUrl
+        }
+      }
+      ...ActorErrorFields
+    }
+  }
+`,
+  [ActorErrorFieldsFragment],
+);
+
 export const PersonQuery = graphql(
   `
   query Person($userId: ID!) {

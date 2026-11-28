@@ -36,6 +36,14 @@ export function RecapShareDialog({
 }) {
   const [state, setState] = useState<ImageState>("loading");
   const [attempt, setAttempt] = useState(0);
+  // The dialog stays mounted while the deck moves on, so a new card's image
+  // starts over: it never inherits the last card's failed or ready (F-185).
+  const [shownPath, setShownPath] = useState(imagePath);
+  if (shownPath !== imagePath) {
+    setShownPath(imagePath);
+    setState("loading");
+    setAttempt(0);
+  }
   const [busy, setBusy] = useState(false);
 
   const send = async (how: "share" | "save") => {
@@ -92,7 +100,7 @@ export function RecapShareDialog({
             )}
             {/* biome-ignore lint/performance/noImgElement: a private, uncached PNG from our own route; next/image would cache it */}
             <img
-              key={attempt}
+              key={`${imagePath}#${attempt}`}
               src={`${imagePath}${imagePath.includes("?") ? "&" : "?"}v=${attempt}`}
               alt={description}
               onLoad={() => setState("ready")}

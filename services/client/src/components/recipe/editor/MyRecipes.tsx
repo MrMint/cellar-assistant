@@ -1,7 +1,9 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useQuery } from "urql";
+import { ErrorState } from "@/components/app/EmptyState";
 import { AI, Lock, People, Public } from "@/components/app/icons";
 import { Link } from "@/components/app/Link";
 import { InsetSection, ListRow } from "@/components/app/Page";
@@ -43,6 +45,8 @@ const privacyOf = (value: string): RecipePrivacy =>
 export function MyRecipes({
   rows,
   publishedTotal,
+  draftsTotal,
+  draftsFailure,
 }: {
   rows: readonly MyRecipeRow[];
   /**
@@ -50,9 +54,29 @@ export function MyRecipes({
    * the server read only the first page. "Show all" then reads the rest.
    */
   publishedTotal?: number;
+  /** How many drafts you have in all, as `publishedTotal` is for recipes. */
+  draftsTotal?: number;
+  /** Why the drafts read failed: said, not drawn as "no drafts" (F-109). */
+  draftsFailure?: string;
 }) {
+  const router = useRouter();
   const [all, setAll] = useState(false);
-  const drafts = rows.filter((row) => row.isDraft);
+  const [allDrafts, setAllDrafts] = useState(false);
+  const draftsFirstPage = rows.filter((row) => row.isDraft);
+  const draftCount = Math.max(draftsTotal ?? 0, draftsFirstPage.length);
+  const [restDrafts] = useQuery({
+    query: MyRecipesQuery,
+    variables: { first: MY_RECIPES_ALL, drafts: true },
+    pause: !allDrafts || draftCount <= draftsFirstPage.length,
+  });
+  const restDraftsResult =
+    restDrafts.data === undefined
+      ? null
+      : unwrapResult(restDrafts.data.myRecipes, "RecipeConnection");
+  const drafts =
+    allDrafts && restDraftsResult?.ok === true
+      ? restDraftsResult.data.edges.map((edge) => edge.node)
+      : draftsFirstPage;
   const firstPage = rows.filter((row) => !row.isDraft);
   const total = Math.max(publishedTotal ?? 0, firstPage.length);
   // "Show all" reads the rest only when the server's first page was short of
@@ -74,10 +98,37 @@ export function MyRecipes({
 
   return (
     <>
-      {drafts.length > 0 && (
+      {draftsFailure !== undefined && (
+        <section aria-label="Your drafts">
+          <ErrorState
+            boxed
+            title="Couldn't load your drafts"
+            reason={draftsFailure}
+            action={
+              <Button variant="outline" onClick={() => router.refresh()}>
+                Try again
+              </Button>
+            }
+          />
+        </section>
+      )}
+      {draftsFailure === undefined && drafts.length > 0 && (
         <InsetSection
-          label={`Drafts ${drafts.length}`}
+          label={`Drafts ${draftCount}`}
           aria-label="Your drafts"
+          action={
+            draftCount > draftsFirstPage.length ? (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="t-head text-act-ink"
+                aria-busy={(allDrafts && restDrafts.fetching) || undefined}
+                onClick={() => setAllDrafts(!allDrafts)}
+              >
+                {allDrafts ? "Show fewer" : `Show all ${draftCount}`}
+              </Button>
+            ) : undefined
+          }
         >
           {drafts.map((row) => (
             <ListRow
