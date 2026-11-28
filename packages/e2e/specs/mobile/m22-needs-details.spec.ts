@@ -76,8 +76,9 @@ test("Needs details lists the draft, filters it, and finishes it with an Undo", 
   await expect(row).toBeVisible();
   await expect(row).toContainText(/Needs winery/);
 
-  // The chips filter by what is missing; the draft needs a maker.
-  const maker = page.getByRole("button", { name: /^Maker/ });
+  // The chips filter by what is missing; the draft needs a maker. The chip
+  // says the kind's own word ("Winery") when every draft is one kind.
+  const maker = page.getByRole("button", { name: /^(Maker|Winery)/ });
   await maker.click();
   await expect(row).toBeVisible();
 
