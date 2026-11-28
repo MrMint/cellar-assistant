@@ -416,6 +416,61 @@ describe("B2 · item onboarding defaults", () => {
     expect(asked[0]?.quality).toBe("high");
   });
 
+  it("F-77: says which kind the label is for, and keeps it out of defaults", async () => {
+    const { provider } = fakeProvider(
+      legible({
+        surfaceKind: "label",
+        labelItemType: "WINE",
+        name: "Château Margaux",
+        confidence: 0.8,
+      }),
+    );
+    const result = await providerItemDefaults(provider, loader)(
+      ctx,
+      withLabels,
+    );
+    expect(result.detectedItemType).toBe("WINE");
+    expect(result.defaults).not.toHaveProperty("labelItemType");
+  });
+
+  it("F-77: a label of another kind is that kind, with nothing transcribed, not a refusal", async () => {
+    const { provider } = fakeProvider(
+      JSON.stringify({
+        imageDescription: "The front label of a can of beer.",
+        labelIsLegible: false,
+        surfaceKind: "other",
+        labelItemType: "BEER",
+        name: "Pliny the Elder",
+        confidence: 0.9,
+      }),
+    );
+    const result = await providerItemDefaults(provider, loader)(
+      ctx,
+      withLabels,
+    );
+    expect(result.detectedItemType).toBe("BEER");
+    // Read against the wrong kind's vocabulary: nothing of it is kept.
+    expect(result.defaults).toEqual({});
+    expect(result.brandName).toBeNull();
+    expect(result.confidence).toBe(0);
+  });
+
+  it("F-77: no label at all is still refused, whatever kind it names", async () => {
+    const { provider } = fakeProvider(
+      JSON.stringify({
+        imageDescription: "A blank grey square.",
+        labelIsLegible: false,
+        surfaceKind: "other",
+        labelItemType: "NONE",
+        name: "x",
+        confidence: 0,
+      }),
+    );
+    await expect(
+      providerItemDefaults(provider, loader)(ctx, withLabels),
+    ).rejects.toThrow();
+  });
+
   /**
    * X1b. `wine_style` holds five rows; before this the schema asked for `style`
    * as free text and the live model answered `"Red Wine"` and `"Chardonnay"` on

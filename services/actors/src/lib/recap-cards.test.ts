@@ -106,6 +106,17 @@ describe("selectRecapCards thresholds", () => {
     expect(card?.newCount).toBe(n - 1);
   });
 
+  it("F-50: STYLES chips use the taste profile's style labels, not raw values", () => {
+    const n = RECAP_CARD_THRESHOLDS.STYLES;
+    const raw = ["pu_erh", "INDIA_PALE_ALE", "mate"];
+    const rows = times(n, (i) => item({ style: raw[i] ?? `Style ${i}` }));
+    const chips = cardOf(rows, "STYLES")?.chips ?? [];
+    expect(chips).toEqual(
+      expect.arrayContaining(["Pu-erh", "India pale ale", "Maté"]),
+    );
+    expect(chips.join(" ")).not.toMatch(/_|[A-Z]{2,}/);
+  });
+
   it("REGIONS: skipped at threshold - 1, shown at threshold", () => {
     const n = RECAP_CARD_THRESHOLDS.REGIONS;
     const rows = (count: number) =>

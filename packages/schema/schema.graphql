@@ -2535,6 +2535,9 @@ type FriendInvite {
 }
 
 type FriendInvitePreview {
+  """
+  The inviter's picture: an uploaded one presigned (F-81), else their stored image. Resolved as every other avatar is.
+  """
   inviterAvatarUrl: String
   inviterDisplayName: String!
   inviterId: ID!
@@ -9365,6 +9368,11 @@ Someone matching the term. By default someone the viewer could send a friend req
 type UserSearchResult {
   avatarUrl: String
   displayName: String!
+
+  """
+  F-43: the open friend request's id when `relation` is REQUEST_SENT or REQUEST_RECEIVED, for `rejectFriendRequest` (Cancel) or `acceptFriendRequest` (Accept) with no lookup. Null otherwise, and on a default search.
+  """
+  pendingRequestId: ID
 
   """Set on an `includeConnected` search only (X12); null otherwise."""
   relation: PersonRelation

@@ -63,11 +63,11 @@ describe("archetypeOf", () => {
     expect(archetype?.title).toBe("Cross-cellar explorer");
     expect(archetype?.loves.map((s) => s.label)).toEqual(["Nebbiolo", "Islay"]);
     expect(archetype?.lessKeen.map((s) => s.label)).toEqual([
-      "NATURAL",
+      "Natural",
       "Merlot",
     ]);
     expect(fallbackLine(ratings.length, archetype ?? null, 3)).toBe(
-      "You rate Nebbiolo and Islay highest and NATURAL lowest, across 3 types.",
+      "You rate Nebbiolo and Islay highest and Natural lowest, across 3 types.",
     );
   });
 
@@ -126,6 +126,42 @@ describe("archetypeOf", () => {
     ]);
     expect(styleStats(ratings)).toEqual([
       { type: "WINE", label: "Nebbiolo", count: 2, average: 4.5 },
+    ]);
+  });
+});
+
+describe("style labels (F-50)", () => {
+  it("names styles in the taste line the way Rated highest does, never as raw enums", () => {
+    const ratings = [
+      ...many(4, "TEA", 5, "black"),
+      ...many(4, "BEER", 4.5, "INDIA_PALE_ALE"),
+      ...many(2, "COFFEE", 4.5, "WASHED"),
+      ...many(2, "BEER", 1, "STOUT"),
+      ...many(2, "TEA", 3.5, "pu_erh"),
+    ];
+    const archetype = archetypeOf(ratings);
+    expect(archetype?.loves.map((s) => s.label)).toEqual([
+      "Black",
+      "India pale ale",
+      "Washed",
+    ]);
+    const line = fallbackLine(ratings.length, archetype ?? null, 3);
+    expect(line).toBe(
+      "You rate Black, India pale ale and Washed highest and Stout lowest, across 3 types.",
+    );
+    expect(line).not.toMatch(/[A-Z]{2,}|_/);
+  });
+
+  it("groups one style stored two ways under one label", () => {
+    const ratings = [
+      rate("TEA", 4, "pu_erh"),
+      rate("TEA", 5, "Pu-erh"),
+      rate("BEER", 4, "INDIA_PALE_ALE"),
+      rate("BEER", 3, "India pale ale"),
+    ];
+    expect(styleStats(ratings)).toEqual([
+      { type: "TEA", label: "Pu-erh", count: 2, average: 4.5 },
+      { type: "BEER", label: "India pale ale", count: 2, average: 3.5 },
     ]);
   });
 });

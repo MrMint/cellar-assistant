@@ -144,3 +144,32 @@ describe("L10 · MENU_EXTRACTION_SCHEMA's venue name", () => {
     expect(schema.required).not.toContain("venueNameIsPrinted");
   });
 });
+
+describe("F-77 · itemDefaultsSchema's label kind", () => {
+  it("asks which kind the label is for after the verdict and surface, before any value", () => {
+    for (const type of ITEM_TYPES) {
+      const schema = prompts.itemDefaultsSchema(type, LARGE_VOCABULARY) as {
+        properties: Record<string, { enum?: readonly string[] }>;
+        required: readonly string[];
+      };
+      const order = Object.keys(schema.properties);
+      expect(order.indexOf("labelItemType")).toBe(
+        order.indexOf("surfaceKind") + 1,
+      );
+      expect(order.indexOf("labelItemType")).toBeLessThan(
+        order.indexOf("name"),
+      );
+      expect(schema.properties.labelItemType?.enum).toEqual([
+        "WINE",
+        "BEER",
+        "SPIRIT",
+        "COFFEE",
+        "SAKE",
+        "TEA",
+        "NONE",
+      ]);
+      // Optional: the model can always leave it out.
+      expect(schema.required).not.toContain("labelItemType");
+    }
+  });
+});
