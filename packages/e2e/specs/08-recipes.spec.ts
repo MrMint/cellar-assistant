@@ -8,10 +8,11 @@ import {
 } from "../fixtures/test.ts";
 
 /**
- * The restored recipe pages (UI parity wave 8), asserted against the
- * production copy at `82450ad1` — "Recipe Groups", "Search Recipe Groups",
- * "View all N versions", "{name} - All Versions", "Community Vote",
- * "Add a review for this recipe...", "AI Recipe Generator".
+ * The recipe pages as the 2026-11 redesign draws them (Recipes-Browse and
+ * Recipes-Page boards): "Recipes" with its search, the group page's
+ * "Name · 2 versions" and its pick card (MC-pick), Versions with Up / Down
+ * for everyone but the author and Undo in the vote's toast, and the review
+ * composer behind "Write a review".
  *
  * Most of that UI never loaded in production (`recipe_votes` and
  * `recipe_reviews` had no Hasura permissions), so these are its first
@@ -64,6 +65,10 @@ test("creates a recipe group with two versions", async ({ api }) => {
           name: unique(`E2 Recipe ${suffix}`),
           type: "cocktail",
           recipeGroupId: groupId,
+          // X15 / D22: private first. These versions stand for the shared
+          // catalog — votes, the canonical and the group's name are about
+          // recipes everyone can see.
+          privacy: "PUBLIC",
         },
       },
     );
@@ -159,16 +164,14 @@ test("/recipes: the old search finds the group and opens its page", async ({
 
   await primary.goto("/recipes");
   await expect(
-    primary.getByRole("heading", { name: "Recipe Groups" }),
+    primary.getByRole("heading", { name: "Recipes", level: 1 }),
   ).toBeVisible({ timeout: 20_000 });
   // After the vote, the group's name follows its canonical (`RecipeGroup.name`
   // "follows the canonical recipe's name"), so search by the version's name,
   // which G26's term matches too.
   const canonicalName = g.recipeNames[0] ?? "";
-  await primary
-    .getByPlaceholder("Search by recipe name, description, or tags...")
-    .fill(canonicalName);
-  await expect(primary.getByText("Found 1 recipe groups")).toBeVisible({
+  await primary.getByPlaceholder("Search recipes").fill(canonicalName);
+  await expect(primary.getByText("1 recipe", { exact: true })).toBeVisible({
     timeout: 20_000,
   });
   await primary.getByRole("heading", { name: canonicalName }).click();
@@ -200,7 +203,11 @@ test("/recipes: newest first, as the old page (UI parity #15)", async ({
 
   // The grid, unsearched: the first card is the group just created.
   await primary.goto("/recipes");
-  const firstCard = primary.locator("h3").first();
+  // Each card's name is an h3 under the "All recipes" h2 (X21).
+  const firstCard = primary
+    .getByRole("region", { name: "All recipes" })
+    .locator("h3")
+    .first();
   await expect(firstCard).toHaveText(g.recipeNames[0] ?? "", {
     timeout: 20_000,
   });
@@ -216,17 +223,19 @@ test("the group page shows the community's pick and links to the versions", asyn
   await primary.goto(`/recipes/groups/${g.id}`);
   await settleNetwork(primary);
   const text = await bodyText(primary);
-  expect(text).toContain("Showing community's preferred version");
+  // MC-pick: a pick needs net votes from people other than the author, so
+  // a group only its author voted on shows its original, and says so.
+  expect(text).toMatch(/Community pick|No pick yet/);
   expect(text).toContain("Stir with ice.");
-  expect(text).toContain("Other variations:");
-  await primary.getByRole("link", { name: "View all 2 versions" }).click();
+  expect(text).toContain("Other versions");
+  await primary.getByRole("link", { name: /· 2 versions$/ }).click();
   await primary.waitForURL(`**/recipes/groups/${g.id}/versions`, {
     timeout: 20_000,
   });
   expect(noise.pageErrors, "the group page threw").toEqual([]);
 });
 
-test("the versions page renders and offers a vote control", async ({
+test("the versions page: a card per version, and no vote buttons for their author", async ({
   primary,
 }) => {
   test.skip(group === null, "no recipe group");
@@ -238,34 +247,43 @@ test("the versions page renders and offers a vote control", async ({
 
   expect(noise.pageErrors, "the versions page threw").toEqual([]);
   await expect(
-    primary.getByRole("heading", { name: / - All Versions$/ }),
+    primary.getByRole("heading", { name: "Versions", level: 1 }),
   ).toBeVisible({ timeout: 20_000 });
-  await expect(primary.getByText("Community Vote").first()).toBeVisible();
-  await expect(
-    primary.getByRole("button", { name: /^Upvote / }).first(),
-    "no upvote control on the versions page",
-  ).toBeVisible({ timeout: 20_000 });
+  for (const name of g.recipeNames) {
+    await expect(primary.getByRole("link", { name })).toBeVisible();
+  }
+  // Both versions are primary's own (lead's ruling: authors never vote).
+  await expect(primary.getByRole("button", { name: /^Upvote / })).toHaveCount(
+    0,
+  );
 });
 
-test("clicking upvote changes the tally on screen", async ({ primary }) => {
+test("someone else votes, and Undo in the toast takes it back", async ({
+  secondary,
+}) => {
   test.skip(group === null, "no recipe group");
 
-  await primary.goto(`/recipes/groups/${(group as Group).id}/versions`);
-  const upvote = primary.getByRole("button", { name: /^Upvote / }).first();
+  await secondary.goto(`/recipes/groups/${(group as Group).id}/versions`);
+  const upvote = secondary.getByRole("button", { name: /^Upvote / }).first();
   await expect(upvote).toBeVisible({ timeout: 20_000 });
+  const pressed = await upvote.getAttribute("aria-pressed");
 
-  const before = await bodyText(primary);
   await upvote.click();
-  await settleNetwork(primary);
-  await expect
-    .poll(async () => await bodyText(primary), {
-      message: "the page did not change after voting",
-      timeout: 20_000,
-    })
-    .not.toBe(before);
+  await expect(
+    secondary.getByText(pressed === "true" ? "Vote taken back" : "Voted up"),
+  ).toBeVisible({ timeout: 20_000 });
+  await expect(upvote).toHaveAttribute(
+    "aria-pressed",
+    pressed === "true" ? "false" : "true",
+  );
+  await secondary.getByRole("button", { name: "Undo" }).click();
+  await expect(secondary.getByText("Vote undone")).toBeVisible({
+    timeout: 20_000,
+  });
+  await expect(upvote).toHaveAttribute("aria-pressed", pressed ?? "false");
 });
 
-test("a text-only review from the old form lands in the old list", async ({
+test("a text-only review: Write a review, then it is yours to edit", async ({
   primary,
 }) => {
   test.skip(group === null, "no recipe group");
@@ -274,37 +292,37 @@ test("a text-only review from the old form lands in the old list", async ({
   const words = unique("E2 tasty");
 
   await primary.goto(`/recipes/${g.recipeIds[1]}`);
-  await primary.getByPlaceholder("Add a review for this recipe...").click();
-  await expect(primary.getByText("Add Recipe Review:")).toBeVisible();
-  const editor = primary.locator('[contenteditable="true"]').first();
+  await primary.getByRole("button", { name: "Write a review" }).click();
+  const composer = primary.getByRole("dialog", { name: "Your review" });
+  await expect(composer).toBeVisible();
+  const editor = composer.locator('[contenteditable="true"]').first();
   await editor.click();
   await editor.pressSequentially(words);
-  await primary.getByRole("button", { name: "Add Review" }).click();
+  await composer.getByRole("button", { name: "Save review" }).click();
 
-  // One review per viewer: the box turns into an edit of the viewer's own.
-  await expect(
-    primary.getByPlaceholder("Edit your review of this recipe..."),
-  ).toBeVisible({ timeout: 20_000 });
-  await expect(primary.getByText("Reviews:")).toBeVisible();
-  // Newest first, so the viewer's review is the first accordion row.
-  await primary.locator(".MuiAccordionSummary-button").first().click();
+  // One review per viewer: it shows as the viewer's own, with Edit.
   await expect(primary.getByText(words)).toBeVisible({ timeout: 20_000 });
+  await expect(
+    primary.getByRole("button", { name: "Edit", exact: true }),
+  ).toBeVisible();
+  await expect(
+    primary.getByRole("button", { name: "Delete your review" }),
+  ).toBeVisible();
   expect(noise.pageErrors, "the recipe page threw").toEqual([]);
 });
 
-test("/recipes/ai-generator is the old page over the real job", async ({
+test("/recipes/ai-generator lands on New recipe › Photo (X15)", async ({
   primary,
 }) => {
   const noise = watch(primary);
   await primary.goto("/recipes/ai-generator");
+  await primary.waitForURL(/\/recipes\/new\?from=photo$/, { timeout: 20_000 });
   await settleNetwork(primary);
-  expect(noise.pageErrors, "the AI generator page threw").toEqual([]);
+  expect(noise.pageErrors, "the composer threw").toEqual([]);
   await expect(
-    primary.getByRole("heading", { name: "AI Recipe Generator" }).first(),
+    primary.getByRole("heading", { name: "New recipe" }),
   ).toBeVisible();
-  await expect(
-    primary.getByRole("button", { name: "Extract Recipes" }),
-  ).toBeDisabled();
   const text = await bodyText(primary);
   expect(text).not.toContain("OCR Accuracy");
+  expect(text).not.toContain("AI Recipe Generator");
 });

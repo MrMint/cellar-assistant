@@ -51,7 +51,6 @@ export type PlaceCategory =
   | "casino"
   | "music_venue"
   // Overture-only: Tea
-  | "tea_shop"
   | "bubble_tea";
 
 export type ItemType = "wine" | "beer" | "spirit" | "coffee" | "sake" | "tea";
@@ -90,6 +89,17 @@ export interface PlaceResult {
   hours?: unknown;
   confidence?: number;
   is_verified?: boolean;
+  /**
+   * X27: APPROVED for every shared marker; PENDING / REJECTED only on the
+   * creator's own map, for their own places.
+   */
+  review_status?: "PENDING" | "APPROVED" | "REJECTED";
+  /** F-196: the viewer's own best band (0–5) across their lists; else absent. */
+  my_band?: number;
+  /** F-196: how many ratings `rating` stands on. */
+  rating_count?: number;
+  /** F-196: the place's first mirrored photo, for the owner's pin. */
+  photo_url?: string;
   viewport_area_km2?: number;
   density_per_km2?: number;
   clustering_applied?: boolean;

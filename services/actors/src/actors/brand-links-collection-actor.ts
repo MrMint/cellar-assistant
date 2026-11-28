@@ -63,6 +63,7 @@ import type {
 } from "@cellar-assistant/contracts";
 import {
   BrandLinksCollectionActorDescriptor,
+  brandFirstItemTypesActorId,
   brandItemCountsActorId,
   brandLinksCollectionActorId,
   isItemType,
@@ -82,6 +83,7 @@ import {
   uuidArray,
 } from "../lib/collection-sql.ts";
 import { ARCS } from "../lib/item-arcs.ts";
+import { placeRefVisibleSql } from "../lib/unshared-places.ts";
 
 type ItemLinkRow = {
   readonly id: string;
@@ -256,6 +258,45 @@ export class BrandLinksCollectionActor
     );
   }
 
+  /**
+   * X23 — each brand's earliest-linked item's type, for a page of brands in
+   * one statement (`distinct on`), addressed at `brandFirstItemTypesActorId`.
+   * "Earliest" is the link's `created_at`, then its id, so the answer is
+   * stable while links are only ever added.
+   */
+  async firstItemTypes(
+    ctx: Ctx,
+    filter: BrandItemCountsFilter,
+  ): Promise<readonly (ItemType | null)[]> {
+    requireReverseEdgeBatch(filter.brandIds, "firstItemTypes brandIds");
+    return await this.keyedBatch(
+      ctx,
+      brandFirstItemTypesActorId(filter),
+      async () => {
+        if (filter.brandIds.length === 0) return [];
+        const { rows } = await this.db.execute<{
+          readonly brand_id: string;
+          readonly item_type: string;
+        }>(sql`
+          select distinct on (ib.brand_id)
+            ib.brand_id, ${ITEM_TYPE_EXPR} as item_type
+          from public.item_brands ib
+          where ib.brand_id = any(${uuidArray(filter.brandIds, "brandId")})
+          order by ib.brand_id,
+                   coalesce(ib.created_at, 'epoch'::timestamptz),
+                   ib.id
+        `);
+        const types = new Map(
+          rows.map((row) => [
+            row.brand_id,
+            isItemType(row.item_type) ? row.item_type : null,
+          ]),
+        );
+        return filter.brandIds.map((id) => types.get(id) ?? null);
+      },
+    );
+  }
+
   async places(
     ctx: Ctx,
     filter: BrandLinksFilter,
@@ -266,9 +307,9 @@ export class BrandLinksCollectionActor
         ctx,
         filter,
         page,
-        (after, limit) => this.#readPlaces(filter, after, limit),
+        (after, limit) => this.#readPlaces(ctx, filter, after, limit),
         (row) => ({ sort: row.sort_key, id: row.id }),
-        () => this.#placesScope(filter),
+        () => this.#placesScope(ctx, filter),
       ),
       (row): PlaceBrandDto => {
         if (!isPlaceBrandRelationship(row.relationship_type)) {
@@ -338,20 +379,29 @@ export class BrandLinksCollectionActor
     return rows;
   }
 
-  /** Shared by the page and its `count(*)` — see `PageScope`. */
-  #placesScope(filter: BrandLinksFilter): PageScope {
+  /**
+   * Shared by the page and its `count(*)` — see `PageScope`. X27: a place
+   * still under review is its creator's alone, so a link to one appears on
+   * the brand's page for its creator and for nobody else, and is not
+   * counted for anybody else either.
+   */
+  #placesScope(ctx: Ctx, filter: BrandLinksFilter): PageScope {
     return {
       from: sql`public.place_brands pb`,
-      where: sql`pb.brand_id = ${filter.brandId}::uuid`,
+      where: sql`pb.brand_id = ${filter.brandId}::uuid and ${placeRefVisibleSql(
+        ctx,
+        sql`pb.place_id`,
+      )}`,
     };
   }
 
   async #readPlaces(
+    ctx: Ctx,
     filter: BrandLinksFilter,
     after: KeysetCursor | null,
     limit: number,
   ): Promise<readonly PlaceLinkRow[]> {
-    const { from, where } = this.#placesScope(filter);
+    const { from, where } = this.#placesScope(ctx, filter);
     const { rows } = await this.db.execute<PlaceLinkRow>(sql`
       select pb.id, pb.place_id, pb.brand_id, pb.relationship_type,
              pb.created_at, (${PLACE_SORT})::text as sort_key

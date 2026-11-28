@@ -35,8 +35,18 @@ type Exemption = { readonly calls: number; readonly reason: string };
  * or an effect's `cancelled` flag — and the reason says which.
  */
 const EXEMPT: Readonly<Record<string, Exemption>> = {
+  "item/parts/pane-refresh.tsx": {
+    calls: 1,
+    reason:
+      "F-156: `paneQuery`, the desktop pane's `PageQuery`, walks the item " +
+      "page's lists past their first 100 through the browser client, as the " +
+      "server page walks them through apiServerQuery. Its one caller is " +
+      "ItemPane's effect, whose `live` flag drops the answer for an item " +
+      "the pane has since moved past.",
+  },
   "map/actions.ts": {
-    calls: 12,
+    // 13 since X27's `resubmitPlace` — another submit-driven write.
+    calls: 13,
     reason:
       "The old map server actions as client functions (82450ad1's " +
       "map/actions.ts, place-actions.ts, menuScanning.ts): the map machine's " +
@@ -57,20 +67,46 @@ const EXEMPT: Readonly<Record<string, Exemption>> = {
       "to page. Both are behind one `searchGate`, so a resubmit retires the " +
       "search before it.",
   },
-  "cellar-api/CellarCheckIns.tsx": {
+  "pour/PourSheet.tsx": {
     calls: 1,
     reason:
-      "`Cellar.checkIns` is reachable only through CellarDetailQuery, so 'more' " +
-      "re-reads the cellar with a bigger window and replaces the list — not a " +
-      "cursor walk the hook models. `windowGate` keeps a smaller, older window " +
-      "from landing after a bigger one.",
+      "After the band move (a submit-driven write behind the row's `moving` " +
+      "flag, so one at a time), one network-only read of the list's top edit " +
+      "names the move's `seq` for its toast's Undo (D4 `expectedSeq`) — the " +
+      "move payload does not carry it. Its answer is used once, inside that " +
+      "move, and only when it is that move (`movedEditSeq`).",
   },
-  "recipe/RecipePhotoProcessor.tsx": {
+  "home/AiJobWatcher.tsx": {
+    calls: 1,
+    reason:
+      "X10's job watcher polls `me.aiJobs` (one bounded list, never paged) " +
+      "with network-only reads, one at a time: the next poll is scheduled " +
+      "only after the last one answered, a `running` flag the effect's " +
+      "cleanup clears drops any answer that lands after it, and it stops when " +
+      "nothing runs. A poll is a loop over one small set, not a list to page.",
+  },
+  "recipe/editor/useRecipeJob.ts": {
+    calls: 1,
+    reason:
+      "Polls one recipe-reading job (photo or pasted text, X15) to a terminal " +
+      "state with network-only reads in an effect whose cleanup sets " +
+      "`cancelled`; a poll is a loop over one object, not a list.",
+  },
+  "recipe/useRecipePhotoJob.ts": {
     calls: 1,
     reason:
       "Polls one recipe-photo job to a terminal state with network-only reads " +
       "in an effect whose cleanup sets `cancelled`; a poll is a loop over one " +
-      "object, not a list.",
+      "object, not a list. (The capture surface's Recipe mode, X06; the Bar's " +
+      "own composer polls through recipe/editor/useRecipeJob.ts.)",
+  },
+  "common/OnboardingWizard/actors/closeOnboarding.ts": {
+    calls: 1,
+    reason:
+      "An xstate promise actor spawned once the catalogue match is filed: " +
+      "one idempotent closeItemOnboarding per wizard, fire-and-forget " +
+      "bookkeeping whose answer nothing reads — there is no list, and no " +
+      "newer request for it to race.",
   },
   "common/OnboardingWizard/actors/createItem.ts": {
     calls: 4,
@@ -86,7 +122,9 @@ const EXEMPT: Readonly<Record<string, Exemption>> = {
     reason:
       "An xstate promise actor (the restored OnboardingMachine's `analyze`): " +
       "one startItemOnboarding per invocation, and xstate drops the result of " +
-      "an actor whose state has been left, which is the gate.",
+      "an actor whose state has been left, which is the gate. X05 tracks it " +
+      "by session id in `captureDrafts`, so a remount or a resume adopts the " +
+      "read in flight instead of sending a second one.",
   },
   "common/OnboardingWizard/actors/insertCellarItem.ts": {
     calls: 1,
@@ -108,6 +146,14 @@ const EXEMPT: Readonly<Record<string, Exemption>> = {
       "An xstate promise actor (`searchingByImage`, G32): one " +
       "itemSearch(imageFileId) per display photo, network-only, read once to " +
       "choose a next state — the same shape as searchByBarcode beside it.",
+  },
+  "common/OnboardingWizard/actors/searchCatalog.ts": {
+    calls: 1,
+    reason:
+      "An xstate promise actor (`matching`, N19): one itemSearch(text) over " +
+      "the name read, network-only, read once to choose quick review or the " +
+      "form — the same shape as searchByImage, and the machine drops the " +
+      "answer of a state it has left.",
   },
   "common/OnboardingWizard/actors/uploadItemImage.ts": {
     calls: 1,

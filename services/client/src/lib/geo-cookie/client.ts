@@ -9,8 +9,9 @@ import {
  * **D5c.** `/map` and `/map/create-place` read this cookie through
  * `geo-cookie/server.ts` to decide where the canvas opens. Its writer is
  * `components/map/hooks/useGeolocation.ts` again — the old map, restored
- * (UI parity wave 7), which asks for the position when the map mounts and
- * keeps watching it, as production did. Between D5 and that restore the
+ * (UI parity wave 7), which keeps watching the position once it has one. Since
+ * D14 it asks when the map opens only after the app's own one-line reason
+ * (or at once, when the browser already allows it). Between D5 and that restore the
  * writer was a "Use my location" button in the rewrite's explorer.
  *
  * Rounds to 4 decimal places (~11m precision).

@@ -1,5 +1,14 @@
 # Restored UI building blocks (UI parity wave 1a)
 
+> **Superseded (2026-10-08).** These restored building blocks were Joy-era
+> markup. The Joy → shadcn migration (D20) converted or replaced every one of
+> them, and its removal step deleted the ones that were left — `common/Link`,
+> `common/UserAvatar`, `common/InteractiveCard`, `common/AIDraftField`,
+> `common/AnimatedPlaceholder`, `common/rating/StarRating`, the Joy theme
+> (`providers/ThemeRegistry`) and its Emotion cache. Their successors are the
+> app primitives in `components/app/` (`app/README.md`). Paths and "verbatim"
+> notes below describe the restore as it was, not the tree as it is.
+
 The production UI at `82450ad1` is the spec (`docs/architecture/ui-parity-decisions.md`).
 These are its shared pieces, restored once so each domain wave ports its own
 pages on top of them instead of re-porting them six ways.
@@ -28,7 +37,7 @@ file the rewrite owns: `common/` already held the old `DebouncedInput`, `Link`,
 | `components/cellar/CellarItemsFilter.tsx` | same, plus `cellarItemCounts.ts` | `ItemTypeValue` → SDL `ItemType` |
 | `hooks/useMediaQuery.ts`, `useColumnCount.ts`, `useDebouncedCallback.ts`, `useAnimatedPlaceholder.ts` | same | verbatim |
 | `hooks/useEnum.ts` | same, plus `hooks/enum-options.ts` | rewritten over `useReferenceOptions` |
-| `utilities/hooks.ts` | same | safe `?types=` parse (`utilities/types-param.ts`); `useReviewersFilterState` left to rankings |
+| `utilities/hooks.ts` | same | safe `?types=` parse (`utilities/types-param.ts`); `useReviewersFilterState` removed with the rankings toggles (N15: `/rankings` keeps `?scope=`) |
 | `utilities/index.ts` | same (pure half only) | see below |
 | `functions/_packages/shared/utility/index.ts` (formatters) | `utilities/formatters.ts` | copied; "Vieena" typo fixed |
 
@@ -47,7 +56,7 @@ own them add those); the recipe and place hooks (`useCanonicalRecipe`,
 | `getNhostStorageUrl(file_id)` into `next/image` | presigned `ItemImage.file.url` into `next/image`, as before. Read URLs are stable per 6-day window (`services/actors/src/lib/s3-presign.ts`, "Stable read URLs"), so the optimizer's cache hits; the file host's `remotePatterns` entry is derived from `PUBLIC_FILES_HOST` (`next.config.mjs`, `imagesConfig`). Was a plain `<img>` under D10 until 2026-10-06 | `ItemCard`, `ItemImage`, `PlaceDetails`, `PlaceDetailsContent` |
 | `next/image` `placeholder` from a base64 body | unchanged (`getNextPlaceholder` adds the `data:image/` prefix) | `ItemCard`, `ItemImage` |
 | `next/image` on `brand.logo_url` / `recipe.image_url` | a plain `<img>`: both are free-form URLs on any host, and a `remotePatterns` entry that admits any host is an open SSRF proxy | `BrandCard`, `BrandDetails`, `ItemBrands`, recipe components |
-| `addFavoriteAction` / `deleteFavoriteAction(favoriteId)` server actions | `toggleFavorite(itemId, type)` via URQL, reconciled to the payload's `favorited`; optimistic flip and revert kept | `ItemCard` |
+| `addFavoriteAction` / `deleteFavoriteAction(favoriteId)` server actions | `setFavorite(itemId, type, favorited)` via URQL (was `toggleFavorite` until wave B), reconciled to the payload's `favorited`; optimistic flip and revert kept | `ItemCard` |
 | `favoriteId` prop | `isFavorite` (from `Item.isFavorite`) | `ItemCardItem` |
 | `displayImageId` prop | `displayImageUrl` | `ItemCardItem` |
 | six `*ItemCardFragment`s on Hasura tables | one `ItemCardFragment` on `Item` | `item/ItemCard/fragments.ts` |

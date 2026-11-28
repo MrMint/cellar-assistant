@@ -61,14 +61,21 @@ import {
   BUDGET_ACTOR_ID,
   BudgetActorDescriptor,
   BudgetExceededError,
+  ConflictError,
 } from "@cellar-assistant/contracts";
 import type {
+  ModelReleaseInput,
   ModelReserveInput,
   ModelSeam,
   ModelSettleInput,
 } from "../../actors/budget-actor.ts";
 import { AI_MODEL_SERVICE } from "../../actors/budget-actor.ts";
 import { internal } from "../internal-client.ts";
+import {
+  isNoModelResponse,
+  mayHaveBeenBilled,
+  noModelResponse,
+} from "./no-response.ts";
 import type {
   AIProvider,
   EmbeddingRequest,
@@ -133,13 +140,17 @@ const IMAGE_TOKENS = 4200;
  */
 export const OUTPUT_TOKEN_ESTIMATES: Readonly<Record<ModelSeam, number>> = {
   embedding: 0,
+  flavour_tags: 256,
   image_embedding: 0,
   image_search: 0,
   item_defaults: 1024,
+  item_suggestions: 512,
   menu_extraction: 4096,
   menu_match: 512,
   place_review: 512,
   recipe_photo: 4096,
+  // L03: `{ factsSupportALine, line }`, one sentence of at most 30 words.
+  taste_phrase: 64,
   tier_list_insights: 1024,
 };
 
@@ -170,6 +181,8 @@ export const estimateImageTokens = (images: number): number =>
 export type ModelBudget = {
   reserve(ctx: Ctx, input: ModelReserveInput): Promise<ReserveResult>;
   settle(ctx: Ctx, input: ModelSettleInput): Promise<void>;
+  /** D17: give back a reservation whose call got no model response. */
+  release(ctx: Ctx, input: ModelReleaseInput): Promise<void>;
 };
 
 /**
@@ -190,6 +203,10 @@ export const daprModelBudget: ModelBudget = {
     ),
   settle: (ctx, input) =>
     internal(ctx)(BudgetActorDescriptor, BUDGET_ACTOR_ID).settleForModel(input),
+  release: (ctx, input) =>
+    internal(ctx)(BudgetActorDescriptor, BUDGET_ACTOR_ID).releaseForModel(
+      input,
+    ),
 };
 
 /**
@@ -246,11 +263,54 @@ export type MeterOptions = {
   readonly entityType?: string;
 };
 
+/**
+ * The refusal, typed. N07: `reason` says whose limit it was — `USER_CAP`
+ * (this account's rolling window) or `SERVICE_BUDGET` (anything
+ * service-wide) — and `retryAt` when asking again can work, so a client never
+ * has to read this message to tell "you, for an hour" from "everyone, until
+ * the month turns". The message stays an operator's.
+ */
 const refuse = (seam: ModelSeam, result: ReserveResult): never => {
   throw new BudgetExceededError(
     `${AI_MODEL_SERVICE}/${seam} refused: ${result.reason}. No model was ` +
       "called and nothing was generated — this is a refusal, not an answer.",
+    result.refusal ?? "SERVICE_BUDGET",
+    result.retryAt ?? null,
   );
+};
+
+/**
+ * D17: hand a reservation back when its call got no model response. The
+ * caller rethrows the call's own error right after.
+ *
+ * Quiet for the reason `settleQuietly` is, and the second of the two
+ * swallowing catches `no-silent-fallback.test.ts` allows: a failed
+ * bookkeeping hop must not replace the error the caller needs to see (a
+ * transport failure is what the outbox retries on). If the release itself
+ * fails, the reservation stands — the over-count, which is the safe
+ * direction. `Promise<void>`, so there is no answer it could fabricate.
+ */
+const releaseIfUnanswered = async (
+  budget: ModelBudget,
+  ctx: Ctx,
+  seam: ModelSeam,
+  usageId: string | null,
+  error: unknown,
+): Promise<void> => {
+  if (usageId === null || !isNoModelResponse(error)) return;
+  try {
+    await budget.release(ctx, {
+      usageId,
+      seam,
+      ...(mayHaveBeenBilled(error) ? { keepCost: true } : {}),
+    });
+  } catch (releaseError) {
+    console.warn(
+      `[ai-budget] ${seam}: could not release usage row ${usageId} after ` +
+        "a call that got no response; it still counts:",
+      releaseError instanceof Error ? releaseError.message : releaseError,
+    );
+  }
 };
 
 /**
@@ -315,6 +375,18 @@ export const meteredProviderFor = (
         estimateImageTokens(request.images?.length ?? 0);
       const outputTokens = OUTPUT_TOKEN_ESTIMATES[seam];
 
+      // N09: a caller that has already stopped waiting books nothing — no
+      // reservation, no call. One that gives up mid-call aborts the request,
+      // and `releaseIfUnanswered` below treats that like any transport loss.
+      if (request.signal?.aborted === true) {
+        throw noModelResponse(
+          new ConflictError(
+            `${AI_MODEL_SERVICE}/${seam}: the caller stopped waiting before ` +
+              "the model was called; nothing was reserved or sent",
+          ),
+        );
+      }
+
       const reservation = await budget.reserve(ctx, {
         seam,
         provider: provider.name,
@@ -333,7 +405,19 @@ export const meteredProviderFor = (
       });
       if (!reservation.allowed) refuse(seam, reservation);
 
-      const response = await provider.generateContent(request, quality);
+      let response: GenerateContentResponse;
+      try {
+        response = await provider.generateContent(request, quality);
+      } catch (error) {
+        await releaseIfUnanswered(
+          budget,
+          ctx,
+          seam,
+          reservation.usageId,
+          error,
+        );
+        throw error;
+      }
 
       const measured = measuredTokens(response, inputTokens);
       if (reservation.usageId !== null && measured !== null) {
@@ -374,7 +458,18 @@ export const meteredProviderFor = (
         },
       });
       if (!reservation.allowed) refuse(seam, reservation);
-      return provider.generateEmbeddings(request);
+      try {
+        return await provider.generateEmbeddings(request);
+      } catch (error) {
+        await releaseIfUnanswered(
+          budget,
+          ctx,
+          seam,
+          reservation.usageId,
+          error,
+        );
+        throw error;
+      }
     },
   });
 };

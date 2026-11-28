@@ -1,14 +1,21 @@
 /**
  * `CellarActor` — B1 (migration plan §2.1, §3).
  *
- * Owns `cellars`, `cellar_owners`, `cellar_items` and `check_ins`, and loads
- * all four on activate: §2.1's "the cellar row, owners, all `cellar_items` (a
- * cellar is small enough to hold), and `check_ins` for those items". That
- * sentence is load-bearing rather than descriptive — because the whole
- * aggregate is in memory, `items` and `checkIns` sort and page the cached
- * list with `offsetPage` instead of issuing a keyset query per call, and
- * `semanticQuery` becomes a *re-sort* of that same list rather than a
- * different query.
+ * Owns `cellars`, `cellar_owners` and `cellar_items`, and loads all three on
+ * activate: §2.1's "the cellar row, owners, all `cellar_items` (a cellar is
+ * small enough to hold)". That sentence is load-bearing rather than
+ * descriptive — because the whole aggregate is in memory, `items` sorts and
+ * pages the cached list with `offsetPage` instead of issuing a keyset query
+ * per call, and `semanticQuery` becomes a *re-sort* of that same list rather
+ * than a different query.
+ *
+ * **`check_ins` left this aggregate in X02.** A log entry is about an item,
+ * and a bottle is only where it was poured from, so its writer is
+ * `CheckInActor`. This actor still answers the cellar-scoped history
+ * (`checkIns`, `checkInsOf`) — read fresh per call, never cached, because it
+ * no longer writes the rows (§1.3: cache only what you write) — and
+ * `removeItem` no longer deletes a bottle's logs: the foreign key nulls their
+ * `cellar_item_id`, and the drinker's history survives the bottle (D5).
  *
  * ## The four-branch rule, and where it does and does not apply
  *
@@ -63,24 +70,21 @@
  *
  * ## Idempotency (§8.4)
  *
- * `cellar_items` and `check_ins` have no natural unique constraint — two
- * bottles of the same wine, or two drinks from the same bottle, are two
- * legitimate rows — so the only thing that can recognise a redelivery is the
- * row id. `addItem` and `checkIn` therefore take one from the caller.
+ * `cellar_items` has no natural unique constraint — two bottles of the same
+ * wine are two legitimate rows — so the only thing that can recognise a
+ * redelivery is the row id. `addItem` therefore takes one from the caller
+ * (as `CheckInActor.log` does, keyed by the id its caller mints).
  * `addItem` alone falls back to `idempotencyKey(ctx, …)` (`lib/delivery.ts`),
  * derived from the delivery `OutboxActor` minted and so stable across its
  * at-least-once redeliveries — and null for anything but a genuine delivery,
  * so a request cannot pick its own row ids. `addItem` is the method B2's
  * `ItemOnboardingActor.confirm` calls (§2.1), so this is where its
  * "re-delivered twice … one cellar item" acceptance is actually paid for.
- * `checkIn` is no outbox target, and `forwardCtx` strips `delivery` from
- * every onward call, so a delivery key could never reach it: without a
- * caller's id it mints a random one, and a retry is a second check-in.
  *
  * ## No outbox row is written here
  *
  * Deliberately, and it is a finding rather than an omission: §2.1 lists no
- * `(system, outbox)` method for this aggregate, none of its four tables has
+ * `(system, outbox)` method for this aggregate, none of its tables has
  * an event trigger today, and its one cross-actor dependency —
  * `EmbeddingActor` for semantic sort — is the single synchronous entity →
  * search call §8.5 allows. This actor is an outbox *target*, not a source.
@@ -89,18 +93,27 @@ import { randomUUID } from "node:crypto";
 import type {
   ActorCategory,
   AddCellarItemInput,
+  BottleLogSummaryDto,
   CappedList,
   CellarActorInterface,
+  CellarDashboardArgs,
+  CellarDashboardDto,
   CellarDto,
   CellarItemDto,
+  CellarItemGroupDto,
+  CellarItemGroupPage,
+  CellarItemGroupsArgs,
   CellarItemSort,
   CellarItemSource,
   CellarItemStatus,
   CellarItemsArgs,
+  CellarNameMatchesArgs,
+  CellarSearchMeaning,
   CheckInDto,
   CreateCellarInput,
   Ctx,
   DeletedCellar,
+  InternalCellarActorInterface,
   ItemRef,
   ItemType,
   ItemTypeCountsDto,
@@ -108,20 +121,36 @@ import type {
   PageArgs,
   PermissionType,
   RemovedCellarItem,
+  RestoreCellarItemInput,
+  StarterCellarInput,
   UpdateCellarInput,
   UpdateCellarItemInput,
 } from "@cellar-assistant/contracts";
 import {
+  BOTTLE_LOCATION_MAX,
+  BOTTLE_PRICE_MAX,
+  type BottleFreshness,
+  type BottleFreshnessInput,
+  CELLAR_ALMOST_EMPTY_AT,
+  CELLAR_LOG_MONTHS,
+  CELLAR_RECENT_DAYS,
   CellarActorDescriptor,
   ConflictError,
+  compareDrinkSoon,
+  type DrinkSoonDto,
   ForbiddenError,
   ITEM_TYPES,
   isCellarItemSource,
   isItemType,
   NotFoundError,
   offsetPage,
+  openedDrinkSoon,
+  orderOwnBottles,
   REVERSE_EDGE_CAP,
   requireReverseEdgeBatch,
+  STARTER_CELLAR_NAME,
+  type StyleFields,
+  sealedDrinkSoon,
   ValidationError,
 } from "@cellar-assistant/contracts";
 import {
@@ -129,34 +158,56 @@ import {
   cellarOwners,
   cellars,
   checkIns,
+  userSettings,
 } from "@cellar-assistant/db";
 import { and, eq, inArray, sql } from "@cellar-assistant/db/orm";
 import {
   bypassesPolicy,
   canSeeCellar,
-  isFriend,
   isOwner,
 } from "@cellar-assistant/policy";
 import type { ActorId, DaprClient } from "@dapr/dapr";
-import { EntityActorBase } from "../lib/actor-base.ts";
+import { absentRow, EntityActorBase } from "../lib/actor-base.ts";
+import {
+  CELLAR_NAME_THRESHOLD,
+  countByMonth,
+  groupInOrder,
+  monthKey,
+  monthsEndingAt,
+  nameScores,
+  narrowCandidates,
+  resolveTimeZone,
+  type SearchMatch,
+} from "../lib/cellar-search.ts";
 import type { DbOrTx } from "../lib/db.ts";
 import { actorDb } from "../lib/db.ts";
 import { idempotencyKey } from "../lib/delivery.ts";
 import { daprEmbedQuery, type EmbedQuery } from "../lib/embedding-client.ts";
+import { requireSystem } from "../lib/guards.ts";
 import { ARCS } from "../lib/item-arcs.ts";
+import { ITEM_TABLES } from "../lib/item-bindings.ts";
 import { itemNames } from "../lib/item-names.ts";
+import { starterCellarId } from "../lib/starter-cellar.ts";
+import { placeIsVisible } from "../lib/unshared-places.ts";
 import { requireUuid } from "../lib/uuid.ts";
 import { vectorDistances } from "../lib/vectors.ts";
 import {
   type CellarAccess,
   cellarVisibility,
-  friendshipsOf,
   isCellarOwner,
+  loadCellarAccess,
 } from "../lib/visibility.ts";
 
 type CellarRow = typeof cellars.$inferSelect;
 type CellarItemRow = typeof cellarItems.$inferSelect;
-type CheckInRow = typeof checkIns.$inferSelect;
+/** A log that still points at one of this cellar's bottles. */
+type BottleCheckInRow = {
+  readonly id: string;
+  readonly userId: string;
+  readonly cellarItemId: string;
+  readonly createdAt: Date;
+  readonly updatedAt: Date;
+};
 
 export type CellarAggregate = {
   readonly cellar: CellarRow;
@@ -164,8 +215,6 @@ export type CellarAggregate = {
   readonly coOwnerIds: readonly string[];
   /** Every row, newest first. §2.1: a cellar is small enough to hold. */
   readonly items: readonly CellarItemRow[];
-  /** Every check-in on those items, newest first. */
-  readonly checkIns: readonly CheckInRow[];
 };
 
 /** What `../lib/visibility.ts` decides a cellar's visibility and ownership from. */
@@ -174,12 +223,6 @@ const access = (aggregate: CellarAggregate): CellarAccess => ({
   privacy: aggregate.cellar.privacy,
   coOwnerIds: aggregate.coOwnerIds,
 });
-
-/**
- * You drank it with a table, not a stadium. Also `MAX_PAGE_SIZE`, so the
- * resolver can hand the written rows straight back as one page.
- */
-const MAX_BULK_CHECK_IN = 100;
 
 /** `cellar_items`' item arc (`../lib/item-arcs.ts`). */
 const ITEMS = ARCS.cellarItems;
@@ -197,7 +240,7 @@ const sourceTypeOf = (value: string | null): CellarItemSource | null =>
 
 export class CellarActor
   extends EntityActorBase<CellarAggregate>
-  implements CellarActorInterface
+  implements CellarActorInterface, InternalCellarActorInterface
 {
   static readonly category: ActorCategory = CellarActorDescriptor.category;
 
@@ -239,21 +282,10 @@ export class CellarActor
       .where(eq(cellarItems.cellarId, id))
       .orderBy(sql`${cellarItems.createdAt} desc, ${cellarItems.id} desc`);
 
-    const itemIds = items.map((item) => item.id);
-    const checkInRows =
-      itemIds.length === 0
-        ? []
-        : await this.db
-            .select()
-            .from(checkIns)
-            .where(inArray(checkIns.cellarItemId, itemIds))
-            .orderBy(sql`${checkIns.createdAt} desc, ${checkIns.id} desc`);
-
     return {
       cellar,
       coOwnerIds: owners.map((owner) => owner.userId),
       items,
-      checkIns: checkInRows,
     };
   }
 
@@ -282,17 +314,18 @@ export class CellarActor
     const query = args.semanticQuery?.trim();
     const dtos =
       query === undefined || query === ""
-        ? await this.#sorted(rows, args.sort)
+        ? await this.#sorted(rows, args.sort, ctx.viewerId)
         : await this.#semanticallySorted(ctx, rows, query);
 
-    return offsetPage(dtos, args.page);
+    return offsetPage(dtos.map(this.#shown(ctx, aggregate)), args.page);
   }
 
   async checkIns(ctx: Ctx, page: PageArgs): Promise<Page<CheckInDto>> {
     const aggregate = this.requireAggregate();
     // The §1.6 decision, in one line. See the module doc.
     await this.requireVisible(ctx, aggregate);
-    return offsetPage(aggregate.checkIns.map(toCheckInDto), page);
+    const rows = await this.#checkInsFor(aggregate.items.map((row) => row.id));
+    return offsetPage(rows.map(toCheckInDto), page);
   }
 
   /**
@@ -303,7 +336,10 @@ export class CellarActor
   async item(ctx: Ctx, cellarItemId: string): Promise<CellarItemDto> {
     const aggregate = this.requireAggregate();
     await this.requireVisible(ctx, aggregate);
-    return toItemDto(this.#requireItem(cellarItemId), null);
+    return this.#shown(
+      ctx,
+      aggregate,
+    )(toItemDto(this.#requireItem(cellarItemId), null));
   }
 
   /**
@@ -326,7 +362,43 @@ export class CellarActor
     const active = bottles.filter((row) => row.emptyAt === null);
     const pool = active.length > 0 ? active : bottles;
     const [only, ...more] = pool;
-    return only === undefined || more.length > 0 ? null : toItemDto(only, null);
+    return only === undefined || more.length > 0
+      ? null
+      : this.#shown(ctx, aggregate)(toItemDto(only, null));
+  }
+
+  /**
+   * X09 "Your bottles": every bottle of each item here, aligned to `items`,
+   * from the cached aggregate — the same rows `bottleFor` picks one from —
+   * filtered by `status` (default `ACTIVE`, as `items` defaults) and in
+   * {@link orderOwnBottles}' order: open, then sealed, then finished.
+   */
+  async bottlesOf(
+    ctx: Ctx,
+    items: readonly ItemRef[],
+    status?: CellarItemStatus | null,
+  ): Promise<readonly (readonly CellarItemDto[])[]> {
+    requireReverseEdgeBatch(items, "bottlesOf items");
+    const aggregate = this.requireAggregate();
+    await this.requireVisible(ctx, aggregate);
+    for (const item of items) {
+      if (!isItemType(item.type)) {
+        throw new ValidationError(`not an item type: ${String(item.type)}`);
+      }
+    }
+    const rows = filtered(aggregate.items, null, status);
+    const shown = this.#shown(ctx, aggregate);
+    return items.map((item) => {
+      const wanted = String(item.id).toLowerCase();
+      return orderOwnBottles(
+        rows
+          .filter((row) => {
+            const ref = itemRefOf(row);
+            return ref.type === item.type && ref.id === wanted;
+          })
+          .map((row) => shown(toItemDto(row, null))),
+      );
+    });
   }
 
   /**
@@ -340,16 +412,340 @@ export class CellarActor
     requireReverseEdgeBatch(cellarItemIds, "checkInsOf cellarItemIds");
     const aggregate = this.requireAggregate();
     await this.requireVisible(ctx, aggregate);
-    return cellarItemIds.map((cellarItemId) => {
-      const wanted = String(cellarItemId).toLowerCase();
-      // `aggregate.checkIns` is newest first already (`loadAggregate`).
-      const rows = aggregate.checkIns.filter(
-        (row) => row.cellarItemId === wanted,
-      );
+    const mine = new Set(aggregate.items.map((row) => row.id));
+    const wanted = cellarItemIds.map((id) => String(id).toLowerCase());
+    // Newest first (`#checkInsFor`), and only this cellar's bottles: an id
+    // from another cellar answers an empty list, as it always has.
+    const all = await this.#checkInsFor(wanted.filter((id) => mine.has(id)));
+    return wanted.map((cellarItemId) => {
+      const rows = all.filter((row) => row.cellarItemId === cellarItemId);
       return {
         nodes: rows.slice(0, REVERSE_EDGE_CAP).map(toCheckInDto),
         totalCount: rows.length,
       };
+    });
+  }
+
+  /* ---------------------------------------------------------------------- */
+  /* X04: the cellar home                                                    */
+  /* ---------------------------------------------------------------------- */
+
+  /**
+   * X04: the grid's list. The same filter as `items` (G2), then either the
+   * sort or — with `search` — the narrowing (`../lib/cellar-search.ts`): name
+   * matches, then meaning matches inside the tuned cutoff, and nothing else.
+   * A search overrides the sort, except FINISHED_DESC (the diary), which
+   * orders what the search kept by date.
+   * Then identical bottles fold into one group ("×3"), which sits where its
+   * best-placed bottle sat. Paged by group; `bottleCount` counts bottles.
+   *
+   * When the phrase cannot be embedded (no AI provider, out of allowance, a
+   * model error) the page is name matches alone and says so (`meaning:
+   * UNAVAILABLE`) — a search by name needs no model, and must not fail
+   * because one is missing.
+   */
+  async itemGroups(
+    ctx: Ctx,
+    args: CellarItemGroupsArgs,
+  ): Promise<CellarItemGroupPage> {
+    const aggregate = this.requireAggregate();
+    await this.requireVisible(ctx, aggregate);
+
+    const rows = filtered(aggregate.items, args.types, args.status);
+    const query = args.search?.trim() ?? "";
+    let ordered: readonly Matched[];
+    let meaning: CellarSearchMeaning = "NOT_ASKED";
+    if (query === "") {
+      ordered = (await this.#sorted(rows, args.sort, ctx.viewerId)).map(
+        (dto) => ({
+          dto,
+          match: null,
+        }),
+      );
+    } else {
+      const searched = await this.#narrowed(ctx, rows, query);
+      meaning = searched.meaning;
+      const hits = searched.matches.map((hit) => ({
+        dto: toItemDto(hit.value, hit.distance),
+        match: hit.match,
+      }));
+      // The narrowing decides *which* bottles; the diary still reads by date,
+      // so a search of Finished keeps its month headings in calendar order
+      // (by relevance they came out as "March 2026", "October 2026", and so
+      // on). Every other sort steps aside for the search's order: names first.
+      ordered =
+        args.sort === "FINISHED_DESC"
+          ? [...hits].sort((a, b) => finishedDesc(a.dto, b.dto))
+          : hits;
+    }
+
+    const shown = this.#shown(ctx, aggregate);
+    const groups = toGroups(
+      ordered.map((entry) => ({ ...entry, dto: shown(entry.dto) })),
+      args.group ?? true,
+    );
+    return {
+      ...offsetPage(groups, args.page),
+      bottleCount: ordered.length,
+      meaning,
+    };
+  }
+
+  /**
+   * X04 / D3: the dashboard above the grid — open, almost empty, finished
+   * this month, recently added, and the logs poured per month. Bottles from
+   * the cached aggregate; the logs read fresh (this actor does not write
+   * them), only their timestamps, only the last {@link CELLAR_LOG_MONTHS}
+   * months' worth. Months are cut in the viewer's zone, so a glass at 11 pm
+   * on the 31st lands in the month the viewer lived it in.
+   */
+  async dashboard(
+    ctx: Ctx,
+    args: CellarDashboardArgs,
+  ): Promise<CellarDashboardDto> {
+    const aggregate = this.requireAggregate();
+    await this.requireVisible(ctx, aggregate);
+
+    const zone = resolveTimeZone(args.timeZone);
+    const now = new Date();
+    const current = monthKey(now, zone);
+    const months = monthsEndingAt(current, CELLAR_LOG_MONTHS);
+    const recentSince = now.getTime() - CELLAR_RECENT_DAYS * DAY_MS;
+
+    const active = aggregate.items.filter((row) => row.emptyAt === null);
+    const open = active.filter(isOpenRow);
+    const finished = aggregate.items.filter((row) => row.emptyAt !== null);
+
+    const ids = aggregate.items.map((row) => row.id);
+    // A day of slack past the oldest month's start in any zone; the
+    // bucketing drops whatever falls outside the months.
+    const since = new Date(
+      now.getTime() - (CELLAR_LOG_MONTHS * 31 + 1) * DAY_MS,
+    );
+    const logs =
+      ids.length === 0
+        ? []
+        : await this.db
+            .select({ createdAt: checkIns.createdAt })
+            .from(checkIns)
+            .where(
+              and(
+                inArray(checkIns.cellarItemId, ids),
+                sql`${checkIns.createdAt} >= ${since.toISOString()}`,
+              ),
+            );
+
+    return {
+      bottleCount: active.length,
+      openCount: open.length,
+      almostEmptyCount: open.filter(
+        (row) => Number(row.percentageRemaining) <= CELLAR_ALMOST_EMPTY_AT,
+      ).length,
+      finishedThisMonth: finished.filter(
+        (row) =>
+          row.emptyAt !== null && monthKey(row.emptyAt, zone) === current,
+      ).length,
+      finishedCount: finished.length,
+      addedRecently: active.filter(
+        (row) => row.createdAt.getTime() >= recentSince,
+      ).length,
+      logsByMonth: countByMonth(
+        logs.map((log) => log.createdAt),
+        months,
+        zone,
+      ),
+      currentMonth: current,
+      timeZone: zone,
+    };
+  }
+
+  /**
+   * ux-c L02 / L18: Drink soon. Opened bottles past their style's shortest
+   * open life, most overdue first; then sealed ones whose window — the
+   * owner's own dates, else the table's typical one — closes within the
+   * horizon, soonest first. Both rules are `@cellar-assistant/contracts`'
+   * (`openedDrinkSoon`, `sealedDrinkSoon`), the same ones Home runs, and
+   * neither estimates anything: a style with no row and no date of the
+   * owner's never appears (D29).
+   *
+   * Owners only — it reads their private dates — so a viewer who may merely
+   * see the cellar gets `[]`, and one who may not see it the usual refusal.
+   */
+  async drinkSoon(ctx: Ctx, page: PageArgs): Promise<Page<DrinkSoonDto>> {
+    const aggregate = this.requireAggregate();
+    await this.requireVisible(ctx, aggregate);
+    if (!this.#isOwner(ctx, aggregate)) return offsetPage([], page);
+    const active = aggregate.items.filter((row) => row.emptyAt === null);
+    if (active.length === 0) return offsetPage([], page);
+
+    const styles = await itemStyles(this.db, active.map(itemRefOf));
+    const now = Date.now();
+    const today = new Date(now).toISOString().slice(0, 10);
+    const soon: DrinkSoonDto[] = [];
+    for (const row of active) {
+      const ref = itemRefOf(row);
+      const style = styles.get(ref.id);
+      if (style === undefined) continue; // the item row is gone
+      const bottle = toItemDto(row, null);
+      if (row.openAt !== null) {
+        const state = openedDrinkSoon(ref.type, style.fields, bottle, now);
+        if (state === null) continue;
+        soon.push({
+          bottle,
+          reason: "OPENED",
+          urgency: state.urgency === "past" ? "PAST" : "NOW",
+          openDays: state.openDays,
+          openLifeDays: [state.entry.fromDays, state.entry.untilDays],
+          window: null,
+          typicalFor: state.entry.label,
+          ratio: state.ratio,
+        });
+        continue;
+      }
+      const state = sealedDrinkSoon(
+        ref.type,
+        style.fields,
+        {
+          packagedOn: bottle.packagedOn,
+          acquiredOn: bottle.acquiredOn,
+          openedAt: null,
+          vintageYear: style.vintageYear,
+          drinkFrom: bottle.drinkFrom,
+          drinkUntil: bottle.drinkUntil,
+          emptyAt: bottle.emptyAt,
+        },
+        today,
+      );
+      if (state === null) continue;
+      soon.push({
+        bottle,
+        reason: "SEALED",
+        urgency: state.urgency === "past" ? "PAST" : "SOON",
+        openDays: null,
+        openLifeDays: null,
+        window: state.window,
+        typicalFor: state.entry?.label ?? null,
+        ratio: null,
+      });
+    }
+    return offsetPage(soon.sort(compareDrinkSoon), page);
+  }
+
+  /**
+   * X04: the Finished diary's "your log" — the viewer's **own** logs from
+   * each bottle, never a co-owner's or a friend's (their notes are theirs;
+   * `checkIns` already tells the cellar *that* they drank). Gated on the
+   * cellar, like every read here.
+   */
+  async myLogsOf(
+    ctx: Ctx,
+    cellarItemIds: readonly string[],
+  ): Promise<readonly BottleLogSummaryDto[]> {
+    requireReverseEdgeBatch(cellarItemIds, "myLogsOf cellarItemIds");
+    const aggregate = this.requireAggregate();
+    await this.requireVisible(ctx, aggregate);
+    const wanted = cellarItemIds.map((id) => String(id).toLowerCase());
+    const viewer = ctx.viewerId;
+    const mine = new Set(aggregate.items.map((row) => row.id));
+    const asked = wanted.filter((id) => mine.has(id));
+    const rows =
+      viewer === null || asked.length === 0
+        ? []
+        : await this.db
+            .select({
+              cellarItemId: checkIns.cellarItemId,
+              createdAt: checkIns.createdAt,
+              score: checkIns.score,
+              note: checkIns.note,
+            })
+            .from(checkIns)
+            .where(
+              and(
+                inArray(checkIns.cellarItemId, asked),
+                eq(checkIns.userId, viewer),
+              ),
+            )
+            .orderBy(sql`${checkIns.createdAt} desc, ${checkIns.id} desc`);
+    return wanted.map((cellarItemId) =>
+      summariseLogs(rows.filter((row) => row.cellarItemId === cellarItemId)),
+    );
+  }
+
+  /**
+   * X04's fan-out: bottles still here whose item name matches `search`,
+   * grouped, best first — no embedding, so `services/api` can ask every
+   * cellar the viewer owns for the price of a trigram read each.
+   */
+  async nameMatches(
+    ctx: Ctx,
+    args: CellarNameMatchesArgs,
+  ): Promise<readonly CellarItemGroupDto[]> {
+    const aggregate = this.requireAggregate();
+    await this.requireVisible(ctx, aggregate);
+    const query = String(args.search ?? "").trim();
+    if (query === "") return [];
+    if (!Number.isInteger(args.limit) || args.limit < 1 || args.limit > 20) {
+      throw new ValidationError(
+        `limit must be an integer from 1 to 20, got ${args.limit}`,
+      );
+    }
+    const rows = aggregate.items.filter((row) => row.emptyAt === null);
+    const matches = await this.#namedOnly(rows, query);
+    const shown = this.#shown(ctx, aggregate);
+    const groups = toGroups(
+      matches.map((hit) => ({
+        dto: shown(toItemDto(hit.value, hit.distance)),
+        match: hit.match,
+      })),
+      true,
+    );
+    return groups.slice(0, args.limit);
+  }
+
+  /**
+   * The narrowing over `rows` (`../lib/cellar-search.ts`): name scores and,
+   * when the phrase can be embedded, vector distances.
+   */
+  async #narrowed(
+    ctx: Ctx,
+    rows: readonly CellarItemRow[],
+    query: string,
+  ): Promise<{
+    readonly matches: readonly SearchMatch<CellarItemRow>[];
+    readonly meaning: CellarSearchMeaning;
+  }> {
+    if (rows.length === 0) return { matches: [], meaning: "USED" };
+    const refs = rows.map(itemRefOf);
+    const [scores, distances] = await Promise.all([
+      nameScores(this.db, refs, query),
+      this.#embed(ctx, query).then(
+        (vector) => vectorDistances(this.db, refs, vector),
+        // A model that is missing, out of allowance or failing costs the
+        // meaning arm, not the search: names need no model.
+        () => null,
+      ),
+    ]);
+    return {
+      matches: narrowCandidates(candidatesOf(rows), scores, distances, {
+        nameThreshold: CELLAR_NAME_THRESHOLD,
+      }),
+      meaning: distances === null ? "UNAVAILABLE" : "USED",
+    };
+  }
+
+  /**
+   * Name matches alone — `nameMatches`' path, which must never reach a model
+   * (`MODEL_BACKED_FIELDS` derives that from this method not calling
+   * `#embed`).
+   */
+  async #namedOnly(
+    rows: readonly CellarItemRow[],
+    query: string,
+  ): Promise<readonly SearchMatch<CellarItemRow>[]> {
+    if (rows.length === 0) return [];
+    const scores = await nameScores(this.db, rows.map(itemRefOf), query);
+    return narrowCandidates(candidatesOf(rows), scores, null, {
+      nameThreshold: CELLAR_NAME_THRESHOLD,
     });
   }
 
@@ -371,13 +767,19 @@ export class CellarActor
     }
     const name = requireName(input.name);
     const coOwnerIds = normaliseOwners(input.coOwnerIds ?? [], creator);
+    // H-119 / FR-21: no privacy given is the creator's account default
+    // (`user_settings`, UserActor's — read fresh, never cached, §1.3); no
+    // settings row is the column default, PRIVATE. Only a new cellar reads
+    // it: nothing here or anywhere rewrites an existing cellar's privacy.
+    const privacy =
+      input.privacy ?? (await this.#defaultPrivacyOf(creator)) ?? undefined;
 
     await this.tx(async (tx) => {
       await tx.insert(cellars).values({
         id: this.key,
         name,
         createdById: creator,
-        ...(input.privacy === undefined ? {} : { privacy: input.privacy }),
+        ...(privacy === undefined ? {} : { privacy }),
       });
       if (coOwnerIds.length > 0) {
         await tx
@@ -387,6 +789,55 @@ export class CellarActor
     });
     await this.reload();
     return this.#toDto(this.requireAggregate());
+  }
+
+  async #defaultPrivacyOf(userId: string): Promise<PermissionType | null> {
+    const [row] = await this.db
+      .select({ privacy: userSettings.defaultCellarPrivacy })
+      .from(userSettings)
+      .where(eq(userSettings.userId, userId));
+    return row?.privacy ?? null;
+  }
+
+  /**
+   * N15 — a brand-new account's first cellar, "My Cellar", PRIVATE.
+   *
+   * Reached only through the outbox (`InternalCellarActorInterface`):
+   * better-auth's `user.create` hook enqueues it at
+   * `starterCellarId(ownerId)`. The row runs as `system`, so the guards are
+   * here rather than in a policy check that would open on it:
+   *
+   *   - `system` only — no request, not even an admin's, makes a cellar for
+   *     someone else this way;
+   *   - this actor's key must be the one derived from `ownerId`, so a row
+   *     cannot plant a cellar for one user at an id chosen for another;
+   *   - idempotent: delivery is at least once, and a second run finds the
+   *     cellar (in the aggregate, or as a conflicting insert) and stops.
+   *
+   * A user who later deletes it is not given another: the hook runs on
+   * account creation and nowhere else.
+   */
+  async createStarter(ctx: Ctx, input: StarterCellarInput): Promise<void> {
+    requireSystem(ctx, "only the outbox makes a starter cellar");
+    const ownerId = requireUuid(input.ownerId, "ownerId");
+    if (this.key !== starterCellarId(ownerId)) {
+      throw new ValidationError(
+        `cellar ${this.key} is not ${ownerId}'s starter cellar`,
+      );
+    }
+    if (this.aggregate !== null) return;
+    await this.tx(async (tx) => {
+      await tx
+        .insert(cellars)
+        .values({
+          id: this.key,
+          name: STARTER_CELLAR_NAME,
+          createdById: ownerId,
+          privacy: "PRIVATE",
+        })
+        .onConflictDoNothing({ target: cellars.id });
+    });
+    await this.reload();
   }
 
   /**
@@ -495,6 +946,40 @@ export class CellarActor
    * and writes nothing.
    */
   async addItem(ctx: Ctx, input: AddCellarItemInput): Promise<CellarItemDto> {
+    const cellarItemId =
+      input.cellarItemId ??
+      idempotencyKey(ctx, "CellarActor.addItem:cellar-item") ??
+      randomUUID();
+    return await this.#insertItem(ctx, { ...input, cellarItemId }, null);
+  }
+
+  /**
+   * F-79: Undo for `removeItem`. `addItem`'s write with the removed row's own
+   * id and `createdAt`, so the bottle comes back where it was in the list.
+   */
+  async restoreItem(
+    ctx: Ctx,
+    input: RestoreCellarItemInput,
+  ): Promise<CellarItemDto> {
+    const createdAt = parseInstant(input.createdAt, "createdAt");
+    if (createdAt === null || createdAt.getTime() > Date.now()) {
+      throw new ValidationError("createdAt must be a past instant");
+    }
+    return await this.#insertItem(
+      ctx,
+      {
+        ...input,
+        cellarItemId: requireUuid(input.cellarItemId, "cellarItemId"),
+      },
+      createdAt,
+    );
+  }
+
+  async #insertItem(
+    ctx: Ctx,
+    input: AddCellarItemInput,
+    createdAt: Date | null,
+  ): Promise<CellarItemDto> {
     const aggregate = this.requireAggregate();
     await this.#requireOwner(ctx, aggregate);
 
@@ -508,9 +993,7 @@ export class CellarActor
     }
     const itemId = requireUuid(input.item.id, "item.id");
     const cellarItemId = requireUuid(
-      input.cellarItemId ??
-        idempotencyKey(ctx, "CellarActor.addItem:cellar-item") ??
-        randomUUID(),
+      input.cellarItemId ?? randomUUID(),
       "cellarItemId",
     );
 
@@ -521,6 +1004,18 @@ export class CellarActor
       input.percentageRemaining === undefined
         ? 100
         : requirePercentage(input.percentageRemaining);
+
+    // X27: a source place the caller cannot see — somebody else's place
+    // still under review — is answered as an unknown one, rather than
+    // accepted by the foreign key and so confirmed to exist.
+    const sourcePlaceId = input.sourcePlaceId ?? null;
+    const freshness = freshnessColumns(input, null);
+    if (
+      sourcePlaceId !== null &&
+      !(await placeIsVisible(this.db, ctx, sourcePlaceId))
+    ) {
+      throw new NotFoundError(`place ${sourcePlaceId} not found`);
+    }
 
     await this.tx(async (tx) => {
       await tx
@@ -535,15 +1030,26 @@ export class CellarActor
           openAt: parseInstant(input.openAt, "openAt"),
           emptyAt: parseInstant(input.emptyAt, "emptyAt"),
           sourceType: input.sourceType ?? null,
-          sourcePlaceId: input.sourcePlaceId ?? null,
+          sourcePlaceId,
           sourceMenuItemId: input.sourceMenuItemId ?? null,
+          ...freshness,
+          ...(createdAt === null ? {} : { createdAt, updatedAt: new Date() }),
         })
         // Belt and braces for a redelivery racing itself: the pre-check above
         // reads the activation's cache, this reads Postgres.
         .onConflictDoNothing({ target: cellarItems.id });
     });
     await this.reload();
-    return toItemDto(this.#requireItem(cellarItemId), null);
+    const row = this.requireAggregate().items.find(
+      (item) => item.id === cellarItemId,
+    );
+    if (row === undefined) {
+      // The id is taken by a bottle in another cellar.
+      throw new ConflictError(
+        `cellar item ${cellarItemId} is not in cellar ${this.key}`,
+      );
+    }
+    return toItemDto(row, null);
   }
 
   async updateItem(
@@ -553,9 +1059,13 @@ export class CellarActor
   ): Promise<CellarItemDto> {
     const aggregate = this.requireAggregate();
     await this.#requireOwner(ctx, aggregate);
-    const { id } = this.#requireItem(cellarItemId);
+    const current = this.#requireItem(cellarItemId);
+    const { id } = current;
 
-    const patch: Partial<typeof cellarItems.$inferInsert> = {};
+    const patch: Partial<typeof cellarItems.$inferInsert> = freshnessColumns(
+      input,
+      current,
+    );
     if (input.percentageRemaining !== undefined) {
       patch.percentageRemaining = requirePercentage(input.percentageRemaining);
     }
@@ -567,8 +1077,48 @@ export class CellarActor
     }
     if (input.emptyAt !== undefined) {
       patch.emptyAt = parseInstant(input.emptyAt, "emptyAt");
+      // F-150 (H-103): "Put back" — un-finishing a bottle — restores the
+      // level it was finished at unless the caller names one, and either
+      // way the kept level is spent.
+      if (patch.emptyAt === null && current.emptyAt !== null) {
+        if (
+          input.percentageRemaining === undefined &&
+          current.levelBeforeEmpty !== null
+        ) {
+          patch.percentageRemaining = Number(current.levelBeforeEmpty);
+        }
+        patch.levelBeforeEmpty = null;
+      }
     }
-    return this.#patchItem(id, patch);
+    const destination = await this.#moveDestination(ctx, input.cellarId);
+    if (destination === null) return this.#patchItem(id, patch);
+
+    // SV-B · MC-move (L13). The row keeps its id, so `check_ins.cellar_item_id`
+    // still points at it: the logs, rating and history follow the bottle. The
+    // shelf is a place inside the old cellar, so it goes, whatever the patch
+    // said about it.
+    await this.tx(async (tx) => {
+      await tx
+        .update(cellarItems)
+        .set({
+          ...patch,
+          cellarId: destination,
+          location: null,
+          updatedAt: new Date(),
+        })
+        .where(and(eq(cellarItems.id, id), eq(cellarItems.cellarId, this.key)));
+    });
+    await this.reload();
+    // The destination's activation, if it has one, notices on its next turn
+    // (`onActorMethodPre` below): its row count and newest `updated_at` moved.
+    const [row] = await this.db
+      .select()
+      .from(cellarItems)
+      .where(eq(cellarItems.id, id));
+    if (row === undefined) {
+      throw new NotFoundError(`cellar_item ${cellarItemId} not found`);
+    }
+    return toItemDto(row, null);
   }
 
   async setItemPercentage(
@@ -600,17 +1150,22 @@ export class CellarActor
     const item = this.#requireItem(cellarItemId);
     if (item.emptyAt !== null) return toItemDto(item, null);
     const now = new Date();
+    const level = Number(item.percentageRemaining);
     return this.#patchItem(item.id, {
       emptyAt: now,
       openAt: item.openAt ?? now,
       percentageRemaining: 0,
+      // F-150 (H-103): keep the level it was finished at, so "Put back"
+      // (`updateItem(emptyAt: null)`) restores it. A bottle finished from 0
+      // keeps nothing and comes back full, as before.
+      levelBeforeEmpty: level > 0 ? level : null,
     });
   }
 
   /**
-   * Removes the item and the check-ins that point at it, in one transaction —
-   * `check_ins.cellar_item_id` is `ON DELETE RESTRICT`, so the order is not a
-   * preference.
+   * Removes the bottle and nothing else. Its logs are `CheckInActor`'s and
+   * outlive it: `check_ins.cellar_item_id` is `ON DELETE SET NULL` since X02,
+   * so Postgres detaches them as the row goes (D5, "logs survive the bottle").
    */
   async removeItem(ctx: Ctx, cellarItemId: string): Promise<RemovedCellarItem> {
     const aggregate = this.requireAggregate();
@@ -618,116 +1173,10 @@ export class CellarActor
     const { id } = this.#requireItem(cellarItemId);
 
     await this.tx(async (tx) => {
-      await tx.delete(checkIns).where(eq(checkIns.cellarItemId, id));
       await tx.delete(cellarItems).where(eq(cellarItems.id, id));
     });
     await this.reload();
     return { id };
-  }
-
-  /* ---------------------------------------------------------------------- */
-  /* Check-ins                                                               */
-  /* ---------------------------------------------------------------------- */
-
-  /**
-   * Requires the cellar to be *visible*, which the Hasura permission it
-   * replaces did not check — `check_ins`' insert rule gated only on the
-   * subject being the caller or a friend, so any `cellar_item_id` a client
-   * could name was checkinnable. Drinking from a cellar you cannot see is not
-   * a thing.
-   */
-  async checkIn(
-    ctx: Ctx,
-    requestedItemId: string,
-    checkInId?: string,
-  ): Promise<CheckInDto> {
-    const aggregate = this.requireAggregate();
-    await this.requireVisible(ctx, aggregate);
-    const userId = ctx.viewerId;
-    if (userId === null) throw new ForbiddenError("sign in to check in");
-    const { id: cellarItemId } = this.#requireItem(requestedItemId);
-
-    const id = requireUuid(checkInId ?? randomUUID(), "checkInId");
-    const existing = aggregate.checkIns.find((row) => row.id === id);
-    if (existing !== undefined) return toCheckInDto(existing);
-
-    await this.tx(async (tx) => {
-      await tx
-        .insert(checkIns)
-        .values({ id, userId, cellarItemId })
-        .onConflictDoNothing({ target: checkIns.id });
-    });
-    await this.reload();
-    const written = this.requireAggregate().checkIns.find(
-      (row) => row.id === id,
-    );
-    if (written === undefined) {
-      throw new ConflictError(`check-in ${id} was not written`);
-    }
-    return toCheckInDto(written);
-  }
-
-  /**
-   * §2.1: "rows written on behalf of friends; friend check in policy". Every
-   * id must be the caller or a friend of the caller; one that is not rejects
-   * the whole call before the transaction opens, so there is no partial write.
-   */
-  async bulkCheckIn(
-    ctx: Ctx,
-    requestedItemId: string,
-    userIds: readonly string[],
-  ): Promise<readonly CheckInDto[]> {
-    const aggregate = this.requireAggregate();
-    await this.requireVisible(ctx, aggregate);
-    const viewer = ctx.viewerId;
-    if (viewer === null) throw new ForbiddenError("sign in to check in");
-    const { id: cellarItemId } = this.#requireItem(requestedItemId);
-    if (!Array.isArray(userIds)) {
-      throw new ValidationError("bulkCheckIn takes a list of user ids");
-    }
-
-    // Canonical before the dedupe and before the friend check, both of which
-    // compare strings: an uppercase copy of your own id, or of a friend's,
-    // used to count as a second person and fail as "not a friend".
-    const unique = [
-      ...new Set(userIds.map((userId) => requireUuid(userId, "userIds[]"))),
-    ];
-    if (unique.length === 0) {
-      throw new ValidationError("bulkCheckIn needs at least one user id");
-    }
-    if (unique.length > MAX_BULK_CHECK_IN) {
-      throw new ValidationError(
-        `bulkCheckIn takes at most ${MAX_BULK_CHECK_IN} user ids, got ${unique.length}`,
-      );
-    }
-    const friendships = await friendshipsOf(this.db, viewer);
-    for (const userId of unique) {
-      if (userId === viewer) continue;
-      if (isFriend(ctx, userId, friendships)) continue;
-      throw new ForbiddenError(
-        `cannot check in on behalf of ${userId}: not a friend`,
-      );
-    }
-
-    const rows = unique.map((userId) => ({
-      id: randomUUID(),
-      userId,
-      cellarItemId,
-    }));
-    await this.tx(async (tx) => {
-      await tx.insert(checkIns).values(rows);
-    });
-    await this.reload();
-    const written = new Map(
-      this.requireAggregate().checkIns.map((row) => [row.id, row]),
-    );
-    return rows.map(({ id }) => {
-      const row = written.get(id);
-      if (row === undefined) {
-        throw new ConflictError(`check-in ${id} was not written`);
-      }
-      return toCheckInDto(row);
-    });
   }
 
   /* ---------------------------------------------------------------------- */
@@ -748,6 +1197,80 @@ export class CellarActor
       ctx,
       await cellarVisibility(this.db, ctx, access(aggregate)),
     );
+  }
+
+  /**
+   * ux-c L02: a bottle's dates, price and place are its owners' — anyone else
+   * who may see the cellar reads them as `null`. The mapper for one read.
+   */
+  #shown(
+    ctx: Ctx,
+    aggregate: CellarAggregate,
+  ): (dto: CellarItemDto) => CellarItemDto {
+    return this.#isOwner(ctx, aggregate)
+      ? (dto) => dto
+      : (dto) => ({ ...dto, ...HIDDEN_FRESHNESS });
+  }
+
+  #isOwner(ctx: Ctx, aggregate: CellarAggregate): boolean {
+    return (
+      bypassesPolicy(ctx) || isCellarOwner(access(aggregate), ctx.viewerId)
+    );
+  }
+
+  /**
+   * SV-B · MC-move: the cellar `updateItem` moves a bottle to, or `null` for
+   * no move (absent, `null`, or this cellar under any spelling). The viewer
+   * must be able to write the destination — creator or co-owner — and one
+   * they cannot write answers as absent, the bytes an id naming nothing gets,
+   * so the move cannot be used to learn which cellars exist.
+   */
+  async #moveDestination(
+    ctx: Ctx,
+    cellarId: string | null | undefined,
+  ): Promise<string | null> {
+    if (cellarId === undefined || cellarId === null) return null;
+    const destination = requireUuid(cellarId, "cellarId");
+    if (destination === this.key.toLowerCase()) return null;
+    const target = await loadCellarAccess(this.db, destination);
+    if (
+      target === null ||
+      !(bypassesPolicy(ctx) || isCellarOwner(target, ctx.viewerId))
+    ) {
+      throw absentRow("CellarActor", destination);
+    }
+    return destination;
+  }
+
+  /**
+   * SV-B: `cellar_items` rows can now arrive from another activation — a
+   * bottle moved in from another cellar — and leave by the same route. The
+   * aggregate is loaded on activate (§2.1), so before each turn this compares
+   * the cached rows' count and newest `updated_at` with Postgres' and reloads
+   * on a difference. One indexed aggregate query per turn
+   * (`idx_cellar_items_cellar_id`); every write path here stamps `updated_at`.
+   */
+  override async onActorMethodPre(): Promise<void> {
+    await super.onActorMethodPre();
+    const aggregate = this.aggregate;
+    if (aggregate === null) return;
+    const result = await this.db.execute(sql`
+      select count(*)::int as n,
+             coalesce(floor(extract(epoch from max(updated_at)) * 1000), 0)::float8 as at
+      from public.cellar_items where cellar_id = ${this.key}::uuid
+    `);
+    const fresh = result.rows[0] as { n: number; at: number } | undefined;
+    const cachedAt = aggregate.items.reduce(
+      (latest, row) => Math.max(latest, row.updatedAt.getTime()),
+      0,
+    );
+    if (
+      fresh !== undefined &&
+      (Number(fresh.n) !== aggregate.items.length ||
+        Number(fresh.at) !== cachedAt)
+    ) {
+      await this.reload();
+    }
   }
 
   /** Creator or co-owner. */
@@ -868,11 +1391,46 @@ export class CellarActor
   async #sorted(
     rows: readonly CellarItemRow[],
     sort: CellarItemSort | null | undefined,
+    viewerId: string | null,
   ): Promise<CellarItemDto[]> {
     const dtos = rows.map((row) => toItemDto(row, null));
-    if (sort !== "NAME_ASC") return sorted(dtos, sort);
-    const names = await itemNames(this.db, rows.map(itemRefOf));
-    return dtos.sort(byName(names));
+    if (sort !== "NAME_ASC" && (sort == null || !(sort in KEYED_SORTS))) {
+      return sorted(dtos, sort);
+    }
+    const refs = rows.map(itemRefOf);
+    const names = await itemNames(this.db, refs);
+    if (sort === "NAME_ASC") return dtos.sort(byName(names));
+    // F-79: maker, style, rating — read fresh, as names are (§1.3).
+    const keyed = KEYED_SORTS[sort as KeyedSort];
+    const keys = await itemSortKeys(this.db, refs, keyed, viewerId);
+    return dtos.sort(byKey(keys, keyed.descending, byName(names)));
+  }
+
+  /**
+   * The logs poured from these bottles, newest first. Read per call: since
+   * X02 `CheckInActor` writes `check_ins`, so a cached copy here would go
+   * stale the moment somebody logged a glass.
+   */
+  async #checkInsFor(
+    cellarItemIds: readonly string[],
+  ): Promise<readonly BottleCheckInRow[]> {
+    if (cellarItemIds.length === 0) return [];
+    const rows = await this.db
+      .select({
+        id: checkIns.id,
+        userId: checkIns.userId,
+        cellarItemId: checkIns.cellarItemId,
+        createdAt: checkIns.createdAt,
+        updatedAt: checkIns.updatedAt,
+      })
+      .from(checkIns)
+      .where(inArray(checkIns.cellarItemId, [...cellarItemIds]))
+      .orderBy(sql`${checkIns.createdAt} desc, ${checkIns.id} desc`);
+    return rows.flatMap((row) =>
+      row.cellarItemId === null
+        ? []
+        : [{ ...row, cellarItemId: row.cellarItemId }],
+    );
   }
 
   #toDto(aggregate: CellarAggregate): CellarDto {
@@ -884,6 +1442,8 @@ export class CellarActor
       coOwnerIds: aggregate.coOwnerIds,
       itemCount: aggregate.items.length,
       itemCounts: activeCounts(aggregate.items),
+      finishedCount: aggregate.items.filter((row) => row.emptyAt !== null)
+        .length,
       createdAt: requiredIso(aggregate.cellar.createdAt),
       updatedAt: requiredIso(aggregate.cellar.updatedAt),
     };
@@ -893,6 +1453,14 @@ export class CellarActor
 /* -------------------------------------------------------------------------- */
 /* Pure helpers                                                                */
 /* -------------------------------------------------------------------------- */
+
+/**
+ * A `cellar_items` row as the API sees it. Exported for the one other reader
+ * of whole bottle rows, `CellarsCollectionActor.openBottles` (Home's Continue
+ * shelf), so both shape a bottle the same way.
+ */
+export const cellarItemDtoFrom = (row: CellarItemRow): CellarItemDto =>
+  toItemDto(row, null);
 
 const toItemDto = (
   row: CellarItemRow,
@@ -914,9 +1482,117 @@ const toItemDto = (
   distance,
   createdAt: requiredIso(row.createdAt),
   updatedAt: requiredIso(row.updatedAt),
+  packagedOn: row.packagedOn,
+  acquiredOn: row.acquiredOn,
+  drinkFrom: row.drinkFrom,
+  drinkUntil: row.drinkUntil,
+  priceAmount: row.priceAmount === null ? null : Number(row.priceAmount),
+  priceCurrency: row.priceCurrency,
+  location: row.location,
+  levelBeforeEmpty:
+    row.levelBeforeEmpty === null ? null : Number(row.levelBeforeEmpty),
 });
 
-const toCheckInDto = (row: CheckInRow): CheckInDto => ({
+/**
+ * Each item's style fields and vintage year, the shelf-life table's keys
+ * (ux-c M3), read fresh like `itemNames`: the item tables are `ItemActor`'s
+ * to write, so this actor may not cache them (§1.3). One `select` per type
+ * present.
+ */
+const itemStyles = async (
+  db: DbOrTx,
+  refs: readonly ItemRef[],
+): Promise<
+  Map<string, { fields: StyleFields; vintageYear: number | null }>
+> => {
+  const ids = (type: ItemType) => [
+    ...new Set(refs.filter((ref) => ref.type === type).map((ref) => ref.id)),
+  ];
+  const out = new Map<
+    string,
+    { fields: StyleFields; vintageYear: number | null }
+  >();
+  const yearOf = (date: string | null): number | null =>
+    date === null ? null : Number(date.slice(0, 4));
+  const reads: Promise<void>[] = [];
+  const read = <R>(
+    type: ItemType,
+    query: (wanted: string[]) => Promise<R[]>,
+    shape: (
+      row: R,
+    ) => [string, { fields: StyleFields; vintageYear: number | null }],
+  ) => {
+    const wanted = ids(type);
+    if (wanted.length === 0) return;
+    reads.push(
+      query(wanted).then((rows) => {
+        for (const row of rows) out.set(...shape(row));
+      }),
+    );
+  };
+  const { WINE, BEER, SPIRIT, SAKE, TEA, COFFEE } = ITEM_TABLES;
+  read(
+    "WINE",
+    (w) =>
+      db
+        .select({ id: WINE.id, style: WINE.style, vintage: WINE.vintage })
+        .from(WINE)
+        .where(inArray(WINE.id, w)),
+    (r) => [
+      r.id,
+      { fields: { style: r.style }, vintageYear: yearOf(r.vintage) },
+    ],
+  );
+  read(
+    "BEER",
+    (w) =>
+      db
+        .select({ id: BEER.id, style: BEER.style })
+        .from(BEER)
+        .where(inArray(BEER.id, w)),
+    (r) => [r.id, { fields: { style: r.style }, vintageYear: null }],
+  );
+  read(
+    "SPIRIT",
+    (w) =>
+      db
+        .select({ id: SPIRIT.id, style: SPIRIT.type })
+        .from(SPIRIT)
+        .where(inArray(SPIRIT.id, w)),
+    (r) => [r.id, { fields: { style: r.style }, vintageYear: null }],
+  );
+  read(
+    "SAKE",
+    (w) =>
+      db
+        .select({ id: SAKE.id, style: SAKE.category, vintage: SAKE.vintage })
+        .from(SAKE)
+        .where(inArray(SAKE.id, w)),
+    (r) => [r.id, { fields: { style: r.style }, vintageYear: r.vintage }],
+  );
+  read(
+    "TEA",
+    (w) =>
+      db
+        .select({ id: TEA.id, style: TEA.category, form: TEA.form })
+        .from(TEA)
+        .where(inArray(TEA.id, w)),
+    (r) => [
+      r.id,
+      { fields: { style: r.style, form: r.form }, vintageYear: null },
+    ],
+  );
+  read(
+    "COFFEE",
+    (w) =>
+      db.select({ id: COFFEE.id }).from(COFFEE).where(inArray(COFFEE.id, w)),
+    (r) => [r.id, { fields: { style: null }, vintageYear: null }],
+  );
+  await Promise.all(reads);
+  return out;
+};
+
+const toCheckInDto = (row: BottleCheckInRow): CheckInDto => ({
   id: row.id,
   userId: row.userId,
   cellarItemId: row.cellarItemId,
@@ -964,14 +1640,29 @@ const filtered = (
           }),
         );
   const state = status ?? "ACTIVE";
-  if (state !== "ACTIVE" && state !== "EMPTY" && state !== "ALL") {
+  if (
+    state !== "ACTIVE" &&
+    state !== "EMPTY" &&
+    state !== "ALL" &&
+    state !== "OPEN"
+  ) {
     throw new ValidationError(`not a cellar item status: ${String(state)}`);
   }
+  const inState = (row: CellarItemRow): boolean => {
+    switch (state) {
+      case "ALL":
+        return true;
+      case "ACTIVE":
+        return row.emptyAt === null;
+      case "EMPTY":
+        return row.emptyAt !== null;
+      case "OPEN":
+        return isOpenRow(row);
+    }
+  };
   return rows.filter(
     (row) =>
-      (wanted === null || wanted.has(itemRefOf(row).type)) &&
-      (state === "ALL" ||
-        (state === "ACTIVE" ? row.emptyAt === null : row.emptyAt !== null)),
+      (wanted === null || wanted.has(itemRefOf(row).type)) && inState(row),
   );
 };
 
@@ -994,6 +1685,103 @@ const byName =
     return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
   };
 
+/** F-79: the sorts keyed on item data this actor does not hold. */
+type KeyedSort = "MAKER_ASC" | "STYLE_ASC" | "RATING_DESC";
+type SortKeySpec = {
+  readonly key: "maker" | "style" | "rating";
+  readonly descending: boolean;
+};
+const KEYED_SORTS: Record<KeyedSort, SortKeySpec> = {
+  MAKER_ASC: { key: "maker", descending: false },
+  STYLE_ASC: { key: "style", descending: false },
+  RATING_DESC: { key: "rating", descending: true },
+};
+
+/** The item table and its card-descriptor column, per type (`STYLE_ASC`). */
+const STYLE_COLUMN: Record<ItemType, string> = {
+  WINE: "variety",
+  BEER: "style",
+  SPIRIT: "style",
+  COFFEE: "roast_level",
+  SAKE: "category",
+  TEA: "category",
+};
+
+/**
+ * Item id -> sort key: the primary brand's name (else the earliest linked),
+ * the descriptor column, or the viewer's latest score. Items with none are
+ * absent from the map. One query per item type present.
+ */
+const itemSortKeys = async (
+  db: DbOrTx,
+  refs: readonly ItemRef[],
+  spec: SortKeySpec,
+  viewerId: string | null,
+): Promise<Map<string, string | number>> => {
+  const keys = new Map<string, string | number>();
+  if (spec.key === "rating" && viewerId === null) return keys;
+  const byType = new Map<ItemType, Set<string>>();
+  for (const ref of refs) {
+    byType.set(ref.type, (byType.get(ref.type) ?? new Set()).add(ref.id));
+  }
+  await Promise.all(
+    [...byType.entries()].map(async ([type, idSet]) => {
+      const ids = sql.join(
+        [...idSet].map((id) => sql`${id}::uuid`),
+        sql`, `,
+      );
+      const brandOf = ARCS.itemBrands.column(type, "ib");
+      const reviewOf = ARCS.itemReviews.column(type, "r");
+      const style = sql.identifier(STYLE_COLUMN[type]);
+      const query =
+        spec.key === "maker"
+          ? sql`
+              select distinct on (${brandOf}) ${brandOf}::text as id, b.name as key
+              from public.item_brands ib join public.brands b on b.id = ib.brand_id
+              where ${brandOf} in (${ids})
+              order by ${brandOf}, ib.is_primary desc nulls last, ib.created_at, b.name`
+          : spec.key === "style"
+            ? sql`
+              select t.id::text as id, t.${style}::text as key
+              from ${ITEM_TABLES[type]} t
+              where t.id in (${ids}) and t.${style} is not null`
+            : sql`
+              select distinct on (${reviewOf}) ${reviewOf}::text as id, r.score as key
+              from public.item_reviews r
+              where r.user_id = ${viewerId}::uuid and ${reviewOf} in (${ids})
+              order by ${reviewOf}, r.updated_at desc`;
+      const { rows } = await db.execute<{ id: string; key: string | number }>(
+        query,
+      );
+      for (const row of rows) keys.set(row.id, row.key);
+    }),
+  );
+  return keys;
+};
+
+/** By key (missing last), then `tie` — `byName`, which ends on the row id. */
+const byKey =
+  (
+    keys: ReadonlyMap<string, string | number>,
+    descending: boolean,
+    tie: (a: CellarItemDto, b: CellarItemDto) => number,
+  ) =>
+  (a: CellarItemDto, b: CellarItemDto): number => {
+    const left = keys.get(a.item.id);
+    const right = keys.get(b.item.id);
+    if (left === undefined || right === undefined) {
+      if (left !== right) return left === undefined ? 1 : -1;
+      return tie(a, b);
+    }
+    const order =
+      typeof left === "number" && typeof right === "number"
+        ? left - right
+        : String(left).localeCompare(String(right), "en", {
+            sensitivity: "base",
+          });
+    return (descending ? -order : order) || tie(a, b);
+  };
+
 /** `loadAggregate` already returns newest-first, which is `ADDED_DESC`. */
 const sorted = (
   items: readonly CellarItemDto[],
@@ -1013,16 +1801,117 @@ const sorted = (
       // Open (and not finished) first, then unopened, then empty; newest
       // first inside each group, which `copy` already is.
       return copy.sort((a, b) => openRank(a) - openRank(b));
+    case "OPENED_DESC":
+      // Open bottles, most recently opened first (one opened by its level
+      // alone has no `openAt` and sorts after those that have one), then the
+      // rest as OPEN_FIRST has them.
+      return copy.sort(
+        (a, b) =>
+          openRank(a) - openRank(b) ||
+          (openRank(a) === 0 ? instantDesc(a.openAt, b.openAt) : 0),
+      );
+    case "FINISHED_DESC":
+      // Finished bottles, most recently finished first, then the rest newest
+      // first — the diary's order.
+      return copy.sort(finishedDesc);
     case "NAME_ASC":
-      // Needs names, which `#sorted` reads before it gets here; reaching this
-      // arm means a caller skipped that, so say so rather than guess.
-      throw new Error("NAME_ASC is sorted by CellarActor#sorted, not here");
+    case "MAKER_ASC":
+    case "STYLE_ASC":
+    case "RATING_DESC":
+      // Need item data, which `#sorted` reads before it gets here; reaching
+      // this arm means a caller skipped that, so say so rather than guess.
+      throw new Error(`${sort} is sorted by CellarActor#sorted, not here`);
   }
 };
 
 const openRank = (item: CellarItemDto): number => {
   if (item.emptyAt !== null) return 2;
   return item.openAt === null ? 1 : 0;
+};
+
+/** Newest instant first; a missing one after any present one. Stable on ties. */
+const instantDesc = (a: string | null, b: string | null): number => {
+  if (a === b) return 0;
+  if (a === null) return 1;
+  if (b === null) return -1;
+  return Date.parse(b) - Date.parse(a);
+};
+
+/** FINISHED_DESC: finished first, the latest finish first; stable on ties. */
+const finishedDesc = (a: CellarItemDto, b: CellarItemDto): number =>
+  Number(a.emptyAt === null) - Number(b.emptyAt === null) ||
+  instantDesc(a.emptyAt, b.emptyAt);
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * X04's "open": not finished, and opened — by `openAt`, or by a level already
+ * below full, which the API allows without one. The client's `bottleState`
+ * reads a bottle the same way.
+ */
+const isOpenRow = (row: CellarItemRow): boolean =>
+  row.emptyAt === null &&
+  (row.openAt !== null || Number(row.percentageRemaining) < 100);
+
+const isOpenDto = (dto: CellarItemDto): boolean =>
+  dto.emptyAt === null &&
+  (dto.openAt !== null || dto.percentageRemaining < 100);
+
+/** Rows as `narrowCandidates` takes them. */
+const candidatesOf = (rows: readonly CellarItemRow[]) =>
+  rows.map((row) => ({ value: row, itemId: itemRefOf(row).id, id: row.id }));
+
+/** A bottle in a list, and how it answered a search (null without one). */
+type Matched = {
+  readonly dto: CellarItemDto;
+  readonly match: CellarItemGroupDto["match"];
+};
+
+/**
+ * X04's ×N over an ordered list (`groupInOrder`). Identical means one catalog
+ * item *and* the same side of finished: under "All" a finished bottle is its
+ * own card, never one of a "×3" whose lead is still on the shelf — the card
+ * links to its lead only, so a folded-in finished bottle could not be reached
+ * from the grid, and the "×3" would count bottles that are gone.
+ */
+const toGroups = (
+  ordered: readonly Matched[],
+  group: boolean,
+): CellarItemGroupDto[] =>
+  groupInOrder(
+    ordered,
+    (entry) =>
+      `${entry.dto.item.type}:${entry.dto.item.id}:${
+        entry.dto.emptyAt === null ? "here" : "finished"
+      }`,
+    group,
+  ).map(({ lead, members }) => ({
+    lead: lead.dto,
+    bottleIds: members.map((member) => member.dto.id),
+    count: members.length,
+    openCount: members.filter((member) => isOpenDto(member.dto)).length,
+    match: lead.match,
+  }));
+
+/** The diary's "your log" for one bottle: newest first in, a summary out. */
+const summariseLogs = (
+  rows: readonly {
+    readonly createdAt: Date;
+    readonly score: number | null;
+    readonly note: string | null;
+  }[],
+): BottleLogSummaryDto => {
+  const newest = rows[0];
+  const oldest = rows.at(-1);
+  const scored = rows.find((row) => row.score !== null);
+  const noted = rows.find((row) => row.note !== null && row.note.trim() !== "");
+  return {
+    count: rows.length,
+    firstAt: oldest === undefined ? null : oldest.createdAt.toISOString(),
+    lastAt: newest === undefined ? null : newest.createdAt.toISOString(),
+    lastScore: scored?.score ?? null,
+    lastNote: noted?.note?.trim() ?? null,
+  };
 };
 
 const requireName = (name: string): string => {
@@ -1053,6 +1942,124 @@ const parseInstant = (
     throw new ValidationError(`${what} must be an ISO-8601 instant`);
   }
   return parsed;
+};
+
+/* ux-c L02: a bottle's own dates, price and place ------------------------- */
+
+const CALENDAR_DATE = /^(\d{4})-(\d{2})-(\d{2})$/;
+const CURRENCY = /^[A-Z]{3}$/;
+
+/** A `yyyy-mm-dd` that names a real day, or null; anything else refuses. */
+const parseCalendarDate = (
+  value: string | null | undefined,
+  what: string,
+): string | null => {
+  if (value === null || value === undefined) return null;
+  const m = CALENDAR_DATE.exec(String(value));
+  const day =
+    m === null
+      ? null
+      : new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])));
+  if (m === null || day === null || day.toISOString().slice(0, 10) !== value) {
+    throw new ValidationError(`${what} must be a calendar date, yyyy-mm-dd`);
+  }
+  return value;
+};
+
+/**
+ * The freshness half of a write, validated, as columns. Fields left out are
+ * left out (a patch leaves them alone). `current` is the stored row on an
+ * update, so a one-sided change is still checked against the other end.
+ */
+const freshnessColumns = (
+  input: BottleFreshnessInput,
+  current: Pick<
+    CellarItemRow,
+    "drinkFrom" | "drinkUntil" | "priceAmount" | "priceCurrency"
+  > | null,
+): Partial<typeof cellarItems.$inferInsert> => {
+  const out: Partial<typeof cellarItems.$inferInsert> = {};
+  if (input.packagedOn !== undefined) {
+    out.packagedOn = parseCalendarDate(input.packagedOn, "packagedOn");
+  }
+  if (input.acquiredOn !== undefined) {
+    out.acquiredOn = parseCalendarDate(input.acquiredOn, "acquiredOn");
+  }
+  if (input.drinkFrom !== undefined) {
+    out.drinkFrom = parseCalendarDate(input.drinkFrom, "drinkFrom");
+  }
+  if (input.drinkUntil !== undefined) {
+    out.drinkUntil = parseCalendarDate(input.drinkUntil, "drinkUntil");
+  }
+  const from =
+    out.drinkFrom !== undefined ? out.drinkFrom : (current?.drinkFrom ?? null);
+  const until =
+    out.drinkUntil !== undefined
+      ? out.drinkUntil
+      : (current?.drinkUntil ?? null);
+  if (from !== null && until !== null && from > until) {
+    throw new ValidationError("drinkFrom must not be after drinkUntil");
+  }
+
+  if (input.priceAmount !== undefined) {
+    const amount = input.priceAmount;
+    if (
+      amount !== null &&
+      (!Number.isFinite(amount) || amount < 0 || amount > BOTTLE_PRICE_MAX)
+    ) {
+      throw new ValidationError(
+        `priceAmount must be between 0 and ${BOTTLE_PRICE_MAX}`,
+      );
+    }
+    out.priceAmount = amount === null ? null : Math.round(amount * 100) / 100;
+    // Clearing the amount clears its currency: the pair is set together.
+    if (amount === null) out.priceCurrency = null;
+  }
+  if (input.priceCurrency !== undefined && input.priceCurrency !== null) {
+    const code = String(input.priceCurrency).trim().toUpperCase();
+    if (!CURRENCY.test(code)) {
+      throw new ValidationError(
+        "priceCurrency must be a three-letter ISO 4217 code",
+      );
+    }
+    out.priceCurrency = code;
+  } else if (input.priceCurrency === null) {
+    out.priceCurrency = null;
+  }
+  const amount =
+    out.priceAmount !== undefined
+      ? out.priceAmount
+      : (current?.priceAmount ?? null);
+  const currency =
+    out.priceCurrency !== undefined
+      ? out.priceCurrency
+      : (current?.priceCurrency ?? null);
+  if ((amount === null) !== (currency === null)) {
+    throw new ValidationError(
+      "priceAmount and priceCurrency are set together, or not at all",
+    );
+  }
+
+  if (input.location !== undefined) {
+    const place = input.location === null ? "" : String(input.location).trim();
+    if (place.length > BOTTLE_LOCATION_MAX) {
+      throw new ValidationError(
+        `location must be at most ${BOTTLE_LOCATION_MAX} characters`,
+      );
+    }
+    out.location = place === "" ? null : place;
+  }
+  return out;
+};
+
+const HIDDEN_FRESHNESS: BottleFreshness = {
+  packagedOn: null,
+  acquiredOn: null,
+  drinkFrom: null,
+  drinkUntil: null,
+  priceAmount: null,
+  priceCurrency: null,
+  location: null,
 };
 
 /**

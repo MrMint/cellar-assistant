@@ -1,10 +1,18 @@
-import { ItemEditPage } from "@/components/item/ItemEditPage";
+import { ItemEditPage, itemEditMetadata } from "@/components/item/ItemEditPage";
 
 /**
  * `/sakes/[itemId]/edit` — new-only, kept (decision 2), with the restored
  * form (`components/item/ItemForm.tsx`).
  */
 export const dynamic = "force-dynamic";
+
+export function generateMetadata({
+  params,
+}: {
+  params: Promise<{ itemId: string }>;
+}) {
+  return params.then(({ itemId }) => itemEditMetadata("SAKE", itemId));
+}
 
 export default async function EditSakePage({
   params,

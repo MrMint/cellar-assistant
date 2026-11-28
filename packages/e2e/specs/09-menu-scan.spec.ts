@@ -1,10 +1,4 @@
-import {
-  bodyText,
-  expect,
-  settleNetwork,
-  test,
-  watch,
-} from "../fixtures/test.ts";
+import { expect, settleNetwork, test, watch } from "../fixtures/test.ts";
 
 /**
  * Menu scans.
@@ -121,7 +115,7 @@ test("a browser PUTs to the presigned URL, and a scan is created from it (E3)", 
     "the presigned PUT is signed for the compose-internal MinIO host again — a browser cannot dial that, so E3 has regressed",
   ).not.toContain("minio:9000");
 
-  await primary.goto("/map/scans");
+  await primary.goto("/");
   await settleNetwork(primary);
 
   const put = await primary.evaluate(
@@ -345,17 +339,33 @@ test("my scans list includes the scan I just made", async ({ api }) => {
   ).toContain(scanId);
 });
 
-test("the scans list renders", async ({ primary }) => {
-  const noise = watch(primary);
-  await primary.goto("/map/scans");
-  await settleNetwork(primary);
-  expect(noise.pageErrors, "/map/scans threw").toEqual([]);
-  expect((await bodyText(primary)).length).toBeGreaterThan(0);
+test("my scan is in Home's AI work, with a typed status (X10)", async ({
+  api,
+}) => {
+  test.skip(scanId === null, SCAN_SKIP_REASON);
+  const data = await api.query(
+    `query { me { aiJobs(first: 30) { edges { node {
+       id kind status subjectId failureCode failureReason
+     } } } } }`,
+  );
+  const jobs = data.me.aiJobs.edges.map((e: any) => e.node);
+  const mine = jobs.find((j: any) => j.id === `MENU_SCAN:${scanId}`);
+  expect(mine, "me.aiJobs does not list a scan made just now").toBeDefined();
+  expect(["RUNNING", "READY", "FAILED"]).toContain(mine.status);
+  // N07: a failure is classified, never worded by the server.
+  expect(JSON.stringify(mine)).not.toMatch(/message/);
 });
 
-test("the discoveries page renders", async ({ primary }) => {
+test("the retired scans list and /discoveries land on Home's inbox (X10)", async ({
+  primary,
+}) => {
   const noise = watch(primary);
-  await primary.goto("/discoveries");
+  for (const retired of ["/map/scans", "/discoveries"]) {
+    await primary.goto(retired);
+    await expect(primary, `${retired} did not land Home`).toHaveURL(
+      /^https?:\/\/[^/]+\/#waiting$/,
+    );
+  }
   await settleNetwork(primary);
-  expect(noise.pageErrors, "/discoveries threw").toEqual([]);
+  expect(noise.pageErrors, "Home threw").toEqual([]);
 });

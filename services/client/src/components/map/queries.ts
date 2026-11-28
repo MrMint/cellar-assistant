@@ -99,6 +99,14 @@ export const MapBrowseQuery = graphql(
               rating
               confidence
               isVerified
+              reviewStatus
+              # F-196: the owner's pins (photo, band, rating). The photo is
+              # one actor call per marker that has one mirrored.
+              ratingCount
+              myBand
+              photo {
+                url
+              }
               location {
                 lng
                 lat
@@ -159,6 +167,7 @@ export const PlaceSearchQuery = graphql(
             region
             isVerified
             combinedScore
+            reviewStatus
             location {
               lng
               lat
@@ -212,6 +221,7 @@ export const PlaceByIdQuery = graphql(
         hours
         confidence
         isVerified
+        reviewStatus
       }
       ...ActorErrorFields
     }
@@ -238,6 +248,7 @@ export const MenuLineFragment = graphql(`
     isAvailable
     createdAt
     extractedAttributes
+    canCorrectMatch
     matchedItem {
       id
       type
@@ -245,6 +256,25 @@ export const MenuLineFragment = graphql(`
         __typename
         id
         name
+        isWantToTry
+      }
+    }
+    forYou {
+      yourScore
+      friendsWhoLovedNames
+      friendsWhoLovedCount
+      cellar {
+        __typename
+        id
+        name
+      }
+      likeYouRated {
+        score
+        item {
+          __typename
+          id
+          name
+        }
       }
     }
   }
@@ -268,6 +298,31 @@ export const PlaceInteractionFragment = graphql(`
     updatedAt
   }
 `);
+
+/**
+ * Whether the viewer may see a place at all, and its hero — the place page
+ * asks this on the server, so a missing or hidden place is a 404 (D24) rather
+ * than a 200 with the client's own message, and the name and category are on
+ * screen before the client's full read lands (X24: the hero stays outside the
+ * wait, design §4.4).
+ */
+export const PlaceHeroQuery = graphql(
+  `
+  query PlaceHero($id: ID!) {
+    place(id: $id) {
+      __typename
+      ... on Place {
+        id
+        name
+        primaryCategory
+        categories
+      }
+      ...ActorErrorFields
+    }
+  }
+`,
+  [ActorErrorFieldsFragment],
+);
 
 /** `GET_PLACE_DETAILS` + `GET_PLACE_ENRICHMENT`, in one read. */
 export const PlaceDetailsQuery = graphql(
@@ -312,6 +367,10 @@ export const PlaceDetailsQuery = graphql(
         lastSyncAt
         createdAt
         updatedAt
+        reviewStatus
+        rejectionReason
+        suggestedCategories
+        suggestedDescription
         myInteraction {
           ...MapPlaceInteraction
         }
@@ -591,6 +650,7 @@ export const CreatePlaceMutation = graphql(
       ... on CreatePlacePayload {
         place {
           id
+          reviewStatus
         }
         nearbyDuplicates(first: 5) {
           edges {
@@ -617,6 +677,124 @@ export const CreatePlaceMutation = graphql(
 );
 
 // ---------------------------------------------------------------------------
+// A place under review (X27 / D28) — the creator's controls
+// ---------------------------------------------------------------------------
+
+/** The review fields a creator's controls re-read after every change. */
+export const PlaceReviewFieldsFragment = graphql(`
+  fragment PlaceReviewFields on Place @_unmask {
+    id
+    name
+    description
+    categories
+    primaryCategory
+    reviewStatus
+    rejectionReason
+    suggestedCategories
+    suggestedDescription
+  }
+`);
+
+/** The place as the edit form needs it — every field the creator chose. */
+export const PlaceForEditQuery = graphql(
+  `
+  query PlaceForEdit($id: ID!) {
+    place(id: $id) {
+      __typename
+      ... on Place {
+        id
+        name
+        categories
+        location {
+          lng
+          lat
+        }
+        streetAddress
+        locality
+        region
+        postcode
+        countryCode
+        phone
+        website
+        description
+        reviewStatus
+        rejectionReason
+      }
+      ...ActorErrorFields
+    }
+  }
+`,
+  [ActorErrorFieldsFragment],
+);
+
+/** Edit a pending or rejected place and send it for review again. */
+export const ResubmitPlaceMutation = graphql(
+  `
+  mutation ResubmitPlace($placeId: ID!, $input: ResubmitPlaceInput!) {
+    resubmitPlace(placeId: $placeId, input: $input) {
+      __typename
+      ... on Place {
+        ...PlaceReviewFields
+      }
+      ...ActorErrorFields
+    }
+  }
+`,
+  [PlaceReviewFieldsFragment, ActorErrorFieldsFragment],
+);
+
+/** Delete a pending or rejected place. */
+export const DeletePlaceMutation = graphql(
+  `
+  mutation DeletePlace($placeId: ID!) {
+    deletePlace(placeId: $placeId) {
+      __typename
+      ... on DeletedPlace {
+        placeId
+      }
+      ...ActorErrorFields
+    }
+  }
+`,
+  [ActorErrorFieldsFragment],
+);
+
+/** Take one of the review's suggestions ("also tagged as …"). */
+export const AcceptPlaceSuggestionMutation = graphql(
+  `
+  mutation AcceptPlaceSuggestion(
+    $placeId: ID!
+    $input: AcceptPlaceSuggestionInput!
+  ) {
+    acceptPlaceSuggestion(placeId: $placeId, input: $input) {
+      __typename
+      ... on Place {
+        ...PlaceReviewFields
+      }
+      ...ActorErrorFields
+    }
+  }
+`,
+  [PlaceReviewFieldsFragment, ActorErrorFieldsFragment],
+);
+
+/** Dismiss the rest of the review's suggestions. */
+export const DismissPlaceSuggestionsMutation = graphql(
+  `
+  mutation DismissPlaceSuggestions($placeId: ID!) {
+    dismissPlaceSuggestions(placeId: $placeId) {
+      __typename
+      ... on Place {
+        ...PlaceReviewFields
+      }
+      ...ActorErrorFields
+    }
+  }
+`,
+  [PlaceReviewFieldsFragment, ActorErrorFieldsFragment],
+);
+
+// ---------------------------------------------------------------------------
 // Menu scans
 // ---------------------------------------------------------------------------
 
@@ -629,6 +807,7 @@ export const CreateMenuScanMutation = graphql(
       ... on MenuScan {
         id
         processingStatus
+        matchStatus
         processingError
         itemsDetected
         itemsMatched
@@ -651,6 +830,7 @@ export const MenuScanStatusQuery = graphql(
       ... on MenuScan {
         id
         processingStatus
+        matchStatus
         processingError
         itemsDetected
         itemsMatched
@@ -737,6 +917,7 @@ export const ScanResultsQuery = graphql(
       ... on MenuScan {
         id
         processingStatus
+        matchStatus
         processingError
         itemsDetected
         confidenceScore
@@ -745,6 +926,11 @@ export const ScanResultsQuery = graphql(
         place {
           id
           name
+        }
+        matchCounts {
+          lines
+          matched
+          toConfirm
         }
         menuItems(first: $menuItems) {
           totalCount
@@ -755,6 +941,7 @@ export const ScanResultsQuery = graphql(
           }
         }
         suggestions(first: $suggestions) {
+          totalCount
           edges {
             node {
               ...MapSuggestion

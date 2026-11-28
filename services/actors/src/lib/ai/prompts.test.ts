@@ -100,3 +100,76 @@ describe("AI response schemas", () => {
     expect(country?.description).toContain("COUNTRY_196");
   });
 });
+
+/**
+ * N02: a vintage is asked for as a year. The form edits it as one and writes
+ * `YYYY-01-01` itself; asking the model for a month and a day the label never
+ * prints only invited it to invent them.
+ */
+describe("itemDefaultsSchema date attributes", () => {
+  for (const type of ["WINE", "BEER", "SPIRIT"] as const) {
+    it(`${type}'s vintage asks for a four-digit year`, () => {
+      const schema = prompts.itemDefaultsSchema(type, LARGE_VOCABULARY);
+      const bag = Object.values(schema.properties ?? {}).find(
+        (child) => child.properties?.vintage !== undefined,
+      );
+      const description = bag?.properties?.vintage?.description ?? "";
+      expect(description).toContain(prompts.VINTAGE_YEAR);
+      expect(description).not.toContain("YYYY-MM-DD");
+    });
+  }
+});
+
+describe("L10 · MENU_EXTRACTION_SCHEMA's venue name", () => {
+  const schema = prompts.MENU_EXTRACTION_SCHEMA as JsonSchema & {
+    properties: Record<string, unknown>;
+    required: readonly string[];
+  };
+  const order = Object.keys(schema.properties);
+
+  it("decides the abstention before the name (property order is generation order, L4)", () => {
+    expect(order.indexOf("venueNameIsPrinted")).toBeGreaterThan(-1);
+    expect(order.indexOf("venueNameIsPrinted")).toBeLessThan(
+      order.indexOf("venueName"),
+    );
+    // After the verdict and the transcription it has to be found in.
+    expect(order.indexOf("menuIsLegible")).toBeLessThan(
+      order.indexOf("venueNameIsPrinted"),
+    );
+    expect(order.indexOf("rawText")).toBeLessThan(order.indexOf("venueName"));
+  });
+
+  it("never requires a name, so declining one is reachable", () => {
+    expect(schema.required).not.toContain("venueName");
+    expect(schema.required).not.toContain("venueNameIsPrinted");
+  });
+});
+
+describe("F-77 · itemDefaultsSchema's label kind", () => {
+  it("asks which kind the label is for after the verdict and surface, before any value", () => {
+    for (const type of ITEM_TYPES) {
+      const schema = prompts.itemDefaultsSchema(type, LARGE_VOCABULARY) as {
+        properties: Record<string, { enum?: readonly string[] }>;
+        required: readonly string[];
+      };
+      const order = Object.keys(schema.properties);
+      expect(order.indexOf("labelItemType")).toBe(
+        order.indexOf("surfaceKind") + 1,
+      );
+      expect(order.indexOf("labelItemType")).toBeLessThan(
+        order.indexOf("name"),
+      );
+      expect(schema.properties.labelItemType?.enum).toEqual([
+        "WINE",
+        "BEER",
+        "SPIRIT",
+        "COFFEE",
+        "SAKE",
+        "TEA",
+        "NONE",
+      ]);
+      // Optional: the model can always leave it out.
+      expect(schema.required).not.toContain("labelItemType");
+    }
+  });
+});

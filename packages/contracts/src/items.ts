@@ -57,6 +57,8 @@ import {
   type Simplify,
 } from "./item-types.ts";
 import type { Page, PageArgs } from "./page.ts";
+import type { SeenAtDto, SeenAtInput } from "./places.ts";
+import type { SharedItemDto } from "./share.ts";
 
 /** Exactly the values of the `item_type` Postgres enum. */
 export const ITEM_TYPES = [
@@ -412,6 +414,23 @@ export const requireItemAttributes = (
       );
     }
   }
+
+  // X19: a non-vintage-capable attribute (`wines.vintage`) is nullable, but
+  // its NULL *means* non-vintage — so it has to be answered, not left out.
+  // An explicit `null` is the answer "NV"; an absent key is a caller that
+  // never asked, and storing it would file an undated wine as NV. Checked on
+  // presence only (the key may hold `null`), which JSON — the outbox payload,
+  // Dapr's wire — preserves where it drops `undefined`.
+  for (const [field, attribute] of itemAttributeEntries(type)) {
+    if (attribute.nonVintage !== true) continue;
+    if (bag[field] === undefined || bag[field] === "") {
+      throw new ValidationError(
+        `a ${type.toLowerCase()} needs ${bagKey}.${field}: a year, or null ` +
+          `for a non-vintage (NV) ${type.toLowerCase()} — leaving it out ` +
+          "would file it as NV without anyone having said so",
+      );
+    }
+  }
 };
 
 export type CreateGenericItemInput = {
@@ -444,7 +463,12 @@ export type AttachItemImageInput = {
 export type AddItemReviewInput = {
   readonly score: number;
   readonly text?: string | null;
-  /** Mint it to make the call idempotent (§8.4). */
+  /**
+   * Mint it to make the call idempotent (§8.4). F-148: the id of the
+   * viewer's own review they just deleted puts that review back with its
+   * original `createdAt` (Undo of "Remove my rating"); there is no
+   * `createdAt` input, so nothing else can backdate a review.
+   */
   readonly reviewId?: string | null;
 };
 
@@ -475,6 +499,39 @@ export type SetItemBarcodeInput = {
 
 export type DeletedItemReview = { readonly id: string };
 export type UnlinkedItemBrand = { readonly brandId: string };
+
+/**
+ * X19 / D8 — "Wrong brand? Change it": one turn that makes `brandId` the
+ * item's primary brand and drops the one it corrects.
+ *
+ * `replacesBrandId` is the brand the person saw and is correcting away from —
+ * named by the caller rather than inferred, because an item's links are a set
+ * and "the wrong one" is whichever the page showed (the primary, or the first
+ * link when none is marked). It is unlinked; any *other* primary is demoted to
+ * an ordinary link, so the item ends with exactly one primary. Absent or
+ * `null`: nothing is unlinked (the item had no brand, or the person is adding
+ * one). Naming the same brand twice is a no-op, and so is naming a link that is
+ * already gone — an Undo of an Undo lands where it started.
+ */
+export type ReplaceItemBrandInput = {
+  readonly brandId: string;
+  readonly replacesBrandId?: string | null;
+};
+
+/**
+ * X19 — what the item's creator can ask the AI for on its edit page, and what
+ * it would read. `null` from `ItemActor.correctionSource` for anyone else.
+ */
+export type ItemCorrectionSource = {
+  /**
+   * The onboarding the item was created through — the actor its label re-read
+   * and text suggestions run in (§8.5: a model call blocks one onboarding id,
+   * never the item). `null` for a sake or tea added without one.
+   */
+  readonly onboardingId: string | null;
+  /** That onboarding kept a front or back label photograph to re-read. */
+  readonly hasLabel: boolean;
+};
 export type DetachedItemImage = { readonly id: string };
 
 /** What an `ItemActor.regenerateVector` outbox row carries. */
@@ -482,8 +539,10 @@ export type RegenerateItemVectorPayload = {
   /**
    * `image`: an image was attached or detached while the configured embedding
    * takes images, so the vector's image set changed (`embedding_images`).
+   * `brand` (N08): a brand was linked, unlinked or made primary, and the
+   * brands are part of the embedded text (`embedding_text`).
    */
-  readonly reason: "create" | "update" | "image";
+  readonly reason: "create" | "update" | "image" | "brand";
   readonly itemType: ItemType;
   readonly itemId: string;
 };
@@ -538,6 +597,12 @@ export type RegenerateVectorResult = {
  */
 export type ItemActorInterface = {
   get(ctx: Ctx): Promise<ItemDto>;
+  /**
+   * X17: the public share page's read. Catalog facts, the newest **public**
+   * image and the everyone score — the same answer for every caller,
+   * anonymous included. See `share.ts`.
+   */
+  getShared(ctx: Ctx): Promise<SharedItemDto>;
   /** Called by `ItemOnboardingActor.confirm` and `RecipePhotoJobActor` (§2.1). */
   create(ctx: Ctx, input: CreateItemInput): Promise<ItemDto>;
   /** Creator only; enrichment updates come in as `system`. */
@@ -569,6 +634,23 @@ export type ItemActorInterface = {
   /** Computed in memory from the loaded reviews; replaces `_aggregate` (§2.1). */
   score(ctx: Ctx): Promise<ItemScoreDto>;
   /**
+   * X09: the item page's taste header, "Friends" — the same average as
+   * `score`, over the reviews of the viewer's friends only. The friend set is
+   * read inside the actor from the viewer's own `friends` rows (as
+   * `RankingsActor`'s `FRIENDS` scope is), never accepted from a caller, so
+   * no one can average over a social graph they cannot read. The viewer's own
+   * review is not in it; no friends (or an anonymous or `system` ctx) is
+   * `{ average: null, count: 0 }`.
+   */
+  friendsScore(ctx: Ctx): Promise<ItemScoreDto>;
+  /**
+   * F-154 (H-106): the reviews `friendsScore` averages — one per friend,
+   * their newest, newest first — paged, for the Friends' ratings sheet. The
+   * same friend set, read the same way, so a non-friend's review never
+   * appears and the viewer's own is not in it.
+   */
+  friendsReviews(ctx: Ctx, page: PageArgs): Promise<Page<ItemReviewDto>>;
+  /**
    * UI parity G7: the viewer's own newest review of this item, or `null` —
    * the old card's gold star (`user_reviews` aggregate) and the tier-list
    * row's score. Read from the reviews this actor already holds. Anonymous is
@@ -576,9 +658,27 @@ export type ItemActorInterface = {
    * calling); a `system` ctx, which names nobody, gets `null`.
    */
   myReview(ctx: Ctx): Promise<ItemReviewDto | null>;
+  /**
+   * X23: `userId`'s newest review of this item, or `null` — a tier list's
+   * owner's verdict beside the entry they ranked (`TierListItem.ownerReview`).
+   * Reviews are readable by any signed-in viewer (`reviews`), so this is no
+   * wider than paging through them; anonymous is refused like every read
+   * here.
+   */
+  reviewBy(ctx: Ctx, userId: string): Promise<ItemReviewDto | null>;
   linkBrand(ctx: Ctx, input: LinkItemBrandInput): Promise<ItemBrandDto>;
   unlinkBrand(ctx: Ctx, brandId: string): Promise<UnlinkedItemBrand>;
+  /** X19 / D8: creator only. See {@link ReplaceItemBrandInput}. */
+  replacePrimaryBrand(
+    ctx: Ctx,
+    input: ReplaceItemBrandInput,
+  ): Promise<ItemBrandDto>;
   brands(ctx: Ctx, page: PageArgs): Promise<Page<ItemBrandDto>>;
+  /**
+   * X19: where this item's label re-read and detail suggestions would run, for
+   * its creator; `null` for anyone else. A read — it calls no model.
+   */
+  correctionSource(ctx: Ctx): Promise<ItemCorrectionSource | null>;
   /**
    * `system`, via the outbox. Idempotent on the outbox row id (§8.4). The
    * payload is forensic — it says in the `outbox` row why the vector was
@@ -608,6 +708,8 @@ export type ItemActorInterface = {
     ctx: Ctx,
     input: UpdateGenericItemInput,
   ): Promise<GenericItemDto>;
+  /** L10: where this item was seen, as far as the viewer may see (`SeenAtDto`). */
+  seenAt(ctx: Ctx, input: SeenAtInput): Promise<readonly SeenAtDto[]>;
 };
 
 export const ItemActorDescriptor: ActorDescriptor<ItemActorInterface> = {
@@ -618,6 +720,7 @@ export const ItemActorDescriptor: ActorDescriptor<ItemActorInterface> = {
   // direction a cost limit may err in).
   methods: {
     get: {},
+    getShared: {},
     create: { modelBacked: true },
     update: { modelBacked: true },
     setBarcode: {},
@@ -632,10 +735,18 @@ export const ItemActorDescriptor: ActorDescriptor<ItemActorInterface> = {
     deleteReview: {},
     reviews: {},
     score: {},
+    friendsScore: {},
+    friendsReviews: {},
     myReview: {},
-    linkBrand: {},
-    unlinkBrand: {},
+    reviewBy: {},
+    // Each enqueues `regenerateVector` (N08): the item's brands are part of
+    // its embedded text.
+    linkBrand: { modelBacked: true },
+    unlinkBrand: { modelBacked: true },
+    // The same `regenerateVector` as a link or an unlink, once.
+    replacePrimaryBrand: { modelBacked: true },
     brands: {},
+    correctionSource: {},
     // An embedding through `EmbeddingActor.embedDocument` (90s: up to three
     // label/display image downloads and the model call), plus the turn around
     // it. The outbox waits this long for the delivery (`pairDeliveryTimeoutMs`).
@@ -646,6 +757,7 @@ export const ItemActorDescriptor: ActorDescriptor<ItemActorInterface> = {
     getGeneric: {},
     createGeneric: {},
     updateGeneric: {},
+    seenAt: {},
   },
 };
 

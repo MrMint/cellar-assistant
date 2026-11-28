@@ -1,6 +1,8 @@
 import type { Client } from "urql";
 import type { ApiItemType } from "@/components/cellar-api/itemTypes";
 import type { Barcode } from "@/constants";
+import type { AiOutcome } from "@/lib/ai/outcome";
+import type { DraftMeta } from "@/lib/capture/draft-store";
 import type { OnboardingDefaults } from "../adapter";
 
 /**
@@ -16,9 +18,13 @@ export type SearchByBarcodeInput = {
   urqlClient: Client;
 };
 
-/** G32: the display photo, as captured, and the type being added. */
+/**
+ * G32: the front label, already uploaded at the shutter, and the type being
+ * added. The search reads the label's own file (X06: one upload, not a
+ * second `image-search` copy of the same bytes).
+ */
 export type SearchByImageInput = {
-  displayImage?: string;
+  imageFileId?: string;
   urqlClient: Client;
   itemType?: ApiItemType;
 };
@@ -31,6 +37,11 @@ export type InsertCellarItemInput = {
   /** Minted once per wizard, so a retry files one bottle, not two. */
   cellarItemId: string;
   displayImage?: string;
+  /**
+   * The display photo, already uploaded (the front label, N21): attached as
+   * it is rather than uploaded again. Wins over `displayImage`.
+   */
+  displayImageFileId?: string;
 };
 
 export type InsertCellarItemResult = {
@@ -57,6 +68,41 @@ export type FetchDefaultsInput = {
   barcode?: Barcode;
   frontLabelFileId?: string;
   backLabelFileId?: string;
+  /**
+   * X05: track the read in `captureDrafts` under the session id, so it
+   * survives leaving the page ("Keep going in the background") and a return
+   * adopts it instead of asking again.
+   */
+  draft?: DraftMeta;
+  /**
+   * F-59: the session is a saved draft being finished, so what the person
+   * typed (`draftFields`) and the cellar it was aimed at are read back too.
+   */
+  resumed?: boolean;
+};
+
+/** X05/N21: the optional back label, read with the front under a new session. */
+export type RereadLabelsInput = {
+  urqlClient: Client;
+  itemType: ApiItemType;
+  barcode?: Barcode;
+  /** The front label already uploaded at the shutter, if it was. */
+  frontLabelFileId?: string;
+  /** The back-label capture, as a data URL. */
+  backLabel: string;
+};
+
+export type RereadLabelsResult = DefaultValuesResult & {
+  backLabelFileId?: string;
+};
+
+/** N19: the read label, looked up in the catalogue. */
+export type SearchCatalogInput = {
+  urqlClient: Client;
+  itemType: ApiItemType;
+  defaults: OnboardingDefaults;
+  /** Items the person already declined (the barcode chooser's "Create New"). */
+  excludeItemIds: readonly string[];
 };
 
 export interface DefaultValuesResult {
@@ -64,11 +110,31 @@ export interface DefaultValuesResult {
   itemOnboardingId: string;
   confidence: number;
   /**
-   * The server's refusal when nothing was read — no label, a photograph that
-   * is not one, no provider. Not fatal: the session row exists and confirm
-   * works, which is what makes typing it in by hand a real path.
+   * Why nothing was read — no label, a photograph that is not one, no
+   * provider, a spent allowance — as `aiOutcome`'s words (N07), never the
+   * server's message. Not fatal: the session row exists and confirm works,
+   * which is what makes typing it in by hand a real path.
    */
-  extractionError?: string;
+  extractionError?: AiOutcome;
+  /**
+   * Whether a label photograph reached the read — from the session itself
+   * when it answered (so a resumed draft knows), else from what was sent.
+   */
+  labelSent?: boolean;
+  /**
+   * The front label's file, as the session stored it. A draft resumed after
+   * a full reload has lost the capture itself; this is how it gets its photo
+   * back (X06), and what its bottle's display image is attached from.
+   */
+  frontLabelFileId?: string;
+  /** F-59: the cellar a resumed draft was saved against, when it has one. */
+  draftCellarId?: string;
+  /**
+   * F-227: the kind the label was read as when the read moved it off the
+   * picked one (F-77's `detectedItemType`): the wizard goes on as this kind,
+   * in the session `itemOnboardingId` names. Absent: the picked kind stands.
+   */
+  itemType?: ApiItemType;
 }
 
 export type UploadItemImageInput = {
@@ -76,8 +142,16 @@ export type UploadItemImageInput = {
   itemId: string;
   itemType: ApiItemType;
   displayImage?: string;
+  /** As on {@link InsertCellarItemInput}. */
+  displayImageFileId?: string;
 };
 
 export type UploadItemImageResult = {
   imageId?: string;
+};
+
+/** The session `analyze` opened, closed because an existing item was filed. */
+export type CloseOnboardingInput = {
+  urqlClient: Client;
+  itemOnboardingId: string;
 };

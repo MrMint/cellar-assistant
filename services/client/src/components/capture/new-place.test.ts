@@ -1,0 +1,276 @@
+import { describe, expect, test } from "bun:test";
+import {
+  categoryFromTypes,
+  headerRenameInput,
+  headerRenameProposal,
+  kindLabel,
+  likelyDuplicate,
+  NEW_PLACE_KINDS,
+  NEW_PLACE_WITHIN_METERS,
+  namePrefill,
+  nearbyWithCreated,
+  newPlaceInput,
+  offerNewPlace,
+  pinnedLine,
+  pinnedShort,
+} from "./new-place";
+
+const HERE = { latitude: 37.7749, longitude: -122.4194 };
+/** About 11 m north per 0.0001°. */
+const north = (metres: number) => ({
+  latitude: HERE.latitude + metres / 111_195,
+  longitude: HERE.longitude,
+});
+
+describe("L10 · when the new place is offered", () => {
+  test("only with a fix, the nearby read settled, and nothing within 50 m", () => {
+    expect(
+      offerNewPlace({ location: HERE, nearby: [], searching: false }),
+    ).toBe(true);
+    expect(
+      offerNewPlace({
+        location: HERE,
+        nearby: [{ distanceMeters: NEW_PLACE_WITHIN_METERS + 1 }],
+        searching: false,
+      }),
+    ).toBe(true);
+    expect(
+      offerNewPlace({
+        location: HERE,
+        nearby: [{ distanceMeters: 30 }],
+        searching: false,
+      }),
+    ).toBe(false);
+    expect(offerNewPlace({ location: HERE, nearby: [], searching: true })).toBe(
+      false,
+    );
+    expect(
+      offerNewPlace({ location: null, nearby: [], searching: false }),
+    ).toBe(false);
+  });
+});
+
+const okInput = {
+  name: "Demo Place",
+  category: "wine_bar",
+  location: HERE,
+  placeId: "p-1",
+};
+
+describe("L10 · place creation bounds (N09)", () => {
+  const ok = {
+    name: "Bar Lumen",
+    category: "wine_bar",
+    location: HERE,
+    placeId: "p-1",
+  };
+
+  test("a valid place becomes one PENDING-to-be createPlace input, keeping the minted id", () => {
+    const result = newPlaceInput({ ...ok, name: "  Bar   Lumen " });
+    expect(result).toEqual({
+      ok: true,
+      input: {
+        name: "Bar Lumen",
+        categories: ["wine_bar"],
+        latitude: HERE.latitude,
+        longitude: HERE.longitude,
+        placeId: "p-1",
+      },
+    });
+  });
+
+  test("names outside 2–200 characters are refused before a round trip", () => {
+    for (const name of ["", " B ", "x".repeat(201)]) {
+      const result = newPlaceInput({ ...ok, name });
+      expect(result.ok).toBe(false);
+    }
+    expect(newPlaceInput({ ...ok, name: "x".repeat(200) }).ok).toBe(true);
+  });
+
+  test("a category the server does not take, none, or no real fix is refused", () => {
+    expect(newPlaceInput({ ...ok, category: null }).ok).toBe(false);
+    expect(newPlaceInput({ ...ok, category: "not_a_kind" }).ok).toBe(false);
+    // "More kinds" offers the rest of the server's list.
+    expect(newPlaceInput({ ...ok, category: "sake_bar" }).ok).toBe(true);
+    expect(newPlaceInput({ ...ok, location: null }).ok).toBe(false);
+    expect(
+      newPlaceInput({ ...ok, location: { latitude: 91, longitude: 0 } }).ok,
+    ).toBe(false);
+    expect(
+      newPlaceInput({
+        ...ok,
+        location: { latitude: Number.NaN, longitude: 0 },
+      }).ok,
+    ).toBe(false);
+  });
+
+  test("the created place leads `nearby`, at 0 m, so the scan keeps its position", () => {
+    const list = nearbyWithCreated(
+      [{ id: "far", name: "Far", distanceMeters: 400, category: null }],
+      { id: "p-1", name: "Bar Lumen", category: "wine_bar" },
+    );
+    expect(list.map((place) => [place.id, place.distanceMeters])).toEqual([
+      ["p-1", 0],
+      ["far", 400],
+    ]);
+  });
+});
+
+describe("L10 · the prefill and the D16 budget", () => {
+  test("the nearest listing where the person stands names the place", () => {
+    expect(
+      namePrefill(HERE, {
+        budgetExhausted: false,
+        places: [
+          { name: "Across town", location: north(900) },
+          { name: "Bar Lumen", location: north(12) },
+          { name: "Next door", location: north(40) },
+        ],
+      }),
+    ).toEqual({ kind: "listing", name: "Bar Lumen" });
+  });
+
+  test("out of budget is 'Details pending', and no name is invented", () => {
+    expect(
+      namePrefill(HERE, {
+        budgetExhausted: true,
+        places: [{ name: "Bar Lumen", location: HERE }],
+      }),
+    ).toEqual({ kind: "pending" });
+  });
+
+  test("no listing close enough, or no read, prefills nothing", () => {
+    expect(
+      namePrefill(HERE, {
+        budgetExhausted: false,
+        places: [{ name: "Across town", location: north(900) }],
+      }),
+    ).toEqual({ kind: "none" });
+    expect(namePrefill(HERE, null)).toEqual({ kind: "none" });
+  });
+
+  test("a listing's types pick the category when the sheet has it", () => {
+    expect(categoryFromTypes(["point_of_interest", "bar"])).toBe("bar");
+    expect(categoryFromTypes(["point_of_interest"])).toBeNull();
+    // One of the six kinds wins over the rest of the list.
+    expect(categoryFromTypes(["pub", "bar"])).toBe("bar");
+    expect(categoryFromTypes(["point_of_interest", "pub"])).toBe("pub");
+  });
+});
+
+describe("Capture-Place 04 · six kinds and More kinds", () => {
+  test("six kinds, each filed as a category the server takes", () => {
+    expect(NEW_PLACE_KINDS.map((kind) => kind.label)).toEqual([
+      "Coffee",
+      "Food",
+      "Bar",
+      "Beer",
+      "Wine",
+      "Shop",
+    ]);
+    for (const kind of NEW_PLACE_KINDS) {
+      expect(newPlaceInput({ ...okInput, category: kind.category }).ok).toBe(
+        true,
+      );
+    }
+    expect(kindLabel("wine_bar")).toBe("Wine");
+    expect(kindLabel("sake_bar")).toBeNull();
+    expect(kindLabel(null)).toBeNull();
+  });
+
+  test("the short pin line", () => {
+    expect(pinnedShort(12.4)).toBe("Pinned \u00b7 \u00b112\u202fm");
+    expect(pinnedShort(143)).toBe("Pinned \u00b7 \u00b1140\u202fm");
+    expect(pinnedShort(null)).toBe("Pinned");
+    expect(pinnedShort(Number.NaN)).toBe("Pinned");
+  });
+});
+
+describe("Capture-Place 07 · On the map?", () => {
+  const nearby = [
+    { id: "far", name: "Demo Taproom", distanceMeters: 300 },
+    { id: "near", name: "The Demo Taproom", distanceMeters: 60 },
+    { id: "other", name: "Corner Cafe", distanceMeters: 20 },
+  ];
+  test("the nearest known place named as typed, folded", () => {
+    expect(likelyDuplicate("demo taproom", nearby)?.id).toBe("near");
+    expect(likelyDuplicate("  Corner Café ", nearby)?.id).toBe("other");
+  });
+  test("short or unmatched names match nothing", () => {
+    expect(likelyDuplicate("de", nearby)).toBeNull();
+    expect(likelyDuplicate("Harbour Wines", nearby)).toBeNull();
+    expect(likelyDuplicate("demo taproom", [])).toBeNull();
+  });
+});
+
+describe("L10 · the menu header's rename is only ever a proposal", () => {
+  const pending = { name: "Wine bar near me", reviewStatus: "PENDING" };
+
+  test("proposed for the creator's place Under review when the header differs", () => {
+    expect(
+      headerRenameProposal({ headerName: "Bar Lumen", place: pending }),
+    ).toBe("Bar Lumen");
+  });
+
+  test("not proposed for a shared place, the same name, or no header", () => {
+    expect(
+      headerRenameProposal({
+        headerName: "Bar Lumen",
+        place: { name: "Bar", reviewStatus: "APPROVED" },
+      }),
+    ).toBeNull();
+    expect(
+      headerRenameProposal({
+        headerName: " bar  LUMEN ",
+        place: { ...pending, name: "Bar Lumen" },
+      }),
+    ).toBeNull();
+    expect(
+      headerRenameProposal({ headerName: null, place: pending }),
+    ).toBeNull();
+    expect(
+      headerRenameProposal({ headerName: "X", place: pending }),
+    ).toBeNull();
+    expect(
+      headerRenameProposal({ headerName: "Bar Lumen", place: null }),
+    ).toBeNull();
+  });
+
+  test("applying it needs the confirm, and changes the name alone", () => {
+    const place = {
+      categories: ["wine_bar"],
+      latitude: HERE.latitude,
+      longitude: HERE.longitude,
+      locality: "San Francisco",
+    };
+    const proposal = headerRenameProposal({
+      headerName: "Bar Lumen",
+      place: pending,
+    });
+    expect(proposal).toBe("Bar Lumen");
+    // The proposal is a string: nothing about it is an input. Only a confirm
+    // turns it into one, and the type refuses an unconfirmed call.
+    expect(
+      headerRenameInput(place, { proposal: proposal ?? "", confirmed: true }),
+    ).toEqual({ ...place, name: "Bar Lumen" });
+    // @ts-expect-error — `confirmed: false` is not a confirm.
+    headerRenameInput(place, { proposal: "Bar Lumen", confirmed: false });
+  });
+});
+
+describe("W-16 · the pin says how good the fix is", () => {
+  test("a fix with an accuracy reads as the board's line", () => {
+    expect(pinnedLine(12.4)).toBe(
+      "Pinned at your location, about 12 m accurate",
+    );
+    expect(pinnedLine(0.3)).toBe("Pinned at your location, about 1 m accurate");
+    expect(pinnedLine(143)).toBe(
+      "Pinned at your location, about 140 m accurate",
+    );
+  });
+  test("no accuracy, or a nonsense one, reads as before", () => {
+    expect(pinnedLine(undefined)).toBe("Pinned at your location");
+    expect(pinnedLine(null)).toBe("Pinned at your location");
+    expect(pinnedLine(Number.NaN)).toBe("Pinned at your location");
+  });
+});

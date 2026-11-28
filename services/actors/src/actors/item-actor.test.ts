@@ -25,6 +25,7 @@ import {
   ConflictError,
   type EmbedDocumentInput,
   ForbiddenError,
+  ITEM_TYPE_SPECS,
   type ItemRef,
   type ItemType,
   NotFoundError,
@@ -39,6 +40,7 @@ import { ActorId, DaprClient } from "@dapr/dapr";
 import { afterAll, afterEach, describe, expect, it } from "vitest";
 import type { DbOrTx } from "../lib/db.ts";
 import type { EmbedDocument } from "../lib/embedding-client.ts";
+import { embeddingTextKey } from "../lib/item-bindings.ts";
 import {
   activate,
   closeTestDb,
@@ -50,7 +52,11 @@ import {
 } from "../lib/testing.ts";
 import { imageSetKey, NO_IMAGES, setEmbeddingModel } from "../lib/vectors.ts";
 import type { VerifyFile } from "./item-actor.ts";
-import { embeddingTextFor, ItemActor } from "./item-actor.ts";
+import {
+  embeddingTextFor,
+  ItemActor,
+  REVIEW_RESTORE_WINDOW_MS,
+} from "./item-actor.ts";
 
 const daprClient = (): DaprClient =>
   new DaprClient({ daprHost: "127.0.0.1", daprPort: "3502" });
@@ -295,13 +301,15 @@ describe.skipIf(skip)("ItemActor (B2)", () => {
         await seedReferenceValues(db);
         const onboardingId = await seedOnboarding(db, user, "WINE");
         const actor = await activate(newItemActor(`wine:${randomUUID()}`, db));
+        // `wines.style` — `wines.vintage` was the example here until X19
+        // made it nullable (NULL is non-vintage).
         await expect(
           actor.create(userCtx(user, "r"), {
-            name: "No Vintage",
+            name: "No Style",
             itemOnboardingId: onboardingId,
-            wine: { style: "RED" },
+            wine: { vintage: "2019-01-01" },
           }),
-        ).rejects.toThrow(/wines\.vintage is NOT NULL/);
+        ).rejects.toThrow(/wines\.style is NOT NULL/);
       });
     });
 
@@ -554,6 +562,27 @@ describe.skipIf(skip)("ItemActor (B2)", () => {
       });
     });
 
+    it("reviewBy (X23): a named user's newest review, to any signed-in viewer", async () => {
+      await withTestDb(async (db) => {
+        const { owner, friend, stranger, actor } = await seedScenario(db);
+        await actor.addReview(userCtx(owner, "r"), { score: 2.5 });
+        // A tier list's viewer reading its owner's verdict: no friendship
+        // needed, as for `reviews`.
+        expect(
+          (await actor.reviewBy(userCtx(stranger, "r"), owner))?.score,
+        ).toBe(2.5);
+        expect(await actor.reviewBy(userCtx(owner, "r"), friend)).toBeNull();
+        // Case-insensitive, like every id here.
+        expect(
+          (await actor.reviewBy(userCtx(friend, "r"), owner.toUpperCase()))
+            ?.userId,
+        ).toBe(owner);
+        await expect(actor.reviewBy(anonymousCtx("r"), owner)).rejects.toThrow(
+          ForbiddenError,
+        );
+      });
+    });
+
     it("reviews / score / brands: every signed-in viewer, anonymous refused", async () => {
       await withTestDb(async (db) => {
         const { owner, friend, stranger, actor } = await seedScenario(db);
@@ -610,6 +639,247 @@ describe.skipIf(skip)("ItemActor (B2)", () => {
         await expect(
           actor.unlinkBrand(userCtx(owner, "r"), brandId),
         ).resolves.toEqual({ brandId });
+      });
+    });
+
+    it("replacePrimaryBrand (X19/D8): one primary, the wrong one gone, creator only", async () => {
+      await withTestDb(async (db) => {
+        const { owner, friend, stranger, ref, actor } = await seedScenario(db);
+        const wrong = await seedBrand(db, `Wrong ${randomUUID()}`);
+        const other = await seedBrand(db, `Other ${randomUUID()}`);
+        const right = await seedBrand(db, `Right ${randomUUID()}`);
+        const ctx = userCtx(owner, "r");
+        await actor.linkBrand(ctx, { brandId: wrong, isPrimary: true });
+        await actor.linkBrand(ctx, { brandId: other });
+
+        for (const viewer of [friend, stranger]) {
+          await expect(
+            actor.replacePrimaryBrand(userCtx(viewer, "r"), {
+              brandId: right,
+              replacesBrandId: wrong,
+            }),
+          ).rejects.toThrow(ForbiddenError);
+        }
+
+        const before = (await pendingOutbox(db, actorIdFor(ref))).length;
+        const link = await actor.replacePrimaryBrand(ctx, {
+          brandId: right,
+          replacesBrandId: wrong,
+        });
+        expect(link).toMatchObject({ brandId: right, isPrimary: true });
+        const after = (await actor.brands(ctx, page)).entries.map(
+          (entry) => entry.node,
+        );
+        expect(after.map((row) => [row.brandId, row.isPrimary]).sort()).toEqual(
+          [
+            [right, true],
+            [other, false],
+          ].sort(),
+        );
+        // One re-embed for the whole change (the brands are embedded, N08).
+        expect((await pendingOutbox(db, actorIdFor(ref))).length).toBe(
+          before + 1,
+        );
+
+        // Settled: asking again writes nothing and enqueues nothing.
+        await actor.replacePrimaryBrand(ctx, {
+          brandId: right,
+          replacesBrandId: wrong,
+        });
+        expect((await pendingOutbox(db, actorIdFor(ref))).length).toBe(
+          before + 1,
+        );
+
+        // Undo: the old brand back as primary, the correction unlinked.
+        await actor.replacePrimaryBrand(ctx, {
+          brandId: wrong,
+          replacesBrandId: right,
+        });
+        const undone = (await actor.brands(ctx, page)).entries.map(
+          (entry) => entry.node,
+        );
+        expect(
+          undone.map((row) => [row.brandId, row.isPrimary]).sort(),
+        ).toEqual(
+          [
+            [wrong, true],
+            [other, false],
+          ].sort(),
+        );
+      });
+    });
+
+    it("replacePrimaryBrand promotes an existing link and demotes the old primary when nothing is replaced", async () => {
+      await withTestDb(async (db) => {
+        const { owner, actor } = await seedScenario(db);
+        const first = await seedBrand(db, `First ${randomUUID()}`);
+        const second = await seedBrand(db, `Second ${randomUUID()}`);
+        const ctx = userCtx(owner, "r");
+        await actor.linkBrand(ctx, { brandId: first, isPrimary: true });
+        await actor.linkBrand(ctx, { brandId: second });
+        await actor.replacePrimaryBrand(ctx, { brandId: second });
+        const rows = (await actor.brands(ctx, page)).entries.map(
+          (entry) => entry.node,
+        );
+        expect(rows.map((row) => [row.brandId, row.isPrimary]).sort()).toEqual(
+          [
+            [first, false],
+            [second, true],
+          ].sort(),
+        );
+        await expect(
+          actor.replacePrimaryBrand(ctx, { brandId: "not-a-uuid" }),
+        ).rejects.toThrow(ValidationError);
+      });
+    });
+
+    it("an unknown brand id is a typed NotFound on link and replace, never a raw foreign-key error", async () => {
+      await withTestDb(async (db) => {
+        const { owner, actor } = await seedScenario(db);
+        const ctx = userCtx(owner, "r");
+        const real = await seedBrand(db, `Real ${randomUUID()}`);
+        await actor.linkBrand(ctx, { brandId: real, isPrimary: true });
+        const ghost = randomUUID();
+
+        for (const call of [
+          () => actor.linkBrand(ctx, { brandId: ghost }),
+          () =>
+            actor.replacePrimaryBrand(ctx, {
+              brandId: ghost,
+              replacesBrandId: real,
+            }),
+        ]) {
+          const refused = await call().then(
+            () => null,
+            (error: unknown) => error,
+          );
+          expect(refused).toBeInstanceOf(NotFoundError);
+          expect((refused as NotFoundError).message).toBe(
+            `brand ${ghost} not found`,
+          );
+        }
+        // Nothing moved: the real brand is still the only, primary, link.
+        const rows = (await actor.brands(ctx, page)).entries.map(
+          (entry) => entry.node,
+        );
+        expect(rows.map((row) => [row.brandId, row.isPrimary])).toEqual([
+          [real, true],
+        ]);
+      });
+    });
+
+    it("unlinkBrand is idempotent: a retried clear (first answer lost) succeeds, and clears", async () => {
+      await withTestDb(async (db) => {
+        const { owner, friend, ref, actor } = await seedScenario(db);
+        const ctx = userCtx(owner, "r");
+        const shown = await seedBrand(db, `Shown ${randomUUID()}`);
+        await actor.linkBrand(ctx, { brandId: shown, isPrimary: true });
+
+        await expect(actor.unlinkBrand(ctx, shown)).resolves.toEqual({
+          brandId: shown,
+        });
+        const before = (await pendingOutbox(db, actorIdFor(ref))).length;
+        // The retry: same answer, nothing written, no second re-embed.
+        await expect(
+          actor.unlinkBrand(ctx, shown.toUpperCase()),
+        ).resolves.toEqual({ brandId: shown });
+        expect((await pendingOutbox(db, actorIdFor(ref))).length).toBe(before);
+        expect((await actor.brands(ctx, page)).totalCount).toBe(0);
+        // Still the creator's alone, linked or not.
+        await expect(
+          actor.unlinkBrand(userCtx(friend, "r"), shown),
+        ).rejects.toThrow(ForbiddenError);
+
+        // A lost *change* retried is the same story: replace is a no-op once
+        // it has landed, not a NotFound for the brand it already unlinked.
+        const next = await seedBrand(db, `Next ${randomUUID()}`);
+        await actor.linkBrand(ctx, { brandId: shown, isPrimary: true });
+        const input = { brandId: next, replacesBrandId: shown };
+        await actor.replacePrimaryBrand(ctx, input);
+        await expect(
+          actor.replacePrimaryBrand(ctx, input),
+        ).resolves.toMatchObject({ brandId: next, isPrimary: true });
+      });
+    });
+
+    it("correctionSource (X19): the creator's onboarding and whether it kept a label; null for anyone else", async () => {
+      await withTestDb(async (db) => {
+        const { owner, friend, stranger, actor } = await seedScenario(db);
+        for (const viewer of [friend, stranger]) {
+          await expect(
+            actor.correctionSource(userCtx(viewer, "r")),
+          ).resolves.toBeNull();
+        }
+        const source = await actor.correctionSource(userCtx(owner, "r"));
+        expect(source?.onboardingId).toEqual(expect.any(String));
+        expect(source?.hasLabel).toBe(false);
+
+        const front = await seedFile(db, owner, true);
+        await db.execute(sql`
+          update public.item_onboardings set front_label_image_id = ${front}::uuid
+          where id = ${source?.onboardingId ?? ""}::uuid
+        `);
+        await expect(
+          actor.correctionSource(userCtx(owner, "r")),
+        ).resolves.toEqual({
+          onboardingId: source?.onboardingId,
+          hasLabel: true,
+        });
+
+        // A tea added directly has no onboarding to run in.
+        const { actor: tea } = await createItem(db, "TEA", owner);
+        await expect(
+          tea.correctionSource(userCtx(owner, "r")),
+        ).resolves.toEqual({ onboardingId: null, hasLabel: false });
+      });
+    });
+
+    it("a wine may be non-vintage (X19): created and cleared to a NULL vintage", async () => {
+      await withTestDb(async (db) => {
+        await seedReferenceValues(db);
+        const owner = await seedUser(db);
+        const onboardingId = await seedOnboarding(db, owner, "WINE");
+        const ref: ItemRef = { type: "WINE", id: randomUUID() };
+        const actor = await activate(newItemActor(actorIdFor(ref), db));
+        const ctx = userCtx(owner, "r");
+        // Left out, the vintage is refused: NULL means NV, so it is asked
+        // for — an explicit `null` is the answer, a missing key is not.
+        await expect(
+          actor.create(ctx, {
+            name: "Krug Grande Cuvée",
+            itemOnboardingId: onboardingId,
+            wine: { style: "RED" },
+          }),
+        ).rejects.toThrow(/wine\.vintage: a year, or null/);
+        const created = await actor.create(ctx, {
+          name: "Krug Grande Cuvée",
+          itemOnboardingId: onboardingId,
+          wine: { style: "RED", vintage: null },
+        });
+        expect(created).toMatchObject({ type: "WINE", vintage: null });
+
+        const dated = await actor.update(ctx, {
+          wine: { vintage: "2012-01-01" },
+        });
+        expect(dated).toMatchObject({ vintage: "2012-01-01" });
+        const cleared = await actor.update(ctx, { wine: { vintage: null } });
+        expect(cleared).toMatchObject({ vintage: null });
+      });
+    });
+
+    it("a coffee needs no description (X19)", async () => {
+      await withTestDb(async (db) => {
+        await seedReferenceValues(db);
+        const owner = await seedUser(db);
+        const onboardingId = await seedOnboarding(db, owner, "COFFEE");
+        const ref: ItemRef = { type: "COFFEE", id: randomUUID() };
+        const actor = await activate(newItemActor(actorIdFor(ref), db));
+        const created = await actor.create(userCtx(owner, "r"), {
+          name: "Ethiopia Guji",
+          itemOnboardingId: onboardingId,
+          coffee: {},
+        });
+        expect(created).toMatchObject({ type: "COFFEE", description: null });
       });
     });
 
@@ -909,6 +1179,114 @@ describe.skipIf(skip)("ItemActor (B2)", () => {
           where wine_id = ${ref.id}::uuid
         `);
         expect(rows).toEqual([{ same: true }]);
+      });
+    });
+
+    describe("which text made the vector (N08)", () => {
+      const recording = () => {
+        const texts: string[] = [];
+        const embed: EmbedDocument = async (_ctx, input) => {
+          texts.push(input.text);
+          return {
+            vector: Array.from({ length: 768 }, (_, i) => (i === 7 ? 1 : 0)),
+            model: null,
+          };
+        };
+        return { texts, embed };
+      };
+      const storedText = async (db: DbOrTx, ref: ItemRef) =>
+        (
+          await db
+            .select({ text: itemVectors.embeddingText })
+            .from(itemVectors)
+            .where(eq(itemVectors.wineId, ref.id))
+        ).map((row) => row.text);
+
+      it("links, re-ranks and unlinks of a brand each enqueue a re-embed, in the same transaction", async () => {
+        await withTestDb(async (db) => {
+          const user = await seedUser(db);
+          const { ref, actor } = await createItem(db, "WINE", user);
+          const key = actorIdFor(ref);
+          const brandId = await seedBrand(db, `Maison ${randomUUID()}`);
+          const brandReasons = async () =>
+            (await pendingOutbox(db, key)).filter(
+              (row) =>
+                row.method === "regenerateVector" &&
+                (row.payload as { reason?: string }).reason === "brand",
+            ).length;
+
+          await actor.linkBrand(userCtx(user, "r"), { brandId });
+          expect(await brandReasons()).toBe(1);
+          // Idempotent re-link: nothing changed, nothing enqueued.
+          await actor.linkBrand(userCtx(user, "r"), { brandId });
+          expect(await brandReasons()).toBe(1);
+          await actor.linkBrand(userCtx(user, "r"), {
+            brandId,
+            isPrimary: true,
+          });
+          expect(await brandReasons()).toBe(2);
+          await actor.unlinkBrand(userCtx(user, "r"), brandId);
+          expect(await brandReasons()).toBe(3);
+        });
+      });
+
+      /**
+       * Linking a brand touches no item column, so by timestamp the vector
+       * stayed fresh and the brand never reached it. The text key is what
+       * notices.
+       */
+      it("embeds the brand, records the text key, and re-embeds when a brand is linked", async () => {
+        await withTestDb(async (db) => {
+          const user = await seedUser(db);
+          const { ref } = await createItem(db, "WINE", user);
+          const { texts, embed } = recording();
+          const fresh = () =>
+            activate(newItemActor(actorIdFor(ref), db, noVerify, embed));
+
+          await (await fresh()).regenerateVector(deliveryCtx(randomUUID()));
+          expect(texts[0]).not.toContain("brand:");
+          const [firstKey] = await storedText(db, ref);
+          expect(firstKey).toBe(embeddingTextKey(texts[0] ?? ""));
+
+          await expect(
+            (await fresh()).regenerateVector(deliveryCtx(randomUUID())),
+          ).resolves.toMatchObject({ skipped: true });
+          expect(texts).toHaveLength(1);
+
+          const brandId = await seedBrand(db, "Domaine Exemple");
+          await (await fresh()).linkBrand(userCtx(user, "r"), { brandId });
+          await expect(
+            (await fresh()).regenerateVector(deliveryCtx(randomUUID())),
+          ).resolves.toMatchObject({ skipped: false });
+          expect(texts).toHaveLength(2);
+          expect(texts[1]).toContain("brand: Domaine Exemple");
+          expect(await storedText(db, ref)).toEqual([
+            embeddingTextKey(texts[1] ?? ""),
+          ]);
+        });
+      });
+
+      it("re-embeds a vector made before the text key existed, then leaves it alone", async () => {
+        await withTestDb(async (db) => {
+          const user = await seedUser(db);
+          const { ref } = await createItem(db, "WINE", user);
+          const { texts, embed } = recording();
+          const fresh = () =>
+            activate(newItemActor(actorIdFor(ref), db, noVerify, embed));
+          await (await fresh()).regenerateVector(deliveryCtx(randomUUID()));
+          // What every row written before N08 looks like.
+          await db.execute(sql`
+            update public.item_vectors set embedding_text = null
+            where wine_id = ${ref.id}::uuid
+          `);
+          await expect(
+            (await fresh()).regenerateVector(deliveryCtx(randomUUID())),
+          ).resolves.toMatchObject({ skipped: false });
+          await expect(
+            (await fresh()).regenerateVector(deliveryCtx(randomUUID())),
+          ).resolves.toMatchObject({ skipped: true });
+          expect(texts).toHaveLength(2);
+        });
       });
     });
 
@@ -1316,6 +1694,277 @@ describe.skipIf(skip)("ItemActor (B2)", () => {
         await expect(
           actor.addReview(userCtx(user, "r"), { score: 3.7 }),
         ).rejects.toThrow(ValidationError);
+      });
+    });
+  });
+
+  describe("friendsScore (X09: the taste header's Friends)", () => {
+    it("averages friends' reviews only, one per friend, newest", async () => {
+      await withTestDb(async (db) => {
+        const { owner, friend, stranger, actor } = await seedScenario(db);
+        const second = await seedUser(db);
+        // The other direction of the pair: an acceptance writes both.
+        await seedFriendship(db, second, owner);
+        await actor.addReview(userCtx(owner, "r"), { score: 5 });
+        await actor.addReview(userCtx(friend, "r"), { score: 2 });
+        await actor.addReview(userCtx(friend, "r"), { score: 4 });
+        await actor.addReview(userCtx(second, "r"), { score: 3 });
+        await actor.addReview(userCtx(stranger, "r"), { score: 0.5 });
+
+        const result = await actor.friendsScore(userCtx(owner, "r"));
+        // The viewer's own 5 and the stranger's 0.5 are not in it, and the
+        // friend counts once — by one review (the newest; two written inside
+        // one test transaction share `now()`, so which is newer is the id's
+        // tiebreak, and either average is that friend counted once).
+        expect(result.count).toBe(2);
+        expect([2.5, 3.5]).toContain(result.average);
+        // Everyone's score is unchanged by the new read.
+        expect((await actor.score(userCtx(owner, "r"))).count).toBe(5);
+      });
+    });
+
+    it("is null, not zero, for a viewer whose friends have not rated it", async () => {
+      await withTestDb(async (db) => {
+        const { owner, stranger, actor } = await seedScenario(db);
+        await actor.addReview(userCtx(owner, "r"), { score: 4 });
+        // The stranger has no friends at all; the owner's friend wrote nothing.
+        expect(await actor.friendsScore(userCtx(stranger, "r"))).toEqual({
+          average: null,
+          count: 0,
+        });
+        expect(await actor.friendsScore(userCtx(owner, "r"))).toEqual({
+          average: null,
+          count: 0,
+        });
+      });
+    });
+
+    it("refuses an anonymous viewer, as every read here does", async () => {
+      await withTestDb(async (db) => {
+        const { actor } = await seedScenario(db);
+        await expect(actor.friendsScore(anonymousCtx("r"))).rejects.toThrow(
+          ForbiddenError,
+        );
+      });
+    });
+  });
+
+  describe("friendsReviews (F-154 / H-106: the Friends' ratings sheet)", () => {
+    it("lists friends' newest reviews only — never a non-friend's, never the viewer's", async () => {
+      await withTestDb(async (db) => {
+        const { owner, friend, stranger, actor } = await seedScenario(db);
+        const second = await seedUser(db);
+        await seedFriendship(db, second, owner);
+        await actor.addReview(userCtx(owner, "r"), { score: 5 });
+        await actor.addReview(userCtx(friend, "r"), { score: 2 });
+        await actor.addReview(userCtx(friend, "r"), { score: 4 });
+        const fromSecond = await actor.addReview(userCtx(second, "r"), {
+          score: 3,
+        });
+        await actor.addReview(userCtx(stranger, "r"), { score: 0.5 });
+
+        const result = await actor.friendsReviews(userCtx(owner, "r"), page);
+        const authors = result.entries.map((entry) => entry.node.userId);
+        expect(authors).toHaveLength(2);
+        expect(new Set(authors)).toEqual(new Set([friend, second]));
+        expect(authors).not.toContain(stranger);
+        expect(authors).not.toContain(owner);
+        expect(result.entries.map((entry) => entry.node.id)).toContain(
+          fromSecond.id,
+        );
+        // The sheet and the number beside it agree.
+        const score = await actor.friendsScore(userCtx(owner, "r"));
+        expect(score.count).toBe(result.entries.length);
+
+        // The stranger has no friends: nothing, not everyone's.
+        const strangers = await actor.friendsReviews(
+          userCtx(stranger, "r"),
+          page,
+        );
+        expect(strangers.entries).toEqual([]);
+      });
+    });
+
+    it("pages", async () => {
+      await withTestDb(async (db) => {
+        const { owner, friend, actor } = await seedScenario(db);
+        const second = await seedUser(db);
+        await seedFriendship(db, owner, second);
+        await actor.addReview(userCtx(friend, "r"), { score: 2 });
+        await actor.addReview(userCtx(second, "r"), { score: 3 });
+        const first = await actor.friendsReviews(
+          userCtx(owner, "r"),
+          pageArgs({ first: 1 }),
+        );
+        expect(first.entries).toHaveLength(1);
+        expect(first.hasNextPage).toBe(true);
+      });
+    });
+
+    it("refuses an anonymous viewer", async () => {
+      await withTestDb(async (db) => {
+        const { actor } = await seedScenario(db);
+        await expect(
+          actor.friendsReviews(anonymousCtx("r"), page),
+        ).rejects.toThrow(ForbiddenError);
+      });
+    });
+  });
+
+  describe("review restore (F-148 / H-102: Undo of Remove my rating)", () => {
+    const ORIGINAL = "2020-03-04T05:06:07.000Z";
+
+    /** A review by `author`, backdated, behind a fresh activation. */
+    const backdatedReview = async (
+      db: DbOrTx,
+      ref: ItemRef,
+      author: string,
+    ): Promise<{ id: string; actor: ItemActor }> => {
+      const seeded = await activate(newItemActor(actorIdFor(ref), db));
+      const review = await seeded.addReview(userCtx(author, "r"), {
+        score: 4,
+      });
+      await db.execute(sql`
+        update public.item_reviews set created_at = ${ORIGINAL}::timestamptz
+        where id = ${review.id}::uuid`);
+      return {
+        id: review.id,
+        actor: await activate(newItemActor(actorIdFor(ref), db)),
+      };
+    };
+
+    it("puts back the viewer's own just-removed review with its id and createdAt", async () => {
+      await withTestDb(async (db) => {
+        const { owner, ref } = await seedScenario(db);
+        const { id, actor } = await backdatedReview(db, ref, owner);
+        await actor.deleteReview(userCtx(owner, "r"), id);
+        const restored = await actor.addReview(userCtx(owner, "r"), {
+          reviewId: id,
+          score: 4,
+        });
+        expect(restored.id).toBe(id);
+        expect(restored.createdAt).toBe(ORIGINAL);
+        expect((await actor.myReview(userCtx(owner, "r")))?.createdAt).toBe(
+          ORIGINAL,
+        );
+      });
+    });
+
+    it("restores once: a second remove-and-add after the first restore keeps the original too, but a new id never backdates", async () => {
+      await withTestDb(async (db) => {
+        const { owner, ref } = await seedScenario(db);
+        const { id, actor } = await backdatedReview(db, ref, owner);
+        await actor.deleteReview(userCtx(owner, "r"), id);
+        const fresh = await actor.addReview(userCtx(owner, "r"), { score: 1 });
+        expect(fresh.id).not.toBe(id);
+        expect(fresh.createdAt).not.toBe(ORIGINAL);
+      });
+    });
+
+    it("never backdates someone else's review: another viewer re-using the removed id gets a fresh stamp", async () => {
+      await withTestDb(async (db) => {
+        const { owner, stranger, ref } = await seedScenario(db);
+        const { id, actor } = await backdatedReview(db, ref, owner);
+        await actor.deleteReview(userCtx(owner, "r"), id);
+        const taken = await actor.addReview(userCtx(stranger, "r"), {
+          reviewId: id,
+          score: 1,
+        });
+        expect(taken.userId).toBe(stranger);
+        expect(taken.createdAt).not.toBe(ORIGINAL);
+        // ...and the tombstone is not spent on them either way: the author's
+        // own undo after a stranger took the id is the id's idempotent hit.
+      });
+    });
+
+    it("a review deleted outside this window is an ordinary new one", async () => {
+      await withTestDb(async (db) => {
+        const { owner, ref } = await seedScenario(db);
+        const { id, actor } = await backdatedReview(db, ref, owner);
+        await actor.deleteReview(userCtx(owner, "r"), id);
+        const realNow = Date.now;
+        Date.now = () => realNow() + REVIEW_RESTORE_WINDOW_MS + 1;
+        try {
+          const late = await actor.addReview(userCtx(owner, "r"), {
+            reviewId: id,
+            score: 4,
+          });
+          expect(late.createdAt).not.toBe(ORIGINAL);
+        } finally {
+          Date.now = realNow;
+        }
+      });
+    });
+  });
+
+  /* ------------------------------------------------------------------ */
+  /* getShared — the X17 share page's read                               */
+  /* ------------------------------------------------------------------ */
+
+  describe("getShared (X17): catalog facts, public photo, the same for everyone", () => {
+    it("answers anonymous callers, with the spec attributes and nothing else", async () => {
+      await withTestDb(async (db) => {
+        const { owner, ref, actor } = await seedScenario(db);
+        const reviewer = await seedUser(db);
+        await actor.addReview(userCtx(reviewer, "r"), { score: 4 });
+
+        const shared = await actor.getShared(anonymousCtx("r"));
+        expect(shared).toMatchObject({
+          id: ref.id,
+          type: "WINE",
+          scoreAverage: 4,
+          scoreCount: 1,
+          imageFileId: null,
+        });
+        expect(Object.keys(shared.attributes).sort()).toEqual(
+          Object.keys(ITEM_TYPE_SPECS.WINE.attributes).sort(),
+        );
+        // The creator and the barcode are not catalog facts for a stranger.
+        const serialised = JSON.stringify(shared);
+        expect(serialised).not.toContain(owner);
+        expect(shared).not.toHaveProperty("createdById");
+        expect(shared).not.toHaveProperty("barcodeCode");
+      });
+    });
+
+    it("carries the newest public photo, never a private one — even to its uploader", async () => {
+      await withTestDb(async (db) => {
+        const { owner, friend, stranger, ref } = await seedScenario(db);
+        const verify: VerifyFile = async (_ctx, id) => ({
+          id,
+          verifiedAt: new Date().toISOString(),
+        });
+        const actor = await activate(newItemActor(actorIdFor(ref), db, verify));
+        const publicFile = await seedFile(db, owner, true);
+        await actor.attachImage(userCtx(owner, "r"), {
+          fileId: publicFile,
+          isPublic: true,
+        });
+        // Newer, but private: must not displace the public one.
+        await actor.attachImage(userCtx(friend, "r"), {
+          fileId: await seedFile(db, friend, true),
+          isPublic: false,
+        });
+
+        for (const ctx of [
+          anonymousCtx("r"),
+          userCtx(owner, "r"),
+          userCtx(friend, "r"),
+          userCtx(stranger, "r"),
+        ]) {
+          expect((await actor.getShared(ctx)).imageFileId).toBe(publicFile);
+        }
+      });
+    });
+
+    it("a missing item is NotFound", async () => {
+      await withTestDb(async (db) => {
+        const actor = await activate(
+          newItemActor(actorIdFor({ type: "WINE", id: randomUUID() }), db),
+        );
+        await expect(actor.getShared(anonymousCtx("r"))).rejects.toThrow(
+          NotFoundError,
+        );
       });
     });
   });

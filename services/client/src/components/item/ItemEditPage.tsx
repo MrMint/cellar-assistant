@@ -1,10 +1,13 @@
-import { Stack, Typography } from "@mui/joy";
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { cache } from "react";
+import { itemTypeTokens } from "@/components/app/TypeChip";
 import type { ApiItemType } from "@/components/cellar-api/itemTypes";
-import { HeaderBar } from "@/components/common/HeaderBar";
+import { ItemUncheckedFieldsQuery } from "@/components/drink-log/queries";
 import { attributesFrom } from "@/components/item-api/itemFormRules";
 import { ViewerQuery } from "@/lib/api/cellars";
 import { readFragment } from "@/lib/api/graphql";
+import { ItemCorrectionQuery } from "@/lib/api/item-correction";
 import {
   ItemAttributesFragment,
   ItemCoreFragment,
@@ -13,16 +16,46 @@ import {
 import { isNotFound, unwrapResult } from "@/lib/api/result";
 import { apiServerQuery } from "@/lib/api/urql-server";
 import { formatItemType } from "@/utilities";
+import { displayItemName } from "@/utilities/smart-title-case";
+import { ItemAppBar } from "./ItemAppBar";
 import { ItemForm } from "./ItemForm";
+import { shownBrandOf } from "./shown-brand";
+
+/** One `ItemSummaryQuery` per request, for the page and its title (X21). */
+const loadItemSummary = cache((type: ApiItemType, itemId: string) =>
+  apiServerQuery(ItemSummaryQuery, { itemId, type }),
+);
+
+/** X21: "Edit <name>", the bar's own title; "Edit wine" when unreadable. */
+export async function itemEditMetadata(
+  type: ApiItemType,
+  itemId: string,
+): Promise<Metadata> {
+  const result = unwrapResult(
+    (await loadItemSummary(type, itemId)).item,
+    "QueryItemSuccess",
+  );
+  return {
+    title: result.ok
+      ? `Edit ${displayItemName(readFragment(ItemCoreFragment, result.data.data).name)}`
+      : `Edit ${itemTypeTokens[type].label.toLowerCase()}`,
+  };
+}
 
 /**
  * `/{type}s/[itemId]/edit` and `/cellars/[c]/{type}s/[bottleId]/edit` — new
  * routes kept by decision 2 (the old edit never worked: its button was
  * disabled and its page passed a bottle id to `wines_by_pk`), restyled with
- * the restored form and breadcrumbs.
+ * the restored form and breadcrumbs. The header is `ItemAppBar` (N26): Back
+ * to the page the edit was opened from, "Edit <name>" as the title on phones,
+ * where the crumbs are hidden, and the crumbs from `md` up.
  *
  * Creator only: `updateItem` refuses anyone else, so the page says so rather
  * than offering a form that cannot save.
+ *
+ * X19: the form also gets the item's brand (`ItemCorrectionQuery`) for its
+ * BrandPicker, and which AI helpers — re-read the label, suggest details — it
+ * can offer the creator.
  */
 export async function ItemEditPage({
   type,
@@ -35,23 +68,51 @@ export async function ItemEditPage({
   cellarName?: string;
   backHref: string;
 }) {
-  const data = await apiServerQuery(ItemSummaryQuery, { itemId, type });
+  const data = await loadItemSummary(type, itemId);
   const result = unwrapResult(data.item, "QueryItemSuccess");
   if (!result.ok) {
     if (isNotFound(result.error)) notFound();
-    return <Typography color="danger">{result.error.message}</Typography>;
+    return (
+      <p role="alert" className="t-body text-danger">
+        {result.error.message}
+      </p>
+    );
   }
   const core = readFragment(ItemCoreFragment, result.data.data);
   const attributes = readFragment(
     ItemAttributesFragment,
     result.data.data,
   ) as unknown as Record<string, unknown>;
-  const viewer = await apiServerQuery(ViewerQuery, {});
+  const [viewer, extras, unchecked] = await Promise.all([
+    apiServerQuery(ViewerQuery, {}),
+    apiServerQuery(ItemCorrectionQuery, { itemId, type }),
+    apiServerQuery(ItemUncheckedFieldsQuery, { itemId, type }),
+  ]);
   const isCreator = viewer.me?.id === core.createdById;
+  // X19: the brand the form starts from, and the AI helpers it may offer.
+  // A failed read leaves both out rather than failing the page: the form
+  // still edits the item's own columns.
+  const correction = unwrapResult(extras.item, "QueryItemSuccess");
+  const brand = correction.ok
+    ? shownBrandOf(correction.data.data.brands.edges.map((edge) => edge.node))
+    : undefined;
+  const tools = correction.ok ? correction.data.data.correction : null;
+  // A failed read shows no marks rather than failing the page.
+  const checks = unwrapResult(unchecked.item, "QueryItemSuccess");
+  const unconfirmed = checks.ok ? checks.data.data.unconfirmedFields : [];
+
+  const itemName = displayItemName(core.name);
 
   return (
-    <Stack spacing={2}>
-      <HeaderBar serverBreadcrumbs={{ cellarName, itemName: core.name }} />
+    <div className="flex flex-col gap-4">
+      <ItemAppBar
+        parent={backHref}
+        // Cellars-Pour 31: the bar says what the page is; the crumbs carry
+        // which item.
+        title="Edit details"
+        cellarName={cellarName}
+        itemName={itemName}
+      />
       {isCreator ? (
         <ItemForm
           id={core.id}
@@ -63,16 +124,26 @@ export async function ItemEditPage({
             attributes: attributesFrom(attributes, type),
           }}
           onSavedHref={backHref}
+          brand={brand}
+          unconfirmed={unconfirmed}
+          correction={
+            tools === null
+              ? null
+              : {
+                  canRereadLabel: tools.canRereadLabel,
+                  canSuggestDetails: tools.canSuggestDetails,
+                }
+          }
         />
       ) : (
-        <Stack spacing={1}>
-          <Typography level="h3">Not yours to edit</Typography>
-          <Typography level="body-sm">
+        <div className="flex flex-col gap-2">
+          <h2 className="t-title text-ink">Not yours to edit</h2>
+          <p className="t-cap text-ink-2">
             Only whoever added this {formatItemType(type).toLowerCase()} can
             change it.
-          </Typography>
-        </Stack>
+          </p>
+        </div>
       )}
-    </Stack>
+    </div>
   );
 }

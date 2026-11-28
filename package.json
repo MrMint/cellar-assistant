@@ -53,6 +53,7 @@
     "dev:bootstrap": "scripts/stack/stack.sh bootstrap",
     "dev:doctor": "scripts/stack/stack.sh doctor",
     "dev:seed": "scripts/stack/stack.sh seed",
+    "dev:seed:demo": "scripts/stack/stack.sh seed:demo",
     "dev:up": "scripts/stack/stack.sh up",
     "dev:down": "scripts/stack/stack.sh down",
     "dev:wait": "scripts/stack/stack.sh wait",
@@ -69,6 +70,8 @@
     "dev:migrate": "scripts/stack/stack.sh migrate",
     "test:e2e": "bun run --filter @cellar-assistant/e2e test",
     "test:e2e:report": "bun run --filter @cellar-assistant/e2e report",
+    "test:visual": "bun run --filter @cellar-assistant/e2e visual",
+    "test:visual:compare": "bun run --filter @cellar-assistant/e2e visual:compare",
     "test:harness": "node --test \".claude/hooks/*.test.mjs\" \"tools/*.test.ts\""
   },
   "packageManager": "bun@1.4.2",

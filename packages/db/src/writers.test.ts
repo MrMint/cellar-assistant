@@ -92,7 +92,7 @@ describe("single writer — coverage (§1.2)", () => {
 
   it("resolves the §3 map", () => {
     expect(writerFor("cellars")).toBe("CellarActor");
-    expect(writerFor("check_ins")).toBe("CellarActor");
+    expect(writerFor("check_ins")).toBe("CheckInActor");
     expect(writerFor("friends")).toBe("UserActor");
     expect(writerFor("outbox")).toBe("infrastructure:outbox");
     expect(writerFor("country")).toBe("infrastructure:migrations");

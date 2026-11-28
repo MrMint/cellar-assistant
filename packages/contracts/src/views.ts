@@ -8,6 +8,7 @@
  * |---|---|
  * | `MapActor(viewerId)` | `/map` viewport browse |
  * | `RankingsActor(viewerId)` | `/rankings` |
+ * | `BarActor(viewerId)` | `/recipes/bar`, recipe availability, "Cocktails with this" |
  *
  * Both write nothing (§1.1), both are keyed by the viewer, and both return a
  * projection shaped like the screen instead of like a table.
@@ -47,10 +48,11 @@
  *     the viewer's own `friends` rows. There is nothing to smuggle.
  */
 import type { ActorDescriptor } from "./actors.ts";
+import type { BarInventory, BarKind, RecipeMakeability } from "./bar.ts";
 import type { Ctx } from "./ctx.ts";
 import type { ItemRef, ItemType } from "./items.ts";
 import type { Page, PageArgs } from "./page.ts";
-import type { LngLat } from "./places.ts";
+import type { LngLat, PlaceReviewStatus } from "./places.ts";
 import type { MapBounds, VisitStatusFilter } from "./search.ts";
 
 /* -------------------------------------------------------------------------- */
@@ -84,7 +86,8 @@ export type MapBrowseInput = {
  *
  * **This is the reduced projection §2.4 asks for, and every field earns its
  * place in a renderer.** `search_places_adaptive_cluster` returns 27 columns;
- * the browse path renders nine of them:
+ * the browse path renders nine of them, plus three F-82 reads for the
+ * owner's pin layer (`ratingCount`, `myBand`, `photoFileId`):
  *
  * - `placeId`, `name`, `location` — the feature's id, label and geometry;
  * - `primaryCategory` — `categoryToIcon()`, the marker's glyph;
@@ -94,7 +97,7 @@ export type MapBrowseInput = {
  *
  * Everything else the SQL returns is dropped: `street_address`, `locality`,
  * `region`, `postcode`, `country_code`, `phone`, `website`, `email`, `hours`,
- * `price_level`, `review_count`, `cluster_bounds`, `viewport_area_km2`,
+ * `price_level`, `cluster_bounds`, `viewport_area_km2`,
  * `density_per_km2`, `clustering_applied`. The address and contact block is
  * read by the place drawer, which fetches the place by id (`PlaceActor.get`);
  * the three clustering diagnostics are read by nothing at all.
@@ -109,6 +112,30 @@ export type MapPlace = {
   readonly rating: number | null;
   readonly confidence: number | null;
   readonly isVerified: boolean | null;
+  /**
+   * X27: `approved` for every shared marker. `pending` / `rejected` appear
+   * only on their creator's own map — drawn as their own markers, never
+   * folded into a cluster — so "Under review" stays visible at any zoom.
+   */
+  readonly reviewStatus: PlaceReviewStatus;
+  /**
+   * F-82 (the owner's pin layer). Optional only so marker fixtures written
+   * before it stay valid; `MapActor` always sets all three.
+   * `places.review_count`: how many ratings
+   * `rating` stands on — `0` when none.
+   */
+  readonly ratingCount?: number;
+  /**
+   * F-82: the viewer's own best band (0–5) for this place across every tier
+   * list they created, or null when it is on none of theirs (and always for
+   * an anonymous viewer). Another person's band never reaches this field.
+   */
+  readonly myBand?: number | null;
+  /**
+   * F-82: the place's first mirrored Google photo (lowest `display_order`
+   * with stored bytes), as a `FileActor` id — the API resolves it to a URL.
+   */
+  readonly photoFileId?: string | null;
 };
 
 /** One cluster bubble: a position and a count, and nothing else is drawn. */
@@ -238,3 +265,86 @@ export const RankingsActorDescriptor: ActorDescriptor<RankingsActorInterface> =
  */
 export const mapActorId = (viewerId: string): string => viewerId;
 export const rankingsActorId = (viewerId: string): string => viewerId;
+
+/* -------------------------------------------------------------------------- */
+/* BarActor (X14, D9, D18/G29, D23)                                            */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * How many cocktail recipes one What-can-I-make scan reads, newest first.
+ * Availability is computed in memory over every ingredient of every scanned
+ * recipe (`recipeMakeability`), so this bounds one turn's work. Past it the
+ * screen says how many it looked at rather than pretending it saw them all.
+ */
+export const BAR_RECIPE_SCAN_CAP = 1_000;
+
+/** Rows per section of What can I make, and per item page. */
+export const BAR_MATCH_LIMIT_DEFAULT = 50;
+export const BAR_MATCH_LIMIT_MAX = 200;
+
+/** One recipe, judged against the viewer's bar. */
+export type BarRecipeMatch = {
+  readonly recipeId: string;
+  readonly recipeGroupId: string | null;
+  readonly name: string;
+  readonly makeability: RecipeMakeability;
+};
+
+export type WhatCanIMakeInput = {
+  /** Rows per section; defaults to {@link BAR_MATCH_LIMIT_DEFAULT}. */
+  readonly limit?: number | null;
+};
+
+/**
+ * G29: the two sections, one recipe per group (the version closest to
+ * makeable, the group's canonical on a tie), most makeable first.
+ */
+export type WhatCanIMakeDto = {
+  readonly makeNow: readonly BarRecipeMatch[];
+  readonly oneAway: readonly BarRecipeMatch[];
+  readonly makeNowCount: number;
+  readonly oneAwayCount: number;
+  /** Bottles still in the viewer's own cellars, and pantry toggles on. */
+  readonly bottleCount: number;
+  readonly pantryCount: number;
+  /** Cocktail recipes looked at (≤ {@link BAR_RECIPE_SCAN_CAP}). */
+  readonly scanned: number;
+};
+
+/** "Cocktails with this" / "Use it up" for one item page. */
+export type ItemCocktailsDto = {
+  /** What a bottle of this item answers as; `null` when nothing can say. */
+  readonly kind: BarKind | null;
+  /**
+   * The viewer has an opened, unfinished bottle of this exact item — the
+   * section reads "Use it up" instead of "Cocktails with this".
+   */
+  readonly useItUp: boolean;
+  readonly recipes: readonly BarRecipeMatch[];
+  readonly total: number;
+};
+
+export type BarActorInterface = {
+  /** The viewer's own bottles (owned and co-owned cellars) and pantry. */
+  inventory(ctx: Ctx): Promise<BarInventory>;
+  whatCanIMake(ctx: Ctx, input: WhatCanIMakeInput): Promise<WhatCanIMakeDto>;
+  /**
+   * Cocktails that use this item, or any bottle of its kind (a bourbon page
+   * lists recipes asking for "bourbon" and for "whiskey"), each judged
+   * against the viewer's bar.
+   */
+  cocktailsFor(ctx: Ctx, ref: ItemRef): Promise<ItemCocktailsDto>;
+};
+
+export const BarActorDescriptor: ActorDescriptor<BarActorInterface> = {
+  actorType: "BarActor",
+  category: "view",
+  methods: {
+    inventory: {},
+    whatCanIMake: {},
+    cocktailsFor: {},
+  },
+};
+
+/** Like every view actor, keyed by the viewer (see `mapActorId`). */
+export const barActorId = (viewerId: string): string => viewerId;

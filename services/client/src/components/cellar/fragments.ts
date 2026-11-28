@@ -14,16 +14,15 @@
  *   `Cellar.itemCounts` (G1): non-empty bottles per type, decision 4.
  * - `cellars_by_pk.items(where: { empty_at null, type _in })` + a client sort
  *   on `distance, name` → `Cellar.items(types:, status: ACTIVE)` (G2, ACTIVE is
- *   the default) with `sort: NAME_ASC` (G3), or `semanticQuery`, which orders
- *   by distance with name as the tie-break — the old two-key sort, server-side.
+ *   the default) with a sort — and since X04 `Cellar.itemGroups`, which groups
+ *   identical bottles (×N) and whose `search` **narrows** (names, then near
+ *   meanings) where the old semantic sort re-ordered everything.
  * - the six per-type item fragments → `...ItemCard` on `CellarItem.item`.
  *
- * Fragment and operation names are distinct from `lib/api/cellars.ts`'s, which
- * the check-ins overview still uses.
+ * Fragment and operation names are distinct from `lib/api/cellars.ts`'s.
  */
 
 import { ItemCardFragment } from "@/components/item/ItemCard/fragments";
-import { CheckInRowFragment } from "@/lib/api/cellars";
 import { ActorErrorFieldsFragment } from "@/lib/api/errors";
 import { graphql } from "@/lib/api/graphql";
 
@@ -72,11 +71,19 @@ export const CellarCardFragment = graphql(`
   }
 `);
 
-/** `/cellars` — one page of the grid. `myCellars` is everything you may see. */
+/**
+ * `/cellars` — one page of one section: Yours, From friends or Discover
+ * (`section`, decision D2). Without a section `myCellars` is everything the
+ * viewer may see, strangers' PUBLIC cellars included.
+ */
 export const GetCellarsQuery = graphql(
   `
-  query GetCellars($first: Int!, $after: String) {
-    myCellars(first: $first, after: $after) {
+  query GetCellars(
+    $first: Int!
+    $after: String
+    $section: CollectionSection
+  ) {
+    myCellars(first: $first, after: $after, section: $section) {
       __typename
       ... on CellarConnection {
         totalCount
@@ -106,6 +113,7 @@ export const CellarInfoFragment = graphql(`
     name
     createdById
     coOwnerIds
+    finishedCount
     itemCounts {
       __typename
       beer
@@ -133,53 +141,37 @@ export const GetCellarInfoQuery = graphql(
 );
 
 /**
- * One page of a cellar's bottles for the grid. Empty bottles are hidden by
- * `status`'s ACTIVE default (decision 4), so `totalCount` counts what the old
- * grid counted.
+ * One bottle on a `BottleCard` (N13b): the item's card fields, plus what the
+ * bottle itself knows — opened when, finished when, how full — and its own
+ * chosen photo (G15), which beats the item's first image. The same fields
+ * `CellarItemRow` (`lib/api/cellars.ts`) reads for the bottle page; nothing
+ * here is new to the schema.
  */
-export const GetCellarItemsQuery = graphql(
+export const CellarBottleCardFragment = graphql(
   `
-  query GetCellarItems(
-    $cellarId: ID!
-    $first: Int!
-    $after: String
-    $types: [ItemType!]
-    $sort: CellarItemSort
-    $semanticQuery: String
-  ) {
-    cellar(id: $cellarId) {
+  fragment CellarBottleCard on CellarItem {
+    __typename
+    id
+    createdAt
+    openAt
+    emptyAt
+    percentageRemaining
+    displayImage {
       __typename
-      ... on Cellar {
+      id
+      placeholder
+      file {
+        __typename
         id
-        items(
-          first: $first
-          after: $after
-          types: $types
-          sort: $sort
-          semanticQuery: $semanticQuery
-        ) {
-          totalCount
-          pageInfo {
-            hasNextPage
-            endCursor
-          }
-          edges {
-            cursor
-            node {
-              __typename
-              id
-              item {
-                ...ItemCard
-              }
-            }
-          }
-        }
+        url
       }
-      ...ActorErrorFields
+    }
+    item {
+      ...ItemCard
     }
   }
 `,
-  [ItemCardFragment, ActorErrorFieldsFragment],
+  [ItemCardFragment],
 );
 
 /**
@@ -219,39 +211,55 @@ export const GetCellarEditQuery = graphql(
 );
 
 /**
- * `/cellars/[cellarId]` — a page the old app never had (it printed the id),
- * kept under decision 2 and drawn with the restored blocks: the cellar's
- * header, a fixed preview of its bottles as `ItemCard`s, and its check-ins.
- * `CheckInRow` comes from `lib/api/cellars.ts`, which `CellarCheckIns`'
- * "Show more" re-reads through `CellarDetailQuery`.
+ * X04's ×N: one grid cell — every bottle of one item, led by the bottle the
+ * list's order put highest. `match` says how a search found it.
  */
-export const GetCellarOverviewQuery = graphql(
+export const CellarItemGroupCardFragment = graphql(
   `
-  query GetCellarOverview(
+  fragment CellarItemGroupCard on CellarItemGroup {
+    __typename
+    count
+    openCount
+    match
+    lead {
+      ...CellarBottleCard
+    }
+  }
+`,
+  [CellarBottleCardFragment],
+);
+
+/**
+ * The grid's pages (X04): `Cellar.itemGroups` — grouped, and narrowed by a
+ * search rather than re-sorted. `bottleCount` and `meaning` describe the
+ * whole list, for the line above it.
+ */
+export const GetCellarItemGroupsQuery = graphql(
+  `
+  query GetCellarItemGroups(
     $cellarId: ID!
-    $items: Int!
-    $checkIns: Int!
+    $first: Int!
+    $after: String
+    $types: [ItemType!]
     $sort: CellarItemSort
+    $status: CellarItemStatus
+    $search: String
   ) {
     cellar(id: $cellarId) {
       __typename
       ... on Cellar {
-        ...CellarInfo
-        items(first: $items, sort: $sort) {
+        id
+        itemGroups(
+          first: $first
+          after: $after
+          types: $types
+          sort: $sort
+          status: $status
+          search: $search
+        ) {
           totalCount
-          edges {
-            cursor
-            node {
-              __typename
-              id
-              item {
-                ...ItemCard
-              }
-            }
-          }
-        }
-        checkIns(first: $checkIns) {
-          totalCount
+          bottleCount
+          meaning
           pageInfo {
             hasNextPage
             endCursor
@@ -259,7 +267,7 @@ export const GetCellarOverviewQuery = graphql(
           edges {
             cursor
             node {
-              ...CheckInRow
+              ...CellarItemGroupCard
             }
           }
         }
@@ -268,10 +276,367 @@ export const GetCellarOverviewQuery = graphql(
     }
   }
 `,
-  [
-    CellarInfoFragment,
-    ItemCardFragment,
-    CheckInRowFragment,
-    ActorErrorFieldsFragment,
-  ],
+  [CellarItemGroupCardFragment, ActorErrorFieldsFragment],
+);
+
+/**
+ * One finished bottle in the diary (X04): the card's fields, plus your own
+ * logs from it — never anyone else's notes.
+ */
+export const CellarDiaryEntryFragment = graphql(
+  `
+  fragment CellarDiaryEntry on CellarItemGroup {
+    __typename
+    lead {
+      ...CellarBottleCard
+      myLog {
+        __typename
+        count
+        lastAt
+        lastScore
+        lastNote
+      }
+    }
+  }
+`,
+  [CellarBottleCardFragment],
+);
+
+/** The Finished diary's pages: one entry per bottle, latest finished first. */
+export const GetCellarDiaryQuery = graphql(
+  `
+  query GetCellarDiary(
+    $cellarId: ID!
+    $first: Int!
+    $after: String
+    $types: [ItemType!]
+    $search: String
+  ) {
+    cellar(id: $cellarId) {
+      __typename
+      ... on Cellar {
+        id
+        itemGroups(
+          first: $first
+          after: $after
+          types: $types
+          status: EMPTY
+          sort: FINISHED_DESC
+          search: $search
+          group: false
+        ) {
+          totalCount
+          meaning
+          pageInfo {
+            hasNextPage
+            endCursor
+          }
+          edges {
+            cursor
+            node {
+              ...CellarDiaryEntry
+            }
+          }
+        }
+      }
+      ...ActorErrorFields
+    }
+  }
+`,
+  [CellarDiaryEntryFragment, ActorErrorFieldsFragment],
+);
+
+/**
+ * The top of the cellar page (X04, D3): the dashboard's numbers, the "Open
+ * now" shelf (open bottles, the most recently opened first) and the
+ * "Recently added" one. One request with the header's `CellarInfo`.
+ */
+export const GetCellarHomeQuery = graphql(
+  `
+  query GetCellarHome(
+    $cellarId: ID!
+    $timeZone: String
+    $shelf: Int!
+  ) {
+    cellar(id: $cellarId) {
+      __typename
+      ... on Cellar {
+        ...CellarInfo
+        dashboard(timeZone: $timeZone) {
+          __typename
+          bottleCount
+          openCount
+          almostEmptyCount
+          almostEmptyAt
+          finishedThisMonth
+          finishedCount
+          addedRecently
+          recentDays
+          logsByMonth
+          currentMonth
+          timeZone
+        }
+        openNow: itemGroups(
+          first: $shelf
+          status: OPEN
+          sort: OPENED_DESC
+          group: false
+        ) {
+          totalCount
+          edges {
+            cursor
+            node {
+              ...CellarItemGroupCard
+            }
+          }
+        }
+        recent: itemGroups(first: $shelf, status: ACTIVE, sort: ADDED_DESC) {
+          totalCount
+          edges {
+            cursor
+            node {
+              ...CellarItemGroupCard
+            }
+          }
+        }
+      }
+      ...ActorErrorFields
+    }
+  }
+`,
+  [CellarInfoFragment, CellarItemGroupCardFragment, ActorErrorFieldsFragment],
+);
+
+/**
+ * X04's fan-out: the same phrase asked of your other cellars, by name —
+ * "Lagavulin is in Bar Cart".
+ */
+export const CellarSearchElsewhereQuery = graphql(
+  `
+  query CellarSearchElsewhere(
+    $search: String!
+    $excludeCellarId: ID
+    $first: Int!
+  ) {
+    cellarSearchElsewhere(
+      search: $search
+      excludeCellarId: $excludeCellarId
+      first: $first
+    ) {
+      __typename
+      ... on CellarSearchElsewhereConnection {
+        totalCount
+        edges {
+          cursor
+          node {
+            __typename
+            cellar {
+              __typename
+              id
+              name
+            }
+            group {
+              ...CellarItemGroupCard
+            }
+          }
+        }
+      }
+      ...ActorErrorFields
+    }
+  }
+`,
+  [CellarItemGroupCardFragment, ActorErrorFieldsFragment],
+);
+
+/**
+ * L02: this cellar's Drink soon — opened bottles past their typical days and
+ * sealed ones whose window closes within three months, ranked by the server
+ * (`Cellar.drinkSoon`). Owner-only: anyone else gets an empty page.
+ */
+export const CellarDrinkSoonQuery = graphql(
+  `
+  query CellarDrinkSoon($cellarId: ID!, $first: Int!) {
+    cellar(id: $cellarId) {
+      __typename
+      ... on Cellar {
+        id
+        drinkSoon(first: $first) {
+          totalCount
+          edges {
+            node {
+              reason
+              urgency
+              openDays
+              openLifeFromDays
+              openLifeUntilDays
+              typicalFor
+              window {
+                until
+                untilSource
+              }
+              bottle {
+                __typename
+                id
+                cellarId
+                item {
+                  __typename
+                  id
+                  type
+                  name
+                  ... on Wine {
+                    vintage
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+      ...ActorErrorFields
+    }
+  }
+`,
+  [ActorErrorFieldsFragment],
+);
+
+/* C1: the cellar list and the cellars index (components/cellar/list). */
+
+/**
+ * One tile of the cellar list: the grid cell (`CellarItemGroupCard`) plus
+ * the owner's own note and when it was written, for the wide note tile
+ * (combined-05). The note is the owner's review of the item, never anyone
+ * else's.
+ */
+export const CellarListGroupFragment = graphql(
+  `
+  fragment CellarListGroup on CellarItemGroup {
+    __typename
+    ...CellarItemGroupCard
+    lead {
+      __typename
+      id
+      openAt
+      item {
+        __typename
+        id
+        myReview {
+          __typename
+          id
+          text
+          updatedAt
+        }
+      }
+    }
+  }
+`,
+  [CellarItemGroupCardFragment],
+);
+
+/**
+ * The whole list, a page at a time: the server page reads every page
+ * (`loadWholeCellar`), because the arrangements the board draws (by maker,
+ * by style, my rating, jump to a letter) need every bottle and the API sorts
+ * by none of them.
+ */
+export const GetCellarListQuery = graphql(
+  `
+  query GetCellarList(
+    $cellarId: ID!
+    $first: Int!
+    $after: String
+    $status: CellarItemStatus
+    $search: String
+  ) {
+    cellar(id: $cellarId) {
+      __typename
+      ... on Cellar {
+        id
+        itemGroups(
+          first: $first
+          after: $after
+          sort: NAME_ASC
+          status: $status
+          search: $search
+        ) {
+          totalCount
+          bottleCount
+          pageInfo {
+            hasNextPage
+            endCursor
+          }
+          edges {
+            cursor
+            node {
+              ...CellarListGroup
+            }
+          }
+        }
+      }
+      ...ActorErrorFields
+    }
+  }
+`,
+  [CellarListGroupFragment, ActorErrorFieldsFragment],
+);
+
+/** MC-drafts: how many of this cellar's bottles still need details. */
+export const CellarNeedsDetailsCountQuery = graphql(`
+  query CellarNeedsDetailsCount($cellarId: ID!) {
+    needsDetailsCount(cellarId: $cellarId)
+  }
+`);
+
+/**
+ * One card of the cellars index (lot-cellars-shelves-01): the old grid card
+ * (name, owners, per-kind counts), how many bottles are open, and the four
+ * newest bottles for the card's mosaic (a photo, else the label plate).
+ */
+export const CellarIndexCardFragment = graphql(
+  `
+  fragment CellarIndexCard on Cellar {
+    __typename
+    ...CellarGridCard
+    open: itemGroups(first: 1, status: OPEN) {
+      bottleCount
+    }
+    recent: itemGroups(first: 4, sort: ADDED_DESC) {
+      edges {
+        node {
+          ...CellarItemGroupCard
+        }
+      }
+    }
+  }
+`,
+  [CellarCardFragment, CellarItemGroupCardFragment],
+);
+
+/** `/cellars`: one page of one section (Yours, From friends, Discover). */
+export const GetCellarIndexQuery = graphql(
+  `
+  query GetCellarIndex(
+    $first: Int!
+    $after: String
+    $section: CollectionSection
+  ) {
+    myCellars(first: $first, after: $after, section: $section) {
+      __typename
+      ... on CellarConnection {
+        totalCount
+        pageInfo {
+          hasNextPage
+          endCursor
+        }
+        edges {
+          cursor
+          node {
+            ...CellarIndexCard
+          }
+        }
+      }
+      ...ActorErrorFields
+    }
+  }
+`,
+  [CellarIndexCardFragment, ActorErrorFieldsFragment],
 );

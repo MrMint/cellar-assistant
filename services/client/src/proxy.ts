@@ -6,6 +6,10 @@ import {
   hasSessionCookie,
   parseCookieHeader,
 } from "./lib/api/session-cookie";
+import { REQUEST_PATH_HEADER, requestPathOf } from "./lib/auth/request-path";
+import { OFFLINE_PATH } from "./lib/pwa/offline";
+import { isPublicSharePath, publicRewriteFor } from "./lib/share/routes";
+import { HOME_PATH } from "./utilities/sanitize-return-to";
 
 /**
  * The signed-in gate, in front of every page.
@@ -34,6 +38,14 @@ import {
  * comes back null, and `services/api` refuses a request whose JWT does not verify.
  * The gate exists to turn a signed-out page load into one redirect instead of a
  * render that fetches, fails and redirects.
+ *
+ * **Shared links (X17).** A signed-out request for a page that can be shared —
+ * `/tier-lists/<id>`, `/recipes/<id>`, `/wines/<id>` and the other item pages
+ * (`lib/share/routes.ts`) — is *rewritten*, not redirected, to its public
+ * `/share/…` page: the browser keeps the canonical URL, the page decides what
+ * is public (PUBLIC only, through the API's anonymous `shared*` reads), and its
+ * sign-up button comes back to that same URL. `/share/…` and `/invite/…` are
+ * public outright, so a link-preview crawler can fetch the cards under them.
  */
 export async function proxy(request: NextRequest): Promise<NextResponse> {
   const path = request.nextUrl.pathname;
@@ -43,8 +55,8 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
     path.startsWith("/_next") ||
     path.startsWith("/sign-in") ||
     path.startsWith("/sign-up") ||
-    path.startsWith("/forgot-password") ||
-    path.startsWith("/verify") ||
+    path === OFFLINE_PATH ||
+    isPublicSharePath(path) ||
     path.includes(".") // Static files
   ) {
     return NextResponse.next();
@@ -52,7 +64,11 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
 
   const cookies = parseCookieHeader(request.headers.get("cookie"));
   if (hasSessionCookie(cookies)) {
-    const response = NextResponse.next();
+    // The path, for `getServerUser()`'s redirect if the session behind this
+    // cookie turns out to be over (`lib/auth/request-path.ts`).
+    const forwarded = new Headers(request.headers);
+    forwarded.set(REQUEST_PATH_HEADER, requestPathOf(request.nextUrl));
+    const response = NextResponse.next({ request: { headers: forwarded } });
     if (cookies.some((cookie) => cookie.name === SESSION_CHECKED_COOKIE)) {
       return response;
     }
@@ -72,10 +88,17 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
     return response;
   }
 
+  const publicPage = publicRewriteFor(path);
+  if (publicPage !== null) {
+    const target = new URL(publicPage, request.url);
+    target.search = request.nextUrl.search;
+    return NextResponse.rewrite(target);
+  }
+
   const signInUrl = new URL("/sign-in", request.url);
   const returnTo = request.nextUrl.pathname + request.nextUrl.search;
-  // Only pass returnTo for non-default routes.
-  if (returnTo !== "/" && returnTo !== "/cellars") {
+  // Only pass returnTo when it is not where sign-in lands anyway (X01: `/`).
+  if (returnTo !== HOME_PATH) {
     signInUrl.searchParams.set("returnTo", returnTo);
   }
   return NextResponse.redirect(signInUrl);
@@ -88,7 +111,10 @@ export const config = {
      * - _next/static (static files)
      * - _next/image (image optimization files)
      * - favicon.ico (favicon file)
-     * - sign-in, sign-up, forgot-password, verify (auth pages)
+     * - sign-in, sign-up (auth pages)
+     * - ~offline (the service worker's offline fallback, which it precaches
+     *   with whatever session the browser has — or none — so it must never
+     *   redirect; see `OFFLINE_PATH` in `src/lib/pwa/offline.ts`)
      * - api/auth, api/graphql (the proxies to Loki)
      *
      * The two `api/` exclusions are load-bearing and guarded by
@@ -97,6 +123,6 @@ export const config = {
      * and `/api/graphql` must answer 401 to its caller rather than 302 to an
      * HTML page, which is not something a GraphQL client can parse.
      */
-    "/((?!_next/static|_next/image|favicon.ico|api/auth|api/graphql|sign-in|sign-up|forgot-password|verify).*)",
+    "/((?!_next/static|_next/image|favicon.ico|api/auth|api/graphql|sign-in|sign-up|~offline).*)",
   ],
 };

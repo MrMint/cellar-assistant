@@ -16,6 +16,7 @@
  */
 import type { Ctx, PlaceSearchInput } from "@cellar-assistant/contracts";
 import {
+  ConflictError,
   ForbiddenError,
   PLACE_SEARCH_WEIGHTS,
   placeSearchActorId,
@@ -201,6 +202,37 @@ describe.skipIf(skip)("PlaceSearchActor (§2.3)", () => {
       });
     });
 
+    it("matches by name when the query cannot be embedded (D25, X12)", async () => {
+      await withTestDb(async (db) => {
+        const viewer = await seedUser(db);
+        await seedPlace(db, { name: "Copper Lantern", lng: -83, lat: 40 });
+        await seedPlace(db, { name: "Somewhere Else", lng: -83, lat: 40 });
+        const input: PlaceSearchInput = { query: "copper lantern" };
+        const unconfigured: EmbedQuery = async () => {
+          throw new ConflictError("no embedding provider", "AI_UNCONFIGURED");
+        };
+        const hits = await newActor(input, db, viewer, unconfigured).all(
+          userCtx(viewer),
+          input,
+        );
+        expect(hits.map((h) => h.name)).toEqual(["Copper Lantern"]);
+        expect(at(hits, 0).categoryScore).toBe(0);
+      });
+    });
+
+    it("still fails a request the name could not make right", async () => {
+      await withTestDb(async (db) => {
+        const viewer = await seedUser(db);
+        const input: PlaceSearchInput = { query: "copper" };
+        const refused: EmbedQuery = async () => {
+          throw new ForbiddenError("not yours");
+        };
+        await expect(
+          newActor(input, db, viewer, refused).all(userCtx(viewer), input),
+        ).rejects.toThrow(ForbiddenError);
+      });
+    });
+
     it("decodes the geography column into { lng, lat }", async () => {
       await withTestDb(async (db) => {
         const viewer = await seedUser(db);
@@ -361,12 +393,14 @@ describe.skipIf(skip)("PlaceSearchActor (§2.3)", () => {
   /* §1.5 keying                                                         */
   /* ------------------------------------------------------------------ */
 
-  describe("the viewer is in the key only when the search is viewer-scoped", () => {
-    it("shares one activation for an unfiltered search", async () => {
+  describe("the viewer is always in the key (X27)", () => {
+    it("splits activations even for an unfiltered search — the answer carries the viewer's own places under review", async () => {
       const a = "11111111-1111-4111-8111-111111111111";
       const b = "22222222-2222-4222-8222-222222222222";
       const input: PlaceSearchInput = { query: "wine bar" };
-      expect(placeSearchActorId(input, a)).toBe(placeSearchActorId(input, b));
+      expect(placeSearchActorId(input, a)).not.toBe(
+        placeSearchActorId(input, b),
+      );
     });
 
     it("splits activations for a tier-list-filtered or visit-filtered search", () => {
@@ -443,6 +477,104 @@ describe.skipIf(skip)("PlaceSearchActor (§2.3)", () => {
       await expect(
         newActor(input, db, null).all(userCtx(null), input),
       ).rejects.toThrow(ForbiddenError);
+    });
+  });
+  /* ------------------------------------------------------------------ */
+  /* X27 / D28                                                           */
+  /* ------------------------------------------------------------------ */
+
+  describe("places under review (X27)", () => {
+    it("the creator finds their own pending place by its name, marked; a stranger asking the same question gets nothing", async () => {
+      await withTestDb(async (db) => {
+        const creator = await seedUser(db);
+        const stranger = await seedUser(db);
+        const pending = await seedPlace(db, {
+          name: "Quietly Pending Wine Room",
+          lng: -83,
+          lat: 40,
+          reviewStatus: "pending",
+          createdBy: creator,
+        });
+        await seedPlace(db, {
+          name: "Quietly Rejected Wine Room",
+          lng: -83.01,
+          lat: 40,
+          reviewStatus: "rejected",
+          createdBy: stranger,
+        });
+        const input: PlaceSearchInput = { query: "Quietly Pending Wine" };
+
+        const mine = await newActor(input, db, creator).all(
+          userCtx(creator),
+          input,
+        );
+        expect(mine.map((h) => [h.placeId, h.reviewStatus])).toEqual([
+          [pending, "pending"],
+        ]);
+
+        const theirs = await newActor(input, db, stranger).all(
+          userCtx(stranger),
+          input,
+        );
+        expect(theirs).toEqual([]);
+      });
+    });
+
+    it("a shared hit says so", async () => {
+      await withTestDb(async (db) => {
+        const viewer = await seedUser(db);
+        await seedPlace(db, {
+          name: "Openly Shared Taproom",
+          lng: -83,
+          lat: 40,
+        });
+        const input: PlaceSearchInput = { query: "Openly Shared Taproom" };
+        const hits = await newActor(input, db, viewer).all(
+          userCtx(viewer),
+          input,
+        );
+        expect(hits.map((h) => h.reviewStatus)).toEqual(["approved"]);
+      });
+    });
+  });
+
+  describe("section totals (MC-search, L3)", () => {
+    it("is the full count under the cap, and the cap as a lower bound past it", async () => {
+      await withTestDb(async (db) => {
+        const viewer = await seedUser(db);
+        for (const name of [
+          "Qzxvino Alpha",
+          "Qzxvino Bravo",
+          "Qzxvino Delta",
+        ]) {
+          await seedPlace(db, {
+            name,
+            lng: -83,
+            lat: 40,
+            primaryCategory: "wine_bar",
+          });
+        }
+
+        const under: PlaceSearchInput = { query: "Qzxvino", limit: 3 };
+        const all = await newActor(under, db, viewer).results(
+          userCtx(viewer),
+          under,
+          { first: 1, after: null },
+        );
+        expect(all.entries).toHaveLength(1);
+        expect(all.totalCount).toBe(3);
+        expect(all.totalIsLowerBound).toBe(false);
+
+        const capped: PlaceSearchInput = { query: "Qzxvino", limit: 2 };
+        const page = await newActor(capped, db, viewer).results(
+          userCtx(viewer),
+          capped,
+          { first: 10, after: null },
+        );
+        expect(page.entries).toHaveLength(2);
+        expect(page.totalCount).toBe(2);
+        expect(page.totalIsLowerBound).toBe(true);
+      });
     });
   });
 });

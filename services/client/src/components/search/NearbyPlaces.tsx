@@ -1,30 +1,20 @@
 "use client";
 
-import {
-  Avatar,
-  Box,
-  Card,
-  CardContent,
-  Grid,
-  IconButton,
-  Stack,
-  ToggleButtonGroup,
-  Tooltip,
-  Typography,
-} from "@mui/joy";
-import { AnimatePresence, motion } from "framer-motion";
-import Image from "next/image";
-import Link from "next/link";
+import { AnimatePresence, motion } from "motion/react";
 import { useMemo, useState } from "react";
-import {
-  FaBeer,
-  FaCocktail,
-  FaCoffee,
-  FaGlassWhiskey,
-  FaWineGlass,
-} from "react-icons/fa";
-import { MdLocationOn, MdStar } from "react-icons/md";
 import { useQuery } from "urql";
+import { FilterChip } from "@/components/app/FilterChip";
+import { ICON_STROKE, Place } from "@/components/app/icons";
+import { PlaceRow } from "@/components/app/parts/PlaceRow";
+import { itemTypeTokens } from "@/components/app/TypeChip";
+import type { ApiItemType } from "@/components/cellar-api/itemTypes";
+import { SEE_ALL_CLASS, SectionHead } from "@/components/home/HomeLayout";
+import {
+  formatMetres,
+  metresBetween,
+  placeYouAreAt,
+} from "@/components/home/landing";
+import { PressLink } from "@/components/home/PressLink";
 import { mapItemTypesToCategories } from "@/components/map/config/scoring";
 import { useGeolocation } from "@/components/map/hooks/useGeolocation";
 import {
@@ -32,12 +22,12 @@ import {
   getPriceLevelText,
 } from "@/components/map/places/place-utils";
 import type { ItemType } from "@/components/map/types";
-import { useMediaQuery } from "@/hooks/useMediaQuery";
 import type { CachedLocation } from "@/lib/geo-cookie/parse";
+import { cn } from "@/lib/utils";
 import { type NearbyPlace, nearbyPlacesFromNodes } from "./adapter";
-import { fadeInLeft, staggerContainerFast } from "./motion-variants";
 import { NEARBY_PLACES_LIMIT, SearchNearbyPlacesQuery } from "./queries";
-import { useHasMounted } from "./useHasMounted";
+import { fadeInLeft, fadeShort, staggerContainerFast } from "./search-motion";
+import { useHasMounted, useHydratedReducedMotion } from "./useHasMounted";
 
 /**
  * `82450ad1:src/components/search/NearbyPlaces.tsx`, restored (UI parity
@@ -57,35 +47,26 @@ import { useHasMounted } from "./useHasMounted";
  *   position differs from the cookie's.
  * - **The photo** is the presigned `file { url }` instead of a Nhost storage
  *   URL built from a file id; same `next/image` props.
+ * - **The filters** are labelled `FilterChip`s (the type's glyph and its
+ *   word), where the old ones were bare icons in a Joy `ToggleButtonGroup`
+ *   (design §3.4). Still a multi-select: any combination, none meaning all.
  */
 
-const PLACE_TYPE_FILTERS: { id: ItemType; label: string; icon: React.FC }[] = [
-  { id: "wine", label: "Wine", icon: FaWineGlass },
-  { id: "beer", label: "Beer", icon: FaBeer },
-  { id: "spirit", label: "Spirits", icon: FaCocktail },
-  { id: "coffee", label: "Coffee", icon: FaCoffee },
-  { id: "sake", label: "Sake", icon: FaGlassWhiskey },
+const PLACE_TYPE_FILTERS: {
+  id: ItemType;
+  label: string;
+  glyph: ApiItemType;
+}[] = [
+  { id: "wine", label: "Wine", glyph: "WINE" },
+  { id: "beer", label: "Beer", glyph: "BEER" },
+  { id: "spirit", label: "Spirits", glyph: "SPIRIT" },
+  { id: "coffee", label: "Coffee", glyph: "COFFEE" },
+  { id: "sake", label: "Sake", glyph: "SAKE" },
 ];
 
-function formatDistance(
-  placeLat: number,
-  placeLng: number,
-  userLat: number,
-  userLng: number,
-): string {
-  const R = 6371e3;
-  const dLat = ((placeLat - userLat) * Math.PI) / 180;
-  const dLng = ((placeLng - userLng) * Math.PI) / 180;
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos((userLat * Math.PI) / 180) *
-      Math.cos((placeLat * Math.PI) / 180) *
-      Math.sin(dLng / 2) ** 2;
-  const meters = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-
-  if (meters < 1000) return `${Math.round(meters)}m`;
-  return `${(meters / 1000).toFixed(1)}km`;
-}
+/** A type toggled in or out, keeping the order the types were picked in. */
+const toggleType = (types: readonly ItemType[], type: ItemType): ItemType[] =>
+  types.includes(type) ? types.filter((t) => t !== type) : [...types, type];
 
 // ─── Open status from cached enrichment hours ────────────────────────────────
 
@@ -125,11 +106,9 @@ export function NearbyPlaces({
   const geo = useGeolocation();
   const hasInitialData = initialPlaces != null && initialPlaces.length > 0;
   const [selectedTypes, setSelectedTypes] = useState<ItemType[]>([]);
-  const prefersReducedMotion = useMediaQuery(
-    "(prefers-reduced-motion: reduce)",
-  );
+  const prefersReducedMotion = useHydratedReducedMotion();
   // The server's render and the hydration pass start visible; only what
-  // mounts afterwards (a filter change) plays the entrance. See ./AnimateIn.
+  // mounts afterwards (a filter change) plays the entrance (./useHasMounted).
   const animateEntrance = useHasMounted();
   const latitude = geo.location?.latitude;
   const longitude = geo.location?.longitude;
@@ -195,60 +174,63 @@ export function NearbyPlaces({
   const userLat = geo.location?.latitude ?? cachedLocation?.latitude ?? 0;
   const userLng = geo.location?.longitude ?? cachedLocation?.longitude ?? 0;
 
+  const here = { lat: userLat, lng: userLng };
+  const at = placeYouAreAt(places, here);
+  const origin = at === null ? "you" : at.place.name;
+  // The place you are at leads: Home is place-aware (DECISIONS 23).
+  const ordered =
+    at === null
+      ? places
+      : [at.place, ...places.filter((place) => place.id !== at.place.id)];
+
   return (
-    <Stack spacing={1.5}>
-      <Stack
-        direction="row"
-        spacing={1}
-        alignItems="center"
-        justifyContent="space-between"
-        flexWrap="wrap"
-        useFlexGap
+    <section aria-labelledby="nearby-heading" className="flex flex-col gap-2">
+      <SectionHead
+        id="nearby-heading"
+        title={at === null ? "Nearby" : `Near ${at.place.name}`}
+        count={
+          places.length === 0
+            ? null
+            : `${places.length} ${places.length === 1 ? "place" : "places"}`
+        }
+      />
+      <fieldset
+        aria-label="Place type filters"
+        className="-mx-4 m-0 flex min-w-0 gap-2 overflow-x-auto border-0 px-4 py-0 [scrollbar-width:none] md:mx-0 md:flex-wrap md:px-0 [&::-webkit-scrollbar]:hidden"
       >
-        <Stack direction="row" spacing={1} alignItems="center">
-          <MdLocationOn
-            style={{
-              color: "var(--joy-palette-primary-400)",
-              fontSize: "1.25rem",
-            }}
-          />
-          <Typography level="title-lg">Nearby Places</Typography>
-        </Stack>
+        {PLACE_TYPE_FILTERS.map(({ id, label, glyph }) => {
+          // The type's own glyph, in the chip's ink: a filter is state,
+          // so it takes the chip's colour rather than the type's hue.
+          const Glyph = itemTypeTokens[glyph].glyph;
+          return (
+            <FilterChip
+              key={id}
+              aria-label={label}
+              selected={selectedTypes.includes(id)}
+              icon={<Glyph aria-hidden strokeWidth={ICON_STROKE} />}
+              onClick={() => setSelectedTypes(toggleType(selectedTypes, id))}
+            >
+              {label}
+            </FilterChip>
+          );
+        })}
+      </fieldset>
 
-        <ToggleButtonGroup
-          variant="plain"
-          spacing={0.5}
-          value={selectedTypes}
-          onChange={(_event, newTypes) => setSelectedTypes(newTypes)}
-          aria-label="Place type filters"
-        >
-          {PLACE_TYPE_FILTERS.map(({ id, label, icon: Icon }) => (
-            <Tooltip key={id} title={label}>
-              <IconButton value={id} aria-label={label} size="sm">
-                <Icon />
-              </IconButton>
-            </Tooltip>
-          ))}
-        </ToggleButtonGroup>
-      </Stack>
-
-      {/* Cards: AnimatePresence handles smooth exit/enter between filter changes */}
       <AnimatePresence mode="wait">
         {initialLoading ? null : places.length === 0 ? (
-          <motion.div
+          <motion.p
             key="empty"
             initial={animateEntrance ? { opacity: 0 } : false}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.15 }}
+            transition={fadeShort}
+            className="t-cap m-0 py-4 text-ink-3"
           >
-            <Typography level="body-sm" sx={{ color: "text.tertiary", py: 2 }}>
-              No nearby places found
-              {selectedTypes.length > 0 && " for the selected types"}
-            </Typography>
-          </motion.div>
+            No nearby places found
+            {selectedTypes.length > 0 && " for the selected types"}
+          </motion.p>
         ) : (
-          <motion.div
+          <motion.ul
             key={selectedTypes.join(",")}
             variants={prefersReducedMotion ? undefined : staggerContainerFast}
             initial={
@@ -256,152 +238,52 @@ export function NearbyPlaces({
             }
             animate="show"
             exit="exit"
+            className="m-0 grid list-none grid-cols-1 gap-2 p-0 md:grid-cols-2"
           >
-            <Grid container spacing={1} columns={{ xs: 1, md: 2 }}>
-              {places.map((place) => {
-                const [lng, lat] = place.coordinates;
-                const dist = formatDistance(lat, lng, userLat, userLng);
-                const photoUrl = place.photoUrl;
-                const rating = place.rating;
-                const priceLevelText = getPriceLevelText(place.priceLevel);
-                const openStatus = place.openingHours
-                  ? getOpenStatus(place.openingHours)
-                  : null;
-
-                return (
-                  <Grid key={place.id} xs={1}>
-                    <motion.div
-                      variants={prefersReducedMotion ? undefined : fadeInLeft}
-                      whileHover={prefersReducedMotion ? undefined : { y: -2 }}
-                      whileTap={
-                        prefersReducedMotion ? undefined : { scale: 0.98 }
-                      }
-                      transition={{ duration: 0.15 }}
-                    >
-                      <Card
-                        component={Link}
-                        href={`/map?placeId=${place.id}`}
-                        variant="outlined"
-                        orientation="horizontal"
-                        sx={{
-                          textDecoration: "none",
-                          "--Card-padding": "0.625rem",
-                          height: "100%",
-                          transition: "all 0.15s ease",
-                          "&:hover": {
-                            boxShadow: "sm",
-                            borderColor: "neutral.outlinedHoverBorder",
-                          },
-                        }}
-                      >
-                        {/* Place thumbnail */}
-                        <Box
-                          sx={{
-                            width: 44,
-                            height: 44,
-                            flexShrink: 0,
-                            borderRadius: "md",
-                            overflow: "hidden",
-                            position: "relative",
-                          }}
-                        >
-                          {photoUrl ? (
-                            <Image
-                              src={photoUrl}
-                              alt={place.name}
-                              fill
-                              style={{ objectFit: "cover" }}
-                              sizes="44px"
-                            />
-                          ) : (
-                            <Avatar
-                              variant="soft"
-                              color="primary"
-                              sx={{
-                                width: "100%",
-                                height: "100%",
-                                borderRadius: "md",
-                                fontSize: "md",
-                              }}
-                            >
-                              {place.name.charAt(0)}
-                            </Avatar>
-                          )}
-                        </Box>
-
-                        <CardContent sx={{ gap: 0.25, minWidth: 0 }}>
-                          <Typography level="title-sm" noWrap>
-                            {place.name}
-                          </Typography>
-
-                          {/* Info line: category · rating · price · distance */}
-                          <Typography
-                            level="body-xs"
-                            noWrap
-                            sx={{ color: "text.tertiary" }}
-                          >
-                            {formatCategoryName(place.primaryCategory)}
-                            {rating != null && (
-                              <>
-                                {" \u00B7 "}
-                                <MdStar
-                                  style={{
-                                    fontSize: "0.7rem",
-                                    verticalAlign: "middle",
-                                    color: "var(--joy-palette-warning-400)",
-                                  }}
-                                />{" "}
-                                {rating.toFixed(1)}
-                              </>
-                            )}
-                            {priceLevelText && (
-                              <>
-                                {" \u00B7 "}
-                                {priceLevelText}
-                              </>
-                            )}
-                            {" \u00B7 "}
-                            {dist}
-                          </Typography>
-
-                          {/* Open/closed status when available */}
-                          {openStatus && (
-                            <Typography
-                              level="body-xs"
-                              sx={{
-                                color: openStatus.isOpen
-                                  ? "success.600"
-                                  : "danger.600",
-                                fontWeight: "md",
-                              }}
-                            >
-                              {openStatus.text}
-                            </Typography>
-                          )}
-                        </CardContent>
-                      </Card>
-                    </motion.div>
-                  </Grid>
-                );
-              })}
-            </Grid>
-          </motion.div>
+            {ordered.map((place) => {
+              const [lng, lat] = place.coordinates;
+              const isHere = at !== null && at.place.id === place.id;
+              const openStatus = place.openingHours
+                ? getOpenStatus(place.openingHours)
+                : null;
+              const where = [
+                formatCategoryName(place.primaryCategory),
+                getPriceLevelText(place.priceLevel) || null,
+                openStatus?.text ?? null,
+                // CROSS-LOT: always name the origin; "At X" within 25 m.
+                isHere
+                  ? `At ${place.name}`
+                  : `${formatMetres(metresBetween(here, { lat, lng }))} from ${origin}`,
+              ]
+                .filter((part): part is string => Boolean(part))
+                .join(" · ");
+              return (
+                <motion.li
+                  key={place.id}
+                  data-here={isHere || undefined}
+                  variants={prefersReducedMotion ? undefined : fadeInLeft}
+                  transition={fadeShort}
+                >
+                  <PlaceRow
+                    glyph={Place}
+                    photoUrl={place.photoUrl}
+                    name={
+                      <PressLink href={`/map?placeId=${place.id}`} overlay>
+                        {place.name}
+                      </PressLink>
+                    }
+                    where={where}
+                    rating={place.rating}
+                  />
+                </motion.li>
+              );
+            })}
+          </motion.ul>
         )}
       </AnimatePresence>
-      <Box sx={{ textAlign: "center" }}>
-        <Typography
-          component={Link}
-          href="/map"
-          level="body-sm"
-          sx={{
-            color: "primary.400",
-            textDecoration: "none",
-            "&:hover": { textDecoration: "underline" },
-          }}
-        >
-          View all on map
-        </Typography>
-      </Box>
-    </Stack>
+      <PressLink href="/map" className={cn(SEE_ALL_CLASS, "mr-0 self-center")}>
+        View all on map
+      </PressLink>
+    </section>
   );
 }

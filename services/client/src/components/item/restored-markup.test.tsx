@@ -1,7 +1,8 @@
 /**
- * Render tests for the restored item pages, asserting the **old** markup
- * (`82450ad1:src/components/{wine,…}/{T}Details.tsx`,
- * `Cellar{T}Details.tsx`, `{T}Form.tsx` and the `item/` leaves).
+ * Render tests for the item pages: X09's one item page (`ItemPageView`, for
+ * the item URL and, with a bottle selected, the bottle URL), and the
+ * restored `{T}Form.tsx` and `item/` leaves, asserting the **old** markup
+ * where it survives.
  */
 import { mock } from "bun:test";
 import assert from "node:assert/strict";
@@ -9,6 +10,7 @@ import { describe, test } from "node:test";
 import type { ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { Client, Provider } from "urql";
+import { stripStyleBlocks } from "@/test-support/markup";
 import {
   NextImageConfig,
   nextImageModule,
@@ -23,18 +25,17 @@ mock.module("next/navigation", () => ({
 }));
 
 const { ItemPageView } = await import("./ItemPageView");
-const { CellarItemPageView } = await import("./CellarItemPageView");
 const { ItemForm } = await import("./ItemForm");
 const { ItemImage } = await import("./ItemImage");
+const { openTag } = await import("../../test-support/markup");
 
 const client = new Client({
   url: "http://test.invalid/graphql",
   exchanges: [],
 });
 const render = (node: ReactNode) =>
-  renderToStaticMarkup(<Provider value={client}>{node}</Provider>).replace(
-    /<style[^>]*>[^<]*<\/style>/g,
-    "",
+  stripStyleBlocks(
+    renderToStaticMarkup(<Provider value={client}>{node}</Provider>),
   );
 
 type ItemView = Parameters<typeof ItemPageView>[0]["item"];
@@ -46,10 +47,12 @@ const tea: ItemView = {
   description: "A green tea.",
   createdById: "me",
   isFavorite: false,
+  isWantToTry: false,
   subTitlePhrases: ["Green", "Loose Leaf", "China", undefined],
-  characteristics: [
+  facts: [
     { label: "Category", value: "Green" },
     { label: "Organic", value: "Yes" },
+    { label: "Country", value: "China" },
   ],
   flavorProfile: "Chestnut",
   ingredients: null,
@@ -70,68 +73,330 @@ const tea: ItemView = {
   reviewsEndCursor: null,
   reviewsHasNextPage: false,
   myReview: null,
+  everyone: { average: null, count: 0 },
+  friends: { average: null, count: 0 },
+  plate: { producer: "West Lake", name: "Dragonwell", origin: "China" },
+  plateStyle: null,
 };
 
-describe("ItemPageView (restored {T}Details)", () => {
-  const html = render(
+type PageProps = Parameters<typeof ItemPageView>[0];
+
+const page = (over: Partial<PageProps> = {}) =>
+  render(
     <ItemPageView
       item={tea}
+      bottles={[]}
+      parent="/"
       cellars={[]}
-      tierLists={[
-        { id: "e", band: 5, tier_list: { id: "l", name: "Best teas" } },
-      ]}
-      recipes={[
-        {
-          id: "ri",
-          quantity: 0.5,
-          unit: "cup",
-          is_optional: true,
-          recipe: {
-            id: "r",
-            name: "Tea Punch",
-            type: "cocktail",
-            image_url: null,
-            difficulty_level: 1,
-          },
-        },
-      ]}
-      addableCellars={[{ id: "c", name: "Home" }]}
-      editHref="/teas/t1/edit"
+      tierLists={[]}
+      recipes={[]}
+      addableCellars={[]}
+      editHref={null}
+      {...over}
     />,
   );
 
-  test("details card: title, subtitle joined with ' - ', description", () => {
-    assert.match(html, /MuiTypography-h3[^>]*>Dragonwell/);
-    assert.match(html, /Green - Loose Leaf - China/);
-    assert.match(html, /A green tea\./);
+const bottle = (over: Partial<PageProps["bottles"][number]> = {}) => ({
+  id: "b1",
+  cellarId: "c",
+  cellarName: "Home",
+  openAt: null,
+  emptyAt: null,
+  percentageRemaining: 100,
+  ...over,
+});
+
+describe("the stars button (F-149)", () => {
+  test("its tap target is 44 px tall", () => {
+    const html = page({
+      item: { ...tea, myReview: { id: "r", score: 4, text: null } },
+    });
+    assert.match(
+      html,
+      /<button[^>]*aria-label="Change your rating"[^>]*min-h-11|<button[^>]*min-h-11[^>]*aria-label="Change your rating"/,
+    );
+  });
+});
+
+describe("ItemPageView in the desktop pane (F-5)", () => {
+  const html = page({ pane: true });
+  test("draws no second hero: the pane's own photo is the only picture", () => {
+    assert.ok(!html.includes('data-slot="item-hero-picture"'));
+    assert.ok(html.includes("Dragonwell"));
+  });
+  test("the title has the pane's full width, not a column beside a photo", () => {
+    assert.ok(!/<header[^>]*md:flex-row/.test(html));
+  });
+});
+
+describe("ItemPageView (X09: one item page)", () => {
+  const html = page({
+    tierLists: [
+      { id: "e", band: 5, tier_list: { id: "l", name: "Best teas" } },
+    ],
+    recipes: [
+      {
+        id: "ri",
+        quantity: 0.5,
+        unit: "cup",
+        is_optional: true,
+        recipe: {
+          id: "r",
+          name: "Tea Punch",
+          type: "cocktail",
+          image_url: null,
+          difficulty_level: 1,
+        },
+      },
+      {
+        id: "rf",
+        quantity: 2,
+        unit: "tbsp",
+        is_optional: false,
+        recipe: {
+          id: "f",
+          name: "Tea-Smoked Duck",
+          type: "food",
+          image_url: null,
+          difficulty_level: 3,
+        },
+      },
+    ],
+    addableCellars: [{ id: "c", name: "Home" }],
+    editHref: "/teas/t1/edit",
   });
 
-  test("the old cards and copy", () => {
-    assert.match(html, />Tea Characteristics</);
-    assert.match(html, /Organic: Yes/);
-    assert.match(html, />Flavor Profile</);
-    assert.match(html, />Located in:</);
-    assert.match(html, /Not in any cellars, variety is the spice of life!/);
-    assert.match(html, />On Lists</);
+  test("hero: one h1, the producer links to its brand, the subtitle", () => {
+    // The page's one h1: the AppBar has no title on the item page, and the
+    // sections under it are h2s.
+    assert.match(html, /<h1[^>]*>Dragonwell/);
+    assert.equal(html.match(/<h1\b/g)?.length, 1);
+    assert.match(html, /href="\/brands\/b"[^>]*>West Lake</);
+    assert.match(html, /Green · Loose Leaf · China/);
+    assert.match(html, /aria-label="Love Dragonwell"/);
+  });
+
+  test("taste header: You · Friends · Everyone, words where there is no number", () => {
+    const header = html.slice(html.indexOf('data-testid="taste-header"'));
+    assert.match(header, /aria-label="You: Rate it"/);
+    assert.match(header, /aria-label="Friends: No friends&#x27; ratings"/);
+    assert.match(header, /aria-label="Everyone: No ratings yet"/);
+    assert.match(header, /href="#your-review"/);
+    // Grounded numbers only: never a percentage.
+    assert.doesNotMatch(header.slice(0, header.indexOf("</nav>")), /%/);
+  });
+
+  test("taste header: your score, friends' and everyone's averages with counts", () => {
+    const rated = page({
+      item: {
+        ...tea,
+        myReview: { id: "r", score: 4.5, text: null },
+        friends: { average: 4.25, count: 2 },
+        everyone: { average: 3.9, count: 12 },
+      },
+    });
+    assert.match(rated, /aria-label="You: rated 4.5 out of 5, Your rating"/);
+    assert.match(rated, /aria-label="Friends: rated 4.25 out of 5, 2 friends"/);
+    assert.match(rated, />4.3<!-- -->|>4.3</);
+    assert.match(
+      rated,
+      /aria-label="Everyone: rated 3.9 out of 5, 12 ratings"/,
+    );
+  });
+
+  test("taste header: the date you rated it under Your rating (F-151, H-130)", () => {
+    const rated = page({
+      item: {
+        ...tea,
+        myReview: {
+          id: "r",
+          score: 4.5,
+          text: null,
+          ratedAt: "2026-11-03T12:00:00Z",
+        },
+      },
+    });
+    const from = rated.indexOf('data-testid="taste-header"');
+    const you = rated.slice(from, rated.indexOf("</a>", from));
+    assert.match(you, /Your rating.*<time dateTime="2026-11-03T12:00:00Z">/s);
+  });
+
+  test("fact sheet: every recorded attribute as a row, then the notes", () => {
+    const facts = html.slice(html.indexOf('data-testid="item-facts"'));
+    assert.match(facts, /<dt[^>]*>Organic<\/dt><dd[^>]*>Yes<\/dd>/);
+    assert.match(facts, /<dt[^>]*>Country<\/dt><dd[^>]*>China<\/dd>/);
+    assert.match(facts, />Flavor Profile</);
+    assert.match(facts, />Chestnut</);
+    assert.match(facts, /A green tea\./);
+  });
+
+  test("sections: producer under one title, food recipes only, reviews, lists", () => {
+    assert.match(html, />Tea house</);
+    assert.doesNotMatch(html, /Tea Brands/);
+    // "Cocktails with this" (X14) carries the cocktail; this list cooks.
+    assert.match(html, />Cook with this \(1\)</);
+    assert.match(html, />Tea-Smoked Duck</);
+    assert.doesNotMatch(html, />Tea Punch</);
+    assert.match(html, /2 tbsp of Dragonwell/);
+    assert.match(html, />Located in</);
+    assert.match(html, /Not in any cellar you can see\./);
+    assert.match(html, />Your rank</);
     assert.match(html, />Best teas</);
     assert.match(html, />Outstanding</);
-    assert.match(html, />Reviews:</);
+    assert.match(html, /id="reviews"/);
     assert.match(html, /No reviews yet! Want to add one\?/);
-    assert.match(html, /placeholder="Add a Review\.\.\."/);
-    assert.match(html, /Tea Brands \(1\)/);
-    assert.match(html, /Used in Recipes \(1\)/);
-    assert.match(html, /1\/2 cup of Dragonwell/);
+    assert.match(html, /id="your-review"/);
+    assert.match(html, /aria-label="Rate it"/);
+    assert.match(html, />Add note</);
+    assert.match(html, /id="your-log"/);
+    // The creator's one-tap brand change (D8).
+    assert.match(html, />Wrong brand\? Change it</);
   });
 
-  test("header: Add to Cellar (one cellar = a button), Share, Edit for the creator", () => {
-    assert.match(html, />Add to Cellar</);
-    assert.match(html, />Share</);
-    assert.match(html, /href="\/teas\/t1\/edit"/);
-    assert.match(html, /Edit item/);
+  test("the menu disc, and no bottom ActionBar (Cellars-Bottles)", () => {
+    assert.match(html, /<button[^>]*aria-label="More actions"/);
+    assert.doesNotMatch(html, /data-testid="item-action-bar"/);
+    // No bottles yet: the card says so, with Add to cellar as its action.
+    assert.match(html, />None in your cellar</);
+    assert.match(html, />Add to cellar</);
   });
 
-  test("the fallback picture when there is no image", () => {
-    assert.match(html, /data-alt="A picture of a glass"/);
+  test("Your rank: Not ranked with Add to a list", () => {
+    const unranked = page();
+    const rank = unranked.slice(unranked.indexOf('data-testid="your-rank"'));
+    assert.match(rank, />Not ranked</);
+    assert.match(rank, />Add to a list</);
+  });
+
+  test("no Add to cellar for a viewer with no cellar to add to", () => {
+    const none = page();
+    assert.doesNotMatch(none, />Add to cellar</);
+    assert.match(none, />Make a cellar</);
+  });
+
+  test("no image: the item's LabelPlate stands in, named by its text (N28)", () => {
+    const plate = openTag(html, 'data-slot="label-plate"');
+    assert.match(plate, /data-type="TEA"/);
+    assert.match(plate, /role="img"/);
+    assert.match(plate, /aria-label="Label: West Lake Dragonwell, China"/);
+    assert.doesNotMatch(html, /data-alt="A picture of a glass"/);
+  });
+
+  test("the hero plate draws the item's style vessel (H-6)", () => {
+    const bagged = page({
+      item: { ...tea, plateStyle: { form: "TEA_BAG" } },
+    });
+    assert.match(bagged, /data-vessel="pouch"/);
+  });
+});
+
+describe("Your bottles (X09)", () => {
+  test("each bottle: its cellar, its state, Pour and Log", () => {
+    const html = page({
+      bottles: [
+        bottle({
+          id: "b1",
+          openAt: "2026-01-01T00:00:00Z",
+          percentageRemaining: 40,
+        }),
+        bottle({ id: "b2", cellarName: "Garage" }),
+      ],
+      bottlesTotal: 2,
+    });
+    // W-20: a tea's bottles are tins.
+    assert.match(html, />Your tins</);
+    assert.match(html, />2 tins</);
+    assert.match(html, />Open · 40% left</);
+    assert.match(html, />Sealed</);
+    assert.match(html, /href="\/cellars\/c\/teas\/b1"/);
+    assert.match(html, /aria-label="Steep from Home"/);
+    // The next bottle is open in place: Check in, Pour… and Log….
+    assert.match(html, />Check in</);
+    assert.match(html, /aria-label="Log a drink from Home"/);
+    // Nothing is selected on the item's own URL (the breadcrumbs' own
+    // aria-current is the page's, not a bottle's).
+    assert.doesNotMatch(html, /aria-current="page"[^>]*>Home</);
+    assert.doesNotMatch(html, /data-selected/);
+    assert.doesNotMatch(html, /data-testid="selected-bottle"/);
+  });
+});
+
+describe("the bottle route: the item page with that bottle selected (X09)", () => {
+  const selected = (over: Record<string, unknown> = {}) => ({
+    ...bottle(),
+    isOwner: true,
+    displayImage: null,
+    ...over,
+  });
+
+  test("yours, sealed: marked, Pour (whose first pour opens it), Mark as opened inline, the photo tile, the hero line", () => {
+    const html = page({
+      selected: selected(),
+      bottles: [bottle()],
+      parent: "/cellars/c/items",
+    });
+    assert.match(html, /aria-current="page"[^>]*>Sealed</);
+    // X03: a sealed bottle is poured (the first pour opens it); opening
+    // without pouring is the quiet "Mark as opened".
+    assert.match(html, /aria-label="Steep from Home"/);
+    assert.match(html, />Mark as opened</);
+    assert.doesNotMatch(html, />Open it!</);
+    assert.match(html, /<button[^>]*aria-label="Add a photo"/);
+    assert.match(html, /This tin · Home · Sealed/);
+  });
+
+  test("the selected bottle leads Your bottles, the rest keep their order", () => {
+    const html = page({
+      selected: selected({ id: "b2", cellarName: "Garage" }),
+      bottles: [
+        bottle({ id: "b1", openAt: "2026-01-01T00:00:00Z" }),
+        bottle({ id: "b2", cellarName: "Garage" }),
+        bottle({ id: "b3", cellarName: "Attic" }),
+      ],
+    });
+    const order = [...html.matchAll(/href="\/cellars\/c\/teas\/(b\d)"/g)].map(
+      (match) => match[1],
+    );
+    assert.deepEqual(order, ["b2", "b1", "b3"]);
+  });
+
+  test("yours, opened: the level inline", () => {
+    const html = page({
+      selected: selected({
+        openAt: "2026-01-01T00:00:00Z",
+        percentageRemaining: 40,
+      }),
+      bottles: [
+        bottle({ openAt: "2026-01-01T00:00:00Z", percentageRemaining: 40 }),
+      ],
+    });
+    assert.match(html, /Remaining: 40%/);
+    assert.doesNotMatch(html, />Mark as opened</);
+  });
+
+  test("yours, finished: still listed, with Restore and no Pour", () => {
+    const html = page({
+      selected: selected({
+        openAt: "2026-01-01T00:00:00Z",
+        emptyAt: "2026-01-03T00:00:00Z",
+        percentageRemaining: 0,
+      }),
+      bottles: [],
+    });
+    assert.match(html, />Finished</);
+    assert.match(html, />Put back</);
+    assert.doesNotMatch(html, /aria-label="Steep from Home"/);
+  });
+
+  test("someone else's: read-only, no level, no photo tile, no Pour", () => {
+    const html = page({
+      selected: selected({ isOwner: false, cellarName: "Sam's" }),
+    });
+    assert.match(html, />This tin</);
+    assert.match(html, />Sam&#x27;s</);
+    assert.doesNotMatch(html, />Mark as opened</);
+    assert.doesNotMatch(html, /aria-label="Add a photo"/);
+    assert.doesNotMatch(html, />Your tins</);
   });
 });
 
@@ -143,7 +408,7 @@ describe("ItemImage (restored)", () => {
         <ItemImage
           url={photo}
           placeholder="png;base64,AAAA"
-          fallback={{ src: "/x.png", width: 1, height: 1 }}
+          fallback={<span data-testid="plate" />}
         />
       </NextImageConfig>,
     );
@@ -154,94 +419,6 @@ describe("ItemImage (restored)", () => {
       /background-image:url\(&quot;data:image\/png;base64,AAAA/,
     );
     assert.doesNotMatch(html, /data-next-image="art"/);
-  });
-});
-
-describe("CellarItemPageView (restored Cellar{T}Details, one bottle)", () => {
-  const props = {
-    item: {
-      ...tea,
-      type: "WINE" as const,
-      characteristics: [],
-      flavorProfile: null,
-    },
-    recipes: [],
-    cellar: { id: "c", name: "Home" },
-    checkIns: [],
-    viewer: { id: "me", displayName: "Me", avatarUrl: "" },
-    friends: [],
-    editHref: null,
-  };
-
-  test("unopened, owner: 'Open it!', Delete enabled, Edit disabled for a non-creator", () => {
-    const html = render(
-      <CellarItemPageView
-        {...props}
-        isOwner
-        bottle={{
-          id: "b1",
-          openAt: null,
-          emptyAt: null,
-          percentageRemaining: 100,
-          displayImage: null,
-        }}
-      />,
-    );
-    assert.match(html, />Open it!</);
-    assert.match(html, />Delete item</);
-    assert.match(
-      html,
-      /Mui-disabled[^>]*><span[^>]*><svg.*?<\/svg><\/span>Edit item/,
-    );
-    assert.match(html, /Add a photo/);
-    assert.match(html, />Wineries \(1\)</);
-    assert.doesNotMatch(html, />Check In</);
-  });
-
-  test("opened: check-ins and the slider", () => {
-    const html = render(
-      <CellarItemPageView
-        {...props}
-        isOwner
-        bottle={{
-          id: "b1",
-          openAt: "2026-01-01T00:00:00Z",
-          emptyAt: null,
-          percentageRemaining: 40,
-          displayImage: null,
-        }}
-        checkIns={[
-          {
-            id: "ci",
-            createdAt: "2026-01-02T10:00:00Z",
-            user: { id: "me", displayName: "Me", avatarUrl: "" },
-          },
-        ]}
-      />,
-    );
-    assert.match(html, />Check In</);
-    assert.match(html, /Remaining: 40%/);
-    assert.match(html, /Opened/);
-    assert.match(html, /2026-01-02/);
-    assert.doesNotMatch(html, />Open it!</);
-  });
-
-  test("emptied: 'Empty … ago', no slider", () => {
-    const html = render(
-      <CellarItemPageView
-        {...props}
-        isOwner={false}
-        bottle={{
-          id: "b1",
-          openAt: "2026-01-01T00:00:00Z",
-          emptyAt: "2026-01-03T00:00:00Z",
-          percentageRemaining: 0,
-          displayImage: null,
-        }}
-      />,
-    );
-    assert.match(html, /Empty/);
-    assert.doesNotMatch(html, /Remaining:/);
   });
 });
 
@@ -299,155 +476,62 @@ describe("ItemForm (restored {T}Form, edit mode)", () => {
   });
 });
 
-describe("CellarItemPageView: the bottle page's own brands column (gap #13b)", () => {
-  const bottle = {
-    id: "b1",
-    openAt: null,
-    emptyAt: null,
-    percentageRemaining: 100,
-    displayImage: null,
-  };
-  const base = {
-    recipes: [],
-    cellar: { id: "c", name: "Home" },
-    checkIns: [],
-    viewer: { id: "me", displayName: "Me", avatarUrl: "" },
-    friends: [],
-    editHref: null,
-    isOwner: true,
-    bottle,
-  };
-  const at = (html: string, needle: string) => {
-    const index = html.indexOf(needle);
-    assert.ok(index >= 0, `missing ${needle}`);
-    return index;
-  };
-
-  // `82450ad1:src/components/beer/CellarBeerDetails.tsx:141` and
-  // `spirit/CellarSpiritDetails.tsx:145`: brands under the reviews.
+describe("one producer title per type, on both URLs (X09)", () => {
+  // The item and bottle pages used to disagree ("Wine Brands" vs
+  // "Wineries"); one word per type now, and the same on a bottle's URL.
   for (const [type, title] of [
-    ["BEER", "Beer Brands"],
-    ["SPIRIT", "Spirit Brands"],
+    ["WINE", "Winery"],
+    ["BEER", "Brewery"],
+    ["SPIRIT", "Distillery"],
+    ["COFFEE", "Roaster"],
+    ["SAKE", "Brewery"],
+    ["TEA", "Tea house"],
   ] as const) {
-    test(`${type}: brands in the right-hand column, after the reviews`, () => {
-      const html = render(
-        <CellarItemPageView {...base} item={{ ...tea, type }} />,
+    test(`${type}: "${title}"`, () => {
+      const item = { ...tea, type };
+      assert.match(page({ item }), new RegExp(`>${title}<`));
+      assert.match(
+        page({
+          item,
+          selected: { ...bottle(), isOwner: true, displayImage: null },
+          bottles: [bottle()],
+        }),
+        new RegExp(`>${title}<`),
       );
-      assert.ok(at(html, `${title} (1)`) > at(html, ">Reviews:<"));
-    });
-  }
-
-  // `wine/CellarWineDetails.tsx:136`, coffee, sake, tea: under Share.
-  for (const [type, title] of [
-    ["WINE", "Wineries"],
-    ["COFFEE", "Roasters"],
-    ["SAKE", "Breweries"],
-    ["TEA", "Brands"],
-  ] as const) {
-    test(`${type}: brands in the middle column, before the reviews`, () => {
-      const html = render(
-        <CellarItemPageView {...base} item={{ ...tea, type }} />,
-      );
-      assert.ok(at(html, `>${title} (1)<`) < at(html, ">Reviews:<"));
     });
   }
 });
 
 describe("lists the API stops at 100 rows say so (gap #8)", () => {
   const user = { id: "me", displayName: "Me", avatarUrl: "" };
-  const checkIns = Array.from({ length: 100 }, (_, index) => ({
-    id: `ci${index}`,
-    createdAt: "2026-01-02T10:00:00Z",
-    user,
-  }));
 
-  test("a bottle with more check-ins than came back names the newest 100", () => {
-    const html = render(
-      <CellarItemPageView
-        item={tea}
-        recipes={[]}
-        cellar={{ id: "c", name: "Home" }}
-        checkIns={checkIns}
-        checkInsTotal={130}
-        viewer={user}
-        friends={[]}
-        editHref={null}
-        isOwner
-        bottle={{
-          id: "b1",
-          openAt: "2026-01-01T00:00:00Z",
-          emptyAt: null,
-          percentageRemaining: 40,
-          displayImage: null,
-        }}
-      />,
-    );
-    assert.match(html, /Showing the newest 100 of 130 check-ins\./);
-  });
-
-  test("a whole list carries no note", () => {
-    const html = render(
-      <CellarItemPageView
-        item={tea}
-        recipes={[]}
-        cellar={{ id: "c", name: "Home" }}
-        checkIns={checkIns.slice(0, 3)}
-        checkInsTotal={3}
-        viewer={user}
-        friends={[]}
-        editHref={null}
-        isOwner
-        bottle={{
-          id: "b1",
-          openAt: "2026-01-01T00:00:00Z",
-          emptyAt: null,
-          percentageRemaining: 40,
-          displayImage: null,
-        }}
-      />,
-    );
-    assert.doesNotMatch(html, /Showing the/);
-  });
-
-  test("Located in:, On Lists and Used in Recipes name what was held back", () => {
+  test("Located in, On tier lists and Your bottles name what was held back", () => {
     const cellars = Array.from({ length: 100 }, (_, index) => ({
       id: `c${index}`,
       name: `Cellar ${index}`,
       createdBy: user,
       co_owners: [],
     }));
-    const html = render(
-      <ItemPageView
-        item={tea}
-        cellars={cellars}
-        cellarsTotal={140}
-        tierLists={[
-          { id: "e", band: 5, tier_list: { id: "l", name: "Best teas" } },
-        ]}
-        tierListsTotal={101}
-        recipes={[
-          {
-            id: "ri",
-            quantity: null,
-            unit: null,
-            is_optional: false,
-            recipe: {
-              id: "r",
-              name: "Tea Punch",
-              type: "cocktail",
-              image_url: null,
-              difficulty_level: 1,
-            },
-          },
-        ]}
-        recipesTotal={250}
-        addableCellars={[]}
-        editHref={null}
-      />,
-    );
+    const html = page({
+      cellars,
+      cellarsTotal: 140,
+      tierLists: [
+        { id: "e", band: 5, tier_list: { id: "l", name: "Best teas" } },
+      ],
+      tierListsTotal: 101,
+      bottles: [bottle()],
+      bottlesTotal: 60,
+    });
     assert.match(html, /Showing the first 100 of 140 cellars\./);
     assert.match(html, /Showing the first 1 of 101 lists\./);
-    assert.match(html, /Showing the first 1 of 250 recipes\./);
+    assert.match(html, /Showing the first 1 of 60 tins\./);
+  });
+
+  test("a whole list carries no note", () => {
+    assert.doesNotMatch(
+      page({ bottles: [bottle()], bottlesTotal: 1 }),
+      /Showing the/,
+    );
   });
 });
 
@@ -470,5 +554,40 @@ describe("ItemForm edit mode keeps the database's required rule (gap #14b)", () 
       ...html.matchAll(/<label[^>]*>([^<]*)<span[^>]*asterisk/g),
     ].map((match) => match[1]);
     assert.deepEqual(starred, ["Name"]);
+  });
+
+  test("the form opts out of native validation, so N03's own messages show", () => {
+    const html = render(
+      <ItemForm
+        id="s1"
+        type="SAKE"
+        defaultValues={{
+          name: "",
+          description: "",
+          country: "",
+          attributes: {},
+        }}
+        onSavedHref="/sakes/s1"
+      />,
+    );
+    // The inputs carry `required` (Joy's FormControl); without `noValidate`
+    // the browser cancels the submit before react-hook-form ever runs.
+    assert.match(html, /<input[^>]*required/);
+    assert.match(html, /<form[^>]*novalidate/i);
+  });
+});
+
+describe("taste header: friend average once (FS-5, F-151)", () => {
+  test("everyone's figure is dropped when it is the friends' own", () => {
+    const same = page({
+      item: {
+        ...tea,
+        friends: { average: 4.3, count: 3 },
+        everyone: { average: 4.3, count: 3 },
+      },
+    });
+    const header = same.slice(same.indexOf('data-testid="taste-header"'));
+    assert.match(header, /aria-label="Friends: rated 4.3/);
+    assert.doesNotMatch(header, /aria-label="Everyone:/);
   });
 });

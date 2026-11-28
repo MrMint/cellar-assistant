@@ -253,8 +253,9 @@ export const reportUnexpectedActorError = (
 /**
  * `{ code, message }` for the five, `{ code: "INTERNAL" }` for everything else.
  *
- * `reason` rides along only when the error carries one, so the body a reader
- * that predates the field sees is byte-for-byte what it saw before.
+ * `reason` and `retryAt` ride along only when the error carries them, so the
+ * body a reader that predates the fields sees is byte-for-byte what it saw
+ * before.
  */
 export const envelopeFor = (
   error: Error,
@@ -264,6 +265,7 @@ export const envelopeFor = (
         code: error.code,
         message: error.message,
         ...(error.reason === null ? {} : { reason: error.reason }),
+        ...(error.retryAt === null ? {} : { retryAt: error.retryAt }),
       }
     : OPAQUE_ERROR_BODY;
 

@@ -84,15 +84,18 @@ export type UploadTarget = {
  * names it in the schema's own documentation, beside `item-image` and
  * `label-front`. The union is a client-side convenience — the server accepts
  * any string matching the pattern — so widening it costs nothing and keeps a
- * typo from reaching the actor.
+ * typo from reaching the actor. `check-in-photo` is X02's: a drink log's photo,
+ * which `FileActor` lets whoever may see the log read.
  */
 export type UploadKind =
+  | "check-in-photo"
   | "item-image"
   | "label-front"
   | "label-back"
   | "menu-scan"
   | "recipe-photo"
-  | "image-search";
+  | "image-search"
+  | "avatar";
 
 export class UploadUnavailableError extends Error {
   readonly blockers: readonly string[];

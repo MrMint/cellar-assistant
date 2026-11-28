@@ -36,13 +36,27 @@
  * `20260928182317_place_menu_items_scan_columns` backfilled the columns from
  * it and removed the keys, so there is no JSONB fallback to keep.
  *
+ * ## Order: vector and name, fused (N08)
+ *
+ * An item line's candidates come back from `ItemSearchActor` ranked by
+ * vector distance and trigram name similarity together (reciprocal rank
+ * fusion), and this job keeps that order for the verifier rather than
+ * re-sorting by vector similarity (`planCandidates`): which candidate is
+ * first is what the verifier sees first, and which three are kept is all it
+ * can choose from. The name match never puts a line *in* the auto band —
+ * that is still the vector similarity's — but it can keep one out of it.
+ *
  * ## The bands
  *
- * `bandOf` (contracts): `>= 0.9` is suggested as-is, `< 0.4` is dropped, and
- * everything between goes to `MenuMatchVerifier`. A deployment with no
- * verifier configured therefore still matches the confident half of a menu and
- * fails loudly — batch retried by the outbox — only on a line that genuinely
- * needed a second opinion.
+ * `bandOf` (contracts): `>= 0.9` is the auto band, `< 0.4` is dropped, and
+ * everything between goes to `MenuMatchVerifier`. Since N08 a line is
+ * suggested as-is only when its best candidate is in the auto band **and**
+ * every other candidate is separated from it, by the vector or by the name
+ * (`AUTO_MARGIN`, `AUTO_LEXICAL_MARGIN` in `lib/menu-matching.ts`); two
+ * siblings neither can tell apart go to the verifier, whose job that is. A
+ * deployment with no verifier configured therefore still matches the
+ * confident, unambiguous part of a menu and fails loudly — batch retried by
+ * the outbox — only on a line that genuinely needed a second opinion.
  *
  * ## Idempotency (§8.4)
  *
@@ -72,13 +86,11 @@ import type {
   ScannedItemType,
 } from "@cellar-assistant/contracts";
 import {
-  bandOf,
   ConflictError,
   isScannedItemType,
   MATCH_AUTO_CONFIDENCE,
   MENU_MATCH_BATCH_SIZE,
   MENU_MATCH_JOB_KIND,
-  MENU_MATCH_MAX_CANDIDATES,
   MenuMatchJobActorDescriptor,
   MenuScanActorDescriptor,
   ValidationError,
@@ -95,6 +107,7 @@ import type { MenuMatchCandidate, MenuSearcher } from "../lib/menu-matching.ts";
 import {
   daprMenuSearcher,
   itemHitToCandidate,
+  planCandidates,
   recipeHitToCandidate,
   routeFor,
 } from "../lib/menu-matching.ts";
@@ -216,7 +229,8 @@ export class MenuMatchJobActor
     // `place_menu_items` belongs to `PlaceActor` (§1.2). A job actor reads any
     // table (§1.1) but caches none of it — this is a fresh query every batch,
     // which also means a scan whose menu items arrive late (the outbox row for
-    // `addMenuFromScan` still in flight) is simply matched on a later run.
+    // `addMenuFromScan` still in flight) is matched when the outbox retries
+    // the first batch (`#requireFiledMenu`).
     const after = cursor?.lastMenuItemId ?? null;
     const { rows } = await this.db.execute<MenuItemRow>(sql`
       select id, menu_item_name, menu_item_description,
@@ -229,6 +243,7 @@ export class MenuMatchJobActor
     `);
 
     if (rows.length === 0) {
+      if (after === null) await this.#requireFiledMenu(menuScanId);
       return { cursor: null, processed: 0, done: true };
     }
 
@@ -250,6 +265,34 @@ export class MenuMatchJobActor
     };
   }
 
+  /**
+   * N06a — a first batch that finds no lines must not complete a scan that
+   * extracted some.
+   *
+   * `process` enqueues `PlaceActor.addMenuFromScan` and then `match`, and
+   * `outbox.seq` orders only their *first attempts*: if the filing failed and
+   * was rescheduled behind the match, this job used to find nothing, finish
+   * `completed`, and leave every line unmatched for good — with the scan's new
+   * `matchStatus` then calling that settled. `addMenuFromScan` inserts a
+   * scan's lines in one statement, so "none yet" while `items_detected > 0`
+   * means "not filed yet": a `ConflictError`, which the outbox retries with
+   * backoff. If the filing never lands, the job fails on its last attempt and
+   * the scan says `failed` rather than pretending it matched.
+   */
+  async #requireFiledMenu(menuScanId: string): Promise<void> {
+    const { rows } = await this.db.execute<{ items_detected: number | null }>(
+      sql`select items_detected from public.menu_scans
+          where id = ${menuScanId}::uuid`,
+    );
+    const detected = Number(rows[0]?.items_detected ?? 0);
+    if (detected > 0) {
+      throw new ConflictError(
+        `menu scan ${menuScanId} extracted ${detected} line(s) but none is ` +
+          "filed on its place yet; matching waits for addMenuFromScan",
+      );
+    }
+  }
+
   /** One menu line: route, search, band, verify. */
   async #matchOne(
     ctx: Ctx,
@@ -260,47 +303,57 @@ export class MenuMatchJobActor
     if (searchText === "") return [];
 
     const route = routeFor(itemType, searchText);
-    const candidates = (
+    // Auto by vector similarity wherever it sits, or by a name identical to
+    // the line's; otherwise the search's own order (N08: vector and name
+    // fused) for the verifier — `planCandidates`.
+    const plan = planCandidates(
       route.kind === "RECIPE"
         ? (await this.#search.searchRecipes(ctx, route.input)).map(
             recipeHitToCandidate,
           )
         : (await this.#search.searchItems(ctx, route.input)).map(
             itemHitToCandidate,
-          )
-    )
-      .filter((candidate) => bandOf(candidate.similarity) !== "drop")
-      .sort((a, b) => b.similarity - a.similarity)
-      .slice(0, MENU_MATCH_MAX_CANDIDATES);
-
-    const best = candidates[0];
-    if (best === undefined) return [];
+          ),
+      [searchText, row.menu_item_name],
+    );
 
     const metrics = (
       candidate: MenuMatchCandidate,
     ): Record<string, unknown> => ({
       vectorSimilarity: candidate.similarity,
+      ...(candidate.lexicalSimilarity === undefined ||
+      candidate.lexicalSimilarity === null
+        ? {}
+        : { lexicalSimilarity: candidate.lexicalSimilarity }),
       route: route.kind,
       searchText,
       scanItemType: itemType,
     });
 
-    if (bandOf(best.similarity) === "auto") {
+    if (plan.auto.length > 0) {
       // Confident enough that §2.1 does not spend a model call on it.
-      return candidates
-        .filter((candidate) => bandOf(candidate.similarity) === "auto")
-        .map((candidate) => ({
-          placeMenuItemId: row.id,
-          target: candidate.target,
-          confidenceScore: candidate.similarity,
-          matchReasoning: `vector similarity ${candidate.similarity.toFixed(
-            2,
-          )} >= ${MATCH_AUTO_CONFIDENCE} (${route.kind.toLowerCase()} search)`,
-          similarityMetrics: metrics(candidate),
-        }));
+      return plan.auto.map((candidate) => ({
+        placeMenuItemId: row.id,
+        target: candidate.target,
+        confidenceScore: candidate.similarity,
+        matchReasoning:
+          plan.autoBy === "name"
+            ? `the menu names it exactly, vector similarity ${candidate.similarity.toFixed(
+                2,
+              )} (${route.kind.toLowerCase()} search)`
+            : `vector similarity ${candidate.similarity.toFixed(
+                2,
+              )} >= ${MATCH_AUTO_CONFIDENCE} (${route.kind.toLowerCase()} search)`,
+        similarityMetrics: {
+          ...metrics(candidate),
+          ...(plan.autoBy === "name" ? { exactName: true } : {}),
+        },
+      }));
     }
 
     // §2.1's 0.4–0.9 band: ambiguous, so ask the model which one — if any.
+    const candidates = plan.verify;
+    if (candidates.length === 0) return [];
     const verification = await this.#verify(ctx, {
       placeMenuItemId: row.id,
       menuItemName: row.menu_item_name,

@@ -28,37 +28,57 @@
 import { randomUUID } from "node:crypto";
 import type {
   AddCellarItemInput as AddCellarItemInputType,
+  BottleSearchHit,
+  CellarDashboardDto,
   CellarDto,
   CellarItemDto,
+  CellarItemGroupDto,
   CellarItemSource,
+  CellarSearchMeaning,
   CheckInDto,
   CollectionStatsDto,
   CreateCellarInput as CreateCellarInputType,
   DeletedCellar,
+  DrinkSoonDto,
+  DrinkWindow,
   ItemRef,
   ItemType,
   ItemTypeCountsDto,
+  LoggedDrinkDto,
   PermissionType,
   RemovedCellarItem,
   UpdateCellarInput as UpdateCellarInputType,
   UpdateCellarItemInput as UpdateCellarItemInputType,
 } from "@cellar-assistant/contracts";
 import {
+  BOTTLE_SEARCH_RESULT_CAP,
+  CELLAR_ALMOST_EMPTY_AT,
   CELLAR_ITEM_SORTS,
   CELLAR_ITEM_SOURCES,
   CELLAR_ITEM_STATUSES,
+  CELLAR_LOG_MONTHS,
+  CELLAR_RECENT_DAYS,
+  CELLAR_SEARCH_MATCHES,
+  CELLAR_SEARCH_MEANINGS,
   CellarActorDescriptor,
   CellarsCollectionActorDescriptor,
+  CheckInActorDescriptor,
+  compareDrinkSoon,
   ForbiddenError,
   itemActorId,
   offsetPage,
+  pageArgs,
   viewerCollectionActorId,
 } from "@cellar-assistant/contracts";
 import type { ApiContext } from "../context.ts";
 import { builder } from "./builder.ts";
-import { PermissionTypeEnum } from "./enums.ts";
+import { CollectionSectionEnum, PermissionTypeEnum } from "./enums.ts";
 import { ItemInterface, ItemTypeEnum } from "./item.ts";
-import { connectionFromPage, toPageArgs } from "./pagination.ts";
+import {
+  type Connection,
+  connectionFromPage,
+  toPageArgs,
+} from "./pagination.ts";
 import { type PatchPolicy, patch, present } from "./patch.ts";
 import { Viewer } from "./viewer.ts";
 
@@ -73,7 +93,7 @@ const CellarItemSortEnum = builder.enumType("CellarItemSort", {
   values: CELLAR_ITEM_SORTS,
 });
 
-const CellarItemStatusEnum = builder.enumType("CellarItemStatus", {
+export const CellarItemStatusEnum = builder.enumType("CellarItemStatus", {
   description:
     "Which bottles a cellar list holds. ACTIVE (not emptied) is the default: " +
     "the old UI hid empty bottles from every cellar list (UI parity decision 4).",
@@ -105,23 +125,89 @@ const CollectionStatsType = builder
   .implement({
     description:
       "The viewer's own collection: cellars they created or co-own, and the " +
-      "distinct items with a bottle in one of them. Never other people's " +
-      "cellars, however visible (UI parity G36).",
+      "bottles still in them. Never other people's cellars, however visible " +
+      "(UI parity G36).",
     fields: (t) => ({
       cellarCount: t.exposeInt("cellarCount"),
       itemCounts: t.field({
         type: ItemTypeCountsType,
         description:
-          "Distinct items per type, whatever their bottles' state — what the " +
-          "old /search line counted.",
+          "Bottles still in the cellar (not finished) per type — the count " +
+          "every cellar card shows (decision D13). Two bottles of one wine " +
+          "count 2.",
         resolve: (stats) => stats.itemCounts,
       }),
     }),
   });
 
+const CellarSearchMatchEnum = builder.enumType("CellarSearchMatch", {
+  description:
+    "How a bottle answered an in-cellar search (X04): NAME — the phrase " +
+    "matches the item's name; MEANING — the item's vector is within the " +
+    "tuned distance cutoff of the phrase's.",
+  values: CELLAR_SEARCH_MATCHES,
+});
+
+const CellarSearchMeaningEnum = builder.enumType("CellarSearchMeaning", {
+  description:
+    "Whether an `itemGroups` page used the vectors. UNAVAILABLE: the phrase " +
+    "could not be embedded (no AI provider, out of allowance, a model " +
+    "error), so the page holds name matches only. NOT_ASKED: no search.",
+  values: CELLAR_SEARCH_MEANINGS,
+});
+
 const CellarItemSourceEnum = builder.enumType("CellarItemSource", {
   description: "`cellar_items.source_type` — how the bottle got here.",
   values: CELLAR_ITEM_SOURCES,
+});
+
+/* -------------------------------------------------------------------------- */
+/* ux-c L02 — drink windows and Drink soon                                     */
+/* -------------------------------------------------------------------------- */
+
+const DrinkWindowSourceEnum = builder.enumType("DrinkWindowSource", {
+  description:
+    "Where one end of a drink window came from: USER — the owner's own " +
+    "date; TYPICAL — the shelf-life table's rule of thumb for the style " +
+    "(D29: never a model estimate).",
+  values: ["USER", "TYPICAL"] as const,
+});
+
+const sourceOf = (source: "user" | "typical" | null) =>
+  source === null ? null : source === "user" ? "USER" : "TYPICAL";
+
+const DrinkWindowType = builder
+  .objectRef<DrinkWindow>("DrinkWindow")
+  .implement({
+    description:
+      "When a bottle is at its best. Each end is the owner's own date where " +
+      "they set one, otherwise the typical one for the style; either may be " +
+      "null.",
+    fields: (t) => ({
+      from: t.expose("from", { type: "Date", nullable: true }),
+      fromSource: t.field({
+        type: DrinkWindowSourceEnum,
+        nullable: true,
+        resolve: (window) => sourceOf(window.fromSource),
+      }),
+      until: t.expose("until", { type: "Date", nullable: true }),
+      untilSource: t.field({
+        type: DrinkWindowSourceEnum,
+        nullable: true,
+        resolve: (window) => sourceOf(window.untilSource),
+      }),
+    }),
+  });
+
+const DrinkSoonReasonEnum = builder.enumType("DrinkSoonReason", {
+  values: ["OPENED", "SEALED"] as const,
+});
+
+const DrinkSoonUrgencyEnum = builder.enumType("DrinkSoonUrgency", {
+  description:
+    "PAST: beyond its window. NOW: opened and inside its open life. SOON: " +
+    "sealed, its window closing within the horizon.",
+  values: ["PAST", "NOW", "SOON"] as const,
 });
 
 /* -------------------------------------------------------------------------- */
@@ -130,8 +216,9 @@ const CellarItemSourceEnum = builder.enumType("CellarItemSource", {
 
 export const CheckInType = builder.objectRef<CheckInDto>("CheckIn").implement({
   description:
-    "One drink from one cellar item. `userId` is who it is *about* — " +
-    "`bulkCheckIn` writes rows on behalf of friends.",
+    "One drink from one cellar item, as the cellar sees it. `userId` is who " +
+    "it is *about* — `bulkCheckIn` writes rows on behalf of friends. The full " +
+    "log entry (score, note, tags, place, companions) is `ItemCheckIn`.",
   fields: (t) => ({
     id: t.exposeID("id"),
     userId: t.exposeID("userId"),
@@ -167,6 +254,17 @@ export const CellarItemType = builder
       openAt: t.expose("openAt", { type: "DateTime", nullable: true }),
       emptyAt: t.expose("emptyAt", { type: "DateTime", nullable: true }),
       percentageRemaining: t.exposeFloat("percentageRemaining"),
+      levelBeforeEmpty: t.field({
+        type: "Float",
+        nullable: true,
+        description:
+          "F-150 (H-103): the level this bottle had when it was finished — " +
+          "what Put back restores. `updateCellarItem(emptyAt: null)` with " +
+          "no `percentageRemaining` puts it back at this level itself. Null " +
+          "when not finished, or finished from 0.",
+        // Older DTOs (a stub, a cached payload) may not carry it.
+        resolve: (cellarItem) => cellarItem.levelBeforeEmpty ?? null,
+      }),
       displayImageId: t.exposeID("displayImageId", { nullable: true }),
       sourceType: t.field({
         type: CellarItemSourceEnum,
@@ -182,13 +280,247 @@ export const CellarItemType = builder
       }),
       createdAt: t.expose("createdAt", { type: "DateTime" }),
       updatedAt: t.expose("updatedAt", { type: "DateTime" }),
+      // ux-c L02. All private to the cellar's owners: anyone else reads null.
+      packagedOn: t.expose("packagedOn", {
+        type: "Date",
+        nullable: true,
+        description:
+          "Bottled, canned, roasted or packed on. Owners only; null to anyone else.",
+      }),
+      acquiredOn: t.expose("acquiredOn", {
+        type: "Date",
+        nullable: true,
+        description: "Bought or received on. Owners only.",
+      }),
+      drinkFrom: t.expose("drinkFrom", {
+        type: "Date",
+        nullable: true,
+        description:
+          "The owner's own start of the drink window; overrides the typical one.",
+      }),
+      drinkUntil: t.expose("drinkUntil", {
+        type: "Date",
+        nullable: true,
+        description:
+          "The owner's own end of the drink window; overrides the typical one.",
+      }),
+      priceAmount: t.exposeFloat("priceAmount", {
+        nullable: true,
+        description: "What it cost, with `priceCurrency`. Owners only.",
+      }),
+      priceCurrency: t.exposeString("priceCurrency", {
+        nullable: true,
+        description: "ISO 4217, upper case. Set exactly when `priceAmount` is.",
+      }),
+      location: t.exposeString("location", {
+        nullable: true,
+        description: "Where it lives: 'Rack B, row 3'. Owners only.",
+      }),
     }),
   });
+
+const DrinkSoonBottleType = builder
+  .objectRef<DrinkSoonDto>("DrinkSoonBottle")
+  .implement({
+    description:
+      "One bottle under Drink soon (ux-c L02): opened and past its style's " +
+      "shortest open life, or sealed with a window closing within three " +
+      "months. Deterministic: the owner's dates, else the shelf-life table.",
+    fields: (t) => ({
+      bottle: t.field({
+        type: CellarItemType,
+        resolve: (soon) => soon.bottle,
+      }),
+      reason: t.field({
+        type: DrinkSoonReasonEnum,
+        resolve: (soon) => soon.reason,
+      }),
+      urgency: t.field({
+        type: DrinkSoonUrgencyEnum,
+        resolve: (soon) => soon.urgency,
+      }),
+      openDays: t.exposeInt("openDays", {
+        nullable: true,
+        description: "Opened: whole days since.",
+      }),
+      openLifeFromDays: t.int({
+        nullable: true,
+        description: "Opened: the style's typical shortest open life, in days.",
+        resolve: (soon) => soon.openLifeDays?.[0] ?? null,
+      }),
+      openLifeUntilDays: t.int({
+        nullable: true,
+        description: "Opened: the style's typical longest open life, in days.",
+        resolve: (soon) => soon.openLifeDays?.[1] ?? null,
+      }),
+      window: t.field({
+        type: DrinkWindowType,
+        nullable: true,
+        description: "Sealed: the window, each end with its source.",
+        resolve: (soon) => soon.window,
+      }),
+      typicalFor: t.exposeString("typicalFor", {
+        nullable: true,
+        description:
+          "The style the typical row is for ('IPA'): label it 'typical for " +
+          "…'. Null when only the owner's own dates made the window.",
+      }),
+    }),
+  });
+
+export const DrinkSoonConnection = builder.connectionObject(
+  { type: DrinkSoonBottleType, name: "DrinkSoonConnection" },
+  { name: "DrinkSoonEdge" },
+);
+
+/** How many of a viewer's own cellars Home's Drink soon reads. */
+const DRINK_SOON_CELLARS = 20;
+/** How many of each cellar's Drink soon bottles it reads. */
+const DRINK_SOON_PER_CELLAR = 50;
+
+/**
+ * Home's Drink soon: every cellar the viewer created or co-owns (their
+ * {@link DRINK_SOON_CELLARS} most recently active), each one's own list,
+ * merged in Drink soon's one order (`compareDrinkSoon`). A cellar that
+ * vanished between the list and the fan-out costs its own answer only.
+ */
+export const viewerDrinkSoon = async (
+  context: ApiContext,
+  viewerId: string,
+): Promise<DrinkSoonDto[]> => {
+  const mine = await context
+    .actor(CellarsCollectionActorDescriptor, viewerCollectionActorId(viewerId))
+    .list(pageArgs({ first: DRINK_SOON_CELLARS }), "MINE");
+  const answers = await Promise.all(
+    mine.entries.map(async ({ node: cellarId }) => {
+      try {
+        const page = await context
+          .actor(CellarActorDescriptor, cellarId)
+          .drinkSoon(pageArgs({ first: DRINK_SOON_PER_CELLAR }));
+        return page.entries.map((entry) => entry.node);
+      } catch {
+        return [];
+      }
+    }),
+  );
+  return answers.flat().sort(compareDrinkSoon);
+};
 
 export const CellarItemConnection = builder.connectionObject(
   { type: CellarItemType, name: "CellarItemConnection" },
   { name: "CellarItemEdge" },
 );
+
+/**
+ * X04's ×N. A connection's `edges` is the only composite list the schema
+ * allows (§1.5); the group's members are ids, a scalar list, and the lead
+ * bottle is the one the card draws.
+ */
+export const CellarItemGroupType = builder
+  .objectRef<CellarItemGroupDto>("CellarItemGroup")
+  .implement({
+    description:
+      "Identical bottles — every bottle of one catalog item in the list — as " +
+      "one grid cell. The lead is the bottle the list's order put highest. " +
+      "Keyless on purpose: one bottle leads different groups in different " +
+      "lists (grouped, per bottle, a search), so a normalised cache keyed by " +
+      "the lead would let one list's count overwrite another's.",
+    fields: (t) => ({
+      lead: t.field({
+        type: CellarItemType,
+        resolve: (group) => group.lead,
+      }),
+      bottleIds: t.idList({
+        description: "Every bottle in the group, lead first, in list order.",
+        resolve: (group) => [...group.bottleIds],
+      }),
+      count: t.exposeInt("count", { description: "Bottles in the group." }),
+      openCount: t.exposeInt("openCount", {
+        description: "How many of them are open.",
+      }),
+      match: t.field({
+        type: CellarSearchMatchEnum,
+        nullable: true,
+        description: "On a `search` page, how the item matched.",
+        resolve: (group) => group.match,
+      }),
+    }),
+  });
+
+type CellarItemGroupConnectionShape = Connection<CellarItemGroupDto> & {
+  readonly bottleCount: number;
+  readonly meaning: CellarSearchMeaning;
+};
+
+export const CellarItemGroupConnection = builder.connectionObject(
+  {
+    type: CellarItemGroupType,
+    name: "CellarItemGroupConnection",
+    fields: (t) => ({
+      bottleCount: t.int({
+        description:
+          "Bottles across every group of the whole list, not just this page " +
+          "— counts are bottles (decision D13).",
+        resolve: (connection) =>
+          (connection as unknown as CellarItemGroupConnectionShape).bottleCount,
+      }),
+      meaning: t.field({
+        type: CellarSearchMeaningEnum,
+        resolve: (connection) =>
+          (connection as unknown as CellarItemGroupConnectionShape).meaning,
+      }),
+    }),
+  },
+  { name: "CellarItemGroupEdge" },
+);
+
+const CellarDashboardType = builder
+  .objectRef<CellarDashboardDto>("CellarDashboard")
+  .implement({
+    description:
+      "The top of a cellar's page (X04, D3). Every count is bottles (D13).",
+    fields: (t) => ({
+      bottleCount: t.exposeInt("bottleCount", {
+        description: "Bottles still in the cellar.",
+      }),
+      openCount: t.exposeInt("openCount", {
+        description: "Open and not finished.",
+      }),
+      almostEmptyCount: t.exposeInt("almostEmptyCount", {
+        description: `Open, not finished, at or under ${CELLAR_ALMOST_EMPTY_AT}% left.`,
+      }),
+      almostEmptyAt: t.int({
+        description: "The percentage `almostEmptyCount` cuts at.",
+        resolve: () => CELLAR_ALMOST_EMPTY_AT,
+      }),
+      finishedThisMonth: t.exposeInt("finishedThisMonth", {
+        description: "Bottles finished this calendar month, in `timeZone`.",
+      }),
+      finishedCount: t.exposeInt("finishedCount", {
+        description: "Every finished bottle.",
+      }),
+      addedRecently: t.exposeInt("addedRecently", {
+        description: `Still in the cellar and added in the last ${CELLAR_RECENT_DAYS} days.`,
+      }),
+      recentDays: t.int({
+        description: "The window `addedRecently` counts.",
+        resolve: () => CELLAR_RECENT_DAYS,
+      }),
+      logsByMonth: t.intList({
+        description:
+          `Logs poured from this cellar's bottles per calendar month, the ` +
+          `last ${CELLAR_LOG_MONTHS} months, oldest first; the last is ` +
+          "`currentMonth`. Everyone's logs, as `checkIns` lists them.",
+        resolve: (dashboard) => [...dashboard.logsByMonth],
+      }),
+      currentMonth: t.exposeString("currentMonth", {
+        description: "`YYYY-MM` in `timeZone`.",
+      }),
+      timeZone: t.exposeString("timeZone", {
+        description: "The IANA zone months were cut in.",
+      }),
+    }),
+  });
 
 /**
  * One batch, N parallel `CellarActor.get` calls — §1.5's "Pothos resolves ids
@@ -237,6 +569,11 @@ export const CellarType = builder
       }),
       itemCount: t.exposeInt("itemCount", {
         description: "Every bottle, emptied ones included.",
+      }),
+      finishedCount: t.exposeInt("finishedCount", {
+        description:
+          "Emptied bottles — the status segment's Finished (X04). Not part " +
+          "of `itemCounts`, which counts what is still in the cellar (D13).",
       }),
       itemCounts: t.field({
         type: ItemTypeCountsType,
@@ -291,6 +628,90 @@ export const CellarType = builder
               // as "no filter", which ALL already spells.
               status: args.status ?? "ACTIVE",
             }),
+          ),
+      }),
+
+      itemGroups: t.field({
+        type: CellarItemGroupConnection,
+        description:
+          "X04: the cellar's grid. Identical bottles are one group (×N), " +
+          "placed where the best-placed of them sits. With `search` the list " +
+          "**narrows**: bottles whose item name matches first, then those " +
+          "whose vector is within the tuned distance cutoff, and nothing " +
+          "else — `items(semanticQuery:)` is the older re-sort of everything.",
+        args: {
+          ...t.arg.connectionArgs(),
+          sort: t.arg({ type: CellarItemSortEnum, required: false }),
+          search: t.arg.string({
+            required: false,
+            description:
+              "Free text that narrows; overrides `sort`, except " +
+              "FINISHED_DESC, which orders what it kept by finish date.",
+          }),
+          types: t.arg({ type: [ItemTypeEnum], required: false }),
+          status: t.arg({
+            type: CellarItemStatusEnum,
+            required: false,
+            defaultValue: "ACTIVE",
+          }),
+          group: t.arg.boolean({
+            required: false,
+            defaultValue: true,
+            description:
+              "False gives one entry per bottle (the Finished diary).",
+          }),
+        },
+        resolve: async (cellar, args, context) => {
+          const page = await context
+            .actor(CellarActorDescriptor, cellar.id)
+            .itemGroups({
+              page: toPageArgs(args),
+              sort: args.sort ?? null,
+              search: args.search ?? null,
+              types: args.types ?? null,
+              status: args.status ?? "ACTIVE",
+              group: args.group ?? true,
+            });
+          return {
+            ...connectionFromPage(page),
+            bottleCount: page.bottleCount,
+            meaning: page.meaning,
+          };
+        },
+      }),
+
+      dashboard: t.field({
+        type: CellarDashboardType,
+        description:
+          "X04 / D3: open, almost empty, finished this month, recently " +
+          "added, and the logs poured per month.",
+        args: {
+          timeZone: t.arg.string({
+            required: false,
+            description:
+              "IANA zone months are cut in (`America/Chicago`). Unknown or " +
+              "absent: UTC.",
+          }),
+        },
+        resolve: (cellar, args, context) =>
+          context
+            .actor(CellarActorDescriptor, cellar.id)
+            .dashboard({ timeZone: args.timeZone ?? null }),
+      }),
+
+      drinkSoon: t.field({
+        type: DrinkSoonConnection,
+        description:
+          "ux-c L02: opened bottles past their style's open life (most " +
+          "overdue first), then sealed ones whose window closes within " +
+          "three months (soonest first). Owners only: anyone else who may " +
+          "see the cellar gets an empty list.",
+        args: t.arg.connectionArgs(),
+        resolve: async (cellar, args, context) =>
+          connectionFromPage(
+            await context
+              .actor(CellarActorDescriptor, cellar.id)
+              .drinkSoon(toPageArgs(args)),
           ),
       }),
 
@@ -400,6 +821,22 @@ const AddCellarItemInput = builder.inputType("AddCellarItemInput", {
     sourceType: t.field({ type: CellarItemSourceEnum, required: false }),
     sourcePlaceId: t.id({ required: false }),
     sourceMenuItemId: t.id({ required: false }),
+    packagedOn: t.field({ type: "Date", required: false }),
+    acquiredOn: t.field({ type: "Date", required: false }),
+    drinkFrom: t.field({ type: "Date", required: false }),
+    drinkUntil: t.field({ type: "Date", required: false }),
+    priceAmount: t.float({
+      required: false,
+      description: "Set with `priceCurrency`; null clears both.",
+    }),
+    priceCurrency: t.string({
+      required: false,
+      description: "ISO 4217 ('EUR').",
+    }),
+    location: t.string({
+      required: false,
+      description: "At most 80 characters.",
+    }),
   }),
 });
 
@@ -409,6 +846,29 @@ const UpdateCellarItemInput = builder.inputType("UpdateCellarItemInput", {
     displayImageId: t.id({ required: false }),
     openAt: t.field({ type: "DateTime", required: false }),
     emptyAt: t.field({ type: "DateTime", required: false }),
+    packagedOn: t.field({ type: "Date", required: false }),
+    acquiredOn: t.field({ type: "Date", required: false }),
+    drinkFrom: t.field({ type: "Date", required: false }),
+    drinkUntil: t.field({ type: "Date", required: false }),
+    priceAmount: t.float({
+      required: false,
+      description: "Set with `priceCurrency`; null clears both.",
+    }),
+    priceCurrency: t.string({
+      required: false,
+      description: "ISO 4217 ('EUR').",
+    }),
+    location: t.string({
+      required: false,
+      description: "At most 80 characters.",
+    }),
+    cellarId: t.id({
+      required: false,
+      description:
+        "Move the bottle to this cellar, which the viewer must be able to " +
+        "write. A move clears `location`; the bottle's logs follow it. Its " +
+        "own cellar is a no-op.",
+    }),
   }),
 });
 
@@ -453,6 +913,13 @@ const toAddItemInput = (input: {
   sourceType?: CellarItemSource | null;
   sourcePlaceId?: string | null;
   sourceMenuItemId?: string | null;
+  packagedOn?: string | null;
+  acquiredOn?: string | null;
+  drinkFrom?: string | null;
+  drinkUntil?: string | null;
+  priceAmount?: number | null;
+  priceCurrency?: string | null;
+  location?: string | null;
 }): AddCellarItemInputType => ({
   item: toItemRef(input.item),
   ...(present(input.cellarItemId)
@@ -467,6 +934,13 @@ const toAddItemInput = (input: {
   sourceType: input.sourceType ?? null,
   sourcePlaceId: input.sourcePlaceId ?? null,
   sourceMenuItemId: input.sourceMenuItemId ?? null,
+  packagedOn: input.packagedOn ?? null,
+  acquiredOn: input.acquiredOn ?? null,
+  drinkFrom: input.drinkFrom ?? null,
+  drinkUntil: input.drinkUntil ?? null,
+  priceAmount: input.priceAmount ?? null,
+  priceCurrency: input.priceCurrency ?? null,
+  location: input.location ?? null,
 });
 
 const UPDATE_CELLAR_ITEM = {
@@ -474,6 +948,15 @@ const UPDATE_CELLAR_ITEM = {
   displayImageId: "clearable",
   openAt: "clearable",
   emptyAt: "clearable",
+  packagedOn: "clearable",
+  acquiredOn: "clearable",
+  drinkFrom: "clearable",
+  drinkUntil: "clearable",
+  priceAmount: "clearable",
+  priceCurrency: "clearable",
+  location: "clearable",
+  // `null` is the same as absent: no move.
+  cellarId: { policy: "keep", map: String },
 } satisfies PatchPolicy<typeof UpdateCellarItemInput.$inferInput>;
 
 /* -------------------------------------------------------------------------- */
@@ -506,8 +989,20 @@ builder.queryField("myCellars", (t) =>
       "co-own, and other people's that are PUBLIC or FRIENDS-and-a-friend " +
       "(C3's `CellarsCollectionActor`, §2.2). The collection returns ids; " +
       "the `Cellar` DataLoader batches them into parallel `CellarActor.get` " +
-      "calls (§1.5).",
-    args: t.arg.connectionArgs(),
+      "calls (§1.5). Ordered with the viewer's own and co-owned cellars " +
+      "first, then the rest, each by most recent activity: a bottle added " +
+      "or changed, or a check-in (decision D13). `section` narrows to one " +
+      "part of that set — Yours, From friends or Discover (decision D2).",
+    args: {
+      ...t.arg.connectionArgs(),
+      section: t.arg({
+        type: CollectionSectionEnum,
+        required: false,
+        description:
+          "Omit for every visible cellar; `MINE` for the viewer's own and " +
+          "co-owned ones only.",
+      }),
+    },
     errors: {},
     resolve: async (_root, args, context) => {
       const viewerId = context.ctx.viewerId;
@@ -517,8 +1012,101 @@ builder.queryField("myCellars", (t) =>
           CellarsCollectionActorDescriptor,
           viewerCollectionActorId(viewerId),
         )
-        .list(toPageArgs(args));
+        .list(toPageArgs(args), args.section ?? null);
       return connectionFromPage(page);
+    },
+  }),
+);
+
+/** X04's fan-out: how many of your cellars a search asks, at most. */
+const ELSEWHERE_CELLARS = 24;
+/** And how many groups each may answer with. */
+const ELSEWHERE_PER_CELLAR = 5;
+
+type ElsewhereHit = {
+  readonly cellarId: string;
+  readonly group: CellarItemGroupDto;
+};
+
+const CellarSearchElsewhereHitType = builder
+  .objectRef<ElsewhereHit>("CellarSearchElsewhereHit")
+  .implement({
+    description:
+      "A bottle in another of your cellars whose name matches the phrase — " +
+      "'Lagavulin is in Bar Cart' (X04).",
+    fields: (t) => ({
+      cellar: t.field({
+        type: CellarType,
+        resolve: (hit) => hit.cellarId,
+      }),
+      group: t.field({
+        type: CellarItemGroupType,
+        resolve: (hit) => hit.group,
+      }),
+    }),
+  });
+
+const CellarSearchElsewhereConnection = builder.connectionObject(
+  {
+    type: CellarSearchElsewhereHitType,
+    name: "CellarSearchElsewhereConnection",
+  },
+  { name: "CellarSearchElsewhereEdge" },
+);
+
+builder.queryField("cellarSearchElsewhere", (t) =>
+  t.field({
+    type: CellarSearchElsewhereConnection,
+    description:
+      "X04's cross-cellar fan-out: bottles still in **your** other cellars " +
+      "(created or co-owned) whose item name matches `search` — 'Lagavulin " +
+      "is in Bar Cart'. By name only, so no model call; your " +
+      `${ELSEWHERE_CELLARS} most recently active cellars, at most ` +
+      `${ELSEWHERE_PER_CELLAR} matches each, in that cellar order.`,
+    errors: {},
+    args: {
+      ...t.arg.connectionArgs(),
+      search: t.arg.string({ required: true }),
+      excludeCellarId: t.arg.id({
+        required: false,
+        description: "The cellar being searched, left out of the answer.",
+      }),
+    },
+    resolve: async (_root, args, context) => {
+      const viewerId = context.ctx.viewerId;
+      if (viewerId === null) throw new ForbiddenError("sign in to search");
+      const paging = toPageArgs(args);
+      const search = args.search.trim();
+      const empty = connectionFromPage(offsetPage<ElsewhereHit>([], paging));
+      if (search === "") return empty;
+      const exclude = present(args.excludeCellarId)
+        ? String(args.excludeCellarId).toLowerCase()
+        : null;
+      const mine = await context
+        .actor(
+          CellarsCollectionActorDescriptor,
+          viewerCollectionActorId(viewerId),
+        )
+        .list({ first: ELSEWHERE_CELLARS + 1, after: null }, "MINE");
+      const cellarIds = mine.entries
+        .map((entry) => entry.node)
+        .filter((id) => id.toLowerCase() !== exclude)
+        .slice(0, ELSEWHERE_CELLARS);
+      const answers = await Promise.all(
+        cellarIds.map(async (cellarId) => {
+          try {
+            const groups = await context
+              .actor(CellarActorDescriptor, cellarId)
+              .nameMatches({ search, limit: ELSEWHERE_PER_CELLAR });
+            return groups.map((group) => ({ cellarId, group }));
+          } catch {
+            // One cellar that vanished (or was unshared) between the list
+            // and the fan-out costs its own answer, not everyone's.
+            return [];
+          }
+        }),
+      );
+      return connectionFromPage(offsetPage(answers.flat(), paging));
     },
   }),
 );
@@ -609,7 +1197,9 @@ builder.mutationField("updateCellarItem", (t) =>
 builder.mutationField("removeItemFromCellar", (t) =>
   t.field({
     type: RemovedCellarItemType,
-    description: "Removes the bottle and the check-ins that point at it.",
+    description:
+      "Removes the bottle. Its check-ins are kept, detached from it: they " +
+      "are the drinkers' history, not the bottle's (X02).",
     errors: {},
     args: {
       cellarId: t.arg.id({ required: true }),
@@ -619,6 +1209,30 @@ builder.mutationField("removeItemFromCellar", (t) =>
       context
         .actor(CellarActorDescriptor, String(args.cellarId))
         .removeItem(String(args.cellarItemId)),
+  }),
+);
+
+builder.mutationField("restoreCellarItem", (t) =>
+  t.field({
+    type: CellarItemType,
+    description:
+      "F-79: Undo for `removeItemFromCellar` — the bottle back under its own " +
+      "id and `createdAt`, so it returns to its place in the list. Creator " +
+      "or co-owner; again is a no-op. The check-ins the removal detached " +
+      "stay detached.",
+    errors: {},
+    args: {
+      cellarId: t.arg.id({ required: true }),
+      cellarItemId: t.arg.id({ required: true }),
+      createdAt: t.arg({ type: "DateTime", required: true }),
+      input: t.arg({ type: AddCellarItemInput, required: true }),
+    },
+    resolve: (_root, args, context) =>
+      context.actor(CellarActorDescriptor, String(args.cellarId)).restoreItem({
+        ...toAddItemInput(args.input),
+        cellarItemId: String(args.cellarItemId),
+        createdAt: String(args.createdAt),
+      }),
   }),
 );
 
@@ -670,12 +1284,34 @@ builder.mutationField("emptyCellarItem", (t) =>
   }),
 );
 
+/**
+ * X02: both bottle check-ins are `CheckInActor.log` now — a log is about an
+ * item, poured from this bottle. The GraphQL shape is unchanged (`CheckIn`
+ * carries the `cellarItemId` you named), and so is the rule: the cellar must
+ * be visible to you, and everyone in `userIds` must be you or a friend. The
+ * richer form — score, note, tags, place, photo, no bottle at all — is
+ * `logDrink` (`check-in.ts`).
+ */
+const loggedRows = (
+  logged: LoggedDrinkDto,
+  cellarItemId: string,
+): CheckInDto[] => {
+  const at = logged.entry.createdAt;
+  return logged.rows.map((row) => ({
+    id: row.id,
+    userId: row.userId,
+    cellarItemId: logged.cellarItemId ?? cellarItemId,
+    createdAt: at,
+    updatedAt: at,
+  }));
+};
+
 builder.mutationField("checkIn", (t) =>
   t.field({
     type: CheckInType,
     description:
       "Records that you drank from this bottle. Requires the cellar to be " +
-      "visible to you.",
+      "visible to you. The quick form of `logDrink`.",
     errors: {},
     args: {
       cellarId: t.arg.id({ required: true }),
@@ -685,15 +1321,20 @@ builder.mutationField("checkIn", (t) =>
         description: "Mint it yourself to make the call idempotent (§8.4).",
       }),
     },
-    resolve: (_root, args, context) =>
-      context
-        .actor(CellarActorDescriptor, String(args.cellarId))
-        .checkIn(
-          String(args.cellarItemId),
-          args.checkInId === null || args.checkInId === undefined
-            ? undefined
-            : String(args.checkInId),
-        ),
+    resolve: async (_root, args, context): Promise<CheckInDto> => {
+      const cellarItemId = String(args.cellarItemId);
+      const id = present(args.checkInId)
+        ? String(args.checkInId)
+        : randomUUID();
+      const logged = await context.actor(CheckInActorDescriptor, id).log({
+        bottle: { cellarId: String(args.cellarId), cellarItemId },
+      });
+      const [own] = loggedRows(logged, cellarItemId);
+      if (own === undefined) {
+        throw new ForbiddenError("the check-in wrote no row");
+      }
+      return own;
+    },
   }),
 );
 
@@ -702,7 +1343,8 @@ builder.mutationField("bulkCheckIn", (t) =>
     type: BulkCheckInPayloadType,
     description:
       "Records the drink for you and your friends at the table. Every id " +
-      "must be you or a friend of yours; one that is not rejects the call.",
+      "must be you or a friend of yours; one that is not rejects the call. " +
+      "The rows share one occasion, so each entry says who else was there.",
     errors: {},
     args: {
       cellarId: t.arg.id({ required: true }),
@@ -711,10 +1353,82 @@ builder.mutationField("bulkCheckIn", (t) =>
     },
     resolve: async (_root, args, context): Promise<BulkCheckInPayload> => {
       const cellarItemId = String(args.cellarItemId);
-      const written = await context
-        .actor(CellarActorDescriptor, String(args.cellarId))
-        .bulkCheckIn(cellarItemId, args.userIds.map(String));
-      return { cellarItemId, checkIns: written };
+      const logged = await context
+        .actor(CheckInActorDescriptor, randomUUID())
+        .log({
+          bottle: { cellarId: String(args.cellarId), cellarItemId },
+          companionIds: args.userIds.map(String),
+          // `bulkCheckIn` writes exactly the rows it is given: you drank only
+          // if your own id is among them, which the actor reads as "include
+          // yourself" (`LogDrinkInput.includeSelf`).
+          includeSelf: false,
+        });
+      return { cellarItemId, checkIns: loggedRows(logged, cellarItemId) };
+    },
+  }),
+);
+
+const BottleSearchHitType = builder
+  .objectRef<BottleSearchHit>("BottleSearchHit")
+  .implement({
+    description:
+      "One item you have open bottles of, in one of your cellars (X12's " +
+      '"Your bottles").',
+    fields: (t) => ({
+      cellarItemId: t.exposeID("cellarItemId", {
+        description:
+          "The bottle a tap opens: one already opened, else the oldest.",
+      }),
+      cellarId: t.exposeID("cellarId"),
+      cellarName: t.exposeString("cellarName"),
+      bottleCount: t.exposeInt("bottleCount", {
+        description: "Open bottles of this item in this cellar, at least 1.",
+      }),
+      item: t.field({
+        type: ItemInterface,
+        description: "The item. One batched loader call per page.",
+        resolve: (hit) => itemActorId(hit.item),
+      }),
+    }),
+  });
+
+const BottleSearchConnection = builder.connectionObject(
+  { type: BottleSearchHitType, name: "BottleSearchConnection" },
+  { name: "BottleSearchEdge" },
+);
+
+builder.objectField(Viewer, "bottleSearch", (t) =>
+  t.field({
+    type: BottleSearchConnection,
+    description:
+      'X12 — universal search\'s "Your bottles": open bottles in cellars ' +
+      "you created or co-own whose item name contains the term (or, for a " +
+      "typo, matches it closely), one hit per item per cellar — exact names " +
+      "first. By name only, so it answers the same with or without an AI " +
+      "provider. Never a friend's bottle, however visible its cellar. " +
+      "`totalCount` counts every match, also past `limit`.",
+    args: {
+      ...t.arg.connectionArgs(),
+      term: t.arg.string({ required: true }),
+      limit: t.arg.int({
+        required: false,
+        description:
+          `How many hits the actor returns — 1 to ${BOTTLE_SEARCH_RESULT_CAP}, ` +
+          `${BOTTLE_SEARCH_RESULT_CAP} when omitted. Not pagination: ` +
+          "`first`/`after` page this set.",
+      }),
+    },
+    resolve: async (viewer, args, context) => {
+      const found = await context
+        .actor(
+          CellarsCollectionActorDescriptor,
+          viewerCollectionActorId(viewer.id),
+        )
+        .findBottles({ term: args.term, limit: args.limit ?? null });
+      return {
+        ...connectionFromPage(offsetPage(found.hits, toPageArgs(args))),
+        totalCount: found.totalCount,
+      };
     },
   }),
 );

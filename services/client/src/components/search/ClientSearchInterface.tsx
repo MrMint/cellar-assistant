@@ -1,403 +1,350 @@
 "use client";
 
 import {
-  Box,
-  Button,
-  Card,
-  CardContent,
-  CircularProgress,
-  IconButton,
-  Input,
-  Stack,
-  Typography,
-} from "@mui/joy";
-import { useActor } from "@xstate/react";
-import { AnimatePresence, motion } from "framer-motion";
-import { useRouter } from "next/navigation";
-import { includes } from "ramda";
-import { useEffect, useRef, useState, useTransition } from "react";
-import { MdCamera, MdClose, MdScanner, MdSearch } from "react-icons/md";
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useTransition,
+} from "react";
 import { useClient } from "urql";
-import { useAnimatedPlaceholder } from "@/hooks/useAnimatedPlaceholder";
-import { useMediaQuery } from "@/hooks/useMediaQuery";
+import {
+  Barcode,
+  Camera,
+  Close,
+  ICON_STROKE,
+  Photo,
+  Search,
+} from "@/components/app/icons";
+import { useAppKey } from "@/components/app/overlays/app-keys";
+import { pressFeedback } from "@/components/app/overlays/press";
+import { useNavigate } from "@/components/app/useNavigate";
+import { Spinner } from "@/components/ui/spinner";
+import { isOffered, useAiCapabilities } from "@/lib/ai/capabilities";
+import {
+  captureHrefWithPhoto,
+  photoHandoff,
+} from "@/lib/capture/photo-handoff";
+import { feedback } from "@/lib/feedback";
 import { uploadSearchPhoto } from "@/lib/items/image-search";
-import { BarcodeScanner } from "../common/BarcodeScanner";
-import { CameraCapture } from "../common/CameraCapture";
-import { interactiveSearchMachine } from "./actors/interactiveSearch";
+import { createLatestOnly, runLatest } from "@/lib/latest-only";
+import { cn } from "@/lib/utils";
+import { BarcodeScanner, type ScanMode } from "../common/BarcodeScanner";
 import { barcodeSearchHref, imageSearchHref } from "./adapter";
-import { modalScale } from "./motion-variants";
+import { useSearchNavigation } from "./SearchNavigation";
+import { type SearchNavigation, textSearchHref } from "./search-navigation";
+import { SECTION_LABELS, type SearchSection } from "./universal-search";
+import { useSearchQuery } from "./useSearchQuery";
 
-const SEARCH_EXAMPLES_DESKTOP = [
-  "Search your collection...",
-  "a bold Cabernet Sauvignon...",
-  "hazy IPA from the Midwest...",
-  "single malt Scotch whisky...",
-  "Ethiopian natural process...",
-  "something for date night...",
-];
-
-const SEARCH_EXAMPLES_MOBILE = [
-  "Search your collection...",
-  "bold Cabernet...",
-  "hazy IPA...",
-  "single malt...",
-  "Ethiopian coffee...",
-  "date night pick...",
-];
-
-const SEARCH_DEBOUNCE_MS = 300;
+/** What the field holds in place of words: a scanned code or a photo. */
+export type SearchToken = "barcode" | "photo" | null;
 
 interface ClientSearchInterfaceProps {
-  initialQuery?: string;
+  /**
+   * The `?q=` the page was rendered for. Not just the initial value: the box
+   * follows it when the URL changes under it (Back, Forward, a link).
+   */
+  urlQuery?: string | null;
+  /** A barcode or photo search: the field shows its token (Recipes-Search 33). */
+  token?: SearchToken;
+  /** `?in=`: the field says what it looks in ("Search places"). */
+  scope?: SearchSection | null;
+  /**
+   * `?with=`: Home's Scan or Photo — the sheet opens on arrival, and `with`
+   * leaves the URL so Back or a reload doesn't open it again (F-102).
+   */
+  openWith?: ScanMode | null;
 }
 
+const SEGMENT =
+  "flex min-h-11 w-[60px] shrink-0 flex-col items-center justify-center gap-0.5 border-edge border-l text-ink transition-transform duration-(--ca-dur-micro) ease-standard active:scale-97 motion-reduce:active:scale-100 disabled:opacity-40";
+
 /**
- * `82450ad1:src/components/search/ClientSearchInterface.tsx`, restored.
+ * Search's field (KIT § 2 "Search field"; Recipes-Search 01, 08, 33): 44
+ * tall, r8, edge, the glyph at 12, focus ring in act-ink, Clear while there
+ * is something to clear, and Scan and Photo as segments at its end (Scan
+ * is phone only: DECISIONS 40d). `/` focuses it from anywhere in the app
+ * that is not already typing.
  *
- * Same box: animated placeholder, no submit button, a 300 ms debounce that
- * navigates to `?q=`, the clear button, and the Scan and Photo buttons opening
- * the barcode scanner or the camera in a framer-motion card. Two changes, both
- * data-side:
- *
- * - **A photo is uploaded, then navigates to `?image=<fileId>`** (G32). The
- *   old `imageSearchAction` posted the capture's base64 data URL to a server
- *   action and serialized the result rows into `?image_results=<JSON>`. Now
- *   the capture goes up the presigned path (`image-search`) and the server
- *   page searches with the file id. The machine stays in `imageSearching`
- *   through the upload and the navigation. A failed upload says so under the
- *   box, where the old flow returned to idle silently.
- * - **A scan navigates to `?barcode=<code>`.** The old `barcodeSearchAction`
- *   serialized whole result rows into the URL (`?barcode_results=<JSON>`,
- *   forgeable and unbounded, §7) — and its search was a stub that returned
- *   nothing. Now the URL carries the code and the server page looks it up.
- *   The machine stays in `barcodeSearching` while the navigation is pending.
+ * Typing navigates to `?q=` after a 300 ms debounce and never remounts the
+ * box (N01; `useSearchQuery`, `search-navigation.ts`). A scan navigates to
+ * `?barcode=`; a photo is uploaded and navigates to `?image=<fileId>` (G32)
+ * — or, where nothing can search by photo, goes to Add to be read as a
+ * label (X06). Uploads answer by sequence (`lib/latest-only.ts`): an upload
+ * that finishes after the sheet closed, or after a newer photo, is dropped.
  */
 export const ClientSearchInterface = ({
-  initialQuery,
+  urlQuery,
+  token = null,
+  scope = null,
+  openWith = null,
 }: ClientSearchInterfaceProps) => {
-  const [searchQuery, setSearchQuery] = useState(initialQuery || "");
-  const [isFocused, setIsFocused] = useState(false);
-  const router = useRouter();
+  const nav = useNavigate();
   const inputRef = useRef<HTMLInputElement>(null);
-  const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
-  const isMobile = useMediaQuery("(max-width: 600px)");
-  const examples = isMobile ? SEARCH_EXAMPLES_MOBILE : SEARCH_EXAMPLES_DESKTOP;
-  const isPlaceholderActive = !isFocused && !searchQuery;
+  // The page's shared transition when there is one (the results dim while
+  // it runs); a local one otherwise.
+  const [localPending, localStartTransition] = useTransition();
+  const shared = useSearchNavigation();
+  const isNavigating = shared?.isPending ?? localPending;
+  const startNavigation = shared?.startTransition ?? localStartTransition;
 
-  const animatedPlaceholder = useAnimatedPlaceholder({
-    examples,
-    enabled: isPlaceholderActive,
-  });
+  const navigate = useCallback(
+    ({ method, href }: SearchNavigation) =>
+      startNavigation(() => {
+        if (method === "push") nav.push(href);
+        else nav.replace(href);
+      }),
+    [nav, startNavigation],
+  );
+  const {
+    value: searchQuery,
+    onChange,
+    commit,
+    clear,
+  } = useSearchQuery({ urlQuery, navigate, isNavigating, scope });
 
-  const [state, send] = useActor(interactiveSearchMachine, {
-    input: {},
-  });
-  const [isNavigating, startNavigation] = useTransition();
   const urqlClient = useClient();
+  // N07/D25: photo search is not offered where the deployment's embedding
+  // model cannot embed a photo. X06: Photo stays where a label can still be
+  // read — its fallback reads the photo as a label in Add.
+  const capabilities = useAiCapabilities();
+  const photoSearchOffered = isOffered(capabilities, "imageSearch");
+  const photoOffered =
+    photoSearchOffered || isOffered(capabilities, "labelRead");
+
+  const [sheet, setSheet] = useState<ScanMode | null>(null);
+  const [working, setWorking] = useState<ScanMode | null>(null);
   const [photoError, setPhotoError] = useState<string | null>(null);
+  const uploads = useMemo(createLatestOnly, []);
 
-  // The old action resolved after its redirect; a transition's end is the
-  // same moment for a client navigation. An image search is still uploading
-  // until `photoNavigating` says the navigation has started.
-  const [photoNavigating, setPhotoNavigating] = useState(false);
+  // The work indicator ends with the navigation it started: when a pending
+  // navigation settles, not while an upload has yet to start one.
+  const wasNavigating = useRef(false);
   useEffect(() => {
-    if (state.value === "barcodeSearching" && !isNavigating) {
-      send({ type: "SEARCH_COMPLETE" });
-    }
-    if (state.value === "imageSearching" && photoNavigating && !isNavigating) {
-      setPhotoNavigating(false);
-      send({ type: "SEARCH_COMPLETE" });
-    }
-  }, [state.value, isNavigating, photoNavigating, send]);
+    if (wasNavigating.current && !isNavigating) setWorking(null);
+    wasNavigating.current = isNavigating;
+  }, [isNavigating]);
 
-  const handlePhoto = (image: string) => {
-    send({ type: "CAPTURED", image });
-    setPhotoError(null);
-    uploadSearchPhoto(urqlClient, image)
-      .then((fileId) => {
-        const href = imageSearchHref(fileId);
-        if (href === null) throw new Error("The photo could not be uploaded.");
-        setPhotoNavigating(true);
-        startNavigation(() => router.push(href));
-      })
-      .catch((error: unknown) => {
-        setPhotoError(
-          error instanceof Error
-            ? error.message
-            : "The photo could not be uploaded.",
-        );
-        send({ type: "SEARCH_ERROR" });
-      });
-  };
-
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
-    setSearchQuery(value);
-
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => {
-      if (value.trim()) {
-        router.push(`/search?q=${encodeURIComponent(value.trim())}`);
-      } else {
-        router.push("/search");
-      }
-    }, SEARCH_DEBOUNCE_MS);
-  };
-
+  // Opened once per arrival: the replace below clears `with`, so this does
+  // not run again for the same link.
   useEffect(() => {
-    return () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-    };
-  }, []);
+    if (openWith === null) return;
+    setSheet(openWith);
+    nav.replace(textSearchHref(urlQuery ?? "", scope));
+  }, [openWith, nav, urlQuery, scope]);
 
-  const handleClear = () => {
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    setSearchQuery("");
-    router.push("/search");
+  const closeSheet = () => {
+    uploads.invalidate();
+    setSheet(null);
     inputRef.current?.focus();
   };
 
-  const prefersReducedMotion = useMediaQuery(
-    "(prefers-reduced-motion: reduce)",
-  );
+  const handleBarcode = (barcode: { text: string }) => {
+    const href = barcodeSearchHref(barcode.text);
+    setSheet(null);
+    if (href === null) {
+      feedback("refuse");
+      return;
+    }
+    feedback("success");
+    setWorking("barcode");
+    startNavigation(() => nav.push(href));
+  };
 
-  const isIdle = !includes(state.value, ["barcode", "image"]);
-  const isSearching = includes(state.value, [
-    "barcodeSearching",
-    "imageSearching",
-  ]);
+  const handlePhoto = (image: string) => {
+    setSheet(null);
+    setPhotoError(null);
+    if (!photoSearchOffered) {
+      // X06: nothing here can search by photo, so the photo goes straight to
+      // its fallback — read as a label in Add, with the same bytes.
+      uploads.invalidate();
+      const href = captureHrefWithPhoto("bottle", photoHandoff.put(image));
+      startNavigation(() => nav.push(href));
+      return;
+    }
+    setWorking("photo");
+    runLatest(
+      uploads,
+      () => uploadSearchPhoto(urqlClient, image),
+      (fileId) => {
+        const href = imageSearchHref(fileId);
+        if (href === null) throw new Error("The photo could not be uploaded.");
+        // Kept for the results' "Read the label" (X06), under the search
+        // file's id — the one thing the results page knows.
+        photoHandoff.put(image, fileId);
+        startNavigation(() => nav.push(href));
+      },
+    ).catch(() => {
+      setWorking(null);
+      feedback("refuse");
+      setPhotoError("Couldn't send the photo");
+    });
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Escape" && searchQuery !== "") {
+      e.preventDefault();
+      clear();
+      return;
+    }
+    if (e.key !== "Enter" || e.nativeEvent.isComposing) return;
+    e.preventDefault();
+    commit();
+    // On a phone, Search on the keyboard should reveal the results.
+    if (window.matchMedia?.("(pointer: coarse)").matches) {
+      inputRef.current?.blur();
+    }
+  };
+
+  // `/` focuses the field (desk-01's key hint): the shell's key, on the app
+  // element; this screen's handler wins while it is mounted.
+  useAppKey("/", () => inputRef.current?.focus());
+
+  const handleClear = () => {
+    feedback("tick");
+    if (token !== null && searchQuery === "") {
+      startNavigation(() => nav.replace("/search"));
+    } else {
+      clear();
+    }
+    inputRef.current?.focus();
+  };
+
+  const press = pressFeedback();
+  const placeholder =
+    scope === null
+      ? "Search everything"
+      : `Search ${SECTION_LABELS[scope].toLowerCase()}`;
+  const showToken = token !== null && searchQuery === "";
+  const canClear = searchQuery !== "" || token !== null;
 
   return (
-    <Box>
-      <AnimatePresence mode="wait">
-        {isIdle && (
-          <motion.div
-            key="idle"
-            variants={prefersReducedMotion ? undefined : modalScale}
-            initial={false}
-            animate="animate"
-            exit="exit"
+    <div className="flex flex-col gap-2">
+      <div
+        data-search-field
+        className="flex min-h-11 items-stretch overflow-hidden rounded-md border border-edge bg-card transition-[border-color,box-shadow] duration-(--ca-dur-short) ease-standard focus-within:border-act-ink focus-within:ring-1 focus-within:ring-act-ink"
+      >
+        <span className="flex w-10 shrink-0 items-center justify-end pr-1 text-glyph">
+          <Search aria-hidden strokeWidth={ICON_STROKE} className="size-5" />
+        </span>
+        {showToken && (
+          <span
+            data-search-token={token}
+            className="t-cap my-1.5 ml-1 inline-flex shrink-0 items-center gap-1.5 rounded-sm bg-sel px-2 text-ink"
           >
-            <Stack spacing={2}>
-              <Input
-                slotProps={{ input: { ref: inputRef } }}
-                placeholder={
-                  isPlaceholderActive
-                    ? animatedPlaceholder
-                    : "Search your collection..."
-                }
-                value={searchQuery}
-                onChange={handleChange}
-                onFocus={() => setIsFocused(true)}
-                onBlur={() => setIsFocused(false)}
-                startDecorator={
-                  <MdSearch style={{ fontSize: "1.25rem", opacity: 0.5 }} />
-                }
-                endDecorator={
-                  <Stack direction="row" spacing={0.5} alignItems="center">
-                    {searchQuery && (
-                      <IconButton
-                        variant="plain"
-                        color="neutral"
-                        size="sm"
-                        aria-label="Clear search"
-                        onClick={handleClear}
-                        sx={{ minWidth: "auto", p: "4px" }}
-                      >
-                        <MdClose style={{ fontSize: "1.1rem" }} />
-                      </IconButton>
-                    )}
-                    {searchQuery ? (
-                      <>
-                        <IconButton
-                          variant="soft"
-                          color="neutral"
-                          size="sm"
-                          aria-label="Scan barcode"
-                          onClick={() => send({ type: "SEARCH_BARCODE" })}
-                          sx={{
-                            borderRadius: "50%",
-                            "--IconButton-size": "30px",
-                          }}
-                        >
-                          <MdScanner style={{ fontSize: "1.1rem" }} />
-                        </IconButton>
-                        <IconButton
-                          variant="soft"
-                          color="neutral"
-                          size="sm"
-                          aria-label="Search by photo"
-                          onClick={() => send({ type: "SEARCH_IMAGE" })}
-                          sx={{
-                            borderRadius: "50%",
-                            "--IconButton-size": "30px",
-                          }}
-                        >
-                          <MdCamera style={{ fontSize: "1.1rem" }} />
-                        </IconButton>
-                      </>
-                    ) : (
-                      <>
-                        <Button
-                          variant="soft"
-                          color="neutral"
-                          size="sm"
-                          startDecorator={
-                            <MdScanner style={{ fontSize: "1rem" }} />
-                          }
-                          onClick={() => send({ type: "SEARCH_BARCODE" })}
-                          sx={{
-                            borderRadius: "lg",
-                            fontSize: "xs",
-                            fontWeight: "md",
-                            px: 1.5,
-                            "--Button-minHeight": "30px",
-                          }}
-                        >
-                          Scan
-                        </Button>
-                        <Button
-                          variant="soft"
-                          color="neutral"
-                          size="sm"
-                          startDecorator={
-                            <MdCamera style={{ fontSize: "1rem" }} />
-                          }
-                          onClick={() => send({ type: "SEARCH_IMAGE" })}
-                          sx={{
-                            borderRadius: "lg",
-                            fontSize: "xs",
-                            fontWeight: "md",
-                            px: 1.5,
-                            "--Button-minHeight": "30px",
-                          }}
-                        >
-                          Photo
-                        </Button>
-                      </>
-                    )}
-                  </Stack>
-                }
-                sx={{
-                  "--Input-minHeight": "48px",
-                  fontSize: "md",
-                  borderRadius: "xl",
-                  "--Input-focusedThickness": "1.5px",
-                  transition: "border-color 0.2s ease, box-shadow 0.2s ease",
-                  "&:focus-within": {
-                    boxShadow: "sm",
-                  },
-                }}
+            {token === "barcode" ? (
+              <Barcode
+                aria-hidden
+                strokeWidth={ICON_STROKE}
+                className="size-4"
               />
-
-              {isSearching && (
-                <Stack
-                  spacing={2}
-                  alignItems="center"
-                  sx={{
-                    "@keyframes pulse": {
-                      "0%, 100%": { opacity: 0.6 },
-                      "50%": { opacity: 1 },
-                    },
-                  }}
-                >
-                  <CircularProgress />
-                  <Typography
-                    level="body-md"
-                    sx={{
-                      "@media (prefers-reduced-motion: no-preference)": {
-                        animation: "pulse 2s ease-in-out infinite",
-                      },
-                    }}
-                  >
-                    {state.value === "barcodeSearching"
-                      ? "Searching by barcode..."
-                      : "Analyzing image..."}
-                  </Typography>
-                </Stack>
-              )}
-
-              {photoError !== null && !isSearching && (
-                <Typography
-                  level="body-sm"
-                  color="danger"
-                  sx={{ textAlign: "center" }}
-                >
-                  {photoError}
-                </Typography>
-              )}
-            </Stack>
-          </motion.div>
+            ) : (
+              <Photo aria-hidden strokeWidth={ICON_STROKE} className="size-4" />
+            )}
+            {token === "barcode" ? "Barcode" : "Photo"}
+          </span>
         )}
-
-        {state.value === "barcode" && (
-          <motion.div
-            key="barcode"
-            variants={prefersReducedMotion ? undefined : modalScale}
-            initial={prefersReducedMotion ? false : "initial"}
-            animate="animate"
-            exit="exit"
+        <input
+          ref={inputRef}
+          // W-12: an empty search opens ready to type, so a phone brings its
+          // keyboard up. Opened on `?q=`, the results are what you came for.
+          // The box never remounts while you type (N01), so this fires once.
+          // biome-ignore lint/a11y/noAutofocus: W-12, the search screen's one job is typing.
+          autoFocus={!urlQuery && token === null && openWith === null}
+          type="search"
+          aria-label="Search"
+          enterKeyHint="search"
+          placeholder={showToken ? "" : placeholder}
+          value={searchQuery}
+          onChange={(e) => onChange(e.target.value)}
+          onKeyDown={handleKeyDown}
+          onBlur={() => commit()}
+          className="t-body min-w-0 flex-1 bg-transparent px-2 text-ink outline-none placeholder:text-ink-3 [&::-webkit-search-cancel-button]:hidden"
+        />
+        {canClear && (
+          <button
+            type="button"
+            aria-label="Clear search"
+            // Keep focus in the box: a blur here would commit the old text
+            // a moment before clear commits "".
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={handleClear}
+            {...press}
+            className="flex min-h-11 w-11 shrink-0 items-center justify-center text-glyph"
           >
-            <Box sx={(theme) => ({ maxWidth: theme.breakpoints.values.md })}>
-              <Card sx={{ padding: "1rem" }}>
-                <Typography level="title-lg" textAlign="center">
-                  Scan barcode
-                </Typography>
-                <BarcodeScanner
-                  onChange={(barcode) => {
-                    send({ type: "FOUND", barcode });
-                    const href = barcodeSearchHref(barcode.text);
-                    if (href === null) {
-                      send({ type: "SEARCH_ERROR" });
-                      return;
-                    }
-                    startNavigation(() => router.push(href));
-                  }}
-                />
-                <CardContent
-                  orientation="horizontal"
-                  sx={{ justifyContent: "flex-end" }}
-                >
-                  <Button onClick={() => send({ type: "CANCEL" })}>
-                    Cancel
-                  </Button>
-                </CardContent>
-              </Card>
-            </Box>
-          </motion.div>
+            <Close aria-hidden strokeWidth={ICON_STROKE} className="size-5" />
+          </button>
         )}
-
-        {state.value === "image" && (
-          <motion.div
-            key="image"
-            variants={prefersReducedMotion ? undefined : modalScale}
-            initial={prefersReducedMotion ? false : "initial"}
-            animate="animate"
-            exit="exit"
+        <span
+          aria-hidden
+          className="hidden w-8 shrink-0 items-center justify-center md:flex"
+        >
+          <kbd className="t-micro rounded-sm border border-edge px-1.5 text-ink-2">
+            /
+          </kbd>
+        </span>
+        <button
+          type="button"
+          aria-label="Scan a barcode"
+          disabled={working !== null}
+          onClick={() => setSheet("barcode")}
+          {...press}
+          className={cn(SEGMENT, "md:hidden")}
+        >
+          {working === "barcode" ? (
+            <Spinner aria-hidden className="size-5" />
+          ) : (
+            <Barcode
+              aria-hidden
+              strokeWidth={ICON_STROKE}
+              className="size-5 text-act-ink"
+            />
+          )}
+          <span className="t-micro">Scan</span>
+        </button>
+        {photoOffered && (
+          <button
+            type="button"
+            aria-label={
+              photoSearchOffered ? "Search by photo" : "Photograph a label"
+            }
+            disabled={working !== null}
+            onClick={() => setSheet("photo")}
+            {...press}
+            className={SEGMENT}
           >
-            <Box sx={(theme) => ({ maxWidth: theme.breakpoints.values.md })}>
-              <Card sx={{ padding: "1rem" }}>
-                <Typography level="title-lg" textAlign="center">
-                  Take a picture of the item
-                </Typography>
-                <CameraCapture onCapture={handlePhoto} />
-                <CardContent
-                  orientation="horizontal"
-                  sx={{ justifyContent: "space-between" }}
-                >
-                  <Button
-                    onClick={() => send({ type: "CANCEL" })}
-                    color="neutral"
-                  >
-                    Cancel
-                  </Button>
-                </CardContent>
-              </Card>
-            </Box>
-          </motion.div>
+            {working === "photo" ? (
+              <Spinner aria-hidden className="size-5" />
+            ) : (
+              <Camera
+                aria-hidden
+                strokeWidth={ICON_STROKE}
+                className="size-5 text-act-ink"
+              />
+            )}
+            <span className="t-micro">Photo</span>
+          </button>
         )}
-      </AnimatePresence>
-    </Box>
+      </div>
+
+      {photoError !== null && working === null && (
+        <p role="alert" className="t-cap m-0 text-danger">
+          {photoError}
+        </p>
+      )}
+
+      {sheet !== null && (
+        <BarcodeScanner
+          mode={sheet}
+          onModeChange={setSheet}
+          photoOffered={photoOffered}
+          onBarcode={handleBarcode}
+          onPhoto={handlePhoto}
+          onClose={closeSheet}
+        />
+      )}
+    </div>
   );
 };

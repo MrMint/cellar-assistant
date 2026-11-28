@@ -1,244 +1,97 @@
 "use client";
 
 /**
- * `82450ad1:src/components/map/places/PlaceDetails.tsx`, restored — the
- * `/places/[placeId]` page (Menu / Camera Scan / Info tabs).
+ * The place page (Places-Place 01, 02, 20, desktop 01) and, at pane width,
+ * its body in the map's desktop pane (`PlacePane`).
  *
- * Data: one `PlaceDetailsQuery` through `usePlaceDetails` (adapter.ts) in
- * place of `GET_PLACE_DETAILS` + the server page's `GET_PLACE_ENRICHMENT`.
- * - The "On Lists" card was a server-rendered slot over `tier_list_items`
- *   (leaking private lists); it is `Place.tierListEntries` (G8) now, visible
- *   lists only, rendered by the restored `ItemTierLists`.
- * - The current menu is `Place.menuItems`: every line this place's scans
- *   wrote, which is what the old single `is_current` menu accumulated
- *   (`processMenuScan` appended each scan to it).
- * - Save / Mark Visited → `recordPlaceInteraction`; the visit count is the
- *   server's, not `visit_count + 1` computed here.
- * - Photos are the mirrored `Place.photos` (presigned, through `next/image`); Google's
- *   attribution blocks are printed with "Powered by Google".
+ * One scrolling page, not tabs (the Places-Place report merges Menu, Scan a
+ * menu and Info): the hero under glass discs, Your rank, where it is with
+ * the screen's one primary (Directions), Visited / Want to try / Share, On
+ * your lists, the Menu card (its lines, or "No menu yet" with Scan a menu),
+ * then Info. From `md` the page is two columns: the photo, name and menu on
+ * the left, the rank, address and lists in a 400 column on the right.
+ *
+ * Data: one `PlaceDetailsQuery` through `usePlaceDetails` (P1's hook).
+ * - On your lists is `Place.tierListEntries` (G8), kept to the lists the
+ *   viewer made (`useOwnListEntries`, CC-3): a friend's is not "yours". Their
+ *   ranks are read from each list (`ListRanksQuery`), as Add to a list does.
+ * - Changing a band from here waits on `tierListEntries` saying whose list
+ *   an entry is on: until then the rank opens its list rather than offering
+ *   a band sheet that could write to a friend's list (hand-off to P1).
+ * - Love / Visited flip on the tap (X24) through `usePlaceToggles`; a refusal
+ *   puts them back.
  */
 
-import {
-  Alert,
-  AspectRatio,
-  Box,
-  Button,
-  Card,
-  CardContent,
-  Chip,
-  CircularProgress,
-  Divider,
-  Snackbar,
-  Stack,
-  Tab,
-  TabList,
-  TabPanel,
-  Tabs,
-  Typography,
-} from "@mui/joy";
-import Image from "next/image";
-import Link from "next/link";
 import { useState } from "react";
-import {
-  MdCheckCircle,
-  MdCoffee,
-  MdDirections,
-  MdFavorite,
-  MdFavoriteBorder,
-  MdFormatListNumbered,
-  MdLanguage,
-  MdLocalBar,
-  MdMap,
-  MdPhone,
-  MdPlace,
-  MdRadioButtonUnchecked,
-  MdRestaurant,
-  MdSchedule,
-  MdShare,
-  MdSportsBar,
-  MdStar,
-  MdWineBar,
-} from "react-icons/md";
+import { AppBar, type AppBarOverflowItem } from "@/components/app/AppBar";
+import { EmptyState } from "@/components/app/EmptyState";
+import { Camera, ICON_STROKE, Share, Warning } from "@/components/app/icons";
+import { ShareSheet } from "@/components/app/overlays/ShareSheet";
+import { Page } from "@/components/app/Page";
+import { Heart } from "@/components/app/parts/Heart";
+import { useNavigate } from "@/components/app/useNavigate";
 import { Timestamp } from "@/components/common/Timestamp";
-import { ItemTierLists } from "@/components/item/ItemTierLists";
+import { Button } from "@/components/ui/button";
+import { Spinner } from "@/components/ui/spinner";
+import { breakpointUp, useMediaQuery } from "@/hooks/useMediaQuery";
+import { isOffered, useAiCapabilities } from "@/lib/ai/capabilities";
+import { cn } from "@/lib/utils";
 import { AddToTierListModal } from "../../tier-list/AddToTierListModal";
 import { usePlaceDetails } from "../hooks/usePlaceDetails";
+import { usePlaceToggles } from "../hooks/usePlaceToggles";
 import { MenuScanner } from "../scanning/MenuScanner";
 import { GoogleAttribution } from "./GoogleAttribution";
-import { PlaceMenuItems } from "./PlaceMenuItems";
+import { useOwnListEntries } from "./own-list-entries";
 import {
-  formatCategoryName,
-  formatTimeString,
-  getPriceLevelText,
-} from "./place-utils";
-
-// ── Constants ──────────────────────────────────────────────────────────
-
-const DAY_NAMES = [
-  "Sunday",
-  "Monday",
-  "Tuesday",
-  "Wednesday",
-  "Thursday",
-  "Friday",
-  "Saturday",
-];
-
-// ── Utilities ──────────────────────────────────────────────────────────
-
-function getCategoryIcon(category: string) {
-  switch (category) {
-    case "restaurant":
-      return MdRestaurant;
-    case "bar":
-    case "pub":
-      return MdLocalBar;
-    case "cafe":
-    case "coffee_shop":
-      return MdCoffee;
-    case "brewery":
-      return MdSportsBar;
-    case "winery":
-      return MdWineBar;
-    default:
-      return MdPlace;
-  }
-}
-
-// ── Sub-components ─────────────────────────────────────────────────────
-
-/** Format an opening-hours point to a display string like "9:00 AM". */
-function formatOpeningPoint(point: {
-  hour?: number;
-  minute?: number;
-  time?: string;
-}): string {
-  // Google Places API (New): { hour, minute }
-  if (point.hour != null) {
-    const hours = point.hour;
-    const minutes = String(point.minute ?? 0).padStart(2, "0");
-    const period = hours >= 12 ? "PM" : "AM";
-    const displayHours = hours > 12 ? hours - 12 : hours === 0 ? 12 : hours;
-    return `${displayHours}:${minutes} ${period}`;
-  }
-  // Legacy format: { time: "0900" }
-  if (point.time) {
-    return formatTimeString(point.time);
-  }
-  return "";
-}
-
-function HoursDisplay({ hours }: { hours: unknown }) {
-  if (typeof hours === "string") {
-    return (
-      <Typography level="body-sm" sx={{ mt: 1 }}>
-        {hours}
-      </Typography>
-    );
-  }
-
-  // Google Places API (New) includes weekdayDescriptions — use them directly
-  if (
-    hours &&
-    typeof hours === "object" &&
-    "weekdayDescriptions" in hours &&
-    Array.isArray(
-      (hours as { weekdayDescriptions: unknown[] }).weekdayDescriptions,
-    )
-  ) {
-    const descriptions = (hours as { weekdayDescriptions: string[] })
-      .weekdayDescriptions;
-    if (descriptions.length > 0) {
-      return (
-        <Stack spacing={0.5} sx={{ mt: 1 }}>
-          {descriptions.map((desc) => (
-            <Typography
-              key={desc}
-              level="body-sm"
-              sx={{ color: "text.secondary" }}
-            >
-              {desc}
-            </Typography>
-          ))}
-        </Stack>
-      );
-    }
-  }
-
-  // Fall back to parsing periods
-  if (
-    hours &&
-    typeof hours === "object" &&
-    "periods" in hours &&
-    Array.isArray((hours as { periods: unknown[] }).periods)
-  ) {
-    type HourPeriod = {
-      open: { day: number; hour?: number; minute?: number; time?: string };
-      close?: { day: number; hour?: number; minute?: number; time?: string };
-    };
-    const periods = (hours as { periods: HourPeriod[] }).periods;
-
-    const byDay = new Map<number, HourPeriod[]>();
-    for (const period of periods) {
-      const day = period.open.day;
-      const existing = byDay.get(day) ?? [];
-      existing.push(period);
-      byDay.set(day, existing);
-    }
-
-    return (
-      <Stack spacing={0.5} sx={{ mt: 1 }}>
-        {Array.from({ length: 7 }, (_, i) => {
-          const dayPeriods = byDay.get(i);
-          return (
-            <Stack key={DAY_NAMES[i]} direction="row" spacing={2}>
-              <Typography
-                level="body-sm"
-                sx={{ minWidth: 90, fontWeight: "md" }}
-              >
-                {DAY_NAMES[i]}
-              </Typography>
-              <Typography level="body-sm" sx={{ color: "text.secondary" }}>
-                {dayPeriods
-                  ? dayPeriods
-                      .map(
-                        (p) =>
-                          `${formatOpeningPoint(p.open)}${p.close ? ` – ${formatOpeningPoint(p.close)}` : " – Open"}`,
-                      )
-                      .join(", ")
-                  : "Closed"}
-              </Typography>
-            </Stack>
-          );
-        })}
-      </Stack>
-    );
-  }
-
-  return (
-    <Typography level="body-sm" sx={{ mt: 1 }}>
-      {String(hours)}
-    </Typography>
-  );
-}
-
-// ── Main Component ─────────────────────────────────────────────────────
+  PlaceDetailsShell,
+  type PlaceHero as PlaceHeroData,
+} from "./PlaceDetailsShell";
+import { PlaceEntryEdit, type PlaceEntryEditMode } from "./PlaceEntryEdit";
+import { PlaceHero } from "./PlaceHero";
+import { PlaceMenuItems } from "./PlaceMenuItems";
+import { PlaceReviewPanel } from "./PlaceReviewPanel";
+import {
+  PlaceActionsRow,
+  PlaceCard,
+  PlaceInfoCard,
+  PlaceListsCard,
+  PlaceRankBlock,
+  PlaceWhereCard,
+} from "./PlaceSections";
+import { formatCategoryName, getPriceLevelText } from "./place-utils";
 
 interface PlaceDetailsProps {
   placeId: string;
+  /**
+   * The name and category the server already read (X24): drawn in the
+   * loading shell while the full read is on its way.
+   */
+  hero?: PlaceHeroData;
   /** The old `getServerUserId()`; unused — the API knows the viewer. */
   userId?: string;
+  /**
+   * `page`: the route, with its bar and, from `md`, two columns. `pane`: the
+   * same sections in one column inside the map's pane, which has its own
+   * chrome.
+   */
+  variant?: "page" | "pane";
 }
 
-export function PlaceDetails({ placeId, userId = "" }: PlaceDetailsProps) {
-  const [activeTab, setActiveTab] = useState(0);
-  const [isTogglingFavorite, setIsTogglingFavorite] = useState(false);
-  const [isMarkingVisited, setIsMarkingVisited] = useState(false);
-  const [feedback, setFeedback] = useState<{
-    message: string;
-    color: "success" | "danger" | "neutral";
-  } | null>(null);
-  const [tierListModalOpen, setTierListModalOpen] = useState(false);
+export function PlaceDetails({
+  placeId,
+  hero,
+  userId = "",
+  variant = "page",
+}: PlaceDetailsProps) {
+  const pane = variant === "pane";
+  // From md the page is two columns; the pane stays one at any width.
+  const desktop = useMediaQuery(breakpointUp("md")) && !pane;
+  // N07/D25: menu scanning is hidden, not refused, where no AI can read one.
+  const menuScanOffered = isOffered(useAiCapabilities(), "menuScan");
+  const [listModalOpen, setListModalOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
+  const [entryMode, setEntryMode] = useState<PlaceEntryEditMode>(null);
+  const navigate = useNavigate();
 
   const {
     place: placeData,
@@ -251,679 +104,387 @@ export function PlaceDetails({ placeId, userId = "" }: PlaceDetailsProps) {
     loadMoreMenuItems,
     enrichment,
     googlePhotos,
-    tierListEntries,
+    tierListEntries: visibleListEntries,
     fetching,
     failure,
     isEnriching,
+    detailsPending,
     refetch,
     setInteraction,
   } = usePlaceDetails(placeId);
-  const currentMenu = menuItems.length > 0;
-
-  // ── Action Handlers ────────────────────────────────────────────────
-
-  const handleDirections = () => {
-    if (!placeData) return;
-    const address = placeData.street_address
-      ? `${placeData.street_address}, ${placeData.locality ?? ""}`
-      : placeData.name;
-    window.open(
-      `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(address)}`,
-      "_blank",
-    );
-  };
-
-  const handleCall = () => {
-    const phone = enrichment?.phone ?? placeData?.phone;
-    if (!phone) return;
-    const cleanPhone = phone.replace(/[^\d+]/g, "");
-    window.open(`tel:${cleanPhone}`, "_self");
-  };
-
-  const handleWebsite = () => {
-    const website = enrichment?.website ?? placeData?.website;
-    if (!website) return;
-    let url = website;
-    if (!url.startsWith("http://") && !url.startsWith("https://")) {
-      url = `https://${url}`;
-    }
-    window.open(url, "_blank");
-  };
-
-  const handleShare = async () => {
-    if (!placeData) return;
-    const placeUrl = `${window.location.origin}/places/${placeData.id}`;
-    const shareData = {
-      title: placeData.name,
-      text: `Check out ${placeData.name}${placeData.street_address ? ` at ${placeData.street_address}` : ""}`,
-      url: placeUrl,
-    };
-    try {
-      if (navigator.share && navigator.canShare?.(shareData)) {
-        await navigator.share(shareData);
-      } else if (navigator.clipboard) {
-        await navigator.clipboard.writeText(
-          `${shareData.title}\n${shareData.text}\n${shareData.url}`,
-        );
-        setFeedback({ message: "Link copied to clipboard", color: "success" });
-      }
-    } catch {
-      setFeedback({ message: "Failed to share", color: "danger" });
-    }
-  };
-
-  const handleToggleFavorite = async () => {
-    if (!placeData) return;
-    setIsTogglingFavorite(true);
-    try {
-      const error = await setInteraction({
-        isFavorite: !userInteraction?.is_favorite,
-      });
-      if (error) {
-        setFeedback({
-          message: "Failed to update favorite",
-          color: "danger",
-        });
-      } else {
-        setFeedback({
-          message: userInteraction?.is_favorite
-            ? "Removed from saved"
-            : "Saved",
-          color: "success",
-        });
-      }
-    } catch {
-      setFeedback({ message: "Failed to update favorite", color: "danger" });
-    } finally {
-      setIsTogglingFavorite(false);
-    }
-  };
-
-  const handleMarkVisited = async () => {
-    if (!placeData) return;
-    setIsMarkingVisited(true);
-    const willBeVisited = !userInteraction?.is_visited;
-    try {
-      const error = await setInteraction({ isVisited: willBeVisited });
-      if (error) {
-        setFeedback({
-          message: "Failed to update visited status",
-          color: "danger",
-        });
-      } else {
-        setFeedback({
-          message: willBeVisited ? "Marked as visited" : "Unmarked",
-          color: "success",
-        });
-      }
-    } catch {
-      setFeedback({
-        message: "Failed to update visited status",
-        color: "danger",
-      });
-    } finally {
-      setIsMarkingVisited(false);
-    }
-  };
-
-  // ── Loading / Error ────────────────────────────────────────────────
+  // CC-3: the visible lists include friends' and public ones; Your rank and
+  // On your lists are the viewer's own.
+  const tierListEntries = useOwnListEntries(placeId, visibleListEntries);
+  const { love, visit } = usePlaceToggles({
+    placeId: placeData?.id,
+    loved: !!userInteraction?.is_favorite,
+    visited: !!userInteraction?.is_visited,
+    wantToTry: userInteraction?.want_to_visit === true,
+    setInteraction,
+  });
 
   if (fetching) {
-    return (
-      <Box sx={{ display: "flex", justifyContent: "center", p: 4 }}>
-        <CircularProgress />
-      </Box>
-    );
+    // The route's shell, now with the real hero (X24) — not a spinner.
+    return <PlaceDetailsShell hero={hero} />;
   }
 
-  // "Not found" and "not yours to see" are one state (§1.6).
+  // "Not found" and "not yours to see" are one state (§1.6); any other
+  // failure says it could not open and offers the read again.
   if (failure && failure.code !== "NOT_FOUND") {
     return (
-      <Box sx={{ p: 2 }}>
-        <Alert color="danger">
-          Failed to load place details: {failure.message}
-        </Alert>
-      </Box>
+      <Page>
+        <EmptyState
+          title="Couldn't open this place"
+          description={failure.message}
+          action={
+            <Button variant="outline" onClick={refetch}>
+              Try again
+            </Button>
+          }
+        />
+      </Page>
     );
   }
 
   if (!placeData) {
     return (
-      <Box sx={{ p: 2 }}>
-        <Alert color="warning">Place not found</Alert>
-      </Box>
+      <Page>
+        <EmptyState
+          title="Place not found"
+          description="It's gone, or it isn't yours to see."
+          action={
+            <Button variant="outline" onClick={() => navigate.push("/map")}>
+              Back to the map
+            </Button>
+          }
+        />
+      </Page>
     );
   }
 
   // ── Derived ────────────────────────────────────────────────────────
 
-  // Merge Google enrichment data (Google takes precedence when available)
-  const mergedRating = enrichment?.rating ?? placeData.rating;
-  const mergedPriceLevel = enrichment?.priceLevel ?? placeData.price_level;
-  const mergedPhone = enrichment?.phone ?? placeData.phone;
-  const mergedWebsite = enrichment?.website ?? placeData.website;
+  const rating = enrichment?.rating ?? placeData.rating;
+  const ratingCount = enrichment?.userRatingsTotal ?? placeData.review_count;
+  const priceLevel = enrichment?.priceLevel ?? placeData.price_level;
+  const phone = enrichment?.phone ?? placeData.phone;
+  const website = enrichment?.website ?? placeData.website;
+  const hours = enrichment?.openingHours ?? placeData.hours;
+  const summary = placeData.description ?? enrichment?.editorialSummary ?? null;
+  const closedStatus =
+    enrichment?.businessStatus === "CLOSED_TEMPORARILY" ||
+    enrichment?.businessStatus === "CLOSED_PERMANENTLY"
+      ? enrichment.businessStatus
+      : null;
 
-  const openNow = (() => {
-    const hours = enrichment?.openingHours;
-    if (!hours || typeof hours !== "object") return null;
-    const h = hours as Record<string, unknown>;
-    // Google Places API (New) uses camelCase: openNow
-    if ("openNow" in h) return (h.openNow as boolean) ?? null;
-    // Legacy format uses snake_case: open_now
-    if ("open_now" in h) return (h.open_now as boolean) ?? null;
-    return null;
-  })();
+  const heroCategory: string | undefined =
+    placeData.primary_category ?? placeData.categories[0];
+  const meta = [
+    ...placeData.categories.slice(0, 2).map(formatCategoryName),
+    ...(priceLevel != null ? [getPriceLevelText(priceLevel)] : []),
+  ].join(" · ");
 
-  const MainCategoryIcon = getCategoryIcon(
-    placeData.primary_category ?? placeData.categories[0],
+  const placeUrl =
+    typeof window === "undefined"
+      ? `/places/${placeData.id}`
+      : `${window.location.origin}/places/${placeData.id}`;
+
+  const openList = () => setListModalOpen(true);
+  const overflow: AppBarOverflowItem[] = [
+    { label: "Add to a list", onSelect: openList },
+    { label: "Share", onSelect: () => setShareOpen(true) },
+    {
+      label: "Show on the map",
+      onSelect: () => navigate.push(`/map?placeId=${placeData.id}`),
+    },
+    // F-201: the entry Your rank shows, on one of the viewer's own lists.
+    ...(tierListEntries.length > 0
+      ? [
+          { label: "Change the band", onSelect: () => setEntryMode("band") },
+          {
+            label: "Remove from list",
+            onSelect: () => setEntryMode("remove"),
+            destructive: true,
+          },
+        ]
+      : []),
+  ];
+
+  const heart = (
+    <Heart
+      size="page"
+      on={love.on}
+      onToggle={love.toggle}
+      label={`Love ${placeData.name}`}
+    />
   );
 
-  const fullAddress = [
-    placeData.street_address,
-    placeData.locality,
-    placeData.region,
-    placeData.postcode,
-  ]
-    .filter(Boolean)
-    .join(", ");
+  // ── Sections ───────────────────────────────────────────────────────
 
-  // ── Render ─────────────────────────────────────────────────────────
-
-  return (
-    <Box sx={{ maxWidth: 720, mx: "auto" }}>
-      {/* Hero Header */}
-      <Card sx={{ mb: 3 }}>
-        <CardContent>
-          <Stack direction="row" spacing={2} alignItems="flex-start">
-            <Box
-              sx={{
-                p: 1.5,
-                borderRadius: "md",
-                backgroundColor: "primary.100",
-                color: "primary.600",
-                flexShrink: 0,
-              }}
-            >
-              <MainCategoryIcon size={28} />
-            </Box>
-
-            <Box sx={{ flex: 1, minWidth: 0 }}>
-              <Typography level="h2" sx={{ mb: 0.5 }}>
-                {placeData.name}
-              </Typography>
-              {placeData.display_name &&
-                placeData.display_name !== placeData.name && (
-                  <Typography
-                    level="body-lg"
-                    sx={{ color: "text.secondary", mb: 0.5 }}
-                  >
-                    {placeData.display_name}
-                  </Typography>
-                )}
-
-              {/* Rating / Price / Review count row */}
-              <Stack
-                direction="row"
-                spacing={2}
-                alignItems="center"
-                sx={{ mb: 1, flexWrap: "wrap" }}
-              >
-                {mergedRating != null && (
-                  <Stack direction="row" spacing={0.5} alignItems="center">
-                    <MdStar
-                      size={18}
-                      style={{ color: "var(--joy-palette-warning-400)" }}
-                    />
-                    <Typography level="body-sm" sx={{ fontWeight: "md" }}>
-                      {mergedRating.toFixed(1)}
-                      {(enrichment?.userRatingsTotal ??
-                        placeData.review_count) != null &&
-                        ` (${enrichment?.userRatingsTotal ?? placeData.review_count})`}
-                    </Typography>
-                  </Stack>
-                )}
-                {mergedPriceLevel != null && (
-                  <Typography
-                    level="body-sm"
-                    sx={{ color: "success.600", fontWeight: "md" }}
-                  >
-                    {getPriceLevelText(mergedPriceLevel)}
-                  </Typography>
-                )}
-                {openNow != null && (
-                  <Typography
-                    level="body-sm"
-                    sx={{
-                      color: openNow ? "success.600" : "danger.600",
-                      fontWeight: "md",
-                    }}
-                  >
-                    {openNow ? "Open" : "Closed"}
-                  </Typography>
-                )}
-                {isEnriching && (
-                  <CircularProgress
-                    size="sm"
-                    sx={{ "--CircularProgress-size": "16px" }}
-                  />
-                )}
-                {placeData.is_verified && (
-                  <Chip size="sm" variant="soft" color="success">
-                    Verified
-                  </Chip>
-                )}
-              </Stack>
-
-              {/* Address with map link */}
-              {fullAddress && (
-                <Link
-                  href={`/map?placeId=${placeData.id}`}
-                  style={{ textDecoration: "none" }}
-                >
-                  <Stack
-                    direction="row"
-                    spacing={1}
-                    alignItems="center"
-                    sx={{
-                      cursor: "pointer",
-                      "&:hover .address-text": { color: "primary.500" },
-                    }}
-                  >
-                    <MdMap
-                      size={18}
-                      style={{
-                        color: "var(--joy-palette-primary-500)",
-                        flexShrink: 0,
-                      }}
-                    />
-                    <Typography
-                      className="address-text"
-                      level="body-sm"
-                      sx={{
-                        color: "primary.600",
-                        transition: "color 0.15s",
-                      }}
-                    >
-                      {fullAddress}
-                    </Typography>
-                  </Stack>
-                </Link>
-              )}
-            </Box>
-          </Stack>
-
-          {/* Categories */}
-          {placeData.categories && placeData.categories.length > 0 && (
-            <Stack
-              direction="row"
-              spacing={1}
-              sx={{ mt: 2, flexWrap: "wrap", gap: 1 }}
-            >
-              {placeData.categories.map((category: string) => (
-                <Chip key={category} variant="soft" color="neutral" size="sm">
-                  {formatCategoryName(category)}
-                </Chip>
-              ))}
-            </Stack>
-          )}
-
-          {/* Visit info */}
-          {userInteraction?.last_visited_at && (
-            <Typography level="body-xs" sx={{ mt: 2, color: "text.tertiary" }}>
-              Last visited:{" "}
-              <Timestamp
-                iso={userInteraction.last_visited_at}
-                precision="date"
-              />
-              {userInteraction.visit_count != null &&
-                userInteraction.visit_count > 1 &&
-                ` (${userInteraction.visit_count} visits)`}
-            </Typography>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Business Status Warning */}
-      {enrichment?.businessStatus &&
-        (enrichment.businessStatus === "CLOSED_TEMPORARILY" ||
-          enrichment.businessStatus === "CLOSED_PERMANENTLY") && (
-          <Alert
-            color={
-              enrichment.businessStatus === "CLOSED_PERMANENTLY"
-                ? "danger"
-                : "warning"
-            }
-            sx={{ mb: 3 }}
-          >
-            {enrichment.businessStatus === "CLOSED_PERMANENTLY"
-              ? "This place is permanently closed"
-              : "This place is temporarily closed"}
-          </Alert>
+  const heroBlock = (
+    <div
+      className={cn("relative", !pane && !desktop && "-mt-4")}
+      data-slot="place-hero-block"
+    >
+      <PlaceHero
+        name={placeData.name}
+        category={heroCategory}
+        categoryLabel={meta}
+        photoUrl={googlePhotos[0]?.url}
+        heart={heart}
+        // Desktop 01: the photo is a framed r8 block in its column, no fade.
+        className={cn(
+          desktop &&
+            "mx-0 [&>div:first-child]:h-[360px] [&>div:first-child]:rounded-lg [&>div:first-child>div[aria-hidden]]:hidden [&>div:last-child]:px-0",
         )}
-
-      {/* Google Photo */}
-      {googlePhotos[0]?.url && (
-        <Card sx={{ mb: 3, p: 0, overflow: "hidden" }}>
-          <AspectRatio ratio="16/9">
-            <Image
-              src={googlePhotos[0].url}
-              alt={placeData.name}
-              fill
-              sizes="(max-width: 720px) 100vw, 720px"
-              style={{ objectFit: "cover" }}
-            />
-          </AspectRatio>
-        </Card>
-      )}
-
-      {/* Action Buttons */}
-      <Card sx={{ mb: 3 }}>
-        <CardContent>
-          <Stack spacing={1.5}>
-            <Button
-              variant="solid"
-              color="primary"
-              startDecorator={<MdDirections />}
-              fullWidth
-              onClick={handleDirections}
-            >
-              Directions
-            </Button>
-
-            <Stack direction="row" spacing={1}>
-              <Button
-                variant="outlined"
-                color="neutral"
-                startDecorator={<MdPhone />}
-                disabled={!mergedPhone}
-                sx={{ flex: 1 }}
-                onClick={handleCall}
-              >
-                Call
-              </Button>
-              <Button
-                variant="outlined"
-                color="neutral"
-                startDecorator={<MdLanguage />}
-                disabled={!mergedWebsite}
-                sx={{ flex: 1 }}
-                onClick={handleWebsite}
-              >
-                Website
-              </Button>
-            </Stack>
-
-            <Stack direction="row" spacing={1}>
-              <Button
-                variant={userInteraction?.is_favorite ? "solid" : "outlined"}
-                color={userInteraction?.is_favorite ? "danger" : "neutral"}
-                startDecorator={
-                  userInteraction?.is_favorite ? (
-                    <MdFavorite />
-                  ) : (
-                    <MdFavoriteBorder />
-                  )
-                }
-                onClick={handleToggleFavorite}
-                loading={isTogglingFavorite}
-                disabled={isTogglingFavorite}
-                sx={{ flex: 1 }}
-              >
-                {userInteraction?.is_favorite ? "Saved" : "Save"}
-              </Button>
-              <Button
-                variant={userInteraction?.is_visited ? "solid" : "outlined"}
-                color={userInteraction?.is_visited ? "success" : "neutral"}
-                startDecorator={
-                  userInteraction?.is_visited ? (
-                    <MdCheckCircle />
-                  ) : (
-                    <MdRadioButtonUnchecked />
-                  )
-                }
-                onClick={handleMarkVisited}
-                loading={isMarkingVisited}
-                disabled={isMarkingVisited}
-                sx={{ flex: 1 }}
-              >
-                {userInteraction?.is_visited ? "Visited" : "Mark Visited"}
-              </Button>
-            </Stack>
-
-            <Stack direction="row" spacing={1}>
-              <Button
-                variant="outlined"
-                color="neutral"
-                startDecorator={<MdShare />}
-                sx={{ flex: 1 }}
-                onClick={handleShare}
-              >
-                Share
-              </Button>
-              <Button
-                variant="outlined"
-                color="neutral"
-                startDecorator={<MdFormatListNumbered />}
-                sx={{ flex: 1 }}
-                onClick={() => setTierListModalOpen(true)}
-              >
-                Add to Tier List
-              </Button>
-            </Stack>
-          </Stack>
-        </CardContent>
-      </Card>
-
-      {/* Editorial Summary */}
-      {enrichment?.editorialSummary && (
-        <Card sx={{ mb: 3 }}>
-          <CardContent>
-            <Typography level="body-md" sx={{ fontStyle: "italic" }}>
-              {enrichment.editorialSummary}
-            </Typography>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Contact Info */}
-      {(mergedPhone || mergedWebsite) && (
-        <Card sx={{ mb: 3 }}>
-          <CardContent>
-            <Stack spacing={1.5}>
-              {mergedPhone && (
-                <Stack
-                  direction="row"
-                  spacing={2}
-                  alignItems="center"
-                  sx={{ cursor: "pointer" }}
-                  onClick={handleCall}
-                >
-                  <MdPhone
-                    size={20}
-                    style={{ color: "var(--joy-palette-text-secondary)" }}
-                  />
-                  <Typography level="body-sm" sx={{ color: "primary.500" }}>
-                    {mergedPhone}
-                  </Typography>
-                </Stack>
-              )}
-              {mergedPhone && mergedWebsite && <Divider />}
-              {mergedWebsite && (
-                <Stack
-                  direction="row"
-                  spacing={2}
-                  alignItems="center"
-                  sx={{ cursor: "pointer" }}
-                  onClick={handleWebsite}
-                >
-                  <MdLanguage
-                    size={20}
-                    style={{ color: "var(--joy-palette-text-secondary)" }}
-                  />
-                  <Typography level="body-sm" sx={{ color: "primary.500" }}>
-                    {mergedWebsite
-                      .replace(/^https?:\/\//, "")
-                      .replace(/\/$/, "")}
-                  </Typography>
-                </Stack>
-              )}
-            </Stack>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Tier lists this place belongs to (G8: visible lists only) */}
-      <Box sx={{ mb: 3 }}>
-        <ItemTierLists entries={tierListEntries} />
-      </Box>
-
-      {/* Google Attribution (the Places terms require the blocks too) */}
-      <GoogleAttribution
-        enrichment={enrichment}
-        photos={googlePhotos.slice(0, 1)}
       />
+      {!pane && !desktop && (
+        <AppBar tone="photo" parent="/map" overflow={overflow} />
+      )}
+    </div>
+  );
 
-      {/* Content tabs */}
-      <Card>
-        <Tabs
-          value={activeTab}
-          onChange={(_, value) => setActiveTab(value as number)}
-        >
-          <TabList>
-            <Tab>
-              Menu
-              {menuItems.length > 0 && (
-                <Chip size="sm" variant="soft" color="primary" sx={{ ml: 1 }}>
-                  {menuItemCount}
-                </Chip>
+  const intro = (summary !== null ||
+    isEnriching ||
+    detailsPending ||
+    placeData.display_name) && (
+    <div className="flex flex-col gap-1">
+      {placeData.display_name && placeData.display_name !== placeData.name && (
+        <p className="t-body text-ink-2">{placeData.display_name}</p>
+      )}
+      {summary !== null && <p className="t-body text-ink-2">{summary}</p>}
+      {/* N22: capped at 8 s, then a calm line rather than a spinner */}
+      {isEnriching && (
+        <p className="t-cap inline-flex items-center gap-2 text-ink-2">
+          <Spinner aria-hidden className="size-4" />
+          Loading details
+        </p>
+      )}
+      {!isEnriching && detailsPending && (
+        <p className="t-cap text-ink-2">Details pending</p>
+      )}
+    </div>
+  );
+
+  const closedNotice = closedStatus && (
+    <div
+      role="status"
+      data-slot="place-closed"
+      className="t-body flex items-center gap-3 rounded-lg bg-surface-1 p-4 text-ink"
+    >
+      <Warning
+        aria-hidden
+        strokeWidth={ICON_STROKE}
+        className={cn(
+          "size-5 shrink-0",
+          closedStatus === "CLOSED_PERMANENTLY" ? "text-danger" : "text-glyph",
+        )}
+      />
+      {closedStatus === "CLOSED_PERMANENTLY"
+        ? "This place is permanently closed"
+        : "This place is temporarily closed"}
+    </div>
+  );
+
+  const rank = (
+    <PlaceRankBlock
+      entries={tierListEntries}
+      rating={rating}
+      ratingCount={ratingCount}
+      onAddToList={openList}
+    />
+  );
+
+  const actionsRow = (
+    <PlaceActionsRow
+      placeId={placeData.id}
+      placeName={placeData.name}
+      visited={visit}
+      wantToTry={userInteraction?.want_to_visit ?? false}
+      onShare={() => setShareOpen(true)}
+    />
+  );
+
+  const lastVisited = userInteraction?.last_visited_at && (
+    <p className="t-cap text-ink-2">
+      Last visited{" "}
+      <Timestamp iso={userInteraction.last_visited_at} precision="date" />
+      {userInteraction.visit_count != null &&
+        userInteraction.visit_count > 1 &&
+        ` · ${userInteraction.visit_count} visits`}
+    </p>
+  );
+
+  const hasMenu = menuItems.length > 0;
+  const menuCard = (
+    <PlaceCard
+      label="Menu"
+      data-slot="place-menu"
+      action={
+        hasMenu ? (
+          <span className="t-cap tabular text-ink-2">{menuItemCount}</span>
+        ) : undefined
+      }
+    >
+      {hasMenu && (
+        <PlaceMenuItems
+          placeId={placeData.id}
+          placeName={placeData.name}
+          userId={userId}
+          onChanged={refetch}
+          menuItems={menuItems}
+          hasMore={hasMoreMenuItems}
+          loadingMore={loadingMoreMenuItems}
+          loadMoreError={menuLoadMoreError}
+          onLoadMore={loadMoreMenuItems}
+        />
+      )}
+      {menuScanOffered ? (
+        <MenuScanner
+          placeId={placeData.id}
+          userId={userId}
+          // Fires once the scan's match run has settled, by which time its
+          // lines are filed on this place (N06a).
+          onScanComplete={refetch}
+          idle={(start) => (
+            <div
+              className={cn(
+                "flex items-center gap-3",
+                hasMenu ? "justify-end" : "justify-between",
               )}
-            </Tab>
-            <Tab>Camera Scan</Tab>
-            <Tab>Info</Tab>
-          </TabList>
+            >
+              {!hasMenu && <p className="t-body text-ink-2">No menu yet</p>}
+              <Button variant="outline" onClick={start}>
+                <Camera aria-hidden strokeWidth={ICON_STROKE} />
+                Scan a menu
+              </Button>
+            </div>
+          )}
+        />
+      ) : (
+        !hasMenu && <p className="t-body text-ink-2">No menu yet</p>
+      )}
+    </PlaceCard>
+  );
 
-          <TabPanel value={0}>
-            {currentMenu ? (
-              <PlaceMenuItems
-                placeId={placeData.id}
-                userId={userId}
-                menuItems={menuItems}
-                hasMore={hasMoreMenuItems}
-                loadingMore={loadingMoreMenuItems}
-                loadMoreError={menuLoadMoreError}
-                onLoadMore={loadMoreMenuItems}
-              />
-            ) : (
-              <Box sx={{ textAlign: "center", py: 4 }}>
-                <MdRestaurant
-                  size={48}
-                  style={{
-                    color: "var(--joy-palette-text-tertiary)",
-                    marginBottom: 16,
-                  }}
-                />
-                <Typography level="title-lg" sx={{ mb: 1 }}>
-                  No menu discovered yet
-                </Typography>
-                <Typography level="body-md" sx={{ color: "text.secondary" }}>
-                  Scan a menu at this location using the &quot;Camera Scan&quot;
-                  tab above.
-                </Typography>
-              </Box>
-            )}
-          </TabPanel>
+  const info = <PlaceInfoCard hours={hours} phone={phone} website={website} />;
 
-          <TabPanel value={1}>
-            <MenuScanner
-              placeId={placeData.id}
-              userId={userId}
-              onScanComplete={() => refetch()}
-            />
-          </TabPanel>
+  const review = (
+    // X27 / D28: the creator's review state, controls and suggestions.
+    <PlaceReviewPanel
+      placeId={placeData.id}
+      placeName={placeData.name}
+      status={placeData.review_status}
+      rejectionReason={placeData.rejection_reason}
+      categories={placeData.categories}
+      description={placeData.description}
+      suggestedCategories={placeData.suggested_categories}
+      suggestedDescription={placeData.suggested_description}
+      refetch={refetch}
+    />
+  );
 
-          <TabPanel value={2}>
-            <Stack spacing={2}>
-              {(enrichment?.openingHours ?? placeData.hours) != null && (
-                <Card variant="outlined">
-                  <CardContent>
-                    <Typography
-                      level="title-md"
-                      startDecorator={<MdSchedule />}
-                    >
-                      Hours
-                    </Typography>
-                    <HoursDisplay
-                      hours={enrichment?.openingHours ?? placeData.hours}
-                    />
-                  </CardContent>
-                </Card>
-              )}
+  const footer = (
+    // The Places terms require Google's blocks wherever its data shows.
+    <GoogleAttribution
+      enrichment={enrichment}
+      photos={googlePhotos.slice(0, 1)}
+      className="mb-0 text-center"
+    />
+  );
 
-              <Card variant="outlined">
-                <CardContent>
-                  <Typography level="title-md">Details</Typography>
-                  <Stack spacing={1} sx={{ mt: 1 }}>
-                    {placeData.primary_category && (
-                      <Typography level="body-sm">
-                        <strong>Primary Category:</strong>{" "}
-                        {formatCategoryName(placeData.primary_category)}
-                      </Typography>
-                    )}
-                    {placeData.categories &&
-                      placeData.categories.length > 0 && (
-                        <Typography level="body-sm">
-                          <strong>Categories:</strong>{" "}
-                          {placeData.categories
-                            .map((c: string) => formatCategoryName(c))
-                            .join(", ")}
-                        </Typography>
-                      )}
-                    {placeData.confidence != null && (
-                      <Typography level="body-sm">
-                        <strong>Data Confidence:</strong>{" "}
-                        {(placeData.confidence * 100).toFixed(0)}%
-                      </Typography>
-                    )}
-                    {mergedPriceLevel != null && (
-                      <Typography level="body-sm">
-                        <strong>Price Level:</strong>{" "}
-                        {"$".repeat(mergedPriceLevel)}
-                      </Typography>
-                    )}
-                    {placeData.is_verified && (
-                      <Typography level="body-sm">
-                        <strong>Verified:</strong> Yes
-                      </Typography>
-                    )}
-                  </Stack>
-                </CardContent>
-              </Card>
-            </Stack>
-          </TabPanel>
-        </Tabs>
-      </Card>
-
-      {/* Feedback Snackbar */}
-      <Snackbar
-        open={feedback !== null}
-        autoHideDuration={3000}
-        onClose={() => setFeedback(null)}
-        color={feedback?.color ?? "neutral"}
-        variant="soft"
-        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
-      >
-        {feedback?.message}
-      </Snackbar>
-
-      {/* Add to Tier List Modal */}
+  const overlays = (
+    <>
+      <ShareSheet
+        open={shareOpen}
+        onOpenChange={setShareOpen}
+        title={placeData.name}
+        url={placeUrl}
+      />
       <AddToTierListModal
-        open={tierListModalOpen}
-        onClose={() => setTierListModalOpen(false)}
+        open={listModalOpen}
+        onClose={() => setListModalOpen(false)}
         entityId={placeData.id}
         entityType="place"
         entityName={placeData.name}
         userId={userId}
       />
-    </Box>
+      <PlaceEntryEdit
+        placeName={placeData.name}
+        own={tierListEntries}
+        mode={entryMode}
+        onModeChange={setEntryMode}
+        onChanged={refetch}
+      />
+    </>
+  );
+
+  if (!desktop) {
+    // A phone, and the pane at any width: one column.
+    return (
+      <Page>
+        {/* F-35: the summary follows the hero's own meta line, not the
+            page's 24 px section gap on top of the hero's padding. */}
+        <div data-slot="place-head" className="flex flex-col">
+          {heroBlock}
+          {intro}
+        </div>
+        {review}
+        {closedNotice}
+        {rank}
+        <PlaceWhereCard place={placeData} />
+        {actionsRow}
+        {lastVisited}
+        <PlaceListsCard entries={tierListEntries} />
+        {menuCard}
+        {info}
+        {footer}
+        {overlays}
+      </Page>
+    );
+  }
+
+  return (
+    <Page wide>
+      {/* Desktop 01: the page's own bar — Map crumbs, Share, ⋯. */}
+      <AppBar
+        parent="/map"
+        breadcrumbs={[
+          { label: "Map", href: "/map" },
+          { label: placeData.name },
+        ]}
+        actions={[
+          { label: "Share", icon: Share, onSelect: () => setShareOpen(true) },
+        ]}
+        overflow={overflow.filter((item) => item.label !== "Share")}
+      />
+      <div className="grid grid-cols-[minmax(0,1fr)_400px] items-start gap-6">
+        <div className="flex min-w-0 flex-col gap-4">
+          {heroBlock}
+          {intro}
+          {menuCard}
+          {info}
+        </div>
+        <aside className="flex flex-col gap-4">
+          {review}
+          {closedNotice}
+          <PlaceCard>{rank}</PlaceCard>
+          <PlaceWhereCard place={placeData}>
+            <PlaceActionsRow
+              placeId={placeData.id}
+              placeName={placeData.name}
+              visited={visit}
+              wantToTry={userInteraction?.want_to_visit ?? false}
+              onShare={() => setShareOpen(true)}
+              share={false}
+            />
+            {lastVisited}
+          </PlaceWhereCard>
+          <PlaceListsCard entries={tierListEntries} />
+        </aside>
+      </div>
+      {footer}
+      {overlays}
+    </Page>
   );
 }

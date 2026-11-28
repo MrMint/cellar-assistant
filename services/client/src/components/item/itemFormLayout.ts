@@ -28,11 +28,18 @@ import type { ApiItemType } from "@/components/cellar-api/itemTypes";
 import {
   type AttributeField,
   ITEM_FORM_RULES,
+  isNonVintageText,
+  NON_VINTAGE,
 } from "@/components/item-api/itemFormRules";
 
 export type FormEntry =
   | { kind: "name"; label: string }
-  | { kind: "description"; label: string }
+  | {
+      kind: "description";
+      label: string;
+      /** `descriptionRequired` — no type since X19 dropped coffee's NOT NULL. */
+      required?: boolean;
+    }
   | { kind: "country"; label: string }
   | {
       kind: "attribute";
@@ -146,20 +153,34 @@ const LABELS = {
   country: "Country",
 } as const;
 
+/** The `react-hook-form` path an entry edits (`name`, `attributes.vintage`). */
+export const entryPath = (entry: FormEntry): string =>
+  entry.kind === "attribute" ? `attributes.${entry.field.key}` : entry.kind;
+
 /** The form's entries for one type, old order and labels. */
 export const formLayout = (
   type: ApiItemType,
   mode: FormMode = "edit",
 ): FormEntry[] =>
   ORDER[type].map((spec): FormEntry => {
+    if (spec === "description") {
+      return {
+        kind: spec,
+        label: LABELS[spec],
+        required: ITEM_FORM_RULES[type].descriptionRequired,
+      };
+    }
     if (typeof spec === "string") return { kind: spec, label: LABELS[spec] };
     const [key, label, multiline] = spec;
     const field = ITEM_FORM_RULES[type].attributes.find((f) => f.key === key);
     if (field === undefined) {
       throw new Error(`itemFormLayout: ${type} has no attribute ${key}`);
     }
+    // X19: a non-vintage-capable field is starred in both forms — the column
+    // is nullable, but NULL means "NV", so the form asks for a year or NV.
     const required =
       field.required === true ||
+      field.nonVintage === true ||
       (mode === "create" && (CREATE_REQUIRED[type] ?? []).includes(key));
     return { kind: "attribute", label, field, multiline, required };
   });
@@ -171,6 +192,7 @@ export const formLayout = (
  * which case the stored date is kept as it was rather than rounded to 1 Jan.
  */
 export const yearFromDate = (date: string): string => {
+  if (isNonVintageText(date)) return NON_VINTAGE;
   const year = date.slice(0, 4);
   return /^\d{4}$/.test(year) ? year : "";
 };
@@ -178,6 +200,39 @@ export const yearFromDate = (date: string): string => {
 export const dateFromYear = (year: string, original: string): string => {
   const trimmed = year.trim();
   if (trimmed === "") return "";
+  // X19: "NV" stays "NV" — `attributesToSave` sends it as `null`.
+  if (isNonVintageText(trimmed)) return NON_VINTAGE;
   if (yearFromDate(original) === trimmed) return original;
   return /^\d{4}$/.test(trimmed) ? `${trimmed}-01-01` : trimmed;
 };
+
+/** "alcohol_content_percentage" and "alcoholContentPercentage" alike. */
+const fieldWord = (key: string): string =>
+  key.replace(/[_\s-]/g, "").toLowerCase();
+
+/**
+ * C3 "Check this" (CROSS-LOT): `Item.unconfirmedFields` names the fields the
+ * label read guessed and nobody confirmed (`name`, `brandName`, `country`, or
+ * an attribute key). This maps them to the form's own paths, in the form's
+ * order, keeping only the fields the form shows; `brandName` only when the
+ * form has a brand field.
+ */
+export const checkPaths = (
+  unconfirmed: readonly string[],
+  layout: readonly FormEntry[],
+  withBrand: boolean,
+): string[] => {
+  const wanted = new Set(unconfirmed.map(fieldWord));
+  // The brand field sits right after the description (ItemForm's order).
+  const shown = layout.flatMap((entry) =>
+    withBrand && entry.kind === "description"
+      ? [entryPath(entry), "brandName"]
+      : [entryPath(entry)],
+  );
+  return shown.filter((path) =>
+    wanted.has(fieldWord(path.replace(/^attributes\./, ""))),
+  );
+};
+
+/** "1 to check", "3 to check" (CROSS-LOT: the counter beside the primary). */
+export const toCheckLabel = (count: number): string => `${count} to check`;

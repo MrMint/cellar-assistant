@@ -12,17 +12,17 @@ import {
   apiActivityKinds,
   barcodeSearchHref,
   collectionStatsLine,
+  DELETED_RECIPE_NAME,
   imageSearchHref,
   MAX_BARCODE_LENGTH,
   nearbyPlacesFromNodes,
+  searchPageTitle,
   searchResultFromCard,
   searchResultsFromNodes,
   searchStateFromParams,
 } from "./adapter";
 import {
   BARCODE_SEARCH_LIMIT,
-  ITEM_SEARCH_LIMIT,
-  ITEM_SEARCH_MAX_DISTANCE,
   NEARBY_PLACES_LIMIT,
   RECENT_ACTIVITY_CAP,
   RECENT_ACTIVITY_PER_KIND,
@@ -30,20 +30,20 @@ import {
 
 const zero = { wine: 0, beer: 0, spirit: 0, coffee: 0, sake: 0, tea: 0 };
 
-describe("collectionStatsLine (the old CollectionStats copy)", () => {
+describe("collectionStatsLine (bottles still in the cellar, D13)", () => {
   test("nothing yet", () => {
     assert.equal(
       collectionStatsLine({ cellarCount: 2, itemCounts: zero }),
       "Your collection awaits. Start by adding your first item.",
     );
   });
-  test("one item, one cellar", () => {
+  test("one bottle, one cellar", () => {
     assert.equal(
       collectionStatsLine({
         cellarCount: 1,
         itemCounts: { ...zero, sake: 1 },
       }),
-      "1 item across 1 cellar",
+      "1 bottle in your cellar",
     );
   });
   test("the six types are summed, sake and tea included", () => {
@@ -52,8 +52,28 @@ describe("collectionStatsLine (the old CollectionStats copy)", () => {
         cellarCount: 3,
         itemCounts: { wine: 4, beer: 1, spirit: 2, coffee: 1, sake: 1, tea: 1 },
       }),
-      "10 items across 3 cellars",
+      "10 bottles in your 3 cellars",
     );
+  });
+});
+
+describe("X21: /search's title", () => {
+  const title = (params: Record<string, string>) =>
+    searchPageTitle(searchStateFromParams(params));
+
+  test("the empty sheet is Search", () => {
+    assert.equal(title({}), "Search");
+    assert.equal(title({ q: "   " }), "Search");
+  });
+
+  test("an active search names what it searches for", () => {
+    assert.equal(title({ q: " barolo " }), "Search: barolo");
+    assert.equal(title({ barcode: "012345678905" }), "Barcode 012345678905");
+    assert.equal(
+      title({ image: "3F2504E0-4F89-11D3-9A0C-0305E82C3301" }),
+      "Photo search",
+    );
+    assert.equal(title({ image_no_results: "true" }), "Photo search");
   });
 });
 
@@ -86,6 +106,9 @@ describe("searchStateFromParams (the old hasActiveSearch)", () => {
   test("an implausibly long code is ignored, not sent", () => {
     const long = "1".repeat(MAX_BARCODE_LENGTH + 1);
     assert.equal(searchStateFromParams({ barcode: long }).barcode, null);
+    // `%00` failed the lookup and crashed the page (UX lane, 2026-10-08).
+    assert.equal(searchStateFromParams({ barcode: "\u0000" }).barcode, null);
+    assert.equal(searchStateFromParams({ barcode: "12\u001f3" }).barcode, null);
   });
   test("?image= carries an uploaded photo's file id, not result rows (G32)", () => {
     const id = "0B5F8C2E-9D61-4C7A-8F0E-3A1B2C4D5E6F";
@@ -130,6 +153,7 @@ describe("barcodeSearchHref", () => {
   });
   test("blank and over-long codes go nowhere", () => {
     assert.equal(barcodeSearchHref("  "), null);
+    assert.equal(barcodeSearchHref("123\u0000"), null);
     assert.equal(barcodeSearchHref("9".repeat(MAX_BARCODE_LENGTH + 1)), null);
   });
   test("round-trips through searchStateFromParams", () => {
@@ -183,10 +207,7 @@ describe("searchResultFromCard", () => {
   });
 });
 
-test("limits match the old page and stay inside the API's caps", () => {
-  assert.equal(ITEM_SEARCH_LIMIT, 10, "text_search(limit: 10)");
-  assert.ok(ITEM_SEARCH_LIMIT >= 1 && ITEM_SEARCH_LIMIT <= 50);
-  assert.equal(ITEM_SEARCH_MAX_DISTANCE, 1, "distance: { _lte: 1 }");
+test("limits stay inside the API's caps", () => {
   assert.ok(BARCODE_SEARCH_LIMIT >= 1 && BARCODE_SEARCH_LIMIT <= 100);
 });
 
@@ -206,11 +227,10 @@ describe("activityKindsFromParams (the old ?activity= parse)", () => {
     );
   });
   test("maps to the API's enum", () => {
-    assert.deepEqual(apiActivityKinds(["added", "reviewed", "tier-listed"]), [
-      "ADDED",
-      "REVIEWED",
-      "TIER_LISTED",
-    ]);
+    assert.deepEqual(
+      apiActivityKinds(["added", "reviewed", "tier-listed", "drank"]),
+      ["ADDED", "REVIEWED", "TIER_LISTED", "CHECKED_IN"],
+    );
   });
 });
 
@@ -282,6 +302,11 @@ describe("activityEntryFromNode (the old buildActivityFeed's extractors)", () =>
       userId: "u2",
       userName: "Fran Friend",
       userAvatar: null,
+      // X08: a friend's row carries the bookmark for what they drank.
+      save: {
+        target: { kind: "ITEM", itemType: "WINE", itemId: "w1" },
+        saved: false,
+      },
       score: 4.5,
       // Through the shared `richTextFromReviewText`: the rewrite's
       // `{ body }` shape becomes a Lexical state, which RichTextDisplay needs.
@@ -356,6 +381,98 @@ describe("activityEntryFromNode (the old buildActivityFeed's extractors)", () =>
     }
   });
 
+  test("a drink logged (X02): the log's score, note, who with and where", () => {
+    const result = activityEntryFromNode(
+      entry({
+        id: "CHECKED_IN:l1",
+        kind: "CHECKED_IN",
+        review: null,
+        checkIn: {
+          __typename: "ItemCheckIn",
+          id: "l1",
+          score: 4,
+          note: "dark cherry",
+          tags: ["cherry"],
+          companionIds: ["u1"],
+          place: {
+            __typename: "Place",
+            id: "p1",
+            name: "corner bar",
+            displayName: "The Corner Bar",
+          },
+          companions: {
+            edges: [
+              {
+                node: {
+                  __typename: "UserProfile",
+                  id: "u1",
+                  displayName: "Sam",
+                },
+              },
+            ],
+          },
+        },
+      }),
+    );
+    assert.equal(result?.kind, "drank");
+    assert.equal(result?.id, "drank-l1");
+    assert.equal(result?.itemHref, "/wines/w1");
+    if (result?.kind === "drank") {
+      assert.equal(result.score, 4);
+      assert.equal(result.note, "dark cherry");
+      assert.deepEqual(result.tags, ["cherry"]);
+      assert.equal(result.context, "with Sam · at The Corner Bar");
+    }
+    // A log the server nulled (no longer visible) drops the row.
+    assert.equal(
+      activityEntryFromNode(
+        entry({ kind: "CHECKED_IN", review: null, checkIn: null }),
+      ),
+      null,
+    );
+  });
+
+  test("a recipe-only Made-it log (H-12): the recipe stands for the item", () => {
+    const log = (recipe: { id: string; name: string } | null) => ({
+      __typename: "ItemCheckIn",
+      id: "l2",
+      score: 4,
+      note: null,
+      tags: [],
+      companionIds: [],
+      place: null,
+      companions: { edges: [] },
+      recipe: recipe === null ? null : { __typename: "Recipe", ...recipe },
+    });
+    const made = activityEntryFromNode(
+      entry({
+        id: "CHECKED_IN:l2",
+        kind: "CHECKED_IN",
+        item: null,
+        review: null,
+        checkIn: log({ id: "r9", name: "Negroni" }),
+      }),
+    );
+    assert.equal(made?.kind, "drank");
+    assert.equal(made?.id, "drank-l2");
+    assert.equal(made?.itemName, "Negroni");
+    assert.equal(made?.itemType, "RECIPE");
+    assert.equal(made?.itemHref, "/recipes/r9");
+    assert.equal(made?.save, null, "a recipe is not a want-to-try target");
+    if (made?.kind === "drank") assert.equal(made.score, 4);
+    // Its recipe since deleted: named so, linking nowhere.
+    const gone = activityEntryFromNode(
+      entry({
+        kind: "CHECKED_IN",
+        item: null,
+        review: null,
+        checkIn: log(null),
+      }),
+    );
+    assert.equal(gone?.itemName, DELETED_RECIPE_NAME);
+    assert.equal(gone?.itemHref, "");
+  });
+
   test("an edge the server nulled (list no longer visible) drops the row", () => {
     assert.equal(
       activityEntryFromNode(
@@ -373,6 +490,67 @@ describe("activityEntryFromNode (the old buildActivityFeed's extractors)", () =>
       null,
     );
     assert.equal(activityEntryFromNode(entry({ item: null })), null);
+  });
+});
+
+describe("the Save target on activity rows (X08)", () => {
+  test("an item row saves the item, with its state", () => {
+    const result = activityEntryFromNode(
+      entry({
+        item: {
+          __typename: "Beer",
+          id: "b9",
+          type: "BEER",
+          name: "Hazy",
+          isWantToTry: true,
+          images: { edges: [] },
+        },
+      }),
+    );
+    assert.deepEqual(result?.save, {
+      target: { kind: "ITEM", itemType: "BEER", itemId: "b9" },
+      saved: true,
+    });
+  });
+
+  test("a tier-listed place saves the place (its wantToVisit)", () => {
+    const result = activityEntryFromNode(
+      entry({
+        kind: "TIER_LISTED",
+        rank: 1,
+        item: null,
+        review: null,
+        place: {
+          __typename: "Place",
+          id: "p1",
+          name: "Corner Bar",
+          displayName: null,
+          myInteraction: {
+            __typename: "PlaceInteraction",
+            id: "i1",
+            wantToVisit: true,
+          },
+          photos: { edges: [] },
+        },
+        tierListItem: {
+          __typename: "TierListItem",
+          id: "t1",
+          tierListId: "l1",
+          tierList: { __typename: "TierList", id: "l1", name: "Best bars" },
+        },
+      }),
+    );
+    assert.deepEqual(result?.save, {
+      target: { kind: "PLACE", placeId: "p1" },
+      saved: true,
+    });
+  });
+
+  test("the viewer's own rows carry no bookmark", () => {
+    const feed = activityFeedFromNodes([entry({})], "u2");
+    assert.equal(feed[0]?.save, null);
+    const others = activityFeedFromNodes([entry({})], "someone-else");
+    assert.notEqual(others[0]?.save, null);
   });
 });
 

@@ -15,7 +15,7 @@
  * The row is also four small fields. Even if a per-check-in actor existed, an
  * id round trip would cost more than the row it fetched.
  *
- * ## Visibility: `canSeeCheckIn`, exactly as A4 wrote it — settled by B1
+ * ## Visibility: `canSeeCheckIn` — settled by B1, widened for X02
  *
  * §1.6 splits the two check-in surfaces and gives them different rules on
  * purpose:
@@ -29,10 +29,16 @@
  * >   cellar, and its answer names the drinker rather than where the bottle sat.
  * >   **C3 keeps `canSeeCheckIn` as A4 wrote it.**
  *
- * So the predicate below is `canSeeCheckIn`, branch for branch — author, then
- * friend-of-author, then `canSeeCellar` — and `packages/policy` is untouched.
- * `check-ins-collection-actor.test.ts` asserts the SQL and the policy function
- * agree for author / friend-of-author / stranger.
+ * So the predicate below is `canSeeCheckIn`, branch for branch — author,
+ * companion, friend-of-author, then `canSeeCellar` for an entry still poured
+ * from a bottle (`lib/check-in-visibility.ts`). X02 made the bottle optional:
+ * an entry logged without one (or whose bottle was since removed) has no
+ * cellar branch at all, and the item is read off the entry's own arc rather
+ * than through `cellar_items`. `check-ins-collection-actor.test.ts` asserts
+ * the SQL and the policy function agree.
+ *
+ * `scope: "MINE"` is the item page's "Your log" (D8): only entries about the
+ * viewer. The default, `"ALL"`, is the C3 surface.
  *
  * **`cellarItemId` is deliberately not in the result.** `CheckInDto` carries it
  * because you asked by cellar; here you asked by item, and echoing it back
@@ -44,36 +50,39 @@ import type {
   CheckInsCollectionActorInterface,
   Ctx,
   ItemCheckInDto,
+  ItemCheckInScope,
   ItemRef,
   Page,
   PageArgs,
 } from "@cellar-assistant/contracts";
 import {
   CheckInsCollectionActorDescriptor,
+  ITEM_CHECK_IN_SCOPES,
   isItemType,
   mapPage,
   ValidationError,
 } from "@cellar-assistant/contracts";
 import { sql } from "@cellar-assistant/db/orm";
+import {
+  type CheckInSqlRow,
+  checkInColumns,
+  toItemCheckInDto,
+} from "../lib/check-in-rows.ts";
+import {
+  canSeeCheckInDetailsSql,
+  canSeeCheckInSql,
+} from "../lib/check-in-visibility.ts";
 import type { KeysetCursor, PageScope } from "../lib/collection-actor-base.ts";
 import { ViewerCollectionActorBase } from "../lib/collection-actor-base.ts";
 import {
   keysetOrder,
   keysetWhere,
   requireUuidValue,
-  toIso,
-  uuidArray,
 } from "../lib/collection-sql.ts";
 import { ARCS } from "../lib/item-arcs.ts";
-import { canSeeSql, visibilityScope } from "../lib/visibility-sql.ts";
+import { visibilityScope } from "../lib/visibility-sql.ts";
 
-type CheckInRow = {
-  readonly id: string;
-  readonly user_id: string;
-  readonly created_at: Date | string;
-  readonly updated_at: Date | string;
-  readonly sort_key: string;
-};
+type CheckInRow = CheckInSqlRow & { readonly sort_key: string };
 
 const SORT = sql`ci.created_at`;
 const ID = sql`ci.id`;
@@ -89,23 +98,19 @@ export class CheckInsCollectionActor
     ctx: Ctx,
     item: ItemRef,
     page: PageArgs,
+    scope?: ItemCheckInScope | null,
   ): Promise<Page<ItemCheckInDto>> {
+    const which = requireScope(scope);
     return mapPage(
       await this.paged<CheckInRow>(
         ctx,
         item,
         page,
-        (after, limit) => this.#read(ctx, item, after, limit),
+        (after, limit) => this.#read(ctx, item, which, after, limit),
         (row) => ({ sort: row.sort_key, id: row.id }),
-        () => this.#scope(ctx, item),
+        () => this.#scope(ctx, item, which),
       ),
-      (row): ItemCheckInDto => ({
-        id: row.id,
-        userId: row.user_id,
-        item,
-        createdAt: toIso(row.created_at) ?? "",
-        updatedAt: toIso(row.updated_at) ?? "",
-      }),
+      (row): ItemCheckInDto => toItemCheckInDto(row, ctx.viewerId),
     );
   }
 
@@ -128,33 +133,43 @@ export class CheckInsCollectionActor
   }
 
   /**
-   * Shared by the page and its `count(*)` — see `PageScope`. Both joins belong
-   * to the scope rather than to the `select`, because the visibility clause
-   * reads `c.privacy` and `cellar_owners`: a count that dropped them would
-   * count rows this viewer may not see.
+   * Shared by the page and its `count(*)` — see `PageScope`. The visibility
+   * clause reads the bottle's cellar through its own `exists`, so a count
+   * over this scope counts exactly the rows the page could show.
    */
-  async #scope(ctx: Ctx, item: ItemRef): Promise<PageScope> {
+  async #scope(
+    ctx: Ctx,
+    item: ItemRef,
+    which: ItemCheckInScope,
+  ): Promise<PageScope> {
     // `authorize` has already refused any type that is not an `ItemType`;
     // the arc renders its column through `sql.identifier`, never `sql.raw`.
-    const column = ARCS.cellarItems.column(item.type, "it");
-    const visible = await this.#visibilityClause(ctx);
+    const column = ARCS.checkIns.column(item.type, "ci");
+    const visible = canSeeCheckInSql(await visibilityScope(this.db, ctx), "ci");
+    const mine =
+      which === "MINE" && ctx.viewerId !== null
+        ? sql` and ci.user_id = ${ctx.viewerId}::uuid`
+        : which === "MINE"
+          ? sql` and false`
+          : sql``;
     return {
-      from: sql`public.check_ins ci
-      join public.cellar_items it on it.id = ci.cellar_item_id
-      join public.cellars c on c.id = it.cellar_id`,
-      where: sql`${column} = ${item.id}::uuid and ${visible}`,
+      from: sql`public.check_ins ci`,
+      where: sql`${column} = ${item.id}::uuid and ${visible}${mine}`,
     };
   }
 
   async #read(
     ctx: Ctx,
     item: ItemRef,
+    which: ItemCheckInScope,
     after: KeysetCursor | null,
     limit: number,
   ): Promise<readonly CheckInRow[]> {
-    const { from, where } = await this.#scope(ctx, item);
+    const { from, where } = await this.#scope(ctx, item, which);
+    const scope = await visibilityScope(this.db, ctx);
+    const details = canSeeCheckInDetailsSql(scope, "ci");
     const { rows } = await this.db.execute<CheckInRow>(sql`
-      select ci.id, ci.user_id, ci.created_at, ci.updated_at,
+      select ${checkInColumns("ci", details, scope)},
              (ci.created_at)::text as sort_key
       from ${from}
       where ${where}
@@ -164,28 +179,16 @@ export class CheckInsCollectionActor
     `);
     return rows;
   }
-
-  /**
-   * `canSeeCheckIn` (`packages/policy`), branch for branch:
-   *
-   *   1. the viewer wrote it (`isOwner(ctx, check_ins.user_id)`);
-   *   2. the viewer is a friend of whoever it is about;
-   *   3. otherwise `canSeeCellar` on the cellar holding the `cellar_items` row
-   *      — which is what keeps a co-owner's own history visible to them here.
-   */
-  async #visibilityClause(ctx: Ctx) {
-    const scope = await visibilityScope(this.db, ctx);
-    const cellar = canSeeSql(scope, {
-      createdBy: sql`c.created_by_id`,
-      privacy: sql`c.privacy`,
-      coOwnedCellarId: sql`c.id`,
-    });
-    // Branch 0 (`true` / `false`) needs nothing added.
-    if (scope.kind !== "viewer") return cellar;
-    return sql`(
-      ci.user_id = ${scope.viewer}::uuid
-      or ci.user_id = any(${uuidArray(scope.friendIds, "friendId")})
-      or ${cellar}
-    )`;
-  }
 }
+
+const requireScope = (
+  scope: ItemCheckInScope | null | undefined,
+): ItemCheckInScope => {
+  const value = scope ?? "ALL";
+  if (!(ITEM_CHECK_IN_SCOPES as readonly string[]).includes(value)) {
+    throw new ValidationError(
+      `unknown check-in scope ${JSON.stringify(value)}`,
+    );
+  }
+  return value;
+};

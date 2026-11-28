@@ -13,7 +13,12 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import type { ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { stripStyleBlocks, stripTags } from "@/test-support/markup";
 
+mock.module("next/navigation", () => ({
+  useRouter: () => ({ push: () => {}, refresh: () => {} }),
+  usePathname: () => "/search",
+}));
 mock.module("next/image", () => ({
   default: (props: { alt: string }) => (
     <span data-next-image="art" data-alt={props.alt} />
@@ -25,6 +30,7 @@ const asked: unknown[] = [];
 mock.module("@/lib/api/urql-server", () => ({
   apiServerQuery: async (_document: unknown, variables: unknown) => {
     asked.push(variables);
+    if (answer instanceof Error) throw answer;
     return { itemSearch: answer };
   },
 }));
@@ -34,10 +40,12 @@ const { ServerImageResults } = await import("./ServerImageResults");
 const FILE = "0b5f8c2e-9d61-4c7a-8f0e-3a1b2c4d5e6f";
 
 const render = async () =>
-  renderToStaticMarkup(
-    (await ServerImageResults({ imageFileId: FILE })) as ReactNode,
-  ).replace(/<style[^>]*>[^<]*<\/style>/g, "");
-const text = (html: string) => html.replace(/<[^>]+>/g, " ");
+  stripStyleBlocks(
+    renderToStaticMarkup(
+      (await ServerImageResults({ imageFileId: FILE })) as ReactNode,
+    ),
+  );
+const text = (html: string) => stripTags(html, " ");
 
 const wine = {
   __typename: "Wine",
@@ -62,11 +70,11 @@ describe("ServerImageResults (restored, G32)", () => {
     assert.deepEqual(asked, [{ imageFileId: FILE, first: 10 }]);
   });
 
-  test("no match is the old empty state, with Add an item", async () => {
+  test("no match says so, with a way to read the label", async () => {
     answer = { __typename: "ItemSearchConnection", edges: [] };
     const html = text(await render());
-    assert.match(html, /No items found matching the image/);
-    assert.match(html, /Add an item/);
+    assert.match(html, /No drink matches this photo/);
+    assert.match(html, /(Read|Snap) the label/);
   });
 
   // `SearchResultGrid` is the virtualised grid, which server-renders no cards
@@ -75,6 +83,9 @@ describe("ServerImageResults (restored, G32)", () => {
   test("a match goes to the result grid, not an empty or error state", async () => {
     answer = {
       __typename: "ItemSearchConnection",
+      totalCount: null,
+      totalIsLowerBound: false,
+      pageInfo: { hasNextPage: false },
       edges: [
         {
           node: {
@@ -89,7 +100,7 @@ describe("ServerImageResults (restored, G32)", () => {
       ],
     };
     const html = text(await render());
-    assert.doesNotMatch(html, /No items found|isn|failed/);
+    assert.doesNotMatch(html, /No drink matches|isn|failed|expired/);
   });
 
   test("a deployment that cannot embed a photo says so, not 'no items'", async () => {
@@ -101,13 +112,13 @@ describe("ServerImageResults (restored, G32)", () => {
     };
     const html = text(await render());
     assert.match(html, /Photo search isn(&#x27;|')t available here/);
-    assert.doesNotMatch(html, /No items found/);
+    assert.doesNotMatch(html, /No drink matches/);
   });
 
   // A search photo is discarded once its search has used it (G32), so a
   // reload after the cached result has gone finds no file: an expired link,
   // said the way the old `?image_results=` links are — not an error page.
-  test("a photo that is no longer there is an expired link, with Add an item", async () => {
+  test("a photo that is no longer there is an expired search, with New search", async () => {
     answer = {
       __typename: "NotFoundError",
       code: "NOT_FOUND",
@@ -115,12 +126,9 @@ describe("ServerImageResults (restored, G32)", () => {
       message: "file 0b5f8c2e-9d61-4c7a-8f0e-3a1b2c4d5e6f not found",
     };
     const html = text(await render());
-    assert.match(
-      html,
-      /This image search link has expired\. Tap Photo to search with a new picture\./,
-    );
-    assert.match(html, /Add an item/);
-    assert.doesNotMatch(html, /Image search failed|No items found/);
+    assert.match(html, /This photo search has expired/);
+    assert.match(html, /New search/);
+    assert.doesNotMatch(html, /Image search failed|No drink matches/);
   });
 
   test("any other refusal is an error, not an empty result", async () => {
@@ -128,10 +136,77 @@ describe("ServerImageResults (restored, G32)", () => {
       __typename: "BudgetExceededError",
       code: "BUDGET_EXCEEDED",
       reason: null,
+      retryAt: null,
       message: "per-user cap reached",
     };
     const html = text(await render());
-    assert.match(html, /Image search failed/);
-    assert.doesNotMatch(html, /No items found/);
+    assert.match(html, /Taking a break/);
+    assert.doesNotMatch(html, /No drink matches/);
+  });
+
+  // N07: the words come from the reason, never from the server's message.
+  test("a per-user limit says so, without the server's message", async () => {
+    answer = {
+      __typename: "BudgetExceededError",
+      code: "BUDGET_EXCEEDED",
+      reason: "USER_CAP",
+      retryAt: null,
+      message: "ai_model/image_search refused: per-user cap reached: …",
+    };
+    const html = text(await render());
+    assert.match(html, /reached your limit for now/);
+    assert.doesNotMatch(html, /per-user cap|ai_model/);
+  });
+
+  // The server renders in its own zone; a clock time from there would be
+  // hours off for the viewer, so the first render leaves it out.
+  test("the server's render never states a clock time for retryAt", async () => {
+    answer = {
+      __typename: "BudgetExceededError",
+      code: "BUDGET_EXCEEDED",
+      reason: "USER_CAP",
+      retryAt: new Date(Date.now() + 40 * 60_000).toISOString(),
+      message: "ai_model/image_search refused: per-user cap reached: …",
+    };
+    const html = text(await render());
+    assert.match(html, /try again a little later/);
+    assert.doesNotMatch(html, /\d:\d\d/);
+  });
+
+  test("F-101: a read that throws keeps the page, with its own failure face", async () => {
+    answer = new Error("[network] fetch failed");
+    const html = text(await render());
+    assert.match(html, /Couldn(?:'|&#x27;)t search this photo/);
+    assert.match(html, /Try again/);
+    answer = null;
+  });
+
+  test("F-100: a full page of matches is 'n+', never the limit as a total", async () => {
+    const edge = (id: string) => ({
+      node: {
+        __typename: "ItemSearchResult",
+        id: `h-${id}`,
+        name: "Barolo",
+        type: "WINE",
+        distance: 0.1,
+        item: { ...wine, id },
+      },
+    });
+    answer = {
+      __typename: "ItemSearchConnection",
+      totalCount: null,
+      totalIsLowerBound: false,
+      pageInfo: { hasNextPage: false },
+      edges: Array.from({ length: 10 }, (_, i) => edge(`w${i}`)),
+    };
+    assert.match(text(await render()), /Matches\s+10\+/);
+    answer = {
+      __typename: "ItemSearchConnection",
+      totalCount: null,
+      totalIsLowerBound: false,
+      pageInfo: { hasNextPage: false },
+      edges: [edge("w1"), edge("w2")],
+    };
+    assert.doesNotMatch(text(await render()), /Matches\s+2\+/);
   });
 });

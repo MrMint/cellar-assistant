@@ -149,16 +149,20 @@ const seedRecipe = async (
     type?: "cocktail" | "food";
     recipeGroupId?: string | null;
     createdAt?: string;
+    /** X15: defaults to PUBLIC — the pre-D22 catalog these tests describe. */
+    privacy?: "PUBLIC" | "FRIENDS" | "PRIVATE";
+    isDraft?: boolean;
   },
 ): Promise<string> => {
   const id = randomUUID();
   await db.execute(sql`
-    insert into public.recipes (id, name, type, created_by_id, recipe_group_id, created_at, updated_at)
+    insert into public.recipes (id, name, type, created_by_id, recipe_group_id, created_at, updated_at, privacy, is_draft)
     values (
       ${id}::uuid, ${options.name ?? "Test Recipe"}, ${options.type ?? "cocktail"},
       ${options.createdById}::uuid, ${options.recipeGroupId ?? null}::uuid,
       coalesce(${options.createdAt ?? null}::timestamptz, now()),
-      coalesce(${options.createdAt ?? null}::timestamptz, now())
+      coalesce(${options.createdAt ?? null}::timestamptz, now()),
+      ${options.privacy ?? "PUBLIC"}::permission_type, ${options.isDraft ?? false}
     )
   `);
   return id;
@@ -225,33 +229,164 @@ describe.skipIf(skip)("RecipeActor", () => {
   /* Reads: the catalog rule, from four viewpoints                           */
   /* ---------------------------------------------------------------------- */
 
-  describe("visibility (catalog: any signed-in viewer, anonymous refused)", () => {
-    it("serves get/ingredients/instructions/reviews/score to owner, friend and stranger alike", async () => {
+  describe("visibility (X15 / D22: private first, a draft is its creator's)", () => {
+    /** Every read, plus a review: all of them must answer the same way. */
+    const reads = (actor: RecipeActor, viewer: string, label: string) => {
+      const ctx = userCtx(viewer, `r-${label}`);
+      return [
+        () => actor.get(ctx),
+        () => actor.ingredients(ctx, page),
+        () => actor.instructions(ctx, page),
+        () => actor.reviews(ctx, page),
+        () => actor.score(ctx),
+      ];
+    };
+
+    const expectSeen = async (
+      actor: RecipeActor,
+      viewer: string,
+      label: string,
+    ) => {
+      for (const read of reads(actor, viewer, label)) {
+        await expect(read(), label).resolves.toBeDefined();
+      }
+    };
+
+    const expectHidden = async (
+      actor: RecipeActor,
+      viewer: string,
+      label: string,
+    ) => {
+      for (const read of reads(actor, viewer, label)) {
+        await expect(read(), label).rejects.toThrow(NotFoundError);
+      }
+      // A Love-less side door: reviewing a hidden recipe is "not found" too.
+      await expect(
+        actor.addReview(userCtx(viewer, `r-review-${label}`), { score: 4 }),
+        label,
+      ).rejects.toThrow(NotFoundError);
+    };
+
+    it("PUBLIC: owner, friend and stranger alike", async () => {
       await withTestDb(async (db) => {
         const owner = await seedUser(db);
         const friend = await seedUser(db);
         const stranger = await seedUser(db);
         await seedFriendship(db, owner, friend);
-
-        const recipeId = await seedRecipe(db, { createdById: owner });
+        const recipeId = await seedRecipe(db, {
+          createdById: owner,
+          privacy: "PUBLIC",
+        });
         const actor = await activate(newRecipeActor(recipeId, db));
+        await expectSeen(actor, owner, "owner");
+        await expectSeen(actor, friend, "friend");
+        await expectSeen(actor, stranger, "stranger");
+        expect((await actor.get(userCtx(owner, "r"))).privacy).toBe("PUBLIC");
+      });
+    });
 
-        for (const [label, viewer] of [
-          ["owner", owner],
-          ["friend", friend],
-          ["stranger", stranger],
-        ] as const) {
-          const ctx = userCtx(viewer, `r-${label}`);
-          expect((await actor.get(ctx)).id, label).toBe(recipeId);
-          expect((await actor.ingredients(ctx, page)).totalCount, label).toBe(
-            0,
-          );
-          expect((await actor.instructions(ctx, page)).totalCount, label).toBe(
-            0,
-          );
-          expect((await actor.reviews(ctx, page)).totalCount, label).toBe(0);
-          expect((await actor.score(ctx)).count, label).toBe(0);
-        }
+    it("FRIENDS: the owner and their friends; a stranger is told it does not exist", async () => {
+      await withTestDb(async (db) => {
+        const owner = await seedUser(db);
+        const friend = await seedUser(db);
+        const stranger = await seedUser(db);
+        await seedFriendship(db, friend, owner);
+        const recipeId = await seedRecipe(db, {
+          createdById: owner,
+          privacy: "FRIENDS",
+        });
+        const actor = await activate(newRecipeActor(recipeId, db));
+        await expectSeen(actor, owner, "owner");
+        await expectSeen(actor, friend, "friend");
+        await expectHidden(actor, stranger, "stranger");
+      });
+    });
+
+    it("PRIVATE: the owner alone; the same NotFound as an id with no row", async () => {
+      await withTestDb(async (db) => {
+        const owner = await seedUser(db);
+        const friend = await seedUser(db);
+        await seedFriendship(db, owner, friend);
+        const recipeId = await seedRecipe(db, {
+          createdById: owner,
+          privacy: "PRIVATE",
+        });
+        const actor = await activate(newRecipeActor(recipeId, db));
+        await expectSeen(actor, owner, "owner");
+        await expectHidden(actor, friend, "friend");
+
+        const hidden = await actor
+          .get(userCtx(friend, "r"))
+          .catch((error: unknown) => error);
+        const missing = await (await activate(newRecipeActor(randomUUID(), db)))
+          .get(userCtx(friend, "r"))
+          .catch((error: unknown) => error);
+        expect(hidden).toBeInstanceOf(NotFoundError);
+        expect(missing).toBeInstanceOf(NotFoundError);
+        expect((hidden as NotFoundError).code).toBe(
+          (missing as NotFoundError).code,
+        );
+      });
+    });
+
+    it("a draft is its creator's alone, even when PUBLIC", async () => {
+      await withTestDb(async (db) => {
+        const owner = await seedUser(db);
+        const friend = await seedUser(db);
+        await seedFriendship(db, owner, friend);
+        const recipeId = await seedRecipe(db, {
+          createdById: owner,
+          privacy: "PUBLIC",
+          isDraft: true,
+        });
+        const actor = await activate(newRecipeActor(recipeId, db));
+        await expectSeen(actor, owner, "owner");
+        await expectHidden(actor, friend, "friend");
+        expect((await actor.get(userCtx(owner, "r"))).isDraft).toBe(true);
+      });
+    });
+
+    it("an admin sees a private draft", async () => {
+      await withTestDb(async (db) => {
+        const owner = await seedUser(db);
+        const admin = await seedUser(db);
+        const recipeId = await seedRecipe(db, {
+          createdById: owner,
+          privacy: "PRIVATE",
+          isDraft: true,
+        });
+        const actor = await activate(newRecipeActor(recipeId, db));
+        expect((await actor.get(adminCtx(admin, "r"))).id).toBe(recipeId);
+      });
+    });
+
+    it("a stranger editing or deleting a private recipe is told it does not exist, not that it is not theirs", async () => {
+      await withTestDb(async (db) => {
+        const owner = await seedUser(db);
+        const stranger = await seedUser(db);
+        const hiddenId = await seedRecipe(db, {
+          createdById: owner,
+          privacy: "PRIVATE",
+        });
+        const hidden = await activate(newRecipeActor(hiddenId, db));
+        const ctx = userCtx(stranger, "r");
+        await expect(hidden.update(ctx, { name: "Mine" })).rejects.toThrow(
+          NotFoundError,
+        );
+        await expect(hidden.delete(ctx)).rejects.toThrow(NotFoundError);
+        await expect(
+          hidden.setInstructions(ctx, { instructions: [] }),
+        ).rejects.toThrow(NotFoundError);
+
+        // A recipe the stranger *can* see is a plain "not yours".
+        const sharedId = await seedRecipe(db, {
+          createdById: owner,
+          privacy: "PUBLIC",
+        });
+        const shared = await activate(newRecipeActor(sharedId, db));
+        await expect(shared.update(ctx, { name: "Mine" })).rejects.toThrow(
+          ForbiddenError,
+        );
       });
     });
 
@@ -281,9 +416,242 @@ describe.skipIf(skip)("RecipeActor", () => {
     });
   });
 
+  describe("privacy and drafts on write (X15 / D22)", () => {
+    it("create is private first and not a draft, unless told otherwise", async () => {
+      await withTestDb(async (db) => {
+        const owner = await seedUser(db);
+        const ctx = userCtx(owner, "r");
+        const plain = await activate(newRecipeActor(randomUUID(), db));
+        const created = await plain.create(ctx, {
+          name: "House Sour",
+          type: "cocktail",
+        });
+        expect(created.privacy).toBe("PRIVATE");
+        expect(created.isDraft).toBe(false);
+
+        const shared = await activate(newRecipeActor(randomUUID(), db));
+        expect(
+          (
+            await shared.create(ctx, {
+              name: "Daiquiri",
+              type: "cocktail",
+              privacy: "PUBLIC",
+            })
+          ).privacy,
+        ).toBe("PUBLIC");
+
+        const draft = await activate(newRecipeActor(randomUUID(), db));
+        expect(
+          (
+            await draft.create(ctx, {
+              name: "Read off a photo",
+              type: "cocktail",
+              isDraft: true,
+            })
+          ).isDraft,
+        ).toBe(true);
+      });
+    });
+
+    it("a re-delivered create does not hand a stranger somebody's private recipe", async () => {
+      await withTestDb(async (db) => {
+        const owner = await seedUser(db);
+        const stranger = await seedUser(db);
+        const recipeId = await seedRecipe(db, {
+          createdById: owner,
+          privacy: "PRIVATE",
+          name: "Secret",
+        });
+        const actor = await activate(newRecipeActor(recipeId, db));
+        await expect(
+          actor.create(userCtx(stranger, "r"), {
+            name: "Anything",
+            type: "cocktail",
+          }),
+        ).rejects.toThrow(NotFoundError);
+      });
+    });
+
+    it("update changes privacy and publishes a draft; a published recipe cannot become a draft", async () => {
+      await withTestDb(async (db) => {
+        const owner = await seedUser(db);
+        const ctx = userCtx(owner, "r");
+        const recipeId = await seedRecipe(db, {
+          createdById: owner,
+          privacy: "PRIVATE",
+          isDraft: true,
+        });
+        const actor = await activate(newRecipeActor(recipeId, db));
+        const published = await actor.update(ctx, {
+          isDraft: false,
+          privacy: "FRIENDS",
+        });
+        expect(published.isDraft).toBe(false);
+        expect(published.privacy).toBe("FRIENDS");
+        // Neither field is in the embedding text: nothing to regenerate.
+        expect(
+          (await outboxRowsFor(db, recipeId)).filter(
+            (row) => row.method === "regenerateVector",
+          ),
+        ).toEqual([]);
+        await expect(actor.update(ctx, { isDraft: true })).rejects.toThrow(
+          ValidationError,
+        );
+        await expect(
+          actor.update(ctx, { privacy: "EVERYONE" as "PUBLIC" }),
+        ).rejects.toThrow(ValidationError);
+      });
+    });
+
+    it("a change of sharing hands the group's canonical recompute to the outbox", async () => {
+      await withTestDb(async (db) => {
+        const owner = await seedUser(db);
+        const ctx = userCtx(owner, "r");
+        const groupId = await seedRecipeGroup(db, { createdById: owner });
+        const recipeId = await seedRecipe(db, {
+          createdById: owner,
+          recipeGroupId: groupId,
+          privacy: "PRIVATE",
+          isDraft: true,
+        });
+        const actor = await activate(newRecipeActor(recipeId, db));
+
+        // A same-value write and an embedding-only edit move nothing.
+        await actor.update(ctx, { privacy: "PRIVATE" });
+        await actor.update(ctx, { name: "Renamed" });
+        expect(await outboxRowsFor(db, groupId)).toEqual([]);
+
+        // Publishing a draft as PUBLIC can make it the canonical, and the
+        // group's name: the group is told.
+        await actor.update(ctx, { isDraft: false, privacy: "PUBLIC" });
+        expect(await outboxRowsFor(db, groupId)).toEqual([
+          {
+            method: "recomputeCanonical",
+            payload: { reason: "member sharing changed", recipeId },
+          },
+        ]);
+      });
+    });
+  });
+
+  /* ---------------------------------------------------------------------- */
+  /* getShared — the X17 public share page                                  */
+  /* ---------------------------------------------------------------------- */
+
+  describe("getShared (X17): the one anonymous read, a closed whitelist", () => {
+    it("serves the recipe with its ingredients by name and its steps to anyone", async () => {
+      await withTestDb(async (db) => {
+        const owner = await seedUser(db);
+        const ctx = userCtx(owner, "r");
+        const recipeId = await seedRecipe(db, {
+          createdById: owner,
+          name: "Negroni",
+        });
+        const wineId = await seedWine(db, owner, "Sweet Vermouth");
+        const calls: string[] = [];
+        const actor = await activate(
+          newRecipeActor(recipeId, db, inProcessGenericItems(db, calls)),
+        );
+        await actor.setIngredients(ctx, {
+          ingredients: [
+            { ref: { type: "WINE", id: wineId }, quantity: 30, unit: "ml" },
+            {
+              newGenericItem: {
+                name: "Campari",
+                category: "liqueur",
+                kind: "spirit",
+              },
+              quantity: 30,
+              unit: "ml",
+            },
+            {
+              newGenericItem: {
+                name: "Orange peel",
+                category: "garnish",
+                kind: "ingredient",
+              },
+              isOptional: true,
+            },
+          ],
+        });
+        await actor.setInstructions(ctx, {
+          instructions: [{ instructionText: "Stir with ice" }],
+        });
+        await actor.addReview(userCtx(owner, "r2"), {
+          score: 5,
+          text: "review-text-q7z",
+        });
+
+        const shared = await actor.getShared(anonymousCtx("r-anon"));
+        expect(shared).toMatchObject({ id: recipeId, name: "Negroni" });
+        expect(shared.ingredients.map((row) => row.name).sort()).toEqual([
+          "Campari",
+          "Orange peel",
+          "Sweet Vermouth",
+        ]);
+        expect(
+          shared.ingredients.find((row) => row.name === "Orange peel"),
+        ).toMatchObject({ isOptional: true });
+        expect(shared.instructions).toEqual([
+          { stepNumber: 1, text: "Stir with ice" },
+        ]);
+        // No author, no review text, no vote state.
+        const serialised = JSON.stringify(shared);
+        expect(serialised).not.toContain(owner);
+        expect(serialised).not.toContain("review-text-q7z");
+      });
+    });
+
+    it("is NotFound for an id with no row, anonymous or not", async () => {
+      await withTestDb(async (db) => {
+        const actor = await activate(newRecipeActor(randomUUID(), db));
+        await expect(actor.getShared(anonymousCtx("r"))).rejects.toThrow(
+          NotFoundError,
+        );
+      });
+    });
+  });
+
   /* ---------------------------------------------------------------------- */
   /* create / update                                                         */
   /* ---------------------------------------------------------------------- */
+
+  describe("getShared (X15): only a PUBLIC, published recipe has a share page", () => {
+    it("answers PRIVATE, FRIENDS and draft recipes exactly like a missing one, author included", async () => {
+      await withTestDb(async (db) => {
+        const owner = await seedUser(db);
+        for (const [privacy, isDraft] of [
+          ["PRIVATE", false],
+          ["FRIENDS", false],
+          ["PUBLIC", true],
+        ] as const) {
+          const recipeId = await seedRecipe(db, {
+            createdById: owner,
+            privacy,
+            isDraft,
+          });
+          const actor = await activate(newRecipeActor(recipeId, db));
+          await expect(
+            actor.getShared(anonymousCtx("r-anon")),
+            `${privacy}/${isDraft}`,
+          ).rejects.toThrow(NotFoundError);
+          await expect(
+            actor.getShared(userCtx(owner, "r-owner")),
+            `${privacy}/${isDraft} as its author`,
+          ).rejects.toThrow(NotFoundError);
+        }
+        const publicId = await seedRecipe(db, {
+          createdById: owner,
+          privacy: "PUBLIC",
+          name: "Shareable",
+        });
+        const actor = await activate(newRecipeActor(publicId, db));
+        expect((await actor.getShared(anonymousCtx("r"))).name).toBe(
+          "Shareable",
+        );
+      });
+    });
+  });
 
   describe("create", () => {
     it("is idempotent on the actor id and enqueues exactly one regenerateVector", async () => {
@@ -698,6 +1066,63 @@ describe.skipIf(skip)("RecipeActor", () => {
             ],
           }),
         ).rejects.toThrow(ValidationError);
+      });
+    });
+  });
+
+  /* ---------------------------------------------------------------------- */
+  /* F-120: the viewer's own log count for a recipe                          */
+  /* ---------------------------------------------------------------------- */
+
+  describe("viewerLogCount (F-120: 'Your 3rd …' after Made it)", () => {
+    const seedRecipeLog = async (
+      db: DbOrTx,
+      userId: string,
+      recipeId: string,
+    ): Promise<void> => {
+      await db.execute(sql`
+        insert into public.check_ins (user_id, created_by_id, group_id, recipe_id)
+        values (${userId}::uuid, ${userId}::uuid, gen_random_uuid(), ${recipeId}::uuid)
+      `);
+    };
+
+    it("counts only the viewer's own logs of this recipe", async () => {
+      await withTestDb(async (db) => {
+        const owner = await seedUser(db);
+        const other = await seedUser(db);
+        const recipeId = await seedRecipe(db, { createdById: owner });
+        const elsewhere = await seedRecipe(db, { createdById: owner });
+        await seedRecipeLog(db, owner, recipeId);
+        await seedRecipeLog(db, owner, recipeId);
+        await seedRecipeLog(db, owner, elsewhere);
+        await seedRecipeLog(db, other, recipeId);
+        const actor = await activate(newRecipeActor(recipeId, db));
+
+        expect(await actor.viewerLogCount(userCtx(owner, "r"))).toBe(2);
+        expect(await actor.viewerLogCount(userCtx(other, "r"))).toBe(1);
+        const stranger = await seedUser(db);
+        expect(await actor.viewerLogCount(userCtx(stranger, "r"))).toBe(0);
+      });
+    });
+
+    it("is refused, as absent, to a stranger who may not see the recipe", async () => {
+      await withTestDb(async (db) => {
+        const owner = await seedUser(db);
+        const stranger = await seedUser(db);
+        const recipeId = await seedRecipe(db, {
+          createdById: owner,
+          privacy: "PRIVATE",
+        });
+        await seedRecipeLog(db, owner, recipeId);
+        const actor = await activate(newRecipeActor(recipeId, db));
+
+        await expect(
+          actor.viewerLogCount(userCtx(stranger, "r")),
+        ).rejects.toThrow(NotFoundError);
+        await expect(actor.viewerLogCount(anonymousCtx("r"))).rejects.toThrow(
+          ForbiddenError,
+        );
+        expect(await actor.viewerLogCount(userCtx(owner, "r"))).toBe(1);
       });
     });
   });

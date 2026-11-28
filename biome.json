@@ -14,6 +14,7 @@
       "**/*.tsx",
       "**/*.json",
       "**/*.jsonc",
+      "**/*.css",
       "!**/node_modules",
       "!**/.next",
       "!**/dist",
@@ -48,6 +49,11 @@
       "arrowParentheses": "always"
     }
   },
+  "css": {
+    "parser": {
+      "tailwindDirectives": true
+    }
+  },
   "json": {
     "formatter": {
       "trailingCommas": "none"
@@ -62,6 +68,54 @@
     }
   },
   "overrides": [
+    {
+      "includes": ["services/client/src/components/ui/**"],
+      "linter": {
+        "rules": {
+          "a11y": {
+            "useSemanticElements": "off",
+            "useFocusableInteractive": "off",
+            "useKeyWithClickEvents": "off"
+          },
+          "suspicious": {
+            "noArrayIndexKey": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": ["services/client/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "framer-motion": "Use motion/react and the tokens in @/lib/motion.",
+                  "react-icons": "Use the Lucide vocabulary in @/components/app/icons.",
+                  "react-simple-star-rating": "Use RatingInput / RatingDisplay from @/components/app/RatingInput."
+                },
+                "patterns": [
+                  {
+                    "group": ["@mui/**", "@emotion/**"],
+                    "message": "MUI and Emotion were removed (D20): use shadcn/ui (src/components/ui) and the app primitives (src/components/app)."
+                  },
+                  {
+                    "group": ["react-icons/**"],
+                    "message": "Use the Lucide vocabulary in @/components/app/icons."
+                  },
+                  {
+                    "group": ["framer-motion/**"],
+                    "message": "Use motion/react and the tokens in @/lib/motion."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
     {
       "includes": ["packages/e2e/**"],
       "linter": {

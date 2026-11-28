@@ -1,18 +1,20 @@
 /**
  * Render tests for the restored `CellarItemsFilter` against the old markup:
- * an outlined `Sheet` around a plain `ToggleButtonGroup` of six icon buttons,
- * in the old order (beer, wine, spirit, coffee, sake, tea), each labelled for
- * assistive tech and showing its count only when one is given.
+ * a frame around a labelled group (a `fieldset`, implicitly `role="group"`)
+ * of six toggle buttons (`aria-pressed`), in the old order (beer, wine,
+ * spirit, coffee, sake, tea), each labelled for assistive tech and showing
+ * its count only when one is given and it is not zero (design §3.7).
  */
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import type { ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { stripStyleBlocks, textOf } from "@/test-support/markup";
 import { CellarItemsFilter } from "./CellarItemsFilter";
 import { filterCountsFromItemCounts } from "./cellarItemCounts";
 
 const render = (node: ReactNode) =>
-  renderToStaticMarkup(node).replace(/<style[^>]*>[^<]*<\/style>/g, "");
+  stripStyleBlocks(renderToStaticMarkup(node));
 
 const buttons = (html: string) =>
   [
@@ -20,14 +22,24 @@ const buttons = (html: string) =>
   ].map((m) => ({
     label: m[1],
     pressed: /aria-pressed="true"/.test(m[0]),
-    count: /<p class="MuiTypography[^>]*>(\d+)<\/p>/.exec(m[2])?.[1],
+    // The chip reads "<word> <count>": the count is the trailing number.
+    count: /\s(\d+)$/.exec(textOf(m[2] ?? ""))?.[1],
   }));
 
 describe("CellarItemsFilter (restored)", () => {
-  test("six type buttons in the old order inside an outlined sheet", () => {
+  test("six type buttons in the old order inside a framed group", () => {
     const html = render(<CellarItemsFilter onTypesChange={() => {}} />);
-    assert.match(html, /^<div class="MuiSheet-root MuiSheet-variantOutlined/);
-    assert.match(html, /MuiToggleButtonGroup-root/);
+    assert.match(html, /^<div\b[^>]*><fieldset\b/);
+    assert.doesNotMatch(html, /text formatting/);
+    assert.match(
+      html,
+      /<fieldset[^>]*aria-label="Filter by type"/,
+      "the group says what it filters (it was labelled 'text formatting')",
+    );
+    assert.equal(
+      [...html.matchAll(/aria-pressed="(?:true|false)"/g)].length,
+      6,
+    );
     assert.deepEqual(
       buttons(html).map((b) => b.label),
       ["Beer", "Wine", "Spirit", "Coffee", "Sake", "Tea"],
@@ -39,7 +51,17 @@ describe("CellarItemsFilter (restored)", () => {
     assert.equal([...html.matchAll(/<svg/g)].length, 6, "one type icon each");
   });
 
-  test("counts render beside their icons; selected types are pressed", () => {
+  test("each chip shows its type's word, not just a glyph", () => {
+    const html = render(<CellarItemsFilter onTypesChange={() => {}} />);
+    assert.deepEqual(
+      [...html.matchAll(/<button[^>]*>(.*?)<\/button>/g)].map((m) =>
+        textOf(m[1] ?? ""),
+      ),
+      ["Beer", "Wine", "Spirit", "Coffee", "Sake", "Tea"],
+    );
+  });
+
+  test("counts render beside their labels; selected types are pressed", () => {
     const html = render(
       <CellarItemsFilter
         types={["WINE", "TEA"]}
@@ -53,7 +75,7 @@ describe("CellarItemsFilter (restored)", () => {
       { label: "Spirit", pressed: false, count: undefined },
       { label: "Coffee", pressed: false, count: undefined },
       { label: "Sake", pressed: false, count: undefined },
-      { label: "Tea", pressed: true, count: "0" },
+      { label: "Tea", pressed: true, count: undefined },
     ]);
   });
 });

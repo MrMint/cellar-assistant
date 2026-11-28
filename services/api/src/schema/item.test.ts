@@ -364,6 +364,68 @@ describe("item mutations (§8.3)", () => {
     });
   });
 
+  it("updateItem records confirmedFields in the item's own onboarding (F-75)", async () => {
+    const { invoke, calls } = stubSidecar({
+      "ItemActor.update": () => ITEMS["wine:w1"],
+      "ItemActor.correctionSource": () => ({
+        onboardingId: "66666666-6666-4666-8666-666666666666",
+        hasLabel: true,
+      }),
+      "ItemOnboardingActor.confirmItemFields": () => ({}),
+    });
+    const result = await run(
+      `mutation {
+        updateItem(type: WINE, itemId: "w1", input: { country: "SPAIN" },
+                   confirmedFields: ["country"]) { __typename }
+      }`,
+      testContext(invoke, viewer),
+    );
+    expect(result.errors).toBeUndefined();
+    expect(result.data?.updateItem).toEqual({
+      __typename: "MutationUpdateItemSuccess",
+    });
+    expect(calls.map((c) => [c.actorId, c.method, c.args[1]])).toEqual([
+      ["wine:w1", "update", { country: "SPAIN" }],
+      ["wine:w1", "correctionSource", undefined],
+      [
+        "66666666-6666-4666-8666-666666666666",
+        "confirmItemFields",
+        { item: { type: "WINE", id: "w1" }, fields: ["country"] },
+      ],
+    ]);
+  });
+
+  it("updateItem without confirmedFields, or for an item made without a read, confirms nothing", async () => {
+    const { invoke, calls } = stubSidecar({
+      "ItemActor.update": () => ITEMS["wine:w1"],
+      "ItemActor.correctionSource": () => ({
+        onboardingId: null,
+        hasLabel: false,
+      }),
+    });
+    for (const extra of [
+      "",
+      "confirmedFields: []",
+      'confirmedFields: ["name"]',
+    ]) {
+      const result = await run(
+        `mutation {
+          updateItem(type: WINE, itemId: "w1", input: { name: "N" } ${extra}) {
+            __typename
+          }
+        }`,
+        testContext(invoke, viewer),
+      );
+      expect(result.errors).toBeUndefined();
+    }
+    expect(calls.map((c) => c.method)).toEqual([
+      "update",
+      "update",
+      "update",
+      "correctionSource",
+    ]);
+  });
+
   it("attachItemImage passes the file id through unchanged", async () => {
     const { invoke, calls } = stubSidecar({
       "ItemActor.attachImage": () => ({
@@ -676,5 +738,73 @@ describe("Item.favoriteCount / Item.myReview (UI parity G6, G7)", () => {
     );
     expect(result.data?.item).toMatchObject({ __typename: "ForbiddenError" });
     expect(calls.map((call) => call.method)).toEqual(["get"]);
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/* F-154 (H-106): Item.friendsReviews                                          */
+/* -------------------------------------------------------------------------- */
+
+describe("Item.friendsReviews (F-154 / H-106)", () => {
+  const friendReview = {
+    id: "r2",
+    itemId: "w1",
+    itemType: "WINE",
+    userId: "22222222-2222-4222-8222-222222222222",
+    score: 3.5,
+    text: null,
+    createdAt: "2026-09-08T00:00:00.000Z",
+    updatedAt: "2026-09-08T00:00:00.000Z",
+  };
+
+  it("is the actor's friends page, as a connection", async () => {
+    const { invoke, calls } = stubSidecar({
+      "ItemActor.get": (actorId) => ITEMS[actorId as keyof typeof ITEMS],
+      "ItemActor.friendsReviews": () => ({
+        entries: [{ cursor: "offset:0", node: friendReview }],
+        hasNextPage: false,
+        hasPreviousPage: false,
+        totalCount: 1,
+      }),
+    });
+    const result = await run(
+      `{ item(type: WINE, id: "w1") { ... on QueryItemSuccess { data {
+           friendsReviews(first: 10) { totalCount edges { node { id userId score } } }
+         } } } }`,
+      testContext(invoke, viewer),
+    );
+    expect(result.errors).toBeUndefined();
+    expect(result.data?.item).toEqual({
+      data: {
+        friendsReviews: {
+          totalCount: 1,
+          edges: [
+            { node: { id: "r2", userId: friendReview.userId, score: 3.5 } },
+          ],
+        },
+      },
+    });
+    const friendCalls = calls.filter(
+      (call) => call.method === "friendsReviews",
+    );
+    expect(friendCalls).toHaveLength(1);
+    expect(friendCalls[0]).toMatchObject({ actorId: "wine:w1" });
+  });
+
+  it("anonymous: empty, with no actor call", async () => {
+    const { invoke, calls } = stubSidecar({
+      "ItemActor.get": (actorId) => ITEMS[actorId as keyof typeof ITEMS],
+    });
+    const result = await run(
+      `{ item(type: WINE, id: "w1") { ... on QueryItemSuccess { data {
+           friendsReviews(first: 10) { totalCount edges { node { id } } }
+         } } } }`,
+      testContext(invoke),
+    );
+    expect(result.errors).toBeUndefined();
+    expect(result.data?.item).toEqual({
+      data: { friendsReviews: { totalCount: 0, edges: [] } },
+    });
+    expect(calls.some((call) => call.method === "friendsReviews")).toBe(false);
   });
 });

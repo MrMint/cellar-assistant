@@ -43,13 +43,17 @@
 import { randomUUID } from "node:crypto";
 import type {
   AddRecipeReviewInput as AddRecipeReviewInputType,
+  BarKind,
   CreateRecipeGroupInput as CreateRecipeGroupInputType,
   CreateRecipeInput as CreateRecipeInputType,
   DeletedRecipe,
   DeletedRecipeGroup,
   DeletedRecipeReview,
   GenericItemKind,
+  IngredientRole,
   InstructionType,
+  PermissionType,
+  RecipeBaseSpiritCountDto,
   RecipeCategory,
   RecipeDto,
   RecipeGroupDto,
@@ -71,11 +75,17 @@ import type {
   UpdateRecipeReviewInput as UpdateRecipeReviewInputType,
 } from "@cellar-assistant/contracts";
 import {
+  BAR_KIND_KEYS,
+  barKindLabel,
+  COMMUNITY_PICK_MIN_NET,
   DEFAULT_RECIPE_GROUP_ORDER,
   genericItemActorId,
+  INGREDIENT_ROLES,
   ItemActorDescriptor,
+  ingredientAmount,
   ingredientItemType,
   itemActorId,
+  NotFoundError,
   normalizeRecipeGroupOrder,
   normalizeRecipeGroupTerm,
   offsetPage,
@@ -90,7 +100,11 @@ import {
 } from "@cellar-assistant/contracts";
 import type { ApiContext } from "../context.ts";
 import { builder } from "./builder.ts";
-import { InstructionTypeEnum, RecipeCategoryEnum } from "./enums.ts";
+import {
+  InstructionTypeEnum,
+  PermissionTypeEnum,
+  RecipeCategoryEnum,
+} from "./enums.ts";
 import { GenericItemKindEnum, GenericItemType, ItemInterface } from "./item.ts";
 import { connectionFromPage, toPageArgs } from "./pagination.ts";
 import { type PatchPolicy, patch, present } from "./patch.ts";
@@ -99,7 +113,7 @@ import { type PatchPolicy, patch, present } from "./patch.ts";
 /* Enums                                                                       */
 /* -------------------------------------------------------------------------- */
 
-const RecipeTypeEnum = builder.enumType("RecipeType", {
+export const RecipeTypeEnum = builder.enumType("RecipeType", {
   description:
     "`recipes_type_check` — a `text` column with a check constraint, not a " +
     "Postgres enum (§4 left it alone).",
@@ -111,6 +125,26 @@ const RecipeIngredientTypeEnum = builder.enumType("RecipeIngredientType", {
     "What one `recipe_ingredients` row points at: one of the six Item types, " +
     "or GENERIC — a `generic_items` row, which is deliberately not an Item.",
   values: RECIPE_INGREDIENT_TYPES,
+});
+
+/** X14: `recipe_ingredients.role`'s check, and the extraction's enum. */
+export const IngredientRoleEnum = builder.enumType("IngredientRole", {
+  description:
+    "What an ingredient does in the drink. A `garnish` never stops a recipe " +
+    "from being makeable.",
+  values: INGREDIENT_ROLES,
+});
+
+/**
+ * X14: the bar vocabulary (`BAR_KINDS` in contracts `bar.ts`) — what an
+ * ingredient is, what a cellar bottle is read as, and the Bar pantry's
+ * toggles, all one closed list so availability is string equality.
+ */
+export const IngredientKindEnum = builder.enumType("IngredientKind", {
+  description:
+    "One kind of bar ingredient — `bourbon`, `sweet_vermouth`, `lime`. The " +
+    "closed list availability compares; `kindLabel` fields carry its words.",
+  values: BAR_KIND_KEYS,
 });
 
 const RecipeVoteTypeEnum = builder.enumType("RecipeVoteType", {
@@ -183,6 +217,38 @@ export const RecipeIngredientType_ = builder
         nullable: true,
       }),
       createdAt: t.expose("createdAt", { type: "DateTime", nullable: true }),
+      role: t.field({
+        type: IngredientRoleEnum,
+        nullable: true,
+        description:
+          "X14. Stored, else inferred from the recipe's ingredients together " +
+          "(the base is the largest spirit pour).",
+        resolve: (row) => row.role,
+      }),
+      kind: t.field({
+        type: IngredientKindEnum,
+        nullable: true,
+        description:
+          "X14. Stored, else inferred from the referenced item's name. Null " +
+          'when nothing can place it — shown as "Not tracked".',
+        resolve: (row) => row.kind,
+      }),
+      kindLabel: t.string({
+        nullable: true,
+        resolve: (row) => barKindLabel(row.kind),
+      }),
+      quantityText: t.exposeString("quantityText", {
+        nullable: true,
+        description: 'X14: the amount as printed ("¾ oz", "top with").',
+      }),
+      brandMentioned: t.exposeString("brandMentioned", { nullable: true }),
+      amount: t.string({
+        description:
+          "The amount to show, from the one quantity formatter: the printed " +
+          'text with Unicode fractions, else `quantity` + `unit` ("1½ oz"). ' +
+          "Empty when neither is known.",
+        resolve: (row) => ingredientAmount(row),
+      }),
     }),
   });
 
@@ -376,10 +442,32 @@ export const RecipeType_ = builder.loadableObjectRef<RecipeDto, string>(
 
 const RecipeGroupType = builder.objectRef<RecipeGroupDto>("RecipeGroup");
 
+/**
+ * X15: a recipe id a field *refers to* — a group's canonical, a menu line's
+ * match — that the viewer may no longer see (made private since, or someone
+ * else's private version). The loader answers `NotFoundError`, which on a
+ * nullable reference is not a failure of the page but simply "nothing to
+ * show you": `null`, never a field error that blanks a whole list.
+ */
+export const visibleRecipeIdOrNull = async (
+  context: ApiContext,
+  recipeId: string | null,
+): Promise<string | null> => {
+  if (recipeId === null) return null;
+  try {
+    await RecipeType_.getDataloader(context).load(recipeId);
+    return recipeId;
+  } catch (cause) {
+    if (cause instanceof NotFoundError) return null;
+    throw cause;
+  }
+};
+
 RecipeType_.implement({
   description:
-    "One version of a drink or dish. Visible to any signed-in viewer; only " +
-    "its creator may edit it.",
+    "One version of a drink or dish. Private first (X15 / D22): visible by " +
+    "`privacy`'s four-branch rule, a draft only to its creator, and " +
+    "`NotFoundError` to everyone else. Only its creator may edit it.",
   fields: (t) => ({
     id: t.exposeID("id"),
     name: t.exposeString("name"),
@@ -403,6 +491,19 @@ RecipeType_.implement({
         "the actor from rows it already holds.",
     }),
     instructionCount: t.exposeInt("instructionCount"),
+    privacy: t.field({
+      type: PermissionTypeEnum,
+      description:
+        "X15 / D22: who may see it — PRIVATE (new recipes), FRIENDS or " +
+        "PUBLIC (every recipe from before privacy existed). Only PUBLIC " +
+        "recipes have a share page.",
+      resolve: (recipe) => recipe.privacy,
+    }),
+    isDraft: t.exposeBoolean("isDraft", {
+      description:
+        "AI output its creator has not reviewed yet — theirs alone, whatever " +
+        "`privacy` says. `updateRecipe(input: { isDraft: false })` publishes it.",
+    }),
     createdAt: t.expose("createdAt", { type: "DateTime", nullable: true }),
     updatedAt: t.expose("updatedAt", { type: "DateTime", nullable: true }),
 
@@ -423,6 +524,17 @@ RecipeType_.implement({
       description: "Computed in the actor from the loaded reviews.",
       resolve: (recipe, _args, context) =>
         context.actor(RecipeActorDescriptor, recipe.id).score(),
+    }),
+
+    viewerLogCount: t.int({
+      description:
+        "F-120: how many times you have logged this recipe (your own check-ins " +
+        'naming it) — the make page\'s "Your 3rd …". 0 for an anonymous ' +
+        "viewer, without asking.",
+      resolve: (recipe, _args, context) =>
+        context.ctx.viewerId === null
+          ? 0
+          : context.actor(RecipeActorDescriptor, recipe.id).viewerLogCount(),
     }),
 
     /**
@@ -556,7 +668,7 @@ RecipeType_.implement({
   }),
 });
 
-const RecipeConnection = builder.connectionObject(
+export const RecipeConnection = builder.connectionObject(
   { type: RecipeType_, name: "RecipeConnection" },
   { name: "RecipeEdge" },
 );
@@ -607,6 +719,28 @@ RecipeGroupType.implement({
     imageUrl: t.exposeString("imageUrl", { nullable: true }),
     createdById: t.exposeID("createdById", { nullable: true }),
     canonicalRecipeId: t.exposeID("canonicalRecipeId", { nullable: true }),
+    communityPickId: t.id({
+      nullable: true,
+      description:
+        "MC-pick: the version with the most net votes from people other " +
+        `than its author, at least ${COMMUNITY_PICK_MIN_NET}, oldest winning ` +
+        "ties; null otherwise, or when you may not see it. A label: it " +
+        "never moves `canonicalRecipeId`.",
+      resolve: async (group, _args, context) => {
+        if (group.communityPickId !== undefined) return group.communityPickId;
+        // The /recipes projection carries it (F-88); any other DTO without
+        // it asks the group.
+        try {
+          const full = await context
+            .actor(RecipeGroupActorDescriptor, group.id)
+            .get();
+          return full.communityPickId ?? null;
+        } catch (cause) {
+          if (cause instanceof NotFoundError) return null;
+          throw cause;
+        }
+      },
+    }),
     recipeCount: t.exposeInt("recipeCount"),
     createdAt: t.expose("createdAt", { type: "DateTime", nullable: true }),
     updatedAt: t.expose("updatedAt", { type: "DateTime", nullable: true }),
@@ -614,8 +748,11 @@ RecipeGroupType.implement({
     canonicalRecipe: t.field({
       type: RecipeType_,
       nullable: true,
-      description: "Resolved through the `Recipe` DataLoader.",
-      resolve: (group) => group.canonicalRecipeId,
+      description:
+        "Resolved through the `Recipe` DataLoader. Null when the viewer may " +
+        "not see it (X15: another person's private version).",
+      resolve: (group, _args, context) =>
+        visibleRecipeIdOrNull(context, group.canonicalRecipeId),
     }),
 
     recipes: t.field({
@@ -771,6 +908,10 @@ const RecipeIngredientInput = builder.inputType("RecipeIngredientInput", {
     unit: t.string({ required: false }),
     isOptional: t.boolean({ required: false }),
     substitutionNotes: t.string({ required: false }),
+    role: t.field({ type: IngredientRoleEnum, required: false }),
+    kind: t.field({ type: IngredientKindEnum, required: false }),
+    quantityText: t.string({ required: false }),
+    brandMentioned: t.string({ required: false }),
   }),
 });
 
@@ -796,6 +937,11 @@ const CreateRecipeInput = builder.inputType("CreateRecipeInput", {
     prepTimeMinutes: t.int({ required: false }),
     servingSize: t.int({ required: false }),
     imageUrl: t.string({ required: false }),
+    privacy: t.field({
+      type: PermissionTypeEnum,
+      required: false,
+      description: "Defaults to PRIVATE (D22: private first).",
+    }),
   }),
 });
 
@@ -810,6 +956,13 @@ const UpdateRecipeInput = builder.inputType("UpdateRecipeInput", {
     prepTimeMinutes: t.int({ required: false }),
     servingSize: t.int({ required: false }),
     imageUrl: t.string({ required: false }),
+    privacy: t.field({ type: PermissionTypeEnum, required: false }),
+    isDraft: t.boolean({
+      required: false,
+      description:
+        "`false` publishes a draft at its `privacy`. A published recipe " +
+        "cannot become a draft again (`ValidationError`).",
+    }),
   }),
 });
 
@@ -870,6 +1023,7 @@ const toCreateRecipeInput = (input: {
   prepTimeMinutes?: number | null;
   servingSize?: number | null;
   imageUrl?: string | null;
+  privacy?: PermissionType | null;
 }): CreateRecipeInputType => ({
   name: input.name,
   type: input.type,
@@ -881,6 +1035,7 @@ const toCreateRecipeInput = (input: {
   prepTimeMinutes: input.prepTimeMinutes ?? null,
   servingSize: input.servingSize ?? null,
   imageUrl: input.imageUrl ?? null,
+  privacy: input.privacy ?? null,
 });
 
 const UPDATE_RECIPE = {
@@ -892,6 +1047,8 @@ const UPDATE_RECIPE = {
   prepTimeMinutes: "clearable",
   servingSize: "clearable",
   imageUrl: "clearable",
+  privacy: "keep",
+  isDraft: "keep",
 } satisfies PatchPolicy<typeof UpdateRecipeInput.$inferInput>;
 
 const UPDATE_RECIPE_REVIEW = {
@@ -913,6 +1070,10 @@ const toIngredientInput = (input: {
   unit?: string | null;
   isOptional?: boolean | null;
   substitutionNotes?: string | null;
+  role?: IngredientRole | null;
+  kind?: BarKind | null;
+  quantityText?: string | null;
+  brandMentioned?: string | null;
 }): RecipeIngredientInputType => ({
   ...(present(input.ref)
     ? { ref: { type: input.ref.type, id: String(input.ref.id) } }
@@ -933,6 +1094,10 @@ const toIngredientInput = (input: {
   unit: input.unit ?? null,
   isOptional: input.isOptional ?? null,
   substitutionNotes: input.substitutionNotes ?? null,
+  role: input.role ?? null,
+  kind: input.kind ?? null,
+  quantityText: input.quantityText ?? null,
+  brandMentioned: input.brandMentioned ?? null,
 });
 
 const toInstructionInput = (input: {
@@ -1055,6 +1220,61 @@ builder.queryField("recipeGroups", (t) =>
           )
           .list(filter, toPageArgs(args)),
       );
+    },
+  }),
+);
+
+const RecipeBaseSpiritCountType = builder
+  .objectRef<RecipeBaseSpiritCountDto>("RecipeBaseSpiritCount")
+  .implement({
+    description:
+      "F-114: one `/recipes` kind chip — a base spirit and how many groups " +
+      "selecting it would list.",
+    fields: (t) => ({
+      baseSpirit: t.exposeString("baseSpirit"),
+      count: t.exposeInt("count", {
+        description:
+          "Groups `recipeGroups(baseSpirit:)` would list under the same " +
+          "category and term; a bar kind counts its narrower kinds.",
+      }),
+    }),
+  });
+
+const RecipeBaseSpiritCountConnection = builder.connectionObject(
+  { type: RecipeBaseSpiritCountType, name: "RecipeBaseSpiritCountConnection" },
+  { name: "RecipeBaseSpiritCountEdge" },
+);
+
+builder.queryField("recipeBaseSpiritCounts", (t) =>
+  t.field({
+    type: RecipeBaseSpiritCountConnection,
+    description:
+      "F-114: `/recipes`' kind chips — every base spirit the groups " +
+      "`recipeGroups(category, term)` lists carry, with its count, most " +
+      "first. Kinds with no visible group are absent. Same visibility as " +
+      "`recipeGroups`: a version you may not see adds nothing. A " +
+      "connection (§1.5), though one page holds every kind there is.",
+    args: {
+      ...t.arg.connectionArgs(),
+      category: t.arg({ type: RecipeCategoryEnum, required: false }),
+      term: t.arg.string({ required: false }),
+    },
+    errors: {},
+    resolve: async (_root, args, context) => {
+      // The unfiltered list's filter, so the count shares its activation.
+      const filter = {
+        category: args.category ?? null,
+        baseSpirit: null,
+        term: normalizeRecipeGroupTerm(args.term),
+        orderBy: DEFAULT_RECIPE_GROUP_ORDER,
+      };
+      const counts = await context
+        .actor(
+          RecipeGroupsCollectionActorDescriptor,
+          recipeGroupsCollectionActorId(filter),
+        )
+        .baseSpiritCounts(filter);
+      return connectionFromPage(offsetPage(counts, toPageArgs(args)));
     },
   }),
 );

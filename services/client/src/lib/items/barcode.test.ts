@@ -304,7 +304,7 @@ that silently discards what a person types is worse than no input.`,
   }
 
   test("the form's Barcode field reaches the save", () => {
-    assert.match(form, /<FormLabel>Barcode<\/FormLabel>/);
+    assert.match(form, />Barcode<\/(?:FormLabel|FieldLabel)>/);
     assert.match(form, /createOnboardedItem\(\{[^}]*\bbarcode,/s);
   });
 

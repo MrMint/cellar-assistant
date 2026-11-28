@@ -1,8 +1,11 @@
+import type { Metadata } from "next";
 import { RankingsClient } from "@/components/ranking/RankingsClient";
 
+export const metadata: Metadata = { title: "Top rated" };
+
 /**
- * `/rankings` — the old `RankingsClient` (`82450ad1`), which fetches its own
- * first page from the URL's filters. The old page read the viewer's id only to
+ * `/rankings` — "Top rated" (Social-Recap boards 22 to 27), which fetches its
+ * own first page from the URL's filters. The old page read the viewer's id only to
  * build a reviewer uuid list; `Query.rankings` resolves the scope server-side
  * (`components/ranking/fragments.ts`), so there is nothing to pass down.
  */

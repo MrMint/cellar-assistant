@@ -1,49 +1,74 @@
 "use client";
 
 /**
- * `82450ad1:src/components/tier-list/TierListViewPage.tsx`, restored: header
- * (name, description, privacy chip, count), the map / share / lock / edit
- * icon buttons, and the URL-backed Rankings / Insights tabs (`?tab=`, with
- * `?item=` scrolling to an entry).
+ * The tier list page (screens/Tier-list, DECISIONS 37–41): the name, its
+ * privacy and count, the Rankings / Insights segments (`?tab=`, with
+ * `?item=` scrolling to an entry) beside Map (a place list: `/map?list=`,
+ * L40), Share and Details, and under Rankings the search, the Arrange sheet
+ * (Ranking or the crowd's rating, and Show only), the board, and the
+ * thumb-zone dock: Edit order and the one primary, Add.
  *
- * Kept from the rewrite (decision 2, new-only, listed for the user): an
- * **Add entry** icon button for the owner of an unlocked list, opening
- * `AddEntryModal` — the old page had no in-page add (entries came from the
- * item and place pages' "Add to Tier List"). A new entry lands in Unrated,
- * as the old modal's did.
+ * Edit order is the lock (DECISIONS 41): the board is read-only until the
+ * owner opens it, and then the board's own dock moves the picked row and
+ * carries this page's Undo and Redo, which step the list's server-side
+ * history (`TierList.editHistory`); every edit's toast offers the same Undo.
+ * A new entry lands in the band your own rating puts it in (`bandForScore`).
  */
 
-import {
-  Box,
-  Chip,
-  IconButton,
-  Snackbar,
-  Stack,
-  Tab,
-  TabList,
-  TabPanel,
-  Tabs,
-  Tooltip,
-  Typography,
-} from "@mui/joy";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { parseAsStringLiteral, useQueryState } from "nuqs";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ActionBar } from "@/components/app/ActionBar";
+import { AppBar } from "@/components/app/AppBar";
+import { BottomSheet } from "@/components/app/BottomSheet";
+import { EmptyState } from "@/components/app/EmptyState";
+import { FilterChip } from "@/components/app/FilterChip";
+import { IconButton } from "@/components/app/IconButton";
 import {
-  MdAdd,
-  MdEdit,
-  MdGroup,
-  MdLock,
-  MdLockOpen,
-  MdMap,
-  MdPublic,
-  MdShare,
-} from "react-icons/md";
+  Add,
+  type AppIcon,
+  Arrange,
+  Edit,
+  ICON_STROKE,
+  Lock,
+  MapIcon,
+  People,
+  Public,
+  Ranked,
+  Redo,
+  Search,
+  Share,
+  SortDescending,
+  Undo,
+} from "@/components/app/icons";
+import { Link } from "@/components/app/Link";
+import { notify } from "@/components/app/notify";
+import { MorphTitle } from "@/components/app/RouteTransition";
+import { SegmentedControl } from "@/components/app/SegmentedControl";
+import { ListShareSheet } from "@/components/share/ListShareSheet";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { feedback } from "@/lib/feedback";
 import { type AddEntryCandidate, AddEntryModal } from "./AddEntryModal";
 import { useTierListActions } from "./actions";
+import { itemTypeOfList, onListHrefs } from "./adapter";
+import { addedMessage } from "./add-entry";
+import { BAND_LABELS, entryNoun } from "./constants";
+import {
+  bandForScore,
+  historyActionLabel,
+  historyStepMessage,
+  stepSeq,
+  type TierListHistoryView,
+} from "./history";
 import { TierListInsightsPanel } from "./insights/TierListInsightsPanel";
-import { TierListView } from "./TierListView";
+import { ListDetailsSheet } from "./lists/ListSheets";
+import {
+  type BoardOrder,
+  TIER_LIST_EDIT_TOAST,
+  TierListView,
+} from "./TierListView";
 import type { TierListData, TierListInsightsData } from "./types";
 
 interface TierListViewPageProps {
@@ -51,11 +76,62 @@ interface TierListViewPageProps {
   insightsData: TierListInsightsData;
 }
 
-const privacyLabels: Record<string, { icon: typeof MdLock; label: string }> = {
-  PRIVATE: { icon: MdLock, label: "Private" },
-  FRIENDS: { icon: MdGroup, label: "Friends" },
-  PUBLIC: { icon: MdPublic, label: "Public" },
+const privacyLabels: Record<string, { icon: AppIcon; label: string }> = {
+  PRIVATE: { icon: Lock, label: "Private" },
+  FRIENDS: { icon: People, label: "Friends" },
+  PUBLIC: { icon: Public, label: "Public" },
 };
+
+const ACTION =
+  "t-cap flex min-h-11 min-w-14 flex-col items-center justify-center gap-0.5 px-3 text-ink-2";
+
+const TRIGGER =
+  "t-head h-full rounded-sm text-ink-2 data-[state=active]:bg-card data-[state=active]:text-ink";
+
+/** Show only offers the ranked bands, best first. */
+const RANKED_BANDS = [5, 4, 3, 2, 1] as const;
+
+/**
+ * How long an Undo tapped right after an edit on this page waits for the
+ * refreshed history to name that edit (`markEdited` cannot know its seq),
+ * and how often it looks. The refresh is a few hundred ms; past this the
+ * tap says so instead of stepping blind.
+ */
+const STEP_SEQ_WAIT_MS = 4000;
+const STEP_SEQ_POLL_MS = 100;
+
+const NO_HISTORY: TierListHistoryView = {
+  canUndo: false,
+  canRedo: false,
+  undo: null,
+  redo: null,
+};
+
+/**
+ * Where Undo / Redo stand, from the server, with an edit made on this page
+ * reflected before the refresh lands: a fresh edit can always be undone and
+ * has always cleared Redo. The server's answer replaces it when it comes.
+ */
+function useHistory(server: TierListHistoryView | null) {
+  const [history, setHistory] = useState<TierListHistoryView>(
+    server ?? NO_HISTORY,
+  );
+  useEffect(() => {
+    setHistory(server ?? NO_HISTORY);
+  }, [server]);
+  const markEdited = useCallback(() => {
+    setHistory((current) => ({
+      ...current,
+      canUndo: true,
+      canRedo: false,
+      // Which edit it is arrives with the refresh; until then the button
+      // says "Undo" without naming it.
+      undo: null,
+      redo: null,
+    }));
+  }, []);
+  return { history, setHistory, markEdited };
+}
 
 export function TierListViewPage({
   data,
@@ -72,276 +148,507 @@ export function TierListViewPage({
   const PrivacyIcon = privacyInfo.icon;
 
   const router = useRouter();
-  const { setTierListEditingLockAction, addItemToTierListAction } =
+  const { addItemsToTierListAction, undoAction, redoAction } =
     useTierListActions();
-  const [feedback, setFeedback] = useState<string | null>(null);
+  const [arranging, setArranging] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const [only, setOnly] = useState<ReadonlySet<number>>(() => new Set());
+  const [order, setOrder] = useState<BoardOrder>("rank");
+  const [sortOpen, setSortOpen] = useState(false);
+  /**
+   * Bumped on every open and used as the picker's `key`, so each open starts
+   * from an empty search: a reopened picker showing the last query's rows
+   * reads as fresh results.
+   */
+  const [addSession, setAddSession] = useState(0);
+  const onList = useMemo(() => onListHrefs(data.items), [data.items]);
+  // X08: an item list's "Try This Next" can be saved from; a place list's
+  // suggestion is a kind of venue, with nothing to look up.
+  const tryNextType = itemTypeOfList(data.listType);
   const [adding, setAdding] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
-  const [isEditingLocked, setIsEditingLocked] = useState(data.isEditingLocked);
-  const [isSavingEditingLock, setIsSavingEditingLock] = useState(false);
-
+  const { history, setHistory, markEdited } = useHistory(data.history);
+  const [stepping, setStepping] = useState(false);
+  const steppingRef = useRef(false);
+  /** The latest history, for a step that waits on the refresh to name it. */
+  const historyRef = useRef(history);
   useEffect(() => {
-    setIsEditingLocked(data.isEditingLocked);
-  }, [data.isEditingLocked]);
+    historyRef.current = history;
+  }, [history]);
 
-  const handleShare = useCallback(async () => {
-    const url = `${window.location.origin}/tier-lists/${data.id}`;
-    const shareData = {
-      title: data.name,
-      text: `Check out my tier list: ${data.name}`,
-      url,
-    };
-
-    try {
-      if (navigator.share && navigator.canShare?.(shareData)) {
-        await navigator.share(shareData);
-      } else if (navigator.clipboard) {
-        await navigator.clipboard.writeText(url);
-        setFeedback("Link copied to clipboard");
+  /**
+   * The `seq` an Undo or Redo names (`expectedSeq`): the step the page
+   * shows. Just after an edit made here the page knows *that* it can undo but
+   * not *which* edit until the refresh lands, so it waits for that — never
+   * steps blind, which is what let a stale tab take back another tab's edit.
+   *
+   * `"nothing"` when the history it now holds has no such step (a refresh
+   * after another tab's change can take it away); `"pending"` when the
+   * refresh has not named it within `STEP_SEQ_WAIT_MS`.
+   */
+  const seqToStep = useCallback(
+    async (
+      direction: "undo" | "redo",
+    ): Promise<number | "nothing" | "pending"> => {
+      for (let waited = 0; ; waited += STEP_SEQ_POLL_MS) {
+        const current = historyRef.current;
+        const seq = stepSeq(current, direction);
+        if (seq !== null) return seq;
+        const possible =
+          direction === "undo" ? current.canUndo : current.canRedo;
+        if (!possible) return "nothing";
+        if (waited >= STEP_SEQ_WAIT_MS) return "pending";
+        await new Promise((resolve) => setTimeout(resolve, STEP_SEQ_POLL_MS));
       }
-    } catch {
-      // User cancelled share
-    }
-  }, [data.id, data.name]);
+    },
+    [],
+  );
 
-  const handleToggleEditingLock = useCallback(async () => {
-    if (!data.isOwner || isSavingEditingLock) return;
+  const canArrange = data.isOwner;
+  const isArranging = canArrange && arranging;
 
-    const previousLocked = isEditingLocked;
-    const nextLocked = !previousLocked;
+  const openAdd = useCallback(() => {
+    setAddError(null);
+    setAddSession((session) => session + 1);
+    setAddOpen(true);
+  }, []);
 
-    setIsEditingLocked(nextLocked);
-    setIsSavingEditingLock(true);
+  // F-22 / H-33: Share and Details are L2's sheets, on this page. The share
+  // sheet says who can open the link and lets the owner change it (X17's
+  // PRIVATE case included), so nothing is copied before the person sees that.
+  const [shareOpen, setShareOpen] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(false);
 
-    const result = await setTierListEditingLockAction(data.id, nextLocked);
-    setIsSavingEditingLock(false);
+  /**
+   * One step of the list's history. Its toast offers the opposite step, so
+   * an Undo by mistake is itself one tap from being taken back.
+   */
+  const step = useCallback(
+    async (direction: "undo" | "redo", expected?: number) => {
+      if (steppingRef.current) return;
+      steppingRef.current = true;
+      setStepping(true);
+      const expectedSeq = expected ?? (await seqToStep(direction));
+      if (typeof expectedSeq !== "number") {
+        steppingRef.current = false;
+        setStepping(false);
+        const verb = direction === "undo" ? "Undo" : "Redo";
+        notify(
+          expectedSeq === "nothing"
+            ? `Nothing to ${direction} on this list any more.`
+            : `Still catching up with your last change. Try ${verb} again.`,
+          { tone: "error", id: TIER_LIST_EDIT_TOAST },
+        );
+        router.refresh();
+        return;
+      }
+      const result =
+        direction === "undo"
+          ? await undoAction(data.id, expectedSeq)
+          : await redoAction(data.id, expectedSeq);
+      steppingRef.current = false;
+      setStepping(false);
+      if (!result.success) {
+        notify(result.error, { tone: "error", id: TIER_LIST_EDIT_TOAST });
+        router.refresh();
+        return;
+      }
+      setHistory(result.history);
+      const opposite = direction === "undo" ? "redo" : "undo";
+      notify(historyStepMessage(direction, result.applied), {
+        id: TIER_LIST_EDIT_TOAST,
+        actionLabel: opposite === "redo" ? "Redo" : "Undo",
+        // The opposite step is this very edit: name it, so the toast can
+        // only ever reverse what it announced.
+        undo: () => void step(opposite, result.applied.seq),
+      });
+      router.refresh();
+    },
+    [data.id, redoAction, router, seqToStep, setHistory, undoAction],
+  );
 
-    if (!result.success) {
-      setIsEditingLocked(previousLocked);
-      setFeedback(result.error ?? "Failed to update editing lock");
-      return;
-    }
+  // ⌘Z / ⇧⌘Z (Ctrl on other systems) while arranging, outside text fields
+  // and not behind the Add entry sheet, whose own focus owns the keyboard.
+  useEffect(() => {
+    if (!isArranging || addOpen) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== "z")
+        return;
+      const target = event.target;
+      if (
+        target instanceof Element &&
+        target.closest("input, textarea, [contenteditable='true']") !== null
+      ) {
+        return;
+      }
+      const direction = event.shiftKey ? "redo" : "undo";
+      if (direction === "undo" ? !history.canUndo : !history.canRedo) return;
+      event.preventDefault();
+      void step(direction);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [addOpen, history.canRedo, history.canUndo, isArranging, step]);
 
-    setIsEditingLocked(result.isEditingLocked ?? nextLocked);
-    setFeedback(nextLocked ? "Editing locked" : "Editing unlocked");
-  }, [
-    data.id,
-    data.isOwner,
-    isEditingLocked,
-    isSavingEditingLock,
-    setTierListEditingLockAction,
-  ]);
-
-  const handleAddEntry = useCallback(
-    async (candidate: AddEntryCandidate) => {
+  /**
+   * X16: everything picked goes on as one multi-add — one edit, so the
+   * toast's Undo takes all of it back — each in the band your own verdict
+   * gives it, Unrated without one.
+   */
+  const handleAdd = useCallback(
+    async (candidates: AddEntryCandidate[], chosenBand?: number) => {
+      if (candidates.length === 0) return;
       setAdding(true);
       setAddError(null);
-      const result = await addItemToTierListAction(
+      const result = await addItemsToTierListAction(
         data.id,
-        candidate.id,
-        candidate.entityType,
-        0,
+        candidates.map((candidate) => ({
+          id: candidate.id,
+          entityType: candidate.entityType,
+          // F-175: the band step's answer places what your rating doesn't.
+          band:
+            bandForScore(candidate.myScore) === 0 && chosenBand !== undefined
+              ? chosenBand
+              : bandForScore(candidate.myScore),
+        })),
       );
       setAdding(false);
       if (!result.success) {
-        setAddError(result.error ?? "Failed to add item to tier list");
+        setAddError(result.error);
         return;
       }
       setAddOpen(false);
-      setFeedback(`Added ${candidate.name} to Unrated`);
+      const message = addedMessage(candidates, result.added, result.skipped);
+      if (result.added === 0) {
+        notify(message, { id: TIER_LIST_EDIT_TOAST });
+        return;
+      }
+      markEdited();
+      // The add's own edit, read back with it: the toast's Undo takes back
+      // exactly that, or is not offered (`addedEntriesEditSeq`).
+      const editSeq = result.editSeq;
+      notify(message, {
+        id: TIER_LIST_EDIT_TOAST,
+        ...(editSeq === null ? {} : { undo: () => void step("undo", editSeq) }),
+      });
       router.refresh();
     },
-    [addItemToTierListAction, data.id, router],
+    [addItemsToTierListAction, data.id, markEdited, router, step],
+  );
+
+  const handleEdited = useCallback(() => markEdited(), [markEdited]);
+  const handleUndo = useCallback(() => void step("undo"), [step]);
+
+  const isEmpty = data.items.length === 0;
+  const noun = (count: number) => entryNoun(data.listType, count);
+  const bandCounts = useMemo(() => {
+    const counts: Record<number, number> = {};
+    for (const item of data.items)
+      counts[item.band] = (counts[item.band] ?? 0) + 1;
+    return counts;
+  }, [data.items]);
+  const toggleOnly = (band: number) =>
+    setOnly((current) => {
+      const next = new Set(current);
+      if (next.has(band)) next.delete(band);
+      else next.add(band);
+      return next;
+    });
+  const narrowed = only.size > 0 || order === "crowd";
+
+  const board = isEmpty ? (
+    <EmptyState
+      illustration={<Ranked aria-hidden strokeWidth={ICON_STROKE} />}
+      title="Nothing ranked yet."
+      description={
+        data.isOwner
+          ? "Add something you've tried. Your rating picks its band."
+          : "When this list ranks something, it shows here."
+      }
+      action={
+        data.isOwner ? (
+          <Button onClick={openAdd}>
+            <Add aria-hidden strokeWidth={ICON_STROKE} />
+            Add from what you&apos;ve tasted
+          </Button>
+        ) : undefined
+      }
+    />
+  ) : (
+    <TierListView
+      tierListId={data.id}
+      items={data.items}
+      isOwner={data.isOwner}
+      listName={data.name}
+      listType={data.listType}
+      arranging={isArranging}
+      selectedItemId={selectedItemId ?? undefined}
+      query={query}
+      only={only}
+      order={order}
+      onClearSearch={() => {
+        setQuery("");
+        setOnly(new Set());
+      }}
+      onEdited={handleEdited}
+      onUndo={handleUndo}
+      onDone={() => setArranging(false)}
+      arrangeTools={
+        <>
+          <IconButton
+            aria-label={historyActionLabel("undo", history.undo)}
+            disabled={!history.canUndo || stepping}
+            onClick={() => void step("undo")}
+          >
+            <Undo />
+          </IconButton>
+          <IconButton
+            aria-label={historyActionLabel("redo", history.redo)}
+            disabled={!history.canRedo || stepping}
+            onClick={() => void step("redo")}
+          >
+            <Redo />
+          </IconButton>
+          <IconButton aria-label="Add entry" onClick={openAdd}>
+            <Add />
+          </IconButton>
+        </>
+      }
+    />
   );
 
   return (
-    <Box sx={{ maxWidth: 800, mx: "auto", px: { xs: 1, sm: 2 } }}>
-      <Stack spacing={2}>
-        {/* Header */}
-        <Stack
-          direction="row"
-          justifyContent="space-between"
-          alignItems="flex-start"
-          spacing={2}
-        >
-          <Box sx={{ flex: 1, minWidth: 0 }}>
-            <Typography level="h3">{data.name}</Typography>
-            {data.description && (
-              <Typography level="body-sm" sx={{ color: "text.secondary" }}>
-                {data.description}
-              </Typography>
-            )}
-            <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
-              <Chip
-                variant="soft"
-                color="neutral"
-                size="sm"
-                startDecorator={<PrivacyIcon />}
-              >
-                {privacyInfo.label}
-              </Chip>
-              <Typography
-                level="body-xs"
-                sx={{ color: "text.tertiary", alignSelf: "center" }}
-              >
-                {data.itemCount} {data.itemCount === 1 ? "item" : "items"}
-              </Typography>
-            </Stack>
-          </Box>
-          <Stack direction="row" spacing={0.5}>
-            {data.isOwner && !isEditingLocked && (
-              <Tooltip title="Add entry">
-                <IconButton
-                  variant="outlined"
-                  color="neutral"
-                  size="sm"
-                  aria-label="Add entry"
-                  onClick={() => {
-                    setAddError(null);
-                    setAddOpen(true);
-                  }}
-                >
-                  <MdAdd />
-                </IconButton>
-              </Tooltip>
-            )}
-            {data.listType === "place" && (
-              <Tooltip title="View on map">
-                <IconButton
-                  component={Link}
-                  href={`/map?tierLists=${data.id}`}
-                  variant="outlined"
-                  color="neutral"
-                  size="sm"
-                >
-                  <MdMap />
-                </IconButton>
-              </Tooltip>
-            )}
-            {data.privacy !== "PRIVATE" && (
-              <Tooltip title="Share">
-                <IconButton
-                  variant="outlined"
-                  color="neutral"
-                  size="sm"
-                  onClick={handleShare}
-                >
-                  <MdShare />
-                </IconButton>
-              </Tooltip>
-            )}
-            {data.isOwner && (
-              <Tooltip
-                title={isEditingLocked ? "Unlock editing" : "Lock editing"}
-              >
-                <IconButton
-                  variant={isEditingLocked ? "solid" : "outlined"}
-                  color={isEditingLocked ? "warning" : "neutral"}
-                  size="sm"
-                  onClick={handleToggleEditingLock}
-                  disabled={isSavingEditingLock}
-                >
-                  {isEditingLocked ? <MdLock /> : <MdLockOpen />}
-                </IconButton>
-              </Tooltip>
-            )}
-            {data.isOwner && (
-              <Tooltip title="Edit list">
-                <IconButton
-                  component={Link}
-                  href={`/tier-lists/${data.id}/edit`}
-                  variant="outlined"
-                  color="neutral"
-                  size="sm"
-                >
-                  <MdEdit />
-                </IconButton>
-              </Tooltip>
-            )}
-          </Stack>
-        </Stack>
+    <div className="mx-auto flex w-full max-w-[800px] flex-col gap-4 sm:px-4">
+      {/* W-10: Back, like every other pushed page; the large title below
+          stays the page's h1 (and the morph target), so the bar has none. */}
+      <AppBar parent="/tier-lists" />
+      <header className="flex flex-col gap-1">
+        {/* B05: the target of TierListCard's title morph (H-7). */}
+        <MorphTitle>
+          <h1 className="t-title m-0 min-w-0 break-words text-ink">
+            {data.name}
+          </h1>
+        </MorphTitle>
+        <p className="t-cap tabular m-0 flex items-center gap-1 text-ink-2">
+          <PrivacyIcon
+            aria-hidden
+            strokeWidth={ICON_STROKE}
+            className="size-4"
+          />
+          <span>{privacyInfo.label}</span>
+          <span aria-hidden>·</span>
+          <span>
+            {data.itemCount} {noun(data.itemCount)}
+          </span>
+        </p>
+        {data.description && (
+          <p className="t-body m-0 text-ink-2">{data.description}</p>
+        )}
+      </header>
 
-        {/* Tabs: Rankings + Insights */}
+      {isArranging ? (
+        <section aria-label="Arrange" className="flex flex-col gap-3 pb-2">
+          <p className="t-cap m-0 text-ink-2">
+            Tap a row, then move it; or hold its handle and drag. Undo reaches
+            back through every change.
+          </p>
+          {board}
+        </section>
+      ) : (
         <Tabs
           value={tab}
-          onChange={(_e, v) => setTab(v as typeof tab)}
-          sx={{ backgroundColor: "transparent" }}
+          onValueChange={(v) => {
+            feedback("tick");
+            void setTab(v as typeof tab);
+          }}
+          className="gap-3"
         >
-          <TabList
-            disableUnderline
-            sx={{
-              gap: 1,
-              borderRadius: "md",
-              backgroundColor: "background.level1",
-              p: 0.5,
-            }}
-          >
-            <Tab
-              value="rankings"
-              disableIndicator
-              sx={{
-                flex: 1,
-                borderRadius: "sm",
-                fontWeight: "md",
-                "&[aria-selected='true']": {
-                  backgroundColor: "background.surface",
-                  boxShadow: "sm",
-                },
-              }}
+          <div className="flex flex-wrap items-center gap-2">
+            <TabsList className="h-11 group-data-[orientation=horizontal]/tabs:h-11 min-w-0 flex-1 rounded-md bg-raised p-1">
+              <TabsTrigger value="rankings" className={TRIGGER}>
+                Rankings
+              </TabsTrigger>
+              <TabsTrigger value="insights" className={TRIGGER}>
+                Insights
+              </TabsTrigger>
+            </TabsList>
+            {/* F-14: the board's labelled group, Map · Share · Details,
+                one bordered strip beside the tabs. */}
+            <fieldset
+              aria-label="List actions"
+              className="m-0 flex shrink-0 divide-x divide-line overflow-hidden rounded-md border border-line"
             >
-              Rankings
-            </Tab>
-            <Tab
-              value="insights"
-              disableIndicator
-              sx={{
-                flex: 1,
-                borderRadius: "sm",
-                fontWeight: "md",
-                "&[aria-selected='true']": {
-                  backgroundColor: "background.surface",
-                  boxShadow: "sm",
-                },
-              }}
-            >
-              Insights
-            </Tab>
-          </TabList>
-          <TabPanel value="rankings" sx={{ px: 0 }}>
-            <TierListView
-              tierListId={data.id}
-              items={data.items}
-              isOwner={data.isOwner}
-              isEditingLocked={isEditingLocked}
-              selectedItemId={selectedItemId ?? undefined}
+              {/* L40: a place list opens on the map, filtered to it. */}
+              {data.listType === "place" && (
+                <Link
+                  href={`/map?list=${encodeURIComponent(data.id)}`}
+                  underline="none"
+                  onClick={() => feedback("press")}
+                  className={ACTION}
+                >
+                  <MapIcon aria-hidden className="size-5" />
+                  Map
+                </Link>
+              )}
+              {/* X17: a PRIVATE list's owner still gets Share, which says how
+                  to make the list shareable (tierListShareBlock) instead of
+                  handing out a link only they can open. */}
+              {(data.privacy !== "PRIVATE" || data.isOwner) && (
+                <button
+                  type="button"
+                  className={ACTION}
+                  onClick={() => {
+                    feedback("press");
+                    setShareOpen(true);
+                  }}
+                >
+                  <Share aria-hidden className="size-5" />
+                  Share
+                </button>
+              )}
+              {data.isOwner && (
+                <button
+                  type="button"
+                  className={ACTION}
+                  onClick={() => {
+                    feedback("press");
+                    setDetailsOpen(true);
+                  }}
+                >
+                  <Edit aria-hidden className="size-5" />
+                  Details
+                </button>
+              )}
+            </fieldset>
+          </div>
+          <TabsContent value="rankings" className="flex flex-col gap-3">
+            {!isEmpty && (
+              <div className="flex items-center gap-2">
+                <div className="relative min-w-0 flex-1">
+                  <Search
+                    aria-hidden
+                    strokeWidth={ICON_STROKE}
+                    className="pointer-events-none absolute top-1/2 left-3 size-5 -translate-y-1/2 text-glyph"
+                  />
+                  <Input
+                    type="search"
+                    aria-label="Search this list"
+                    value={query}
+                    placeholder="Search this list"
+                    onChange={(event) => setQuery(event.target.value)}
+                    className="pl-10"
+                  />
+                </div>
+                <Button
+                  variant="outline"
+                  aria-label={`Arrange: ${order === "crowd" ? "Crowd's rating" : "Ranking"}${only.size > 0 ? `, ${only.size} bands` : ""}`}
+                  aria-pressed={narrowed}
+                  onClick={() => setSortOpen(true)}
+                >
+                  <SortDescending aria-hidden strokeWidth={ICON_STROKE} />
+                  {order === "crowd" ? "Crowd" : "Rank"}
+                </Button>
+              </div>
+            )}
+            {board}
+            {/* The thumb-zone dock: Edit order (the lock, DECISIONS 41) and
+                the one primary, Add. */}
+            {canArrange && (
+              <ActionBar>
+                {!isEmpty && (
+                  <Button
+                    variant="outline"
+                    className="min-w-0 flex-1"
+                    onClick={() => {
+                      void setTab("rankings");
+                      setArranging(true);
+                    }}
+                  >
+                    <Arrange aria-hidden strokeWidth={ICON_STROKE} />
+                    Edit order
+                  </Button>
+                )}
+                <Button className="min-w-0 flex-1" onClick={openAdd}>
+                  <Add aria-hidden strokeWidth={ICON_STROKE} />
+                  Add a {noun(1)}
+                </Button>
+              </ActionBar>
+            )}
+          </TabsContent>
+          <TabsContent value="insights">
+            <TierListInsightsPanel
+              insights={insightsData}
+              tryNext={
+                tryNextType === null ? null : { itemType: tryNextType, onList }
+              }
+              grounded={{ tierListId: data.id, isOwner: data.isOwner }}
+              noun={noun(2)}
             />
-          </TabPanel>
-          <TabPanel value="insights" sx={{ px: 0 }}>
-            <TierListInsightsPanel insights={insightsData} />
-          </TabPanel>
+          </TabsContent>
         </Tabs>
-      </Stack>
+      )}
+
+      <BottomSheet open={sortOpen} onOpenChange={setSortOpen} title="Arrange">
+        <div className="flex flex-col gap-4 pb-2">
+          <SegmentedControl
+            aria-label="Order"
+            options={[
+              { value: "rank", label: "Ranking" },
+              { value: "crowd", label: "Crowd's rating" },
+            ]}
+            value={order}
+            onValueChange={setOrder}
+          />
+          <div className="flex flex-col gap-2">
+            <h3 className="t-head m-0 text-ink">Show only</h3>
+            <div className="flex flex-wrap gap-2">
+              {RANKED_BANDS.map((band) => (
+                <FilterChip
+                  key={band}
+                  selected={only.has(band)}
+                  count={bandCounts[band] ?? 0}
+                  onClick={() => toggleOnly(band)}
+                >
+                  {BAND_LABELS[band]}
+                </FilterChip>
+              ))}
+            </div>
+          </div>
+        </div>
+      </BottomSheet>
+
+      {(data.privacy !== "PRIVATE" || data.isOwner) && (
+        <ListShareSheet
+          open={shareOpen}
+          onOpenChange={setShareOpen}
+          tierListId={data.id}
+          name={data.name}
+          privacy={data.privacy}
+        />
+      )}
+      {data.isOwner && (
+        <ListDetailsSheet
+          open={detailsOpen}
+          onOpenChange={setDetailsOpen}
+          tierList={data}
+          viewerId={data.createdById}
+        />
+      )}
 
       <AddEntryModal
+        key={addSession}
         open={addOpen}
         onClose={() => setAddOpen(false)}
-        onPick={(candidate) => void handleAddEntry(candidate)}
+        onAdd={(candidates, band) => void handleAdd(candidates, band)}
+        bandCounts={bandCounts}
         busy={adding}
         error={addError}
         listType={data.listType}
+        listName={data.name}
+        onList={onList}
+        tierListId={data.id}
       />
-
-      <Snackbar
-        open={feedback !== null}
-        autoHideDuration={3000}
-        onClose={() => setFeedback(null)}
-        color="success"
-        variant="soft"
-        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
-      >
-        {feedback}
-      </Snackbar>
-    </Box>
+    </div>
   );
 }

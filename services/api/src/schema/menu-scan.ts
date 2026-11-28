@@ -26,11 +26,13 @@ import type {
   ActOnSuggestionResult,
   MatchSuggestionDto,
   MenuScanDto,
+  MenuScanMatchCounts,
 } from "@cellar-assistant/contracts";
 import {
   ForbiddenError,
   itemActorId,
   MatchSuggestionsCollectionActorDescriptor,
+  MENU_SCAN_MATCH_STATUSES,
   MENU_SCAN_STATUSES,
   MenuScanActorDescriptor,
   MenuScansCollectionActorDescriptor,
@@ -42,7 +44,7 @@ import { builder } from "./builder.ts";
 import { failureSummary } from "./failure-summary.ts";
 import { ItemInterface } from "./item.ts";
 import { connectionFromPage, toPageArgs } from "./pagination.ts";
-import { RecipeType_ } from "./recipe.ts";
+import { RecipeType_, visibleRecipeIdOrNull } from "./recipe.ts";
 import { PlaceStubType } from "./tier-list.ts";
 
 const MenuScanStatusEnum = builder.enumType("MenuScanStatus", {
@@ -51,6 +53,17 @@ const MenuScanStatusEnum = builder.enumType("MenuScanStatus", {
     "`pending` → `processing` → `completed` | `failed`; the transitions are " +
     "made by `MenuScanActor.process`, never by a client.",
   values: MENU_SCAN_STATUSES,
+});
+
+const MenuScanMatchStatusEnum = builder.enumType("MenuScanMatchStatus", {
+  description:
+    "Where the match run is — the half of the pipeline `processingStatus` " +
+    "does not describe, since a scan is `completed` as soon as extraction " +
+    "finishes. `waiting` (extracting) → `queued` → `running` → `completed` | " +
+    "`failed`; `skipped` when there is nothing to match. Derived from the " +
+    "match job and the outbox on every read (N06a). Poll until it is " +
+    "`completed`, `failed` or `skipped`.",
+  values: MENU_SCAN_MATCH_STATUSES,
 });
 
 const SuggestionTargetKindEnum = builder.enumType("MatchSuggestionTargetKind", {
@@ -101,10 +114,14 @@ export const MatchSuggestionType = builder
         type: RecipeType_,
         nullable: true,
         description: "Set when `targetKind` is `RECIPE` — a matched cocktail.",
-        resolve: (suggestion) =>
-          suggestion.target.kind === "RECIPE"
-            ? suggestion.target.recipeId
-            : null,
+        // X15: null, not a field error, once its author makes it private.
+        resolve: (suggestion, _args, context) =>
+          visibleRecipeIdOrNull(
+            context,
+            suggestion.target.kind === "RECIPE"
+              ? suggestion.target.recipeId
+              : null,
+          ),
       }),
       confidenceScore: t.exposeFloat("confidenceScore", {
         description:
@@ -129,6 +146,31 @@ export const MatchSuggestionConnection = builder.connectionObject(
   { type: MatchSuggestionType, name: "MatchSuggestionConnection" },
   { name: "MatchSuggestionEdge" },
 );
+
+const MenuScanMatchCountsType = builder
+  .objectRef<MenuScanMatchCounts>("MenuScanMatchCounts")
+  .implement({
+    description:
+      "How a scan's filed lines stand, counted by the server so a menu " +
+      "longer than one page still gets an honest headline. Every line is in " +
+      "exactly one bucket: `matched`, `toConfirm`, or new " +
+      "(`lines - matched - toConfirm`).",
+    fields: (t) => ({
+      lines: t.exposeInt("lines", {
+        description: "Menu lines filed on the place for this scan.",
+      }),
+      matched: t.exposeInt("matched", {
+        description:
+          "Confirmed lines: a verified item, a linked recipe, or an accepted " +
+          "suggestion. An AI suggestion nobody has accepted is not counted.",
+      }),
+      toConfirm: t.exposeInt("toConfirm", {
+        description:
+          "Unconfirmed lines with at least one suggestion awaiting Accept / " +
+          "Reject.",
+      }),
+    }),
+  });
 
 /**
  * One batch, N parallel `MenuScanActor.get` calls (§1.5).
@@ -184,9 +226,21 @@ export const MenuScanType = builder
           scan.effectivePlaceId === null ? null : { id: scan.effectivePlaceId },
       }),
       extractedText: t.exposeString("extractedText", { nullable: true }),
+      headerName: t.string({
+        nullable: true,
+        description:
+          "L10: the venue name the menu itself prints, or null when the " +
+          "model declined to read one. A proposal only — the place keeps " +
+          "its name until its creator confirms a rename.",
+        resolve: (scan) => scan.headerName ?? null,
+      }),
       processingStatus: t.field({
         type: MenuScanStatusEnum,
         resolve: (scan) => scan.processingStatus,
+      }),
+      matchStatus: t.field({
+        type: MenuScanMatchStatusEnum,
+        resolve: (scan) => scan.matchStatus,
       }),
       processingError: t.string({
         nullable: true,
@@ -207,8 +261,10 @@ export const MenuScanType = builder
       itemsDetected: t.exposeInt("itemsDetected"),
       itemsMatched: t.exposeInt("itemsMatched", {
         description:
-          "Menu lines with at least one suggestion. Recomputed from rows " +
-          "each time the matcher reports, never incremented.",
+          "Menu lines with at least one suggestion, confirmed or not. " +
+          "Recomputed from rows each time the matcher reports, never " +
+          "incremented. For a headline use `matchCounts`, which counts only " +
+          "confirmed lines as matched.",
       }),
       scannedAt: t.expose("scannedAt", { type: "DateTime", nullable: true }),
       processedAt: t.expose("processedAt", {
@@ -218,6 +274,15 @@ export const MenuScanType = builder
       createdAt: t.expose("createdAt", { type: "DateTime", nullable: true }),
       updatedAt: t.expose("updatedAt", { type: "DateTime", nullable: true }),
 
+      matchCounts: t.field({
+        type: MenuScanMatchCountsType,
+        description:
+          "Matched / to confirm / new, counted over every line rather than " +
+          "the page a client loaded. Read it after an accept or reject to " +
+          "get the settled numbers.",
+        resolve: (scan, _args, context) =>
+          context.actor(MenuScanActorDescriptor, scan.id).matchCounts(),
+      }),
       suggestions: t.field({
         type: MatchSuggestionConnection,
         description:

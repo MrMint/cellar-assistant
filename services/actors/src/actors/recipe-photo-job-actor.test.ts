@@ -43,8 +43,10 @@ import {
   ITEM_TYPES,
   NotFoundError,
   RECIPE_PHOTO_STAGES,
+  RECIPE_TEXT_MAX,
   systemCtx,
   userCtx,
+  ValidationError,
 } from "@cellar-assistant/contracts";
 import { files, friends, jobs, outbox } from "@cellar-assistant/db";
 import { and, eq, sql } from "@cellar-assistant/db/orm";
@@ -386,6 +388,79 @@ describe.skipIf(skip)("RecipePhotoJobActor — target-stack §7 IDOR", () => {
       expect(extractions[0]?.viewerId).toBe(owner);
       expect(extractions[0]?.kind).toBe("user");
       expect((await jobRow(db, jobId)).createdBy).toBe(owner);
+    });
+  });
+
+  it("X15 / D22: what the model read is a private draft, never published by the job", async () => {
+    await withTestDb(async (db) => {
+      const owner = await seedUser(db);
+      const fileId = await seedFile(db, owner);
+      const jobId = randomUUID();
+      const { extract } = countingExtractor();
+      const { write, calls } = recordingWriter();
+      const actor = await jobActor(db, jobId, extract, noHits, write);
+      await actor.start(userCtx(owner, "req"), { fileId });
+      await runToCompletion(actor, jobId);
+      const created = calls.find((call) => call.method === "createRecipe");
+      expect(created?.input).toMatchObject({
+        privacy: "PRIVATE",
+        isDraft: true,
+      });
+    });
+  });
+
+  it("X15's Paste: reads pasted text with no file at all, and passes the text to the model", async () => {
+    await withTestDb(async (db) => {
+      const owner = await seedUser(db);
+      const jobId = randomUUID();
+      const requests: unknown[] = [];
+      const extract: RecipePhotoExtractor = async (_ctx, request) => {
+        requests.push(request);
+        return { recipe: EXTRACTION, model: "fake-text-1" };
+      };
+      const { write, calls } = recordingWriter();
+      // A verifier that fails loudly: nothing on the text path may ask it.
+      const actor = await jobActor(
+        db,
+        jobId,
+        extract,
+        noHits,
+        write,
+        async () => {
+          throw new Error("the text path verified a file");
+        },
+      );
+      await actor.start(userCtx(owner, "req"), {
+        text: "Negroni: 1 oz gin, 1 oz Campari, 1 oz sweet vermouth. Stir.",
+      });
+      await runToCompletion(actor, jobId);
+      expect(requests[0]).toMatchObject({
+        fileId: null,
+        text: "Negroni: 1 oz gin, 1 oz Campari, 1 oz sweet vermouth. Stir.",
+      });
+      expect(calls.map((call) => call.method)).toContain("createRecipe");
+      expect((await jobRow(db, jobId)).status).toBe("completed");
+    });
+  });
+
+  it("X15's Paste: refuses blank text, text with a photo, and text past the cap — before any job exists", async () => {
+    await withTestDb(async (db) => {
+      const owner = await seedUser(db);
+      const fileId = await seedFile(db, owner);
+      for (const payload of [
+        { text: "   " },
+        { text: "a recipe", fileId },
+        { text: "x".repeat(RECIPE_TEXT_MAX + 1) },
+      ]) {
+        const jobId = randomUUID();
+        const { extract } = countingExtractor();
+        const { write } = recordingWriter();
+        const actor = await jobActor(db, jobId, extract, noHits, write);
+        await expect(
+          actor.start(userCtx(owner, "req"), payload),
+        ).rejects.toThrow(ValidationError);
+        expect(await outboxFor(db, jobId)).toHaveLength(0);
+      }
     });
   });
 
@@ -850,6 +925,81 @@ describe.skipIf(skip)("RecipePhotoJobActor — the stage chain (§2.6)", () => {
     });
   });
 
+  /**
+   * X14: what the job writes per line is decided over the whole list —
+   * the rye is the base because it is the largest spirit pour — and the
+   * printed amount and brand ride along. A new group gets its base spirit
+   * (T7: "baseSpirit is never written").
+   */
+  it("writes kind, role, the printed amount and the brand, and the group's base spirit", async () => {
+    await withTestDb(async (db) => {
+      const owner = await seedUser(db);
+      const fileId = await seedFile(db, owner);
+      const jobId = randomUUID();
+      const extract: RecipePhotoExtractor = async () => ({
+        recipe: {
+          ...EXTRACTION,
+          ingredients: [
+            {
+              name: "Rittenhouse",
+              quantity: 2,
+              unit: "oz",
+              quantityText: "2 oz",
+              brandMentioned: "Rittenhouse",
+              baseSpirit: "rye",
+            },
+            {
+              name: "simple syrup",
+              quantity: 0.25,
+              unit: "oz",
+              quantityText: "1/4 oz",
+              category: "syrup",
+            },
+            {
+              name: "Angostura bitters",
+              quantityText: "2 dashes",
+              role: "garnish",
+            },
+            { name: "orange twist", role: "garnish" },
+          ],
+        },
+        model: "fake-vision-1",
+      });
+      const { write, calls } = recordingWriter();
+      const actor = await jobActor(db, jobId, extract, noHits, write);
+      await actor.start(userCtx(owner, "req"), { fileId });
+      await runToCompletion(actor, jobId);
+
+      const group = calls.find((call) => call.method === "createGroup");
+      expect(group?.input).toMatchObject({ baseSpirit: "rye" });
+
+      const ingredientsCall = calls.find(
+        (call) => call.method === "setIngredients",
+      );
+      if (ingredientsCall === undefined) {
+        throw new Error("setIngredients was never called");
+      }
+      const written = (
+        ingredientsCall.input as {
+          ingredients: readonly RecipeIngredientInput[];
+        }
+      ).ingredients;
+      expect(written.map((line) => [line.kind, line.role])).toEqual([
+        ["rye", "base"],
+        ["simple_syrup", "sweetener"],
+        // The rules know bitters; the model's "garnish" is not trusted over
+        // them (a wrong garnish would make a drink look makeable).
+        ["aromatic_bitters", "bitters"],
+        ["orange", "garnish"],
+      ]);
+      expect(written[0]).toMatchObject({
+        quantityText: "2 oz",
+        brandMentioned: "Rittenhouse",
+      });
+      expect(written[1]).toMatchObject({ quantityText: "1/4 oz" });
+    });
+  });
+
   it("normalises the instruction verbs the check constraint refuses", async () => {
     await withTestDb(async (db) => {
       const owner = await seedUser(db);
@@ -1146,7 +1296,7 @@ describe("recipe-photo routing", () => {
   });
 
   it("takes the closest hit inside the threshold and no other", () => {
-    const hit = (distance: number): ItemSearchHit => ({
+    const hit = (distance: number | null): ItemSearchHit => ({
       type: "SPIRIT",
       id: randomUUID(),
       name: "x",
@@ -1154,6 +1304,10 @@ describe("recipe-photo routing", () => {
     });
     const near = hit(0.1);
     expect(pickIngredientMatch([hit(0.3), near])).toBe(near);
+    // N08: a hit the name found with no vector has no distance, and is not
+    // close enough to claim an ingredient — even listed first.
+    expect(pickIngredientMatch([hit(null), near])).toBe(near);
+    expect(pickIngredientMatch([hit(null)])).toBeNull();
     expect(
       pickIngredientMatch([hit(INGREDIENT_MATCH_MAX_DISTANCE + 0.01)]),
     ).toBeNull();

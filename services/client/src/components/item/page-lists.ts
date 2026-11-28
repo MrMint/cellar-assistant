@@ -35,15 +35,18 @@ import type { ItemBrand } from "./ItemBrands";
 import type { ItemCellar, ItemCellarUser } from "./ItemCellars";
 
 export type PageQuery = typeof apiServerQuery;
+// `null` in place of a `PageQuery` below: first pages only (100 of each),
+// for a reader with no imperative query of its own — the desktop pane.
 
 /** Every brand of the item: the first 100 inline, the rest with `after`. */
 export async function allItemBrands(
-  query: PageQuery,
+  query: PageQuery | null,
   data: FragmentOf<typeof ItemPageItemFragment>,
   ids: { itemId: string; type: ApiItemType },
 ): Promise<ItemBrand[]> {
   const first = readFragment(ItemPageItemFragment, data).brands;
   const { edges } = await loadRest(first, async (after) => {
+    if (query === null) return null;
     const page = await query(ItemBrandsPageQuery, { ...ids, after });
     const result = unwrapResult(page.item, "QueryItemSuccess");
     return result.ok ? result.data.data.brands : null;
@@ -68,7 +71,7 @@ type CellarWithCoOwners = Omit<CellarSource, "coOwners"> & {
  * 100 is all of it, `total` is the exact count), each with every co-owner.
  */
 export async function allItemCellars(
-  query: PageQuery,
+  query: PageQuery | null,
   data: FragmentOf<typeof ItemPageRelationsFragment>,
 ): Promise<{ cellars: ItemCellar[]; total: number | null }> {
   const relations = readFragment(ItemPageRelationsFragment, data);
@@ -76,6 +79,7 @@ export async function allItemCellars(
     relations.cellars.edges.map(
       async ({ node }: { node: CellarWithCoOwners }) => {
         const { edges } = await loadRest(node.coOwners, async (after) => {
+          if (query === null) return null;
           const page = await query(CellarCoOwnersPageQuery, {
             cellarId: node.id,
             after,
@@ -99,11 +103,12 @@ type MyCellarNode = {
 
 /** "Add to Cellar" — every cellar the viewer may add to, past 100. */
 export async function allAddableCellars(
-  query: PageQuery,
+  query: PageQuery | null,
   first: RestConnection<{ node: MyCellarNode }>,
   viewerId: string | null,
 ): Promise<{ id: string; name: string }[]> {
   const { edges } = await loadRest(first, async (after) => {
+    if (query === null) return null;
     const page = await query(AddableCellarsPageQuery, { after });
     const result = unwrapResult(page.myCellars, "CellarConnection");
     return result.ok ? result.data : null;

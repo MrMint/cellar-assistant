@@ -40,7 +40,7 @@ import type { ActorDescriptor } from "./actors.ts";
 import type { Ctx } from "./ctx.ts";
 import type { ItemRef, ItemType } from "./items.ts";
 import type { Page, PageArgs } from "./page.ts";
-import type { LngLat } from "./places.ts";
+import type { LngLat, PlaceReviewStatus } from "./places.ts";
 
 /* -------------------------------------------------------------------------- */
 /* Hashing                                                                     */
@@ -74,6 +74,17 @@ const canonical = (value: unknown): string => {
  */
 export type SearchAllInterface<TInput, THit> = {
   all(ctx: Ctx, input: TInput): Promise<readonly THit[]>;
+};
+
+/**
+ * A search section's page (MC-search, L3). `totalCount` is counted before the
+ * actor's cap: exact for a lexical section, and for a semantic one either the
+ * full count (under the cap) or the cap itself with `totalIsLowerBound` true,
+ * which a client shows as "200+" — never as a total.
+ */
+export type SearchPage<T> = Page<T> & {
+  readonly totalCount: number;
+  readonly totalIsLowerBound: boolean;
 };
 
 /** The hash every search actor id is. Exported for tests, not for call sites. */
@@ -274,12 +285,62 @@ export type ItemSearchInput = {
   readonly itemTypes?: readonly ItemType[] | null;
   readonly maxDistance?: number | null;
   readonly limit?: number | null;
+  /**
+   * X12: **narrow instead of padding.** A `text` search whose phrase names
+   * an item outright (a hit whose name matches at
+   * {@link ITEM_SEARCH_NARROW_STRONG_NAME} or better) keeps only the hits
+   * whose names match too, plus the vector-only hits within
+   * {@link ITEM_SEARCH_NARROW_DISTANCE_GAP} of that name hit — the same
+   * producer's other bottles, which the embedding puts right beside it —
+   * rather than filling the list with whatever else is nearest. No effect on
+   * a search with no such hit (a description, a producer the names do not
+   * say), on a photo or vector search, or when it is false. Off by default,
+   * so the menu matcher's candidate lists are unchanged; part of the key
+   * only when set.
+   */
+  readonly narrow?: boolean | null;
 };
+
+/**
+ * X12: the name similarity (`strict_word_similarity`, 0–1) that counts as
+ * the phrase naming an item. Tuned on the N05 eval
+ * (`services/actors/src/eval/retrieval/README.md`): 0.6 takes typos that
+ * still spell most of the name ("blantons" against "Blanton's" 0.70, "veuve cliquot" 0.71) and
+ * leaves a descriptive phrase that merely shares a word with a name
+ * ("wheated bourbon" against "… Bourbon", 0.50) un-narrowed — narrowing that
+ * one would drop the wheated bourbons the vector found.
+ */
+export const ITEM_SEARCH_NARROW_STRONG_NAME = 0.6;
+
+/**
+ * X12: how much further than the nearest strong name hit a vector-only hit
+ * may lie and still be kept by a narrowed search. Relative, not absolute, so
+ * it survives a change of embedding model better than a fixed cutoff; tuned
+ * on N05 with `nomic-embed-text` — a producer's other bottles sit within
+ * 0.011 of the named one ("buffalo trace": Eagle Rare 17 at +0.011), the
+ * nearest unrelated hit +0.020 ("kbs"). See the eval README for the sweep.
+ */
+export const ITEM_SEARCH_NARROW_DISTANCE_GAP = 0.03;
 
 export type ItemSearchHit = ItemRef & {
   readonly name: string;
-  /** Cosine distance, 0–2. Lower is closer. */
-  readonly distance: number;
+  /**
+   * Cosine distance, 0–2. Lower is closer. Always the item's own vector
+   * distance, also for a hit the name match brought in (N08) — which is why
+   * such a hit can lie beyond `maxDistance`: the cutoff bounds the vector
+   * arm, not the lexical one. `null` only for an item the name match found
+   * that has **no vector yet** (never embedded): it has no distance to
+   * report, as `CellarItemSearchHit` and `RecipeSearchHit` say the same way.
+   */
+  readonly distance: number | null;
+  /**
+   * N08: pg_trgm `strict_word_similarity` of the phrase to the item's name,
+   * 0–1, on every hit of a `text` search — also one only the vector found,
+   * whose name scored under the lexical ranking's threshold — so two hits'
+   * name matches can be compared. `null` (or absent) for a vector or photo
+   * search, which have no phrase.
+   */
+  readonly lexicalSimilarity?: number | null;
 };
 
 export type ItemSearchActorInterface = {
@@ -287,7 +348,7 @@ export type ItemSearchActorInterface = {
     ctx: Ctx,
     input: ItemSearchInput,
     page: PageArgs,
-  ): Promise<Page<ItemSearchHit>>;
+  ): Promise<SearchPage<ItemSearchHit>>;
 };
 
 export const ItemSearchActorDescriptor: ActorDescriptor<
@@ -323,6 +384,8 @@ export const itemSearchActorId = (
     itemTypes: [...(input.itemTypes ?? [])].sort(),
     maxDistance: input.maxDistance ?? ITEM_SEARCH_MAX_DISTANCE,
     limit: input.limit ?? ITEM_SEARCH_RESULT_CAP,
+    // Absent unless set, so every key minted before X12 is unchanged.
+    ...(input.narrow === true ? { narrow: true } : {}),
   });
 
 /* -------------------------------------------------------------------------- */
@@ -414,7 +477,7 @@ export type BrandSearchActorInterface = {
     ctx: Ctx,
     input: BrandSearchInput,
     page: PageArgs,
-  ): Promise<Page<BrandSearchHit>>;
+  ): Promise<SearchPage<BrandSearchHit>>;
 };
 
 export const BrandSearchActorDescriptor: ActorDescriptor<
@@ -457,7 +520,37 @@ export type RecipeSearchInput = {
   readonly type?: string | null;
   readonly maxDistance?: number | null;
   readonly limit?: number | null;
+  /**
+   * X12 / D9: universal search's Recipes section. `term` is matched against
+   * recipe **names** (the lexical half, first) and is also embedded and
+   * ranked by `recipe_vectors` distance (the semantic half, after), cut at
+   * `maxDistance` (default {@link RECIPE_HYBRID_MAX_DISTANCE}) and at
+   * {@link RECIPE_HYBRID_DISTANCE_GAP} past the nearest. With no embedding
+   * (no AI provider, a spent budget) it answers with the name matches alone
+   * rather than failing. `semanticQuery` is ignored. Part of the key only
+   * when set.
+   */
+  readonly hybrid?: boolean | null;
 };
+
+/**
+ * X12 / D9: a hybrid recipe search's default cutoff. `RECIPE_SEARCH_MAX_DISTANCE`
+ * (0.8) passes every recipe in the catalog for any phrase with
+ * `nomic-embed-text`. Measured 2026-10-09 on 15 hand-written recipe texts in
+ * `RecipeActor`'s embedding format and 16 phrases — **not** an eval set; the
+ * N05 harness has no recipes: right answers sat at 0.28–0.45, a phrase with
+ * no recipe ("lagavulin 16", "duvel") found its nearest at 0.60, one about
+ * wine ("barolo", "pinot noir") at 0.44–0.48.
+ */
+export const RECIPE_HYBRID_MAX_DISTANCE = 0.45;
+
+/**
+ * X12 / D9: how far past the nearest recipe a hybrid search still reaches.
+ * Same measurement: every second right answer was within 0.044 of the first
+ * ("something with ginger": Penicillin 0.404, Moscow Mule 0.448), the
+ * nearest wrong one often within 0.06 ("tequila": Mojito at +0.053).
+ */
+export const RECIPE_HYBRID_DISTANCE_GAP = 0.05;
 
 export type RecipeSearchHit = {
   readonly recipeId: string;
@@ -474,7 +567,7 @@ export type RecipeSearchActorInterface = {
     ctx: Ctx,
     input: RecipeSearchInput,
     page: PageArgs,
-  ): Promise<Page<RecipeSearchHit>>;
+  ): Promise<SearchPage<RecipeSearchHit>>;
 };
 
 export const RecipeSearchActorDescriptor: ActorDescriptor<
@@ -489,18 +582,27 @@ export const RecipeSearchActorDescriptor: ActorDescriptor<
   internalMethods: { all: { timeoutMs: 20_000 } },
 };
 
-/** Viewer-insensitive: recipes are catalog data with no privacy column. */
+/**
+ * **Viewer-scoped** since X15 (D22): a recipe is private first, so the answer
+ * depends on who asks — their own recipes and drafts, their friends' FRIENDS
+ * ones, and everyone's PUBLIC ones — and one activation may not serve two
+ * viewers. A `null` viewer (the menu matcher's `system` work) has its own
+ * activation, which answers PUBLIC recipes only.
+ */
 export const recipeSearchActorId = (
   input: RecipeSearchInput,
-  _viewerId: string | null,
+  viewerId: string | null,
 ): string =>
   searchHash({
     kind: "recipe",
+    viewerId,
     term: normaliseText(input.term),
     semanticQuery: normaliseText(input.semanticQuery),
     type: normaliseText(input.type),
     maxDistance: input.maxDistance ?? RECIPE_SEARCH_MAX_DISTANCE,
     limit: input.limit ?? RECIPE_SEARCH_RESULT_CAP,
+    // Absent unless set, so every key minted before X12 is unchanged.
+    ...(input.hybrid === true ? { hybrid: true } : {}),
   });
 
 /* -------------------------------------------------------------------------- */
@@ -512,12 +614,42 @@ export const USER_SEARCH_RESULT_CAP = 10;
 export type UserSearchInput = {
   readonly term: string;
   readonly limit?: number | null;
+  /**
+   * X12: universal search's People section, which looks for *anyone* by
+   * name — your friends first, then people with a request open either way,
+   * then everyone else — where the default (the `/friends` "Add friends"
+   * box) leaves out everyone you are already connected to. Every hit then
+   * says how it is connected (`relation`). Part of the key only when set.
+   */
+  readonly includeConnected?: boolean | null;
 };
+
+/** How a person in a search answer is connected to the viewer. */
+export const PERSON_RELATIONS = [
+  "FRIEND",
+  "REQUEST_RECEIVED",
+  "REQUEST_SENT",
+  "NONE",
+] as const;
+export type PersonRelation = (typeof PERSON_RELATIONS)[number];
 
 export type UserSearchHit = {
   readonly userId: string;
   readonly displayName: string;
+  /** `user.image`; see `UserProfileDto.avatarUrl` — the same pair, the same helper. */
   readonly avatarUrl: string | null;
+  readonly avatarFileId: string | null;
+  /**
+   * X12: set on an `includeConnected` search only; a default search returns
+   * no one but `NONE`s and leaves it absent.
+   */
+  readonly relation?: PersonRelation;
+  /**
+   * F-43: the open friend request's id when `relation` is `REQUEST_SENT` or
+   * `REQUEST_RECEIVED` (what `rejectFriendRequest` / `acceptFriendRequest`
+   * take); absent otherwise.
+   */
+  readonly pendingRequestId?: string;
 };
 
 export type UserSearchActorInterface = {
@@ -525,7 +657,7 @@ export type UserSearchActorInterface = {
     ctx: Ctx,
     input: UserSearchInput,
     page: PageArgs,
-  ): Promise<Page<UserSearchHit>>;
+  ): Promise<SearchPage<UserSearchHit>>;
 };
 
 export const UserSearchActorDescriptor: ActorDescriptor<
@@ -554,6 +686,8 @@ export const userSearchActorId = (
     term: normaliseText(input.term),
     limit: input.limit ?? USER_SEARCH_RESULT_CAP,
     viewerId,
+    // Absent unless set, so every key minted before X12 is unchanged.
+    ...(input.includeConnected === true ? { includeConnected: true } : {}),
   });
 
 /* -------------------------------------------------------------------------- */
@@ -616,10 +750,14 @@ export const DuplicatePlaceSearchActorDescriptor: ActorDescriptor<
   internalMethods: { all: {} },
 };
 
-/** Viewer-insensitive: `places` has no privacy column (B5's module doc). */
+/**
+ * Viewer-scoped since X27. It was viewer-insensitive while every place was
+ * public; now the answer includes the viewer's own places under review
+ * (`ownUnsharedDuplicates`), so a shared activation would leak them.
+ */
 export const duplicatePlaceSearchActorId = (
   input: DuplicatePlaceSearchInput,
-  _viewerId: string | null,
+  viewerId: string | null,
 ): string =>
   searchHash({
     kind: "duplicate-place",
@@ -629,6 +767,7 @@ export const duplicatePlaceSearchActorId = (
     radiusMeters: input.radiusMeters ?? DUPLICATE_SEARCH_RADIUS_M,
     minSimilarity: input.minSimilarity ?? DUPLICATE_SEARCH_MIN_SIMILARITY,
     limit: input.limit ?? DUPLICATE_SEARCH_RESULT_CAP,
+    viewerId,
   });
 
 /* -------------------------------------------------------------------------- */
@@ -703,6 +842,11 @@ export type PlaceSearchHit = {
   readonly trigramSimilarity: number;
   readonly categoryScore: number;
   readonly combinedScore: number;
+  /**
+   * X27: `approved` for every shared hit; a `pending` / `rejected` hit is the
+   * viewer's own place, matched on its name — nobody else's ever appears.
+   */
+  readonly reviewStatus: PlaceReviewStatus;
 };
 
 export type PlaceSearchActorInterface = {
@@ -710,7 +854,7 @@ export type PlaceSearchActorInterface = {
     ctx: Ctx,
     input: PlaceSearchInput,
     page: PageArgs,
-  ): Promise<Page<PlaceSearchHit>>;
+  ): Promise<SearchPage<PlaceSearchHit>>;
 };
 
 export const PlaceSearchActorDescriptor: ActorDescriptor<
@@ -726,13 +870,13 @@ export const PlaceSearchActorDescriptor: ActorDescriptor<
 };
 
 /**
- * True when this search's answer depends on who is asking — §1.5's second
- * identity-sensitive surface, "map browse **with tier-list or visit filters**".
+ * Viewer in the hash, always. It used to be only with a tier-list or visit
+ * filter (§1.5's "map browse **with tier-list or visit filters**"), and a plain
+ * query shared one activation — and one cached result set — across viewers.
+ * X27 made every place search identity-sensitive: the answer includes the
+ * viewer's own places under review, which nobody else may see, so a shared
+ * activation would hand A's pending place to B.
  */
-export const placeSearchIsViewerScoped = (input: PlaceSearchInput): boolean =>
-  (input.tierListIds?.length ?? 0) > 0 || input.visitStatus != null;
-
-/** Viewer in the hash **iff** `placeSearchIsViewerScoped` (module doc). */
 export const placeSearchActorId = (
   input: PlaceSearchInput,
   viewerId: string | null,
@@ -746,7 +890,7 @@ export const placeSearchActorId = (
     tierListIds: [...(input.tierListIds ?? [])].sort(),
     visitStatus: input.visitStatus ?? null,
     limit: input.limit ?? PLACE_SEARCH_RESULT_CAP,
-    viewerId: placeSearchIsViewerScoped(input) ? viewerId : null,
+    viewerId,
   });
 
 /* -------------------------------------------------------------------------- */

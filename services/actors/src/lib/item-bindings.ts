@@ -24,6 +24,7 @@
  * when `x` is a named table import, so `ItemActor` keeps a switch whose arms
  * differ only in the table they name, and asks this module for the values.
  */
+import { createHash } from "node:crypto";
 import type {
   CreateItemInput,
   ItemAttributeKey,
@@ -42,6 +43,7 @@ import {
   ITEM_TYPE_SPECS,
   itemAttributeKeys,
   itemAttributeSpec,
+  NON_VINTAGE,
   ValidationError,
 } from "@cellar-assistant/contracts";
 import {
@@ -300,9 +302,10 @@ export const itemInsertValues = <T extends ItemType>(
 
 /**
  * The row properties whose values are embedded, in embedding order — the
- * spec's `embedding` list with each attribute resolved to its property. The
- * property name is also the label in the embedded text (`type: BOURBON`), so
- * this is byte-for-byte the list `ItemActor` used to spell out.
+ * spec's `embedding` list with each attribute resolved to its property,
+ * index for index, so `embeddingTextFor` reads `record[properties[i]]` for
+ * the spec's `fields[i]`. (Format 1 also used the property name as the
+ * label, `type: BOURBON`; format 2 labels by `EMBEDDING_LABELS`.)
  */
 export const EMBEDDING_PROPERTIES: Readonly<
   Record<ItemType, readonly string[]>
@@ -314,14 +317,190 @@ export const EMBEDDING_PROPERTIES: Readonly<
   ),
 );
 
-/** The text `regenerateVector` embeds. Deterministic, so a re-run is a no-op. */
-export const embeddingTextFor = (ref: ItemRef, row: ItemRow): string => {
-  const record = row as Record<string, unknown>;
-  const parts = [ref.type.toLowerCase()];
-  for (const field of EMBEDDING_PROPERTIES[ref.type]) {
-    const value = record[field];
-    if (value === null || value === undefined || value === "") continue;
-    parts.push(`${field}: ${String(value)}`);
+/* -------------------------------------------------------------------------- */
+/* The embedded text (N08)                                                     */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Which `embeddingTextFor` format a stored vector was made from. It is the
+ * prefix of `item_vectors.embedding_text` (`embeddingTextKey`), so the re-embed
+ * job can find every row made from an older format in SQL.
+ *
+ * **Bump it whenever `embeddingTextFor` would return different text for an
+ * unchanged row** — a label, a value rendering, the order, the layout — or the
+ * old vectors stay "fresh" in a space the new text no longer describes.
+ *
+ * - 1 (implicit; `embedding_text` NULL): `spirit; name: …; type: BOURBON;
+ *   alcoholContentPercentage: 45` — the Drizzle property as the label and the
+ *   stored code as the value, no brand.
+ * - 2: human-readable labels and values, and the item's brands after its name.
+ */
+export const EMBEDDING_TEXT_VERSION = 2;
+
+type EmbeddedField = (typeof ITEM_TYPE_SPECS)[ItemType]["embedding"][number];
+
+/**
+ * The label each embedded field gets, by wire key. Total by type: a field
+ * added to a spec's `embedding` list does not compile until it has a label
+ * here. `name` has none — it leads the text after the type word.
+ */
+const EMBEDDING_LABELS: Readonly<
+  Record<Exclude<EmbeddedField, "name">, string>
+> = {
+  description: "description",
+  country: "country",
+  vintage: "vintage",
+  variety: "grape",
+  region: "region",
+  style: "style",
+  specialDesignation: "designation",
+  vineyardDesignation: "vineyard",
+  alcoholContentPercentage: "ABV",
+  internationalBitternessUnit: "IBU",
+  spiritType: "type",
+  roastLevel: "roast",
+  process: "process",
+  species: "species",
+  cultivar: "cultivar",
+  category: "category",
+  sakeType: "profile",
+  riceVariety: "rice",
+  servingTemperature: "serving temperature",
+  polishGrade: "rice polished to",
+  vintageYear: "vintage",
+  form: "form",
+  caffeineLevel: "caffeine",
+  harvestYear: "harvest",
+};
+
+/** Wire fields whose number is a percentage. */
+const PERCENT_FIELDS: ReadonlySet<string> = new Set([
+  "alcoholContentPercentage",
+  "polishGrade",
+]);
+
+/**
+ * A vocabulary code as words: `PILSENER_PILSNER_PILS` → `pilsener pilsner
+ * pils`, `junmai_daiginjo` → `junmai daiginjo`, `UNITED_STATES` → `united
+ * states`. Lower case, because the codes are upper or lower case by accident
+ * of the table they live in, not because the case means anything.
+ */
+export const humanizeCode = (code: string): string =>
+  code.replace(/_+/g, " ").trim().toLowerCase();
+
+/** One embedded value as a person would write it, or `null` to leave it out. */
+const renderEmbeddedValue = (
+  type: ItemType,
+  field: EmbeddedField,
+  value: unknown,
+): string | null => {
+  if (value === null || value === undefined || value === "") {
+    // X19: a wine's NULL vintage is an answer — non-vintage — and "NV" is
+    // what a search for one types. No row embedded before X19 can hold one
+    // (the column was NOT NULL), so no stored text changes and
+    // `EMBEDDING_TEXT_VERSION` stays where it is.
+    return value === null && itemAttributeSpec(type, field)?.nonVintage
+      ? NON_VINTAGE
+      : null;
   }
+  if (field === "name" || field === "description") return String(value);
+  if (field === "country") return humanizeCode(String(value));
+  const spec = itemAttributeSpec(type, field);
+  if (spec === undefined) return String(value);
+  if (spec.vocabulary !== null) return humanizeCode(String(value));
+  switch (spec.kind) {
+    case "date":
+      // `wines.vintage` is a calendar date by schema and a year by meaning:
+      // every vintage is stored as `YYYY-01-01`.
+      return String(value).slice(0, 4);
+    case "boolean":
+      return value === true ? "yes" : "no";
+    case "decimal": {
+      const number = Number(value);
+      const shown = Number.isFinite(number) ? String(number) : String(value);
+      return PERCENT_FIELDS.has(field) ? `${shown}%` : shown;
+    }
+    default:
+      return String(value);
+  }
+};
+
+/**
+ * The text `regenerateVector` embeds. Deterministic, so a re-run is a no-op.
+ *
+ * `spirit: Lagavulin 16 Year Old; brand: Lagavulin; description: …; type:
+ * scotch; country: scotland; ABV: 43%` — the type word, the name, the
+ * brands (primary first, as the caller orders them), then the spec's
+ * `embedding` fields in order, each under a label a person would use and with
+ * its value spelled as words rather than as the stored code.
+ *
+ * The brand is there because it is often the only place a producer's name
+ * appears — "Tignanello" never says Antinori — and a search for the producer
+ * should find it. It is left out when the name already says it ("Jameson
+ * Irish Whiskey", brand Jameson): repeating it adds nothing a search could
+ * use and makes every sibling of the house look more like every other —
+ * measured on the N05 eval, where it cost two menu lines their match. A
+ * brand rename does not re-embed its items; the next change to the item, or
+ * a version bump, does.
+ *
+ * Changing the output for an unchanged row requires bumping
+ * {@link EMBEDDING_TEXT_VERSION}.
+ */
+export const embeddingTextFor = (
+  ref: ItemRef,
+  row: ItemRow,
+  brands: readonly string[] = [],
+): string => {
+  const record = row as Record<string, unknown>;
+  const fields = ITEM_TYPE_SPECS[ref.type]
+    .embedding as readonly EmbeddedField[];
+  const properties = EMBEDDING_PROPERTIES[ref.type];
+  const parts: string[] = [];
+  const name = renderEmbeddedValue(ref.type, "name", record.name) ?? "";
+  parts.push(`${ref.type.toLowerCase()}: ${name}`);
+  const brandNames = brands
+    .map((brand) => brand.trim())
+    .filter((brand) => brand !== "" && !nameSays(name, brand));
+  if (brandNames.length > 0) parts.push(`brand: ${brandNames.join(", ")}`);
+  fields.forEach((field, index) => {
+    if (field === "name") return;
+    const property = properties[index] ?? field;
+    const value = renderEmbeddedValue(ref.type, field, record[property]);
+    if (value === null) return;
+    parts.push(`${EMBEDDING_LABELS[field]}: ${value}`);
+  });
   return parts.join("; ");
 };
+
+/**
+ * Whether `name` already contains `brand` as a run of whole words, ignoring
+ * case, accents and apostrophes — "The Glenlivet 12 Year Old" says "The
+ * Glenlivet", "Hendrick's Gin" says "Hendrick's", "Eagle Rare 10 Year" does
+ * not say "Buffalo Trace".
+ */
+const nameSays = (name: string, brand: string): boolean => {
+  const words = (text: string) =>
+    text
+      .toLowerCase()
+      .normalize("NFKD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/['’]/g, "")
+      .split(/[^a-z0-9]+/)
+      .filter(Boolean);
+  const haystack = ` ${words(name).join(" ")} `;
+  const needle = words(brand).join(" ");
+  return needle !== "" && haystack.includes(` ${needle} `);
+};
+
+/**
+ * `item_vectors.embedding_text`: the format version and a digest of the text,
+ * `v2:3f1c…` (16 hex digits of SHA-256). A stored vector whose key differs
+ * from the one its item would embed now is stale — whether the format
+ * changed (the version) or what the item says did (the digest: an edit, a
+ * brand linked or unlinked). `NULL` on every row written before N08.
+ */
+export const embeddingTextKey = (text: string): string =>
+  `v${EMBEDDING_TEXT_VERSION}:${createHash("sha256").update(text).digest("hex").slice(0, 16)}`;
+
+/** The `embedding_text` prefix every current row has: `v2:`. */
+export const EMBEDDING_TEXT_PREFIX = `v${EMBEDDING_TEXT_VERSION}:`;

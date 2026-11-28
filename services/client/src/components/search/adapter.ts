@@ -8,15 +8,18 @@
 
 import type { ApiItemType } from "@/components/cellar-api/itemTypes";
 import { richTextFromReviewText } from "@/components/common/rich-text";
+import { entryContext } from "@/components/drink-log/log-draft";
 import { itemCardFromItem } from "@/components/item/ItemCard/adapter";
 import { ItemCardFragment } from "@/components/item/ItemCard/fragments";
 import type { ItemCardItem } from "@/components/item/ItemCard/types";
+import type { WantToTryTarget } from "@/components/want-to-try/adapter";
 import {
   type FragmentOf,
   type ResultOf,
   readFragment,
 } from "@/lib/api/graphql";
-import { formatVintage } from "@/utilities";
+import { formatItemVintage, formatVintage } from "@/utilities";
+import { displayItemName } from "@/utilities/smart-title-case";
 import {
   RECENT_ACTIVITY_CAP,
   type SearchNearbyPlacesQuery,
@@ -46,8 +49,16 @@ export const searchResultsFromNodes = (
 ): SearchResultItem[] => nodes.map(searchResultFromCard);
 
 /**
- * The old `CollectionStats` line, verbatim: the six per-type counts summed,
- * and the cellar count.
+ * The old `CollectionStats` line: the six per-type counts summed, and the
+ * cellar count. Decision D13: the counts are **bottles still in the cellar**
+ * (`me.collectionStats` counts unfinished bottles, as every cellar card does),
+ * so the line says "bottles" — the old "items" counted distinct items, which
+ * read 34 for a collection of 53 bottles.
+ *
+ * "in your N cellars", not "across N cellars": the stats count only cellars
+ * the viewer created or co-owns, while /cellars also lists friends' cellars,
+ * so a user adding up those cards got a different number (UX lane,
+ * 2026-10-08: 46 here, 54 on the cards with a friend's cellar of 8).
  */
 export const collectionStatsLine = (stats: {
   cellarCount: number;
@@ -62,17 +73,27 @@ export const collectionStatsLine = (stats: {
 }): string => {
   const { itemCounts: c, cellarCount } = stats;
   const totalItems = c.beer + c.wine + c.spirit + c.coffee + c.sake + c.tea;
-  const cellars = `${cellarCount} ${cellarCount === 1 ? "cellar" : "cellars"}`;
+  const cellars =
+    cellarCount === 1 ? "your cellar" : `your ${cellarCount} cellars`;
   if (totalItems === 0) {
     return "Your collection awaits. Start by adding your first item.";
   }
   return totalItems === 1
-    ? `1 item across ${cellars}`
-    : `${totalItems} items across ${cellars}`;
+    ? `1 bottle in ${cellars}`
+    : `${totalItems} bottles in ${cellars}`;
 };
 
 /** The longest code `?barcode=` accepts; real symbologies stop well short. */
 export const MAX_BARCODE_LENGTH = 64;
+
+// biome-ignore lint/suspicious/noControlCharactersInRegex: matching them is the point.
+const CONTROL_CHARACTER = /[\u0000-\u001f\u007f]/;
+
+/** A code worth sending: not blank, not implausibly long, no control bytes. */
+const plausibleBarcode = (code: string): boolean =>
+  code !== "" &&
+  code.length <= MAX_BARCODE_LENGTH &&
+  !CONTROL_CHARACTER.test(code);
 
 export type SearchParams = {
   q?: string | string[];
@@ -81,6 +102,10 @@ export type SearchParams = {
   image_results?: string | string[];
   image_no_results?: string | string[];
   activity?: string | string[];
+  /** X12: the one section "See all" opened (`universal-search.ts`). */
+  in?: string | string[];
+  /** Home's Scan / Photo: the sheet to open (`scanModeFromParam`). */
+  with?: string | string[];
 };
 
 export type SearchState = {
@@ -109,7 +134,8 @@ const single = (value: string | string[] | undefined): string | undefined =>
  * - `?barcode=<code>` replaces the old `?barcode_results=<JSON>`: the old page
  *   serialized whole result rows into the URL (forgeable and unbounded, §7);
  *   now the URL carries only the code, and the server looks it up. A code that
- *   is blank or implausibly long is ignored rather than sent.
+ *   is blank, implausibly long or carries a control character (`%00` crashed
+ *   the lookup) is ignored rather than sent.
  * - `?image=<fileId>` replaces the old `?image_results=<JSON>` the same way
  *   (G32): the Photo button uploads the capture and the URL carries only the
  *   file id; the server searches with it. Anything that is not a uuid is
@@ -121,8 +147,7 @@ const single = (value: string | string[] | undefined): string | undefined =>
 export const searchStateFromParams = (params: SearchParams): SearchState => {
   const q = single(params.q)?.trim() ?? "";
   const code = single(params.barcode)?.trim() ?? "";
-  const barcode =
-    code !== "" && code.length <= MAX_BARCODE_LENGTH ? code : null;
+  const barcode = plausibleBarcode(code) ? code : null;
   const image = single(params.image)?.trim().toLowerCase() ?? "";
   const imageFileId = UUID.test(image) ? image : null;
   const legacyImageLink =
@@ -142,6 +167,20 @@ export const searchStateFromParams = (params: SearchParams): SearchState => {
   };
 };
 
+/**
+ * `/search`'s document title (X21). The empty sheet is "Search" (X10 made
+ * Home `/`); an active search names what is being searched for, so history and the
+ * app switcher tell one search from another. The suffix is the root
+ * layout's template.
+ */
+export const searchPageTitle = (state: SearchState): string => {
+  if (state.query !== null) return `Search: ${state.query}`;
+  if (state.barcode !== null) return `Barcode ${state.barcode}`;
+  if (state.imageFileId !== null || state.legacyImageLink)
+    return "Photo search";
+  return "Search";
+};
+
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 /** Where an uploaded search photo goes: `/search?image=<fileId>` (G32). */
@@ -156,7 +195,7 @@ export const imageSearchHref = (fileId: string): string | null => {
  */
 export const barcodeSearchHref = (code: string): string | null => {
   const trimmed = code.trim();
-  if (trimmed === "" || trimmed.length > MAX_BARCODE_LENGTH) return null;
+  if (!plausibleBarcode(trimmed)) return null;
   return `/search?barcode=${encodeURIComponent(trimmed)}`;
 };
 
@@ -168,14 +207,16 @@ export const barcodeSearchHref = (code: string): string | null => {
  * The old feed's filter ids, which are also its `?activity=` values
  * (`82450ad1:src/components/search/RecentActivity.tsx`).
  */
-export type ActivityKind = "added" | "reviewed" | "tier-listed";
+export type ActivityKind = "added" | "reviewed" | "tier-listed" | "drank";
 
-type ApiActivityKind = "ADDED" | "REVIEWED" | "TIER_LISTED";
+type ApiActivityKind = "ADDED" | "REVIEWED" | "TIER_LISTED" | "CHECKED_IN";
 
 const API_KIND: Record<ActivityKind, ApiActivityKind> = {
   added: "ADDED",
   reviewed: "REVIEWED",
   "tier-listed": "TIER_LISTED",
+  // X02: a drink logged — `?activity=drank`.
+  drank: "CHECKED_IN",
 };
 
 /**
@@ -198,6 +239,12 @@ export const apiActivityKinds = (
   kinds: readonly ActivityKind[],
 ): ApiActivityKind[] => kinds.map((kind) => API_KIND[kind]);
 
+/** X08: the Save target on a friend's row — what it names and its state. */
+export type ActivitySave = {
+  target: WantToTryTarget;
+  saved: boolean;
+};
+
 type ActivityBase = {
   id: string;
   timestamp: string;
@@ -211,6 +258,11 @@ type ActivityBase = {
   userId: string;
   userName: string;
   userAvatar: string | null;
+  /**
+   * The bookmark on the row (X08: "a Save target on activity rows"). Absent
+   * on the viewer's own rows — you do not want to try what you just logged.
+   */
+  save?: ActivitySave | null;
 };
 
 /** The old `ActivityEntry`, one image URL in place of the file id. */
@@ -225,6 +277,15 @@ export type ActivityEntry =
       kind: "tier-listed";
       tierListName: string;
       rank: number;
+    })
+  | (ActivityBase & {
+      kind: "drank";
+      /** This glass's half stars — the log's, never the review. */
+      score: number | null;
+      note: string | null;
+      tags: readonly string[];
+      /** "with Sam and Ana · at The Corner Bar", or "". */
+      context: string;
     });
 
 type ActivityNode = NonNullable<
@@ -244,12 +305,25 @@ const ITEM_ROUTE: Record<string, string> = {
 const itemDisplayName = (item: NonNullable<ActivityNode["item"]>): string => {
   const vintage =
     item.__typename === "Wine"
-      ? formatVintage(item.vintage)
+      ? formatItemVintage("WINE", item.vintage)
       : item.__typename === "Sake"
         ? formatVintage(item.vintageYear)
         : undefined;
-  return vintage === undefined ? item.name : `${vintage} ${item.name}`;
+  const name = displayItemName(item.name);
+  return vintage === undefined ? name : `${vintage} ${name}`;
 };
+
+/** L44: what a Made-it log whose recipe was deleted names. */
+export const DELETED_RECIPE_NAME = "a recipe that was deleted";
+
+/** "with Sam and Ana · at The Corner Bar", or "". */
+const logContext = (log: NonNullable<ActivityNode["checkIn"]>): string =>
+  entryContext({
+    companionNames: log.companions.edges.map((edge) => edge.node.displayName),
+    companionCount: log.companionIds.length,
+    placeName:
+      log.place === null ? null : (log.place.displayName ?? log.place.name),
+  });
 
 /**
  * One API entry → the old `ActivityEntry`, or `null` for a row whose edge the
@@ -258,13 +332,16 @@ const itemDisplayName = (item: NonNullable<ActivityNode["item"]>): string => {
  */
 export const activityEntryFromNode = (
   node: ActivityNode,
+  viewerId: string | null = null,
 ): ActivityEntry | null => {
   const user = {
     userId: node.user?.id ?? "",
     userName: node.user?.displayName ?? "",
     userAvatar: node.user?.avatarUrl ?? null,
   };
-  const base = { timestamp: node.occurredAt as string, ...user };
+  const own = viewerId !== null && user.userId === viewerId;
+  const save = own ? null : activitySave(node);
+  const base = { timestamp: node.occurredAt as string, ...user, save };
 
   if (node.kind === "TIER_LISTED") {
     const list = node.tierListItem?.tierList;
@@ -302,6 +379,27 @@ export const activityEntryFromNode = (
     };
   }
 
+  // ux-c L08: a recipe-only "Made it" log. The recipe stands where the item
+  // would, and links into the recipe, or nowhere once it was deleted (H-12).
+  if (node.kind === "CHECKED_IN" && node.item === null) {
+    const log = node.checkIn;
+    if (log === null) return null;
+    const recipe = log.recipe;
+    return {
+      ...base,
+      save: null,
+      kind: "drank",
+      id: `drank-${log.id}`,
+      itemName: recipe === null ? DELETED_RECIPE_NAME : recipe.name,
+      itemType: "RECIPE",
+      itemHref: recipe === null ? "" : `/recipes/${recipe.id}`,
+      score: log.score,
+      note: log.note,
+      tags: log.tags,
+      context: logContext(log),
+    };
+  }
+
   if (node.item === null) return null;
   const image = node.item.images.edges[0]?.node;
   const item = {
@@ -311,6 +409,21 @@ export const activityEntryFromNode = (
     itemPlaceholder: image?.placeholder ?? null,
     itemHref: `/${ITEM_ROUTE[node.item.type] ?? "wines"}/${node.item.id}`,
   };
+
+  if (node.kind === "CHECKED_IN") {
+    const log = node.checkIn;
+    if (log === null) return null;
+    return {
+      ...base,
+      ...item,
+      kind: "drank",
+      id: `drank-${log.id}`,
+      score: log.score,
+      note: log.note,
+      tags: log.tags,
+      context: logContext(log),
+    };
+  }
 
   if (node.kind === "REVIEWED") {
     if (node.review === null) return null;
@@ -334,16 +447,40 @@ export const activityEntryFromNode = (
   };
 };
 
+/** What the row's bookmark would save: its item, or a tier-listed place. */
+const activitySave = (node: ActivityNode): ActivitySave | null => {
+  if (node.item !== null) {
+    const type = node.item.type;
+    if (!(type in ITEM_ROUTE)) return null;
+    return {
+      target: {
+        kind: "ITEM",
+        itemType: type as ApiItemType,
+        itemId: node.item.id,
+      },
+      saved: node.item.isWantToTry === true,
+    };
+  }
+  if (node.place !== null) {
+    return {
+      target: { kind: "PLACE", placeId: node.place.id },
+      saved: node.place.myInteraction?.wantToVisit === true,
+    };
+  }
+  return null;
+};
+
 /**
  * The old `buildActivityFeed`: entries newest first, capped at eight. The
  * server already merged and ordered them; the sort is kept so the order never
- * depends on that.
+ * depends on that. `viewerId` takes the bookmark off the viewer's own rows.
  */
 export const activityFeedFromNodes = (
   nodes: readonly ActivityNode[],
+  viewerId: string | null = null,
 ): ActivityEntry[] =>
   nodes
-    .map(activityEntryFromNode)
+    .map((node) => activityEntryFromNode(node, viewerId))
     .filter((entry): entry is ActivityEntry => entry !== null)
     .sort(
       (a, b) =>

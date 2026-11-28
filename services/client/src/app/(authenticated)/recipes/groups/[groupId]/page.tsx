@@ -1,29 +1,51 @@
-import { Alert, Box, Typography } from "@mui/joy";
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { Link } from "@/components/common/Link";
+import { cache } from "react";
+import { EmptyState } from "@/components/app/EmptyState";
+import { People, Verified } from "@/components/app/icons";
+import { Link } from "@/components/app/Link";
+import { shownVersion } from "@/components/recipe/group-pick";
 import { RecipeGroupPageQuery } from "@/components/recipe/queries";
 import { RecipePage } from "@/components/recipe/RecipePage";
+import {
+  QUIET_ACTION,
+  RecipeInfoCard,
+} from "@/components/recipe/RecipePageParts";
+import { RecipeReadError } from "@/components/recipe/RecipeReadError";
+import { versionsLine } from "@/components/recipe/recipe-meta";
 import { isNotFound, unwrapResult } from "@/lib/api/result";
 import { apiServerQuery } from "@/lib/api/urql-server";
 
 /**
- * `/recipes/groups/[groupId]` — `82450ad1:src/app/(authenticated)/recipes/groups/[groupId]/page.tsx`,
- * restored: the group's name and description, "Showing community's preferred
- * version • View all N versions", and the canonical version as
- * `RecipeDetails`. In production it threw on load.
+ * `/recipes/groups/[groupId]` (Recipes-Browse 13 to 15, 21): the recipe page
+ * of the version shown, with "Negroni · 3 versions" above its name (the
+ * title names the version shown, ruling 4) and a pick card under the
+ * description.
  *
- * Two fixes the inventory recorded (§7):
- *
- * - "View all N versions" goes to `/recipes/groups/{id}/versions`; the old
- *   link was `/recipes/{groupId}/versions`, a 404.
- * - "No canonical" is not a data error. `canonicalRecipeId` is derived from
- *   votes, so a group nobody has voted on has none. The old page printed
- *   "This recipe group has no canonical recipe. This indicates a data
- *   issue." Instead the first version — `recipes` is ordered the way the
- *   canonical is chosen — is shown, under a plain note that it is the top
- *   version, not the community's pick (kept from the rewrite).
+ * The version shown is the community pick (MC-pick: at least 3 net votes
+ * from people other than its author, ruling 1), labelled "Community pick";
+ * with none it is the original, under "No pick yet · Showing the original"
+ * and a way to Vote on the versions page.
  */
 export const dynamic = "force-dynamic";
+
+/** One group read per request, for the page and its title (X21). */
+const loadRecipeGroup = cache((groupId: string) =>
+  apiServerQuery(RecipeGroupPageQuery, { groupId }),
+);
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ groupId: string }>;
+}): Promise<Metadata> {
+  const { groupId } = await params;
+  const result = unwrapResult(
+    (await loadRecipeGroup(groupId)).recipeGroup,
+    "RecipeGroup",
+  );
+  return { title: result.ok ? result.data.name : "Recipe" };
+}
 
 export default async function RecipeGroupPage({
   params,
@@ -31,67 +53,67 @@ export default async function RecipeGroupPage({
   params: Promise<{ groupId: string }>;
 }) {
   const { groupId } = await params;
-  const data = await apiServerQuery(RecipeGroupPageQuery, { groupId });
+  const data = await loadRecipeGroup(groupId);
   const result = unwrapResult(data.recipeGroup, "RecipeGroup");
   if (!result.ok) {
     if (isNotFound(result.error)) notFound();
-    return <Typography color="danger">{result.error.message}</Typography>;
+    return <RecipeReadError reason={result.error.message} />;
   }
 
   const recipeGroup = result.data;
   const versionCount = recipeGroup.recipeCount;
-  const canonicalId = recipeGroup.canonicalRecipeId ?? null;
-  const shownId = canonicalId ?? recipeGroup.recipes.edges[0]?.node.id ?? null;
-
-  const header = (
-    <Box sx={{ mb: 4 }}>
-      <Typography level="h1" sx={{ mb: 1 }}>
-        {recipeGroup.name}
-      </Typography>
-
-      {recipeGroup.description && (
-        <Typography level="body-lg" sx={{ color: "text.secondary", mb: 2 }}>
-          {recipeGroup.description}
-        </Typography>
-      )}
-
-      {versionCount > 1 && (
-        <Typography level="body-md" sx={{ color: "text.secondary" }}>
-          {canonicalId === null
-            ? "Showing the top version • "
-            : "Showing community's preferred version • "}
-          <Link
-            href={`/recipes/groups/${recipeGroup.id}/versions`}
-            underline="always"
-          >
-            View all {versionCount} versions
-          </Link>
-        </Typography>
-      )}
-
-      {canonicalId === null && versionCount > 1 && (
-        <Alert color="neutral" variant="soft" sx={{ mt: 2 }}>
-          Nobody has voted yet, so this group has no community pick. Vote on the
-          versions page to choose one.
-        </Alert>
-      )}
-    </Box>
+  const versionsHref = `/recipes/groups/${recipeGroup.id}/versions`;
+  const shown = shownVersion(
+    recipeGroup.communityPickId,
+    recipeGroup.recipes.edges.map((edge) => edge.node),
   );
 
-  if (shownId === null) {
+  if (shown === null) {
     return (
-      <Box sx={{ p: 3, maxWidth: 1200, mx: "auto" }}>
-        {header}
-        <Typography level="body-lg" sx={{ color: "text.secondary" }}>
-          This recipe group has no versions yet.
-        </Typography>
-      </Box>
+      <EmptyState
+        title="No versions yet"
+        action={
+          <Link href="/recipes" underline="none" className={QUIET_ACTION}>
+            All recipes
+          </Link>
+        }
+      />
     );
   }
 
+  const many = versionCount > 1;
   return (
-    <Box sx={{ p: 3, maxWidth: 1200, mx: "auto" }}>
-      <RecipePage recipeId={shownId} header={header} />
-    </Box>
+    <RecipePage
+      recipeId={shown.id}
+      parent="/recipes"
+      eyebrow={
+        many ? (
+          <Link href={versionsHref} underline="none" className="text-ink-2">
+            {recipeGroup.name} · {versionsLine(versionCount)}
+          </Link>
+        ) : undefined
+      }
+      aside={
+        many ? (
+          <RecipeInfoCard
+            data-pick={shown.isPick ? "community" : "none"}
+            glyph={shown.isPick ? <Verified /> : <People />}
+            title={shown.isPick ? "Community pick" : "No pick yet"}
+            detail={
+              shown.isPick ? "Most votes from others" : "Showing the original"
+            }
+            action={
+              <Link
+                href={versionsHref}
+                underline="none"
+                className={QUIET_ACTION}
+              >
+                {shown.isPick ? "Versions" : "Vote"}
+              </Link>
+            }
+          />
+        ) : undefined
+      }
+    />
   );
 }

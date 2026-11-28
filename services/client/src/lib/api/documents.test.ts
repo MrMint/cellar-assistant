@@ -58,25 +58,53 @@ import {
   validate,
 } from "graphql";
 import ts from "typescript";
+import * as barQueries from "@/components/bar/queries";
 import * as brandQueries from "@/components/brand/queries";
+import * as captureQueries from "@/components/capture/queries";
 import * as cellarFragments from "@/components/cellar/fragments";
+import * as cellarListRate from "@/components/cellar/list/rate";
 import * as onboardingQueries from "@/components/common/OnboardingWizard/queries";
+import * as draftsQueries from "@/components/drafts/queries";
+import * as drinkLogQueries from "@/components/drink-log/queries";
 import * as favoritesFragments from "@/components/favorites/fragments";
+import * as lovedCounts from "@/components/favorites/loved-counts";
+import * as lovedRecipes from "@/components/favorites/loved-recipes";
 import * as friendFragments from "@/components/friend/fragments";
+import * as homeQueries from "@/components/home/queries";
 import * as itemFragments from "@/components/item/fragments";
+import * as itemFriendsRatings from "@/components/item/friends/friends-ratings";
 import * as itemCardFragments from "@/components/item/ItemCard/fragments";
+import * as itemSeenAt from "@/components/item/seen-at";
+import * as makeBrewQueries from "@/components/make/brew-queries";
+import * as mapOwnPlaces from "@/components/map/hooks/useOwnPlaces";
+import * as placeListOwners from "@/components/map/places/own-list-entries";
 import * as mapQueries from "@/components/map/queries";
+import * as scanHeaderRename from "@/components/map/scanning/header-rename";
+import * as menuLinesQueries from "@/components/menu-lines/queries";
+import * as pourQueries from "@/components/pour/queries";
+import * as profileQueries from "@/components/profile/queries";
 import * as rankingFragments from "@/components/ranking/fragments";
+import * as recapData from "@/components/recap/recap-data";
+import * as recipeEditorDocuments from "@/components/recipe/editor/documents";
 import * as recipeFragments from "@/components/recipe/fragments";
 import * as recipeQueries from "@/components/recipe/queries";
 import * as searchQueries from "@/components/search/queries";
-import { ITEM_SEARCH_LIMIT } from "@/components/search/queries";
+import * as recipeSpiritChips from "@/components/search/recipe-spirit-chips";
+import * as universalSearch from "@/components/search/universal-search";
+import { SECTION_LIMITS } from "@/components/search/universal-search";
+import * as shareQueries from "@/components/share/queries";
+import * as tasteCompareQueries from "@/components/taste/compare/queries";
+import * as tasteQueries from "@/components/taste/queries";
 import * as tierListFragments from "@/components/tier-list/fragments";
 import * as tierListQueries from "@/components/tier-list/queries";
 import * as userFragments from "@/components/user/fragments";
+import * as meHubData from "@/components/user/me-hub-data";
+import * as wantToTryQueries from "@/components/want-to-try/queries";
+import * as ai from "./ai.ts";
 import * as cellars from "./cellars.ts";
 import * as errors from "./errors.ts";
 import * as files from "./files.ts";
+import * as itemCorrection from "./item-correction.ts";
 import * as items from "./items.ts";
 import * as recipePhotos from "./recipe-photos.ts";
 
@@ -87,24 +115,55 @@ const SCHEMA_PATH = fileURLToPath(
 
 /** Every module that defines documents, by its path under `src/`. */
 const MODULES: Readonly<Record<string, Record<string, unknown>>> = {
+  "components/bar/queries.ts": barQueries,
   "components/brand/queries.ts": brandQueries,
+  "components/capture/queries.ts": captureQueries,
   "components/cellar/fragments.ts": cellarFragments,
+  "components/cellar/list/rate.ts": cellarListRate,
   "components/common/OnboardingWizard/queries.ts": onboardingQueries,
+  "components/drafts/queries.ts": draftsQueries,
+  "components/drink-log/queries.ts": drinkLogQueries,
   "components/favorites/fragments.ts": favoritesFragments,
+  "components/favorites/loved-counts.ts": lovedCounts,
+  "components/favorites/loved-recipes.ts": lovedRecipes,
   "components/friend/fragments.ts": friendFragments,
+  "components/home/queries.ts": homeQueries,
   "components/item/ItemCard/fragments.ts": itemCardFragments,
   "components/item/fragments.ts": itemFragments,
+  "components/item/friends/friends-ratings.ts": itemFriendsRatings,
+  "components/item/seen-at.ts": itemSeenAt,
+  "components/make/brew-queries.ts": makeBrewQueries,
   "components/map/queries.ts": mapQueries,
+  "components/map/hooks/useOwnPlaces.ts": mapOwnPlaces,
+  "components/map/places/own-list-entries.ts": placeListOwners,
+  "components/map/scanning/header-rename.ts": scanHeaderRename,
+  "components/menu-lines/queries.ts": menuLinesQueries,
+  "components/pour/queries.ts": pourQueries,
+  "components/profile/queries.ts": profileQueries,
   "components/ranking/fragments.ts": rankingFragments,
+  "components/recap/recap-data.ts": recapData,
+  "components/recipe/editor/documents.ts": recipeEditorDocuments,
   "components/recipe/fragments.ts": recipeFragments,
   "components/recipe/queries.ts": recipeQueries,
   "components/search/queries.ts": searchQueries,
+  "components/search/recipe-spirit-chips.ts": recipeSpiritChips,
+  "components/search/universal-search.ts": universalSearch,
+  "components/share/queries.ts": shareQueries,
+  "components/taste/compare/queries.ts": tasteCompareQueries,
+  "components/taste/queries.ts": tasteQueries,
   "components/tier-list/fragments.ts": tierListFragments,
   "components/tier-list/queries.ts": tierListQueries,
+  "components/tier-list/lists/queries.ts": await import(
+    "@/components/tier-list/lists/queries"
+  ),
   "components/user/fragments.ts": userFragments,
+  "components/want-to-try/queries.ts": wantToTryQueries,
+  "components/user/me-hub-data.ts": meHubData,
+  "lib/api/ai.ts": ai,
   "lib/api/cellars.ts": cellars,
   "lib/api/errors.ts": errors,
   "lib/api/files.ts": files,
+  "lib/api/item-correction.ts": itemCorrection,
   "lib/api/items.ts": items,
   "lib/api/recipe-photos.ts": recipePhotos,
 };
@@ -259,14 +318,25 @@ describe("argument values the schema documents but cannot enforce", () => {
     assert.deepEqual(over, []);
   });
 
-  test("ITEM_SEARCH_LIMIT stays inside itemSearch's cap of 50", () => {
-    // `limit`'s own description in the SDL reads "1 to 50 inclusive, and over
-    // the cap is a VALIDATION error rather than a silent clamp (A7g)". This
-    // file is a consumer of that contract, not its source; the constant is a
-    // value, so only a test can hold it to the documented range.
-    assert.ok(
-      ITEM_SEARCH_LIMIT >= 1 && ITEM_SEARCH_LIMIT <= 50,
-      `ITEM_SEARCH_LIMIT is ${ITEM_SEARCH_LIMIT}; itemSearch accepts 1-50`,
-    );
+  test("universal search's limits stay inside each search's documented cap", () => {
+    // Each `limit` description in the SDL reads "1 to N inclusive … over the
+    // cap is a VALIDATION error rather than a silent clamp (A7g)"; the
+    // sections pass these constants as both `limit` and `first`, so only a
+    // test holds them to the documented ranges.
+    const caps = {
+      bottles: 50,
+      items: 50,
+      places: 50,
+      recipes: 50,
+      people: 10,
+      brands: 100,
+    } as const;
+    for (const [section, cap] of Object.entries(caps)) {
+      const limit = SECTION_LIMITS[section as keyof typeof caps];
+      assert.ok(
+        limit >= 1 && limit <= cap,
+        `SECTION_LIMITS.${section} is ${limit}; the search accepts 1-${cap}`,
+      );
+    }
   });
 });

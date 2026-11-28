@@ -1,97 +1,28 @@
-"use client";
-
-import {
-  AspectRatio,
-  Box,
-  Card,
-  CardContent,
-  CardOverflow,
-  Skeleton,
-  Stack,
-} from "@mui/joy";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export type RecipeGroupCardSkeletonProps = {
   count?: number;
 };
 
+/** `RecipeGroupCard`'s row while a page of groups loads (Recipes-Browse 01). */
 export const RecipeGroupCardSkeleton = ({
   count = 1,
 }: RecipeGroupCardSkeletonProps) => {
   return (
     <>
       {Array.from({ length: count }, (_, i) => `skeleton-${i}`).map((key) => (
-        <Card key={key} variant="outlined">
-          <CardOverflow>
-            <AspectRatio ratio="4/3">
-              <Skeleton variant="overlay" />
-            </AspectRatio>
-          </CardOverflow>
-
-          <CardContent sx={{ gap: 1 }}>
-            {/* Recipe Group Name */}
-            <Skeleton variant="text" level="title-md" />
-
-            {/* Featured Recipe Name */}
-            <Skeleton variant="text" level="body-sm" width="70%" />
-
-            {/* Description */}
-            <Box sx={{ mt: 1 }}>
-              <Skeleton variant="text" level="body-sm" />
-              <Skeleton variant="text" level="body-sm" width="80%" />
-            </Box>
-
-            {/* Recipe Details */}
-            <Stack direction="row" spacing={2} sx={{ mt: 1 }}>
-              <Skeleton variant="text" level="body-xs" width="60px" />
-              <Skeleton variant="text" level="body-xs" width="40px" />
-              <Skeleton variant="text" level="body-xs" width="70px" />
-            </Stack>
-
-            {/* Category and Tags */}
-            <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
-              <Skeleton
-                variant="rectangular"
-                width="80px"
-                height="24px"
-                sx={{ borderRadius: "sm" }}
-              />
-              <Skeleton
-                variant="rectangular"
-                width="60px"
-                height="24px"
-                sx={{ borderRadius: "sm" }}
-              />
-              <Skeleton
-                variant="rectangular"
-                width="90px"
-                height="24px"
-                sx={{ borderRadius: "sm" }}
-              />
-            </Stack>
-
-            {/* Tags */}
-            <Stack direction="row" spacing={0.5} sx={{ mt: 1 }}>
-              <Skeleton
-                variant="rectangular"
-                width="50px"
-                height="20px"
-                sx={{ borderRadius: "sm" }}
-              />
-              <Skeleton
-                variant="rectangular"
-                width="65px"
-                height="20px"
-                sx={{ borderRadius: "sm" }}
-              />
-              <Skeleton
-                variant="rectangular"
-                width="45px"
-                height="20px"
-                sx={{ borderRadius: "sm" }}
-              />
-            </Stack>
-          </CardContent>
-        </Card>
+        <div
+          key={key}
+          aria-hidden
+          className="flex min-h-[88px] overflow-hidden rounded-lg border border-edge bg-card"
+        >
+          <Skeleton className="w-[88px] shrink-0 rounded-none" />
+          <div className="flex flex-1 flex-col justify-center gap-2 px-4 py-3">
+            <Skeleton className="h-5 w-[60%]" />
+            <Skeleton className="h-4 w-[45%]" />
+            <Skeleton className="h-4 w-[80%]" />
+          </div>
+        </div>
       ))}
     </>
   );

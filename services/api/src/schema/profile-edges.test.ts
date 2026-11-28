@@ -147,7 +147,6 @@ const sidecar = () =>
       createdById: ALICE,
       privacy: "PUBLIC" as const,
       listType: "item",
-      isEditingLocked: false,
       itemCount: 0,
       aiInsights: null,
       insightsGeneratedAt: null,

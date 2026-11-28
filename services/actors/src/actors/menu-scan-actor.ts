@@ -32,7 +32,9 @@
  * `outbox.seq` (A7b) gives the two rows `process` writes their first-attempt
  * order, so the menu items exist before `match` looks for them; if they do not
  * — a lost race, a failed `addMenuFromScan` — the matching job's first batch
- * finds nothing and completes, and re-running `match` is free.
+ * finds nothing and throws a retryable `ConflictError` (N06a), so the outbox
+ * runs it again once the lines are filed, and fails the job if they never
+ * are. `matchStatus` reports which of those happened.
  *
  * ## `match` does not match. §8.5 is why
  *
@@ -80,6 +82,8 @@ import type {
   MatchSuggestionTarget,
   MenuScanActorInterface,
   MenuScanDto,
+  MenuScanMatchCounts,
+  MenuScanMatchStatus,
   MenuScanStatus,
   Page,
   PageArgs,
@@ -92,8 +96,10 @@ import type {
 import {
   ConflictError,
   DEAD_DELIVERY_REASONS,
+  deriveMatchStatus,
   ForbiddenError,
   formatStoredFailure,
+  isMatchEligible,
   isMenuScanStatus,
   isScannedItemType,
   keysetPage,
@@ -138,6 +144,7 @@ import { enqueueOutbox } from "../lib/outbox.ts";
 import { OUTBOX_TARGETS } from "../lib/outbox-targets.ts";
 import { menuItemRowToDto } from "../lib/place-menu-items.ts";
 import { emit } from "../lib/telemetry.ts";
+import { placeIsVisible } from "../lib/unshared-places.ts";
 import { isUuid, requireUuid } from "../lib/uuid.ts";
 
 type ScanRow = typeof menuScans.$inferSelect;
@@ -187,7 +194,23 @@ const statusOf = (value: string): MenuScanStatus =>
 export const effectivePlaceId = (row: ScanRow): string | null =>
   row.manualPlaceOverride ?? row.placeId ?? row.estimatedPlaceId;
 
-export const scanRowToDto = (row: ScanRow): MenuScanDto => ({
+/**
+ * The row as a DTO. `matchStatus` is not a column — it is derived from `jobs`
+ * and `outbox` (`#matchStatus`) — so the caller hands it in; it defaults to
+ * the answer the row alone can give, which is exact for every scan that is
+ * not yet, or never will be, eligible for matching.
+ */
+export const scanRowToDto = (
+  row: ScanRow,
+  matchStatus: MenuScanMatchStatus = deriveMatchStatus({
+    processingStatus: statusOf(row.processingStatus),
+    effectivePlaceId: effectivePlaceId(row),
+    itemsDetected: row.itemsDetected ?? 0,
+    jobStatus: null,
+    matchQueued: false,
+    matchDeadLettered: false,
+  }),
+): MenuScanDto => ({
   id: row.id,
   userId: row.userId,
   placeId: row.placeId,
@@ -198,6 +221,7 @@ export const scanRowToDto = (row: ScanRow): MenuScanDto => ({
   processedImageId: row.processedImageId,
   extractedText: row.extractedText,
   processingStatus: statusOf(row.processingStatus),
+  matchStatus,
   processingError: row.processingError,
   confidenceScore: num(row.confidenceScore),
   processingModel: row.processingModel,
@@ -208,6 +232,7 @@ export const scanRowToDto = (row: ScanRow): MenuScanDto => ({
   processedAt: iso(row.processedAt),
   createdAt: iso(row.createdAt),
   updatedAt: iso(row.updatedAt),
+  headerName: row.headerName ?? null,
 });
 
 /** `item_match_suggestions`' arc: its six `suggested_<type>_id` columns. */
@@ -350,7 +375,77 @@ export class MenuScanActor
   async get(ctx: Ctx): Promise<MenuScanDto> {
     const aggregate = this.requireAggregate();
     await this.requireVisible(ctx, aggregate);
-    return scanRowToDto(aggregate.row);
+    return scanRowToDto(aggregate.row, await this.#matchStatus(aggregate.row));
+  }
+
+  /**
+   * N06a — where the match run is, derived fresh on every read.
+   *
+   * `jobs` is `JobActor`'s and `outbox` is everybody's queue; neither is
+   * cached here (§1.3), for the same reason `match` reads `jobs` fresh. A
+   * scan that is not eligible for matching costs no query at all: the row
+   * alone says `waiting` or `skipped`.
+   *
+   * The two outbox targets are the two hops between "extraction completed"
+   * and "the job row exists": `process` commits `MenuScanActor.match` in the
+   * transaction that completes the scan, and `match` commits
+   * `MenuMatchJobActor.start` before its own row is marked delivered — so an
+   * eligible scan always has a job, a live row, or a dead one, except a scan
+   * matched before the migration (see `deriveMatchStatus`). The live check
+   * rides `outbox_live_target_idx`; the dead one scans only what the hourly
+   * reaper leaves, which is live and dead rows.
+   */
+  async #matchStatus(row: ScanRow): Promise<MenuScanMatchStatus> {
+    const processingStatus = statusOf(row.processingStatus);
+    const facts = {
+      processingStatus,
+      effectivePlaceId: effectivePlaceId(row),
+      itemsDetected: row.itemsDetected ?? 0,
+    };
+    if (!isMatchEligible(facts)) return scanRowToDto(row).matchStatus;
+
+    const jobId = menuMatchJobId(row.id);
+    const match = OUTBOX_TARGETS["MenuScanActor.match"];
+    const start = OUTBOX_TARGETS["MenuMatchJobActor.start"];
+    const ours = sql`(
+      (o.target_actor = ${match.actorType} and o.method = ${match.method}
+        and o.target_id = ${row.id})
+      or (o.target_actor = ${start.actorType} and o.method = ${start.method}
+        and o.target_id = ${jobId})
+    )`;
+    // Each fact is read only when the ones ahead of it in `deriveMatchStatus`
+    // left the answer open: a scan with a job row (every settled scan) costs
+    // one primary-key lookup, and the dead-row check — the one no index
+    // covers — runs only for a scan with no job and nothing live.
+    const { rows } = await this.db.execute<{
+      job_status: string | null;
+      queued: boolean | null;
+      dead: boolean | null;
+    }>(sql`
+      with job as (
+        select (select status from public.jobs where id = ${jobId}::uuid)
+          as status
+      ), live as (
+        select job.status as job_status,
+          case when job.status is null then exists (
+            select 1 from public.outbox o
+            where o.status in ('pending', 'delivering') and ${ours}
+          ) end as queued
+        from job
+      )
+      select job_status, queued,
+        case when job_status is null and queued = false then exists (
+          select 1 from public.outbox o where o.status = 'dead' and ${ours}
+        ) end as dead
+      from live
+    `);
+    const found = rows[0];
+    return deriveMatchStatus({
+      ...facts,
+      jobStatus: found?.job_status ?? null,
+      matchQueued: found?.queued === true,
+      matchDeadLettered: found?.dead === true,
+    });
   }
 
   /**
@@ -415,6 +510,58 @@ export class MenuScanActor
     };
   }
 
+  /**
+   * N06a follow-up — the headline's three numbers, counted here so a menu
+   * longer than the page the client loaded is still counted whole.
+   *
+   * A line is *matched* only once it is confirmed: a verified item on the
+   * line, a linked recipe, or an accepted suggestion (the acceptance reaches
+   * `place_menu_items` an outbox hop later, and a recipe never does). A line
+   * whose only claim is a suggestion awaiting Accept / Reject is *to
+   * confirm*, not matched. Fresh on every read, like the rest of this
+   * actor's child reads (§1.3); one statement, riding the
+   * `place_menu_items.menu_scan_id` and suggestion / recipe FK indexes.
+   */
+  async matchCounts(ctx: Ctx): Promise<MenuScanMatchCounts> {
+    const aggregate = this.requireAggregate();
+    await this.requireVisible(ctx, aggregate);
+    const { rows } = await this.db.execute<{
+      lines: number;
+      matched: number;
+      to_confirm: number;
+    }>(sql`
+      with line as (
+        select
+          (${ARCS.placeMenuItems.idExpr("i")} is not null
+            or exists (
+              select 1 from public.menu_item_recipes r
+              where r.menu_item_id = i.id
+            )
+            or exists (
+              select 1 from public.item_match_suggestions s
+              where s.place_menu_item_id = i.id and s.accepted is true
+            )) as matched,
+          exists (
+            select 1 from public.item_match_suggestions s
+            where s.place_menu_item_id = i.id
+              and s.accepted is null and s.rejected is null
+          ) as open
+        from public.place_menu_items i
+        where i.menu_scan_id = ${aggregate.row.id}::uuid
+      )
+      select count(*)::int as lines,
+        (count(*) filter (where matched))::int as matched,
+        (count(*) filter (where open and not matched))::int as to_confirm
+      from line
+    `);
+    const found = rows[0];
+    return {
+      lines: Number(found?.lines ?? 0),
+      matched: Number(found?.matched ?? 0),
+      toConfirm: Number(found?.to_confirm ?? 0),
+    };
+  }
+
   async #readSuggestions(): Promise<readonly SuggestionJoinRow[]> {
     const { rows } = await this.db.execute<SuggestionJoinRow>(sql`
       select s.*, i.menu_scan_id, i.place_id, i.menu_item_name
@@ -476,7 +623,7 @@ export class MenuScanActor
     const existing = this.aggregate;
     if (existing !== null) {
       await this.requireVisible(ctx, existing);
-      return scanRowToDto(existing.row);
+      return scanRowToDto(existing.row, await this.#matchStatus(existing.row));
     }
 
     const originalImageId = requireUuid(
@@ -520,6 +667,16 @@ export class MenuScanActor
       ...(hint.location == null ? {} : { scanLocation: hint.location }),
       processingStatus: "pending" as const,
     };
+
+    // X27: a hinted place the caller cannot see is a place that does not
+    // exist — the same refusal the foreign key gives an unknown id below, so
+    // a scan cannot be filed into (or used to probe for) somebody else's
+    // place under review.
+    for (const placeId of [values.placeId, values.estimatedPlaceId]) {
+      if (placeId !== null && !(await placeIsVisible(this.db, ctx, placeId))) {
+        throw translateFkViolation({ code: "23503" });
+      }
+    }
 
     try {
       await this.tx(async (tx) => {
@@ -682,6 +839,11 @@ export class MenuScanActor
           processingDurationMs: durationMs,
           confidenceScore: clamp01(result.confidence).toFixed(2),
           itemsDetected: items.length,
+          // L10: stored, never applied — the place keeps its name until its
+          // creator confirms the rename (L24).
+          headerName: result.noMenuDetected
+            ? null
+            : (result.headerName ?? null),
           processedAt: new Date(),
           updatedAt: new Date(),
         })

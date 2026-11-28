@@ -1,0 +1,175 @@
+/*
+ * Route motion (B05, design-direction §4.3, §4.4, §4.9). Imported by the
+ * root layout, after globals.css (L26: globals.css is not routemotion's).
+ *
+ * `RouteTransition` (components/app) wraps the shell's scroller in a React
+ * <ViewTransition> that, per navigation type, gives it one class:
+ *   .nav-forward  a push: the old page leaves to the leading edge, the new
+ *                 one arrives from the trailing edge;
+ *   .nav-back     the mirror;
+ *   .nav-tab      a tab switch: a crossfade, no slide.
+ * `MorphTitle` pairs a card's title with its page's heading (.morph).
+ * Without the API none of this runs.
+ *
+ * Timings follow motion/SPEC.md (movements 2, 3, 23) on lib/motion.ts's
+ * tokens: a push drifts 60 px (`distance.route`) over long (400 ms); a back
+ * is its exit, ⅔ of that (267 ms) on the exit curve; a tab is a crossfade at
+ * short. Under reduced motion nothing translates: a push becomes a 150 ms
+ * crossfade (`calm.fade`), a back a 120 ms fade (`calm.sheet`) and a tab is
+ * instant, whether or not a type is set (the block at the end).
+ */
+
+:root {
+  /* Enough to read as direction, not enough to track across the screen. */
+  --ca-route-offset: 60px;
+  /* A back runs at ⅔ of a push (lib/motion.ts `exitOf`). */
+  --ca-route-back: calc(var(--ca-dur-long) * 2 / 3);
+  /* Reduced motion's replacements (lib/motion.ts `calm`). */
+  --ca-calm-fade: 150ms;
+  --ca-calm-sheet: 120ms;
+}
+
+/* Clicks during a transition reach the live page, not the overlay. */
+::view-transition {
+  pointer-events: none;
+}
+
+/* The document root: the bars and the page each animate on their own. */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+}
+
+/* ---- Forward and back: a short slide under a quick fade ---------------- */
+
+::view-transition-old(.nav-forward) {
+  --ca-route-from: 0;
+  --ca-route-to: calc(-1 * var(--ca-route-offset));
+  animation:
+    var(--ca-dur-short) var(--ca-ease-exit) both ca-route-fade-out,
+    var(--ca-dur-long) var(--ca-ease-standard) both ca-route-slide;
+}
+::view-transition-new(.nav-forward) {
+  --ca-route-from: var(--ca-route-offset);
+  --ca-route-to: 0;
+  animation:
+    var(--ca-dur-medium) var(--ca-ease-enter) var(--ca-dur-micro) both
+    ca-route-fade-in,
+    var(--ca-dur-long) var(--ca-ease-standard) both ca-route-slide;
+}
+::view-transition-old(.nav-back) {
+  --ca-route-from: 0;
+  --ca-route-to: var(--ca-route-offset);
+  animation:
+    var(--ca-dur-short) var(--ca-ease-exit) both ca-route-fade-out,
+    var(--ca-route-back) var(--ca-ease-exit) both ca-route-slide;
+}
+::view-transition-new(.nav-back) {
+  --ca-route-from: calc(-1 * var(--ca-route-offset));
+  --ca-route-to: 0;
+  animation:
+    var(--ca-dur-short) var(--ca-ease-enter) var(--ca-dur-micro) both
+    ca-route-fade-in,
+    var(--ca-route-back) var(--ca-ease-exit) both ca-route-slide;
+}
+
+/* ---- Tabs: a crossfade, in place --------------------------------------- */
+
+::view-transition-old(.nav-tab) {
+  animation: var(--ca-dur-short) var(--ca-ease-exit) both ca-route-fade-out;
+}
+::view-transition-new(.nav-tab) {
+  animation: var(--ca-dur-short) var(--ca-ease-enter) both ca-route-fade-in;
+}
+
+/* ---- Title morph -------------------------------------------------------- */
+
+::view-transition-group(.morph) {
+  animation-duration: var(--ca-dur-long);
+  animation-timing-function: var(--ca-ease-standard);
+}
+
+/* ---- Anchored bars: they do not move with the page ---------------------- */
+
+[data-slot="tab-bar"] {
+  view-transition-name: ca-tab-bar;
+}
+[data-slot="side-rail"] {
+  view-transition-name: ca-side-rail;
+}
+[data-slot="app-bar"] {
+  view-transition-name: ca-app-bar;
+}
+
+::view-transition-group(ca-tab-bar),
+::view-transition-group(ca-side-rail),
+::view-transition-group(ca-app-bar) {
+  animation: none;
+  z-index: 100;
+}
+::view-transition-old(ca-tab-bar),
+::view-transition-old(ca-side-rail),
+::view-transition-old(ca-app-bar) {
+  display: none;
+}
+::view-transition-new(ca-tab-bar),
+::view-transition-new(ca-side-rail),
+::view-transition-new(ca-app-bar) {
+  animation: none;
+}
+
+@keyframes ca-route-slide {
+  from {
+    translate: var(--ca-route-from) 0;
+  }
+  to {
+    translate: var(--ca-route-to) 0;
+  }
+}
+@keyframes ca-route-fade-out {
+  to {
+    opacity: 0;
+  }
+}
+@keyframes ca-route-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+/* §4.9: no translation under reduced motion. Each type keeps only its
+   fade (SPEC's reduced column); anything else that would run is zeroed. */
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    /* biome-ignore lint/complexity/noImportantStyles: reduced motion must beat every route animation. */
+    animation: none !important;
+  }
+  :root {
+    --ca-calm-push-out: var(--ca-calm-fade) var(--ca-ease-standard) both
+      ca-route-fade-out;
+    --ca-calm-push-in: var(--ca-calm-fade) var(--ca-ease-standard) both
+      ca-route-fade-in;
+    --ca-calm-back-out: var(--ca-calm-sheet) var(--ca-ease-standard) both
+      ca-route-fade-out;
+    --ca-calm-back-in: var(--ca-calm-sheet) var(--ca-ease-standard) both
+      ca-route-fade-in;
+  }
+  ::view-transition-old(.nav-forward) {
+    /* biome-ignore lint/complexity/noImportantStyles: beats the zeroing above. */
+    animation: var(--ca-calm-push-out) !important;
+  }
+  ::view-transition-new(.nav-forward) {
+    /* biome-ignore lint/complexity/noImportantStyles: beats the zeroing above. */
+    animation: var(--ca-calm-push-in) !important;
+  }
+  ::view-transition-old(.nav-back) {
+    /* biome-ignore lint/complexity/noImportantStyles: beats the zeroing above. */
+    animation: var(--ca-calm-back-out) !important;
+  }
+  ::view-transition-new(.nav-back) {
+    /* biome-ignore lint/complexity/noImportantStyles: beats the zeroing above. */
+    animation: var(--ca-calm-back-in) !important;
+  }
+}

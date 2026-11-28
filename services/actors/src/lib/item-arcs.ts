@@ -1,7 +1,7 @@
 /**
  * The polymorphic item foreign key — "an arc" — stated once per table.
  *
- * Ten tables point at an item through six nullable columns, one per item type
+ * Eleven tables point at an item through six nullable columns, one per item type
  * (`wine_id`, `beer_id`, … or `suggested_wine_id`, …), under a
  * `num_nonnulls(...)` check that lets exactly one be set. Every reader and
  * writer of those tables used to carry its own `ItemType → column` map — about
@@ -35,7 +35,9 @@ import type { ItemRef, ItemType } from "@cellar-assistant/contracts";
 import { ConflictError, ITEM_TYPES } from "@cellar-assistant/contracts";
 import {
   cellarItems,
+  checkIns,
   itemBrands,
+  itemBrewPrefs,
   itemFavorites,
   itemImage,
   itemMatchSuggestions,
@@ -44,6 +46,7 @@ import {
   placeMenuItems,
   recipeIngredients,
   tierListItems,
+  wantToTry,
 } from "@cellar-assistant/db";
 import type {
   Column,
@@ -119,7 +122,7 @@ export type ItemArc<TTable extends Table = Table> = {
   columnList(alias?: string): SQL;
 };
 
-/** `WINE` → `wineId` — the naming nine of the ten arc tables follow. */
+/** `WINE` → `wineId` — the naming ten of the eleven arc tables follow. */
 const defaultProperty = (type: ItemType): string => `${type.toLowerCase()}Id`;
 
 /** `WINE` → `suggestedWineId`. */
@@ -231,14 +234,17 @@ export const itemArc = <TTable extends Table>(
  * the item tables) and fails if one is missing here, if one carries fewer
  * than all six columns, or if its `num_nonnulls` check does not name them all.
  *
- * Three share their check with one more column, and say so where they are
+ * Some share their check with one more column, and say so where they are
  * read: `recipe_ingredients` (`generic_item_id`), `tier_list_items`
- * (`place_id`), `item_match_suggestions` (`suggested_recipe_id`). And
+ * (`place_id`), `item_match_suggestions` (`suggested_recipe_id`), `want_to_try`
+ * and `check_ins` (`recipe_id`, ux-c seams for the latter). And
  * `place_menu_items`' check is `<= 1`, because a menu line may be unmatched.
  */
 export const ARCS = {
   cellarItems: itemArc(cellarItems),
+  checkIns: itemArc(checkIns),
   itemBrands: itemArc(itemBrands),
+  itemBrewPrefs: itemArc(itemBrewPrefs),
   itemFavorites: itemArc(itemFavorites),
   itemImage: itemArc(itemImage),
   itemMatchSuggestions: itemArc(itemMatchSuggestions, {
@@ -249,4 +255,5 @@ export const ARCS = {
   placeMenuItems: itemArc(placeMenuItems),
   recipeIngredients: itemArc(recipeIngredients),
   tierListItems: itemArc(tierListItems),
+  wantToTry: itemArc(wantToTry),
 } as const;

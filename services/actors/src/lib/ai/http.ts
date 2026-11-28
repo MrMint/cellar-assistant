@@ -45,6 +45,7 @@
  */
 import { ConflictError, ValidationError } from "@cellar-assistant/contracts";
 import { describeImages } from "./image-mime.ts";
+import { keepNoModelResponse, noModelResponse } from "./no-response.ts";
 import type { FetchLike, ProviderName } from "./types.ts";
 
 /**
@@ -69,10 +70,37 @@ export type PostJsonOptions = {
   /** For the error message: `"embeddings"`, `"generateContent"`, `"token"`. */
   readonly what: string;
   readonly fetchImpl: FetchLike;
+  /**
+   * The caller's own cancellation (N09), combined with `timeoutMs`: whichever
+   * fires first aborts the request.
+   */
+  readonly signal?: AbortSignal;
 };
 
+/** A function, so the check after the `await` is not narrowed away. */
+const isAborted = (signal: AbortSignal | undefined): boolean =>
+  signal?.aborted === true;
+
+/**
+ * The caller gave up before the request was sent: nothing left this process,
+ * so nothing can have been billed.
+ */
+const cancelledBeforeSend = (
+  provider: ProviderName,
+  what: string,
+  url: string,
+): ConflictError =>
+  noModelResponse(
+    new ConflictError(
+      `${provider} ${what} was cancelled before it was sent to ` +
+        `${redactUrl(url)}: the caller stopped waiting`,
+    ),
+  );
+
 export const postJson = async (options: PostJsonOptions): Promise<unknown> => {
-  const { url, body, headers, timeoutMs, provider, what, fetchImpl } = options;
+  const { url, body, headers, timeoutMs, provider, what, fetchImpl, signal } =
+    options;
+  if (isAborted(signal)) throw cancelledBeforeSend(provider, what, url);
 
   let response: Awaited<ReturnType<FetchLike>>;
   try {
@@ -80,15 +108,32 @@ export const postJson = async (options: PostJsonOptions): Promise<unknown> => {
       method: "POST",
       headers: { "content-type": "application/json", ...headers },
       body: JSON.stringify(body),
-      signal: AbortSignal.timeout(timeoutMs),
+      signal:
+        signal === undefined
+          ? AbortSignal.timeout(timeoutMs)
+          : AbortSignal.any([AbortSignal.timeout(timeoutMs), signal]),
     });
   } catch (error) {
     // Rethrown, never swallowed. A DNS failure, a refused connection or a
     // timeout is exactly the case where returning something plausible would
     // be worst — see `config.ts`'s note on the Wisconsin mock.
-    throw new ConflictError(
-      `${provider} ${what} could not be reached at ${redactUrl(url)}: ` +
-        `${error instanceof Error ? error.message : String(error)}`,
+    //
+    // No answer arrived (D17), but a timeout or a reset connection may have
+    // reached the provider first, and it may bill what it ran. The fetch error
+    // does not say reliably which, so every transport failure keeps its cost
+    // booked and gives back only the allowance (`maybeBilled`).
+    //
+    // A caller's cancellation after the send is the same fact (N09): the
+    // request may have run, so its cost stays booked like a timeout's.
+    throw noModelResponse(
+      new ConflictError(
+        isAborted(signal)
+          ? `${provider} ${what} was cancelled at ${redactUrl(url)}: ` +
+              "the caller stopped waiting"
+          : `${provider} ${what} could not be reached at ${redactUrl(url)}: ` +
+              `${error instanceof Error ? error.message : String(error)}`,
+      ),
+      { maybeBilled: true },
     );
   }
 
@@ -100,9 +145,13 @@ export const postJson = async (options: PostJsonOptions): Promise<unknown> => {
     // The class is the retry schedule (see this file's header). Same message
     // either way — an operator reading a dead-lettered row needs the status and
     // the body regardless of which of the two it turned out to be.
-    throw isTransientStatus(response.status)
-      ? new ConflictError(detail)
-      : new ValidationError(detail);
+    // An HTTP error status is the provider refusing before it generated
+    // anything — not a model response (D17), so the reservation is released.
+    throw noModelResponse(
+      isTransientStatus(response.status)
+        ? new ConflictError(detail)
+        : new ValidationError(detail),
+    );
   }
   try {
     return JSON.parse(text);
@@ -153,8 +202,15 @@ export const withImageContext = async <T>(
       "usually refusing the pixel data: a truncated or otherwise malformed " +
       "raster still has a valid signature, and still renders in a browser, " +
       "so looking at the file proves nothing.";
-    if (error instanceof ValidationError) throw new ValidationError(detail);
-    if (error instanceof ConflictError) throw new ConflictError(detail);
+    // The rewrap keeps the class (the retry schedule) and whether a model
+    // answered (D17) — both are facts about the original failure.
+    const keep = <E>(next: E): E => keepNoModelResponse(error, next);
+    if (error instanceof ValidationError) {
+      throw keep(new ValidationError(detail, error.reason, error.retryAt));
+    }
+    if (error instanceof ConflictError) {
+      throw keep(new ConflictError(detail, error.reason, error.retryAt));
+    }
     throw error;
   }
 };

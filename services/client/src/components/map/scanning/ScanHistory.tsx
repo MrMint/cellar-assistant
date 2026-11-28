@@ -8,53 +8,44 @@
  * `processingError` under its chip (kept from D5).
  */
 
+import { EmptyState } from "@/components/app/EmptyState";
 import {
-  Alert,
-  Box,
-  Button,
-  Card,
-  CardContent,
-  Chip,
-  CircularProgress,
-  Stack,
-  Typography,
-} from "@mui/joy";
-import NextLink from "next/link";
-import {
-  MdCheckCircle,
-  MdError,
-  MdHourglassEmpty,
-  MdPhotoCamera,
-  MdSettings,
-} from "react-icons/md";
+  Camera,
+  ErrorIcon,
+  Pending,
+  Settings,
+  Success,
+} from "@/components/app/icons";
+import { Link } from "@/components/app/Link";
 import { Timestamp } from "@/components/common/Timestamp";
+import { Button } from "@/components/ui/button";
+import { Spinner } from "@/components/ui/spinner";
 import { unwrapResult } from "@/lib/api/result";
 import { pageOf } from "@/lib/paging/paged-connection";
 import { usePagedConnection } from "@/lib/paging/use-paged-connection";
 import { scanSummaryFrom } from "../adapter";
 import { SCANS_PAGE_SIZE, ScanHistoryQuery } from "../queries";
+import { ScanStatusBadge, type ScanTone } from "./ScanStatusBadge";
 
 const getStatusIcon = (status: string) => {
   switch (status) {
     case "completed":
-      return <MdCheckCircle size={20} />;
+      return <Success aria-hidden />;
     case "processing":
-      return <MdSettings size={20} />;
+      return <Settings aria-hidden />;
     case "failed":
-      return <MdError size={20} />;
+      return <ErrorIcon aria-hidden />;
     default:
-      return <MdHourglassEmpty size={20} />;
+      return <Pending aria-hidden />;
   }
 };
 
-const getStatusColor = (
-  status: string,
-): "success" | "warning" | "danger" | "neutral" => {
+const getStatusTone = (status: string): ScanTone => {
   switch (status) {
     case "completed":
       return "success";
     case "processing":
-      return "warning";
+      return "working";
     case "failed":
       return "danger";
     default:
@@ -76,112 +67,98 @@ export function ScanHistory() {
   const scans = paged.rows;
 
   if (paged.failure) {
-    return <Alert color="danger">{paged.failure.message}</Alert>;
+    return (
+      <p
+        role="alert"
+        className="t-body rounded-md border border-destructive/60 px-4 py-3 text-danger"
+      >
+        {paged.failure.message}
+      </p>
+    );
   }
 
   if (paged.status === "resetting" && scans.length === 0) {
     return (
-      <Box sx={{ display: "flex", justifyContent: "center", p: 4 }}>
-        <CircularProgress />
-      </Box>
+      <div className="flex justify-center p-8">
+        <Spinner className="size-8 text-ink-2" />
+      </div>
     );
   }
 
   if (scans.length === 0) {
     return (
-      <Card>
-        <CardContent sx={{ textAlign: "center", py: 6 }}>
-          <MdPhotoCamera
-            size={48}
-            style={{
-              color: "var(--joy-palette-text-secondary)",
-              marginBottom: 16,
-            }}
-          />
-          <Typography level="h4" sx={{ mb: 1 }}>
-            No menu scans yet
-          </Typography>
-          <Typography level="body-md" sx={{ color: "text.secondary" }}>
-            Visit a place and scan their menu to see results here.
-          </Typography>
-        </CardContent>
-      </Card>
+      <div className="rounded-xl bg-surface-1">
+        <EmptyState
+          illustration={<Camera aria-hidden />}
+          title="No menu scans yet"
+          description="Visit a place and scan their menu to see results here."
+        />
+      </div>
     );
   }
 
   return (
-    <Stack spacing={2}>
-      {scans.map((scan) => (
-        <Card
-          key={scan.id}
-          variant="outlined"
-          component={NextLink}
-          href={`/map/scans/${scan.id}`}
-          sx={{
-            textDecoration: "none",
-            cursor: "pointer",
-            transition: "border-color 0.2s",
-            "&:hover": { borderColor: "primary.300" },
-          }}
-        >
-          <CardContent>
-            <Stack
-              direction="row"
-              justifyContent="space-between"
-              alignItems="flex-start"
-            >
-              <Box>
-                <Typography level="title-md">
+    <div className="flex flex-col gap-4">
+      <ul className="flex flex-col gap-4">
+        {scans.map((scan) => (
+          <li
+            key={scan.id}
+            className="relative rounded-xl bg-surface-1 p-4 transition-colors duration-(--ca-dur-short) ease-standard hover:bg-surface-2"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <Link
+                  href={`/map/scans/${scan.id}`}
+                  overlay
+                  underline="none"
+                  className="t-head text-ink"
+                >
                   {scan.place?.name ?? "Unknown place"}
-                </Typography>
+                </Link>
                 {scan.scanned_at && (
-                  <Typography level="body-xs" sx={{ color: "text.secondary" }}>
+                  <p className="t-cap text-ink-2">
                     <Timestamp iso={scan.scanned_at} precision="datetime" />
-                  </Typography>
+                  </p>
                 )}
-              </Box>
+              </div>
 
-              <Chip
-                variant="soft"
-                color={getStatusColor(scan.processing_status)}
-                size="sm"
-                startDecorator={getStatusIcon(scan.processing_status)}
+              <ScanStatusBadge
+                tone={getStatusTone(scan.processing_status)}
+                icon={getStatusIcon(scan.processing_status)}
               >
                 {scan.processing_status}
-              </Chip>
-            </Stack>
+              </ScanStatusBadge>
+            </div>
 
-            <Stack direction="row" spacing={2} sx={{ mt: 1 }}>
+            <div className="mt-2 flex gap-4">
               {scan.items_detected != null && (
-                <Typography level="body-xs">
+                <p className="t-cap tabular text-ink">
                   {scan.items_detected} items detected
-                </Typography>
+                </p>
               )}
               {scan.confidence_score != null && (
-                <Typography level="body-xs">
+                <p className="t-cap tabular text-ink">
                   {(scan.confidence_score * 100).toFixed(0)}% confidence
-                </Typography>
+                </p>
               )}
-            </Stack>
+            </div>
             {scan.processing_error && (
-              <Typography level="body-xs" color="danger" sx={{ mt: 0.5 }}>
-                {scan.processing_error}
-              </Typography>
+              <p className="t-cap mt-1 text-danger">{scan.processing_error}</p>
             )}
-          </CardContent>
-        </Card>
-      ))}
+          </li>
+        ))}
+      </ul>
       {paged.hasNextPage && (
         <Button
-          variant="outlined"
-          color="neutral"
-          loading={paged.status === "loadingMore"}
-          disabled={!paged.canLoadMore}
+          variant="outline"
+          disabled={!paged.canLoadMore || paged.status === "loadingMore"}
+          aria-busy={paged.status === "loadingMore"}
           onClick={() => void paged.loadMore()}
         >
+          {paged.status === "loadingMore" && <Spinner />}
           Load more
         </Button>
       )}
-    </Stack>
+    </div>
   );
 }

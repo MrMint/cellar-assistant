@@ -1,6 +1,9 @@
-import { Box, Typography } from "@mui/joy";
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { Link } from "@/components/common/Link";
+import { cache } from "react";
+import { AppBar } from "@/components/app/AppBar";
+import { ErrorState } from "@/components/app/EmptyState";
+import { Page } from "@/components/app/Page";
 import { versionFromNodes } from "@/components/recipe/adapter";
 import {
   RecipeDetailsFragment,
@@ -13,17 +16,33 @@ import { isNotFound, unwrapResult } from "@/lib/api/result";
 import { apiServerQuery } from "@/lib/api/urql-server";
 
 /**
- * `/recipes/groups/[groupId]/versions` — `82450ad1:src/app/(authenticated)/recipes/groups/[groupId]/versions/page.tsx`,
- * restored: the text breadcrumbs, "{name} - All Versions", the blurb and
- * `RecipeVersionsTab`. In production it threw on load (`recipe_votes` had no
- * Hasura permission).
- *
- * The middle breadcrumb goes to `/recipes/groups/{id}`; the old one was
- * `/recipes/{groupId}`, which put a group id on the recipe route (a 404).
- * Versions beyond the first 20 (`RECIPE_VERSIONS_PAGE_SIZE`) are counted, not
- * shown.
+ * `/recipes/groups/[groupId]/versions` — Versions (Recipes-Browse 16–20,
+ * desktop 03): the bar says "Versions" over "Negroni · 3", Back goes to the
+ * group, and every version is a card with its vote row
+ * (`RecipeVersionsTab`). Versions beyond the first 20
+ * (`RECIPE_VERSIONS_PAGE_SIZE`) are counted, never shown as a total.
  */
 export const dynamic = "force-dynamic";
+
+/** One versions read per request, for the page and its title (X21). */
+const loadVersions = cache((groupId: string) =>
+  apiServerQuery(RecipeVersionsPageQuery, { groupId }),
+);
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ groupId: string }>;
+}): Promise<Metadata> {
+  const { groupId } = await params;
+  const result = unwrapResult(
+    (await loadVersions(groupId)).recipeGroup,
+    "RecipeGroup",
+  );
+  return {
+    title: result.ok ? `${result.data.name}: all versions` : "Recipe versions",
+  };
+}
 
 export default async function RecipeVersionsPage({
   params,
@@ -31,11 +50,19 @@ export default async function RecipeVersionsPage({
   params: Promise<{ groupId: string }>;
 }) {
   const { groupId } = await params;
-  const data = await apiServerQuery(RecipeVersionsPageQuery, { groupId });
+  const data = await loadVersions(groupId);
   const result = unwrapResult(data.recipeGroup, "RecipeGroup");
   if (!result.ok) {
     if (isNotFound(result.error)) notFound();
-    return <Typography color="danger">{result.error.message}</Typography>;
+    return (
+      <Page>
+        <AppBar title="Versions" parent="/recipes" />
+        <ErrorState
+          title="Couldn't open the versions"
+          reason={result.error.message}
+        />
+      </Page>
+    );
   }
 
   const recipeGroup = result.data;
@@ -45,52 +72,33 @@ export default async function RecipeVersionsPage({
       readFragment(RecipeVoteStateFragment, edge.node),
     ),
   );
-  const canonicalRecipeId = recipeGroup.canonicalRecipeId ?? null;
   const hidden = recipeGroup.recipeCount - recipes.length;
 
   return (
-    <Box sx={{ p: 3, maxWidth: 1400, mx: "auto" }}>
-      {/* Page Header */}
-      <Box sx={{ mb: 4 }}>
-        <Typography level="body-sm" sx={{ mb: 1 }}>
-          <Link href="/recipes" underline="always">
-            Recipe Groups
-          </Link>
-          {" > "}
-          <Link href={`/recipes/groups/${recipeGroup.id}`} underline="always">
-            {recipeGroup.name}
-          </Link>
-          {" > Versions"}
-        </Typography>
-
-        <Typography level="h1" sx={{ mb: 1 }}>
-          {recipeGroup.name} - All Versions
-        </Typography>
-
-        {recipeGroup.description && (
-          <Typography level="body-lg" sx={{ color: "text.secondary", mb: 2 }}>
-            {recipeGroup.description}
-          </Typography>
-        )}
-
-        <Typography level="body-md" sx={{ color: "text.secondary" }}>
-          Compare all {recipeGroup.recipeCount} versions of this recipe and vote
-          for your favorite. The community's preferred version is shown as the
-          canonical recipe.
-        </Typography>
-        {hidden > 0 && (
-          <Typography level="body-sm" sx={{ color: "text.tertiary", mt: 1 }}>
-            Showing the top {recipes.length}; {hidden} more are not listed.
-          </Typography>
-        )}
-      </Box>
-
-      {/* Recipe Versions Comparison */}
+    <Page wide>
+      <AppBar
+        parent={`/recipes/groups/${recipeGroup.id}`}
+        title={
+          <div className="flex min-w-0 flex-col">
+            <h1 className="t-head m-0 truncate text-ink">Versions</h1>
+            <p className="t-cap m-0 truncate text-ink-2">
+              {recipeGroup.name} · {recipeGroup.recipeCount}
+            </p>
+          </div>
+        }
+      />
       <RecipeVersionsTab
         recipes={recipes}
-        canonicalRecipeId={canonicalRecipeId}
+        canonicalRecipeId={recipeGroup.canonicalRecipeId ?? null}
+        communityPickId={recipeGroup.communityPickId ?? null}
         groupId={recipeGroup.id}
+        viewerId={data.me?.id ?? null}
       />
-    </Box>
+      {hidden > 0 && (
+        <p className="t-cap m-0 text-ink-3">
+          {recipes.length} of {recipeGroup.recipeCount} shown
+        </p>
+      )}
+    </Page>
   );
 }

@@ -76,34 +76,53 @@
 import { randomUUID } from "node:crypto";
 import type {
   ActorCategory,
+  ConfirmItemFieldsInput,
   ConfirmOnboardingInput,
   ConfirmOnboardingResult,
   CreateItemInput,
   Ctx,
+  DraftImageBatchFilter,
+  ItemDetailSuggestions,
+  ItemLabelReading,
   ItemOnboardingActorInterface,
   ItemOnboardingDto,
   ItemRef,
   ItemType,
   OnboardingStatus,
+  OpenDraftInput,
+  ReadTarget,
   ReprocessResult,
+  RereadLabelInput,
+  SaveDraftFields,
+  SaveDraftInput,
   StartOnboardingInput,
+  SuggestItemDetailsInput,
+  SuggestNewItemDetailsInput,
+  VintageAnswer,
 } from "@cellar-assistant/contracts";
 import {
   BarcodeActorDescriptor,
   BrandRegistryActorDescriptor,
   barcodeActorId,
+  CONFIRMED_FIELDS_MAX,
+  ConflictError,
+  DRAFT_IMAGE_BATCH_MAX_IDS,
+  draftImageBatchActorId,
   ForbiddenError,
   ITEM_ATTRIBUTE_KEY,
+  ITEM_TYPE_SPECS,
   ItemOnboardingActorDescriptor,
   isItemType,
   isOnboardingStatus,
+  isVintageAnswer,
   itemActorId,
+  itemAttributeKeys,
   normalizeBrandName,
   requireItemAttributes,
   ValidationError,
 } from "@cellar-assistant/contracts";
-import { itemOnboardings } from "@cellar-assistant/db";
-import { eq } from "@cellar-assistant/db/orm";
+import { files, itemOnboardings } from "@cellar-assistant/db";
+import { and, eq, inArray, isNotNull } from "@cellar-assistant/db/orm";
 import { isOwner } from "@cellar-assistant/policy";
 import type { ActorId, DaprClient } from "@dapr/dapr";
 import { absentRow, EntityActorBase } from "../lib/actor-base.ts";
@@ -115,6 +134,7 @@ import {
   requireVerifiedFile,
   type VerifyFile,
 } from "../lib/file-verification.ts";
+import { requireSignedIn } from "../lib/guards.ts";
 import { internal } from "../lib/internal-client.ts";
 import { ITEM_TABLES } from "../lib/item-bindings.ts";
 import type {
@@ -122,8 +142,20 @@ import type {
   ItemDefaultsRequest,
 } from "../lib/item-defaults.ts";
 import { itemDefaultsProvider } from "../lib/item-defaults.ts";
+import type { ItemSuggestionsProvider } from "../lib/item-suggestions.ts";
+import {
+  emptySuggestibleFields,
+  itemSuggestionsProvider,
+} from "../lib/item-suggestions.ts";
 import { enqueueOutbox } from "../lib/outbox.ts";
 import { OUTBOX_TARGETS } from "../lib/outbox-targets.ts";
+import {
+  filesS3Config,
+  presignedStableGetUrl,
+  readUrlWindowSettings,
+  type StableReadWindow,
+  stableReadWindow,
+} from "../lib/s3-presign.ts";
 import { isUuid, requireUuid } from "../lib/uuid.ts";
 import { isCellarOwner, loadCellarAccess } from "../lib/visibility.ts";
 
@@ -145,6 +177,19 @@ export type BrandResolver = (
   ctx: Ctx,
   name: string,
 ) => Promise<{ readonly id: string }>;
+
+/**
+ * H-133 (F-71): signs a browser GET URL for one stored object. Production
+ * signs in process, exactly as `FileActor.presignRead` does
+ * (`presignGetPublic` dials nothing); a test passes a fake.
+ */
+export type ImageSigner = (
+  key: string,
+  window: StableReadWindow,
+) => Promise<string>;
+
+const signImageInProcess: ImageSigner = (key, window) =>
+  presignedStableGetUrl(filesS3Config(), key, window);
 
 /**
  * `BarcodeActor(barcodeActorId(code, type))` — the canonical key, with the
@@ -172,6 +217,13 @@ export const daprResolveBrand: BrandResolver = (ctx, name) =>
 /* Helpers                                                                     */
 /* -------------------------------------------------------------------------- */
 
+/**
+ * X19: the longest name, brand or detail `suggestDetails` puts in its prompt.
+ * A product name is a few words; this only stops a client from padding a
+ * metered model call.
+ */
+const MAX_SUGGEST_CONTEXT_CHARS = 200;
+
 const iso = (value: Date | null): string =>
   (value ?? new Date(0)).toISOString();
 
@@ -180,6 +232,117 @@ const jsonOrNull = (value: unknown): string | null =>
 
 const statusOf = (value: string): OnboardingStatus =>
   isOnboardingStatus(value) ? value : "START";
+
+const vintageAnswerOf = (value: string): VintageAnswer =>
+  isVintageAnswer(value) ? value : "UNANSWERED";
+
+/* -------------------------------------------------------------------------- */
+/* SV-B · saved drafts                                                         */
+/* -------------------------------------------------------------------------- */
+
+/** A draft's text fields: a name or a brand, never an essay. */
+const DRAFT_TEXT_MAX = 500;
+/** `draft_fields` as JSON. A draft is a form's worth of values. */
+const DRAFT_JSON_MAX = 16_384;
+const CONFIRMED_FIELD_MAX_CHARS = 64;
+
+const isPlainObject = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+const draftText = (value: unknown, field: string): string | null => {
+  if (value === undefined || value === null) return null;
+  if (typeof value !== "string") {
+    throw new ValidationError(`fields.${field} must be a string`);
+  }
+  const text = value.trim();
+  if (text.length > DRAFT_TEXT_MAX) {
+    throw new ValidationError(
+      `fields.${field} must be at most ${DRAFT_TEXT_MAX} characters`,
+    );
+  }
+  return text === "" ? null : text;
+};
+
+/** The shape checks `saveDraft` makes; everything else is the form's. */
+export const draftFieldsOf = (value: unknown): SaveDraftFields => {
+  if (!isPlainObject(value)) {
+    throw new ValidationError("fields must be an object");
+  }
+  const attributes = value.attributes;
+  if (
+    attributes !== undefined &&
+    attributes !== null &&
+    !isPlainObject(attributes)
+  ) {
+    throw new ValidationError("fields.attributes must be an object");
+  }
+  const fields: SaveDraftFields = {
+    name: draftText(value.name, "name"),
+    description: draftText(value.description, "description"),
+    country: draftText(value.country, "country"),
+    brandName: draftText(value.brandName, "brandName"),
+    attributes: attributes ?? null,
+  };
+  if (JSON.stringify(fields).length > DRAFT_JSON_MAX) {
+    throw new ValidationError(
+      `fields must be at most ${DRAFT_JSON_MAX} characters as JSON`,
+    );
+  }
+  return fields;
+};
+
+/** Trimmed, de-duplicated, in the order given; bounded in count and length. */
+export const confirmedFieldsOf = (value: unknown): string[] => {
+  if (!Array.isArray(value)) {
+    throw new ValidationError("confirmedFields must be a list of field names");
+  }
+  const out: string[] = [];
+  for (const entry of value) {
+    if (typeof entry !== "string") {
+      throw new ValidationError("confirmedFields must be a list of strings");
+    }
+    const name = entry.trim();
+    if (name === "" || out.includes(name)) continue;
+    if (name.length > CONFIRMED_FIELD_MAX_CHARS) {
+      throw new ValidationError(
+        `a confirmed field name is at most ${CONFIRMED_FIELD_MAX_CHARS} characters`,
+      );
+    }
+    out.push(name);
+  }
+  if (out.length > CONFIRMED_FIELDS_MAX) {
+    throw new ValidationError(
+      `at most ${CONFIRMED_FIELDS_MAX} confirmed fields`,
+    );
+  }
+  return out;
+};
+
+/**
+ * F-77: the label read's `labelItemType`, from the completion it stored in
+ * `raw_defaults` — the seam keeps the whole answer there, grounding fields
+ * included, so this is the detected kind's one record and needs no column of
+ * its own. Anything that is not one of the six kinds (`NONE`, an older row's
+ * completion that never asked, text that is not JSON) is `null`.
+ */
+const detectedItemTypeOf = (raw: string | null): ItemType | null => {
+  if (raw === null) return null;
+  // A completion may arrive fenced (```json … ```); the object is the answer.
+  const start = raw.indexOf("{");
+  const end = raw.lastIndexOf("}");
+  if (start === -1 || end < start) return null;
+  let answer: unknown;
+  try {
+    answer = JSON.parse(raw.slice(start, end + 1));
+  } catch {
+    return null;
+  }
+  const value =
+    typeof answer === "object" && answer !== null
+      ? (answer as { labelItemType?: unknown }).labelItemType
+      : undefined;
+  return typeof value === "string" && isItemType(value) ? value : null;
+};
 
 export const onboardingRowToDto = (row: OnboardingRow): ItemOnboardingDto => ({
   id: row.id,
@@ -194,11 +357,19 @@ export const onboardingRowToDto = (row: OnboardingRow): ItemOnboardingDto => ({
   backLabelImageId: row.backLabelImageId,
   defaults: jsonOrNull(row.defaults),
   rawDefaults: row.rawDefaults,
+  detectedItemType: detectedItemTypeOf(row.rawDefaults),
   aiModel: row.aiModel,
   confidence: row.confidence,
   lastReprocessResult: jsonOrNull(row.lastReprocessResult),
   createdAt: iso(row.createdAt),
   updatedAt: iso(row.updatedAt),
+  cellarId: row.cellarId,
+  confirmedFields: row.confirmedFields,
+  vintageAnswer: vintageAnswerOf(row.vintageAnswer),
+  displayName: row.displayName,
+  displayMaker: row.displayMaker,
+  imageId: row.imageId,
+  draftFields: jsonOrNull(row.draftFields),
 });
 
 /* -------------------------------------------------------------------------- */
@@ -216,6 +387,8 @@ export class ItemOnboardingActor
   readonly #ensureBarcode: BarcodeEnsurer;
   readonly #resolveBrand: BrandResolver;
   readonly #verifyFile: VerifyFile;
+  readonly #suggestionsProvider: ItemSuggestionsProvider;
+  readonly #signImage: ImageSigner;
 
   constructor(
     daprClient: DaprClient,
@@ -225,12 +398,18 @@ export class ItemOnboardingActor
     ensureBarcode: BarcodeEnsurer = daprEnsureBarcode,
     resolveBrand: BrandResolver = daprResolveBrand,
     verifyFile: VerifyFile = daprVerifyFile,
+    // Last, so every existing construction site keeps its meaning (X19).
+    suggestionsProvider: ItemSuggestionsProvider = itemSuggestionsProvider(),
+    // H-133: after it, for the same reason.
+    signImage: ImageSigner = signImageInProcess,
   ) {
     super(daprClient, id, db);
     this.#defaultsProvider = defaultsProvider;
     this.#ensureBarcode = ensureBarcode;
     this.#resolveBrand = resolveBrand;
     this.#verifyFile = verifyFile;
+    this.#suggestionsProvider = suggestionsProvider;
+    this.#signImage = signImage;
   }
 
   protected async loadAggregate(
@@ -411,6 +590,24 @@ export class ItemOnboardingActor
       ) {
         return onboardingRowToDto(existing.row);
       }
+      // A closed session (it created its item, or filed a catalogue match)
+      // is answered as it stands, never re-read. X05's `?draft=<id>` resume
+      // can call `start` again on a session the person already finished —
+      // from history, or a late "Review" toast — and a re-run here would
+      // spend a model call and then write `COMPLETED` (or `FAILED`) over
+      // `CONFIRMED`, reopening the session `confirm` short-circuits on.
+      // `closeAsMatched` and `reprocess` keep a closed status the same way.
+      // SV-B: so is a saved "Needs details" draft — resuming it must not
+      // spend a model call or write `COMPLETED` over the person's save.
+      if (
+        existing.row.status === "CONFIRMED" ||
+        existing.row.status === "MATCHED" ||
+        existing.row.status === "NEEDS_DETAILS" ||
+        // H-133: nor may a resume bring a deleted draft back.
+        existing.row.status === "DISCARDED"
+      ) {
+        return onboardingRowToDto(existing.row);
+      }
     }
 
     // E2f: the fourth instance of "never trust the client's done" (§4). Both
@@ -512,6 +709,114 @@ export class ItemOnboardingActor
     return onboardingRowToDto(this.requireAggregate().row);
   }
 
+  /**
+   * X07: a session with nothing to read, so `confirm` can create an item the
+   * person typed or carried over from a menu line — wine, beer, spirit and
+   * coffee rows require an `item_onboarding_id`. No photograph, no barcode,
+   * no model call: the row stays `START`, which is exactly what it is, rather
+   * than going through `start` and being marked `FAILED` for having nothing
+   * to read. Idempotent on the key; the same id opened as another type is a
+   * caller mistake, refused before anything is written.
+   */
+  async openDraft(ctx: Ctx, input: OpenDraftInput): Promise<ItemOnboardingDto> {
+    requireUuid(this.key, "onboardingId");
+    const userId = ctx.viewerId;
+    if (userId === null) {
+      throw new ForbiddenError("sign in to add an item to the catalog");
+    }
+    if (!isItemType(input.itemType)) {
+      throw new ValidationError(`"${input.itemType}" is not an item type`);
+    }
+    const existing = this.aggregate;
+    if (existing === null) {
+      await this.tx(async (tx) => {
+        await tx
+          .insert(itemOnboardings)
+          .values({
+            id: this.key,
+            userId,
+            itemType: input.itemType,
+            status: "START",
+          })
+          .onConflictDoNothing({ target: itemOnboardings.id });
+      });
+      await this.reload();
+    }
+    const aggregate = this.requireAggregate();
+    await this.requireVisible(ctx, aggregate);
+    const dto = onboardingRowToDto(aggregate.row);
+    if (dto.itemType !== input.itemType) {
+      throw new ValidationError(
+        `onboarding ${this.key} was opened as a ${dto.itemType.toLowerCase()}, ` +
+          `not a ${input.itemType.toLowerCase()}; open a new draft for another type`,
+      );
+    }
+    return dto;
+  }
+
+  /**
+   * SV-B · MC-drafts (L6): keep an unfinished bottle on the account.
+   *
+   * Owner only (`requireVisible`: someone else's draft is absent). The cellar
+   * it is aimed at is authorized like `confirm`'s, against the onboarding's
+   * owner, because `confirm` from this row later falls back to it. Every
+   * saved draft becomes `NEEDS_DETAILS`, floor met or not (FR-1), and stays
+   * listed until `confirm`.
+   * A closed session — `CONFIRMED`, `MATCHED` — is refused: its bottle is
+   * filed already. Writes no outbox row: nothing downstream exists yet.
+   */
+  async saveDraft(ctx: Ctx, input: SaveDraftInput): Promise<ItemOnboardingDto> {
+    const aggregate = this.requireAggregate();
+    await this.requireVisible(ctx, aggregate);
+    const { row } = aggregate;
+    if (row.status === "CONFIRMED" || row.status === "MATCHED") {
+      throw new ConflictError(
+        `onboarding ${this.key} is closed (${row.status}): its bottle is filed already`,
+      );
+    }
+    if (row.status === "DISCARDED") {
+      throw new ConflictError(`draft ${this.key} was deleted`);
+    }
+    if (!isVintageAnswer(input.vintageAnswer)) {
+      throw new ValidationError(
+        "vintageAnswer must be VINTAGE, NON_VINTAGE or UNANSWERED",
+      );
+    }
+    const cellarId =
+      input.cellarId === undefined || input.cellarId === null
+        ? null
+        : requireUuid(input.cellarId, "cellarId");
+    if (cellarId !== null) {
+      await this.#requireCellarWriteAccess(cellarId, row.userId);
+    }
+    const fields = draftFieldsOf(input.fields);
+    const confirmedFields = confirmedFieldsOf(input.confirmedFields);
+    // FR-1: every draft set aside is listed until it is finished or deleted,
+    // whatever the floor says. Beer, coffee, sake and tea need only a name to
+    // confirm, so a floor check here hid a named one from Needs details; what
+    // it still lacks (maker, strength, vintage) is the client's fuller list.
+    const status: OnboardingStatus = "NEEDS_DETAILS";
+
+    await this.tx(async (tx) => {
+      await tx
+        .update(itemOnboardings)
+        .set({
+          status,
+          cellarId,
+          confirmedFields,
+          vintageAnswer: input.vintageAnswer,
+          draftFields: fields,
+          displayName: fields.name ?? null,
+          displayMaker: fields.brandName ?? null,
+          imageId: row.frontLabelImageId,
+          updatedAt: new Date(),
+        })
+        .where(eq(itemOnboardings.id, this.key));
+    });
+    await this.reload();
+    return onboardingRowToDto(this.requireAggregate().row);
+  }
+
   /** The stored proposal. Never calls the model — that is `start`'s job. */
   async defaults(ctx: Ctx): Promise<ItemOnboardingDto> {
     const aggregate = this.requireAggregate();
@@ -534,6 +839,10 @@ export class ItemOnboardingActor
   ): Promise<ConfirmOnboardingResult> {
     const aggregate = this.requireAggregate();
     await this.requireVisible(ctx, aggregate);
+    // H-133: a deleted draft creates nothing, even from a tab still open on it.
+    if (aggregate.row.status === "DISCARDED") {
+      throw new ConflictError(`draft ${this.key} was deleted`);
+    }
 
     const itemType = onboardingRowToDto(aggregate.row).itemType;
     const name = input.name.trim();
@@ -546,10 +855,16 @@ export class ItemOnboardingActor
       "itemId",
     );
     const item: ItemRef = { type: itemType, id: itemId };
+    // SV-B: a saved draft remembers where it was going; an explicit `null`
+    // still means "no cellar".
+    const wantedCellar =
+      input.cellarId === undefined ? aggregate.row.cellarId : input.cellarId;
     const cellarId =
-      input.cellarId === undefined || input.cellarId === null
+      wantedCellar === null ? null : requireUuid(wantedCellar, "cellarId");
+    const confirmedFields =
+      input.confirmedFields === undefined || input.confirmedFields === null
         ? null
-        : requireUuid(input.cellarId, "cellarId");
+        : confirmedFieldsOf(input.confirmedFields);
     const cellarItemId =
       cellarId === null
         ? null
@@ -643,7 +958,11 @@ export class ItemOnboardingActor
     await this.tx(async (tx) => {
       await tx
         .update(itemOnboardings)
-        .set({ status: "CONFIRMED", updatedAt: new Date() })
+        .set({
+          status: "CONFIRMED",
+          ...(confirmedFields === null ? {} : { confirmedFields }),
+          updatedAt: new Date(),
+        })
         .where(eq(itemOnboardings.id, this.key));
 
       // §1.4: the status change and every follow-up commit together. Order is
@@ -698,6 +1017,316 @@ export class ItemOnboardingActor
       brandId,
       cellarItemId,
       barcode,
+    };
+  }
+
+  /**
+   * The person filed a bottle of an item the catalogue already held (the
+   * quick-add countdown, or "Is it this one? +1 bottle"), so this session
+   * creates nothing: mark it `MATCHED` rather than leave it `COMPLETED`,
+   * indistinguishable from one somebody walked away from.
+   *
+   * Owner only, like every other method here. Idempotent. A session that has
+   * already `CONFIRMED` an item of its own keeps that status: `confirm`
+   * short-circuits on it, and its item references this row.
+   */
+  async closeAsMatched(ctx: Ctx): Promise<ItemOnboardingDto> {
+    const aggregate = this.requireAggregate();
+    await this.requireVisible(ctx, aggregate);
+    if (
+      aggregate.row.status === "CONFIRMED" ||
+      aggregate.row.status === "MATCHED"
+    ) {
+      return onboardingRowToDto(aggregate.row);
+    }
+    await this.tx(async (tx) => {
+      await tx
+        .update(itemOnboardings)
+        .set({ status: "MATCHED", updatedAt: new Date() })
+        .where(eq(itemOnboardings.id, this.key));
+    });
+    await this.reload();
+    return onboardingRowToDto(this.requireAggregate().row);
+  }
+  /**
+   * H-133 (F-65): the owner deletes a draft (contract doc). Owner only, as
+   * absent for anyone else. A status write, not a row delete: an item row
+   * references its onboarding (`ON DELETE RESTRICT`), and a kept row is what
+   * lets a late `confirm` from another tab be refused instead of starting
+   * over. Every draft list and count reads `NEEDS_DETAILS`, so this leaves
+   * them all. Writes no outbox row: nothing downstream exists.
+   */
+  async discardDraft(ctx: Ctx): Promise<ItemOnboardingDto> {
+    const aggregate = this.requireAggregate();
+    await this.requireVisible(ctx, aggregate);
+    const { status } = aggregate.row;
+    if (status === "DISCARDED") return onboardingRowToDto(aggregate.row);
+    if (status === "CONFIRMED" || status === "MATCHED") {
+      throw new ConflictError(
+        `onboarding ${this.key} is closed (${status}): its bottle is filed already`,
+      );
+    }
+    await this.tx(async (tx) => {
+      await tx
+        .update(itemOnboardings)
+        .set({ status: "DISCARDED", updatedAt: new Date() })
+        .where(eq(itemOnboardings.id, this.key));
+    });
+    await this.reload();
+    return onboardingRowToDto(this.requireAggregate().row);
+  }
+
+  /**
+   * H-133 (F-71): one turn signs a page of draft pictures (contract doc). One
+   * statement finds which of the ids are the viewer's own onboardings whose
+   * picture is a verified file the viewer uploaded; each is signed in
+   * process under one window, so the URLs are the ones `FileActor.presignRead`
+   * hands out for the same file. Addressed at the viewer's own id, which names
+   * no onboarding, and refused for anyone else.
+   */
+  async draftImageUrls(
+    ctx: Ctx,
+    filter: DraftImageBatchFilter,
+  ): Promise<readonly (ReadTarget | null)[]> {
+    const viewer = requireSignedIn(ctx, "see draft pictures");
+    if (viewer === null || draftImageBatchActorId(viewer) !== this.key) {
+      throw new ForbiddenError(
+        `ItemOnboardingActor(${this.key}) signs draft pictures only for the viewer it is keyed by`,
+      );
+    }
+    if (filter.onboardingIds.length > DRAFT_IMAGE_BATCH_MAX_IDS) {
+      throw new ValidationError(
+        `draftImageUrls takes at most ${DRAFT_IMAGE_BATCH_MAX_IDS} ids, got ${filter.onboardingIds.length}`,
+      );
+    }
+    const ids = filter.onboardingIds.map((id) =>
+      requireUuid(String(id), "onboardingId").toLowerCase(),
+    );
+    if (ids.length === 0) return [];
+    const rows = await this.db
+      .select({ id: itemOnboardings.id, key: files.key })
+      .from(itemOnboardings)
+      .innerJoin(files, eq(files.id, itemOnboardings.imageId))
+      .where(
+        and(
+          inArray(itemOnboardings.id, [...new Set(ids)]),
+          eq(itemOnboardings.userId, viewer),
+          eq(files.uploadedBy, viewer),
+          isNotNull(files.verifiedAt),
+        ),
+      );
+    const window = stableReadWindow(new Date(), readUrlWindowSettings());
+    const expiresAt = window.expiresAt.toISOString();
+    const signed = new Map<string, ReadTarget>();
+    for (const row of rows) {
+      signed.set(row.id, {
+        url: await this.#signImage(row.key, window),
+        expiresAt,
+      });
+    }
+    return ids.map((id) => signed.get(id) ?? null);
+  }
+
+  /* ---------------------------------------------------------------------- */
+  /* X19 — the catalog correction loop                                        */
+  /* ---------------------------------------------------------------------- */
+
+  /**
+   * The gate both correction calls share: this session exists and is the
+   * caller's (`requireVisible` — absent, not forbidden, for anyone else), and
+   * the item named is one **the caller created, through this session**. Both
+   * halves are needed: the session's owner is the person who scanned, and the
+   * item's `item_onboarding_id` is what ties a label photograph to the item
+   * it is evidence about. A caller cannot point this session's photographs at
+   * another item, nor another person's item at their own photographs.
+   *
+   * Reads the item table directly, as `#requireItemNotAnotherUsers` does —
+   * §8.5 allows no synchronous `ItemOnboardingActor → ItemActor` edge, and a
+   * read adds none (§1.2 governs writers).
+   */
+  async #requireCorrectable(
+    ctx: Ctx,
+    item: ItemRef,
+  ): Promise<ItemOnboardingAggregate> {
+    const aggregate = this.requireAggregate();
+    await this.requireVisible(ctx, aggregate);
+    if (!isItemType(item.type)) {
+      throw new ValidationError(`"${String(item.type)}" is not an item type`);
+    }
+    const itemId = requireUuid(item.id, "item.id");
+    const table = ITEM_TABLES[item.type];
+    const [row] = await this.db
+      .select({
+        createdById: table.createdById,
+        itemOnboardingId: table.itemOnboardingId,
+      })
+      .from(table)
+      .where(eq(table.id, itemId));
+    if (row === undefined || !isOwner(ctx, row.createdById)) {
+      throw new ForbiddenError(
+        `only the creator of ${item.type.toLowerCase()} ${itemId} may correct it`,
+      );
+    }
+    if (row.itemOnboardingId !== this.key) {
+      throw new ValidationError(
+        `${item.type.toLowerCase()} ${itemId} was not created through ` +
+          `onboarding ${this.key}, so its label photographs are not this ` +
+          "item's to read",
+      );
+    }
+    return aggregate;
+  }
+
+  /**
+   * X19 "Re-read label": `start`'s extraction again, over the photographs
+   * this session kept, for the item it created. Runs in this actor's turn for
+   * `start`'s reason (§8.5: the person is waiting, and the blast radius is
+   * this one onboarding id).
+   *
+   * **Stores nothing.** The session's `defaults` stay what the item was
+   * created from; the answer goes back to the edit form, where every value is
+   * a chip the creator taps and Save is the only write. A failed read (no
+   * label kept, a photograph that holds no label, no provider) throws as
+   * `start` does — `requireExtractableInput` and `requireLegibleLabel` are
+   * the provider's — and leaves the row untouched, `CONFIRMED` included.
+   */
+  async rereadLabel(
+    ctx: Ctx,
+    input: RereadLabelInput,
+  ): Promise<ItemLabelReading> {
+    const aggregate = await this.#requireCorrectable(ctx, input.item);
+    const { row } = aggregate;
+    const result = await this.#defaultsProvider(ctx, {
+      itemType: input.item.type,
+      frontLabelImageId: row.frontLabelImageId,
+      backLabelImageId: row.backLabelImageId,
+      barcode: row.barcode,
+      barcodeType: row.barcodeType,
+    });
+    return {
+      defaults: JSON.stringify(result.defaults),
+      brandName: result.brandName ?? null,
+      confidence: result.confidence,
+      model: result.model,
+    };
+  }
+
+  /**
+   * F-75: the fields the creator confirmed on the item's edit page, added to
+   * the session's `confirmed_fields` so `Item.unconfirmedFields` (and Home's
+   * "n to check") stop pointing at them. `#requireCorrectable`'s gate: the
+   * session is the caller's and the item is the one it created. A set union,
+   * so a repeat is a no-op and nothing is ever un-confirmed.
+   */
+  async confirmItemFields(
+    ctx: Ctx,
+    input: ConfirmItemFieldsInput,
+  ): Promise<ItemOnboardingDto> {
+    const { row } = await this.#requireCorrectable(ctx, input.item);
+    const confirmedFields = confirmedFieldsOf([
+      ...row.confirmedFields,
+      ...confirmedFieldsOf(input.fields),
+    ]);
+    if (confirmedFields.length !== row.confirmedFields.length) {
+      await this.tx(async (tx) => {
+        await tx
+          .update(itemOnboardings)
+          .set({ confirmedFields, updatedAt: new Date() })
+          .where(eq(itemOnboardings.id, this.key));
+      });
+      await this.reload();
+    }
+    return onboardingRowToDto(this.requireAggregate().row);
+  }
+
+  /**
+   * X19 "Suggest details": the text-only pass (`../lib/item-suggestions.ts`)
+   * over what the edit form holds now — the name as just corrected, the brand,
+   * and the details already filled in, which are context and are never
+   * re-suggested. Same gate as `rereadLabel`; stores nothing; may abstain.
+   */
+  async suggestDetails(
+    ctx: Ctx,
+    input: SuggestItemDetailsInput,
+  ): Promise<ItemDetailSuggestions> {
+    await this.#requireCorrectable(ctx, input.item);
+    return await this.#suggest(ctx, input.item.type, input);
+  }
+
+  /**
+   * X07 "Add to catalog": the same pass for a draft that is not an item yet
+   * — an unmatched menu line, say. No item to be the creator of, so the gate
+   * is the signed-in caller; the key is a draft id the client minted, and one
+   * that already names an onboarding must be the caller's (answered as absent
+   * otherwise, like every other read of a row here). Writes nothing — the
+   * draft card's Add is `openDraft` then `confirm`, on the person's tap.
+   */
+  async suggestNewItem(
+    ctx: Ctx,
+    input: SuggestNewItemDetailsInput,
+  ): Promise<ItemDetailSuggestions> {
+    requireUuid(this.key, "draftId");
+    if (ctx.viewerId === null) {
+      throw new ForbiddenError("sign in to ask for details about a new item");
+    }
+    if (!isItemType(input.itemType)) {
+      throw new ValidationError(`"${input.itemType}" is not an item type`);
+    }
+    // A draft with no name gives the model nothing to look up: refused before
+    // a metered call, not answered with a guess about an empty string.
+    if (typeof input.name !== "string" || input.name.trim() === "") {
+      throw new ValidationError("a draft needs a name to suggest details for");
+    }
+    const existing = this.aggregate;
+    if (existing !== null) await this.requireVisible(ctx, existing);
+    return await this.#suggest(ctx, input.itemType, input);
+  }
+
+  /** The text-only call behind both, on the form's values as context. */
+  async #suggest(
+    ctx: Ctx,
+    type: ItemType,
+    input: {
+      readonly name: string;
+      readonly brandName?: string | null;
+      readonly country?: string | null;
+      readonly attributes?: Record<string, unknown> | null;
+    },
+  ): Promise<ItemDetailSuggestions> {
+    const bagKey = ITEM_TYPE_SPECS[type].bag;
+    // The form's values go into the prompt as context, so only what the form
+    // could hold does: the type's own attributes, as scalars, each short. A
+    // client cannot pad a metered call with arbitrary keys or prose.
+    const declared = new Set<string>(itemAttributeKeys(type));
+    const attributes: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(input.attributes ?? {})) {
+      if (!declared.has(key)) continue;
+      if (typeof value === "string") {
+        attributes[key] = value.slice(0, MAX_SUGGEST_CONTEXT_CHARS);
+      } else if (typeof value === "number" || typeof value === "boolean") {
+        attributes[key] = value;
+      }
+    }
+    const clip = (value: string | null | undefined): string =>
+      (value ?? "").trim().slice(0, MAX_SUGGEST_CONTEXT_CHARS);
+    const country = clip(input.country);
+    const known: Record<string, unknown> = {
+      country: country === "" ? null : country,
+      [bagKey]: attributes,
+    };
+    const brand = clip(input.brandName);
+    const result = await this.#suggestionsProvider(ctx, {
+      itemType: type,
+      name: clip(input.name),
+      brandName: brand === "" ? null : brand,
+      known,
+      wanted: emptySuggestibleFields(type, known),
+    });
+    return {
+      abstained: result.abstained,
+      note: result.note,
+      defaults: JSON.stringify(result.defaults),
+      model: result.model,
     };
   }
 
@@ -778,11 +1407,20 @@ export class ItemOnboardingActor
       throw error;
     }
 
+    // A re-read refreshes the proposal; it does not reopen a session that
+    // has already ended in an item (`CONFIRMED`) or in an existing one
+    // (`MATCHED`).
+    // SV-B: a saved draft keeps its `NEEDS_DETAILS` through a re-read too.
+    const closed =
+      aggregate.row.status === "CONFIRMED" ||
+      aggregate.row.status === "MATCHED" ||
+      aggregate.row.status === "NEEDS_DETAILS" ||
+      aggregate.row.status === "DISCARDED";
     await this.tx(async (tx) => {
       await tx
         .update(itemOnboardings)
         .set({
-          status: "COMPLETED",
+          status: closed ? aggregate.row.status : "COMPLETED",
           defaults: result.defaults,
           rawDefaults: result.raw,
           aiModel: result.model,

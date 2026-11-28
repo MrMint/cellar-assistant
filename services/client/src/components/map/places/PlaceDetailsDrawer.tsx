@@ -8,8 +8,7 @@
  * adaptive-cluster rows had them.
  */
 
-import { Alert, Box, CircularProgress } from "@mui/joy";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion } from "motion/react";
 import {
   forwardRef,
   useCallback,
@@ -18,8 +17,13 @@ import {
   useRef,
   useState,
 } from "react";
+import { Spinner } from "@/components/ui/spinner";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
+import { spring, tween } from "@/lib/motion";
+import { cn } from "@/lib/utils";
 import { usePlaceDetails } from "../hooks/usePlaceDetails";
+import type { ViewportInsets } from "../hooks/useViewportInsets";
+import { MOBILE_NAV_HEIGHT, SIDEBAR_WIDTH } from "../utils/layout";
 import type { DrawerState, Place } from "./PlaceDetailsContent";
 import { PlaceDetailsContent } from "./PlaceDetailsContent";
 
@@ -71,12 +75,18 @@ interface PlaceDetailsDrawerProps {
   open: boolean;
   onClose: () => void;
   userId: string;
+  /**
+   * The map's distance from the viewport's left and bottom edges (the side
+   * rail, the tab bar); measured by `MapLibreRenderer`. Until it is, the old
+   * shell's 56 px rail and 50 px bar.
+   */
+  insets?: ViewportInsets | null;
 }
 
 export const PlaceDetailsDrawer = forwardRef<
   PlaceDetailsDrawerRef,
   PlaceDetailsDrawerProps
->(function PlaceDetailsDrawer({ place, open, onClose, userId }, ref) {
+>(function PlaceDetailsDrawer({ place, open, onClose, userId, insets }, ref) {
   const [dragStartY, setDragStartY] = useState<number | null>(null);
   const [dragCurrentY, setDragCurrentY] = useState<number | null>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -107,6 +117,7 @@ export const PlaceDetailsDrawer = forwardRef<
     enrichment,
     googlePhotos,
     isEnriching,
+    detailsPending,
     fetching: loadingDetails,
     failure: error,
     refetch,
@@ -116,11 +127,12 @@ export const PlaceDetailsDrawer = forwardRef<
 
   // ── Drawer Height & Drag Logic ──────────────────────────────────────
 
-  const MOBILE_NAV_HEIGHT = 50;
+  const bottomInset = insets?.bottom ?? MOBILE_NAV_HEIGHT;
+  const leftInset = insets?.left ?? (hasSidebar ? SIDEBAR_WIDTH : 0);
 
   const getDrawerHeight = (state: DrawerState) => {
     const vh = typeof window !== "undefined" ? window.innerHeight : 800;
-    const availableHeight = vh - (isDesktop ? 0 : MOBILE_NAV_HEIGHT);
+    const availableHeight = vh - (isDesktop ? 0 : bottomInset);
     switch (state) {
       case "collapsed":
         return availableHeight * 0.25;
@@ -290,19 +302,22 @@ export const PlaceDetailsDrawer = forwardRef<
   // Loading state (initial)
   if (loadingDetails && !detailedPlace) {
     return (
-      <Box sx={{ display: "flex", justifyContent: "center", p: 4 }}>
-        <CircularProgress />
-      </Box>
+      <div className="flex justify-center p-8">
+        <Spinner className="size-8 text-ink-2" />
+      </div>
     );
   }
 
   if (error) {
     return (
-      <Box sx={{ p: 2 }}>
-        <Alert color="danger">
+      <div className="p-4">
+        <p
+          role="alert"
+          className="t-body rounded-md border border-destructive/60 px-4 py-3 text-danger"
+        >
           Failed to load place details: {error.message}
-        </Alert>
-      </Box>
+        </p>
+      </div>
     );
   }
 
@@ -316,6 +331,7 @@ export const PlaceDetailsDrawer = forwardRef<
       website: detailedPlace?.website ?? place.website,
       price_level: detailedPlace?.price_level ?? place.price_level,
       rating: detailedPlace?.rating ?? place.rating,
+      review_status: detailedPlace?.review_status ?? place.review_status,
     },
     userInteraction,
     menuItems,
@@ -332,6 +348,7 @@ export const PlaceDetailsDrawer = forwardRef<
     setInteraction,
     enrichment,
     isEnriching,
+    detailsPending,
     googlePhotos,
   } as const;
 
@@ -345,26 +362,9 @@ export const PlaceDetailsDrawer = forwardRef<
             initial={{ x: -400, opacity: 0 }}
             animate={{ x: 0, opacity: 1 }}
             exit={{ x: -400, opacity: 0 }}
-            transition={{
-              type: "spring",
-              stiffness: 500,
-              damping: 35,
-              opacity: { duration: 0.15 },
-            }}
-            style={{
-              position: "fixed",
-              top: 0,
-              left: hasSidebar ? 56 : 0,
-              width: 400,
-              height: "100dvh",
-              backgroundColor: "var(--joy-palette-background-body)",
-              boxShadow: "4px 0 20px rgba(0,0,0,0.08)",
-              zIndex: 950,
-              overflowY: "auto",
-              borderRight: "1px solid var(--joy-palette-divider)",
-              cursor: "default",
-              overscrollBehavior: "contain",
-            }}
+            transition={{ ...spring.sheet, opacity: tween("short") }}
+            className="fixed top-0 z-[950] h-dvh w-[400px] cursor-default overflow-y-auto overscroll-contain border-rule border-r bg-background shadow-xl"
+            style={{ left: leftInset }}
             onClick={(e) => e.stopPropagation()}
             onMouseDown={(e) => e.stopPropagation()}
             onMouseMove={(e) => e.stopPropagation()}
@@ -373,25 +373,16 @@ export const PlaceDetailsDrawer = forwardRef<
             onTouchMove={(e) => e.stopPropagation()}
             onTouchEnd={(e) => e.stopPropagation()}
           >
-            <Box
-              sx={{
-                pt: 10,
-                px: 3,
-                pb: 2,
-                height: "100%",
-                display: "flex",
-                flexDirection: "column",
-                overflow: "hidden",
-                pointerEvents: "auto",
-                cursor: "default",
-              }}
-            >
+            <div className="pointer-events-auto flex h-full cursor-default flex-col overflow-hidden px-6 pt-20 pb-4">
               <PlaceDetailsContent
+                // One place per instance: its optimistic Save / Visited (X24)
+                // and its open modal must not carry over to the next pin.
+                key={place.id}
                 {...contentProps}
                 variant="desktop"
                 drawerState="full"
               />
-            </Box>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
@@ -412,26 +403,12 @@ export const PlaceDetailsDrawer = forwardRef<
           }}
           exit={{ y: "100%", opacity: 0 }}
           transition={{
-            type: "spring",
-            stiffness: 550,
-            damping: 40,
-            opacity: { duration: 0.15 },
-            height: { type: "spring", stiffness: 400, damping: 30 },
+            ...spring.sheet,
+            opacity: tween("short"),
+            height: spring.sheet,
           }}
-          style={{
-            position: "fixed",
-            bottom: MOBILE_NAV_HEIGHT,
-            left: 0,
-            right: 0,
-            zIndex: 1100,
-            backgroundColor: "var(--joy-palette-background-body)",
-            borderTopLeftRadius: 16,
-            borderTopRightRadius: 16,
-            boxShadow: "0 -8px 32px rgba(0,0,0,0.15)",
-            cursor: "default",
-            overflow: "hidden",
-            overscrollBehavior: "contain",
-          }}
+          className="fixed inset-x-0 z-[1100] cursor-default overflow-hidden overscroll-contain rounded-t-lg bg-background shadow-[0_-8px_32px_black] shadow-black/15"
+          style={{ bottom: bottomInset }}
           onMouseDown={(e) => e.stopPropagation()}
           onMouseMove={(e) => e.stopPropagation()}
           onMouseUp={(e) => e.stopPropagation()}
@@ -439,33 +416,21 @@ export const PlaceDetailsDrawer = forwardRef<
           onTouchMove={(e) => e.stopPropagation()}
           onTouchEnd={(e) => e.stopPropagation()}
         >
-          <Box
+          <div
             ref={drawerRef}
             data-drawer-content
-            sx={{
-              p: 0,
-              display: "flex",
-              flexDirection: "column",
-              pointerEvents: "auto",
-              cursor: "default",
-              height: "100%",
-              overflow: "hidden",
-            }}
+            className="pointer-events-auto flex h-full cursor-default flex-col overflow-hidden p-0"
             onTouchEnd={handleTouchTap}
           >
-            {/* Drag handle */}
-            <Box
+            {/* Drag handle: a pointer-only grip, hidden from assistive tech
+                (the drawer's own controls do the keyboard work). */}
+            <div
+              aria-hidden
               data-drag-handle
-              sx={{
-                width: "100%",
-                display: "flex",
-                justifyContent: "center",
-                alignItems: "center",
-                py: 1.5,
-                cursor: isDragging ? "grabbing" : "grab",
-                userSelect: "none",
-                touchAction: "none",
-              }}
+              className={cn(
+                "group flex w-full touch-none select-none items-center justify-center py-3",
+                isDragging ? "cursor-grabbing" : "cursor-grab",
+              )}
               onTouchStart={handleTouchStart}
               onTouchMove={handleTouchMove}
               onTouchEnd={handleTouchEnd}
@@ -473,40 +438,31 @@ export const PlaceDetailsDrawer = forwardRef<
               onMouseMove={handleMouseMove}
               onMouseUp={handleMouseUp}
             >
-              <Box
-                sx={{
-                  width: 48,
-                  height: 5,
-                  backgroundColor: isDragging ? "neutral.500" : "neutral.400",
-                  borderRadius: 3,
-                  transition: "background-color 0.2s ease, transform 0.2s ease",
-                  "&:hover": {
-                    backgroundColor: "neutral.500",
-                    transform: "scaleX(1.1)",
-                  },
-                }}
+              <div
+                className={cn(
+                  "h-[5px] w-12 rounded-[3px] transition-[background-color,transform] duration-(--ca-dur-medium) ease-standard group-hover:scale-x-110 group-hover:bg-ink-2",
+                  isDragging ? "bg-ink-2" : "bg-ink-3",
+                )}
               />
-            </Box>
+            </div>
 
             {/* Content */}
-            <Box
-              sx={{
-                flex: 1,
-                display: "flex",
-                flexDirection: "column",
-                overflow: "hidden",
+            <div
+              className="flex flex-1 flex-col overflow-hidden"
+              style={{
                 opacity: isDragging
                   ? Math.max(0.5, 1 - getDragOffset() / 200)
                   : 1,
               }}
             >
               <PlaceDetailsContent
+                key={place.id}
                 {...contentProps}
                 variant="mobile"
                 drawerState={drawerState}
               />
-            </Box>
-          </Box>
+            </div>
+          </div>
         </motion.div>
       )}
     </AnimatePresence>

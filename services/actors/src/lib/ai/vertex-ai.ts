@@ -47,6 +47,7 @@ import {
   requireVector,
   withImageContext,
 } from "./http.ts";
+import { beforeModelCall } from "./no-response.ts";
 import type {
   AIProvider,
   EmbeddingRequest,
@@ -177,15 +178,25 @@ export const createVertexAIProvider = (
     `/locations/${encodeURIComponent(location)}/publishers/google/models/` +
     `${encodeURIComponent(model)}:${verb}`;
 
-  const call = async (url: string, body: unknown, what: string) =>
+  const call = async (
+    url: string,
+    body: unknown,
+    what: string,
+    signal?: AbortSignal,
+  ) =>
     await postJson({
       url,
       body,
-      headers: { authorization: `Bearer ${await accessToken()}` },
+      // The token exchange precedes the model call, so however it fails, no
+      // model answered (D17).
+      headers: {
+        authorization: `Bearer ${await beforeModelCall(accessToken)}`,
+      },
       timeoutMs: config.timeoutMs,
       provider: "vertex-ai",
       what,
       fetchImpl,
+      ...(signal === undefined ? {} : { signal }),
     });
 
   return {
@@ -204,6 +215,7 @@ export const createVertexAIProvider = (
           modelUrl(config.location, model, "generateContent"),
           geminiBody(request, "vertex-ai"),
           `generateContent(${model})`,
+          request.signal,
         ),
       );
       const tokens = geminiTokens(raw);

@@ -109,6 +109,11 @@ const MUTATIONS = {
     doc: (i) =>
       `mutation { updateBrand(id: "${ID}", input: ${i}) { __typename } }`,
   },
+  updateDrinkLog: {
+    method: "update",
+    doc: (i) =>
+      `mutation { updateDrinkLog(id: "${ID}", input: ${i}) { __typename } }`,
+  },
   updateProfile: {
     method: "updateProfile",
     doc: (i) => `mutation { updateProfile(input: ${i}) { __typename } }`,
@@ -189,10 +194,22 @@ const FIELDS: ReadonlyArray<
     "2026-09-01T00:00:00.000Z",
   ],
 
+  // L02: a bottle's own dates, price and place — every one cleared by null.
+  // The price pair is the actor's rule (set together; a null amount clears
+  // the currency): each half is forwarded here as sent, null included.
+  ["updateCellarItem", "packagedOn", "clearable", `"2026-01-10"`, "2026-01-10"],
+  ["updateCellarItem", "acquiredOn", "clearable", `"2026-01-10"`, "2026-01-10"],
+  ["updateCellarItem", "drinkFrom", "clearable", `"2026-01-10"`, "2026-01-10"],
+  ["updateCellarItem", "drinkUntil", "clearable", `"2026-01-10"`, "2026-01-10"],
+  ["updateCellarItem", "priceAmount", "clearable", "58", 58],
+  ["updateCellarItem", "priceCurrency", "clearable", `"EUR"`, "EUR"],
+  ["updateCellarItem", "location", "clearable", `"Rack B"`, "Rack B"],
+  // SV-B MC-move: a destination cellar; null means "stay", never "clear".
+  ["updateCellarItem", "cellarId", "keep", `"${ID2}"`, ID2],
+
   ["updateTierList", "name", "keep", `"N"`, "N"],
   ["updateTierList", "description", "clearable", `"D"`, "D"],
   ["updateTierList", "privacy", "keep", "PRIVATE", "PRIVATE"],
-  ["updateTierList", "isEditingLocked", "keep", "true", true],
 
   ["updateRecipe", "name", "keep", `"N"`, "N"],
   ["updateRecipe", "description", "clearable", `"D"`, "D"],
@@ -202,6 +219,8 @@ const FIELDS: ReadonlyArray<
   ["updateRecipe", "prepTimeMinutes", "clearable", "10", 10],
   ["updateRecipe", "servingSize", "clearable", "2", 2],
   ["updateRecipe", "imageUrl", "clearable", `"u"`, "u"],
+  ["updateRecipe", "privacy", "keep", "PUBLIC", "PUBLIC"],
+  ["updateRecipe", "isDraft", "keep", "false", false],
 
   ["updateRecipeReview", "score", "clearable", "4.5", 4.5],
   ["updateRecipeReview", "text", "clearable", `"T"`, "T"],
@@ -217,6 +236,22 @@ const FIELDS: ReadonlyArray<
   ["updateBrand", "description", "clearable", `"D"`, "D"],
   ["updateBrand", "logoUrl", "clearable", `"u"`, "u"],
   ["updateBrand", "brandType", "clearable", "brewery", "brewery"],
+
+  // X02: every field of a drink log may be cleared — a log is its date and
+  // item; score, note, tags, place and photo are all optional.
+  ["updateDrinkLog", "score", "clearable", "4.5", 4.5],
+  ["updateDrinkLog", "note", "clearable", `"N"`, "N"],
+  ["updateDrinkLog", "tags", "clearable", `["t"]`, ["t"]],
+  ["updateDrinkLog", "placeId", "clearable", `"${ID2}"`, ID2],
+  ["updateDrinkLog", "photoFileId", "clearable", `"${ID2}"`, ID2],
+  // X03: a log always has a date — re-dating is allowed, clearing is not.
+  [
+    "updateDrinkLog",
+    "drankAt",
+    "reject",
+    `"2026-10-01T18:00:00.000Z"`,
+    "2026-10-01T18:00:00.000Z",
+  ],
 
   ["updateProfile", "displayName", "reject", `"N"`, "N"],
   ["updateProfile", "avatarUrl", "clearable", `"u"`, "u"],
@@ -312,8 +347,23 @@ const REPLACES =
   "replaces a whole list; each entry is a new row, so its nulls are 'not given'";
 const STARTS =
   "starts a job or an upload; there is no stored value for null to clear";
+const RESUBMITS =
+  "X27: resubmits a whole place for review — every field is the creator's " +
+  "full new answer, so a null is 'none', exactly as on `createPlace`, and " +
+  "there is no partial update to protect";
+const PICKS =
+  "X27: picks one of the review's suggestions; the nullable fields are the " +
+  "two alternatives, exactly one of which must be given — a null is 'not " +
+  "this one', never 'clear'";
+const NAMES_A_TARGET =
+  "its input only names which thing to act on (exactly one of the fields is " +
+  "set); a null there is 'not this kind', never 'clear it'";
+const ASKS =
+  "asks a model a question and writes nothing, so there is no stored value " +
+  "for null to clear";
 
 const NOT_PATCHES: Readonly<Record<string, string>> = {
+  acceptPlaceSuggestion: PICKS,
   addItemReview: CREATES,
   addItemToCellar: CREATES,
   addRecipeReview: CREATES,
@@ -329,10 +379,19 @@ const NOT_PATCHES: Readonly<Record<string, string>> = {
   createRecipeGroup: CREATES,
   createTierList: CREATES,
   createUploadTarget: STARTS,
+  logDrink: CREATES,
+  restoreCellarItem: CREATES,
+  resubmitPlace: RESUBMITS,
   setRecipeIngredients: REPLACES,
   setRecipeInstructions: REPLACES,
+  setWantToTry: NAMES_A_TARGET,
   startItemOnboarding: STARTS,
   startRecipePhotoJob: STARTS,
+  startRecipeTextJob: STARTS,
+  suggestItemDetails: ASKS,
+  suggestNewItemDetails: ASKS,
+  // SV-B MC-drafts: a save sends the whole draft, so null is "no value".
+  saveDraft: REPLACES,
 };
 
 /** A name that says "change what is there" cannot be classified away. */

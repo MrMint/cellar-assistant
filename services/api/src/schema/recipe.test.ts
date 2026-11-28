@@ -5,7 +5,11 @@
  * are correct — that is `recipe-actor.test.ts` and `recipe-group-actor.test.ts`
  * against real Postgres.
  */
-import { ConflictError } from "@cellar-assistant/contracts";
+import {
+  ConflictError,
+  NotFoundError,
+  recipeGroupsCollectionActorId,
+} from "@cellar-assistant/contracts";
 import { execute, parse } from "graphql";
 import { describe, expect, it } from "vitest";
 import { stubSidecar, testContext } from "../testing.ts";
@@ -42,6 +46,8 @@ const recipeDto = (id = RECIPE_ID, name = "Negroni") => ({
   version: 1,
   ingredientCount: 2,
   instructionCount: 1,
+  privacy: "PUBLIC" as const,
+  isDraft: false,
   createdAt: "2026-09-08T00:00:00.000Z",
   updatedAt: "2026-09-08T00:00:00.000Z",
 });
@@ -91,6 +97,77 @@ describe("recipe query", () => {
       actorId: RECIPE_ID,
       method: "get",
     });
+  });
+});
+
+describe("Recipe.viewerLogCount (F-120)", () => {
+  it("asks RecipeActor for the viewer's own count", async () => {
+    const { invoke, calls } = stubSidecar({
+      "RecipeActor.get": () => recipeDto(),
+      "RecipeActor.viewerLogCount": () => 3,
+    });
+    const result = await run(
+      `{ recipe(id: "${RECIPE_ID}") { ... on Recipe { viewerLogCount } } }`,
+      testContext(invoke, viewer),
+    );
+    expect(result.errors).toBeUndefined();
+    expect(result.data?.recipe).toEqual({ viewerLogCount: 3 });
+    expect(
+      calls.find((call) => call.method === "viewerLogCount"),
+    ).toMatchObject({ actorType: "RecipeActor", actorId: RECIPE_ID });
+  });
+
+  it("answers 0 for an anonymous viewer, with no sidecar hop", async () => {
+    const { invoke, calls } = stubSidecar({
+      "RecipeActor.get": () => recipeDto(),
+    });
+    const result = await run(
+      `{ recipe(id: "${RECIPE_ID}") { ... on Recipe { viewerLogCount } } }`,
+      testContext(invoke, null),
+    );
+    expect(result.errors).toBeUndefined();
+    expect(result.data?.recipe).toEqual({ viewerLogCount: 0 });
+    expect(calls.filter((call) => call.method === "viewerLogCount")).toEqual(
+      [],
+    );
+  });
+});
+
+describe("recipeBaseSpiritCounts (F-114)", () => {
+  it("addresses the unfiltered list's activation and passes the counts through", async () => {
+    const { invoke, calls } = stubSidecar({
+      "RecipeGroupsCollectionActor.baseSpiritCounts": () => [
+        { baseSpirit: "gin", count: 4 },
+        { baseSpirit: "whiskey", count: 2 },
+      ],
+    });
+    const result = await run(
+      `{ recipeBaseSpiritCounts(first: 50, category: cocktail, term: " sour ") {
+           ... on RecipeBaseSpiritCountConnection {
+             edges { node { baseSpirit count } } } } }`,
+      testContext(invoke, viewer),
+    );
+    expect(result.errors).toBeUndefined();
+    expect(result.data?.recipeBaseSpiritCounts).toEqual({
+      edges: [
+        { node: { baseSpirit: "gin", count: 4 } },
+        { node: { baseSpirit: "whiskey", count: 2 } },
+      ],
+    });
+    const filter = {
+      category: "cocktail",
+      baseSpirit: null,
+      term: "sour",
+      orderBy: "NEWEST",
+    } as const;
+    expect(calls).toEqual([
+      {
+        actorType: "RecipeGroupsCollectionActor",
+        actorId: recipeGroupsCollectionActorId(filter),
+        method: "baseSpiritCounts",
+        args: [expect.anything(), filter],
+      },
+    ]);
   });
 });
 
@@ -294,6 +371,10 @@ describe("mutations", () => {
           unit: "ml",
           isOptional: null,
           substitutionNotes: null,
+          role: null,
+          kind: null,
+          quantityText: null,
+          brandMentioned: null,
         },
         {
           newGenericItem: {
@@ -308,6 +389,10 @@ describe("mutations", () => {
           unit: null,
           isOptional: true,
           substitutionNotes: null,
+          role: null,
+          kind: null,
+          quantityText: null,
+          brandMentioned: null,
         },
       ],
     });
@@ -687,6 +772,103 @@ describe("deleteRecipe / deleteRecipeGroup (A7d item 7)", () => {
     expect(result.data?.deleteRecipeGroup).toMatchObject({
       __typename: "ConflictError",
       code: "CONFLICT",
+    });
+  });
+});
+
+describe("X15: a recipe the viewer may not see, referred to from elsewhere", () => {
+  it("a group's canonical that is someone else's private version is null, not a field error", async () => {
+    const { invoke } = stubSidecar({
+      "RecipeGroupActor.get": () => groupDto,
+      "RecipeActor.get": () => {
+        throw new NotFoundError(`RecipeActor(${RECIPE_ID}) has no row`);
+      },
+    });
+    const result = await run(
+      `{ recipeGroup(id: "${GROUP_ID}") {
+           ... on RecipeGroup { id canonicalRecipe { id } }
+         } }`,
+      testContext(invoke, viewer),
+    );
+    expect(result.errors).toBeUndefined();
+    expect(result.data?.recipeGroup).toEqual({
+      id: GROUP_ID,
+      canonicalRecipe: null,
+    });
+  });
+
+  it("privacy and isDraft are on the type", async () => {
+    const { invoke } = stubSidecar({
+      "RecipeActor.get": () => ({
+        ...recipeDto(),
+        privacy: "PRIVATE",
+        isDraft: true,
+      }),
+    });
+    const result = await run(
+      `{ recipe(id: "${RECIPE_ID}") { ... on Recipe { privacy isDraft } } }`,
+      testContext(invoke, viewer),
+    );
+    expect(result.errors).toBeUndefined();
+    expect(result.data?.recipe).toEqual({ privacy: "PRIVATE", isDraft: true });
+  });
+});
+
+describe("RecipeGroup.communityPickId (MC-pick)", () => {
+  it("serves the group's own pick, a label beside the canonical", async () => {
+    const { invoke, calls } = stubSidecar({
+      "RecipeGroupActor.get": () => ({
+        ...groupDto,
+        communityPickId: OTHER_RECIPE_ID,
+      }),
+    });
+    const result = await run(
+      `{ recipeGroup(id: "${GROUP_ID}") { __typename ... on RecipeGroup {
+           canonicalRecipeId communityPickId } } }`,
+      testContext(invoke, viewer),
+    );
+    expect(result.errors).toBeUndefined();
+    expect(result.data?.recipeGroup).toEqual({
+      __typename: "RecipeGroup",
+      canonicalRecipeId: RECIPE_ID,
+      communityPickId: OTHER_RECIPE_ID,
+    });
+    expect(calls.filter((c) => c.method === "get")).toHaveLength(1);
+  });
+
+  it("asks the group when a projection did not compute it, and a hidden group is null", async () => {
+    const { invoke, calls } = stubSidecar({
+      "RecipeGroupsCollectionActor.list": () => pageOf([groupDto]),
+      "RecipeGroupActor.get": () => ({ ...groupDto, communityPickId: null }),
+    });
+    const result = await run(
+      `{ recipeGroups(first: 3) { __typename ... on RecipeGroupConnection {
+           edges { node { communityPickId } } } } }`,
+      testContext(invoke, viewer),
+    );
+    expect(result.errors).toBeUndefined();
+    expect(result.data?.recipeGroups).toMatchObject({
+      edges: [{ node: { communityPickId: null } }],
+    });
+    expect(calls.find((c) => c.method === "get")).toMatchObject({
+      actorType: "RecipeGroupActor",
+      actorId: GROUP_ID,
+    });
+
+    const hidden = stubSidecar({
+      "RecipeGroupsCollectionActor.list": () => pageOf([groupDto]),
+      "RecipeGroupActor.get": () => {
+        throw new NotFoundError("recipe group");
+      },
+    });
+    const none = await run(
+      `{ recipeGroups(first: 3) { __typename ... on RecipeGroupConnection {
+           edges { node { communityPickId } } } } }`,
+      testContext(hidden.invoke, viewer),
+    );
+    expect(none.errors).toBeUndefined();
+    expect(none.data?.recipeGroups).toMatchObject({
+      edges: [{ node: { communityPickId: null } }],
     });
   });
 });

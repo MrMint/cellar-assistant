@@ -178,6 +178,45 @@ of `:3000`. `dev:seed` sets all three, and resolves a Node that can run a `.ts`
 file. (Root `db:seed` now runs `scripts/check-node-version.mjs` first, so on the
 wrong Node it fails with that script's message instead of an ESM loader error.)
 
+### Demo data: `bun run dev:seed:demo`
+
+```bash
+bun run dev:seed          # first: the reference tables and the two fixed-id accounts
+bun run dev:seed:demo     # then: a year of synthetic data for reviewing the app
+```
+
+`services/actors/scripts/demo-seed.ts` fills a stack with enough to review every
+screen. It writes four accounts, all with password `123456789`: `test@test.com`,
+`test2@test.com`, `maya.chen@demo.test` and `omar.haddad@demo.test`, who are friends
+with each other. It also writes:
+
+- 58 real-world items across all six types
+- five cellars (one co-owned), with sealed, open and finished bottles
+- ratings and about 220 drink logs over 14 months, with places, companions and tags
+- three tier lists, one with Undo and Redo history
+- eleven cocktails, which Make mode splits into "make now" and "one bottle away"
+- seven Madison places, one left under review
+- a completed menu scan with matched and to-confirm lines
+
+The data lives in `demo-seed-data.ts` and is synthetic.
+
+It writes through the GraphQL API as each user. It writes to Postgres directly only
+where the API has no write, and its header comment lists those places: place
+approval, the menu scan (extraction needs a model), and backdated `created_at` on
+reviews and bottles. Every id it mints is hashed from a stable key, and every write
+is skipped when its row exists, so a second run creates nothing.
+
+To load another stack, pass its endpoints. For example, the private review lane:
+
+```bash
+bun run dev:seed:demo -- --database-url postgres://cellar:cellar@127.0.0.1:5893/cellar \
+  --auth-url http://localhost:3462 --api-url http://localhost:3461/graphql \
+  --origin http://localhost:3460
+```
+
+`--origin` must be in that stack's `AUTH_TRUSTED_ORIGINS`. Its documents are checked
+offline against the schema by `services/client/src/lib/dev-checks/demo-seed-documents.test.ts`.
+
 ### The AI provider is three states, and only one is a fault
 
 ```
@@ -477,7 +516,19 @@ Overrides, in order of precedence:
 CELLAR_STACK_SLOT=19 bun run dev:up    # force a slot
 CELLAR_STACK_SLUG=scratch bun run dev:up   # force an identity (two stacks in one worktree)
 bun run dev:up -- --reset              # forget the pin and re-derive
+CELLAR_EXTRA_ORIGINS=http://localhost:3303 bun run dev:up   # also trust another browser origin
 ```
+
+`CELLAR_EXTRA_ORIGINS` (comma-separated) is appended to this stack's
+`AUTH_TRUSTED_ORIGINS` and `FILES_CORS_ALLOWED_ORIGINS`, which otherwise hold
+only `http://localhost:<WEB_PORT>`. It is for serving the app on a second
+origin against this stack — e.g. a container built from
+`services/client/Dockerfile`, published on its own port and pointed at
+`http://host.docker.internal:<API_PORT|ACTORS_PORT>` — whose sign-in would
+otherwise fail better-auth's origin check. Read at actor-host start, so pass it
+on every `up`. A stack started under `CELLAR_STACK_SLUG` is recognised by
+`dev:doctor` in any worktree of this repo (via its `.stack/<slug>` state dir)
+rather than reported as stale.
 
 If all 24 slots are occupied, `dev:up` says so and points at `dev:prune`.
 

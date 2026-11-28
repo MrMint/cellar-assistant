@@ -5,6 +5,8 @@
  * `client-boundary.test.ts` forbids). Logic unchanged except `ITEM_SEGMENTS`.
  */
 
+import { activeTab, TABS } from "@/components/app/nav";
+
 export interface BreadcrumbSegment {
   label: string;
   href?: string;
@@ -26,9 +28,23 @@ export function generateBreadcrumbs(
   recipeName?: string,
 ): BreadcrumbSegment[] {
   const segments = pathname.split("/").filter(Boolean);
-  const breadcrumbs: BreadcrumbSegment[] = [{ label: "Home", href: "/" }];
+  const root = rootCrumb(pathname);
+  const rootHref = root.href ?? pathname;
+  const crumbs: BreadcrumbSegment[] = [root];
+  // A segment that is the rail item itself ("Cellars" under Cellars, "Tier
+  // lists" under Lists) is already the first crumb.
+  const breadcrumbs = {
+    push: (crumb: BreadcrumbSegment) => {
+      if (
+        crumbs.length === 1 &&
+        (crumb.label === root.label || crumb.label === TAB_SEGMENT[rootHref])
+      )
+        return;
+      crumbs.push(crumb);
+    },
+  };
 
-  if (segments.length === 0) return breadcrumbs;
+  if (segments.length === 0) return crumbs;
 
   // Handle authenticated routes (skip the "(authenticated)" segment)
   let segmentIndex = 0;
@@ -63,9 +79,12 @@ export function generateBreadcrumbs(
       );
 
       if (!isCellarItemPath) {
-        // Only add item type breadcrumb for standalone item pages, not cellar item pages
+        // Only add item type breadcrumb for standalone item pages, not cellar
+        // item pages. A label, never a link: D7 removed the `/{type}s` index
+        // pages, so `/wines` is a not-found and a crumb to it would be a
+        // dead end.
         const label = segment.charAt(0).toUpperCase() + segment.slice(1);
-        breadcrumbs.push({ label, href: isLast ? undefined : href });
+        breadcrumbs.push({ label });
       }
     } else if (
       segment.match(/^[0-9a-f-]{36}$/i) &&
@@ -79,11 +98,23 @@ export function generateBreadcrumbs(
     } else if (segment === "add") {
       breadcrumbs.push({ label: "Add" });
     } else if (segment === "favorites") {
-      breadcrumbs.push({ label: "Favorites", href: isLast ? undefined : href });
+      // D1/D27: favourites are "Loved" everywhere a person reads them.
+      breadcrumbs.push({ label: "Loved", href: isLast ? undefined : href });
+    } else if (segment === "want-to-try") {
+      breadcrumbs.push({
+        label: "Want to try",
+        href: isLast ? undefined : href,
+      });
     } else if (segment === "friends") {
       breadcrumbs.push({ label: "Friends", href: isLast ? undefined : href });
     } else if (segment === "rankings") {
       breadcrumbs.push({ label: "Rankings", href: isLast ? undefined : href });
+    } else if (segment === "tier-lists") {
+      // Title-cased by the fallback below this read "Tier-lists".
+      breadcrumbs.push({
+        label: "Tier lists",
+        href: isLast ? undefined : href,
+      });
     } else if (segment === "search") {
       breadcrumbs.push({ label: "Search", href: isLast ? undefined : href });
     } else if (segment === "recipes") {
@@ -116,5 +147,85 @@ export function generateBreadcrumbs(
     }
   }
 
-  return breadcrumbs;
+  return crumbs;
+}
+
+/** The crumb a rail item's own route segment would push. */
+const TAB_SEGMENT: Readonly<Record<string, string>> = {
+  "/cellars": "Cellars",
+  "/tier-lists": "Tier lists",
+  "/map": "Map",
+  "/me": "Me",
+};
+
+/**
+ * The trail's first crumb names the rail item the page sits under (CROSS-LOT
+ * "Breadcrumbs"): "Cellars" for a cellar's bottle, "Search" for Home (`/`)
+ * and for any page under no rail item.
+ */
+const rootCrumb = (pathname: string): BreadcrumbSegment => {
+  const path = pathname.replace(/^\/\(authenticated\)(?=\/|$)/, "") || "/";
+  const key = activeTab(path) ?? "search";
+  const tab = TABS.find((t) => t.key === key);
+  const href = tab?.href ?? "/";
+  const label = tab?.label ?? "Search";
+  // On the rail item's own page the crumb is that page: no link.
+  return path === href ? { label } : { label, href };
+};
+
+/**
+ * Pages that *are* a tab root: the four tabs' own hrefs, plus `/search`, the
+ * full-screen search sheet (X10), which has its own Close rather than a Back.
+ */
+const TAB_ROOTS: ReadonlySet<string> = new Set(["/", "/search"]);
+
+/** Crumbs too generic to stand alone as a page title on a phone. */
+const GENERIC_LAST = new Set(["Items", "Edit", "Add"]);
+
+export interface PageHeader {
+  /** The phone title: the page's own crumb, named after its owner if generic. */
+  title: string;
+  /** Where Back goes on a cold open; undefined on a tab root. */
+  parent?: string;
+  /** One of the five tabs' own pages (`/`, `/cellars`, `/map`, `/me`): no Back. */
+  tabRoot: boolean;
+}
+
+/**
+ * What `HeaderBar` hands `AppBar` on a phone, where the trail collapses to a
+ * Back and a title (N26):
+ *
+ * - **title** — the last crumb; a generic one ("Items", "Edit", "Add") takes
+ *   the crumb before it as its subject ("Home bar", "Edit Barolo").
+ * - **parent** — the nearest earlier crumb that links somewhere other than
+ *   this page (a cellar's crumb points at its own items page, so on that page
+ *   it is skipped). A parent of `/` becomes the route's tab root instead, so
+ *   the lists that moved under Me (D1) go back to `/me`, not Home.
+ * - **tabRoot** — the page *is* a tab (or `/search`, Home's landing): no
+ *   Back, whatever the history.
+ */
+export function pageHeader(
+  pathname: string,
+  crumbs: readonly BreadcrumbSegment[],
+): PageHeader {
+  const last = crumbs.at(-1);
+  const before = crumbs.at(-2);
+  let title = last?.label ?? "";
+  if (last !== undefined && before !== undefined && GENERIC_LAST.has(title)) {
+    title = title === "Items" ? before.label : `${title} ${before.label}`;
+  }
+
+  const tabRoot =
+    TAB_ROOTS.has(pathname) || TABS.some((t) => t.href === pathname);
+  if (tabRoot) return { title, tabRoot };
+
+  let parent = crumbs
+    .slice(0, -1)
+    .reverse()
+    .find((c) => c.href !== undefined && c.href !== pathname)?.href;
+  if (parent === "/") {
+    const tab = TABS.find((t) => t.key === activeTab(pathname));
+    if (tab !== undefined && tab.href !== pathname) parent = tab.href;
+  }
+  return { title, parent, tabRoot };
 }

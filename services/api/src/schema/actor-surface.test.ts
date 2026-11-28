@@ -107,11 +107,6 @@ const NO_SURFACE: Readonly<Record<string, string>> = {
     "Reference data (§2.5). `seed` is admin-only and must be handed " +
     "pre-computed vectors, and the table is read through the " +
     "`search_category_vectors` SQL function rather than through the actor.",
-  BudgetActor:
-    "The gate every paid external call reserves through (§1.5). Called by " +
-    "`PlaceActor`, `GooglePlacesActor` and `PlaceRefreshJobActor`; a denial " +
-    "already reaches clients as `BudgetExceededError`. `setBudget` is " +
-    "admin-only and wants an operator console, not a public field.",
   EmbeddingActor:
     "Reached only by synchronous sidecar invokes from seven other actors " +
     "(§2.3). Exposing it would reopen target-stack §7's client-reachable " +
@@ -120,6 +115,10 @@ const NO_SURFACE: Readonly<Record<string, string>> = {
     "Started by one outbox row from `MenuScanActor.match` with a " +
     "deterministic job id (§8.5). Its methods are `system`-only, so a " +
     "resolver could not call them even if a field existed.",
+  PlaceReviewActor:
+    "X27: the AI review of a pending place. Delivered only by the outbox row " +
+    "`PlaceActor.create` / `editUnshared` write; `review` is `system`-only, " +
+    "and its verdict reaches clients as `Place.reviewStatus`.",
   PlaceRefreshJobActor:
     "Operator tooling. `start` is admin-only and its Hasura predecessor " +
     "(`refresh_places`) was `role: admin` too, so no user page needs it. " +

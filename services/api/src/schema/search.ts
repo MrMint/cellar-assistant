@@ -42,6 +42,7 @@ import type {
   CellarItemSearchHit,
   ItemSearchHit,
   RecipeSearchHit,
+  SearchPage,
   UserSearchHit,
 } from "@cellar-assistant/contracts";
 import {
@@ -57,6 +58,9 @@ import {
   ItemSearchActorDescriptor,
   itemActorId,
   itemSearchActorId,
+  PERSON_RELATIONS,
+  RECIPE_HYBRID_DISTANCE_GAP,
+  RECIPE_HYBRID_MAX_DISTANCE,
   RECIPE_SEARCH_RESULT_CAP,
   RecipeSearchActorDescriptor,
   recipeSearchActorId,
@@ -69,6 +73,42 @@ import { builder } from "./builder.ts";
 import { ItemInterface, ItemTypeEnum } from "./item.ts";
 import { connectionFromPage, toPageArgs } from "./pagination.ts";
 import { RecipeType_ } from "./recipe.ts";
+import { avatarUrlOf } from "./user.ts";
+
+/* -------------------------------------------------------------------------- */
+/* Section totals (MC-search, L3)                                              */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * A search section's connection: `totalCount` is the actor's pre-cap total,
+ * and `totalIsLowerBound` says whether it is the cap of a semantic section
+ * (shown "200+") rather than the count. Bottles are exempt (L31).
+ */
+export const searchConnectionFromPage = <T>(page: SearchPage<T>) => ({
+  ...connectionFromPage(page),
+  totalIsLowerBound: page.totalIsLowerBound,
+});
+
+/**
+ * Read back off the parent Pothos hands the connection's own fields. A
+ * connection built any other way is a server bug, never a `false`.
+ */
+export const lowerBoundOf = (parent: object): boolean => {
+  if (
+    "totalIsLowerBound" in parent &&
+    typeof parent.totalIsLowerBound === "boolean"
+  ) {
+    return parent.totalIsLowerBound;
+  }
+  throw new Error(
+    "a search section's connection was built without searchConnectionFromPage",
+  );
+};
+
+export const SEARCH_LOWER_BOUND_DESCRIPTION =
+  "True when `totalCount` is this semantic section's cap rather than its " +
+  'count: there are at least that many matches, so show it as "N+", never ' +
+  "as a total. Lexical sections are exact and say false.";
 
 /* -------------------------------------------------------------------------- */
 /* Item search                                                                 */
@@ -84,8 +124,14 @@ const ItemSearchResult = builder
       id: t.exposeID("id"),
       type: t.field({ type: ItemTypeEnum, resolve: (hit) => hit.type }),
       name: t.exposeString("name"),
-      distance: t.exposeFloat("distance", {
-        description: "Cosine distance to the query, 0-2. Lower is closer.",
+      distance: t.float({
+        nullable: true,
+        description:
+          "Cosine distance to the query, 0-2. Lower is closer. For a `text` " +
+          "search a result the name match brought in can lie beyond " +
+          "`maxDistance`, which bounds the vector ranking only, and is null " +
+          "when that item has no embedding yet.",
+        resolve: (hit) => hit.distance,
       }),
       item: t.field({
         type: ItemInterface,
@@ -96,7 +142,16 @@ const ItemSearchResult = builder
   });
 
 const ItemSearchConnection = builder.connectionObject(
-  { type: ItemSearchResult, name: "ItemSearchConnection" },
+  {
+    type: ItemSearchResult,
+    name: "ItemSearchConnection",
+    fields: (t) => ({
+      totalIsLowerBound: t.boolean({
+        description: SEARCH_LOWER_BOUND_DESCRIPTION,
+        resolve: lowerBoundOf,
+      }),
+    }),
+  },
   { name: "ItemSearchEdge" },
 );
 
@@ -104,10 +159,17 @@ builder.queryField("itemSearch", (t) =>
   t.field({
     type: ItemSearchConnection,
     description:
-      "Semantic item search over `item_vectors` (ItemSearchActor). Replaces " +
-      "the `text_search` and `image_search` native queries: pass `text` for a " +
-      "phrase, `imageFileId` for a photo (G32), or `vector` for an embedding " +
-      "the client already has — exactly one. A photo search matches the " +
+      "Item search (ItemSearchActor). Replaces the `text_search` and " +
+      "`image_search` native queries: pass `text` for a phrase, " +
+      "`imageFileId` for a photo (G32), or `vector` for an embedding the " +
+      "client already has — exactly one. A `text` search ranks by " +
+      "`item_vectors` distance and by trigram similarity of item names " +
+      "together (reciprocal rank fusion), so an exact or misspelt name " +
+      "finds its item even where the embedding prefers a sibling. Where " +
+      "the phrase cannot be embedded (no AI provider, a spent budget, a " +
+      "provider failure) it ranks by name alone and every `distance` is " +
+      "null, rather than failing. A photo " +
+      "search matches the " +
       "item vectors and every stored photo you may see, ranks each item by " +
       "the nearer, and defaults `maxDistance` to " +
       `${IMAGE_SEARCH_MAX_DISTANCE} and \`limit\` to ${IMAGE_SEARCH_RESULT_LIMIT}. ` +
@@ -133,6 +195,15 @@ builder.queryField("itemSearch", (t) =>
       }),
       itemTypes: t.arg({ type: [ItemTypeEnum], required: false }),
       maxDistance: t.arg.float({ required: false }),
+      narrow: t.arg.boolean({
+        required: false,
+        description:
+          "X12: when the phrase names an item outright, return the items " +
+          "whose names match and the ones the embedding puts right beside " +
+          "the named one, instead of padding the list with whatever else is " +
+          "nearest. No effect on a search that names nothing (a description, " +
+          "a producer the names do not say), or on a photo or vector search.",
+      }),
       limit: t.arg.int({
         required: false,
         description:
@@ -156,8 +227,9 @@ builder.queryField("itemSearch", (t) =>
         limit:
           args.limit ??
           (imageFileId === null ? null : IMAGE_SEARCH_RESULT_LIMIT),
+        ...(args.narrow === true ? { narrow: true } : {}),
       };
-      return connectionFromPage(
+      return searchConnectionFromPage(
         await context
           .actor(
             ItemSearchActorDescriptor,
@@ -256,7 +328,16 @@ const BrandSearchResult = builder
   });
 
 const BrandSearchConnection = builder.connectionObject(
-  { type: BrandSearchResult, name: "BrandSearchConnection" },
+  {
+    type: BrandSearchResult,
+    name: "BrandSearchConnection",
+    fields: (t) => ({
+      totalIsLowerBound: t.boolean({
+        description: SEARCH_LOWER_BOUND_DESCRIPTION,
+        resolve: lowerBoundOf,
+      }),
+    }),
+  },
   { name: "BrandSearchEdge" },
 );
 
@@ -282,7 +363,7 @@ builder.queryField("brandSearch", (t) =>
     },
     resolve: async (_root, args, context) => {
       const input = { term: args.term ?? null, limit: args.limit ?? null };
-      return connectionFromPage(
+      return searchConnectionFromPage(
         await context
           .actor(
             BrandSearchActorDescriptor,
@@ -341,7 +422,16 @@ const RecipeSearchResult = builder
   });
 
 const RecipeSearchConnection = builder.connectionObject(
-  { type: RecipeSearchResult, name: "RecipeSearchConnection" },
+  {
+    type: RecipeSearchResult,
+    name: "RecipeSearchConnection",
+    fields: (t) => ({
+      totalIsLowerBound: t.boolean({
+        description: SEARCH_LOWER_BOUND_DESCRIPTION,
+        resolve: lowerBoundOf,
+      }),
+    }),
+  },
   { name: "RecipeSearchEdge" },
 );
 
@@ -351,7 +441,8 @@ builder.queryField("recipeSearch", (t) =>
     description:
       "Recipe search (RecipeSearchActor). `term` matches name, description " +
       "and type; `semanticQuery` ranks by `recipe_vectors` distance; both " +
-      "together narrow with the first and rank with the second.",
+      "together narrow with the first and rank with the second. `hybrid` " +
+      "is universal search's mode: names first, then meaning.",
     // A7e — an error union, for the reason `pagination.ts` records.
     errors: {},
     args: {
@@ -360,6 +451,16 @@ builder.queryField("recipeSearch", (t) =>
       semanticQuery: t.arg.string({ required: false }),
       type: t.arg.string({ required: false }),
       maxDistance: t.arg.float({ required: false }),
+      hybrid: t.arg.boolean({
+        required: false,
+        description:
+          "X12 / D9: universal search's Recipes — recipes whose name " +
+          "contains `term` first, then the ones nearest its meaning (cut at " +
+          `\`maxDistance\`, default ${RECIPE_HYBRID_MAX_DISTANCE}, and at ` +
+          `${RECIPE_HYBRID_DISTANCE_GAP} past the nearest). Answers with the ` +
+          "name matches alone when the term cannot be embedded. " +
+          "`semanticQuery` is ignored.",
+      }),
       limit: t.arg.int({
         required: false,
         description:
@@ -375,8 +476,9 @@ builder.queryField("recipeSearch", (t) =>
         type: args.type ?? null,
         maxDistance: args.maxDistance ?? null,
         limit: args.limit ?? null,
+        ...(args.hybrid === true ? { hybrid: true } : {}),
       };
-      return connectionFromPage(
+      return searchConnectionFromPage(
         await context
           .actor(
             RecipeSearchActorDescriptor,
@@ -392,22 +494,60 @@ builder.queryField("recipeSearch", (t) =>
 /* User search                                                                 */
 /* -------------------------------------------------------------------------- */
 
+const PersonRelationEnum = builder.enumType("PersonRelation", {
+  description:
+    "How a person in a search answer is connected to the viewer (X12): a " +
+    "friend, someone whose request is waiting on the viewer, someone the " +
+    "viewer has asked, or nobody yet.",
+  values: PERSON_RELATIONS,
+});
+
 const UserSearchResult = builder
   .objectRef<UserSearchHit>("UserSearchResult")
   .implement({
     description:
-      "Someone the viewer could send a friend request to. The viewer, their " +
-      "friends, and anyone with a request open in either direction are never " +
-      "in this list.",
+      "Someone matching the term. By default someone the viewer could send " +
+      "a friend request to: the viewer, their friends, and anyone with a " +
+      "request open in either direction are never in this list. With " +
+      "`includeConnected` everyone but the viewer, connected people first, " +
+      "each with `relation`.",
     fields: (t) => ({
       userId: t.exposeID("userId"),
       displayName: t.exposeString("displayName"),
-      avatarUrl: t.exposeString("avatarUrl", { nullable: true }),
+      avatarUrl: t.string({
+        nullable: true,
+        resolve: (hit, _args, context) => avatarUrlOf(context, hit),
+      }),
+      relation: t.field({
+        type: PersonRelationEnum,
+        nullable: true,
+        description:
+          "Set on an `includeConnected` search only (X12); null otherwise.",
+        resolve: (hit) => hit.relation ?? null,
+      }),
+      pendingRequestId: t.id({
+        nullable: true,
+        description:
+          "F-43: the open friend request's id when `relation` is " +
+          "REQUEST_SENT or REQUEST_RECEIVED, for `rejectFriendRequest` " +
+          "(Cancel) or `acceptFriendRequest` (Accept) with no lookup. Null " +
+          "otherwise, and on a default search.",
+        resolve: (hit) => hit.pendingRequestId ?? null,
+      }),
     }),
   });
 
 const UserSearchConnection = builder.connectionObject(
-  { type: UserSearchResult, name: "UserSearchConnection" },
+  {
+    type: UserSearchResult,
+    name: "UserSearchConnection",
+    fields: (t) => ({
+      totalIsLowerBound: t.boolean({
+        description: SEARCH_LOWER_BOUND_DESCRIPTION,
+        resolve: lowerBoundOf,
+      }),
+    }),
+  },
   { name: "UserSearchEdge" },
 );
 
@@ -422,6 +562,13 @@ builder.queryField("userSearch", (t) =>
     args: {
       ...t.arg.connectionArgs(),
       term: t.arg.string({ required: true }),
+      includeConnected: t.arg.boolean({
+        required: false,
+        description:
+          "X12: search everyone but the viewer — friends first, then open " +
+          "requests either way, then everyone else — instead of only the " +
+          "people the viewer could ask. Universal search's People section.",
+      }),
       limit: t.arg.int({
         required: false,
         description:
@@ -431,8 +578,12 @@ builder.queryField("userSearch", (t) =>
       }),
     },
     resolve: async (_root, args, context) => {
-      const input = { term: args.term, limit: args.limit ?? null };
-      return connectionFromPage(
+      const input = {
+        term: args.term,
+        limit: args.limit ?? null,
+        ...(args.includeConnected === true ? { includeConnected: true } : {}),
+      };
+      return searchConnectionFromPage(
         await context
           .actor(
             UserSearchActorDescriptor,

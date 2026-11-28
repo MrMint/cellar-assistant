@@ -1,5 +1,7 @@
-import { Stack, Typography } from "@mui/joy";
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { cache } from "react";
+import { AppBar } from "@/components/app/AppBar";
 import { ApiError } from "@/components/cellar-api/ApiError";
 import { DeleteTierListButton } from "@/components/tier-list/DeleteTierListButton";
 import { EditTierListClient } from "@/components/tier-list/EditTierListClient";
@@ -11,7 +13,8 @@ import { isNotFound, unwrapResult } from "@/lib/api/result";
 import { apiServerQuery } from "@/lib/api/urql-server";
 
 /**
- * `/tier-lists/[id]/edit` — the old `EditTierListClient` (`82450ad1`).
+ * `/tier-lists/[id]/edit` — List details as a page (Social-Lists 08; the
+ * list page opens the same form as a sheet).
  *
  * `NotFoundError` ("no such list" or "not yours to see") is `notFound()`, as
  * the old null `tier_lists_by_pk` was. A viewer who can see the list but did
@@ -21,6 +24,24 @@ import { apiServerQuery } from "@/lib/api/urql-server";
  */
 export const dynamic = "force-dynamic";
 
+/** One edit read per request, for the page and its title (X21). */
+const loadTierListEdit = cache((tierListId: string) =>
+  apiServerQuery(GetTierListEditQuery, { id: tierListId }),
+);
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ tierListId: string }>;
+}): Promise<Metadata> {
+  const { tierListId } = await params;
+  const result = unwrapResult(
+    (await loadTierListEdit(tierListId)).tierList,
+    "TierList",
+  );
+  return { title: result.ok ? `${result.data.name} details` : "List details" };
+}
+
 export default async function EditTierListPage({
   params,
 }: {
@@ -28,7 +49,7 @@ export default async function EditTierListPage({
 }) {
   const { tierListId } = await params;
   const [data, viewer] = await Promise.all([
-    apiServerQuery(GetTierListEditQuery, { id: tierListId }),
+    loadTierListEdit(tierListId),
     apiServerQuery(TierListViewerQuery, {}),
   ]);
 
@@ -41,25 +62,28 @@ export default async function EditTierListPage({
 
   if (viewer.me?.id !== tierList.createdById) {
     return (
-      <Stack spacing={1}>
-        <Typography level="h3">{tierList.name}</Typography>
-        <Typography level="body-sm" sx={{ color: "text.secondary" }}>
-          Only the person who made a tier list can change it.
-        </Typography>
-      </Stack>
+      <div className="flex flex-col gap-2">
+        <AppBar title={tierList.name} parent={`/tier-lists/${tierList.id}`} />
+        <p className="t-body m-0 text-ink-2">
+          Only the list's maker can change it.
+        </p>
+      </div>
     );
   }
 
   return (
-    <Stack spacing={4}>
+    <div className="flex max-w-[600px] flex-col gap-6">
+      {/* X21: the page's h1, and Back to the list on a cold open. */}
+      <AppBar title="List details" parent={`/tier-lists/${tierList.id}`} />
       <EditTierListClient tierList={tierList} />
-      <Stack direction="row">
+      <div className="border-edge border-t pt-2">
         <DeleteTierListButton
           tierListId={tierList.id}
           name={tierList.name}
           itemCount={tierList.itemCount}
+          listType={tierList.listType}
         />
-      </Stack>
-    </Stack>
+      </div>
+    </div>
   );
 }

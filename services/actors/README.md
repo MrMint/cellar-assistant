@@ -6,18 +6,22 @@ connection.
 
 ## Local AI
 
-Six features are backed by a model, and every one of them reaches it through
-an injectable seam rather than an AI client of its own:
+Every feature backed by a model reaches it through an injectable seam rather
+than an AI client of its own — one row per seam family below, one budget
+endpoint per entry in `MODEL_SEAMS` (`src/actors/budget-actor.ts`):
 
 | feature | seam | module |
 |---|---|---|
 | semantic search (`CellarActor.semanticQuery`, `recipeSearch(semanticQuery:)`, every `*SearchActor`) | `Embedder` | `src/lib/embeddings.ts` |
 | tier-list insights | `InsightsGenerator` | `src/actors/tier-list-actor.ts` |
 | item onboarding label defaults | `ItemDefaultsProvider` | `src/lib/item-defaults.ts` |
+| "Suggest details" on the item edit form (`suggestItemDetails`, X19) — text only, abstains rather than guess | `ItemSuggestionsProvider` | `src/lib/item-suggestions.ts` |
 | menu extraction, ambiguous-match verification | `MenuExtractionProvider`, `MenuMatchVerifier` | `src/lib/menu-ai.ts` |
 | recipe-photo vision | `RecipePhotoExtractor` | `src/lib/recipe-photo-ai.ts` |
 | review of a user-submitted place | `PlaceReviewer` | `src/actors/place-creation-actor.ts` |
+| flavour chips from a drink log's note (`suggestFlavourTags`, X02) — text only, Ollama is fine | `FlavourTagSuggester` | `src/lib/flavour-tags.ts` |
 | image search (`itemSearch(imageFileId:)`), stored-photo vectors | `ImageEmbedder` (query and document slots) | `src/lib/image-embeddings.ts` |
+| the taste profile's one sentence (`tasteProfile.line`, L03; budget entry `taste_phrase`) — text only, never on thin data, abstains rather than guess | `TastePhraser` | `src/actors/taste-actor.ts` |
 
 **Image search needs an embedding that takes images**: `gemini-embedding-2`
 (`AI_PROVIDER=vertex-ai` or `google-ai`) when deployed, or locally
@@ -42,10 +46,10 @@ the cached result is gone reads as an expired link. An item's shared vector
 takes in only its newest **public** photo; a private one never shapes it.
 
 `src/index.ts` calls `installAI()` at boot, which installs a real implementation
-behind all seven seams — or, with no provider configured, installs nothing and
+behind every seam — or, with no provider configured, installs nothing and
 leaves each seam throwing an error that names itself.
 
-Every one of those seven model calls is charged to `BudgetActor` before it runs
+Every one of those model calls is charged to `BudgetActor` before it runs
 (`811cad82`). Each seam has a monthly request cap and a cost cap
 (`MODEL_SPENDERS` in `src/actors/budget-actor.ts`). `ollama` and
 `openai-compatible` (whatever it points at) are priced at zero (`FREE_PROVIDERS`)
@@ -482,6 +486,35 @@ The reload is **non-destructive**. It deletes nothing (the old one began with
 `'overture'`, it never touches Google's columns or `last_sync_at`, and
 `is_active` is set on insert only. Re-running a finished reload writes zero
 rows, which is also what makes an interrupted one free to resume.
+
+## Recipes meet the cellar (X14)
+
+`BarActor(viewerId)` judges cocktails against the viewer's bar — bottles in
+the cellars they created or co-own, plus the Bar pantry toggles
+(`bar_pantry_items`, `UserActor`) — with the pure functions in
+`@cellar-assistant/contracts` `bar.ts` (`ingredientAvailability`,
+`recipeMakeability`). Every ingredient has a `kind` from that file's closed
+vocabulary and a `role`; a row written before migration
+`20261008235751_recipe_ingredient_meta_bar_pantry_recipe_love` has neither,
+and reads infer both from the referenced item's name, so nothing waits on a
+backfill to be right. To persist them (and `recipe_groups.base_spirit`):
+
+```bash
+bun scripts/operator.ts backfill-recipes             # up to 500 recipes and 500 groups
+bun scripts/operator.ts backfill-recipes --limit 5000
+bun scripts/operator.ts backfill-recipes --limit 5000 \
+  --after-recipe <nextAfterRecipe> --after-group <nextAfterGroup>
+```
+
+It enqueues `RecipeActor.backfillIngredientMeta` and
+`RecipeGroupActor.backfillBaseSpirit` through the outbox, for cocktails only
+(the vocabulary is drinks); each writes only null cells. It walks recipes and
+groups in id order and prints `nextAfterRecipe` / `nextAfterGroup`: pass them
+back as `--after-recipe` / `--after-group` until both print `null`. (A cursor,
+not "whatever is still null": an ingredient nothing can place keeps a null
+kind for ever, so re-selecting from the start would return the same first
+batch every time.) No re-embed is needed: neither `kind` nor `role` is in the
+embedding text.
 
 ## The runtime, and how to change your mind about it
 

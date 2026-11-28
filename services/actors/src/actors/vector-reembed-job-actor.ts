@@ -26,6 +26,16 @@
  * where embedding_model is distinct from :configured and id > :lastId
  * ```
  *
+ * — and, for `item_vectors` only, also every row whose `embedding_text` is
+ * not of the current `embeddingTextFor` format (`EMBEDDING_TEXT_PREFIX`, N08):
+ * `NULL` on every row written before the column existed. So after a deploy
+ * that changes the embedded text (N08 added labels and brands), this job is
+ * the backfill too — start it with `tables: ["item_vectors"]` and it re-embeds
+ * every item whose vector was made from the old text, with the model it
+ * already had. A text that changed *within* a format (an edit, a brand) is
+ * not visible to SQL, and needs no walk: those writes enqueue their own
+ * `regenerateVector`.
+ *
  * `regenerateVector` records the new model, so a re-embedded row drops out of
  * the predicate; `id >` is what makes the walk terminate over a row that stays
  * stale (its re-embed failed, or a replica with another model answered it). A
@@ -81,6 +91,7 @@ import { actorDb } from "../lib/db.ts";
 import { requirePrivileged } from "../lib/guards.ts";
 import { internal } from "../lib/internal-client.ts";
 import { ARCS } from "../lib/item-arcs.ts";
+import { EMBEDDING_TEXT_PREFIX } from "../lib/item-bindings.ts";
 import { emit } from "../lib/telemetry.ts";
 import { embeddingModel, imageEmbeddingKey } from "../lib/vectors.ts";
 import type { BatchInput, BatchOutcome } from "./job-actor/index.ts";
@@ -368,7 +379,10 @@ export class VectorReembedJobActor
         select v.id, ${VECTORS.idExpr("v")} as item_id,
                ${VECTORS.typeExpr("v")} as item_type
         from public.item_vectors v
-        where v.embedding_model is distinct from ${cursor.model}
+        where (v.embedding_model is distinct from ${cursor.model}
+               or v.embedding_text is null
+               or left(v.embedding_text, ${EMBEDDING_TEXT_PREFIX.length})
+                  <> ${EMBEDDING_TEXT_PREFIX})
           and v.id > ${cursor.lastId}
         order by v.id asc
         limit ${limit}

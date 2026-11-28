@@ -7,6 +7,7 @@
  * `queries.ts` moves nothing here.
  */
 
+import { displayItemName } from "@/utilities/smart-title-case";
 import {
   calculateItemTypeMatches,
   calculateOverallQuality,
@@ -40,6 +41,8 @@ export type MarkerNode = {
   readonly priceLevel?: number | null;
   readonly confidence?: number | null;
   readonly isVerified?: boolean | null;
+  /** X27: absent on a node that predates it (a deep link's shape). */
+  readonly reviewStatus?: "PENDING" | "APPROVED" | "REJECTED" | null;
   readonly location?: LngLat | null;
   readonly streetAddress?: string | null;
   readonly locality?: string | null;
@@ -88,6 +91,7 @@ export function placeResultFromNode(
     hours: node.hours ?? undefined,
     confidence: orUndefined(node.confidence),
     is_verified: orUndefined(node.isVerified),
+    review_status: orUndefined(node.reviewStatus),
   };
   if (!searchParams) return base;
   const overallQuality = calculateOverallQuality(base);
@@ -109,6 +113,10 @@ export type MapEntryNode = {
   readonly rating?: number | null;
   readonly confidence?: number | null;
   readonly isVerified?: boolean | null;
+  readonly reviewStatus?: "PENDING" | "APPROVED" | "REJECTED" | null;
+  readonly ratingCount?: number | null;
+  readonly myBand?: number | null;
+  readonly photo?: { readonly url?: string | null } | null;
   readonly location?: LngLat | null;
   readonly clusterId?: number;
   readonly count?: number;
@@ -130,8 +138,8 @@ export function mapItemsFromBrowse(
       typeof node.id === "string" &&
       node.location
     ) {
-      items.push(
-        placeResultFromNode(
+      items.push({
+        ...placeResultFromNode(
           {
             id: node.id,
             name: node.name ?? "",
@@ -140,11 +148,16 @@ export function mapItemsFromBrowse(
             rating: node.rating,
             confidence: node.confidence,
             isVerified: node.isVerified,
+            reviewStatus: node.reviewStatus,
             location: node.location,
           },
           searchParams,
         ),
-      );
+        // F-196: what the owner's pin draws.
+        my_band: orUndefined(node.myBand),
+        rating_count: orUndefined(node.ratingCount),
+        photo_url: orUndefined(node.photo?.url),
+      });
     } else if (
       node.__typename === "MapCluster" &&
       typeof node.clusterId === "number" &&
@@ -326,12 +339,29 @@ export function photosFrom(nodes: readonly PhotoNode[]): PlaceGooglePhoto[] {
  * (`{ displayName, uri }` for a photo author, `{ provider, … }` otherwise).
  * Anything else is skipped rather than set as HTML.
  */
+/**
+ * The text of an attribution string with its markup dropped (Google sends
+ * `<a href>` credits). A character scan rather than a regex `replace`, so a
+ * removal cannot join two halves into a new tag; the result is rendered as
+ * text, never as HTML, either way.
+ */
+function withoutTags(value: string): string {
+  let out = "";
+  let inTag = false;
+  for (const ch of value) {
+    if (inTag) inTag = ch !== ">";
+    else if (ch === "<") inTag = true;
+    else out += ch;
+  }
+  return out;
+}
+
 export function attributionLines(attributions: unknown): string[] {
   if (!Array.isArray(attributions)) return [];
   const lines: string[] = [];
   for (const entry of attributions) {
     if (typeof entry === "string") {
-      const text = entry.replace(/<[^>]*>/g, "").trim();
+      const text = withoutTags(entry).trim();
       if (text !== "") lines.push(text);
       continue;
     }
@@ -409,8 +439,36 @@ export type MenuLineNode = {
   readonly matchedItem?: {
     readonly id: string;
     readonly type: string;
-    readonly item?: { readonly id: string; readonly name: string } | null;
+    readonly item?: {
+      readonly id: string;
+      readonly name: string;
+      readonly isWantToTry?: boolean | null;
+    } | null;
   } | null;
+  readonly canCorrectMatch?: boolean | null;
+  readonly forYou?: {
+    readonly yourScore?: number | null;
+    readonly friendsWhoLovedNames?: readonly string[] | null;
+    readonly friendsWhoLovedCount?: number | null;
+    readonly cellar?: { readonly id: string; readonly name: string } | null;
+    readonly likeYouRated?: {
+      readonly score: number;
+      readonly item?: { readonly id: string; readonly name: string } | null;
+    } | null;
+  } | null;
+};
+
+/**
+ * X07: the grounded reasons a matched line matters to the viewer
+ * (`PlaceMenuItem.forYou`), each one a fact — `menu-lines/menu-lines.ts`
+ * turns them into chips. Never a score the app made up.
+ */
+export type MenuLineForYou = {
+  your_score: number | null;
+  cellar: { id: string; name: string } | null;
+  friends_who_loved: string[];
+  friends_who_loved_count: number;
+  like_you_rated: { name: string; score: number } | null;
 };
 
 /**
@@ -429,7 +487,23 @@ export type MenuItemView = {
   is_available: boolean | null;
   created_at: string | null;
   extracted_attributes: Record<string, unknown> | null;
-  matched_item: { id: string; name: string; type: string } | null;
+  matched_item: {
+    id: string;
+    name: string;
+    type: string;
+    /** X08's Save state for the matched item (`Item.isWantToTry`). */
+    is_want_to_try: boolean;
+  } | null;
+  /**
+   * The pipeline's normalised name for matching (`search_name`, kept out of
+   * `extracted_attributes` because it is not a menu fact) — what X07's
+   * candidate search asks the catalog for. Null when the read gave none.
+   */
+  search_name: string | null;
+  /** X07: the viewer scanned this menu, so may set or clear its match. */
+  can_correct_match: boolean;
+  /** X07: null for an unmatched line, or when nothing grounded applies. */
+  for_you: MenuLineForYou | null;
 };
 
 /**
@@ -446,6 +520,31 @@ const extractedAttributesFrom = (
     ([key, v]) => key !== "search_name" && v !== null && v !== undefined,
   );
   return entries.length > 0 ? Object.fromEntries(entries) : null;
+};
+
+const searchNameFrom = (value: unknown): string | null => {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+  const name = (value as Record<string, unknown>).search_name;
+  return typeof name === "string" && name.trim() !== "" ? name.trim() : null;
+};
+
+const forYouFrom = (forYou: MenuLineNode["forYou"]): MenuLineForYou | null => {
+  if (forYou == null) return null;
+  const like = forYou.likeYouRated;
+  return {
+    your_score: forYou.yourScore ?? null,
+    cellar: forYou.cellar
+      ? { id: forYou.cellar.id, name: forYou.cellar.name }
+      : null,
+    friends_who_loved: [...(forYou.friendsWhoLovedNames ?? [])],
+    friends_who_loved_count: forYou.friendsWhoLovedCount ?? 0,
+    like_you_rated:
+      like?.item != null
+        ? { name: displayItemName(like.item.name), score: like.score }
+        : null,
+  };
 };
 
 export function menuItemFrom(node: MenuLineNode): MenuItemView {
@@ -465,10 +564,14 @@ export function menuItemFrom(node: MenuLineNode): MenuItemView {
       matched?.item != null
         ? {
             id: matched.item.id,
-            name: matched.item.name,
+            name: displayItemName(matched.item.name),
             type: matched.type.toLowerCase(),
+            is_want_to_try: matched.item.isWantToTry === true,
           }
         : null,
+    search_name: searchNameFrom(node.extractedAttributes),
+    can_correct_match: node.canCorrectMatch === true,
+    for_you: forYouFrom(node.forYou),
   };
 }
 
@@ -550,10 +653,21 @@ export function duplicateFrom(node: DuplicateNode): DuplicatePlace {
 
 export type ScanStatus = "pending" | "processing" | "completed" | "failed";
 
+/** `MenuScan.matchStatus` (N06a); see `scanning/scan-progress.ts`. */
+export type ScanMatchStatus =
+  | "waiting"
+  | "queued"
+  | "running"
+  | "completed"
+  | "failed"
+  | "skipped";
+
 /** The old `MenuScanStatus`. */
 export type MenuScanStatusView = {
   id: string;
   processing_status: ScanStatus;
+  /** N06a: the match run, which `processing_status` does not describe. */
+  match_status: ScanMatchStatus;
   items_detected: number | null;
   items_matched: number | null;
   confidence_score: number | null;
@@ -564,6 +678,7 @@ export type MenuScanStatusView = {
 export function scanStatusFrom(node: {
   readonly id: string;
   readonly processingStatus: ScanStatus;
+  readonly matchStatus: ScanMatchStatus;
   readonly itemsDetected?: number | null;
   readonly itemsMatched?: number | null;
   readonly confidenceScore?: number | null;
@@ -573,6 +688,7 @@ export function scanStatusFrom(node: {
   return {
     id: node.id,
     processing_status: node.processingStatus,
+    match_status: node.matchStatus,
     items_detected: node.itemsDetected ?? null,
     items_matched: node.itemsMatched ?? null,
     confidence_score: node.confidenceScore ?? null,
@@ -646,6 +762,8 @@ export type SuggestionView = {
   match_reasoning: string | null;
   created_at: string | null;
   pending: boolean;
+  /** True once the scan's owner has accepted it (N06a: the acceptance is the match). */
+  accepted: boolean;
   /** The suggested item or recipe, with where it lives. */
   suggested: { id: string; name: string; href: string | null } | null;
 };
@@ -662,10 +780,11 @@ export function suggestionFrom(node: SuggestionNode): SuggestionView {
     match_reasoning: node.matchReasoning ?? null,
     created_at: node.createdAt ?? null,
     pending: node.accepted == null && node.rejected == null,
+    accepted: node.accepted === true,
     suggested: item
       ? {
           id: item.id,
-          name: item.name,
+          name: displayItemName(item.name),
           href: matchedItemHref({ id: item.id, type: item.type.toLowerCase() }),
         }
       : recipe
@@ -701,4 +820,52 @@ export function googlePrefillFields(
       ? { description: details.editorialSummary }
       : {}),
   };
+}
+
+/** The address fields the dropped pin's reverse geocode can fill. */
+export type PinAddressField =
+  | "street_address"
+  | "locality"
+  | "region"
+  | "postcode"
+  | "country_code";
+
+/**
+ * What the pin's reverse geocode drafts into the create-place form — only the
+ * parts it actually returned, the country upper-cased the way the field holds
+ * it. `CreatePlaceForm` writes these and keeps them as the draft its
+ * `AIDraftField source="pin"` marks are diffed against (N19), so "From pin"
+ * shows on exactly the fields that still hold the pin's value — not, as the
+ * old section chip did, whenever the lookup merely finished.
+ */
+export function pinAddressDraft(
+  geocode: Partial<Record<PinAddressField, string | null>> | null,
+): Partial<Record<PinAddressField, string>> {
+  if (geocode === null) return {};
+  const draft: Partial<Record<PinAddressField, string>> = {};
+  for (const key of [
+    "street_address",
+    "locality",
+    "region",
+    "postcode",
+    "country_code",
+  ] as const) {
+    const value = geocode[key]?.trim();
+    if (value === undefined || value === "") continue;
+    draft[key] = key === "country_code" ? value.toUpperCase() : value;
+  }
+  return draft;
+}
+
+/**
+ * Whether the create-place form should say the pin's lookup found no address:
+ * the lookup has finished and drafted nothing. Without it the address fields
+ * just sit empty, which reads the same as a lookup still on its way — or one
+ * that never ran.
+ */
+export function pinAddressNotFound(
+  loading: boolean,
+  draft: Partial<Record<PinAddressField, string>>,
+): boolean {
+  return !loading && Object.keys(draft).length === 0;
 }

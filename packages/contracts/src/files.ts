@@ -42,6 +42,12 @@ export type FileDto = {
   readonly updatedAt: string;
 };
 
+/**
+ * SV-D: the upload kind of a profile picture. `UserActor.setAvatar` accepts
+ * only a verified file of this kind that the viewer uploaded themselves.
+ */
+export const AVATAR_FILE_KIND = "avatar";
+
 export type CreateUploadTargetInput = {
   /**
    * A free-form namespace for the object key (`"item-image"`, `"label-front"`,
@@ -103,7 +109,35 @@ export type FileActorInterface = {
    */
   presignRead(ctx: Ctx): Promise<ReadTarget>;
   delete(ctx: Ctx): Promise<void>;
+  /**
+   * F-89: a browser GET URL for each **profile picture** in `filter.fileIds`,
+   * aligned, in one turn — a page of people is one call, not one
+   * `FileActor` activation and presign per person. Addressed at
+   * {@link avatarBatchActorId} (the viewer's own id), so it queues only
+   * behind the viewer's own reads. Each id is signed only when it is some
+   * user's `avatar_file_id`, verified, and that profile is one the viewer may
+   * see (`canSeeProfile`, the same rule `presignRead` gives a picture);
+   * anything else is `null`, never an error, so a caller falls back to the
+   * stored image. At most {@link AVATAR_BATCH_MAX_IDS} ids.
+   */
+  presignAvatars(
+    ctx: Ctx,
+    filter: AvatarBatchFilter,
+  ): Promise<readonly (ReadTarget | null)[]>;
 };
+
+/** The pictures one {@link FileActorInterface.presignAvatars} call signs. */
+export type AvatarBatchFilter = { readonly fileIds: readonly string[] };
+
+/** The most ids one {@link AvatarBatchFilter} may carry. */
+export const AVATAR_BATCH_MAX_IDS = 100;
+
+/**
+ * The `FileActor` id an avatar batch is addressed at: the viewer's own id.
+ * No file has it (both are random uuids), so the activation holds no row and
+ * serializes only that viewer's batches.
+ */
+export const avatarBatchActorId = (viewerId: string): string => viewerId;
 
 /**
  * Only the actor host's own AI image loader calls these — never a resolver,
@@ -152,6 +186,7 @@ export const FileActorDescriptor: ActorDescriptor<
     verify: { timeoutMs: 30_000 },
     presignRead: {},
     delete: {},
+    presignAvatars: {},
   },
   internalMethods: {
     presignReadInternal: {},

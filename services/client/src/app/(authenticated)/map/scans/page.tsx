@@ -1,39 +1,11 @@
-import { Box, CircularProgress, Typography } from "@mui/joy";
-import { Suspense } from "react";
-import { ScanHistory } from "@/components/map/scanning/ScanHistory";
+import { redirect } from "next/navigation";
 
-export default function ScanHistoryPage() {
-  return (
-    <Box
-      sx={{
-        height: "100dvh",
-        overflow: "auto",
-        p: 2,
-      }}
-    >
-      <Typography level="h2" sx={{ mb: 3 }}>
-        Menu Scan History
-      </Typography>
-
-      <Suspense
-        fallback={
-          <Box
-            sx={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              height: "50vh",
-              flexDirection: "column",
-              gap: 2,
-            }}
-          >
-            <CircularProgress />
-            <Typography>Loading scan history...</Typography>
-          </Box>
-        }
-      >
-        <ScanHistory />
-      </Suspense>
-    </Box>
-  );
+/**
+ * `/map/scans` (the list) — retired by X10 (D1: "Scans and Discoveries →
+ * Home inbox plus the Map sheet"). A scan that is reading, read or waiting
+ * on matches is on Home (the job tray and "Waiting on you"); each scan's own
+ * page, `/map/scans/[scanId]`, stays. An old link lands on Home's inbox.
+ */
+export default function ScanHistoryPage(): never {
+  redirect("/#waiting");
 }

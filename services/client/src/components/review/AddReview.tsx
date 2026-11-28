@@ -1,26 +1,22 @@
 "use client";
 
-import {
-  Button,
-  Card,
-  CardActions,
-  CardContent,
-  Input,
-  Stack,
-  Typography,
-} from "@mui/joy";
-import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
-import { Rating } from "react-simple-star-rating";
 import { useMutation } from "urql";
+import { formatKitScore, Stars } from "@/components/app/parts/Stars";
+import { RatingInput } from "@/components/app/RatingInput";
 import type { ApiItemType } from "@/components/cellar-api/itemTypes";
+import { useRefreshAfterWrite } from "@/components/item/parts/pane-refresh";
+import { Button } from "@/components/ui/button";
 import {
   AddItemReviewMutation,
   DeleteItemReviewMutation,
   UpdateItemReviewMutation,
 } from "@/lib/api/items";
 import { unwrapResult } from "@/lib/api/result";
+import { feedback } from "@/lib/feedback";
 import { RichTextEditor } from "../common/RichTextEditor";
+import { plainTextFromRichText } from "../common/rich-text";
+import { LoadingButton } from "../item/LoadingButton";
 
 export type AddReviewProps = {
   itemId: string;
@@ -59,13 +55,15 @@ export const AddReview = ({
   type,
   myReview = null,
 }: AddReviewProps) => {
-  const router = useRouter();
+  const refreshAfterWrite = useRefreshAfterWrite();
   const [isPending, startTransition] = useTransition();
   const [open, setOpen] = useState(false);
-  const [score, setScore] = useState<number | undefined>(myReview?.score);
-  const [text, setText] = useState<string | undefined>(
-    myReview?.text ?? undefined,
-  );
+  // F-146 / F-147: the editor's draft. It is seeded from the saved review
+  // each time the editor opens (`openEditor`), never once at mount, so it
+  // follows every refresh (an Add, a Remove from ⋯ and its Undo) and an
+  // abandoned edit (Cancel) is thrown away rather than carried to the next.
+  const [score, setScore] = useState<number | undefined>(undefined);
+  const [text, setText] = useState<string | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
   const [, addReview] = useMutation(AddItemReviewMutation);
   const [, updateReview] = useMutation(UpdateItemReviewMutation);
@@ -81,7 +79,7 @@ export const AddReview = ({
 
   const finish = () => {
     setOpen(false);
-    router.refresh();
+    refreshAfterWrite();
   };
 
   const handleClick = () => {
@@ -103,8 +101,6 @@ export const AddReview = ({
           setError(result.error.message);
           return;
         }
-        setScore(undefined);
-        setText(undefined);
       } else {
         const result = unwrapResult(
           (
@@ -139,76 +135,112 @@ export const AddReview = ({
         setError(result.error.message);
         return;
       }
-      setScore(undefined);
-      setText(undefined);
       finish();
     });
   };
 
+  const note =
+    myReview?.text === null || myReview?.text === undefined
+      ? ""
+      : plainTextFromRichText(myReview.text).trim();
+  const openEditor = () => {
+    feedback("tick");
+    setScore(myReview?.score);
+    setText(myReview?.text ?? undefined);
+    setError(null);
+    setOpen(true);
+  };
+  // Button already sounds the press (KIT § 2); Cancel only closes, and the
+  // draft is re-seeded on the next open.
+  const cancel = () => setOpen(false);
+
   if (open === false) {
+    // Cellars-Bottles 01: the rating and note sit under the photo — the
+    // stars (gold: the owner's own verdict), the score beside them, the note,
+    // then "Add note" / "Edit note". Tapping the stars opens the editor.
     return (
-      <Input
-        placeholder={editing ? "Edit your Review..." : "Add a Review..."}
-        onClick={() => setOpen(true)}
-        slotProps={{ input: { readOnly: true } }}
-      />
+      <section
+        id="your-review"
+        data-testid="your-rating"
+        aria-label="Your rating"
+        className="flex flex-col gap-1"
+      >
+        <div className="flex items-center gap-4">
+          <button
+            type="button"
+            onClick={openEditor}
+            aria-label={editing ? "Change your rating" : "Rate it"}
+            className="-mx-1 inline-flex min-h-11 items-center rounded-md px-1 outline-none focus-visible:outline-2 focus-visible:outline-act-ink"
+          >
+            <Stars value={myReview?.score ?? null} size="lg" />
+          </button>
+          {editing && (
+            <span className="t-score tabular text-ink">
+              {formatKitScore(myReview.score)}
+            </span>
+          )}
+        </div>
+        {note !== "" && (
+          <p className="t-body line-clamp-4 whitespace-pre-line text-ink">
+            {note}
+          </p>
+        )}
+        <Button
+          variant="quiet"
+          className="-ml-2.5 self-start"
+          onClick={openEditor}
+        >
+          {note === "" ? "Add note" : "Edit note"}
+        </Button>
+      </section>
     );
   }
 
   return (
-    <Card>
-      <Stack spacing={2}>
-        <Typography level="title-lg">
-          {editing ? "Edit Review:" : "Add Review:"}
-        </Typography>
-        <CardContent>
-          <Rating
-            onClick={handleRatingClick}
-            initialValue={score ?? 0}
-            showTooltip
-            tooltipDefaultText="Your Score"
-            allowFraction
-            tooltipArray={[
-              "Terrible",
-              "Bad",
-              "Bad+",
-              "Mediocre",
-              "Mediocre+",
-              "Good",
-              "Good+",
-              "Very Good",
-              "Very Good+",
-              "Outstanding",
-            ]}
-            readonly={isPending}
-          />
-        </CardContent>
-        <RichTextEditor
-          placeholder="What did you think of it?"
-          initialText={text}
-          onChange={setText}
-        />
-        {error !== null && (
-          <Typography level="body-sm" color="danger">
-            {error}
-          </Typography>
-        )}
-      </Stack>
-      <CardActions>
-        <Button onClick={handleClick} disabled={!canSubmit} loading={isPending}>
+    <section
+      id="your-review"
+      data-testid="your-rating"
+      aria-label="Your rating"
+      className="flex flex-col gap-3"
+    >
+      <RatingInput
+        value={score}
+        onChange={handleRatingClick}
+        disabled={isPending}
+        label="Your score"
+      />
+      <RichTextEditor
+        placeholder="What did you think of it?"
+        initialText={text}
+        onChange={setText}
+      />
+      {error !== null && (
+        <p role="alert" className="t-body text-destructive">
+          {error}
+        </p>
+      )}
+      <div className="flex flex-wrap gap-2">
+        <LoadingButton
+          onClick={handleClick}
+          disabled={!canSubmit}
+          loading={isPending}
+        >
           {editing ? "Save" : "Add"}
+        </LoadingButton>
+        <Button variant="outline" disabled={isPending} onClick={cancel}>
+          Cancel
         </Button>
         {editing && (
           <Button
-            variant="plain"
-            color="danger"
+            variant="quiet-muted"
+            className="ml-auto"
             disabled={isPending}
             onClick={handleDelete}
           >
-            Delete
+            Remove rating
           </Button>
         )}
-      </CardActions>
-    </Card>
+      </div>
+    </section>
   );
 };

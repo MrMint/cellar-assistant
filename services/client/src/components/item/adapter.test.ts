@@ -11,15 +11,19 @@ import {
   heldBackNote,
   isCellarOwner,
   itemCharacteristics,
+  itemPlateStyle,
   itemShareUrl,
   itemSubtitlePhrases,
   myReviewFromRow,
   recipeIngredientFromNode,
+  restoreBottleVariables,
   reviewFromRow,
   teaTextCards,
   tierListEntryFromNode,
+  yourBottlesFromFragment,
 } from "./adapter";
 import { dateFromYear, formLayout, yearFromDate } from "./itemFormLayout";
+import { tasteScore } from "./TasteHeader";
 
 const core = { name: "X", description: null, country: "FRANCE" };
 
@@ -167,6 +171,29 @@ describe("rows", () => {
     assert.equal(review.text, null);
   });
 
+  test("F-151: myReview carries when you rated it, for the line under Your rating", () => {
+    assert.equal(
+      myReviewFromRow({
+        id: "r",
+        score: 4,
+        text: null,
+        updatedAt: "2026-11-03T18:00:00.000Z",
+      })?.ratedAt,
+      "2026-11-03T18:00:00.000Z",
+    );
+    assert.equal(
+      myReviewFromRow({ id: "r", score: 4, text: null })?.ratedAt,
+      null,
+    );
+  });
+
+  test("F-151: the taste header's scores are one decimal, always", () => {
+    assert.equal(tasteScore(4), "4.0");
+    assert.equal(tasteScore(4.25), "4.3");
+    assert.equal(tasteScore(3.96), "4.0");
+    assert.equal(tasteScore(5.4), "5.0");
+  });
+
   test("myReview: null stays null", () => {
     assert.equal(myReviewFromRow(null), null);
     assert.equal(myReviewFromRow({ id: "r", score: 3, text: "hi" })?.score, 3);
@@ -245,6 +272,34 @@ describe("rows", () => {
           brand_type: "winery",
         },
       },
+    );
+    // X23: unset or "other" falls back to the first item's producer, and
+    // then to nothing — the row never says "Other".
+    assert.equal(
+      brandFromNode({
+        id: "ib",
+        isPrimary: false,
+        brand: {
+          id: "b",
+          name: "Dassai",
+          brandType: null,
+          firstItemType: "SAKE",
+        },
+      }).brand.brand_type,
+      "kura",
+    );
+    assert.equal(
+      brandFromNode({
+        id: "ib",
+        isPrimary: false,
+        brand: {
+          id: "b",
+          name: "Acme",
+          brandType: "other",
+          firstItemType: null,
+        },
+      }).brand.brand_type,
+      null,
     );
   });
 
@@ -441,5 +496,130 @@ describe("formLayout create mode (the old create forms' stars)", () => {
     assert.deepEqual(starred("SAKE", "edit"), []);
     assert.deepEqual(starred("TEA", "edit"), []);
     assert.deepEqual(starred("WINE", "create"), starred("WINE", "edit"));
+  });
+});
+
+describe("itemPlateStyle (H-2)", () => {
+  test("reads the page's own attribute aliases into the vessel's fields", () => {
+    assert.deepEqual(
+      itemPlateStyle("WINE", {
+        __typename: "Wine",
+        wineStyle: "SPARKLING",
+        variety: "CHARDONNAY",
+      }),
+      { style: "SPARKLING", variety: "CHARDONNAY" },
+    );
+    assert.deepEqual(
+      itemPlateStyle("SPIRIT", {
+        __typename: "Spirit",
+        spiritType: "TEQUILA",
+        spiritStyle: "Blanco",
+      }),
+      { style: "TEQUILA" },
+    );
+    assert.deepEqual(
+      itemPlateStyle("TEA", {
+        __typename: "Tea",
+        category: "GREEN",
+        form: "matcha_powder",
+      }),
+      { style: "GREEN", form: "matcha_powder" },
+    );
+    assert.deepEqual(itemPlateStyle("BEER", { beerStyle: "STOUT" }), {
+      style: "STOUT",
+    });
+    assert.equal(itemPlateStyle("SAKE", { category: "JUNMAI" }), null);
+  });
+
+  test("an unselected or non-string field is null, not a match", () => {
+    assert.deepEqual(itemPlateStyle("WINE", { variety: 3 }), {
+      style: null,
+      variety: null,
+    });
+  });
+});
+
+describe("F-145: Undo of Delete bottle puts the same bottle back (restoreCellarItem)", () => {
+  const row = {
+    __typename: "CellarItem",
+    id: "b-1",
+    cellarId: "c-1",
+    createdAt: "2026-10-01T09:00:00.000Z",
+    updatedAt: "2026-11-01T09:00:00.000Z",
+    acquiredOn: "2026-09-30",
+    displayImageId: "img-1",
+    drinkFrom: null,
+    drinkUntil: "2030-01-01",
+    emptyAt: null,
+    location: "Rack B",
+    openAt: "2026-10-05T20:00:00.000Z",
+    packagedOn: null,
+    percentageRemaining: 70,
+    priceAmount: 24.5,
+    priceCurrency: "USD",
+    sourceMenuItemId: null,
+    sourcePlaceId: "p-1",
+    sourceType: "manual" as const,
+    item: { __typename: "Tea", id: "t-1", type: "TEA" as const },
+  };
+  test("under its own id and createdAt, with every field it had", () => {
+    assert.deepEqual(restoreBottleVariables(row), {
+      cellarId: "c-1",
+      cellarItemId: "b-1",
+      createdAt: "2026-10-01T09:00:00.000Z",
+      input: {
+        item: { id: "t-1", type: "TEA" },
+        acquiredOn: "2026-09-30",
+        displayImageId: "img-1",
+        drinkFrom: null,
+        drinkUntil: "2030-01-01",
+        emptyAt: null,
+        location: "Rack B",
+        openAt: "2026-10-05T20:00:00.000Z",
+        packagedOn: null,
+        percentageRemaining: 70,
+        priceAmount: 24.5,
+        priceCurrency: "USD",
+        sourceMenuItemId: null,
+        sourcePlaceId: "p-1",
+        sourceType: "manual",
+      },
+    });
+  });
+  test("no read of the bottle is no restore: never a bottle rebuilt from guesses", () => {
+    assert.equal(restoreBottleVariables(null), null);
+    assert.equal(restoreBottleVariables(undefined), null);
+  });
+});
+
+describe("Your bottles keep the level a finish kept (F-150, H-125)", () => {
+  const bottle = (id: string, levelBeforeEmpty: number | null) => ({
+    node: {
+      __typename: "CellarItem",
+      id,
+      cellarId: "c-1",
+      openAt: "2026-10-05T20:00:00.000Z",
+      emptyAt: "2026-11-01T20:00:00.000Z",
+      percentageRemaining: 0,
+      levelBeforeEmpty,
+      createdAt: "2026-10-01T09:00:00.000Z",
+      cellar: { __typename: "Cellar", id: "c-1", name: "Home" },
+    },
+  });
+  test("levelBeforeEmpty comes through, and none kept is null", () => {
+    const { bottles } = yourBottlesFromFragment({
+      __typename: "Tea",
+      myBottles: {
+        totalCount: 2,
+        edges: [bottle("b-1", 40), bottle("b-2", null)],
+      },
+    } as unknown as Parameters<typeof yourBottlesFromFragment>[0]);
+    assert.deepEqual(
+      bottles.map((row) => [row.id, row.levelBeforeEmpty]),
+      [
+        ["b-1", 40],
+        ["b-2", null],
+      ],
+    );
   });
 });

@@ -9,10 +9,15 @@
  *
  *   bun run --filter @cellar-assistant/actors test lib/ai/budget
  */
-import type { Ctx } from "@cellar-assistant/contracts";
-import { BudgetExceededError } from "@cellar-assistant/contracts";
+import type { Ctx, ReserveResult } from "@cellar-assistant/contracts";
+import {
+  BudgetExceededError,
+  ConflictError,
+  ValidationError,
+} from "@cellar-assistant/contracts";
 import { describe, expect, it, vi } from "vitest";
 import type {
+  ModelReleaseInput,
   ModelReserveInput,
   ModelSettleInput,
 } from "../../actors/budget-actor.ts";
@@ -25,6 +30,7 @@ import {
   meteredProviderFor,
   OUTPUT_TOKEN_ESTIMATES,
 } from "./budget.ts";
+import { noModelResponse } from "./no-response.ts";
 import type { AIProvider, GenerateContentResponse } from "./types.ts";
 
 const ctx: Ctx = {
@@ -44,6 +50,7 @@ type Recorder = {
   readonly budget: ModelBudget;
   readonly reserved: ModelReserveInput[];
   readonly settled: ModelSettleInput[];
+  readonly released: ModelReleaseInput[];
   /** Every ctx either hop was called with, in call order. */
   readonly ctxs: Ctx[];
 };
@@ -52,15 +59,20 @@ const recorder = (
   options: {
     allowed?: boolean;
     settleThrows?: boolean;
+    releaseThrows?: boolean;
     usageId?: string | null;
+    refusal?: ReserveResult["refusal"];
+    retryAt?: string | null;
   } = {},
 ): Recorder => {
   const reserved: ModelReserveInput[] = [];
   const settled: ModelSettleInput[] = [];
+  const released: ModelReleaseInput[] = [];
   const ctxs: Ctx[] = [];
   return {
     reserved,
     settled,
+    released,
     ctxs,
     budget: {
       reserve: async (c, input) => {
@@ -76,12 +88,23 @@ const recorder = (
           isEnabled: true,
           reason: (options.allowed ?? true) ? "charged" : "budget exhausted",
           usageId: options.usageId === undefined ? "u-1" : options.usageId,
+          ...(options.refusal === undefined
+            ? {}
+            : { refusal: options.refusal }),
+          ...(options.retryAt === undefined
+            ? {}
+            : { retryAt: options.retryAt }),
         };
       },
       settle: async (c, input) => {
         ctxs.push(c);
         settled.push(input);
         if (options.settleThrows === true) throw new Error("sidecar down");
+      },
+      release: async (c, input) => {
+        ctxs.push(c);
+        released.push(input);
+        if (options.releaseThrows === true) throw new Error("sidecar down");
       },
     },
   };
@@ -347,6 +370,28 @@ describe("a denial is a throw, never a manufactured answer", () => {
 /* Reservation ids                                                             */
 /* -------------------------------------------------------------------------- */
 
+describe("N09: a caller that stopped waiting is not metered", () => {
+  it("reserves nothing and calls nothing when the signal has already fired", async () => {
+    const rec = recorder();
+    const p = provider();
+    const metered = meteredProviderFor(p.provider, "place_review", MODELS, {
+      budget: rec.budget,
+    });
+
+    const error = await metered(ctx)
+      .generateContent({ prompt: "x", signal: AbortSignal.abort() }, "low")
+      .then(
+        () => null,
+        (caught: unknown) => caught,
+      );
+
+    expect(error).toBeInstanceOf(Error);
+    expect(rec.reserved).toHaveLength(0);
+    expect(rec.settled).toHaveLength(0);
+    expect(p.calls).toBe(0);
+  });
+});
+
 describe("reservation ids", () => {
   it("are distinct per call even within one ctx", async () => {
     const { budget, reserved } = recorder();
@@ -431,5 +476,149 @@ describe("the caller's ctx", () => {
 
     // reserve + settle for the content call, reserve for the embedding.
     expect(ctxs).toEqual([ctx, ctx, ctx]);
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/* N07: typed refusals                                                         */
+/* -------------------------------------------------------------------------- */
+
+describe("a refusal says whose limit it was and when to ask again", () => {
+  it("carries USER_CAP and the window's retryAt onto the error", async () => {
+    const { budget } = recorder({
+      allowed: false,
+      refusal: "USER_CAP",
+      retryAt: "2026-10-07T15:40:00.000Z",
+    });
+    const metered = meteredProviderFor(
+      provider().provider,
+      "item_defaults",
+      MODELS,
+      { budget },
+    );
+    const error = await metered(ctx)
+      .generateContent({ prompt: "x" })
+      .catch((caught: unknown) => caught);
+    expect(error).toBeInstanceOf(BudgetExceededError);
+    expect(error).toMatchObject({
+      code: "BUDGET_EXCEEDED",
+      reason: "USER_CAP",
+      retryAt: "2026-10-07T15:40:00.000Z",
+    });
+  });
+
+  it("treats a refusal an older host did not classify as service-wide", async () => {
+    const { budget } = recorder({ allowed: false });
+    const error = await meteredProviderFor(
+      provider().provider,
+      "embedding",
+      MODELS,
+      { budget },
+    )(ctx)
+      .generateEmbeddings({ content: "x", type: "text" })
+      .catch((caught: unknown) => caught);
+    expect(error).toMatchObject({ reason: "SERVICE_BUDGET", retryAt: null });
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/* D17: only calls that got a model response count                             */
+/* -------------------------------------------------------------------------- */
+
+const failing = (error: unknown): AIProvider => ({
+  name: "vertex-ai",
+  getAvailableQualities: () => ["low", "medium", "high"],
+  async generateContent() {
+    throw error;
+  },
+  async generateEmbeddings() {
+    throw error;
+  },
+});
+
+describe("D17: a call that got no model response gives its reservation back", () => {
+  it("releases the row when the provider was never reached, and rethrows", async () => {
+    const { budget, released, settled } = recorder({ usageId: "u-9" });
+    const unreachable = noModelResponse(
+      new ConflictError("connect ECONNREFUSED"),
+    );
+    await expect(
+      meteredProviderFor(failing(unreachable), "menu_extraction", MODELS, {
+        budget,
+      })(ctx).generateContent({ prompt: "x" }),
+    ).rejects.toBe(unreachable);
+    expect(released).toEqual([{ usageId: "u-9", seam: "menu_extraction" }]);
+    expect(settled).toEqual([]);
+  });
+
+  it("keeps the cost of a request that left and got no answer", async () => {
+    // A timeout: no answer, so the allowance comes back (D17); the provider
+    // may still have run it, so the money stays booked.
+    const { budget, released } = recorder({ usageId: "u-7" });
+    const timedOut = noModelResponse(new ConflictError("timed out"), {
+      maybeBilled: true,
+    });
+    await expect(
+      meteredProviderFor(failing(timedOut), "item_defaults", MODELS, {
+        budget,
+      })(ctx).generateContent({ prompt: "x" }),
+    ).rejects.toBe(timedOut);
+    expect(released).toEqual([
+      { usageId: "u-7", seam: "item_defaults", keepCost: true },
+    ]);
+  });
+
+  it("releases an embedding's row too", async () => {
+    const { budget, released } = recorder({ usageId: "u-3" });
+    const refused = noModelResponse(new ValidationError("400 bad request"));
+    await expect(
+      meteredProviderFor(failing(refused), "embedding", MODELS, { budget })(
+        ctx,
+      ).generateEmbeddings({ content: "x", type: "text" }),
+    ).rejects.toBe(refused);
+    expect(released).toEqual([{ usageId: "u-3", seam: "embedding" }]);
+  });
+
+  it("keeps the charge when a response arrived and then failed to read", async () => {
+    // An unmarked failure is one that may have been billed: the safe
+    // direction for a budget is to count it.
+    const { budget, released } = recorder();
+    const garbled = new ConflictError("returned a body that is not JSON");
+    await expect(
+      meteredProviderFor(failing(garbled), "item_defaults", MODELS, {
+        budget,
+      })(ctx).generateContent({ prompt: "x" }),
+    ).rejects.toBe(garbled);
+    expect(released).toEqual([]);
+  });
+
+  it("has nothing to release when the reservation wrote no row", async () => {
+    const { budget, released } = recorder({ usageId: null });
+    await expect(
+      meteredProviderFor(
+        failing(noModelResponse(new ConflictError("timeout"))),
+        "menu_match",
+        MODELS,
+        { budget },
+      )(ctx).generateContent({ prompt: "x" }),
+    ).rejects.toThrow("timeout");
+    expect(released).toEqual([]);
+  });
+
+  it("a failed release does not replace the call's own error", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      const { budget, released } = recorder({ releaseThrows: true });
+      const unreachable = noModelResponse(new ConflictError("unreachable"));
+      await expect(
+        meteredProviderFor(failing(unreachable), "recipe_photo", MODELS, {
+          budget,
+        })(ctx).generateContent({ prompt: "x" }),
+      ).rejects.toBe(unreachable);
+      expect(released).toHaveLength(1);
+      expect(warn).toHaveBeenCalled();
+    } finally {
+      warn.mockRestore();
+    }
   });
 });

@@ -1,6 +1,7 @@
 import type { Client } from "urql";
 import type { ApiItemType } from "@/components/cellar-api/itemTypes";
 import type { ItemFormValues } from "@/components/item/ItemForm";
+import { announceSave } from "@/components/pwa/install-prompt";
 import {
   ConfirmItemOnboardingMutation,
   EnsureBarcodeMutation,
@@ -30,6 +31,8 @@ export type CreateOnboardedItemInput = {
   barcode: string;
   /** The code the session was opened with (scanned), if any. */
   sessionBarcode?: string;
+  /** DECISIONS 34: the guessed fields the person touched (server names). */
+  confirmedFields?: readonly string[];
 };
 
 /**
@@ -57,6 +60,7 @@ export const createOnboardedItem = async ({
   brandName,
   barcode,
   sessionBarcode,
+  confirmedFields,
 }: CreateOnboardedItemInput): Promise<string> => {
   const typed = normalizeBarcode(barcode);
   const problem = typed === "" ? null : barcodeProblem(typed);
@@ -69,7 +73,12 @@ export const createOnboardedItem = async ({
       await urqlClient
         .mutation(ConfirmItemOnboardingMutation, {
           onboardingId,
-          input: confirmInputFrom(type, values, brandName),
+          input: {
+            ...confirmInputFrom(type, values, brandName),
+            ...(confirmedFields === undefined
+              ? {}
+              : { confirmedFields: [...confirmedFields] }),
+          },
         })
         .toPromise()
     ).data?.confirmItemOnboarding,
@@ -107,6 +116,12 @@ export const createOnboardedItem = async ({
     }
     await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
   }
+
+  // The item exists: that is the save the install prompt waits for (N15) —
+  // announced here, before the barcode, so a barcode that fails to link
+  // (reported below as "the item was saved; the barcode was not") still
+  // counts.
+  announceSave();
 
   if (typed !== "" && typed !== normalizeBarcode(sessionBarcode ?? "")) {
     const ensured = unwrapResult(

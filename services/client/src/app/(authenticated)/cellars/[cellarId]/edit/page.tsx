@@ -1,5 +1,8 @@
-import { Typography } from "@mui/joy";
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { cache } from "react";
+import { AppBar } from "@/components/app/AppBar";
+import { ErrorState } from "@/components/app/EmptyState";
 import { canAddToCellar } from "@/components/cellar/adapter";
 import { EditCellarClient } from "@/components/cellar/EditCellarClient";
 import { GetCellarEditQuery } from "@/components/cellar/fragments";
@@ -16,6 +19,24 @@ import { apiServerQuery } from "@/lib/api/urql-server";
  */
 export const dynamic = "force-dynamic";
 
+/** One edit read per request, for the page and its title (X21). */
+const loadCellarEdit = cache((cellarId: string) =>
+  apiServerQuery(GetCellarEditQuery, { cellarId }),
+);
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ cellarId: string }>;
+}): Promise<Metadata> {
+  const { cellarId } = await params;
+  const result = unwrapResult(
+    (await loadCellarEdit(cellarId)).cellar,
+    "Cellar",
+  );
+  return { title: result.ok ? `Edit ${result.data.name}` : "Edit cellar" };
+}
+
 export default async function EditCellar({
   params,
 }: {
@@ -23,7 +44,7 @@ export default async function EditCellar({
 }) {
   const { cellarId } = await params;
   const [data, viewer] = await Promise.all([
-    apiServerQuery(GetCellarEditQuery, { cellarId }),
+    loadCellarEdit(cellarId),
     apiServerQuery(ViewerQuery, {}),
   ]);
 
@@ -31,39 +52,55 @@ export default async function EditCellar({
   if (!result.ok) {
     // §1.6: "no such cellar" and "not yours to see" are the same answer.
     if (isNotFound(result.error)) notFound();
-    return <Typography color="danger">{result.error.message}</Typography>;
+    return (
+      <ErrorState
+        title="Can't open this cellar"
+        reason={result.error.message}
+      />
+    );
   }
 
   const cellar = result.data;
   const me = viewer.me;
+  // X21: the page's h1 (the generateMetadata title's words), and Back to
+  // the cellar on a cold open.
+  const bar = (
+    <AppBar title={cellar.name} parent={`/cellars/${cellar.id}/items`} />
+  );
   if (!canAddToCellar(cellar, me?.id ?? null)) {
     return (
-      <Typography level="body-md">
-        You do not have permission to edit this cellar.
-      </Typography>
+      <div className="flex flex-col gap-4">
+        {bar}
+        <p className="t-body m-0 text-ink-2">
+          Only its owners can edit this cellar.
+        </p>
+      </div>
     );
   }
 
   return (
-    <EditCellarClient
-      cellar={{
-        id: cellar.id,
-        name: cellar.name,
-        privacy: cellar.privacy,
-        createdById: cellar.createdById,
-        coOwnerIds: cellar.coOwnerIds,
-        coOwners: cellar.coOwners.edges.map((edge) => edge.node),
-        itemCount: cellar.itemCount,
-      }}
-      viewer={
-        me === null || me === undefined
-          ? null
-          : {
-              id: me.id,
-              displayName: me.profile?.displayName ?? me.email ?? "",
-              avatarUrl: me.profile?.avatarUrl ?? null,
-            }
-      }
-    />
+    <div className="flex flex-col gap-4">
+      {bar}
+      <EditCellarClient
+        cellar={{
+          id: cellar.id,
+          name: cellar.name,
+          privacy: cellar.privacy,
+          createdById: cellar.createdById,
+          coOwnerIds: cellar.coOwnerIds,
+          coOwners: cellar.coOwners.edges.map((edge) => edge.node),
+          itemCount: cellar.itemCount,
+        }}
+        viewer={
+          me === null || me === undefined
+            ? null
+            : {
+                id: me.id,
+                displayName: me.profile?.displayName ?? me.email ?? "",
+                avatarUrl: me.profile?.avatarUrl ?? null,
+              }
+        }
+      />
+    </div>
   );
 }

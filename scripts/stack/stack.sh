@@ -114,6 +114,7 @@ OLLAMA_MODEL_HIGH
 OPENAI_COMPAT_ENDPOINT
 OPENAI_COMPAT_EMBEDDING_ENDPOINT
 OPENAI_COMPAT_API_KEY
+OPENAI_COMPAT_FREE
 OPENAI_COMPAT_MODEL_LOW
 OPENAI_COMPAT_MODEL_MEDIUM
 OPENAI_COMPAT_MODEL_HIGH
@@ -133,6 +134,7 @@ VERTEX_AI_EMBEDDING_MODEL
 AI_MODEL_PRICES
 AI_BUDGET_MAX_REQUESTS
 BUDGET_USER_CAPS
+GOOGLE_PLACES_MONTHLY_PAID_CENTS
 DAPR_API_TOKEN
 APP_API_TOKEN'
 
@@ -365,6 +367,18 @@ resolve() { # resolve [--reset]
   # one origin that uploads to this lane's MinIO, so it is the same single
   # origin as AUTH_TRUSTED_ORIGINS, not the base file's 3000/3003 default.
   FILES_CORS_ALLOWED_ORIGINS="http://localhost:$WEB_PORT"
+  # Opt-in: further browser origins served against THIS stack — e.g. a
+  # containerised Next client (services/client/Dockerfile) published on a fixed
+  # host port and pointed at this lane's api/actors through
+  # host.docker.internal. better-auth CSRF-checks the Origin the Next proxy
+  # forwards verbatim, and MinIO's CORS gates browser uploads, so such a client
+  # needs its origin in both lists. Comma-separated, e.g.
+  # `CELLAR_EXTRA_ORIGINS=http://localhost:3303`. Read once at actor-host start
+  # (and at `minio-init`), so it must be set on every `up` of the stack.
+  if [ -n "${CELLAR_EXTRA_ORIGINS:-}" ]; then
+    AUTH_TRUSTED_ORIGINS="$AUTH_TRUSTED_ORIGINS,$CELLAR_EXTRA_ORIGINS"
+    FILES_CORS_ALLOWED_ORIGINS="$FILES_CORS_ALLOWED_ORIGINS,$CELLAR_EXTRA_ORIGINS"
+  fi
   OLLAMA_ENDPOINT="${OLLAMA_ENDPOINT:-http://localhost:11434}"
   ACTORS_APP_ID="actors-$STACK_SLUG"
   API_APP_ID="api-$STACK_SLUG"
@@ -1347,9 +1361,22 @@ port_listener_pid() { # port_listener_pid PORT
 # worktree's stack is somebody else's live environment; a slug with no directory
 # is leftovers. `prune` cannot tell them apart because both compose files exist.
 slug_has_checkout() { # slug_has_checkout SLUG
-  local parent
+  local parent wt
   parent="$(dirname "$REPO_ROOT")"
-  [ -d "$parent/$1" ] || [ "$1" = "$(slugify "$(basename "$REPO_ROOT")")" ]
+  if [ -d "$parent/$1" ] || [ "$1" = "$(slugify "$(basename "$REPO_ROOT")")" ]; then
+    return 0
+  fi
+  # A stack started under `CELLAR_STACK_SLUG=<name>` (documented: two stacks in
+  # one worktree) has no directory of that name, but it does have its state dir
+  # in the checkout that started it. Look in every worktree of this repository,
+  # so a deliberately named stack is not reported as stale — with a teardown
+  # hint — by a sibling worktree's doctor.
+  while IFS= read -r wt; do
+    if [ -n "$wt" ] && [ -d "$wt/.stack/$1" ]; then return 0; fi
+  done <<EOF
+$(git -C "$REPO_ROOT" worktree list --porcelain 2>/dev/null | sed -n 's/^worktree //p')
+EOF
+  return 1
 }
 
 psql_in() { # psql_in CONTAINER DB SQL
@@ -2575,6 +2602,30 @@ cmd_seed() {
   the generated $STACK_DIR/dapr.yaml."
 }
 
+# `seed:demo` — services/actors/scripts/demo-seed.ts, pointed at this stack the
+# same way `seed` is: Postgres, the actor host, the API, and the Origin this
+# stack's better-auth trusts. Run `seed` first; the demo seed needs its accounts.
+# Flags after `seed:demo` go to the script and win over these defaults, which is
+# how it loads another stack.
+cmd_seed_demo() {
+  resolve
+  probe_node || true
+  [ -n "$GOOD_NODE" ] || die "seed:demo runs \`node scripts/demo-seed.ts\` and needs Node $NVMRC_VERSION (fnm install $NVMRC_VERSION)"
+  if [ $# -eq 0 ]; then
+    local pg
+    pg="$(project_container "$COMPOSE_PROJECT_NAME" postgres)"
+    [ -n "$pg" ] || die "this stack's Postgres is not running — \`bun run dev:bootstrap\` first"
+    say "demo seed into $PG_DB on 127.0.0.1:$POSTGRES_PORT via $BETTER_AUTH_URL and :$API_PORT"
+  fi
+  ( cd "$REPO_ROOT/services/actors" \
+    && PATH="$(node_path_prefix)" \
+       DATABASE_URL="$DATABASE_URL" \
+       BETTER_AUTH_URL="$BETTER_AUTH_URL" \
+       GRAPHQL_API_URL="http://localhost:$API_PORT/graphql" \
+       AUTH_TRUSTED_ORIGIN="http://localhost:$WEB_PORT" \
+       node scripts/demo-seed.ts "$@" )
+}
+
 # Proof that the seeded accounts can actually sign in: a real better-auth
 # sign-in on this stack's actor host, with the Origin a browser would send.
 # Only the status code and the presence of a session cookie are ever printed.
@@ -2816,6 +2867,9 @@ Commands
                             --from PROJ (clone source), --skip-doctor, --no-fix, --reset
   doctor [--fix]            preflight only: every known silent failure mode, named
   seed                      `db:seed` pointed at THIS stack (ports, origin and Node)
+  seed:demo [flags]         the big synthetic demo dataset (services/actors/scripts/demo-seed.ts)
+                            on THIS stack; flags (--database-url, --auth-url, --api-url,
+                            --origin) retarget it at another stack
   migrate [-- --status]     `db:migrate` against THIS stack: the migration ledger
   up [--detach] [--reset]   infra + `dapr run -f` for this worktree
   wait                      block until the API and the actor sidecar answer
@@ -2835,6 +2889,8 @@ Commands
 Environment
   CELLAR_STACK_SLUG   override the slug (default: the worktree directory name)
   CELLAR_STACK_SLOT   override the slot (default: hashed from the slug, then pinned)
+  CELLAR_EXTRA_ORIGINS  extra comma-separated browser origins to trust (better-auth +
+                      MinIO CORS), e.g. a containerised client on its own port
 EOF
 }
 
@@ -2845,6 +2901,7 @@ main() {
     bootstrap) cmd_bootstrap "$@" ;;
     doctor)    cmd_doctor "$@" ;;
     seed)      cmd_seed "$@" ;;
+    seed:demo) cmd_seed_demo "$@" ;;
     migrate)   cmd_migrate "$@" ;;
     up)        cmd_up "$@" ;;
     wait)      cmd_wait "$@" ;;

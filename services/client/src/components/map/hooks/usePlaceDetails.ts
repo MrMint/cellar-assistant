@@ -17,6 +17,7 @@ import {
   photosFrom,
   tierListEntriesFrom,
 } from "../adapter";
+import type { ReviewStatus } from "../places/place-review";
 import {
   MENU_ITEMS_PAGE_SIZE,
   PLACE_PHOTOS_PAGE_SIZE,
@@ -75,6 +76,12 @@ export type PlaceDetailsData = {
   price_level: number | null;
   rating: number | null;
   review_count: number | null;
+  /** X27: only the creator ever reads PENDING / REJECTED. */
+  review_status: ReviewStatus;
+  rejection_reason: string | null;
+  /** The review's offers — the creator's only; empty for anyone else. */
+  suggested_categories: string[];
+  suggested_description: string | null;
 };
 
 export function usePlaceDetails(placeId: string | undefined) {
@@ -86,6 +93,13 @@ export function usePlaceDetails(placeId: string | undefined) {
       photos: PLACE_PHOTOS_PAGE_SIZE,
       tierListEntries: PLACE_TIER_LIST_ENTRIES_PAGE_SIZE,
     },
+    // N06a — the place page's refetch race. A menu scan files its lines on
+    // the place through the outbox *after* the scan reports `completed`, and
+    // the scanner now hands off to the results page; coming back, the cached
+    // place still held the menu from before the scan. Graphcache has no way
+    // to know `Place.menuItems` grew — the scan's lines arrive under
+    // `MenuScan.menuItems` — so every mount shows the cache and revalidates.
+    requestPolicy: "cache-and-network",
     pause: !placeId,
   });
   const [, recordAccess] = useMutation(RecordPlaceAccessMutation);
@@ -173,6 +187,10 @@ export function usePlaceDetails(placeId: string | undefined) {
       price_level: raw.priceLevel ?? null,
       rating: raw.rating ?? null,
       review_count: raw.reviewCount ?? null,
+      review_status: raw.reviewStatus,
+      rejection_reason: raw.rejectionReason ?? null,
+      suggested_categories: [...raw.suggestedCategories],
+      suggested_description: raw.suggestedDescription ?? null,
     };
     return {
       place,
@@ -190,7 +208,7 @@ export function usePlaceDetails(placeId: string | undefined) {
     };
   }, [raw, menuRows, menuIsCurrent, menu.totalCount]);
 
-  const { isEnriching } = usePlaceEnrichment({
+  const { isEnriching, detailsPending } = usePlaceEnrichment({
     placeId,
     loaded: raw !== null,
     hasEnrichment: raw?.enrichment != null,
@@ -245,6 +263,7 @@ export function usePlaceDetails(placeId: string | undefined) {
     fetching: fetching && raw === null,
     failure,
     isEnriching,
+    detailsPending,
     refetch,
     setInteraction,
   };

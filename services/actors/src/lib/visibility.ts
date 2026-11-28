@@ -58,6 +58,24 @@ export const friendshipsOf = async (
     .where(or(eq(friends.userId, viewerId), eq(friends.friendId, viewerId)));
 
 /**
+ * The other side of each friendship touching `viewer`, once each, without
+ * `viewer` — the ids `canSee`'s third branch compares the creator against.
+ * `friends` is directed and read in both directions (`./visibility.ts`), so
+ * the steady state has two rows per friendship.
+ */
+export const friendIdsOf = (
+  viewer: string,
+  friendships: readonly Friendship[],
+): string[] =>
+  [
+    ...new Set(
+      friendships.map((row) =>
+        row.userId === viewer ? row.friendId : row.userId,
+      ),
+    ),
+  ].filter((id) => id !== viewer);
+
+/**
  * The friendships a visibility decision for `ctx` needs: none for an anonymous
  * caller (who has no friends) or a privileged one (whom `canSee` admits before
  * asking), the viewer's otherwise.

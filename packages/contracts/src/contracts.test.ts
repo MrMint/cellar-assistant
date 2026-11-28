@@ -25,6 +25,7 @@ import {
   isActorError,
   isActorErrorReason,
   NotFoundError,
+  parseActorErrorPayload,
   ValidationError,
 } from "./errors.ts";
 import * as contracts from "./index.ts";
@@ -273,7 +274,49 @@ describe("actor errors (§8.3)", () => {
       "NOT_REVIEW_AUTHOR",
       "RECIPE_NOT_IN_GROUP",
       "IMAGE_SEARCH_UNAVAILABLE",
+      "USER_CAP",
+      "SERVICE_BUDGET",
+      "AI_UNCONFIGURED",
+      "NOTHING_READ",
+      "LOOKS_LIKE_MENU",
+      "TIER_LIST_HISTORY_MOVED",
     ]);
+  });
+
+  /**
+   * N07: a budget refusal says *when* asking again can work. It has to
+   * survive the sidecar hop like `reason` does, and a value that is not an
+   * instant is dropped rather than handed to a client that formats it.
+   */
+  it("carries an optional retryAt through the wire envelope", () => {
+    const refusal = new BudgetExceededError(
+      "over the hourly cap",
+      "USER_CAP",
+      "2026-10-07T15:40:00Z",
+    );
+    expect(refusal.retryAt).toBe("2026-10-07T15:40:00.000Z");
+    expect(new ConflictError("plain").retryAt).toBeNull();
+
+    const parsed = parseActorErrorPayload(
+      JSON.stringify({
+        code: "BUDGET_EXCEEDED",
+        message: "m",
+        reason: "SERVICE_BUDGET",
+        retryAt: "2026-11-01T00:00:00.000Z",
+      }),
+    );
+    expect(parsed).toBeInstanceOf(BudgetExceededError);
+    expect(parsed?.reason).toBe("SERVICE_BUDGET");
+    expect(parsed?.retryAt).toBe("2026-11-01T00:00:00.000Z");
+
+    const garbled = parseActorErrorPayload(
+      JSON.stringify({
+        code: "BUDGET_EXCEEDED",
+        message: "m",
+        retryAt: "soon",
+      }),
+    );
+    expect(garbled?.retryAt).toBeNull();
   });
 
   /**

@@ -9,12 +9,14 @@
  *   their camelCase SDL names.
  * - `items_aggregate { aggregate { count } }` → `itemCount`.
  * - `createdBy { id displayName avatarUrl }` → the same, on `UserProfile` (G4).
- * - `is_editing_locked` (read by a hand-parsed second query, because the
- *   generated types predated the column) → `isEditingLocked`, here.
+ * - `is_editing_locked` → nothing: the padlock is retired (X16; X23's
+ *   Arrange replaced it), and the API no longer serves the flag.
  * - Seven nullable per-table relations (`place`, `wine`, … `tea`) →
  *   `entryType` plus `item: Item` / `place: Place`, exactly one non-null.
  * - The page's separate `GetUserItemReviews` round trip (the viewer's own
  *   score per item) → `Item.myReview { score }` (G7), on the row.
+ * - X23: the **list owner's** score per item → `TierListItem.ownerReview`
+ *   (a place rating stays its giver's: null for places).
  * - `place.user_place_interactions { rating }` (the viewer's own place
  *   rating) → `place.myInteraction { rating }` (G16, one batched call).
  * - `place.google_enrichment { google_rating google_user_ratings_total }` →
@@ -27,26 +29,6 @@
 
 import { graphql } from "@/lib/api/graphql";
 
-/** Tier list card for the index page grid: creator and item count. */
-export const TierListCardFragment = graphql(`
-  fragment TierListCard on TierList @_unmask {
-    __typename
-    id
-    name
-    description
-    privacy
-    listType
-    itemCount
-    createdAt
-    createdById
-    createdBy {
-      id
-      displayName
-      avatarUrl
-    }
-  }
-`);
-
 /** The header fields the detail page and the edit form read. */
 export const TierListCoreFragment = graphql(`
   fragment TierListCore on TierList @_unmask {
@@ -58,9 +40,11 @@ export const TierListCoreFragment = graphql(`
     privacy
     listType
     itemCount
-    isEditingLocked
     aiInsights
     insightsGeneratedAt
+    insightsStatus
+    insightsFailureReason
+    insightsRetryAt
     contentUpdatedAt
     createdAt
     updatedAt
@@ -79,6 +63,10 @@ export const TierListItemFragment = graphql(`
     entryType
     createdAt
     updatedAt
+    ownerReview {
+      id
+      score
+    }
     place {
       id
       name
@@ -96,6 +84,19 @@ export const TierListItemFragment = graphql(`
         googleRating
         googleUserRatingsTotal
       }
+      photos(first: 1) {
+        edges {
+          node {
+            __typename
+            id
+            file {
+              __typename
+              id
+              url
+            }
+          }
+        }
+      }
     }
     item {
       __typename
@@ -106,6 +107,23 @@ export const TierListItemFragment = graphql(`
       myReview {
         id
         score
+      }
+      score {
+        average
+        count
+      }
+      images(first: 1) {
+        edges {
+          node {
+            __typename
+            id
+            file {
+              __typename
+              id
+              url
+            }
+          }
+        }
       }
       ... on Wine {
         wineVariety: variety
@@ -143,3 +161,34 @@ export const TierListEditFragment = graphql(`
     itemCount
   }
 `);
+
+/** One recorded edit, as Undo and Redo name it (D4). */
+export const TierListRecordedEditFragment = graphql(`
+  fragment TierListEditFields on TierListEdit @_unmask {
+    __typename
+    seq
+    kind
+    entryName
+    fromBand
+    toBand
+    entryCount
+  }
+`);
+
+/** Where the list's edit history stands — the owner's alone (D4). */
+export const TierListEditHistoryFragment = graphql(
+  `
+    fragment TierListEditHistoryFields on TierListEditHistory @_unmask {
+      __typename
+      canUndo
+      canRedo
+      undo {
+        ...TierListEditFields
+      }
+      redo {
+        ...TierListEditFields
+      }
+    }
+  `,
+  [TierListRecordedEditFragment],
+);

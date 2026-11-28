@@ -1,46 +1,28 @@
 "use client";
 
 /**
- * `82450ad1:src/components/tier-list/EditTierListClient.tsx`, restored; the
- * fragment is unmasked (`@_unmask`), so there is nothing to read.
+ * `/tier-lists/[id]/edit`'s form: List details as a page, for a link or a
+ * cold open (the list page opens the same form as a sheet). Save and Cancel
+ * both go back to the list.
  */
 
-import { useRouter } from "next/navigation";
 import { useCallback } from "react";
+import { useNavigate } from "@/components/app/useNavigate";
 import type { ResultOf } from "@/lib/api/graphql";
 import type { TierListEditFragment } from "./fragments";
-import { TierListForm } from "./TierListForm";
+import { ListDetailsForm } from "./lists/ListSheets";
 
 interface EditTierListClientProps {
   tierList: ResultOf<typeof TierListEditFragment>;
 }
 
 export function EditTierListClient({ tierList }: EditTierListClientProps) {
-  const router = useRouter();
-  const data = tierList;
-
-  const handleSubmitted = useCallback(
-    (id: string) => {
-      router.push(`/tier-lists/${id}`);
-    },
-    [router],
-  );
+  const navigate = useNavigate();
+  const back = useCallback(() => {
+    navigate.push(`/tier-lists/${tierList.id}`);
+  }, [navigate, tierList.id]);
 
   return (
-    <TierListForm
-      id={data.id}
-      onSubmitted={handleSubmitted}
-      defaults={{
-        name: data.name,
-        description: data.description ?? "",
-        privacy:
-          data.privacy === "PRIVATE" ||
-          data.privacy === "FRIENDS" ||
-          data.privacy === "PUBLIC"
-            ? data.privacy
-            : "PRIVATE",
-        list_type: data.listType,
-      }}
-    />
+    <ListDetailsForm tierList={tierList} onSubmitted={back} onCancel={back} />
   );
 }

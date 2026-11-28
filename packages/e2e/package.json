@@ -6,12 +6,16 @@
   "scripts": {
     "build": "echo 'no build step: consumed as TypeScript source'",
     "test": "node ../../scripts/check-node-version.mjs && playwright test",
+    "test:unit": "node ../../scripts/check-node-version.mjs && node --test fixtures/*.test.ts",
     "typecheck": "tsc --noEmit",
     "lint": "biome lint .",
     "test:ui": "node ../../scripts/check-node-version.mjs && playwright test --ui",
-    "report": "playwright show-report artifacts/report"
+    "report": "playwright show-report artifacts/report",
+    "visual": "node ../../scripts/check-node-version.mjs && playwright test -c playwright.visual.config.ts",
+    "visual:compare": "node ../../scripts/check-node-version.mjs && node visual/compare.ts"
   },
   "devDependencies": {
+    "@axe-core/playwright": "4.13.0",
     "@playwright/test": "^1.63.0",
     "@types/node": "catalog:",
     "typescript": "catalog:"

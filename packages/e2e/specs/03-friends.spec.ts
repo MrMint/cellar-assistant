@@ -7,7 +7,13 @@ import {
   friendIds,
   unique,
 } from "../fixtures/data.ts";
-import { ACCOUNTS, bodyText, expect, test } from "../fixtures/test.ts";
+import {
+  ACCOUNTS,
+  bodyText,
+  expect,
+  settleNetwork,
+  test,
+} from "../fixtures/test.ts";
 
 /**
  * Friend request → accept, and the cellar-visibility rule on both sides of it.
@@ -74,39 +80,49 @@ test.describe("friend request and acceptance", () => {
   }) => {
     await secondary.goto("/friends");
     // Search by **display name**: `userSearch(term:)` matches the display
-    // name only, and the placeholder now says so (it used to promise email
-    // too, which returned zero rows).
+    // name only ("Search people", Social-Friends 16).
     await secondary
-      .getByPlaceholder("Search for users by name...")
+      .getByRole("searchbox", { name: "Search people" })
       .fill(ACCOUNTS.primary.displayName);
 
-    const row = secondary
-      .locator("li")
-      .filter({ hasText: ACCOUNTS.primary.displayName });
+    const add = secondary.getByRole("button", {
+      name: `Add ${ACCOUNTS.primary.displayName}`,
+      exact: true,
+    });
     await expect(
-      row.first(),
+      add,
       "user search did not return the other test account",
     ).toBeVisible({ timeout: 20_000 });
-    await row.getByRole("button", { name: "Request" }).first().click();
+    await add.click();
+    // The request has to reach the server before the lists are read again:
+    // clearing the search on top of it showed an empty Sent once under load.
+    await settleNetwork(secondary);
 
-    // The outgoing-request row is the only one carrying a "Cancel" button.
+    // The search clears back to the lists, where the request is under Sent
+    // with its quiet Cancel (Social-Friends 19).
+    await secondary.getByRole("searchbox", { name: "Search people" }).fill("");
     await expect(
-      secondary.getByRole("button", { name: "Cancel" }).first(),
-      "the request did not appear under Outgoing Requests",
+      secondary.getByRole("button", {
+        name: `Cancel request to ${ACCOUNTS.primary.displayName}`,
+      }),
+      "the request did not appear under Sent",
     ).toBeVisible({ timeout: 20_000 });
   });
 
   test("the first account accepts it", async ({ primary }) => {
     await primary.goto("/friends");
 
-    const accept = primary.getByRole("button", { name: "Accept" });
-    await expect(accept.first(), "no incoming request to accept").toBeVisible({
+    const accept = primary.getByRole("button", {
+      name: `Accept ${ACCOUNTS.secondary.displayName}`,
+    });
+    await expect(accept, "no incoming request to accept").toBeVisible({
       timeout: 20_000,
     });
-    await accept.first().click();
+    await accept.click();
 
+    // Friends rows open the profile (Remove friend lives there now).
     await expect(
-      primary.getByRole("button", { name: "Remove" }).first(),
+      primary.locator(`a[href="/users/${ACCOUNTS.secondary.id}"]`).first(),
       "the accepted friend did not appear in the friends list",
     ).toBeVisible({ timeout: 20_000 });
   });
@@ -160,10 +176,20 @@ test.describe("the /cellars index reflects the friendship", () => {
       "the friendship flow did not run",
     );
     await expectIndexRendered(secondary);
+    // X11 / D2: under From friends — never among the viewer's own.
     await expect(
-      secondary.getByText(friendsCellarName).first(),
-      "the friend's cellar is not listed on /cellars",
+      secondary
+        .getByRole("region", { name: "From friends" })
+        .getByText(friendsCellarName)
+        .first(),
+      "the friend's cellar is not listed under From friends on /cellars",
     ).toBeVisible({ timeout: 20_000 });
+    await expect(
+      secondary
+        .getByRole("region", { name: "Yours" })
+        .getByText(friendsCellarName),
+      "a friend's cellar is listed under Yours",
+    ).toHaveCount(0);
   });
 
   test("another account's PRIVATE cellar is not on this viewer's index", async ({

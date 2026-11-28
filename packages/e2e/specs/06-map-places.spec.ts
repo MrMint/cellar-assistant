@@ -31,11 +31,14 @@ import {
  * either.
  *
  * The id is taken from the `createPlace` **request**, not from the page the
- * form navigates to afterwards (the map, `?placeId=`, as in production). `createPlace` runs a synchronous AI review
- * before it inserts, so a slow review used to fail the first test at its URL
- * wait, the row committed a moment later, and the `afterAll` — with no id —
- * skipped the delete: the very leak it exists to close. The form mints the
- * id client-side, so it is known before the server has done anything.
+ * form navigates to afterwards (the map, `?placeId=`, as in production).
+ * `createPlace` used to run a synchronous AI review before it inserted, so a
+ * slow review failed the first test at its URL wait, the row committed a
+ * moment later, and the `afterAll` — with no id — skipped the delete: the
+ * very leak it exists to close. (Since X27 the place is inserted pending at
+ * once and reviewed afterwards, and it is on its creator's map either way,
+ * which is all the tests below need.) The form mints the id client-side, so
+ * it is known before the server has done anything.
  */
 test.describe.configure({ mode: "serial" });
 
@@ -115,33 +118,39 @@ test("creates a place through the form", async ({ primary }) => {
   // jitter keeps every run off one shared point.
   const lat = 43.0731 + Math.random() * 0.01;
   const lng = -89.4012 + Math.random() * 0.01;
+  // The reverse geocode fills the address fields when it lands; wait for it
+  // so it cannot overwrite what this test types. Wait on the request itself
+  // and the section's "Loading address..." chip (shown from first paint until
+  // the answer is applied), never on what it filled: N19 marks only the
+  // fields the geocode actually filled ("From pin"), and a pin it has no
+  // address for — every pin on a lane without a geocoder — fills nothing, so
+  // a wait on a mark would hang on a correct page.
+  const geocoded = primary.waitForResponse(
+    (response) =>
+      response.url().includes("/api/graphql") &&
+      /query MapReverseGeocode\b/.test(response.request().postData() ?? ""),
+    { timeout: 30_000 },
+  );
   await primary.goto(`/map/create-place?lat=${lat}&lng=${lng}`);
   await expect(
-    primary.getByRole("heading", { name: "Add a new place" }),
+    primary.getByRole("heading", { name: "Add a place" }),
   ).toBeVisible();
-
-  // The reverse geocode fills the address fields when it lands; wait for it
-  // so it cannot overwrite what this test types.
-  await expect(primary.getByText("Auto-filled from pin")).toBeVisible({
+  await geocoded;
+  await expect(primary.getByText("Loading address...")).toBeHidden({
     timeout: 30_000,
   });
 
-  await primary.getByLabel("Name *").fill(placeName);
-
-  // "Categories *" is a multi-select Autocomplete grouped Venues / Retail.
-  await primary.getByLabel("Categories *").click();
-  await primary.getByRole("option", { name: "Wine Bar" }).click();
-  await primary.keyboard.press("Escape");
-
-  await primary.getByLabel("City").fill("Madison");
-  await primary.getByLabel("Country Code").fill("US");
+  // F-200 / H-139: the name is one field and the kind is a toggle; the
+  // address fields the pin filled stay as they are.
+  await primary.getByLabel("Name", { exact: true }).fill(placeName);
+  await primary.getByRole("button", { name: "Wine", exact: true }).click();
 
   const createRequest = primary.waitForRequest(
     (request) =>
       request.url().includes("/api/graphql") &&
       /mutation MapCreatePlace\b/.test(request.postData() ?? ""),
   );
-  await primary.getByRole("button", { name: "Add Place" }).click();
+  await primary.getByRole("button", { name: "Add here" }).click();
 
   // Record the id the moment it exists, before the server has done anything
   // with it (see the module doc): from here on the `afterAll` can clean up
@@ -183,8 +192,10 @@ test("creates a place through the form", async ({ primary }) => {
     primary.getByRole("heading", { name: placeName }),
     `the place page never showed the name (body: ${(await bodyText(primary)).slice(0, 200)})`,
   ).toBeVisible({ timeout: 20_000 });
-  await expect(primary.getByRole("tab", { name: /Menu/ })).toBeVisible();
-  await expect(primary.getByRole("tab", { name: "Camera Scan" })).toBeVisible();
+  await expect(primary.locator('[data-slot="place-menu"]')).toBeVisible();
+  await expect(
+    primary.getByRole("button", { name: "Scan a menu" }),
+  ).toBeVisible();
   expect(noise.pageErrors, "the place page threw").toEqual([]);
 });
 
@@ -310,6 +321,13 @@ test("the map page renders and asks the server for a viewport", async ({
 
   await primary.goto("/map");
   await settleNetwork(primary);
+
+  // The redesign's list (Map board, desktop/Places): the search sits in the
+  // dock on a phone and in the list column from md, one field either way.
+  await expect(
+    primary.getByPlaceholder("Search places", { exact: true }),
+    "the map's place search never rendered",
+  ).toBeVisible();
 
   expect(noise.pageErrors, "the map page threw").toEqual([]);
   expect(

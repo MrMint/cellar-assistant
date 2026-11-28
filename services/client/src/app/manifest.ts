@@ -1,4 +1,5 @@
 import type { MetadataRoute } from "next";
+import { darkValues } from "@/lib/tokens";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
@@ -11,8 +12,10 @@ export default function manifest(): MetadataRoute.Manifest {
     scope: "/",
     display: "standalone",
     display_override: ["standalone"],
-    background_color: "#111015",
-    theme_color: "#111015",
+    // One value per install, so the manifest stays dark whatever the theme
+    // (L45); the page itself follows the theme through viewport.themeColor.
+    background_color: darkValues.bg,
+    theme_color: darkValues.bg,
     orientation: "any",
     categories: ["food", "lifestyle", "utilities"],
     launch_handler: {
@@ -58,7 +61,7 @@ export default function manifest(): MetadataRoute.Manifest {
         name: "Search",
         short_name: "Search",
         url: "/search",
-        description: "Search your collection",
+        description: "Search your bottles",
         icons: [
           {
             src: "/icons/android/android-launchericon-96-96.png",

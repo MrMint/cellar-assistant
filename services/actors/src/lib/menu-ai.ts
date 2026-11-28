@@ -115,6 +115,15 @@ export type MenuExtractionResult = {
    * read.
    */
   readonly imageDescription: string | null;
+  /**
+   * L10 (wave C seenat): the venue name the menu itself prints, or `null`
+   * when the model abstained (`venueNameIsPrinted` false or absent), when
+   * there is no legible menu, or when the name is not in `rawText`. Into
+   * `menu_scans.header_name`, and only ever offered as a rename the person
+   * confirms (L24); nothing applies it. Optional so that an extraction
+   * provider which does not read headers answers "none" by omission.
+   */
+  readonly headerName?: string | null;
 };
 
 export type MenuExtractionProvider = (
@@ -134,6 +143,7 @@ export const unconfiguredMenuExtraction: MenuExtractionProvider = async () => {
       "cannot extract menu lines until AI_PROVIDER is set — `installAI()` " +
       "installed nothing at boot. Set AI_PROVIDER=ollama for a local model that " +
       `needs no credentials. See services/actors/README.md · Local AI.`,
+    "AI_UNCONFIGURED",
   );
 };
 
@@ -189,6 +199,7 @@ export const unconfiguredMenuMatchVerifier: MenuMatchVerifier = async () => {
       "(migration plan §2.1: the 0.4–0.9 confidence band). AI_PROVIDER is unset, " +
       "so `installAI()` installed nothing at boot. Confident matches (>= 0.9) " +
       `and clear misses (< 0.4) are still decided without it. See services/actors/README.md · Local AI.`,
+    "AI_UNCONFIGURED",
   );
 };
 

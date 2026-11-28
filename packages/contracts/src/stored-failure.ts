@@ -39,13 +39,31 @@
  *   leads with the class, and the message that follows is byte-identical to
  *   what was stored before.
  *
- * It deliberately does **not** carry `reason`. `ActorErrorReason` discriminates
- * *within* a code for a client that must branch; a dead job has nothing to
- * branch on, and every reason that exists today is a friends/recipes case that
- * cannot reach either column.
+ * ## The reason, when there is one (N07)
+ *
+ * This used to deliberately leave `reason` out, on the grounds that every
+ * reason then in existence was a friends/recipes case no background job could
+ * raise. The AI reasons changed that: a menu scan or a tier list's insights
+ * can now fail `AI_UNCONFIGURED`, `NOTHING_READ`, `USER_CAP` or
+ * `SERVICE_BUDGET`, and those are exactly the distinctions a person needs
+ * ("this isn't available here" versus "try again after 3:40"). So a reason
+ * rides in brackets right after the code:
+ *
+ * ```
+ * BUDGET_EXCEEDED[USER_CAP]: ai_model/menu_extraction refused: …
+ * ```
+ *
+ * Still backwards compatible — a row with no brackets parses with
+ * `reason: null` — and still closed: the bracketed value is recognised only
+ * when it is an exact `ActorErrorReason`, otherwise the whole prefix is not
+ * one and the row is unclassified, as before.
  */
-import type { ActorErrorCode } from "./errors.ts";
-import { ACTOR_ERROR_CODES, isActorError } from "./errors.ts";
+import type { ActorErrorCode, ActorErrorReason } from "./errors.ts";
+import {
+  ACTOR_ERROR_CODES,
+  isActorError,
+  isActorErrorReason,
+} from "./errors.ts";
 
 const SEPARATOR = ": ";
 
@@ -53,6 +71,8 @@ const SEPARATOR = ": ";
 export type StoredFailure = {
   /** The class the raiser recorded, or `null` for an unprefixed row. */
   readonly code: ActorErrorCode | null;
+  /** The finer reason the raiser recorded, or `null` (most rows). */
+  readonly reason: ActorErrorReason | null;
   /** Everything after the prefix — the raw message, for operators only. */
   readonly detail: string;
 };
@@ -69,7 +89,7 @@ const messageOf = (error: unknown): string =>
 export const formatStoredFailure = (error: unknown, limit = 4_000): string => {
   const message = messageOf(error);
   const line = isActorError(error)
-    ? `${error.code}${SEPARATOR}${message}`
+    ? `${error.code}${error.reason === null ? "" : `[${error.reason}]`}${SEPARATOR}${message}`
     : message;
   return line.slice(0, limit);
 };
@@ -79,14 +99,28 @@ export const formatStoredFailure = (error: unknown, limit = 4_000): string => {
  * prefix simply means `code: null` with `detail` left whole.
  */
 export const parseStoredFailure = (stored: string): StoredFailure => {
+  const unclassified: StoredFailure = {
+    code: null,
+    reason: null,
+    detail: stored,
+  };
   const at = stored.indexOf(SEPARATOR);
-  if (at <= 0) return { code: null, detail: stored };
-  const candidate = stored.slice(0, at);
-  if (!(ACTOR_ERROR_CODES as readonly string[]).includes(candidate)) {
-    return { code: null, detail: stored };
+  if (at <= 0) return unclassified;
+  const prefix = /^([A-Z_]+)(?:\[([A-Z_]+)\])?$/.exec(stored.slice(0, at));
+  const candidate = prefix?.[1];
+  if (
+    candidate === undefined ||
+    !(ACTOR_ERROR_CODES as readonly string[]).includes(candidate)
+  ) {
+    return unclassified;
+  }
+  const reason = prefix?.[2];
+  if (reason !== undefined && !isActorErrorReason(reason)) {
+    return unclassified;
   }
   return {
     code: candidate as ActorErrorCode,
+    reason: reason ?? null,
     detail: stored.slice(at + SEPARATOR.length),
   };
 };

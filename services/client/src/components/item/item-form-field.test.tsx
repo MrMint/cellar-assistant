@@ -1,0 +1,99 @@
+/**
+ * N03 in the markup: a field holding a validation error is marked
+ * `aria-invalid` with a line saying what is wrong under it.
+ *
+ * `useForm({ errors })` seeds the errors the way a failed submit would leave
+ * them, so a static render can show the state.
+ */
+import { mock } from "bun:test";
+import assert from "node:assert/strict";
+import { describe, test } from "node:test";
+import { renderToStaticMarkup } from "react-dom/server";
+import { type FieldErrors, useForm } from "react-hook-form";
+import { stripStyleBlocks } from "@/test-support/markup";
+
+mock.module("@/components/item-api/useReferenceOptions", () => ({
+  useReferenceOptions: () => ({
+    optionsFor: () => [{ value: "RED", comment: null }],
+    countries: [],
+    fetching: false,
+    error: undefined,
+  }),
+}));
+
+const { ItemFormField } = await import("./ItemFormField");
+const { openTag } = await import("@/test-support/markup");
+const { formLayout } = await import("./itemFormLayout");
+const { emptyFormValues } = await import(
+  "@/components/common/OnboardingWizard/adapter"
+);
+type Values = ReturnType<typeof emptyFormValues>;
+
+const layout = formLayout("WINE", "create");
+const entry = (label: string) => {
+  const found = layout.find((e) => e.label === label);
+  if (found === undefined) throw new Error(label);
+  return found;
+};
+
+const render = (label: string, errors?: FieldErrors<Values>) => {
+  function Harness() {
+    const { control } = useForm<Values>({
+      defaultValues: emptyFormValues(),
+      errors,
+    });
+    return (
+      <ItemFormField entry={entry(label)} control={control} disabled={false} />
+    );
+  }
+  return stripStyleBlocks(renderToStaticMarkup(<Harness />));
+};
+
+describe("ItemFormField errors (N03)", () => {
+  test("a valid field draws no error", () => {
+    const html = render("Vintage");
+    assert.doesNotMatch(html, /aria-invalid="true"/);
+    assert.doesNotMatch(html, /is required/);
+  });
+
+  test("a missing text field says so under itself", () => {
+    const html = render("Vintage", {
+      attributes: { vintage: { type: "required", message: "" } },
+    } as FieldErrors<Values>);
+    const input = openTag(html, 'name="attributes.vintage"');
+    assert.match(input, /aria-invalid="true"/);
+    assert.match(
+      html.slice(html.indexOf(input)),
+      /^<input[^>]*>[\s\S]*>Vintage is required\.</,
+      "the message sits under the control",
+    );
+    // …and is the control's description, as Joy's FormControl wired it.
+    const describedBy = /aria-describedby="([^"]+)"/.exec(input)?.[1];
+    assert.ok(describedBy, "the control names its error line");
+    assert.match(
+      html,
+      new RegExp(`id="${describedBy}"[^>]*>Vintage is required\\.<`),
+    );
+  });
+
+  test("a valid field points at no error line", () => {
+    assert.doesNotMatch(
+      openTag(render("Vintage"), 'name="attributes.vintage"'),
+      /aria-describedby/,
+    );
+  });
+
+  test("the name, and a missing picker, too", () => {
+    assert.match(
+      render("Name", {
+        name: { type: "required", message: "Name is required." },
+      }),
+      />Name is required\.</,
+    );
+    const picker = render("Style", {
+      attributes: { style: { type: "required", message: "" } },
+    } as FieldErrors<Values>);
+    assert.match(picker, />Style is required\.</);
+    assert.match(openTag(picker, 'role="combobox"'), /aria-invalid="true"/);
+  });
+});

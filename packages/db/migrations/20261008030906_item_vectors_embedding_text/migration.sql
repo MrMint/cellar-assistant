@@ -1,0 +1,18 @@
+-- N08: which embedded text made each item vector.
+--
+-- `embeddingTextFor` now writes human-readable labels and values and the
+-- item's brands (format 2). The text is an input of the vector just as the
+-- model is (`embedding_model`), and a changed text touches no column the
+-- freshness check could see — a brand linked to an item changes nothing in
+-- the item's row. So each row records `v<format>:<sha256 prefix of the text>`
+-- (`embeddingTextKey`), and `ItemActor.regenerateVector` treats a row whose
+-- key differs from the one it would write now as stale.
+--
+-- NULL on every existing row, which reads as stale. The backfill is the vector
+-- re-embed job, which now also walks `item_vectors` rows whose key is not of
+-- the current format: `bun services/actors/scripts/operator.ts reembed
+-- --tables item_vectors` after deploy (one embedding call per item, charged
+-- to the embedding budget).
+-- Until it has run, search ranks old vectors as before — nothing breaks, the
+-- old rows are just embedded from the old text.
+ALTER TABLE "item_vectors" ADD COLUMN "embedding_text" text;

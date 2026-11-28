@@ -1,20 +1,11 @@
 "use client";
 
-import {
-  Box,
-  Button,
-  Card,
-  CardContent,
-  FormControl,
-  FormLabel,
-  Input,
-  Option,
-  Select,
-  Stack,
-  Typography,
-} from "@mui/joy";
-import { useCallback, useRef, useState } from "react";
-import { MdClear, MdRestaurant, MdSearch } from "react-icons/md";
+import { type ReactNode, useCallback, useState } from "react";
+import { useQuery } from "urql";
+import { EmptyState } from "@/components/app/EmptyState";
+import { FilterChip } from "@/components/app/FilterChip";
+import { Check, ChevronDown, NoResults } from "@/components/app/icons";
+import { ResponsiveDialog } from "@/components/app/ResponsiveDialog";
 import {
   type RecipeGroupCardData,
   recipeGroupCardFromNode,
@@ -24,14 +15,22 @@ import {
   RECIPE_GROUPS_PAGE_SIZE,
   RecipeGroupsQuery,
 } from "@/components/recipe/queries";
-import { VirtualizedRecipeGroupGrid } from "@/components/recipe/VirtualizedRecipeGroupGrid";
-import { useDebouncedCallback } from "@/hooks/useDebouncedCallback";
-import { useEnum } from "@/hooks/useEnum";
+import { RecipeGroupCard } from "@/components/recipe/RecipeGroupCard";
+import { RecipeGroupCardSkeleton } from "@/components/recipe/RecipeGroupCardSkeleton";
+import { SearchField } from "@/components/shell/SearchField";
+import { Button } from "@/components/ui/button";
 import type { FragmentOf } from "@/lib/api/graphql";
 import { readFragment } from "@/lib/api/graphql";
 import { unwrapResult } from "@/lib/api/result";
+import { feedback } from "@/lib/feedback";
 import { pageOf } from "@/lib/paging/paged-connection";
 import { usePagedConnection } from "@/lib/paging/use-paged-connection";
+import { cn } from "@/lib/utils";
+import {
+  RECIPE_SPIRIT_COUNTS_SIZE,
+  RecipeBaseSpiritCountsQuery,
+  spiritChips,
+} from "./recipe-spirit-chips";
 
 /**
  * The SDL's `RecipeCategory`, in the old Select's style. The old Select offered
@@ -45,6 +44,12 @@ const CATEGORY_OPTIONS = [
   { value: "shot", label: "Shots" },
   { value: "other", label: "Other" },
 ] as const;
+
+const categoryLabel = (category: "all" | Category): string =>
+  category === "all"
+    ? "All kinds"
+    : (CATEGORY_OPTIONS.find((option) => option.value === category)?.label ??
+      "All kinds");
 
 type Category = (typeof CATEGORY_OPTIONS)[number]["value"];
 
@@ -76,12 +81,24 @@ export type RecipeGroupSearchProps = {
   initialEndCursor?: string | null;
   initialHasNextPage?: boolean;
   initialTotalCount?: number | null;
+  /**
+   * What sits between the search field and All recipes on the index (the bar
+   * card, your drafts and recipes). Hidden while a search term is in, when
+   * the page is the search's results (Recipes-Browse 08, 09).
+   */
+  between?: ReactNode;
 };
 
 /**
  * `82450ad1:src/components/search/RecipeGroupSearch.tsx`, restored — the
- * search card (one box, category and base-spirit Selects, "Clear All"), the
- * results line, and `VirtualizedRecipeGroupGrid`.
+ * search card (one box, category and base-spirit Selects, "Clear"), the
+ * results line, and the cards.
+ *
+ * X15 dropped the old nested virtualizer: an 800 px scroll box *inside* the
+ * app's own scroller, which sliced the last card in half and hid the end of
+ * the list (review #58). The cards are a plain grid in the page's scroll now,
+ * with "Show more" for the next page — twelve cards a page does not need
+ * windowing, and the page's own scroll is the one the thumb expects.
  *
  * `useOptimizedRecipeGroupSearch` (Hasura `_ilike`, offset paging, an LRU) →
  * `recipeGroups(term:, category:, baseSpirit:)` through `usePagedConnection`:
@@ -90,9 +107,11 @@ export type RecipeGroupSearchProps = {
  * hook dropped it) and every category (it hard-coded `cocktail`). The term
  * is G26: the old box's name / description / version-name substring.
  *
- * Spirit options are `referenceData(SPIRIT_TYPE)` (`useEnum("spiritType")`),
- * the successor of the old `spirit_type_enum` introspection; their values are
- * the same upper-case names it listed.
+ * Spirit chips are the kinds the groups hold (F-114, H-87):
+ * `recipeBaseSpiritCounts` under the same category and term, each with its
+ * count — a bar kind ("rye", "gin"), what `recipe_groups.base_spirit` holds
+ * and the filter matches (a "Whiskey" chip counts bourbon, rye, Scotch and
+ * Irish). Never the whole vocabulary: a kind no recipe has is no chip.
  */
 export const RecipeGroupSearch = ({
   initialQuery = "",
@@ -101,7 +120,11 @@ export const RecipeGroupSearch = ({
   initialEndCursor = null,
   initialHasNextPage = false,
   initialTotalCount = null,
+  between,
 }: RecipeGroupSearchProps) => {
+  // Clear remounts the (uncontrolled) search field empty.
+  const [fieldKey, setFieldKey] = useState(0);
+  const [kindsOpen, setKindsOpen] = useState(false);
   const [filters, setFilters] = useState<RecipeGroupSearchFilters>({
     ...DEFAULT_FILTERS,
     searchTerm: initialQuery,
@@ -144,9 +167,6 @@ export const RecipeGroupSearch = ({
     } satisfies Args,
   });
 
-  // Get base spirit options
-  const { options: spiritOptions } = useEnum("spiritType");
-
   const { reset } = list;
   const search = useCallback(
     (next: RecipeGroupSearchFilters) => {
@@ -156,197 +176,227 @@ export const RecipeGroupSearch = ({
           category: next.category,
           baseSpirit: next.baseSpirit,
         },
-        { clear: true },
+        // The rows stay, dimmed, until the new answer lands (Recipes-Browse 08).
+        { clear: false },
       );
     },
     [reset],
   );
-  // The debounced run reads the filters as they are when it fires, so a
-  // Select changed mid-typing is not undone by the term's late search.
-  const latestFilters = useRef(filters);
-  latestFilters.current = filters;
-  const debouncedSearch = useDebouncedCallback(
-    () => search(latestFilters.current),
-    300,
-  );
-
-  // Handle filter updates
   const handleUpdateFilters = useCallback(
     (updates: Partial<RecipeGroupSearchFilters>) => {
       const next = { ...filters, ...updates };
       setFilters(next);
-      // Typing waits 300 ms (the old hook's debounce); a Select applies now.
-      if ("searchTerm" in updates) debouncedSearch();
-      else search(next);
+      // The field debounces itself (300 ms); a chip applies now.
+      search(next);
     },
-    [debouncedSearch, filters, search],
+    [filters, search],
   );
 
-  // Handle clear filters
   const handleClearFilters = useCallback(() => {
+    feedback("tick");
     setFilters(DEFAULT_FILTERS);
+    setFieldKey((key) => key + 1);
     search(DEFAULT_FILTERS);
   }, [search]);
+
+  const [counts] = useQuery({
+    query: RecipeBaseSpiritCountsQuery,
+    variables: {
+      first: RECIPE_SPIRIT_COUNTS_SIZE,
+      category: filters.category === "all" ? null : filters.category,
+      term: filters.searchTerm.trim() === "" ? null : filters.searchTerm.trim(),
+    },
+  });
+  const countsConnection = counts.data?.recipeBaseSpiritCounts;
+  const spirits = spiritChips(
+    countsConnection?.__typename === "RecipeBaseSpiritCountConnection"
+      ? countsConnection.edges
+      : [],
+    filters.baseSpirit,
+  );
 
   const results = list.rows;
   const isLoading = list.status !== "idle";
   const hasMore = list.hasNextPage;
   const totalCount = list.totalCount ?? results.length;
   const error = list.failure;
+  const term = filters.searchTerm.trim();
+  const filtered = filters.category !== "all" || filters.baseSpirit !== null;
+  // Never a fetch limit as a total (CROSS-LOT): "12+" until the API counts.
+  const countText =
+    list.totalCount === null && hasMore
+      ? `${results.length}+`
+      : String(totalCount);
 
   return (
-    <Box>
-      {/* Search Header */}
-      <Card sx={{ mb: 3 }}>
-        <CardContent>
-          <Stack spacing={2}>
-            {/* Main search input */}
-            <FormControl>
-              <FormLabel>Search Recipe Groups</FormLabel>
-              <Input
-                placeholder="Search by recipe name, description, or tags..."
-                value={filters.searchTerm}
-                onChange={(e) =>
-                  handleUpdateFilters({ searchTerm: e.target.value })
-                }
-                startDecorator={<MdSearch />}
-                endDecorator={
-                  filters.searchTerm && (
-                    <Button
-                      variant="plain"
-                      size="sm"
-                      aria-label="Clear search"
-                      onClick={() => handleUpdateFilters({ searchTerm: "" })}
-                    >
-                      <MdClear />
-                    </Button>
-                  )
-                }
-              />
-            </FormControl>
-
-            {/* Quick filters */}
-            <Stack
-              direction="row"
-              spacing={2}
-              flexWrap="wrap"
-              alignItems="center"
-            >
-              <Select
-                value={filters.category}
-                onChange={(_, value) =>
-                  value && handleUpdateFilters({ category: value })
-                }
-                size="sm"
-                sx={{ minWidth: 120 }}
-                aria-label="Category"
-              >
-                <Option value="all">All Categories</Option>
-                {CATEGORY_OPTIONS.map((option) => (
-                  <Option key={option.value} value={option.value}>
-                    {option.label}
-                  </Option>
-                ))}
-              </Select>
-
-              <Select
-                value={filters.baseSpirit || ""}
-                onChange={(_, value) =>
-                  handleUpdateFilters({ baseSpirit: value || null })
-                }
-                size="sm"
-                sx={{ minWidth: 140 }}
-                placeholder="Base Spirit"
-                aria-label="Base Spirit"
-              >
-                <Option value="">Any Spirit</Option>
-                {spiritOptions.map((option) => (
-                  <Option key={option.value} value={option.value}>
-                    {option.label}
-                  </Option>
-                ))}
-              </Select>
-
-              {/* Active filters indicator */}
-              {(filters.searchTerm ||
-                filters.category !== "all" ||
-                filters.baseSpirit) && (
-                <Button variant="plain" size="sm" onClick={handleClearFilters}>
-                  Clear All
-                </Button>
-              )}
-            </Stack>
-          </Stack>
-        </CardContent>
-      </Card>
-
-      {/* Results */}
-      {error && (
-        <Typography level="body-md" sx={{ color: "danger.500" }}>
-          Error searching recipe groups: {error.message}
-        </Typography>
-      )}
-
-      {/* Results summary */}
-      <Box sx={{ mb: 2 }}>
-        <Typography level="body-sm" sx={{ color: "text.secondary" }}>
-          {isLoading && results.length === 0
-            ? "Searching recipe groups..."
-            : results.length > 0
-              ? `Found ${totalCount} recipe groups${hasMore ? ` (showing ${results.length})` : ``}`
-              : "No recipe groups found"}
-        </Typography>
-        {hasMore && (
-          <Button
-            variant="plain"
-            size="sm"
-            onClick={() => void reset(undefined, { fresh: true })}
-            sx={{ ml: 2 }}
-          >
-            Refresh
-          </Button>
-        )}
-      </Box>
-
-      {/* Recipe group grid */}
-      {results.length > 0 ? (
-        <VirtualizedRecipeGroupGrid
-          recipeGroups={[...results]}
-          onRecipeGroupSelect={onRecipeGroupSelect}
-          isLoading={isLoading}
-          hasMore={hasMore}
-          onLoadMore={() => void list.loadMore()}
-          containerHeight={800}
-          itemHeight={350}
-          loadingItems={6}
+    <div data-slot="recipe-group-search" className="flex flex-col gap-6">
+      <div className="sticky top-0 z-10 -mx-4 bg-background px-4 py-2">
+        <SearchField
+          key={fieldKey}
+          defaultValue={filters.searchTerm}
+          placeholder="Search recipes"
+          debounceTimeout={300}
+          searching={isLoading && term !== ""}
+          onDebounced={(value) => handleUpdateFilters({ searchTerm: value })}
         />
-      ) : (
-        !isLoading && (
-          <Card>
-            <CardContent sx={{ textAlign: "center", py: 4 }}>
-              <MdRestaurant
-                size={48}
-                style={{
-                  color: "var(--joy-palette-neutral-400)",
-                  marginBottom: 16,
-                }}
-              />
-              <Typography level="h4" sx={{ mb: 1 }}>
-                No recipe groups found
-              </Typography>
-              <Typography
-                level="body-md"
-                sx={{ color: "text.secondary", mb: 2 }}
+      </div>
+
+      {term === "" && between}
+
+      <section aria-labelledby="all-recipes" className="flex flex-col gap-3">
+        <h2
+          id="all-recipes"
+          className="t-head m-0 flex items-baseline gap-2 text-ink"
+          aria-live="polite"
+        >
+          {term === "" ? "All recipes" : "Results"}
+          {!(isLoading && results.length === 0) && (
+            <span className="t-cap tabular text-ink-3">{countText}</span>
+          )}
+        </h2>
+
+        <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none]">
+          <FilterChip
+            selected={filters.category !== "all"}
+            aria-haspopup="dialog"
+            onClick={() => setKindsOpen(true)}
+          >
+            <span className="inline-flex items-center gap-1">
+              {categoryLabel(filters.category)}
+              <ChevronDown aria-hidden className="size-4" />
+            </span>
+          </FilterChip>
+          {spirits.map((option) => (
+            <FilterChip
+              key={option.value}
+              selected={filters.baseSpirit === option.value}
+              count={option.count}
+              onClick={() =>
+                handleUpdateFilters({
+                  baseSpirit:
+                    filters.baseSpirit === option.value ? null : option.value,
+                })
+              }
+            >
+              {option.label}
+            </FilterChip>
+          ))}
+        </div>
+
+        {(filtered || term !== "") && (
+          <div className="flex min-h-11 items-center justify-between gap-2">
+            <p className="t-cap m-0 text-ink-2">
+              {isLoading && results.length === 0
+                ? "Searching…"
+                : totalCount === 1
+                  ? "1 recipe"
+                  : `${countText} recipes`}
+            </p>
+            <Button
+              variant="ghost"
+              className="text-ink-2"
+              onClick={handleClearFilters}
+            >
+              Clear
+            </Button>
+          </div>
+        )}
+
+        {error !== null && (
+          <p role="alert" className="t-body m-0 text-danger">
+            Couldn't search recipes. {error.message}
+          </p>
+        )}
+
+        {results.length > 0 ? (
+          <div className="flex flex-col gap-3">
+            <ul
+              aria-busy={isLoading || undefined}
+              className={cn(
+                "m-0 grid list-none grid-cols-1 gap-3 p-0 transition-opacity duration-(--ca-dur-short) md:grid-cols-2",
+                // Dim while refining (Recipes-Browse 08): the rows stay put.
+                list.status === "resetting" && "opacity-60",
+              )}
+            >
+              {results.map((recipeGroup) => (
+                <li key={recipeGroup.id}>
+                  <RecipeGroupCard
+                    recipeGroup={recipeGroup}
+                    href={`/recipes/groups/${recipeGroup.id}`}
+                    onClick={onRecipeGroupSelect}
+                  />
+                </li>
+              ))}
+              {list.status === "loadingMore" && (
+                <RecipeGroupCardSkeleton count={3} />
+              )}
+            </ul>
+            {hasMore && (
+              <Button
+                variant="outline"
+                className="self-center"
+                disabled={list.status === "loadingMore"}
+                aria-busy={list.status === "loadingMore" || undefined}
+                onClick={() => void list.loadMore()}
               >
-                Try adjusting your search criteria or filters
-              </Typography>
-              <Button variant="outlined" onClick={handleClearFilters}>
-                Clear Filters
+                Show more
               </Button>
-            </CardContent>
-          </Card>
-        )
-      )}
-    </Box>
+            )}
+          </div>
+        ) : (
+          !isLoading &&
+          error === null && (
+            <EmptyState
+              illustration={<NoResults aria-hidden />}
+              title={
+                term !== ""
+                  ? `No recipe matches “${term}”`
+                  : filtered
+                    ? "No recipe matches"
+                    : "No recipes yet"
+              }
+              action={
+                term !== "" || filtered ? (
+                  <Button variant="outline" onClick={handleClearFilters}>
+                    {term !== "" ? "Clear search" : "Clear filters"}
+                  </Button>
+                ) : undefined
+              }
+            />
+          )
+        )}
+      </section>
+
+      <ResponsiveDialog
+        open={kindsOpen}
+        onOpenChange={setKindsOpen}
+        title="Kind"
+      >
+        <ul className="m-0 flex list-none flex-col p-0">
+          {(
+            [{ value: "all", label: "All kinds" }, ...CATEGORY_OPTIONS] as const
+          ).map((option) => {
+            const on = filters.category === option.value;
+            return (
+              <li key={option.value}>
+                <button
+                  type="button"
+                  aria-pressed={on}
+                  onClick={() => {
+                    feedback("detent");
+                    setKindsOpen(false);
+                    handleUpdateFilters({ category: option.value });
+                  }}
+                  className="t-body flex min-h-12 w-full items-center gap-3 rounded-md px-2 text-left text-ink outline-none active:bg-raised focus-visible:outline-2 focus-visible:outline-act-ink"
+                >
+                  <span className="min-w-0 flex-1">{option.label}</span>
+                  {on && <Check aria-hidden className="size-5 text-act-ink" />}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      </ResponsiveDialog>
+    </div>
   );
 };

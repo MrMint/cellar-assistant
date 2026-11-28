@@ -11,13 +11,20 @@ import {
   cellarCardFromSource,
   cellarCardItemCounts,
   cellarGridItemFromSource,
+  cellarGroupCellFromSource,
   editCoOwnerOptions,
   userFromProfile,
 } from "./adapter";
 import {
+  CELLAR_SORTS,
+  CELLAR_STATUSES,
+  type CellarSort,
+  type CellarStatus,
   cellarItemsCacheKey,
   cellarItemsVariables,
   ITEMS_PAGE_SIZE,
+  parseCellarSort,
+  parseCellarStatus,
   parseItemTypes,
 } from "./cellarItemsQuery";
 import { virtualTotal } from "./virtualTotal";
@@ -143,10 +150,58 @@ describe("cellarGridItemFromSource + cellarBottleHref", () => {
   test("href is absolute, and on the bottle id (decision 1)", () => {
     assert.equal(cellarBottleHref("c1", cell), "/cellars/c1/spirits/bottle-1");
   });
+
+  test("the bottle's own state rides along; a missing level is full", () => {
+    assert.deepEqual(cell.bottle, {
+      openAt: null,
+      emptyAt: null,
+      percentageRemaining: 100,
+      createdAt: null,
+    });
+    const open = cellarGridItemFromSource({
+      id: "b2",
+      item: { id: "i", type: "WINE", name: "W" },
+      openAt: "2026-10-01T00:00:00.000Z",
+      emptyAt: null,
+      percentageRemaining: 35,
+    });
+    assert.deepEqual(open.bottle, {
+      openAt: "2026-10-01T00:00:00.000Z",
+      emptyAt: null,
+      percentageRemaining: 35,
+      createdAt: null,
+    });
+  });
+
+  test("the bottle's chosen photo beats the item's first image (G15)", () => {
+    const withImages = {
+      id: "i",
+      type: "WINE" as const,
+      name: "W",
+      images: {
+        edges: [
+          { node: { placeholder: "item", file: { url: "https://f/item" } } },
+        ],
+      },
+    };
+    const own = cellarGridItemFromSource({
+      id: "b",
+      item: withImages,
+      displayImage: { placeholder: "own", file: { url: "https://f/own" } },
+    });
+    assert.equal(own.item.displayImageUrl, "https://f/own");
+    assert.equal(own.item.placeholder, "own");
+    const fallback = cellarGridItemFromSource({
+      id: "b",
+      item: withImages,
+      displayImage: null,
+    });
+    assert.equal(fallback.item.displayImageUrl, "https://f/item");
+  });
 });
 
 describe("cellarItemsVariables (first page and later pages agree)", () => {
-  test("no search: name order, no semantic query, no filter", () => {
+  test("no search: open first, in the cellar, no search, no filter", () => {
     assert.deepEqual(
       cellarItemsVariables("c1", { search: "", types: [] }, null),
       {
@@ -154,11 +209,48 @@ describe("cellarItemsVariables (first page and later pages agree)", () => {
         first: ITEMS_PAGE_SIZE,
         after: null,
         types: null,
-        sort: "NAME_ASC",
-        semanticQuery: null,
+        sort: "OPEN_FIRST",
+        status: "ACTIVE",
+        search: null,
       },
     );
     assert.equal(ITEMS_PAGE_SIZE, 50, "the old page size");
+  });
+
+  test("the sort chip's four orders are the API's sorts (N13b)", () => {
+    const sortOf = (sort: CellarSort) =>
+      cellarItemsVariables("c1", { search: "", types: [], sort }, null).sort;
+    assert.equal(sortOf("open"), "OPEN_FIRST");
+    assert.equal(sortOf("recent"), "ADDED_DESC");
+    assert.equal(sortOf("almost-empty"), "PERCENTAGE_ASC");
+    assert.equal(sortOf("a-z"), "NAME_ASC");
+    assert.deepEqual(
+      CELLAR_SORTS.map((sort) => sort.label),
+      ["Open first", "Recently added", "Almost empty", "A–Z"],
+    );
+  });
+
+  test("the status segment: In cellar · Finished · All (N13b)", () => {
+    const statusOf = (status: CellarStatus) =>
+      cellarItemsVariables("c1", { search: "", types: [], status }, null)
+        .status;
+    assert.equal(statusOf("in-cellar"), "ACTIVE");
+    assert.equal(statusOf("finished"), "EMPTY");
+    assert.equal(statusOf("all"), "ALL");
+    assert.deepEqual(
+      CELLAR_STATUSES.map((status) => status.label),
+      ["In cellar", "Finished", "All"],
+    );
+  });
+
+  test("?sort= and ?status= fall back to the defaults on anything unknown", () => {
+    assert.equal(parseCellarSort("recent"), "recent");
+    assert.equal(parseCellarSort("NAME_ASC"), "open");
+    assert.equal(parseCellarSort(""), "open");
+    assert.equal(parseCellarSort(null), "open");
+    assert.equal(parseCellarStatus("finished"), "finished");
+    assert.equal(parseCellarStatus("EMPTY"), "in-cellar");
+    assert.equal(parseCellarStatus(undefined), "in-cellar");
   });
 
   test("a search overrides the sort, trimmed; blank is no search", () => {
@@ -168,11 +260,20 @@ describe("cellarItemsVariables (first page and later pages agree)", () => {
       "cur",
     );
     assert.equal(vars.sort, null);
-    assert.equal(vars.semanticQuery, "smoky");
+    assert.equal(vars.search, "smoky");
     assert.equal(vars.after, "cur");
     assert.equal(
       cellarItemsVariables("c1", { search: "   ", types: [] }, null).sort,
-      "NAME_ASC",
+      "OPEN_FIRST",
+    );
+    // A search orders by match, but the status still filters.
+    assert.equal(
+      cellarItemsVariables(
+        "c1",
+        { search: "smoky", types: [], sort: "a-z", status: "all" },
+        null,
+      ).status,
+      "ALL",
     );
   });
 
@@ -208,8 +309,46 @@ describe("cellarItemsVariables (first page and later pages agree)", () => {
       cellarItemsCacheKey("c2", { search: "", types: [] }),
       cellarItemsCacheKey("c1", { search: "a", types: [] }),
       cellarItemsCacheKey("c1", { search: "", types: ["WINE"] }),
+      cellarItemsCacheKey("c1", { search: "", types: [], sort: "a-z" }),
+      cellarItemsCacheKey("c1", { search: "", types: [], status: "all" }),
     ]);
-    assert.equal(keys.size, 4);
+    assert.equal(keys.size, 6);
+    // An absent sort is the default sort: one cache entry, not two.
+    assert.equal(
+      cellarItemsCacheKey("c1", { search: "", types: [] }),
+      cellarItemsCacheKey("c1", {
+        search: "",
+        types: [],
+        sort: "open",
+        status: "in-cellar",
+      }),
+    );
+  });
+});
+
+describe("cellarGroupCellFromSource (X04 ×N)", () => {
+  test("the lead bottle's cell, with the group's count and match", () => {
+    const cell = cellarGroupCellFromSource({
+      count: 3,
+      openCount: 1,
+      match: "NAME",
+      lead: {
+        id: "bottle-1",
+        createdAt: "2026-10-01T00:00:00.000Z",
+        openAt: "2026-10-02T00:00:00.000Z",
+        percentageRemaining: 40,
+        item: {
+          id: "item-1",
+          type: "SPIRIT",
+          name: "Lagavulin 16",
+          images: { edges: [] },
+        },
+      },
+    });
+    assert.equal(cell.item.id, "bottle-1");
+    assert.equal(cell.item.itemId, "item-1");
+    assert.deepEqual(cell.group, { count: 3, openCount: 1, match: "NAME" });
+    assert.equal(cell.bottle.createdAt, "2026-10-01T00:00:00.000Z");
   });
 });
 

@@ -28,21 +28,28 @@ import type {
   ItemRef,
   PlaceInteractionDto,
   RecordPlaceInteractionInput,
-  ToggleFavoriteResult,
+  SetFavoriteResult,
   UpdateProfileInput,
   UserProfileDto,
+  UserSettingsDto,
 } from "@cellar-assistant/contracts";
 import {
+  AVATAR_BATCH_MAX_IDS,
+  avatarBatchActorId,
+  FileActorDescriptor,
   ForbiddenError,
   FRIEND_REQUEST_DIRECTIONS,
   FriendsCollectionActorDescriptor,
   itemActorId,
+  NotFoundError,
+  PROFILE_NOT_SHARED,
   UserActorDescriptor,
   viewerCollectionActorId,
 } from "@cellar-assistant/contracts";
+import DataLoader from "dataloader";
 import type { ApiContext } from "../context.ts";
 import { builder } from "./builder.ts";
-import { FriendRequestStatusEnum } from "./enums.ts";
+import { FriendRequestStatusEnum, PermissionTypeEnum } from "./enums.ts";
 import { ItemInterface, ItemTypeEnum } from "./item.ts";
 import { connectionFromPage, toPageArgs } from "./pagination.ts";
 import { type PatchPolicy, patch } from "./patch.ts";
@@ -105,28 +112,162 @@ const loadProfiles = async (
     }),
   );
 
-export const UserProfileType = builder
-  .loadableObjectRef<UserProfileDto, string>("UserProfile", {
+/**
+ * MC-avatar (L17): **the** avatar URL, for every resolver that returns one.
+ *
+ * An uploaded picture (`avatarFileId`) is a file id, presigned per read like
+ * an item image, because a stored presigned URL expires in 30 minutes. With
+ * none, or when the picture cannot be read, it is `user.image` as stored.
+ * `FileActor` decides who may read the file (`canSeeProfile`), so a viewer
+ * who could not see it gets the fallback, never an error for the whole row.
+ */
+/**
+ * F-89: every picture a request shows is signed in **one** call. A signed-in
+ * viewer's pictures go through a per-request DataLoader to
+ * `FileActor.presignAvatars`, addressed at the viewer's own id — a friends
+ * page of 100 people with pictures is one actor turn, not 100 activations
+ * and presigns. Keyed by the request's context object, so nothing outlives
+ * the request or crosses viewers; the loader's cache also gives each
+ * picture one URL however many rows show it.
+ *
+ * An anonymous request (a share page's inviter) has no batch to be keyed by
+ * and keeps the one-file `presignRead`, memoised the same way.
+ */
+const avatarBatchByRequest = new WeakMap<
+  ApiContext,
+  DataLoader<string, string | null>
+>();
+
+const avatarBatchOf = (
+  context: ApiContext,
+  viewerId: string,
+): DataLoader<string, string | null> => {
+  const known = avatarBatchByRequest.get(context);
+  if (known !== undefined) return known;
+  const loader = new DataLoader<string, string | null>(
+    async (fileIds) => {
+      const urls: (string | null)[] = [];
+      for (let at = 0; at < fileIds.length; at += AVATAR_BATCH_MAX_IDS) {
+        const chunk = fileIds.slice(at, at + AVATAR_BATCH_MAX_IDS);
+        try {
+          const targets = await context
+            .actor(FileActorDescriptor, avatarBatchActorId(viewerId))
+            .presignAvatars({ fileIds: chunk });
+          urls.push(...chunk.map((_id, index) => targets[index]?.url ?? null));
+        } catch (error) {
+          console.warn(
+            `[api] ${chunk.length} avatar file(s) could not be presigned; ` +
+              `falling back to user.image: ${String(error)}`,
+          );
+          urls.push(...chunk.map(() => null));
+        }
+      }
+      return urls;
+    },
+    { maxBatchSize: AVATAR_BATCH_MAX_IDS * 4 },
+  );
+  avatarBatchByRequest.set(context, loader);
+  return loader;
+};
+
+const presignedThisRequest = new WeakMap<
+  ApiContext,
+  Map<string, Promise<string | null>>
+>();
+
+export const avatarUrlOf = async (
+  context: ApiContext,
+  profile: {
+    readonly avatarFileId: string | null;
+    readonly avatarUrl: string | null;
+  },
+): Promise<string | null> => {
+  const fileId = profile.avatarFileId;
+  if (fileId === null) return profile.avatarUrl;
+  const viewerId = context.ctx.viewerId;
+  if (viewerId !== null) {
+    return (
+      (await avatarBatchOf(context, viewerId).load(fileId)) ?? profile.avatarUrl
+    );
+  }
+  const memo = presignedThisRequest.get(context) ?? new Map();
+  presignedThisRequest.set(context, memo);
+  const key = `${fileId}\u0000${profile.avatarUrl ?? ""}`;
+  const known = memo.get(key);
+  if (known !== undefined) return await known;
+  const url = presignAvatar(context, fileId, profile.avatarUrl);
+  memo.set(key, url);
+  return await url;
+};
+
+const presignAvatar = async (
+  context: ApiContext,
+  avatarFileId: string,
+  avatarUrl: string | null,
+): Promise<string | null> => {
+  const profile = { avatarFileId, avatarUrl };
+  try {
+    return (
+      await context
+        .actor(FileActorDescriptor, profile.avatarFileId)
+        .presignRead()
+    ).url;
+  } catch (error) {
+    console.warn(
+      `[api] avatar file ${profile.avatarFileId} could not be presigned; ` +
+        `falling back to user.image: ${String(error)}`,
+    );
+    return profile.avatarUrl;
+  }
+};
+
+/** The same URL for a user known only by id: one profile load, then the helper. */
+export const avatarUrlForUser = async (
+  context: ApiContext,
+  userId: string,
+  fallback: string | null,
+): Promise<string | null> => {
+  try {
+    return await avatarUrlOf(
+      context,
+      await UserProfileLoadable.getDataloader(context).load(userId),
+    );
+  } catch {
+    return fallback;
+  }
+};
+
+const UserProfileLoadable = builder.loadableObjectRef<UserProfileDto, string>(
+  "UserProfile",
+  {
     load: loadProfiles,
     toKey: (profile) => profile.id,
-  })
-  .implement({
-    description:
-      "A user, as any signed-in viewer may see them. Profile fields live in " +
-      "better-auth's `user` table; there is no `public.users` (plan §3).",
-    fields: (t) => ({
-      id: t.exposeID("id"),
-      displayName: t.exposeString("displayName"),
-      avatarUrl: t.exposeString("avatarUrl", { nullable: true }),
-      locale: t.exposeString("locale", { nullable: true }),
-      email: t.exposeString("email", {
-        nullable: true,
-        description:
-          "Only ever populated for the owner (or an admin); null for " +
-          "everybody else, including friends.",
-      }),
+  },
+);
+
+export const UserProfileType = UserProfileLoadable.implement({
+  description:
+    "A user, as any signed-in viewer may see them. Profile fields live in " +
+    "better-auth's `user` table; there is no `public.users` (plan §3).",
+  fields: (t) => ({
+    id: t.exposeID("id"),
+    displayName: t.exposeString("displayName"),
+    avatarUrl: t.string({
+      nullable: true,
+      description:
+        "The uploaded profile picture (a presigned URL, fresh per read) " +
+        "when there is one, else the stored image URL.",
+      resolve: (profile, _args, context) => avatarUrlOf(context, profile),
     }),
-  });
+    locale: t.exposeString("locale", { nullable: true }),
+    email: t.exposeString("email", {
+      nullable: true,
+      description:
+        "Only ever populated for the owner (or an admin); null for " +
+        "everybody else, including friends.",
+    }),
+  }),
+});
 
 export const FriendType = builder.objectRef<FriendEdgeDto>("Friend").implement({
   description: "Someone the user is friends with, and since when.",
@@ -279,12 +420,16 @@ const RemoveFriendPayload = builder
     }),
   });
 
-const ToggleFavoritePayload = builder
-  .objectRef<ToggleFavoriteResult>("ToggleFavoritePayload")
+const SetFavoritePayload = builder
+  .objectRef<SetFavoriteResult>("SetFavoritePayload")
   .implement({
-    description: "The state of one favourite after the toggle.",
+    description: "The state of one favourite after `setFavorite`.",
     fields: (t) => ({
       favorited: t.exposeBoolean("favorited"),
+      changed: t.exposeBoolean("changed", {
+        description:
+          "False when the favourite already was what was asked — a repeat or a retry.",
+      }),
       itemId: t.id({ resolve: (result) => result.ref.id }),
       itemType: t.field({
         type: ItemTypeEnum,
@@ -365,16 +510,34 @@ const RECORD_PLACE_INTERACTION = {
 /* Queries                                                                    */
 /* -------------------------------------------------------------------------- */
 
+/** A user id: a uuid, any case (the hop lowercases it, `../context.ts`). */
+const USER_ID =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 builder.queryField("user", (t) =>
   t.field({
     type: UserProfileType,
     description:
       "One user's public profile. Any signed-in viewer may read it; `email` " +
-      "comes back null unless the viewer is the owner.",
+      "comes back null unless the viewer is the owner. An id that names " +
+      "nobody, a malformed id and a profile the viewer may not see all get " +
+      "the same `NotFoundError`, so the answer never says whether an " +
+      "account exists.",
     args: { id: t.arg.id({ required: true }) },
     errors: {},
-    resolve: (_root, args, context) =>
-      context.actor(UserActorDescriptor, String(args.id)).getProfile(),
+    resolve: (_root, args, context) => {
+      // Leftovers 5 (L6, D24). Anonymous first, for every id alike: the
+      // actor says the same, but a malformed id must not be the one case
+      // that answers differently. A malformed id never makes the hop (Dapr
+      // routes on the raw string); it gets the actor's own refusal, byte
+      // for byte, which `UserActor.refuseAsAbsent` gives a missing user.
+      if (context.ctx.viewerId === null) {
+        throw new ForbiddenError("sign in to view a profile");
+      }
+      const id = String(args.id);
+      if (!USER_ID.test(id)) throw new NotFoundError(PROFILE_NOT_SHARED);
+      return context.actor(UserActorDescriptor, id).getProfile();
+    },
   }),
 );
 
@@ -491,6 +654,80 @@ builder.mutationField("updateProfile", (t) =>
   }),
 );
 
+builder.mutationField("setAvatar", (t) =>
+  t.field({
+    type: UserProfileType,
+    description:
+      "Make an uploaded file the viewer's profile picture (MC-avatar). The " +
+      "file must be the viewer's own verified upload of kind `avatar` " +
+      '(`createUploadTarget(kind: "avatar")`, then `verifyUpload`).',
+    args: { fileId: t.arg.id({ required: true }) },
+    errors: {},
+    resolve: (_root, args, context) =>
+      myActor(context, "set your profile picture").setAvatar({
+        fileId: String(args.fileId),
+      }),
+  }),
+);
+
+builder.mutationField("removeAvatar", (t) =>
+  t.field({
+    type: UserProfileType,
+    description:
+      "Clear the viewer's profile picture; `avatarUrl` falls back to the " +
+      "stored image URL.",
+    errors: {},
+    resolve: (_root, _args, context) =>
+      myActor(context, "remove your profile picture").removeAvatar(),
+  }),
+);
+
+/* -------------------------------------------------------------------------- */
+/* H-119 / FR-21: account settings                                            */
+/* -------------------------------------------------------------------------- */
+
+const UserSettingsType = builder
+  .objectRef<UserSettingsDto>("UserSettings")
+  .implement({
+    description:
+      "The viewer's own account settings (H-119). Only the viewer can read " +
+      "or change them.",
+    fields: (t) => ({
+      defaultCellarPrivacy: t.field({
+        type: PermissionTypeEnum,
+        description:
+          'Settings, "Who sees your cellars": the privacy a NEW cellar ' +
+          "gets when `createCellar` is given none. Changing it never " +
+          "changes an existing cellar. PRIVATE until set.",
+        resolve: (settings) => settings.defaultCellarPrivacy,
+      }),
+    }),
+  });
+
+builder.objectField(Viewer, "settings", (t) =>
+  t.field({
+    type: UserSettingsType,
+    description: "The viewer's own account settings (H-119).",
+    resolve: (viewer, _args, context) =>
+      context.actor(UserActorDescriptor, viewer.id).settings(),
+  }),
+);
+
+builder.mutationField("setDefaultCellarPrivacy", (t) =>
+  t.field({
+    type: UserSettingsType,
+    description:
+      "H-119 / FR-21: the privacy new cellars get by default. Existing " +
+      "cellars keep their own.",
+    args: { privacy: t.arg({ type: PermissionTypeEnum, required: true }) },
+    errors: {},
+    resolve: (_root, args, context) =>
+      myActor(context, "change your settings").setDefaultCellarPrivacy({
+        privacy: args.privacy,
+      }),
+  }),
+);
+
 /**
  * `UserActor.sendFriendRequest` answers with B4's `FriendRequestDto`, which
  * inlines the other user's profile; `FriendRequest` now carries the *id* and
@@ -591,18 +828,25 @@ builder.mutationField("removeFriend", (t) =>
   }),
 );
 
-builder.mutationField("toggleFavorite", (t) =>
+builder.mutationField("setFavorite", (t) =>
   t.field({
-    type: ToggleFavoritePayload,
-    description: "Add or remove one item from the viewer's favourites.",
+    type: SetFavoritePayload,
+    description:
+      "Put one item in the viewer's favourites, or take it out. Idempotent: " +
+      "asking for the current state changes nothing, so a retried request " +
+      "cannot flip it back (it replaced the flipping `toggleFavorite`).",
     args: {
       type: t.arg({ type: ItemTypeEnum, required: true }),
       itemId: t.arg.id({ required: true }),
+      favorited: t.arg.boolean({ required: true }),
     },
     errors: {},
     resolve: (_root, args, context) => {
       const ref: ItemRef = { type: args.type, id: String(args.itemId) };
-      return myActor(context, "change your favourites").toggleFavorite(ref);
+      return myActor(context, "change your favourites").setFavorite(
+        ref,
+        args.favorited,
+      );
     },
   }),
 );

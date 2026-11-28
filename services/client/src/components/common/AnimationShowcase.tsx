@@ -1,15 +1,30 @@
 "use client";
 
-import { Box, Typography } from "@mui/joy";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useReducedMotion } from "motion/react";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { Check } from "@/components/app/icons";
+import { color } from "@/lib/tokens";
+import { cn } from "@/lib/utils";
 
 // ─── Constants ──────────────────────────────────────────────────────────────────
 const NUM_PARTICLES = 400;
 const PHASE_DURATION = 6000;
 const CANVAS_W = 300;
 const CANVAS_H = 500;
-const TEAL = "112,163,169";
-const LIGHT_TEAL = "175,204,207";
+
+/** `#RRGGBB` → its three channels, for the canvas's `rgba()` strings. */
+const channels = (hex: string): number[] =>
+  [1, 3, 5].map((at) => Number.parseInt(hex.slice(at, at + 2), 16));
+
+// The canvas cannot read a CSS variable, so its colours come from the tokens:
+// teal is `--ca-ai` (the AI is working, D21), and the light tint is that teal
+// halfway to parchment ink.
+const AI_RGB = channels(color.ai);
+const INK_RGB = channels(color.ink1);
+const TEAL = AI_RGB.join(",");
+const LIGHT_TEAL = AI_RGB.map((c, i) =>
+  Math.round((c + (INK_RGB[i] ?? c)) / 2),
+).join(",");
 
 type Point = { x: number; y: number };
 
@@ -650,15 +665,51 @@ function drawConstellation(d: DrawCtx) {
 }
 
 // ─── Component ──────────────────────────────────────────────────────────────────
+
+/** How long the opening assemble takes (the old one was 2.2 s from nothing). */
+const INITIAL_ASSEMBLE = 900;
+/**
+ * The least the opening frame shows (N21). The old opening faded the
+ * particles in from zero over a 2.2 s cubic, so the first ~0.7 s was a black
+ * screen with "ANALYZING…" alone (capture obs 26); from 0.6 the bottle is
+ * there on the first frame and only tightens.
+ */
+const OPENING_VISIBILITY = 0.6;
+/** How far from the vessel the opening particles start: a loose bottle, not noise. */
+const OPENING_SPREAD = 26;
+
+/** One line of the stage list: done, happening now, or still to come. */
+export type ShowcaseStage = {
+  readonly label: string;
+  readonly state: "done" | "active" | "pending";
+};
+
+/**
+ * The particle vessel that stands for "the AI is reading" (teal: the AI is
+ * working, D21).
+ *
+ * - **Mounted visible** (N21): the first frame is drawn in the effect, not a
+ *   frame later, and the vessel starts as a loose bottle at 60% rather than
+ *   fading in out of black.
+ * - **Reduced motion** (design §4.9): one static, assembled frame — no
+ *   animation loop — and the stage list carries the progress.
+ * - `stages`, when given, is that list: named steps driven by real events,
+ *   under the vessel; `children` sits below it (an action, honest copy).
+ */
 export function AnimationShowcase({
   statusText = "Scanning...",
+  stages,
+  children,
 }: {
   statusText?: string;
+  stages?: readonly ShowcaseStage[];
+  children?: ReactNode;
 } = {}) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const frameRef = useRef<number>(0);
   const nameRef = useRef(ITEM_CONFIGS[0].name);
   const [currentType, setCurrentType] = useState(ITEM_CONFIGS[0].name);
+  const reduceMotion = useReducedMotion();
 
   const shapes = useMemo(
     () =>
@@ -676,13 +727,15 @@ export function AnimationShowcase({
     [],
   );
 
+  // A loose version of the first vessel — so the opening frame already reads
+  // as a bottle (N21), where the old one started from noise.
   const scatterPoints = useMemo(
     () =>
-      Array.from({ length: NUM_PARTICLES }, () => ({
-        x: Math.random() * CANVAS_W,
-        y: Math.random() * CANVAS_H,
+      shapes[0].points.map((p) => ({
+        x: p.x + (Math.random() - 0.5) * 2 * OPENING_SPREAD,
+        y: p.y + (Math.random() - 0.5) * 2 * OPENING_SPREAD,
       })),
-    [],
+    [shapes],
   );
 
   useEffect(() => {
@@ -691,9 +744,27 @@ export function AnimationShowcase({
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
+    // Reduced motion: the first vessel, assembled and still, drawn once.
+    if (reduceMotion === true) {
+      ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
+      drawConstellation({
+        ctx,
+        positions: shapes[0].points,
+        toPoints: shapes[0].points,
+        easedMorph: 1,
+        visibility: 1,
+        isAssembled: true,
+        now: 0,
+        holdT: 0.5,
+        labels: shapes[0].labels,
+        typeName: shapes[0].name,
+        neighbors: shapes[0].neighbors,
+      });
+      return;
+    }
+
     const startTime = performance.now();
     const totalCycle = shapes.length * PHASE_DURATION;
-    const INITIAL_ASSEMBLE = 2200;
 
     const animate = (now: number) => {
       const rawElapsed = now - startTime;
@@ -725,7 +796,16 @@ export function AnimationShowcase({
         currentLabels = shapes[shapeIdx].labels;
         currentNeighbors = shapes[shapeIdx].neighbors;
 
-        if (phaseProgress < 0.33) {
+        if (rawElapsed - INITIAL_ASSEMBLE < PHASE_DURATION) {
+          // The first vessel is already assembled: hold it.
+          fromPoints = shapes[shapeIdx].points;
+          toPoints = shapes[shapeIdx].points;
+          morphT = 1;
+          holdT =
+            phaseProgress < 0.8
+              ? phaseProgress / 0.8
+              : 1 + (phaseProgress - 0.8) / 0.2;
+        } else if (phaseProgress < 0.33) {
           fromPoints = shapes[prevIdx].points;
           toPoints = shapes[shapeIdx].points;
           morphT = phaseProgress / 0.33;
@@ -750,7 +830,10 @@ export function AnimationShowcase({
 
       const easedMorph = easeInOutCubic(Math.min(1, Math.max(0, morphT)));
       const isAssembled = easedMorph > 0.95;
-      const visibility = rawElapsed < INITIAL_ASSEMBLE ? easedMorph : 1;
+      const visibility =
+        rawElapsed < INITIAL_ASSEMBLE
+          ? OPENING_VISIBILITY + (1 - OPENING_VISIBILITY) * easedMorph
+          : 1;
 
       const positions: Point[] = new Array(NUM_PARTICLES);
       const scatterAmt = Math.sin(Math.min(1, morphT) * Math.PI) * 12;
@@ -787,64 +870,65 @@ export function AnimationShowcase({
       frameRef.current = requestAnimationFrame(animate);
     };
 
-    frameRef.current = requestAnimationFrame(animate);
+    // The first frame now, in this effect — not one frame later.
+    animate(performance.now());
     return () => cancelAnimationFrame(frameRef.current);
-  }, [shapes, scatterPoints]);
+  }, [shapes, scatterPoints, reduceMotion]);
 
   return (
-    <Box
-      sx={{
-        width: "100%",
-        height: "min(calc(100dvh - 8rem), 600px)",
-        display: "flex",
-        flexDirection: "column",
-        position: "relative",
-      }}
+    <div
+      data-slot="ai-progress"
+      className="relative flex h-[min(calc(100dvh-8rem),600px)] w-full flex-col"
     >
-      <Box
-        sx={{
-          flex: 1,
-          minHeight: 0,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
+      <div className="flex min-h-0 flex-1 items-center justify-center">
         <canvas
           ref={canvasRef}
           width={CANVAS_W}
           height={CANVAS_H}
-          style={{ maxWidth: 260, maxHeight: "65vh" }}
+          className="max-h-[52vh] max-w-[240px]"
           role="img"
-          aria-label={`Scanning ${currentType}`}
+          aria-label={`Reading: ${currentType}`}
         />
-      </Box>
+      </div>
 
-      <Box
-        sx={{
-          p: 2,
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          gap: 1,
-          bgcolor: "rgba(17,16,21,0.9)",
-          backdropFilter: "blur(10px)",
-          borderTop: "1px solid",
-          borderColor: "neutral.800",
-        }}
-      >
-        <Typography
-          level="h4"
-          sx={{
-            color: "primary.300",
-            letterSpacing: "0.15em",
-            textTransform: "uppercase",
-            fontSize: "0.85rem",
-          }}
-        >
+      <div className="flex flex-col items-center gap-3 border-line border-t bg-background/90 p-4 backdrop-blur-md">
+        <p role="status" className="t-micro uppercase text-ai">
           {statusText}
-        </Typography>
-      </Box>
-    </Box>
+        </p>
+        {stages !== undefined && stages.length > 0 && (
+          <ol
+            aria-label="Progress"
+            className="flex flex-col gap-1.5 self-stretch px-2"
+          >
+            {stages.map((stage) => (
+              <li
+                key={stage.label}
+                data-state={stage.state}
+                aria-current={stage.state === "active" ? "step" : undefined}
+                className={cn(
+                  "flex items-center gap-2 t-body",
+                  stage.state === "pending" ? "text-ink-3" : "text-ink",
+                )}
+              >
+                <span
+                  aria-hidden
+                  className={cn(
+                    "flex size-4 shrink-0 items-center justify-center rounded-full",
+                    stage.state === "done" && "bg-ai text-background",
+                    stage.state === "active" &&
+                      "border-2 border-ai motion-safe:animate-pulse",
+                    stage.state === "pending" && "border border-ink-3",
+                  )}
+                >
+                  {stage.state === "done" && <Check className="size-3" />}
+                </span>
+                {stage.label}
+              </li>
+            ))}
+          </ol>
+        )}
+        {children}
+      </div>
+    </div>
   );
 }

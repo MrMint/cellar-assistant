@@ -8,6 +8,7 @@ import { describe, test } from "node:test";
 import type { ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { Client, Provider } from "urql";
+import { stripStyleBlocks } from "@/test-support/markup";
 
 mock.module("next/image", () => ({
   default: (props: { alt: string }) => (
@@ -27,9 +28,8 @@ const client = new Client({
   exchanges: [],
 });
 const render = (node: ReactNode) =>
-  renderToStaticMarkup(<Provider value={client}>{node}</Provider>).replace(
-    /<style[^>]*>[^<]*<\/style>/g,
-    "",
+  stripStyleBlocks(
+    renderToStaticMarkup(<Provider value={client}>{node}</Provider>),
   );
 
 const emptyPage = {
@@ -44,7 +44,7 @@ describe("FavoritesClient (restored)", () => {
     const html = render(
       <FavoritesClient initialPage={emptyPage} initialTypes={[]} />,
     );
-    assert.match(html, /MuiTypography-title-lg[^>]*>Favorites</);
+    assert.match(html, /^(?:<[^>]+>)*Loved</, "the title leads the page");
     for (const type of ["Beer", "Wine", "Spirit", "Coffee", "Sake", "Tea"]) {
       assert.match(html, new RegExp(`aria-label="${type}"`));
     }

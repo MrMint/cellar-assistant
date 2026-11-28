@@ -21,8 +21,17 @@
  * A3's transform restores a schema-only dump, so every fixture here is created
  * by the actor under test or by a direct insert inside the rolled-back
  * transaction.
+ *
+ * ## X27: no review in here any more
+ *
+ * The AI review moved out of the creation turn: a place is created `pending`
+ * (creator-only) and the review is an outbox row for `PlaceReviewActor`. The
+ * review's own behaviour — approve, reject, the never-a-fabricated-approval
+ * paths, the B5b installed-reviewer regression — is
+ * `place-review-actor.test.ts`; what this file proves about it is that every
+ * creation queues exactly one, and that nothing about a creation depends on a
+ * model.
  */
-import type { PlaceReview } from "@cellar-assistant/contracts";
 import {
   adminCtx,
   anonymousCtx,
@@ -34,12 +43,11 @@ import {
   userCtx,
   ValidationError,
 } from "@cellar-assistant/contracts";
-import { places } from "@cellar-assistant/db";
-import { eq, sql } from "@cellar-assistant/db/orm";
+import { outbox, places } from "@cellar-assistant/db";
+import { and, eq, sql } from "@cellar-assistant/db/orm";
 import { ActorId, DaprClient } from "@dapr/dapr";
 import { afterAll, describe, expect, it } from "vitest";
 import type { DbOrTx } from "../lib/db.ts";
-import { geocellOf } from "../lib/geocell.ts";
 import {
   activate,
   closeTestDb,
@@ -49,17 +57,8 @@ import {
   withTestDb,
 } from "../lib/testing.ts";
 import { PlaceActor } from "./place-actor.ts";
-import type {
-  PlaceCreator,
-  PlaceReviewer,
-  PlaceReviewSubject,
-} from "./place-creation-actor.ts";
-import {
-  confidenceFromReview,
-  PlaceCreationActor,
-  setPlaceReviewer,
-  unconfiguredPlaceReviewer,
-} from "./place-creation-actor.ts";
+import type { PlaceCreator } from "./place-creation-actor.ts";
+import { PlaceCreationActor } from "./place-creation-actor.ts";
 
 const daprClient = (): DaprClient =>
   new DaprClient({ daprHost: "127.0.0.1", daprPort: "3502" });
@@ -74,29 +73,65 @@ const inProcessCreator =
     return actor.create(ctx, input);
   };
 
-const approves = (overrides: Partial<PlaceReview> = {}): PlaceReviewer => {
-  const review: PlaceReview = {
-    approved: true,
-    confidenceAdjustment: 0.2,
-    flags: [],
-    ...overrides,
-  };
-  return async () => review;
-};
-
 /** Keyed as production keys it: `placeCreationActorId(viewerId)`. */
 const newCreationActor = (
   db: DbOrTx,
   viewerId: string,
-  seams: { create?: PlaceCreator; review?: PlaceReviewer } = {},
+  seams: { create?: PlaceCreator } = {},
 ): PlaceCreationActor =>
   new PlaceCreationActor(
     daprClient(),
     new ActorId(placeCreationActorId(viewerId)),
     db,
     seams.create ?? inProcessCreator(db),
-    seams.review ?? unconfiguredPlaceReviewer,
   );
+
+/** The review rows a creation queued for `placeId`. */
+const reviewRowsFor = (db: DbOrTx, placeId: string) =>
+  db
+    .select({
+      payload: outbox.payload,
+      attributedTo: outbox.attributedTo,
+    })
+    .from(outbox)
+    .where(
+      and(
+        eq(outbox.targetActor, "PlaceReviewActor"),
+        eq(outbox.method, "review"),
+        eq(outbox.targetId, placeId),
+      ),
+    );
+
+/**
+ * For the tests here that really commit: a creation queues a review row
+ * (X27), and a committed `pending` outbox row is claimable by any other file's
+ * drain test running at the same moment — it showed up as `outbox-actor`'s
+ * "claimed 25, expected 24". Deleting it inside the creating transaction means
+ * it is never committed at all.
+ */
+const dropQueuedReviews = async (tx: DbOrTx, placeId: string) => {
+  await tx
+    .delete(outbox)
+    .where(
+      and(
+        eq(outbox.targetActor, "PlaceReviewActor"),
+        eq(outbox.targetId, placeId),
+      ),
+    );
+};
+
+/** An approved (shared) place, written straight in — as an Overture row is. */
+const insertShared = async (
+  db: DbOrTx,
+  name: string,
+  location = SAN_FRANCISCO,
+): Promise<string> => {
+  const [row] = await db
+    .insert(places)
+    .values({ name, categories: ["bar"], location, source: "overture" })
+    .returning({ id: places.id });
+  return row?.id ?? "";
+};
 
 const SAN_FRANCISCO = { lng: -122.4194, lat: 37.7749 };
 
@@ -144,9 +179,7 @@ describe.skipIf(skip)("PlaceCreationActor (B5)", () => {
     await withTestDb(async (db) => {
       for (const _ of [0, 1, 2]) {
         const viewer = await seedUser(db);
-        const actor = await activate(
-          newCreationActor(db, viewer, { review: approves() }),
-        );
+        const actor = await activate(newCreationActor(db, viewer));
         const result = await actor.createPlace(
           userCtx(viewer, `r-${viewer}`),
           baseInput(fixtureName()),
@@ -161,15 +194,7 @@ describe.skipIf(skip)("PlaceCreationActor (B5)", () => {
     await withTestDb(async (db) => {
       const owner = await seedUser(db);
       const intruder = await seedUser(db);
-      const reviewed: string[] = [];
-      const actor = await activate(
-        newCreationActor(db, owner, {
-          review: async (_ctx, subject) => {
-            reviewed.push(subject.name);
-            return { approved: true, confidenceAdjustment: 0, flags: [] };
-          },
-        }),
-      );
+      const actor = await activate(newCreationActor(db, owner));
       // Someone else's user ctx, and an admin's — §1.6's bypass is about
       // seeing rows, not about becoming somebody else.
       for (const ctx of [
@@ -180,7 +205,6 @@ describe.skipIf(skip)("PlaceCreationActor (B5)", () => {
           actor.createPlace(ctx, baseInput(fixtureName())),
         ).rejects.toThrow(/creates places only for that user/);
       }
-      expect(reviewed).toEqual([]);
       const created = await db
         .select({ id: places.id })
         .from(places)
@@ -199,9 +223,7 @@ describe.skipIf(skip)("PlaceCreationActor (B5)", () => {
   it("findDuplicates: anonymous is refused; a signed-in viewer gets the nearby row", async () => {
     await withTestDb(async (db) => {
       const viewer = await seedUser(db);
-      const actor = await activate(
-        newCreationActor(db, viewer, { review: approves() }),
-      );
+      const actor = await activate(newCreationActor(db, viewer));
       const name = fixtureName();
       await actor.createPlace(userCtx(viewer, "r1"), baseInput(name));
 
@@ -243,7 +265,7 @@ describe.skipIf(skip)("PlaceCreationActor (B5)", () => {
         return inProcessCreator(db)(ctx, placeId, input);
       };
       const actor = await activate(
-        newCreationActor(db, viewer, { create: creator, review: approves() }),
+        newCreationActor(db, viewer, { create: creator }),
       );
 
       const result = await actor.createPlace(
@@ -257,9 +279,7 @@ describe.skipIf(skip)("PlaceCreationActor (B5)", () => {
   it("createPlace: refuses a very similar place within 50m, and reports the near-misses it allowed", async () => {
     await withTestDb(async (db) => {
       const viewer = await seedUser(db);
-      const actor = await activate(
-        newCreationActor(db, viewer, { review: approves() }),
-      );
+      const actor = await activate(newCreationActor(db, viewer));
       const name = fixtureName();
 
       const first = await actor.createPlace(
@@ -283,135 +303,137 @@ describe.skipIf(skip)("PlaceCreationActor (B5)", () => {
     });
   });
 
-  it("createPlace: an unapproved review is a ValidationError carrying its reason", async () => {
-    await withTestDb(async (db) => {
-      const viewer = await seedUser(db);
-      const actor = await activate(
-        newCreationActor(db, viewer, {
-          review: approves({
-            approved: false,
-            rejectionReason: "this looks like a private residence",
-          }),
-        }),
-      );
-      await expect(
-        actor.createPlace(userCtx(viewer, "r"), baseInput(fixtureName())),
-      ).rejects.toThrow(/private residence/);
-    });
-  });
+  /* ---------------------------------------------------------------------- */
+  /* X27 / D28: saved at once, creator-only, review queued                   */
+  /* ---------------------------------------------------------------------- */
 
-  it("createPlace: the unconfigured reviewer degrades to review: null and the neutral confidence", async () => {
+  it("X27: a new place is saved at once as pending — neutral confidence, the creator's own description untouched, review: null", async () => {
     await withTestDb(async (db) => {
       const viewer = await seedUser(db);
       const actor = await activate(newCreationActor(db, viewer));
-      const result = await actor.createPlace(
-        userCtx(viewer, "r"),
-        baseInput(fixtureName()),
-      );
-      expect(result.review).toBeNull();
+      const result = await actor.createPlace(userCtx(viewer, "r"), {
+        ...baseInput(fixtureName()),
+        description: "Our corner wine bar.",
+      });
+      expect(result.place.reviewStatus).toBe("pending");
       expect(result.place.confidence).toBe(0.5);
+      expect(result.place.description).toBe("Our corner wine bar.");
+      expect(result.place.rejectionReason).toBeNull();
+      expect(result.place.suggestedCategories).toEqual([]);
+      // The verdict is not in this turn — it arrives on `reviewStatus`.
+      expect(result.review).toBeNull();
     });
   });
 
-  it("createPlace: an approving review sets the confidence and can supply the description", async () => {
+  it("X27: every creation queues exactly one review — for this place, this submission, attributed to its creator", async () => {
     await withTestDb(async (db) => {
       const viewer = await seedUser(db);
-      const actor = await activate(
-        newCreationActor(db, viewer, {
-          review: approves({
-            confidenceAdjustment: 0.9, // clamped to +0.3 → 0.8
-            enrichedDescription: "A snug natural-wine bar.",
-          }),
+      const actor = await activate(newCreationActor(db, viewer));
+      const placeId = crypto.randomUUID();
+      const input = { ...baseInput(fixtureName()), placeId };
+      await actor.createPlace(userCtx(viewer, "r1"), input);
+      // A replay of the same creation queues nothing more.
+      await actor.createPlace(userCtx(viewer, "r2"), input);
+
+      const rows = await reviewRowsFor(db, placeId);
+      expect(rows).toHaveLength(1);
+      expect(rows[0]?.attributedTo).toBe(viewer);
+      const [stored] = await db
+        .select({ requested: places.reviewRequestedAt })
+        .from(places)
+        .where(eq(places.id, placeId));
+      const payload = rows[0]?.payload as { submittedAt?: string } | undefined;
+      expect(payload?.submittedAt).toBe(stored?.requested?.toISOString());
+    });
+  });
+
+  it("X27: somebody else's pending place neither blocks a creation nor appears among its near-misses — it does not exist for them", async () => {
+    await withTestDb(async (db) => {
+      const first = await seedUser(db);
+      const second = await seedUser(db);
+      const name = fixtureName();
+      const theirs = await activate(newCreationActor(db, first)).then((a) =>
+        a.createPlace(userCtx(first, "r1"), baseInput(name)),
+      );
+      expect(theirs.place.reviewStatus).toBe("pending");
+
+      const mine = await activate(newCreationActor(db, second)).then((a) =>
+        a.createPlace(userCtx(second, "r2"), baseInput(name)),
+      );
+      expect(mine.place.id).not.toBe(theirs.place.id);
+      expect(mine.nearbyDuplicates).toEqual([]);
+
+      // …and the live duplicate check, the form's, says the same.
+      const checker = await activate(newCreationActor(db, second));
+      const found = await checker.findDuplicates(userCtx(second, "r3"), {
+        name,
+        location: SAN_FRANCISCO,
+      });
+      expect(found.map((d) => d.placeId)).toEqual([mine.place.id]);
+    });
+  });
+
+  it("X27: a shared place still blocks, exactly as before, and is named", async () => {
+    await withTestDb(async (db) => {
+      const viewer = await seedUser(db);
+      const name = fixtureName();
+      const sharedId = await insertShared(db, name);
+      const actor = await activate(newCreationActor(db, viewer));
+      await expect(
+        actor.createPlace(userCtx(viewer, "r"), baseInput(name)),
+      ).rejects.toThrow(new RegExp(`it is place ${sharedId}`));
+    });
+  });
+
+  it("X27: a placeId that is somebody else's is refused in one wording, whatever that place's review status — no oracle for a pending one", async () => {
+    await withTestDb(async (db) => {
+      const owner = await seedUser(db);
+      const other = await seedUser(db);
+      const pendingId = crypto.randomUUID();
+      await activate(newCreationActor(db, owner)).then((a) =>
+        a.createPlace(userCtx(owner, "r1"), {
+          ...baseInput(fixtureName()),
+          placeId: pendingId,
         }),
       );
-      const result = await actor.createPlace(
-        userCtx(viewer, "r"),
-        baseInput(fixtureName()),
-      );
-      expect(result.place.confidence).toBe(0.8);
-      expect(result.place.description).toBe("A snug natural-wine bar.");
-      expect(result.review?.approved).toBe(true);
-    });
-  });
-
-  it("B5b: with `review` omitted the actor takes the *installed* reviewer, not the throwing stub", async () => {
-    // The one test in this file that does not pass its own reviewer, and the
-    // only one that could ever have caught the shipped bug.
-    //
-    // Dapr's `ActorManager` builds every actor as
-    // `new ActorCls(daprClient, actorId)` and offers no factory hook, so a
-    // constructor parameter's *default* is production's only wiring. The
-    // version that shipped named `unconfiguredPlaceReviewer` there: every real
-    // activation threw, `#reviewOrNull` swallowed it, every creation took the
-    // `review: null` path — and the suite stayed green, because every test
-    // above injects a reviewer explicitly and so never reads the default.
-    //
-    // Omitting the argument is therefore the whole assertion. X5 fixed the
-    // identical defect in `GeocodeActor` (`unconfiguredPhotonClient` as the
-    // default) and `geocode-actor.test.ts` carries the same shape of test.
-    await withTestDb(async (db) => {
-      const seen: PlaceReviewSubject[] = [];
-      setPlaceReviewer(async (_ctx, subject) => {
-        seen.push(subject);
-        return {
-          approved: true,
-          confidenceAdjustment: 0.3,
-          enrichedDescription: "Installed at boot, as installAI() does.",
-          flags: [],
-        };
+      const sharedId = await insertShared(db, fixtureName(), {
+        lng: SAN_FRANCISCO.lng + 0.05,
+        lat: SAN_FRANCISCO.lat,
       });
-      try {
-        const viewer = await seedUser(db);
-        const actor = await activate(
-          new PlaceCreationActor(
-            daprClient(),
-            new ActorId(placeCreationActorId(viewer)),
-            db,
-            inProcessCreator(db),
-            // `review` deliberately omitted — the point of this test.
-          ),
-        );
-        const name = fixtureName();
-        const result = await actor.createPlace(
-          userCtx(viewer, "r"),
-          baseInput(name),
-        );
 
-        // The installed reviewer ran, on this submission…
-        expect(seen.map((subject) => subject.name)).toEqual([name]);
-        // …and its verdict reached both the result and the row. With the stub
-        // as the default these three are `null`, `0.5` and `null`.
-        expect(result.review?.approved).toBe(true);
-        expect(result.place.confidence).toBe(0.8);
-        expect(result.place.description).toBe(
-          "Installed at boot, as installAI() does.",
+      const actor = await activate(newCreationActor(db, other));
+      const refusals: string[] = [];
+      for (const placeId of [pendingId, sharedId]) {
+        const error = await actor
+          .createPlace(userCtx(other, `r-${placeId}`), {
+            ...baseInput(fixtureName()),
+            location: { lng: SAN_FRANCISCO.lng + 0.1, lat: SAN_FRANCISCO.lat },
+            placeId,
+          })
+          .then(
+            () => null,
+            (caught: unknown) => caught,
+          );
+        expect(error).toBeInstanceOf(ConflictError);
+        refusals.push(
+          String((error as Error).message).replace(placeId, "<id>"),
         );
-      } finally {
-        setPlaceReviewer(unconfiguredPlaceReviewer);
       }
+      expect(refusals[0]).toBe(refusals[1]);
+      // Nothing was written under either id for the second user.
+      const theirs = await db
+        .select({ id: places.id })
+        .from(places)
+        .where(eq(places.createdBy, other));
+      expect(theirs).toEqual([]);
     });
-  });
-
-  it("confidenceFromReview clamps the adjustment and the result", () => {
-    expect(confidenceFromReview(null)).toBe(0.5);
-    const review = (adjustment: number): PlaceReview => ({
-      approved: true,
-      confidenceAdjustment: adjustment,
-      flags: [],
-    });
-    expect(confidenceFromReview(review(0))).toBe(0.5);
-    expect(confidenceFromReview(review(5))).toBe(0.8);
-    expect(confidenceFromReview(review(-5))).toBe(0.2);
-    expect(confidenceFromReview(review(Number.NaN))).toBe(0.5);
   });
 
   it("createPlace: rejects a caller-chosen confidence, a bad website and an over-long description", async () => {
     await withTestDb(async (db) => {
       const viewer = await seedUser(db);
       const ctx = userCtx(viewer, "r");
-      const actor = await activate(
-        newCreationActor(db, viewer, { review: approves() }),
-      );
+      const actor = await activate(newCreationActor(db, viewer));
 
       await expect(
         actor.createPlace(ctx, {
@@ -458,9 +480,7 @@ describe.skipIf(skip)("PlaceCreationActor (B5)", () => {
           source: "user",
         })),
       );
-      const actor = await activate(
-        newCreationActor(db, viewer, { review: approves() }),
-      );
+      const actor = await activate(newCreationActor(db, viewer));
 
       await expect(
         actor.createPlace(userCtx(viewer, "r"), baseInput(fixtureName())),
@@ -476,9 +496,7 @@ describe.skipIf(skip)("PlaceCreationActor (B5)", () => {
       // The bucket is the user's own: someone else, at their own key, is
       // unaffected by this user having used all 25.
       const other = await seedUser(db);
-      const theirs = await activate(
-        newCreationActor(db, other, { review: approves() }),
-      );
+      const theirs = await activate(newCreationActor(db, other));
       const allowed = await theirs.createPlace(userCtx(other, "r-other"), {
         ...baseInput(fixtureName()),
         // Away from the admin's row above: a near-identical fixture name at
@@ -492,9 +510,7 @@ describe.skipIf(skip)("PlaceCreationActor (B5)", () => {
   it("createPlace: geography round-trips as { lng, lat } through the registry", async () => {
     await withTestDb(async (db) => {
       const viewer = await seedUser(db);
-      const actor = await activate(
-        newCreationActor(db, viewer, { review: approves() }),
-      );
+      const actor = await activate(newCreationActor(db, viewer));
       const location = { lng: -122.8, lat: 38.0668 };
       const result = await actor.createPlace(userCtx(viewer, "r"), {
         ...baseInput(fixtureName()),
@@ -512,9 +528,7 @@ describe.skipIf(skip)("PlaceCreationActor (B5)", () => {
   it("createPlace: a re-submitted placeId returns the same row, and google_place_id stays null", async () => {
     await withTestDb(async (db) => {
       const viewer = await seedUser(db);
-      const actor = await activate(
-        newCreationActor(db, viewer, { review: approves() }),
-      );
+      const actor = await activate(newCreationActor(db, viewer));
       const placeId = crypto.randomUUID();
       const input = { ...baseInput(fixtureName()), placeId };
 
@@ -551,10 +565,7 @@ describe.skipIf(skip)("PlaceCreationActor (B5)", () => {
         throw new ConflictError(`place ${placeId} was created concurrently`);
       };
       const actor = await activate(
-        newCreationActor(db, viewer, {
-          create: alwaysConflicts,
-          review: approves(),
-        }),
+        newCreationActor(db, viewer, { create: alwaysConflicts }),
       );
       const result = await actor.createPlace(userCtx(viewer, "r1"), {
         ...baseInput(fixtureName()),
@@ -573,7 +584,6 @@ describe.skipIf(skip)("PlaceCreationActor (B5)", () => {
           create: async () => {
             throw boom;
           },
-          review: approves(),
         }),
       );
       await expect(
@@ -648,12 +658,14 @@ describe.skipIf(skip)("PlaceCreationActor (B5)", () => {
     const attempt = () =>
       testDb().transaction(async (tx) => {
         const actor = await activate(
-          newCreationActor(tx, viewer, {
-            create: barrieredCreator(tx),
-            review: approves(),
-          }),
+          newCreationActor(tx, viewer, { create: barrieredCreator(tx) }),
         );
-        return actor.createPlace(userCtx(viewer, `r-${placeId}`), input);
+        const result = await actor.createPlace(
+          userCtx(viewer, `r-${placeId}`),
+          input,
+        );
+        await dropQueuedReviews(tx, result.place.id);
+        return result;
       });
 
     try {
@@ -716,205 +728,76 @@ const rendezvous = (n: number, timeoutMs?: number) => {
   };
 };
 
-/**
- * Two points a metre or so apart that fall in different geocells: walk east
- * from `start` a metre at a time until the column changes.
- */
-const straddlingPair = (start: { lng: number; lat: number }) => {
-  const METRE_OF_LNG = 1 / (111_320 * Math.cos((start.lat * Math.PI) / 180));
-  let a = start;
-  let b = { lng: a.lng + METRE_OF_LNG, lat: a.lat };
-  while (geocellOf(b).col === geocellOf(a).col) {
-    a = b;
-    b = { lng: a.lng + METRE_OF_LNG, lat: a.lat };
-  }
-  return { a, b };
-};
+describe.skipIf(skip)(
+  "PlaceCreationActor keyed per creator (Wave 6, X27)",
+  () => {
+    /**
+     * Two *different* users adding the same bar at the same moment, in two
+     * activations and two real top-level transactions.
+     *
+     * Before X27 this was the race the geocell locks inside `PlaceActor.create`
+     * existed to close: exactly one place, and the other creator told it was a
+     * duplicate. Since X27 a new place is its creator's alone until reviewed, so
+     * telling the second creator about the first one's pending place would be
+     * the existence oracle D28 forbids. Both creations therefore succeed, each
+     * creator sees only their own — and the duplicate rule moves to the
+     * approval, where `PlaceActor.applyReview` re-runs it under the same locks
+     * against *shared* places (`place-review-actor.test.ts` races two
+     * approvals the way this used to race two creations).
+     *
+     * The rendezvous still releases both into `PlaceActor.create` together and
+     * holds each open after its INSERT, so the second creator is genuinely
+     * parked on the first one's geocell locks and then re-checks against a
+     * committed pending row — which it must not treat as a duplicate.
+     */
+    const HOLD_MS = 750;
 
-describe.skipIf(skip)("PlaceCreationActor keyed per creator (Wave 6)", () => {
-  /**
-   * The race the singleton used to close, and that the geocell locks inside
-   * `PlaceActor.create` close now. Two *different* users, so two different
-   * activations (`placeCreationActorId(viewer)`), each in its own real
-   * top-level transaction — nothing in process serialises them.
-   *
-   * ## The two rendezvous, and why the second has a timeout
-   *
-   * `beforeCreate` releases both into `PlaceActor.create` together, after
-   * both have passed the early duplicate check (neither can see a row yet).
-   * `beforeCommit` then holds each transaction open after its INSERT until
-   * the other has also inserted — so *without* the locks both INSERTs are
-   * uncommitted when both rechecks run, and both commit: two rows, every time.
-   * *With* the locks the second creator is parked on `pg_advisory_xact_lock`
-   * and never reaches `beforeCommit`, so the first gives up waiting after
-   * `HOLD_MS`, commits, releases its locks, and the second's recheck sees the
-   * committed row. The timeout is what keeps the correct version from
-   * deadlocking against the test's own barrier.
-   */
-  const HOLD_MS = 750;
-
-  const raceTwoCreators = async (locations: {
-    readonly a: { lng: number; lat: number };
-    readonly b: { lng: number; lat: number };
-  }) => {
-    const name = fixtureName();
-    const users = [await seedUser(testDb()), await seedUser(testDb())];
-    const beforeCreate = rendezvous(2);
-    const beforeCommit = rendezvous(2, HOLD_MS);
-    const creatorFor =
-      (db: DbOrTx): PlaceCreator =>
-      async (ctx, id, input) => {
-        await beforeCreate();
-        const created = await inProcessCreator(db)(ctx, id, input);
-        await beforeCommit();
-        return created;
-      };
-    const attempt = (viewer: string, location: { lng: number; lat: number }) =>
-      testDb().transaction(async (tx) => {
-        const actor = await activate(
-          newCreationActor(tx, viewer, {
-            create: creatorFor(tx),
-            review: approves(),
-          }),
-        );
-        return actor.createPlace(userCtx(viewer, `r-${viewer}`), {
-          ...baseInput(name),
-          location,
+    it("two users creating the same place at once → two pending places, each its creator's alone, and neither creator is told of the other", async () => {
+      const name = fixtureName();
+      const users = [await seedUser(testDb()), await seedUser(testDb())];
+      const beforeCreate = rendezvous(2);
+      const beforeCommit = rendezvous(2, HOLD_MS);
+      const creatorFor =
+        (db: DbOrTx): PlaceCreator =>
+        async (ctx, id, input) => {
+          await beforeCreate();
+          const created = await inProcessCreator(db)(ctx, id, input);
+          await beforeCommit();
+          return created;
+        };
+      const attempt = (viewer: string) =>
+        testDb().transaction(async (tx) => {
+          const actor = await activate(
+            newCreationActor(tx, viewer, { create: creatorFor(tx) }),
+          );
+          const result = await actor.createPlace(
+            userCtx(viewer, `r-${viewer}`),
+            baseInput(name),
+          );
+          await dropQueuedReviews(tx, result.place.id);
+          return result;
         });
-      });
 
-    try {
-      const settled = await Promise.allSettled([
-        attempt(users[0] ?? "", locations.a),
-        attempt(users[1] ?? "", locations.b),
-      ]);
-      const rows = await testDb()
-        .select({ id: places.id, createdBy: places.createdBy })
-        .from(places)
-        .where(eq(places.name, name));
-      return { settled, rows };
-    } finally {
-      await testDb().delete(places).where(eq(places.name, name));
-      for (const user of users) {
-        await testDb().execute(
-          sql`delete from "user" where id = ${user}::uuid`,
-        );
+      try {
+        const results = await Promise.all(users.map((user) => attempt(user)));
+        expect(results.map((r) => r.place.createdById)).toEqual(users);
+        for (const result of results) {
+          expect(result.place.reviewStatus).toBe("pending");
+          expect(result.nearbyDuplicates).toEqual([]);
+        }
+        const rows = await testDb()
+          .select({ id: places.id, createdBy: places.createdBy })
+          .from(places)
+          .where(eq(places.name, name));
+        expect(rows).toHaveLength(2);
+      } finally {
+        await testDb().delete(places).where(eq(places.name, name));
+        for (const user of users) {
+          await testDb().execute(
+            sql`delete from "user" where id = ${user}::uuid`,
+          );
+        }
       }
-    }
-  };
-
-  const expectOnePlaceAndOneDuplicate = (
-    outcome: Awaited<ReturnType<typeof raceTwoCreators>>,
-  ) => {
-    const fulfilled = outcome.settled.filter((r) => r.status === "fulfilled");
-    const rejected = outcome.settled.filter(
-      (r): r is PromiseRejectedResult => r.status === "rejected",
-    );
-    expect(outcome.rows).toHaveLength(1);
-    expect(fulfilled).toHaveLength(1);
-    expect(rejected).toHaveLength(1);
-    // The same outcome a user got from the singleton: a ConflictError naming
-    // the place that already exists.
-    expect(rejected[0]?.reason).toBeInstanceOf(ConflictError);
-    expect(String(rejected[0]?.reason?.message)).toMatch(
-      new RegExp(`a very similar place .* it is place ${outcome.rows[0]?.id}`),
-    );
-  };
-
-  it("two users creating the same place at once, in different activations and real concurrent transactions → exactly one place, and the other is told it is a duplicate", async () => {
-    expectOnePlaceAndOneDuplicate(
-      await raceTwoCreators({ a: SAN_FRANCISCO, b: SAN_FRANCISCO }),
-    );
-  }, 30_000);
-
-  it("two near-duplicates a metre apart on either side of a geocell boundary are still caught", async () => {
-    const { a, b } = straddlingPair(SAN_FRANCISCO);
-    expect(geocellOf(a)).not.toEqual(geocellOf(b));
-    expectOnePlaceAndOneDuplicate(await raceTwoCreators({ a, b }));
-  }, 30_000);
-
-  /**
-   * What the re-key buys. Dapr runs one turn at a time per actor id; the
-   * harness has no sidecar, so `turn` below reproduces exactly that guarantee
-   * in process (a promise chain per key) and nothing more.
-   *
-   * User A's AI review hangs. User B's creation — a different place, a
-   * different key — completes anyway; under the old singleton it would have
-   * waited out A's review (up to 120s). A's *own* second submission does wait,
-   * which is the per-user serialisation the rate limit relies on.
-   */
-  it("different users' creations do not block each other: B completes while A's AI review hangs, and A's own next submission waits for it", async () => {
-    await withTestDb(async (db) => {
-      const turns = new Map<string, Promise<unknown>>();
-      const turn = <T>(key: string, body: () => Promise<T>): Promise<T> => {
-        const previous = turns.get(key) ?? Promise.resolve();
-        const next = previous.then(body, body);
-        turns.set(
-          key,
-          next.catch(() => undefined),
-        );
-        return next;
-      };
-
-      const userA = await seedUser(db);
-      const userB = await seedUser(db);
-      let unblockA: () => void = () => {};
-      const gate = new Promise<void>((resolve) => {
-        unblockA = resolve;
-      });
-      const aReviewStarted = rendezvous(1);
-      const hangingReview: PlaceReviewer = async () => {
-        await aReviewStarted();
-        await gate;
-        return { approved: true, confidenceAdjustment: 0, flags: [] };
-      };
-      const actorA = await activate(
-        newCreationActor(db, userA, { review: hangingReview }),
-      );
-      const actorB = await activate(
-        newCreationActor(db, userB, { review: approves() }),
-      );
-
-      let aDone = false;
-      let aSecondDone = false;
-      const first = turn(placeCreationActorId(userA), () =>
-        actorA.createPlace(userCtx(userA, "r-a1"), baseInput(fixtureName())),
-      ).then((result) => {
-        aDone = true;
-        return result;
-      });
-      const second = turn(placeCreationActorId(userA), () =>
-        actorA.createPlace(userCtx(userA, "r-a2"), {
-          ...baseInput(fixtureName()),
-          location: { lng: SAN_FRANCISCO.lng + 0.05, lat: SAN_FRANCISCO.lat },
-        }),
-      ).then((result) => {
-        aSecondDone = true;
-        return result;
-      });
-      await aReviewStarted();
-
-      const started = performance.now();
-      const b = await turn(placeCreationActorId(userB), () =>
-        actorB.createPlace(userCtx(userB, "r-b"), {
-          ...baseInput(fixtureName()),
-          location: { lng: SAN_FRANCISCO.lng + 0.1, lat: SAN_FRANCISCO.lat },
-        }),
-      );
-      const elapsed = performance.now() - started;
-
-      expect(b.place.createdById).toBe(userB);
-      expect(aDone).toBe(false);
-      expect(aSecondDone).toBe(false);
-      console.log(
-        `[W6 fan-out] B's createPlace completed in ${elapsed.toFixed(1)}ms ` +
-          "while A's AI review was hung and A's own second submission queued",
-      );
-
-      unblockA();
-      const [aFirst, aSecond] = await Promise.all([first, second]);
-      expect(aFirst.place.createdById).toBe(userA);
-      expect(aSecond.place.createdById).toBe(userA);
-    });
-  }, 30_000);
-});
+    }, 30_000);
+  },
+);

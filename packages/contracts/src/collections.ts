@@ -79,25 +79,31 @@
  */
 import type { ActorDescriptor } from "./actors.ts";
 import type { BrandDto } from "./brand.ts";
-import type { ItemTypeCountsDto } from "./cellars.ts";
+import type { CellarItemDto, ItemTypeCountsDto } from "./cellars.ts";
+import type { ItemCheckInDto } from "./check-ins.ts";
 import type { Ctx } from "./ctx.ts";
 import type {
   BrandType,
   FriendRequestStatus,
   RecipeCategory,
 } from "./enums.ts";
+import { ValidationError } from "./errors.ts";
 import type {
   ItemBrandDto,
   ItemRef,
   ItemReviewDto,
   ItemType,
 } from "./items.ts";
-import type { MatchSuggestionDto } from "./menu-scans.ts";
+import type { MatchSuggestionDto, MenuLineContextDto } from "./menu-scans.ts";
 import type { CappedList, Page, PageArgs } from "./page.ts";
 import type { PlaceBrandDto, PlaceMenuItemDto } from "./places.ts";
 import type { RecipeGroupDto, RecipeIngredientDto } from "./recipes.ts";
 import { searchHash } from "./search.ts";
-import type { TierListEntryRef, TierListItemDto } from "./tier-lists.ts";
+import type {
+  TierListEntryRef,
+  TierListItemDto,
+  TierListTemplateDto,
+} from "./tier-lists.ts";
 
 /* -------------------------------------------------------------------------- */
 /* Keys                                                                        */
@@ -114,6 +120,43 @@ import type { TierListEntryRef, TierListItemDto } from "./tier-lists.ts";
  * before addressing.
  */
 export const viewerCollectionActorId = (viewerId: string): string => viewerId;
+
+/* -------------------------------------------------------------------------- */
+/* Sections — Yours / From friends / Discover (decision D2, roadmap X11)       */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Which part of a viewer's visible set a `/cellars` or `/tier-lists` page
+ * asks for (D2: "Yours · From friends · Discover"). The three are a
+ * **partition** of what `canSee` admits, so asking for each in turn lists
+ * every visible row exactly once:
+ *
+ * | section    | rows                                                        |
+ * |------------|-------------------------------------------------------------|
+ * | `MINE`     | ones the viewer created (or, for a cellar, co-owns)         |
+ * | `FRIENDS`  | not the viewer's; created by a friend; PUBLIC or FRIENDS    |
+ * | `DISCOVER` | not the viewer's; created by someone who is not a friend; PUBLIC |
+ *
+ * Each section is still `and`ed with the visibility clause, so a section can
+ * only ever narrow what the viewer may see. The privacy conditions are
+ * written out rather than left to that clause so the partition holds for an
+ * admin too, whose visibility clause is `true`: an admin's Discover is other
+ * people's PUBLIC rows, not every private cellar in the database.
+ *
+ * Omitting the section keeps the old behaviour — the whole visible set — for
+ * any caller that wants "anything the viewer can see". (The client's own
+ * pickers — add to cellar, add to tier list — ask for `MINE`.) A stranger's
+ * PUBLIC row is never in `MINE`.
+ */
+export const COLLECTION_SECTIONS = ["MINE", "FRIENDS", "DISCOVER"] as const;
+
+export type CollectionSection = (typeof COLLECTION_SECTIONS)[number];
+
+export const isCollectionSection = (
+  value: unknown,
+): value is CollectionSection =>
+  typeof value === "string" &&
+  (COLLECTION_SECTIONS as readonly string[]).includes(value);
 
 /* -------------------------------------------------------------------------- */
 /* CellarsCollectionActor(viewerId) — /cellars                                 */
@@ -142,17 +185,28 @@ export const viewerCollectionActorId = (viewerId: string): string => viewerId;
  * one; dropping cellars a user can see today would read as a bug.
  */
 export type CellarsCollectionActorInterface = {
-  /** **ids** — `cellars.id`, newest first. Hydrated through `CellarActor.get`. */
-  list(ctx: Ctx, page: PageArgs): Promise<Page<string>>;
   /**
-   * The `/search` landing line ("N items across M cellars"), UI parity G36.
+   * **ids** — `cellars.id`: the viewer's own (created or co-owned) first, then
+   * everyone else's, each by most recent activity (decision D13). Hydrated
+   * through `CellarActor.get`. `section` narrows to one of
+   * {@link COLLECTION_SECTIONS} (D2); omitted or null is the whole set.
+   */
+  list(
+    ctx: Ctx,
+    page: PageArgs,
+    section?: CollectionSection | null,
+  ): Promise<Page<string>>;
+  /**
+   * The `/search` landing line ("N bottles across M cellars"), UI parity G36.
    *
    * **Not** `list`'s set. `list` is every cellar the viewer may *see*, which
    * includes strangers' PUBLIC cellars and friends' FRIENDS ones; summing it
    * told a user they owned other people's bottles. The old page
    * (`82450ad1:src/components/search/fragments.ts`) counted cellars the viewer
-   * created or co-owns, and **distinct items** in them per type — so that is
-   * what this counts.
+   * created or co-owns — so that is whose cellars this counts. Per type it
+   * counts **bottles still in the cellar** (decision D13), as every cellar
+   * card does; the old page's distinct items, finished ones included, were
+   * the drift D13 removed.
    */
   stats(ctx: Ctx): Promise<CollectionStatsDto>;
   /**
@@ -166,6 +220,62 @@ export type CellarsCollectionActorInterface = {
     ctx: Ctx,
     refs: readonly ItemRef[],
   ): Promise<readonly CappedList<string>[]>;
+  /**
+   * **projection** — Home's Continue shelf (X10): open bottles (`open_at` set,
+   * `empty_at` not) in cellars the viewer created or co-owns — `stats`'s
+   * set, never a friend's or a stranger's — most recently opened first. A
+   * `cellar_items` row has no entity actor of its own (it belongs to
+   * `CellarActor(cellar)`), so the rows come back whole.
+   */
+  openBottles(ctx: Ctx, page: PageArgs): Promise<Page<CellarItemDto>>;
+  /**
+   * X09 — where "Your bottles" are: for each ref, the ids of the cellars the
+   * viewer **created or co-owns** (privacy plays no part, as in `stats`)
+   * holding a bottle of it — a finished one too when `includeFinished` — by
+   * cellar name. Aligned to `refs`; one statement for the batch. Never anyone
+   * else's cellar, however visible: these are the bottles you can pour.
+   */
+  ownContaining(
+    ctx: Ctx,
+    refs: readonly ItemRef[],
+    includeFinished?: boolean | null,
+  ): Promise<readonly CappedList<string>[]>;
+  /**
+   * X12 — universal search's "Your bottles": open bottles in cellars the
+   * viewer **created or co-owns** (`stats`' set, not `list`'s — a friend's
+   * bottle is not yours) whose item name matches the term, one hit per item
+   * per cellar. Matched by name only — substring, or pg_trgm word
+   * similarity for a typo — so it answers the same with or without an AI
+   * provider.
+   */
+  findBottles(ctx: Ctx, input: BottleSearchInput): Promise<BottleSearchDto>;
+};
+
+/** {@link CellarsCollectionActorInterface.findBottles}. */
+export type BottleSearchInput = {
+  readonly term: string;
+  /** 1 to {@link BOTTLE_SEARCH_RESULT_CAP}; defaults to it. */
+  readonly limit?: number | null;
+};
+
+/** How many hits `findBottles` returns at most. */
+export const BOTTLE_SEARCH_RESULT_CAP = 50;
+
+export type BottleSearchHit = {
+  /** The oldest open bottle of the item in that cellar: where a tap goes. */
+  readonly cellarItemId: string;
+  readonly cellarId: string;
+  readonly cellarName: string;
+  readonly item: ItemRef;
+  readonly itemName: string;
+  /** Open bottles of the item in that cellar, at least 1. */
+  readonly bottleCount: number;
+};
+
+export type BottleSearchDto = {
+  readonly hits: readonly BottleSearchHit[];
+  /** Every matching (item, cellar) pair, not only the ones returned. */
+  readonly totalCount: number;
 };
 
 /** {@link CellarsCollectionActorInterface.stats}. */
@@ -173,9 +283,9 @@ export type CollectionStatsDto = {
   /** Cellars the viewer created or co-owns. */
   readonly cellarCount: number;
   /**
-   * Distinct catalog items with at least one bottle in those cellars, per
-   * type — the old `<type>s_aggregate(where: {cellar_items: {cellar: …}})`,
-   * which counted items whatever their bottles' state, emptied ones included.
+   * Bottles still in those cellars (`empty_at is null`), per type — decision
+   * D13: the same count every cellar card shows. Two bottles of one wine are
+   * 2; a finished bottle is 0.
    */
   readonly itemCounts: ItemTypeCountsDto;
 };
@@ -188,6 +298,9 @@ export const CellarsCollectionActorDescriptor: ActorDescriptor<CellarsCollection
       list: {},
       stats: {},
       containing: {},
+      ownContaining: {},
+      findBottles: {},
+      openBottles: {},
     },
   };
 
@@ -196,8 +309,8 @@ export const CellarsCollectionActorDescriptor: ActorDescriptor<CellarsCollection
 /* -------------------------------------------------------------------------- */
 
 /**
- * One `check_ins` row on an item's detail page, with the cellar it came from
- * deliberately **absent**.
+ * The item page's check-in list is `ItemCheckInDto` (`./check-ins.ts`, X02):
+ * one log entry, with the cellar it came from deliberately **absent**.
  *
  * §1.6's settled reading of this surface is that it *"names the drinker rather
  * than where the bottle sat"*. `CellarActor.checkIns` carries `cellarItemId`
@@ -206,15 +319,13 @@ export const CellarsCollectionActorDescriptor: ActorDescriptor<CellarsCollection
  * a row id inside a cellar they may not be able to see — the oracle B1 refused,
  * one field smaller.
  */
-export type ItemCheckInDto = {
-  readonly id: string;
-  /** `check_ins.user_id` — who the check-in is *about* (`bulkCheckIn`, §2.1). */
-  readonly userId: string;
-  /** The item this check-in is on. Equal to the requested ref, echoed back. */
-  readonly item: ItemRef;
-  readonly createdAt: string;
-  readonly updatedAt: string;
-};
+/**
+ * Whose entries an item's check-in list holds. `ALL` is the C3 surface (yours,
+ * your companions', your friends', and any from a cellar you can see); `MINE`
+ * is the item page's "Your log" (D8) — entries about the viewer only.
+ */
+export const ITEM_CHECK_IN_SCOPES = ["ALL", "MINE"] as const;
+export type ItemCheckInScope = (typeof ITEM_CHECK_IN_SCOPES)[number];
 
 /**
  * `CheckInsCollectionActor(viewerId)` — collection actor, **C3**.
@@ -242,7 +353,12 @@ export type CheckInsCollectionActorInterface = {
    * **projection** — check-ins on `item`, newest first, filtered by
    * `canSeeCheckIn`. See the type doc: a check-in has no entity actor to load.
    */
-  list(ctx: Ctx, item: ItemRef, page: PageArgs): Promise<Page<ItemCheckInDto>>;
+  list(
+    ctx: Ctx,
+    item: ItemRef,
+    page: PageArgs,
+    scope?: ItemCheckInScope | null,
+  ): Promise<Page<ItemCheckInDto>>;
 };
 
 export const CheckInsCollectionActorDescriptor: ActorDescriptor<CheckInsCollectionActorInterface> =
@@ -275,8 +391,16 @@ export const CheckInsCollectionActorDescriptor: ActorDescriptor<CheckInsCollecti
  * re-deriving the rule in SQL.
  */
 export type TierListsCollectionActorInterface = {
-  /** **ids** — `tier_lists.id`, most recently changed first. */
-  list(ctx: Ctx, page: PageArgs): Promise<Page<string>>;
+  /**
+   * **ids** — `tier_lists.id`, most recently changed first. `section`
+   * narrows to one of {@link COLLECTION_SECTIONS} (D2); omitted or null is
+   * every list the viewer may see.
+   */
+  list(
+    ctx: Ctx,
+    page: PageArgs,
+    section?: CollectionSection | null,
+  ): Promise<Page<string>>;
   /**
    * UI parity G8 — "On lists": for each entry (an item or a place), the
    * `tier_list_items` rows ranking it on a list the viewer may see
@@ -291,6 +415,14 @@ export type TierListsCollectionActorInterface = {
     ctx: Ctx,
     refs: readonly TierListEntryRef[],
   ): Promise<readonly CappedList<TierListItemDto>[]>;
+  /**
+   * X16's templates: for each of the seven entry types, in
+   * `TIER_LIST_ENTRY_TYPES` order, how many you have rated — distinct items
+   * you reviewed, places you rated (and may still see). What a list
+   * `createTierList(startFrom: RATINGS)` would hold, before the
+   * `MAX_BATCH_ADD` cap.
+   */
+  templates(ctx: Ctx): Promise<readonly TierListTemplateDto[]>;
 };
 
 export const TierListsCollectionActorDescriptor: ActorDescriptor<TierListsCollectionActorInterface> =
@@ -300,6 +432,7 @@ export const TierListsCollectionActorDescriptor: ActorDescriptor<TierListsCollec
     methods: {
       list: {},
       entriesOf: {},
+      templates: {},
     },
   };
 
@@ -390,7 +523,13 @@ export const isFriendRequestFilter = (
  * (`82450ad1:src/components/search/RecentActivity.tsx`): a bottle added to a
  * cellar, an item review, an entry added to a tier list.
  */
-export const ACTIVITY_KINDS = ["ADDED", "REVIEWED", "TIER_LISTED"] as const;
+export const ACTIVITY_KINDS = [
+  "ADDED",
+  "REVIEWED",
+  "TIER_LISTED",
+  // X02: a drink logged — by the viewer, a friend, or a table the viewer sat at.
+  "CHECKED_IN",
+] as const;
 export type ActivityKind = (typeof ACTIVITY_KINDS)[number];
 
 export const isActivityKind = (value: string): value is ActivityKind =>
@@ -410,6 +549,107 @@ export type ActivityFilter = {
   readonly limit: number;
 };
 
+/* -------------------------------------------------------------------------- */
+/* Friends feed — Home's "Friends" section (X10)                               */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Where a page of the friends feed ended: the last entry's instant (to the
+ * millisecond, as `occurredAt` carries it), kind and source row id. The
+ * feed's order is `occurredAt` newest first, then kind A→Z, then id Z→A —
+ * `recentActivity`'s order — and a cursor names one point in it exactly, so
+ * the next page starts strictly after it whichever kind it was.
+ */
+export type ActivityFeedCursor = {
+  readonly at: string;
+  readonly kind: ActivityKind;
+  readonly id: string;
+};
+
+/** What `friendsFeed` reads: the kinds (empty = all four). */
+export type FriendsFeedFilter = {
+  readonly kinds: readonly ActivityKind[];
+};
+
+const FEED_CURSOR_PREFIX = "feed:";
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+const ISO_MS = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
+
+/** `feed:<iso>|<kind>|<uuid>` — opaque to clients, readable in a log. */
+export const activityFeedCursor = (entry: {
+  readonly occurredAt: string;
+  readonly kind: ActivityKind;
+  readonly id: string;
+}): string =>
+  `${FEED_CURSOR_PREFIX}${new Date(entry.occurredAt).toISOString()}|${entry.kind}|${entry.id}`;
+
+/**
+ * Reads a cursor back. Refuses anything the server did not mint — a cursor
+ * from another list, or a hand-edited one — rather than starting the page
+ * somewhere it was not asked to.
+ */
+export const parseActivityFeedCursor = (cursor: string): ActivityFeedCursor => {
+  const refuse = (): never => {
+    throw new ValidationError(`not a feed cursor: ${cursor}`);
+  };
+  if (!cursor.startsWith(FEED_CURSOR_PREFIX)) refuse();
+  const [at, kind, id, ...rest] = cursor
+    .slice(FEED_CURSOR_PREFIX.length)
+    .split("|");
+  if (
+    rest.length > 0 ||
+    at === undefined ||
+    kind === undefined ||
+    id === undefined ||
+    !ISO_MS.test(at) ||
+    Number.isNaN(Date.parse(at)) ||
+    !isActivityKind(kind) ||
+    !UUID.test(id)
+  ) {
+    return refuse();
+  }
+  return { at, kind, id };
+};
+
+/**
+ * Whether `entry` comes after `cursor` in the feed's order — the rule each
+ * kind's SQL applies, stated once in plain code for the tests to hold it to.
+ */
+export const isAfterFeedCursor = (
+  entry: {
+    readonly occurredAt: string;
+    readonly kind: ActivityKind;
+    readonly id: string;
+  },
+  cursor: ActivityFeedCursor,
+): boolean => {
+  const at = new Date(entry.occurredAt).toISOString();
+  if (at !== cursor.at) return at < cursor.at;
+  if (entry.kind !== cursor.kind) return entry.kind > cursor.kind;
+  return entry.id < cursor.id;
+};
+
+/** The feed's order: newest first, then kind A→Z, then id Z→A. */
+export const compareFeedEntries = (
+  a: {
+    readonly occurredAt: string;
+    readonly kind: ActivityKind;
+    readonly id: string;
+  },
+  b: {
+    readonly occurredAt: string;
+    readonly kind: ActivityKind;
+    readonly id: string;
+  },
+): number => {
+  const atA = new Date(a.occurredAt).toISOString();
+  const atB = new Date(b.occurredAt).toISOString();
+  if (atA !== atB) return atA < atB ? 1 : -1;
+  if (a.kind !== b.kind) return a.kind < b.kind ? -1 : 1;
+  if (a.id === b.id) return 0;
+  return a.id < b.id ? 1 : -1;
+};
+
 /**
  * One feed row — **projection**: none of the three source rows has an entity
  * actor addressable by its own id (`item_reviews` belongs to `ItemActor(item)`,
@@ -419,7 +659,8 @@ export type ActivityFilter = {
  * (`TierListActor.get`, which applies `canSeeTierList` again) and the cellar
  * (`CellarActor.get`, `canSeeCellar` again).
  *
- * Exactly one of `review` / `tierListItem` / `cellarItemId` is set, by `kind`.
+ * Exactly one of `review` / `tierListItem` / `cellarItemId` / `checkIn` is
+ * set, by `kind` (`cellarItemId` for ADDED).
  */
 export type ActivityEntryDto = {
   readonly kind: ActivityKind;
@@ -439,6 +680,86 @@ export type ActivityEntryDto = {
   readonly rank: number | null;
   readonly cellarId: string | null;
   readonly cellarItemId: string | null;
+  /** The log entry, CHECKED_IN only — `canSeeCheckIn` decided it is shown. */
+  readonly checkIn: ItemCheckInDto | null;
+};
+
+/* -------------------------------------------------------------------------- */
+/* A friend's profile — X18                                                    */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Whose profile a `profile*` read is about. An object rather than a bare id so
+ * `FriendsCollectionActor`'s one `authorize` can tell it from a
+ * `FriendRequestFilter` (a string) and an `ActivityFilter`.
+ */
+export type ProfileFilter = { readonly profileOf: string };
+
+export const isProfileFilter = (value: unknown): value is ProfileFilter =>
+  typeof value === "object" &&
+  value !== null &&
+  typeof (value as { profileOf?: unknown }).profileOf === "string" &&
+  Object.keys(value).length === 1;
+
+/**
+ * F-51: whose latest activity to read — a page of the viewer's friends, by
+ * user id. At most {@link LATEST_ACTIVITY_MAX_IDS}; an id that is not one of
+ * the viewer's friends answers `null`, like a friend with nothing visible.
+ */
+export type LatestActivityFilter = { readonly latestOf: readonly string[] };
+
+/** The most ids one {@link LatestActivityFilter} may carry (a friends page). */
+export const LATEST_ACTIVITY_MAX_IDS = 100;
+
+export const isLatestActivityFilter = (
+  value: unknown,
+): value is LatestActivityFilter =>
+  typeof value === "object" &&
+  value !== null &&
+  Array.isArray((value as { latestOf?: unknown }).latestOf) &&
+  Object.keys(value).length === 1;
+
+/**
+ * F-94: the person whose mutual friends with the viewer to count — any
+ * profile the viewer may see (`canSeeProfile`), friend or not.
+ */
+export type MutualFriendsFilter = { readonly mutualWith: string };
+
+export const isMutualFriendsFilter = (
+  value: unknown,
+): value is MutualFriendsFilter =>
+  typeof value === "object" &&
+  value !== null &&
+  typeof (value as { mutualWith?: unknown }).mutualWith === "string" &&
+  Object.keys(value).length === 1;
+
+/**
+ * F-94: the viewer's own friends who are also friends of someone — how many,
+ * and the first by name (the locked profile's "Friend of …"). Only ever the
+ * viewer's own friends, so it names nobody the viewer does not already know.
+ */
+export type MutualFriendsDto = {
+  readonly count: number;
+  /** The first mutual friend by display name, or `null` with none. */
+  readonly firstUserId: string | null;
+};
+
+/**
+ * The one answer every refused profile gets — not a friend, no such user,
+ * yourself, or not a user id at all. One message for all of them, so the
+ * answer is never an oracle for whether an account exists (D24).
+ */
+export const PROFILE_NOT_SHARED =
+  "This profile doesn't exist or isn't shared with you.";
+
+/**
+ * A friend, as their profile page opens (X18): who, and since when. The
+ * profile itself is `UserActor.getProfile`, hydrated by the API's loader.
+ */
+export type FriendProfileDto = {
+  readonly userId: string;
+  /** ISO-8601: when the friendship began (the newer of its two rows). */
+  readonly since: string;
 };
 
 /**
@@ -485,6 +806,74 @@ export type FriendsCollectionActorInterface = {
     ctx: Ctx,
     filter: ActivityFilter,
   ): Promise<readonly ActivityEntryDto[]>;
+  /**
+   * **projection** — Home's Friends section (X10): what the viewer's
+   * **friends** did (never the viewer's own rows), every kind keeping
+   * `recentActivity`'s rule, newest first and paged for real. The cursor is
+   * an {@link ActivityFeedCursor}: each kind reads `first + 1` rows strictly
+   * after it, the merge keeps `first`, so a page never skips or repeats a row
+   * however the kinds interleave.
+   */
+  friendsFeed(
+    ctx: Ctx,
+    filter: FriendsFeedFilter,
+    page: PageArgs,
+  ): Promise<Page<ActivityEntryDto>>;
+  /**
+   * X18: a friend's profile — `NotFound` ({@link PROFILE_NOT_SHARED}) for
+   * anyone who is not the viewer's friend, the viewer included, and for an
+   * id that names nobody, with the same message.
+   */
+  profile(ctx: Ctx, userId: string): Promise<FriendProfileDto>;
+  /**
+   * **ids** — the friend's own tier lists that `canSeeTierList` admits
+   * (PUBLIC or FRIENDS; never their PRIVATE ones), most recently changed
+   * first. Empty for anyone who is not a friend.
+   */
+  profileTierLists(
+    ctx: Ctx,
+    filter: ProfileFilter,
+    page: PageArgs,
+  ): Promise<Page<string>>;
+  /**
+   * **ids** — cellars the friend created or co-owns that `canSeeCellar`
+   * admits, newest first. Empty for anyone who is not a friend.
+   */
+  profileCellars(
+    ctx: Ctx,
+    filter: ProfileFilter,
+    page: PageArgs,
+  ): Promise<Page<string>>;
+  /**
+   * **projection** — the friend's drink log (entries about them), newest
+   * first, filtered by `canSeeCheckIn`. Empty for anyone who is not a friend.
+   */
+  profileLogs(
+    ctx: Ctx,
+    filter: ProfileFilter,
+    page: PageArgs,
+  ): Promise<Page<ItemCheckInDto>>;
+  /**
+   * F-51 — **projection**: each friend's newest activity entry, aligned to
+   * `filter.latestOf`, by `recentActivity`'s rules for every kind (a PRIVATE
+   * list's entry, a hidden cellar's bottle or a log `canSeeCheckIn` refuses
+   * never counts). `null` for a friend with nothing visible and for an id that
+   * is not a friend. One statement per kind for the whole page.
+   */
+  latestActivity(
+    ctx: Ctx,
+    filter: LatestActivityFilter,
+  ): Promise<readonly (ActivityEntryDto | null)[]>;
+  /**
+   * F-94: the viewer's friends who are also `filter.mutualWith`'s friends.
+   * Answered for anyone `canSeeProfile` admits, friend or not; the viewer
+   * themself, an id that names nobody and a malformed id all answer
+   * `{ count: 0, firstUserId: null }`, so it is no oracle for an account.
+   */
+  mutualFriends(
+    ctx: Ctx,
+    filter: MutualFriendsFilter,
+  ): Promise<MutualFriendsDto>;
 };
 
 export const FriendsCollectionActorDescriptor: ActorDescriptor<FriendsCollectionActorInterface> =
@@ -495,6 +884,13 @@ export const FriendsCollectionActorDescriptor: ActorDescriptor<FriendsCollection
       friends: {},
       requests: {},
       recentActivity: {},
+      friendsFeed: {},
+      profile: {},
+      profileTierLists: {},
+      profileCellars: {},
+      profileLogs: {},
+      latestActivity: {},
+      mutualFriends: {},
     },
   };
 
@@ -521,6 +917,19 @@ export const FriendsCollectionActorDescriptor: ActorDescriptor<FriendsCollection
 export type MenuScansCollectionActorInterface = {
   /** **ids** — `menu_scans.id` for the viewer, most recently scanned first. */
   list(ctx: Ctx, page: PageArgs): Promise<Page<string>>;
+  /**
+   * X07 — what each of a page of menu lines means to the viewer: whether they
+   * scanned it (and so may correct its match), and the grounded reasons a
+   * matched line might matter to them (`MenuLineForYouDto`). Aligned to
+   * `lineIds`; an id that names no line answers `canCorrectMatch: false` and
+   * no reasons. Reads only the viewer's own rows and their friends' ratings,
+   * so it says nothing about a line the viewer could not already see. At most
+   * `REVERSE_EDGE_MAX_PARENTS` ids per call.
+   */
+  lineContext(
+    ctx: Ctx,
+    lineIds: readonly string[],
+  ): Promise<readonly MenuLineContextDto[]>;
 };
 
 export const MenuScansCollectionActorDescriptor: ActorDescriptor<MenuScansCollectionActorInterface> =
@@ -529,6 +938,7 @@ export const MenuScansCollectionActorDescriptor: ActorDescriptor<MenuScansCollec
     category: "collection",
     methods: {
       list: {},
+      lineContext: {},
     },
   };
 
@@ -701,6 +1111,24 @@ export type RecipeGroupsCollectionActorInterface = {
     ctx: Ctx,
     filter: RecipeIngredientUsesFilter,
   ): Promise<readonly CappedList<RecipeIngredientDto>[]>;
+  /**
+   * F-114 — `/recipes`' kind chips: for each base spirit the groups `list`
+   * would return under `filter` carry, how many a chip of that value would
+   * list (a bar kind counts its narrower kinds too, as `baseSpirit` filters
+   * them). `filter.baseSpirit` is ignored by the count but still part of the
+   * key, so call it with `baseSpirit: null`. Most groups first, then by name;
+   * only kinds with at least one visible group.
+   */
+  baseSpiritCounts(
+    ctx: Ctx,
+    filter: RecipeGroupsFilter,
+  ): Promise<readonly RecipeBaseSpiritCountDto[]>;
+};
+
+/** One kind chip's count ({@link RecipeGroupsCollectionActorInterface.baseSpiritCounts}). */
+export type RecipeBaseSpiritCountDto = {
+  readonly baseSpirit: string;
+  readonly count: number;
 };
 
 /** The items one {@link RecipeGroupsCollectionActorInterface.ingredientUses} call reads. */
@@ -731,6 +1159,7 @@ export const RecipeGroupsCollectionActorDescriptor: ActorDescriptor<RecipeGroups
     methods: {
       list: {},
       ingredientUses: {},
+      baseSpiritCounts: {},
     },
   };
 
@@ -908,6 +1337,19 @@ export type BrandLinksCollectionActorInterface = {
     ctx: Ctx,
     filter: BrandItemCountsFilter,
   ): Promise<readonly number[]>;
+
+  /**
+   * X23 — the type of each brand's **earliest-linked** item (`item_brands`
+   * by `created_at`, then id), aligned to `filter.brandIds`; `null` for a
+   * brand that carries no item. One statement for a page of brands,
+   * addressed at {@link brandFirstItemTypesActorId}. The client infers a
+   * brand's type from it when `brands.brand_type` says nothing (null or
+   * `other`) — a fact read, not a write to the shared catalog.
+   */
+  firstItemTypes(
+    ctx: Ctx,
+    filter: BrandItemCountsFilter,
+  ): Promise<readonly (ItemType | null)[]>;
 };
 
 /** The brands whose item counts one {@link BrandLinksCollectionActorInterface.itemCounts} call reads. */
@@ -924,6 +1366,7 @@ export const BrandLinksCollectionActorDescriptor: ActorDescriptor<BrandLinksColl
       places: {},
       itemLinks: {},
       itemCounts: {},
+      firstItemTypes: {},
     },
   };
 
@@ -939,5 +1382,17 @@ export const brandLinksCollectionActorId = (filter: BrandLinksFilter): string =>
 export const brandItemCountsActorId = (filter: BrandItemCountsFilter): string =>
   searchHash({
     kind: "brand-item-counts",
+    brandIds: Array.from(new Set(filter.brandIds)).sort(),
+  });
+
+/**
+ * The actor id for one batch of first-item types — {@link brandItemCountsActorId}'s
+ * rule under its own namespace, so the two batches never share an activation.
+ */
+export const brandFirstItemTypesActorId = (
+  filter: BrandItemCountsFilter,
+): string =>
+  searchHash({
+    kind: "brand-first-item-types",
     brandIds: Array.from(new Set(filter.brandIds)).sort(),
   });

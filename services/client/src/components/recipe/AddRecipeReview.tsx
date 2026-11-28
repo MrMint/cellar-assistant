@@ -1,19 +1,17 @@
 "use client";
 
-import {
-  Button,
-  Card,
-  CardActions,
-  CardContent,
-  Input,
-  Stack,
-  Typography,
-} from "@mui/joy";
 import { isNotNil } from "ramda";
 import { useState, useTransition } from "react";
-import { Rating } from "react-simple-star-rating";
 import { useMutation } from "urql";
+import { notify } from "@/components/app/notify";
+import { Stars } from "@/components/app/parts/Stars";
+import { RatingInput } from "@/components/app/RatingInput";
+import { ResponsiveDialog } from "@/components/app/ResponsiveDialog";
+import { UserAvatar } from "@/components/app/UserAvatar";
+import { Button } from "@/components/ui/button";
+import { Spinner } from "@/components/ui/spinner";
 import { unwrapResult } from "@/lib/api/result";
+import { RichTextDisplay } from "../common/RichTextDisplay";
 import { RichTextEditor } from "../common/RichTextEditor";
 import { reviewTextForSave } from "./adapter";
 import {
@@ -21,6 +19,12 @@ import {
   DeleteRecipeReviewMutation,
   UpdateRecipeReviewMutation,
 } from "./queries";
+import { QUIET_ACTION } from "./RecipePageParts";
+import {
+  type OwnReview,
+  reviewDeleteWrite,
+  reviewRestoreWrite,
+} from "./review-plan";
 
 export type AddRecipeReviewResult = {
   userId: string;
@@ -36,12 +40,9 @@ export type AddRecipeReviewProps = {
    * The viewer's own review, which this form edits rather than adding a
    * second: the API allows one per viewer per recipe.
    */
-  myReview?: {
-    id: string;
-    score?: number;
-    /** Serialized Lexical state, or null. */
-    text?: string | null;
-  } | null;
+  myReview?: OwnReview | null;
+  /** Whether anyone else has reviewed it: "No reviews yet" when not. */
+  hasReviews?: boolean;
   onReviewAdded?: (review: AddRecipeReviewResult) => void;
 };
 
@@ -66,6 +67,7 @@ export const AddRecipeReview = ({
   recipeId,
   viewerId = null,
   myReview = null,
+  hasReviews = true,
   onReviewAdded,
 }: AddRecipeReviewProps) => {
   const [open, setOpen] = useState(false);
@@ -83,171 +85,204 @@ export const AddRecipeReview = ({
   const savedText = reviewTextForSave(text);
   const dirty = isNotNil(score) || isNotNil(savedText);
 
-  const finish = () => {
+  const finish = (next: { score?: number; text?: string }) => {
     setOpen(false);
-    onReviewAdded?.({ userId: viewerId ?? "", score, text: savedText });
+    onReviewAdded?.({ userId: viewerId ?? "", ...next });
   };
 
-  const handleClick = () => {
-    if (dirty === true) {
-      startTransition(async () => {
-        setError(null);
-        if (myReview === null) {
-          const result = unwrapResult(
-            (
-              await addReview({
-                recipeId,
-                input: {
-                  reviewId: crypto.randomUUID(),
-                  score: score ?? null,
-                  text: savedText ?? null,
-                },
-              })
-            ).data?.addRecipeReview,
-            "RecipeReview",
-          );
-          if (!result.ok) {
-            setError(
-              result.error.reason === "REVIEW_ALREADY_EXISTS"
-                ? "You have already reviewed this recipe."
-                : result.error.message,
-            );
-            return;
-          }
-          setScore(undefined);
-          setText(undefined);
-        } else {
-          const result = unwrapResult(
-            (
-              await updateReview({
-                recipeId,
-                reviewId: myReview.id,
-                input: { score: score ?? null, text: savedText ?? null },
-              })
-            ).data?.updateRecipeReview,
-            "RecipeReview",
-          );
-          if (!result.ok) {
-            setError(result.error.message);
-            return;
-          }
-        }
-        finish();
-      });
-    }
-  };
+  /** A new review on this recipe, as the viewer: the API sets the author. */
+  const add = async (input: { score?: number; text?: string }) =>
+    unwrapResult(
+      (
+        await addReview({
+          recipeId,
+          input: {
+            reviewId: crypto.randomUUID(),
+            score: input.score ?? null,
+            text: input.text ?? null,
+          },
+        })
+      ).data?.addRecipeReview,
+      "RecipeReview",
+    );
 
-  const handleDelete = () => {
-    if (myReview === null) return;
+  const handleSave = () => {
+    if (!dirty) return;
     startTransition(async () => {
       setError(null);
+      if (myReview === null) {
+        const result = await add({ score, text: savedText });
+        if (!result.ok) {
+          setError(
+            result.error.reason === "REVIEW_ALREADY_EXISTS"
+              ? "You already reviewed this recipe."
+              : result.error.message,
+          );
+          return;
+        }
+        setScore(undefined);
+        setText(undefined);
+      } else {
+        const result = unwrapResult(
+          (
+            await updateReview({
+              recipeId,
+              reviewId: myReview.id,
+              input: { score: score ?? null, text: savedText ?? null },
+            })
+          ).data?.updateRecipeReview,
+          "RecipeReview",
+        );
+        if (!result.ok) {
+          setError(result.error.message);
+          return;
+        }
+      }
+      notify("Review saved");
+      finish({ score, text: savedText });
+    });
+  };
+
+  /**
+   * Delete acts at once with Undo (KIT § 4 "Toast or confirm"): Undo adds
+   * the same words and stars back, as a new review on this recipe.
+   */
+  const handleDelete = () => {
+    const write = reviewDeleteWrite(recipeId, myReview, viewerId);
+    if (write === null || myReview === null) return;
+    const gone = reviewRestoreWrite(myReview);
+    startTransition(async () => {
       const result = unwrapResult(
-        (await deleteReview({ recipeId, reviewId: myReview.id })).data
-          ?.deleteRecipeReview,
+        (await deleteReview(write)).data?.deleteRecipeReview,
         "DeletedRecipeReview",
       );
       if (!result.ok) {
-        setError(result.error.message);
+        notify(`Couldn't delete it: ${result.error.message}`, {
+          tone: "error",
+        });
         return;
       }
       setScore(undefined);
       setText(undefined);
-      finish();
+      notify("Review deleted", {
+        undo: () => {
+          void add(gone).then((back) => {
+            if (back.ok) finish(gone);
+            else notify("Couldn't bring it back", { tone: "error" });
+          });
+        },
+      });
+      finish({});
     });
   };
 
-  const handleCancel = () => {
-    setOpen(false);
-    setError(null);
-    setScore(myReview?.score);
-    setText(myReview?.text ?? undefined);
+  const handleOpenChange = (next: boolean) => {
+    setOpen(next);
+    if (!next) {
+      setError(null);
+      setScore(myReview?.score);
+      setText(myReview?.text ?? undefined);
+    }
   };
 
-  if (open === false) {
-    return (
-      <Input
-        placeholder={
-          editing
-            ? "Edit your review of this recipe..."
-            : "Add a review for this recipe..."
-        }
-        onClick={() => setOpen(true)}
-        slotProps={{ input: { readOnly: true } }}
-        sx={{ cursor: "pointer" }}
-      />
-    );
-  }
-
   return (
-    <Card>
-      <Stack spacing={2}>
-        <Typography level="title-lg">
-          {editing ? "Edit Recipe Review:" : "Add Recipe Review:"}
-        </Typography>
-        <CardContent>
-          <Stack spacing={2}>
-            <div>
-              <Typography level="body-sm" sx={{ mb: 1 }}>
-                Rate this recipe:
-              </Typography>
-              <Rating
-                onClick={setScore}
-                showTooltip
-                tooltipDefaultText="Your Score"
-                allowFraction
-                tooltipArray={[
-                  "Terrible",
-                  "Bad",
-                  "Bad+",
-                  "Mediocre",
-                  "Mediocre+",
-                  "Good",
-                  "Good+",
-                  "Very Good",
-                  "Very Good+",
-                  "Outstanding",
-                ]}
-                readonly={isPending}
-                initialValue={score}
-              />
-            </div>
-
-            <RichTextEditor
-              placeholder="How was this recipe? Did you make any modifications?"
-              onChange={setText}
-              initialText={text}
-            />
-            {error !== null && (
-              <Typography level="body-sm" color="danger">
-                {error}
-              </Typography>
+    <div data-slot="my-review" className="flex flex-col gap-2">
+      {editing ? (
+        <div className="flex flex-col gap-1">
+          <div className="flex min-h-14 items-center gap-3">
+            <UserAvatar displayName="You" />
+            <span className="t-head min-w-0 flex-1 text-ink">You</span>
+            {myReview.score !== undefined && (
+              <Stars value={myReview.score} size="md" />
             )}
-          </Stack>
-        </CardContent>
-      </Stack>
-      <CardActions>
-        <Button
-          onClick={handleClick}
-          disabled={!dirty}
-          loading={isPending}
-          color="primary"
-        >
-          {editing ? "Save Review" : "Add Review"}
-        </Button>
-        {editing && (
+          </div>
+          {isNotNil(myReview.text) && (
+            <div className="t-body text-ink-2">
+              <RichTextDisplay text={myReview.text} />
+            </div>
+          )}
+          <div className="-ml-2 flex items-center gap-2">
+            <button
+              type="button"
+              className={QUIET_ACTION}
+              onClick={() => setOpen(true)}
+              disabled={isPending}
+            >
+              Edit
+            </button>
+            <button
+              type="button"
+              className={QUIET_ACTION}
+              onClick={handleDelete}
+              disabled={isPending}
+              aria-label="Delete your review"
+            >
+              Delete
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="flex min-h-14 items-center gap-3">
+          {!hasReviews && (
+            <p className="t-cap m-0 min-w-0 flex-1 text-ink-2">
+              No reviews yet
+            </p>
+          )}
           <Button
-            variant="plain"
-            color="danger"
-            disabled={isPending}
-            onClick={handleDelete}
+            variant="outline"
+            className={hasReviews ? "self-start" : "ml-auto"}
+            onClick={() => setOpen(true)}
           >
-            Delete
+            Write a review
           </Button>
-        )}
-        <Button onClick={handleCancel} variant="outlined" disabled={isPending}>
-          Cancel
-        </Button>
-      </CardActions>
-    </Card>
+        </div>
+      )}
+
+      <ResponsiveDialog
+        open={open}
+        onOpenChange={handleOpenChange}
+        title={editing ? "Edit your review" : "Your review"}
+        footer={
+          <div className="flex w-full items-center justify-between gap-2">
+            <Button
+              variant="ghost"
+              className="text-ink-2"
+              disabled={isPending}
+              onClick={() => handleOpenChange(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSave}
+              disabled={!dirty || isPending}
+              aria-busy={isPending || undefined}
+            >
+              {isPending && <Spinner aria-hidden />}
+              Save review
+            </Button>
+          </div>
+        }
+      >
+        <div className="flex flex-col gap-4">
+          <RatingInput
+            value={score}
+            onChange={setScore}
+            onClear={() => setScore(undefined)}
+            disabled={isPending}
+            label="Rate this recipe"
+          />
+          <RichTextEditor
+            placeholder="How was it? Anything you changed?"
+            onChange={setText}
+            initialText={text}
+          />
+          {error !== null && (
+            <p role="alert" className="t-cap m-0 text-danger">
+              {error}
+            </p>
+          )}
+        </div>
+      </ResponsiveDialog>
+    </div>
   );
 };

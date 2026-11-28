@@ -13,55 +13,36 @@
  *   a band's full membership and the old page always held every entry.
  * - `GetTierListsForItem` (the viewer's own lists of one type, each with the
  *   entity's row if present) → the entity's own `tierListEntries` (G8) for
- *   "Already added (band)", plus **every** visible list
- *   (`MyTierListOptionsPageQuery`, walked to the end by `useAllMyTierLists`)
- *   narrowed to the viewer's own and the type client-side. G33 (a server
- *   filter) is not built, so the walk is what keeps a viewer who sees more
- *   than 100 lists from losing their own.
+ *   "Already added (band)", plus the viewer's own lists
+ *   (`MyTierListOptionsPageQuery`, `section: MINE` since X11 — G33's owner
+ *   half — walked to the end by `useAllMyTierLists`) narrowed to the type
+ *   client-side.
  * - `GetUserItemReviews` → `Item.myReview` on the entry (fragments.ts).
  * - Every write is a named command returning a result union.
  */
 
+import { sectionPageSize } from "@/components/cellar-api/pagination";
+import { ItemCardFragment } from "@/components/item/ItemCard/fragments";
 import { ActorErrorFieldsFragment } from "@/lib/api/errors";
 import { graphql } from "@/lib/api/graphql";
 import {
-  TierListCardFragment,
   TierListCoreFragment,
   TierListEditFragment,
+  TierListEditHistoryFragment,
   TierListItemFragment,
+  TierListRecordedEditFragment,
 } from "./fragments";
 
 /** The API caps `first` at 100 on every connection. */
 export const TIER_LISTS_PAGE_SIZE = 100;
+
+/** One page of a `/tier-lists` section (X11): a short Discover, else 100. */
+export const tierListPageSize = (
+  section: "MINE" | "FRIENDS" | "DISCOVER",
+): number => sectionPageSize(section, TIER_LISTS_PAGE_SIZE);
 export const TIER_LIST_ITEMS_PAGE_SIZE = 100;
 /** `Item/Place.tierListEntries` reaches at most 100 rows. */
 export const ENTITY_ENTRIES_PAGE_SIZE = 100;
-
-/** Every tier list the viewer may see, for the index page. */
-export const GetTierListsQuery = graphql(
-  `
-    query GetTierLists($first: Int!, $after: String) {
-      myTierLists(first: $first, after: $after) {
-        __typename
-        ... on TierListConnection {
-          totalCount
-          pageInfo {
-            hasNextPage
-            endCursor
-          }
-          edges {
-            cursor
-            node {
-              ...TierListCard
-            }
-          }
-        }
-        ...ActorErrorFields
-      }
-    }
-  `,
-  [TierListCardFragment, ActorErrorFieldsFragment],
-);
 
 /** One tier list with a page of its entries, `band desc, position asc`. */
 export const GetTierListQuery = graphql(
@@ -71,6 +52,9 @@ export const GetTierListQuery = graphql(
         __typename
         ... on TierList {
           ...TierListCore
+          editHistory {
+            ...TierListEditHistoryFields
+          }
           items(first: $first, after: $after) {
             totalCount
             pageInfo {
@@ -89,7 +73,12 @@ export const GetTierListQuery = graphql(
       }
     }
   `,
-  [TierListCoreFragment, TierListItemFragment, ActorErrorFieldsFragment],
+  [
+    TierListCoreFragment,
+    TierListEditHistoryFragment,
+    TierListItemFragment,
+    ActorErrorFieldsFragment,
+  ],
 );
 
 /** The edit form's initial values. */
@@ -117,41 +106,6 @@ export const TierListViewerQuery = graphql(`
   }
 `);
 
-/**
- * One page of the viewer's visible lists, with just what an "own lists of
- * this type" picker needs — the map's tier-list filter and the "Add to Tier
- * List" modal. `useAllMyTierLists` walks every page before either filters.
- */
-export const MyTierListOptionsPageQuery = graphql(
-  `
-    query MyTierListOptionsPage($first: Int!, $after: String) {
-      me {
-        id
-      }
-      myTierLists(first: $first, after: $after) {
-        __typename
-        ... on TierListConnection {
-          pageInfo {
-            hasNextPage
-            endCursor
-          }
-          edges {
-            node {
-              __typename
-              id
-              name
-              listType
-              createdById
-            }
-          }
-        }
-        ...ActorErrorFields
-      }
-    }
-  `,
-  [ActorErrorFieldsFragment],
-);
-
 /** "Add to Tier List" modal for an item: where the item already is. */
 export const GetTierListsForItemQuery = graphql(
   `
@@ -166,6 +120,10 @@ export const GetTierListsForItemQuery = graphql(
           data {
             __typename
             id
+            myReview {
+              id
+              score
+            }
             tierListEntries(first: $first) {
               edges {
                 node {
@@ -192,6 +150,10 @@ export const GetTierListsForPlaceQuery = graphql(
         __typename
         ... on Place {
           id
+          myInteraction {
+            id
+            rating
+          }
           tierListEntries(first: $first) {
             edges {
               node {
@@ -228,7 +190,7 @@ export const AddTierListMutation = graphql(
   [ActorErrorFieldsFragment],
 );
 
-/** Only the fields passed are written; also the editing lock. */
+/** Only the fields passed are written. */
 export const EditTierListMutation = graphql(
   `
     mutation EditTierList($id: ID!, $input: UpdateTierListInput!) {
@@ -236,7 +198,6 @@ export const EditTierListMutation = graphql(
         __typename
         ... on TierList {
           id
-          isEditingLocked
         }
         ...ActorErrorFields
       }
@@ -263,7 +224,8 @@ export const DeleteTierListMutation = graphql(
 
 /**
  * `tierListItemId` is minted client-side so a retried add is idempotent; the
- * server appends at the end of `band` (no max-position read-then-insert race).
+ * server appends at the end of `band` (no max-position read-then-insert race),
+ * or with `position` (M7, pairwise placement) inserts at that index of it.
  */
 export const AddItemToTierListMutation = graphql(
   `
@@ -278,6 +240,72 @@ export const AddItemToTierListMutation = graphql(
           band
           position
           entryType
+          # Which edit the add recorded, so its toast's Undo names exactly it
+          # (undoTierListEdit's expectedSeq) — read in the same request.
+          tierList {
+            id
+            editHistory {
+              undo {
+                seq
+                kind
+                entryId
+              }
+            }
+          }
+        }
+        ...ActorErrorFields
+      }
+    }
+  `,
+  [ActorErrorFieldsFragment],
+);
+
+/**
+ * X16's multi-add: several entries as one edit, which one Undo takes back.
+ * Each `tierListItemId` is minted client-side, so a retry is idempotent.
+ */
+export const AddItemsToTierListMutation = graphql(
+  `
+    mutation AddItemsToTierList(
+      $tierListId: ID!
+      $input: AddTierListItemsInput!
+    ) {
+      addTierListItems(tierListId: $tierListId, input: $input) {
+        __typename
+        ... on AddTierListItemsPayload {
+          skippedCount
+          added(first: 100) {
+            totalCount
+            edges {
+              node {
+                id
+                band
+                position
+                entryType
+              }
+            }
+          }
+          # Which edit the multi-add recorded, so its toast's Undo names
+          # exactly it (undoTierListEdit's expectedSeq) — read once, through
+          # the first added row, in the same request.
+          latest: added(first: 1) {
+            edges {
+              node {
+                id
+                tierList {
+                  id
+                  editHistory {
+                    undo {
+                      seq
+                      kind
+                      entryId
+                      entryCount
+                    }
+                  }
+                }
+              }
+            }
+          }
         }
         ...ActorErrorFields
       }
@@ -325,6 +353,109 @@ export const ReorderBandMutation = graphql(
   [ActorErrorFieldsFragment],
 );
 
+/**
+ * D4: take back the edit `expectedSeq` names — the `undo` the page showed;
+ * anything newer on top is refused (TIER_LIST_HISTORY_MOVED), so a stale tab
+ * cannot take back an edit it never saw. The toast and the buttons read the
+ * rest.
+ */
+export const UndoTierListEditMutation = graphql(
+  `
+    mutation UndoTierListEdit($tierListId: ID!, $expectedSeq: Int!) {
+      undoTierListEdit(tierListId: $tierListId, expectedSeq: $expectedSeq) {
+        __typename
+        ... on TierListHistoryStep {
+          applied {
+            ...TierListEditFields
+          }
+          history {
+            ...TierListEditHistoryFields
+          }
+        }
+        ...ActorErrorFields
+      }
+    }
+  `,
+  [
+    TierListRecordedEditFragment,
+    TierListEditHistoryFragment,
+    ActorErrorFieldsFragment,
+  ],
+);
+
+/**
+ * L12 / MC-quota: write this list's Insights now — the panel sends it once,
+ * when it sees `insightsStatus: IDLE` on a list of 3+ entries the viewer
+ * owns. Idempotent server-side (a no-op from any other status), creator
+ * only, and counted against `ai_model/tier_list_insights`: a refusal is a
+ * `BudgetExceededError` whose `retryAt` is the reset.
+ */
+export const RequestTierListInsightsMutation = graphql(
+  `
+    mutation RequestTierListInsights($tierListId: ID!) {
+      requestTierListInsights(tierListId: $tierListId) {
+        __typename
+        ... on TierList {
+          id
+          insightsStatus
+          insightsFailureReason
+          insightsRetryAt
+        }
+        ...ActorErrorFields
+      }
+    }
+  `,
+  [ActorErrorFieldsFragment],
+);
+
+/**
+ * F-182: "Rewrite" on a READY Insights card (F-86). Counts against the
+ * viewer's AI allowance; a refusal is a typed error (USER_CAP), said as
+ * "Limit reached".
+ */
+export const RewriteTierListInsightsMutation = graphql(
+  `
+    mutation RewriteTierListInsights($tierListId: ID!) {
+      rewriteTierListInsights(tierListId: $tierListId) {
+        __typename
+        ... on TierList {
+          id
+          insightsStatus
+          insightsFailureReason
+          insightsRetryAt
+        }
+        ...ActorErrorFields
+      }
+    }
+  `,
+  [ActorErrorFieldsFragment],
+);
+
+/** D4: put back the undone edit `expectedSeq` names — `undo`'s mirror. */
+export const RedoTierListEditMutation = graphql(
+  `
+    mutation RedoTierListEdit($tierListId: ID!, $expectedSeq: Int!) {
+      redoTierListEdit(tierListId: $tierListId, expectedSeq: $expectedSeq) {
+        __typename
+        ... on TierListHistoryStep {
+          applied {
+            ...TierListEditFields
+          }
+          history {
+            ...TierListEditHistoryFields
+          }
+        }
+        ...ActorErrorFields
+      }
+    }
+  `,
+  [
+    TierListRecordedEditFragment,
+    TierListEditHistoryFragment,
+    ActorErrorFieldsFragment,
+  ],
+);
+
 // ---------------------------------------------------------------------------
 // In-page add (AddEntryModal) — kept from the rewrite
 // ---------------------------------------------------------------------------
@@ -351,7 +482,30 @@ export const TierListItemPickerQuery = graphql(
               item {
                 __typename
                 id
+                type
                 country
+                myReview {
+                  id
+                  score
+                }
+                ... on Wine {
+                  wineVariety: variety
+                  wineVintage: vintage
+                }
+                ... on Beer {
+                  beerStyle: style
+                }
+                ... on Spirit {
+                  spiritKind: spiritType
+                }
+                ... on Sake {
+                  sakeCategory: category
+                  sakeRegion: region
+                }
+                ... on Tea {
+                  teaCategory: category
+                  teaRegion: region
+                }
               }
             }
           }
@@ -365,12 +519,21 @@ export const TierListItemPickerQuery = graphql(
 
 /**
  * Places by phrase, with no `bounds`: a tier list is not a viewport, and
- * `placeSearch` without bounds searches globally.
+ * `placeSearch` without bounds searches globally. `filterCategories` is the
+ * picker's "Cafés only" (F-180), null for every kind.
  */
 export const TierListPlacePickerQuery = graphql(
   `
-    query TierListPlacePicker($query: String!, $first: Int!) {
-      placeSearch(query: $query, first: $first) {
+    query TierListPlacePicker(
+      $query: String!
+      $first: Int!
+      $filterCategories: [String!]
+    ) {
+      placeSearch(
+        query: $query
+        first: $first
+        filterCategories: $filterCategories
+      ) {
         __typename
         ... on PlaceSearchConnection {
           edges {
@@ -385,6 +548,10 @@ export const TierListPlacePickerQuery = graphql(
                 primaryCategory
                 locality
                 countryCode
+                myInteraction {
+                  id
+                  rating
+                }
               }
             }
           }
@@ -395,3 +562,163 @@ export const TierListPlacePickerQuery = graphql(
   `,
   [ActorErrorFieldsFragment],
 );
+
+// ---------------------------------------------------------------------------
+// X16 — adding without typing, templates, and what to try next
+// ---------------------------------------------------------------------------
+
+/** Add entry's sections ride one page: three sections of at most 30. */
+export const SUGGESTIONS_PAGE_SIZE = 100;
+
+/**
+ * Add entry's sections — In your cellars, Tasted (not ranked), Friends
+ * ranked — for the list's own type. The owner's alone: anyone else gets an
+ * empty connection. The item selection is the picker's, so a suggestion row
+ * and a search row describe a bottle the same way.
+ */
+export const TierListAddSuggestionsQuery = graphql(
+  `
+    query TierListAddSuggestions($id: ID!, $first: Int!) {
+      tierList(id: $id) {
+        __typename
+        ... on TierList {
+          id
+          addSuggestions(first: $first) {
+            edges {
+              cursor
+              node {
+                section
+                entryType
+                myScore
+                cellarName
+                bottleCount
+                logCount
+                lastTastedAt
+                friendBand
+                friendCount
+                friend {
+                  id
+                  displayName
+                }
+                place {
+                  id
+                  name
+                  displayName
+                  primaryCategory
+                  locality
+                  countryCode
+                }
+                item {
+                  __typename
+                  id
+                  type
+                  name
+                  country
+                  ... on Wine {
+                    wineVariety: variety
+                    wineVintage: vintage
+                  }
+                  ... on Beer {
+                    beerStyle: style
+                  }
+                  ... on Spirit {
+                    spiritKind: spiritType
+                  }
+                  ... on Sake {
+                    sakeCategory: category
+                    sakeRegion: region
+                  }
+                  ... on Tea {
+                    teaCategory: category
+                    teaRegion: region
+                  }
+                }
+              }
+            }
+          }
+        }
+        ...ActorErrorFields
+      }
+    }
+  `,
+  [ActorErrorFieldsFragment],
+);
+
+/** How many cards Try this next asks for. */
+export const TRY_NEXT_PAGE_SIZE = 6;
+
+/**
+ * X16's grounded Try this next: catalog cards, each with the fact behind
+ * it. The item is the shared card fragment (photo or LabelPlate, name,
+ * maker) plus its Want to try state.
+ */
+export const TierListTryNextQuery = graphql(
+  `
+    query TierListTryNext($id: ID!, $first: Int!) {
+      tierList(id: $id) {
+        __typename
+        ... on TierList {
+          id
+          tryNext(first: $first) {
+            edges {
+              cursor
+              node {
+                reason
+                entryType
+                friendBand
+                friendCount
+                likeName
+                likeBand
+                friend {
+                  id
+                  displayName
+                }
+                place {
+                  id
+                  name
+                  displayName
+                  primaryCategory
+                  locality
+                  countryCode
+                  myInteraction {
+                    id
+                    wantToVisit
+                  }
+                }
+                item {
+                  __typename
+                  id
+                  isWantToTry
+                  ...ItemCard
+                }
+              }
+            }
+          }
+        }
+        ...ActorErrorFields
+      }
+    }
+  `,
+  [ItemCardFragment, ActorErrorFieldsFragment],
+);
+
+/**
+ * X16's templates: per list type, how many you have rated — what a list
+ * started from your ratings would hold.
+ */
+export const TierListTemplatesQuery = graphql(`
+  query TierListTemplates {
+    me {
+      id
+      tierListTemplates(first: 10) {
+        edges {
+          node {
+            listType
+            entryType
+            ratedCount
+          }
+        }
+      }
+    }
+  }
+`);

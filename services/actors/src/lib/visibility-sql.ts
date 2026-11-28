@@ -31,29 +31,15 @@
  */
 import type { Ctx } from "@cellar-assistant/contracts";
 import { type SQL, sql } from "@cellar-assistant/db/orm";
-import type { Friendship } from "@cellar-assistant/policy";
 import { bypassesPolicy } from "@cellar-assistant/policy";
 import { uuidArray } from "./collection-sql.ts";
 import type { DbOrTx } from "./db.ts";
-import { friendshipsOf } from "./visibility.ts";
+import { friendIdsOf, friendshipsOf } from "./visibility.ts";
 
-/**
- * The other side of each friendship touching `viewer`, once each, without
- * `viewer` — the ids `canSee`'s third branch compares the creator against.
- * `friends` is directed and read in both directions (`./visibility.ts`), so
- * the steady state has two rows per friendship.
- */
-export const friendIdsOf = (
-  viewer: string,
-  friendships: readonly Friendship[],
-): string[] =>
-  [
-    ...new Set(
-      friendships.map((row) =>
-        row.userId === viewer ? row.friendId : row.userId,
-      ),
-    ),
-  ].filter((id) => id !== viewer);
+// `friendIdsOf` is pure and lives beside `friendshipsOf`, so an actor that
+// needs only the friend set (`ItemActor.friendsScore`) need not import the SQL
+// half; re-exported here for the callers that already read it from here.
+export { friendIdsOf } from "./visibility.ts";
 
 /** Who is asking, resolved once per query. */
 export type VisibilityScope =

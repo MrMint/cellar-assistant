@@ -28,20 +28,30 @@ import {
   MODEL_SEAMS,
   readModelBudgetPolicy,
 } from "../../actors/budget-actor.ts";
-import { setPlaceReviewer } from "../../actors/place-creation-actor.ts";
+import {
+  providerTastePhraser,
+  setTastePhraser,
+} from "../../actors/taste-actor.ts";
 import { setInsightsGenerator } from "../../actors/tier-list-actor.ts";
 import { EMBEDDING_DIMENSIONS, setEmbedder } from "../embeddings.ts";
+import { setFlavourTagSuggester } from "../flavour-tags.ts";
 import {
   setDocumentImageEmbedder,
   setQueryImageEmbedder,
 } from "../image-embeddings.ts";
 import { setItemDefaultsProvider } from "../item-defaults.ts";
+import { setItemSuggestionsProvider } from "../item-suggestions.ts";
 import { setMenuExtractionProvider, setMenuMatchVerifier } from "../menu-ai.ts";
+import { setPlaceReviewer } from "../place-review.ts";
 import { setRecipePhotoExtractor } from "../recipe-photo-ai.ts";
 import type { EmbeddingModelIdentity } from "../vectors.ts";
 import { embeddingModelKey, setEmbeddingModel } from "../vectors.ts";
 import type { ModelBudget, SeamModels } from "./budget.ts";
 import { meteredProviderFor } from "./budget.ts";
+import {
+  capabilitiesForInstalledProvider,
+  setAiCapabilities,
+} from "./capabilities.ts";
 import type { EmbeddingInputDialect, Env } from "./config.ts";
 import { readAIProviderConfig, selectProvider } from "./config.ts";
 import { createAIProvider } from "./factory.ts";
@@ -51,9 +61,11 @@ import { daprImageLoader } from "./images.ts";
 import { LLAMACPP_EMBEDDING_VARIANT } from "./openai-compatible.ts";
 import {
   providerEmbedder,
+  providerFlavourTags,
   providerImageEmbedder,
   providerInsightsGenerator,
   providerItemDefaults,
+  providerItemSuggestions,
   providerMenuExtraction,
   providerMenuMatchVerifier,
   providerPlaceReviewer,
@@ -103,6 +115,11 @@ export const SEAMS = {
     install: (provider, loadImages) =>
       setEmbedder(providerEmbedder(provider, loadImages)),
   },
+  flavour_tags: {
+    entityType: "check_in",
+    install: (provider) =>
+      setFlavourTagSuggester(providerFlavourTags(provider)),
+  },
   // G32: the same implementation in two slots, each charged to its own seam
   // (`../image-embeddings.ts` says why).
   image_embedding: {
@@ -118,6 +135,11 @@ export const SEAMS = {
     entityType: "item_onboarding",
     install: (provider, loadImages) =>
       setItemDefaultsProvider(providerItemDefaults(provider, loadImages)),
+  },
+  item_suggestions: {
+    entityType: "item_onboarding",
+    install: (provider) =>
+      setItemSuggestionsProvider(providerItemSuggestions(provider)),
   },
   menu_extraction: {
     entityType: "menu_scan",
@@ -139,6 +161,12 @@ export const SEAMS = {
       setRecipePhotoExtractor(
         providerRecipePhotoExtractor(provider, loadImages),
       ),
+  },
+  // L03 (H-10): the taste profile's one sentence. `TasteActor.profile` never
+  // calls it on thin data and keeps the deterministic line on any throw.
+  taste_phrase: {
+    entityType: "taste_profile",
+    install: (provider) => setTastePhraser(providerTastePhraser(provider)),
   },
   tier_list_insights: {
     entityType: "tier_list",
@@ -210,8 +238,17 @@ export const installSeams = (
   // Not a seam, but installed with the embedder and from the same answer:
   // which embedding every vector this process writes is recorded as, and what
   // `regenerateVector` compares a stored vector's `embedding_model` against.
-  setEmbeddingModel(
-    embeddingModelIdentity(provider.name, models.embedding, embeddingInput),
+  const identity = embeddingModelIdentity(
+    provider.name,
+    models.embedding,
+    embeddingInput,
+  );
+  setEmbeddingModel(identity);
+  // N07/D25: what a client may offer, decided from the same answer.
+  setAiCapabilities(
+    capabilitiesForInstalledProvider({
+      embeddingAcceptsImages: identity.acceptsImages,
+    }),
   );
   for (const seam of MODEL_SEAMS) {
     const spec: SeamSpec = SEAMS[seam];

@@ -12,12 +12,17 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import type { ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { stripStyleBlocks } from "@/test-support/markup";
 import { RichTextDisplay } from "./RichTextDisplay";
 import { RichTextEditor } from "./RichTextEditor";
-import { lexicalStateFromPlainText, richTextFromReviewText } from "./rich-text";
+import {
+  lexicalStateFromPlainText,
+  plainTextFromRichText,
+  richTextFromReviewText,
+} from "./rich-text";
 
 const render = (node: ReactNode) =>
-  renderToStaticMarkup(node).replace(/<style[^>]*>[^<]*<\/style>/g, "");
+  stripStyleBlocks(renderToStaticMarkup(node));
 
 const oldLexical = lexicalStateFromPlainText("Bright cherry.\nLong finish.");
 
@@ -81,7 +86,14 @@ describe("RichTextDisplay (restored)", () => {
   test("a read-only content-editable inside the composer", () => {
     const html = render(<RichTextDisplay text={oldLexical} />);
     assert.match(html, /contentEditable="false"/);
-    assert.match(html, /role="textbox"/);
+  });
+
+  test("X21: an article, not an unnamed read-only textbox", () => {
+    const html = render(<RichTextDisplay text={oldLexical} />);
+    assert.match(html, /role="article"/);
+    assert.doesNotMatch(html, /role="textbox"/);
+    assert.doesNotMatch(html, /aria-readonly/);
+    assert.doesNotMatch(html, /aria-autocomplete/);
   });
 
   test("every column shape renders once adapted; a raw { body } would not", () => {
@@ -99,12 +111,58 @@ describe("RichTextDisplay (restored)", () => {
   });
 });
 
+describe("plainTextFromRichText", () => {
+  test("a state's blocks on one line, empty paragraphs dropped", () => {
+    const state = lexicalStateFromPlainText("Bright cherry\n\nlong finish");
+    assert.equal(plainTextFromRichText(state), "Bright cherry long finish");
+  });
+
+  test("runs inside a block join as written; blocks and list items get a space", () => {
+    const state = JSON.stringify({
+      root: {
+        type: "root",
+        children: [
+          {
+            type: "paragraph",
+            children: [
+              { type: "text", text: "Very " },
+              { type: "text", text: "good", format: 1 },
+            ],
+          },
+          {
+            type: "list",
+            children: [
+              { type: "listitem", children: [{ type: "text", text: "a" }] },
+              { type: "listitem", children: [{ type: "text", text: "b" }] },
+            ],
+          },
+        ],
+      },
+    });
+    assert.equal(plainTextFromRichText(state), "Very good a b");
+  });
+
+  test("the old editor's state and every adapted shape read as words", () => {
+    for (const raw of [{ body: "lovely" }, "lovely", oldLexical]) {
+      const text = richTextFromReviewText(raw);
+      assert.ok(text);
+      assert.notEqual(plainTextFromRichText(text), "");
+      assert.doesNotMatch(plainTextFromRichText(text), /[{}]/);
+    }
+  });
+
+  test("anything unparsable comes back as it was", () => {
+    assert.equal(plainTextFromRichText("not json"), "not json");
+    assert.equal(plainTextFromRichText('{"nope":1}'), "");
+  });
+});
+
 describe("RichTextEditor (restored)", () => {
-  test("an outlined Sheet with an editable surface and the placeholder", () => {
+  test("a framed, editable, empty textbox and the placeholder", () => {
     const html = render(
       <RichTextEditor onChange={() => {}} placeholder="Tell us more" />,
     );
-    assert.match(html, /^<div class="MuiSheet-root MuiSheet-variantOutlined/);
+    assert.match(html, /^<div\b[^>]*><div[^>]*role="textbox"[^>]*><\/div>/);
     assert.match(html, /contentEditable="true"/);
     assert.match(html, />Tell us more</);
   });

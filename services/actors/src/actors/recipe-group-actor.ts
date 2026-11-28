@@ -59,6 +59,18 @@
  * The "on a recipe in this group" clause is itself new: today a caller with
  * the admin secret can write a `recipe_votes` row pointing at any recipe in
  * the database, and nothing relates it to the group whose canonical it moves.
+ *
+ * ## Private versions (X15 / D22)
+ *
+ * A recipe is private first now, and a group is only as visible as its
+ * versions: a viewer sees the group when they created it or may see at least
+ * one version in it (`canSeeRecipe`); otherwise it is `NotFound`, like a
+ * missing one. Every read answers with the versions *that viewer* may see —
+ * the list, the count, the votes and the tallies — and a vote may only be
+ * cast on one of them. The canonical is chosen from the most widely shared
+ * versions first (PUBLIC, then FRIENDS, then the rest), and only a PUBLIC
+ * canonical renames the group — the name is read by everyone who can see any
+ * version, so it is never a private recipe's.
  */
 import { randomUUID } from "node:crypto";
 import type {
@@ -70,6 +82,7 @@ import type {
   PageArgs,
   RecipeCategory,
   RecipeGroupActorInterface,
+  RecipeGroupBaseSpiritResult,
   RecipeGroupDto,
   RecipeVoteDto,
   RecipeVoteResult,
@@ -80,8 +93,9 @@ import type {
   VoteOnRecipeInput,
 } from "@cellar-assistant/contracts";
 import {
+  baseSpiritOf,
+  COMMUNITY_PICK_MIN_NET,
   ConflictError,
-  ForbiddenError,
   isRecipeVoteType,
   NotFoundError,
   offsetPage,
@@ -90,21 +104,30 @@ import {
   ValidationError,
   voteWeight,
 } from "@cellar-assistant/contracts";
-import { recipeGroups, recipes, recipeVotes } from "@cellar-assistant/db";
-import { and, eq, inArray, sql } from "@cellar-assistant/db/orm";
-import { bypassesPolicy, isOwner } from "@cellar-assistant/policy";
+import {
+  recipeGroups,
+  recipeIngredients,
+  recipes,
+  recipeVotes,
+} from "@cellar-assistant/db";
+import { and, eq, inArray, isNull, sql } from "@cellar-assistant/db/orm";
+import {
+  bypassesPolicy,
+  canSeeRecipe,
+  isFriend,
+  isOwner,
+  type Privacy,
+} from "@cellar-assistant/policy";
 import type { ActorId, DaprClient } from "@dapr/dapr";
 import { EntityActorBase } from "../lib/actor-base.ts";
 import type { DbOrTx } from "../lib/db.ts";
 import { actorDb } from "../lib/db.ts";
-import {
-  requirePrivileged,
-  requireSignedIn,
-  requireViewer,
-} from "../lib/guards.ts";
+import { requireSignedIn, requireViewer } from "../lib/guards.ts";
 import { enqueueOutbox } from "../lib/outbox.ts";
 import { OUTBOX_TARGETS } from "../lib/outbox-targets.ts";
+import { inferRecipeMeta } from "../lib/recipe-ingredients.ts";
 import { isUuid, requireUuid } from "../lib/uuid.ts";
+import { policyFriendships } from "../lib/visibility.ts";
 
 type RecipeGroupRow = typeof recipeGroups.$inferSelect;
 type RecipeVoteRow = typeof recipeVotes.$inferSelect;
@@ -114,7 +137,24 @@ type MemberRecipe = {
   readonly id: string;
   readonly name: string;
   readonly createdAt: Date | null;
+  /** X15: what `canSeeRecipe` reads. */
+  readonly createdById: string | null;
+  readonly privacy: Privacy;
+  readonly isDraft: boolean;
 };
+
+/**
+ * How widely a version is shared, for the canonical's tie-breaking tier:
+ * PUBLIC beats FRIENDS beats private or draft (module doc).
+ */
+const shareTier = (recipe: MemberRecipe): number =>
+  recipe.isDraft
+    ? 0
+    : recipe.privacy === "PUBLIC"
+      ? 2
+      : recipe.privacy === "FRIENDS"
+        ? 1
+        : 0;
 
 /**
  * **Only the `recipe_groups` row is cached.** §1.3 lets an actor cache its
@@ -141,6 +181,41 @@ type RecipeGroupSnapshot = {
   readonly recipes: readonly MemberRecipe[];
   /** Every vote on every recipe in this group. */
   readonly votes: readonly RecipeVoteRow[];
+  /**
+   * MC-pick, over the *whole* group (`communityPickOf`), carried unchanged
+   * through `#viewFor`; `#toDto` names it only when the viewer sees it.
+   */
+  readonly communityPickId: string | null;
+};
+
+/**
+ * MC-pick / L15: the version with the highest net votes from people other
+ * than its author, at least `COMMUNITY_PICK_MIN_NET`, the oldest winning a
+ * tie (`recipes` arrive `created_at asc, id asc`). A draft is never the pick.
+ * A label only: `#recomputeCanonical`, which renames and re-embeds, is not
+ * touched by it.
+ */
+export const communityPickOf = (
+  recipes: readonly Pick<MemberRecipe, "id" | "createdById" | "isDraft">[],
+  votes: readonly Pick<RecipeVoteRow, "recipeId" | "userId" | "voteType">[],
+): string | null => {
+  let pick: string | null = null;
+  let best = COMMUNITY_PICK_MIN_NET - 1;
+  for (const recipe of recipes) {
+    if (recipe.isDraft) continue;
+    let net = 0;
+    for (const vote of votes) {
+      if (vote.recipeId !== recipe.id || vote.userId === recipe.createdById) {
+        continue;
+      }
+      net += vote.voteType === "upvote" ? 1 : -1;
+    }
+    if (net > best) {
+      best = net;
+      pick = recipe.id;
+    }
+  }
+  return pick;
 };
 
 /** `recipe_groups_name_check`: `length(name) > 0`. */
@@ -233,6 +308,9 @@ export class RecipeGroupActor
         id: recipes.id,
         name: recipes.name,
         createdAt: recipes.createdAt,
+        createdById: recipes.createdById,
+        privacy: recipes.privacy,
+        isDraft: recipes.isDraft,
       })
       .from(recipes)
       .where(eq(recipes.recipeGroupId, id))
@@ -254,27 +332,97 @@ export class RecipeGroupActor
             )
             .orderBy(sql`${recipeVotes.createdAt} asc, ${recipeVotes.id} asc`);
 
-    return { group, recipes: members, votes };
+    return {
+      group,
+      recipes: members,
+      votes,
+      communityPickId: communityPickOf(members, votes),
+    };
   }
 
   /* ---------------------------------------------------------------------- */
   /* Policy                                                                  */
   /* ---------------------------------------------------------------------- */
 
-  // Reads are catalog data: today's `recipe_groups` select filter is `{}` for
-  // `user`, so they take `requireSignedIn` (`../lib/guards.ts`).
+  // Reads are signed-in only (`requireSignedIn`) and, since X15, answered
+  // with the versions the viewer may see (`#viewFor`); a group with none of
+  // those that the viewer did not create is `NotFound` (module doc).
+
+  /**
+   * The snapshot narrowed to what `ctx` may see: the visible versions and the
+   * votes on them. `system`/admin see all of it.
+   */
+  async #viewFor(
+    ctx: Ctx,
+    snapshot: RecipeGroupSnapshot,
+  ): Promise<RecipeGroupSnapshot> {
+    if (bypassesPolicy(ctx)) return snapshot;
+    const needsFriends = snapshot.recipes.some(
+      (recipe) => recipe.privacy === "FRIENDS" && !recipe.isDraft,
+    );
+    const friendships = needsFriends
+      ? await policyFriendships(this.db, ctx)
+      : [];
+    const visible = snapshot.recipes.filter((recipe) =>
+      canSeeRecipe(ctx, {
+        createdById: recipe.createdById,
+        privacy: recipe.privacy,
+        isDraft: recipe.isDraft,
+        viewerIsFriendOfCreator: isFriend(ctx, recipe.createdById, friendships),
+      }),
+    );
+    const ids = new Set(visible.map((recipe) => recipe.id));
+    return {
+      group: snapshot.group,
+      recipes: visible,
+      votes: snapshot.votes.filter((vote) => ids.has(vote.recipeId)),
+      communityPickId: snapshot.communityPickId,
+    };
+  }
+
+  /** Whether `ctx` may know this group exists, given its view of it. */
+  #canSeeView(ctx: Ctx, view: RecipeGroupSnapshot): boolean {
+    return (
+      bypassesPolicy(ctx) ||
+      isOwner(ctx, view.group.createdById) ||
+      view.recipes.length > 0
+    );
+  }
+
+  protected override async canSee(
+    ctx: Ctx,
+    _aggregate: RecipeGroupAggregate,
+  ): Promise<boolean> {
+    return this.#canSeeView(
+      ctx,
+      await this.#viewFor(ctx, await this.#snapshot()),
+    );
+  }
+
+  /** Signed in, then the viewer's view of the group — or `NotFound`. */
+  async #readableView(ctx: Ctx, what: string): Promise<RecipeGroupSnapshot> {
+    this.requireAggregate();
+    requireSignedIn(ctx, what);
+    const view = await this.#viewFor(ctx, await this.#snapshot());
+    if (!this.#canSeeView(ctx, view)) this.refuseAsAbsent();
+    return view;
+  }
 
   /** Today's `recipe_groups` update filter: `created_by_id = session user`. */
-  #requireCreator(ctx: Ctx, group: RecipeGroupRow, what: string): void {
+  async #requireCreator(
+    ctx: Ctx,
+    group: RecipeGroupRow,
+    what: string,
+  ): Promise<void> {
     if (bypassesPolicy(ctx)) return;
-    if (group.createdById === null) {
-      throw new ForbiddenError(
-        `recipe group ${this.key} has no creator; only an admin may ${what}`,
-      );
-    }
-    if (isOwner(ctx, group.createdById)) return;
-    throw new ForbiddenError(
-      `recipe group ${this.key} is not yours to ${what}`,
+    requireSignedIn(ctx, `${what.replace(/ it$/, "")} a recipe group`);
+    // Someone who cannot see the group is told it is absent (X15).
+    await this.requireAllowed(
+      ctx,
+      group.createdById !== null && isOwner(ctx, group.createdById),
+      group.createdById === null
+        ? `recipe group ${this.key} has no creator; only an admin may ${what}`
+        : `recipe group ${this.key} is not yours to ${what}`,
     );
   }
 
@@ -283,9 +431,7 @@ export class RecipeGroupActor
   /* ---------------------------------------------------------------------- */
 
   async get(ctx: Ctx): Promise<RecipeGroupDto> {
-    this.requireAggregate();
-    requireSignedIn(ctx, "view a recipe group");
-    return this.#toDto(await this.#snapshot());
+    return this.#toDto(await this.#readableView(ctx, "view a recipe group"));
   }
 
   /**
@@ -297,9 +443,10 @@ export class RecipeGroupActor
    * recipe, and a versions list reads top-down in the order the votes put it.
    */
   async recipes(ctx: Ctx, page: PageArgs): Promise<Page<string>> {
-    this.requireAggregate();
-    requireSignedIn(ctx, "view a recipe group's recipes");
-    const snapshot = await this.#snapshot();
+    const snapshot = await this.#readableView(
+      ctx,
+      "view a recipe group's recipes",
+    );
     return offsetPage(
       this.#rankedRecipes(snapshot).map((recipe) => recipe.id),
       page,
@@ -307,9 +454,8 @@ export class RecipeGroupActor
   }
 
   async votes(ctx: Ctx, page: PageArgs): Promise<Page<RecipeVoteDto>> {
-    this.requireAggregate();
-    requireSignedIn(ctx, "view a recipe group's votes");
-    return offsetPage((await this.#snapshot()).votes.map(voteRowToDto), page);
+    const view = await this.#readableView(ctx, "view a recipe group's votes");
+    return offsetPage(view.votes.map(voteRowToDto), page);
   }
 
   /**
@@ -337,9 +483,10 @@ export class RecipeGroupActor
     ctx: Ctx,
     recipeIds: readonly string[],
   ): Promise<readonly RecipeVoteSummaryDto[]> {
-    this.requireAggregate();
-    requireSignedIn(ctx, "view a recipe group's votes");
-    const snapshot = await this.#snapshot();
+    const snapshot = await this.#readableView(
+      ctx,
+      "view a recipe group's votes",
+    );
     const members = new Set(snapshot.recipes.map((recipe) => recipe.id));
     const viewer = ctx.viewerId;
 
@@ -381,7 +528,13 @@ export class RecipeGroupActor
   ): Promise<RecipeGroupDto> {
     requireUuid(this.key, "recipeGroupId");
     requireSignedIn(ctx, "create a recipe group");
-    if (this.aggregate !== null) return this.#toDto(await this.#snapshot());
+    // A re-delivered create gets the group back — as the caller may see it,
+    // and only if they may see it at all (X15).
+    if (this.aggregate !== null) {
+      return this.#toDto(
+        await this.#readableView(ctx, "create a recipe group"),
+      );
+    }
 
     const name = requireName(input.name);
     const category = requireCategory(input.category);
@@ -406,7 +559,7 @@ export class RecipeGroupActor
     });
 
     await this.reload();
-    return this.#toDto(await this.#snapshot());
+    return this.#toDto(await this.#viewFor(ctx, await this.#snapshot()));
   }
 
   /**
@@ -424,7 +577,7 @@ export class RecipeGroupActor
     input: UpdateRecipeGroupInput,
   ): Promise<RecipeGroupDto> {
     const snapshot = await this.#snapshot();
-    this.#requireCreator(ctx, snapshot.group, "update it");
+    await this.#requireCreator(ctx, snapshot.group, "update it");
 
     const patch: Partial<typeof recipeGroups.$inferInsert> = {};
     if (input.name !== undefined) patch.name = requireName(input.name);
@@ -463,7 +616,7 @@ export class RecipeGroupActor
     });
 
     await this.reload();
-    return this.#toDto(await this.#snapshot());
+    return this.#toDto(await this.#viewFor(ctx, await this.#snapshot()));
   }
 
   /* ---------------------------------------------------------------------- */
@@ -487,7 +640,9 @@ export class RecipeGroupActor
   async vote(ctx: Ctx, input: VoteOnRecipeInput): Promise<RecipeVoteResult> {
     this.requireAggregate();
     const userId = requireViewer(ctx, "vote on a recipe");
-    const snapshot = await this.#snapshot();
+    // X15: only a version the voter may see — a hidden one is answered
+    // exactly like one that is not in the group.
+    const snapshot = await this.#viewFor(ctx, await this.#snapshot());
 
     const recipeId = requireUuid(input.recipeId, "recipeId");
     const voteType = requireVoteType(input.voteType);
@@ -514,7 +669,7 @@ export class RecipeGroupActor
     const canonicalChanged = await this.#recomputeCanonical(ctx);
     await this.reload();
 
-    const reloaded = await this.#snapshot();
+    const reloaded = await this.#viewFor(ctx, await this.#snapshot());
     const written = reloaded.votes.find(
       (row) => row.recipeId === recipeId && row.userId === userId,
     );
@@ -592,8 +747,7 @@ export class RecipeGroupActor
     ctx: Ctx,
     _payload?: Record<string, unknown>,
   ): Promise<RecipeGroupDto> {
-    this.requireAggregate();
-    requirePrivileged(
+    this.requirePrivilegedAggregate(
       ctx,
       `only a system or admin caller may recompute a recipe group's canonical version`,
     );
@@ -622,7 +776,7 @@ export class RecipeGroupActor
    */
   async delete(ctx: Ctx): Promise<DeletedRecipeGroup> {
     const { group } = this.requireAggregate();
-    this.#requireCreator(ctx, group, "delete it");
+    await this.#requireCreator(ctx, group, "delete it");
     const snapshot = await this.#snapshot();
 
     if (snapshot.recipes.length > 0) {
@@ -671,8 +825,13 @@ export class RecipeGroupActor
         .update(recipeGroups)
         .set({
           canonicalRecipeId: next,
-          // `name = COALESCE(new_canonical_name, name)`, verbatim.
-          name: winner?.name ?? snapshot.group.name,
+          // `name = COALESCE(new_canonical_name, name)` — but only a PUBLIC
+          // winner renames the group (X15): the name is shown to everyone
+          // who can see any version, so it may never be a private recipe's.
+          name:
+            winner !== null && shareTier(winner) === 2
+              ? winner.name
+              : snapshot.group.name,
           updatedAt: new Date(),
         })
         .where(eq(recipeGroups.id, this.key));
@@ -696,9 +855,16 @@ export class RecipeGroupActor
       .reduce((sum, row) => sum + voteWeight(requireVoteType(row.voteType)), 0);
   }
 
-  /** `ORDER BY net_score DESC, created_at ASC` — plus `id ASC` (module doc). */
+  /**
+   * `ORDER BY net_score DESC, created_at ASC` — plus `id ASC` (module doc),
+   * behind X15's share tier: a more widely shared version outranks any vote
+   * count on a less shared one, so the canonical (and the group's name) is
+   * a PUBLIC recipe whenever the group has one.
+   */
   #rankedRecipes(snapshot: RecipeGroupSnapshot): readonly MemberRecipe[] {
     return snapshot.recipes.slice().sort((a, b) => {
+      const byTier = shareTier(b) - shareTier(a);
+      if (byTier !== 0) return byTier;
       const byScore =
         this.#netScore(snapshot, b.id) - this.#netScore(snapshot, a.id);
       if (byScore !== 0) return byScore;
@@ -735,6 +901,65 @@ export class RecipeGroupActor
     }
   }
 
+  /**
+   * X14 — see the interface. Reads the member's ingredient rows (another
+   * actor's table; reads are free, §1.2 is about writes) and derives the base
+   * exactly as the recipe page does (`inferRecipeMeta`, `baseSpiritOf`), so a
+   * group's chip and its recipe's "base" row cannot disagree.
+   *
+   * Does not enqueue the members' `regenerateVector`, though `base_spirit` is
+   * in their embedding text: a backfill over every group would spend an
+   * embedding per recipe for one word. The stamp this write leaves on
+   * `updated_at` makes the next regeneration of each member pick it up.
+   */
+  async backfillBaseSpirit(
+    ctx: Ctx,
+    _payload: Record<string, unknown> = {},
+  ): Promise<RecipeGroupBaseSpiritResult> {
+    const { group } = this.requirePrivilegedAggregate(
+      ctx,
+      `only a system or admin caller may backfill recipe group ${this.key}`,
+    );
+    if (group.baseSpirit !== null) {
+      return {
+        groupId: this.key,
+        baseSpirit: group.baseSpirit,
+        written: false,
+      };
+    }
+    const snapshot = await this.#snapshot();
+    const memberId = group.canonicalRecipeId ?? snapshot.recipes[0]?.id ?? null;
+    if (memberId === null) {
+      return { groupId: this.key, baseSpirit: null, written: false };
+    }
+    const rows = await this.db
+      .select()
+      .from(recipeIngredients)
+      .where(eq(recipeIngredients.recipeId, memberId))
+      .orderBy(
+        sql`${recipeIngredients.createdAt} asc, ${recipeIngredients.id} asc`,
+      );
+    const meta = await inferRecipeMeta(this.db, rows);
+    const base = baseSpiritOf(
+      rows.map((row) => meta.get(row.id) ?? { kind: null, role: null }),
+    );
+    if (base === null) {
+      return { groupId: this.key, baseSpirit: null, written: false };
+    }
+    await this.tx(async (tx) => {
+      // `is null` again inside the write: an author who set one between the
+      // read above and here keeps theirs.
+      await tx
+        .update(recipeGroups)
+        .set({ baseSpirit: base })
+        .where(
+          and(eq(recipeGroups.id, this.key), isNull(recipeGroups.baseSpirit)),
+        );
+    });
+    await this.reload();
+    return { groupId: this.key, baseSpirit: base, written: true };
+  }
+
   #toDto(snapshot: RecipeGroupSnapshot): RecipeGroupDto {
     const row = snapshot.group;
     return {
@@ -746,7 +971,19 @@ export class RecipeGroupActor
       tags: row.tags ?? [],
       imageUrl: row.imageUrl,
       createdById: row.createdById,
-      canonicalRecipeId: row.canonicalRecipeId,
+      // X15: the canonical as this snapshot's viewer may see it — another
+      // person's private version is not named, even by id.
+      canonicalRecipeId: snapshot.recipes.some(
+        (recipe) => recipe.id === row.canonicalRecipeId,
+      )
+        ? row.canonicalRecipeId
+        : null,
+      // MC-pick: likewise named only when the viewer may see that version.
+      communityPickId: snapshot.recipes.some(
+        (recipe) => recipe.id === snapshot.communityPickId,
+      )
+        ? snapshot.communityPickId
+        : null,
       recipeCount: snapshot.recipes.length,
       createdAt: iso(row.createdAt),
       updatedAt: iso(row.updatedAt),

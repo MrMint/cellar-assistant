@@ -14,14 +14,18 @@
  *   - the three `system` methods have no field at all.
  */
 import {
+  avatarBatchActorId,
   ConflictError,
   ForbiddenError,
+  NotFoundError,
+  PROFILE_NOT_SHARED,
   ValidationError,
 } from "@cellar-assistant/contracts";
 import { execute, parse } from "graphql";
 import { describe, expect, it } from "vitest";
 import { stubSidecar, testContext } from "../testing.ts";
 import { schema } from "./index.ts";
+import { avatarUrlOf } from "./user.ts";
 
 const run = (document: string, context: ReturnType<typeof testContext>) =>
   execute({ schema, document: parse(document), contextValue: context });
@@ -37,7 +41,8 @@ const BOB = "22222222-2222-4222-8222-222222222222";
 const profile = (id: string, name: string, email: string | null = null) => ({
   id,
   displayName: name,
-  avatarUrl: null,
+  avatarUrl: null as string | null,
+  avatarFileId: null as string | null,
   locale: "en",
   email,
 });
@@ -88,6 +93,31 @@ describe("user profile", () => {
     expect(calls[0]?.actorId).toBe(alice.id);
   });
 
+  it("serves viewer.aiCapabilities from the viewer's own UserActor (N07)", async () => {
+    const capabilities = {
+      semanticSearch: true,
+      imageSearch: false,
+      labelRead: true,
+      menuScan: true,
+      recipePhoto: true,
+      tierListInsights: true,
+    };
+    const { invoke, calls } = stubSidecar({
+      "UserActor.aiCapabilities": () => capabilities,
+    });
+    const result = await run(
+      `{ me { aiCapabilities { semanticSearch imageSearch labelRead menuScan recipePhoto tierListInsights } } }`,
+      testContext(invoke, alice),
+    );
+    expect(result.errors).toBeUndefined();
+    expect(result.data?.me).toEqual({ aiCapabilities: capabilities });
+    expect(calls[0]).toMatchObject({
+      actorType: "UserActor",
+      actorId: alice.id,
+      method: "aiCapabilities",
+    });
+  });
+
   it("maps a typed actor error onto the field's result union", async () => {
     const { invoke } = stubSidecar({
       "UserActor.getProfile": () => {
@@ -104,6 +134,216 @@ describe("user profile", () => {
       code: "FORBIDDEN",
       message: "sign in to view a profile",
     });
+  });
+});
+
+describe("profile picture (SV-D, MC-avatar)", () => {
+  const FILE = "33333333-3333-4333-8333-333333333333";
+  const query = `{ user(id: "${BOB}") { ... on UserProfile { avatarUrl } } }`;
+
+  const signedBatch = (_actorId: string, ...args: unknown[]) =>
+    (args.at(-1) as { fileIds: string[] }).fileIds.map((id) => ({
+      url: `https://files.example.test/signed/${id}`,
+      expiresAt: "2026-11-27T00:30:00.000Z",
+    }));
+
+  it("presigns the uploaded picture when there is one, in the viewer's batch", async () => {
+    const { invoke, calls } = stubSidecar({
+      "UserActor.getProfile": (actorId) => ({
+        ...profile(actorId, "Bob"),
+        avatarUrl: "https://example.test/oauth.png",
+        avatarFileId: FILE,
+      }),
+      "FileActor.presignAvatars": signedBatch,
+    });
+    const result = await run(query, testContext(invoke, alice));
+    expect(result.errors).toBeUndefined();
+    expect(result.data?.user).toEqual({
+      avatarUrl: `https://files.example.test/signed/${FILE}`,
+    });
+    const call = calls.find((c) => c.actorType === "FileActor");
+    expect(call).toMatchObject({
+      actorId: avatarBatchActorId(alice.id),
+      method: "presignAvatars",
+    });
+    expect(call?.args.at(-1)).toEqual({ fileIds: [FILE] });
+  });
+
+  it("F-89: one presign call per request across people, however many rows show them", async () => {
+    const CAROL = "44444444-4444-4444-8444-444444444444";
+    const pictureOf = (id: string) =>
+      `5555555${id === BOB ? "5" : "6"}-5555-4555-8555-555555555555`;
+    const { invoke, calls } = stubSidecar({
+      "UserActor.getProfile": (actorId) => ({
+        ...profile(actorId, "Someone"),
+        avatarFileId: pictureOf(actorId),
+      }),
+      "FileActor.presignAvatars": signedBatch,
+    });
+    const result = await run(
+      `{ a: user(id: "${BOB}") { ... on UserProfile { avatarUrl } }
+         b: user(id: "${CAROL}") { ... on UserProfile { avatarUrl } }
+         c: user(id: "${BOB}") { ... on UserProfile { avatarUrl } } }`,
+      testContext(invoke, alice),
+    );
+    expect(result.errors).toBeUndefined();
+    expect(result.data?.b).toEqual({
+      avatarUrl: `https://files.example.test/signed/${pictureOf(CAROL)}`,
+    });
+    const fileCalls = calls.filter((c) => c.actorType === "FileActor");
+    expect(fileCalls).toHaveLength(1);
+    const asked = fileCalls[0]?.args.at(-1) as
+      | { fileIds: string[] }
+      | undefined;
+    expect([...(asked?.fileIds ?? [])].sort()).toEqual(
+      [pictureOf(BOB), pictureOf(CAROL)].sort(),
+    );
+  });
+
+  it("falls back to user.image with no picture, when the batch signs none, and when it fails", async () => {
+    const batches = [
+      () => [null],
+      () => {
+        throw new NotFoundError("gone");
+      },
+    ];
+    for (const avatarFileId of [null, FILE]) {
+      for (const batch of batches) {
+        const { invoke } = stubSidecar({
+          "UserActor.getProfile": (actorId) => ({
+            ...profile(actorId, "Bob"),
+            avatarUrl: "https://example.test/oauth.png",
+            avatarFileId,
+          }),
+          "FileActor.presignAvatars": batch,
+        });
+        const result = await run(query, testContext(invoke, alice));
+        expect(result.data?.user).toEqual({
+          avatarUrl: "https://example.test/oauth.png",
+        });
+      }
+    }
+  });
+
+  it("an anonymous request keeps the one-file presignRead", async () => {
+    const { invoke, calls } = stubSidecar({
+      "FileActor.presignRead": () => ({
+        url: "https://files.example.test/anonymous",
+        expiresAt: "2026-11-27T00:30:00.000Z",
+      }),
+    });
+    const url = await avatarUrlOf(testContext(invoke, null), {
+      avatarFileId: FILE,
+      avatarUrl: null,
+    });
+    expect(url).toBe("https://files.example.test/anonymous");
+    expect(calls).toMatchObject([
+      { actorType: "FileActor", actorId: FILE, method: "presignRead" },
+    ]);
+  });
+
+  it("setAvatar and removeAvatar run on the viewer's own actor", async () => {
+    const { invoke, calls } = stubSidecar({
+      "UserActor.setAvatar": (actorId) => ({
+        ...profile(actorId, "Alice"),
+        avatarFileId: FILE,
+      }),
+      "UserActor.removeAvatar": (actorId) => profile(actorId, "Alice"),
+      "FileActor.presignAvatars": signedBatch,
+    });
+    const set = await run(
+      `mutation { setAvatar(fileId: "${FILE}") { ... on UserProfile { avatarUrl } } }`,
+      testContext(invoke, alice),
+    );
+    expect(set.errors).toBeUndefined();
+    expect(set.data?.setAvatar).toEqual({
+      avatarUrl: `https://files.example.test/signed/${FILE}`,
+    });
+    expect(calls[0]).toMatchObject({
+      actorType: "UserActor",
+      actorId: alice.id,
+      method: "setAvatar",
+    });
+    expect(calls[0]?.args[1]).toEqual({ fileId: FILE });
+
+    const removed = await run(
+      "mutation { removeAvatar { ... on UserProfile { avatarUrl } } }",
+      testContext(invoke, alice),
+    );
+    expect(removed.data?.removeAvatar).toEqual({ avatarUrl: null });
+  });
+
+  it("relays another person's file as a typed NotFound", async () => {
+    const { invoke } = stubSidecar({
+      "UserActor.setAvatar": () => {
+        throw new NotFoundError(`file ${FILE} not found`);
+      },
+    });
+    const result = await run(
+      `mutation { setAvatar(fileId: "${FILE}") { __typename } }`,
+      testContext(invoke, alice),
+    );
+    expect(result.errors).toBeUndefined();
+    expect(result.data?.setAvatar).not.toEqual({ __typename: "UserProfile" });
+  });
+});
+
+describe("Query.user is no account-existence oracle (leftovers 5, L6, L41)", () => {
+  const MISSING = "33333333-3333-4333-8333-333333333333";
+  const query = (id: string) =>
+    `{ user(id: ${JSON.stringify(id)}) { __typename ... on UserProfile { id displayName } ... on ActorError { code message } } }`;
+  /** The actor as it answers now: a profile for BOB, the one refusal else. */
+  const sidecar = () =>
+    stubSidecar({
+      "UserActor.getProfile": (actorId) => {
+        if (actorId === BOB) return profile(BOB, "Bob");
+        throw new NotFoundError(PROFILE_NOT_SHARED);
+      },
+    });
+
+  it("answers an existing user with their profile", async () => {
+    const { invoke } = sidecar();
+    const result = await run(query(BOB), testContext(invoke, alice));
+    expect(result.errors).toBeUndefined();
+    expect(result.data?.user).toEqual({
+      __typename: "UserProfile",
+      id: BOB,
+      displayName: "Bob",
+    });
+  });
+
+  it("answers a missing id and a malformed id in the same bytes", async () => {
+    const answers = [];
+    for (const id of [MISSING, "not-a-uuid", "../UserActor/x", ""]) {
+      const { invoke } = sidecar();
+      const result = await run(query(id), testContext(invoke, alice));
+      expect(result.errors).toBeUndefined();
+      answers.push(result.data?.user);
+    }
+    expect(answers[0]).toEqual({
+      __typename: "NotFoundError",
+      code: "NOT_FOUND",
+      message: PROFILE_NOT_SHARED,
+    });
+    for (const answer of answers) expect(answer).toEqual(answers[0]);
+  });
+
+  it("never sends a malformed id to an actor", async () => {
+    const { invoke, calls } = sidecar();
+    await run(query("not-a-uuid"), testContext(invoke, alice));
+    expect(calls).toEqual([]);
+  });
+
+  it("refuses an anonymous caller alike for a real, a missing and a malformed id", async () => {
+    const answers = [];
+    for (const id of [BOB, MISSING, "not-a-uuid"]) {
+      const { invoke, calls } = sidecar();
+      const result = await run(query(id), testContext(invoke));
+      answers.push(result.data?.user);
+      expect(calls).toEqual([]);
+    }
+    expect(answers[0]).toMatchObject({ __typename: "ForbiddenError" });
+    for (const answer of answers) expect(answer).toEqual(answers[0]);
   });
 });
 
@@ -213,7 +453,7 @@ describe("friend mutations address the viewer's own actor (§1.2)", () => {
     for (const document of [
       `mutation { sendFriendRequest(userId: "${BOB}") { __typename } }`,
       `mutation { removeFriend(userId: "${BOB}") { __typename } }`,
-      `mutation { toggleFavorite(type: WINE, itemId: "${BOB}") { __typename } }`,
+      `mutation { setFavorite(type: WINE, itemId: "${BOB}", favorited: true) { __typename } }`,
       `{ myFriends(first: 5) { __typename } }`,
       `{ myFriendRequests(direction: INCOMING, first: 5) { __typename } }`,
     ]) {
@@ -290,5 +530,134 @@ describe("place interactions", () => {
     });
     // Absent fields are absent, not `null`: the actor keeps their stored value.
     expect(calls[0]?.args[1]).toEqual({ placeId: BOB, isVisited: true });
+  });
+});
+
+/*
+ * F-87 (H-54): Loved's subtitle and count chips need per-type counts without
+ * paging every favourite. `me.lovedCounts` reads each one as a page of one
+ * from the actor that already counts it (`totalCount`), only for the fields
+ * asked for.
+ */
+describe("Viewer.lovedCounts (F-87)", () => {
+  const favouritesByType: Record<string, number> = {
+    WINE: 4,
+    BEER: 2,
+    SPIRIT: 0,
+    COFFEE: 1,
+    SAKE: 0,
+    TEA: 3,
+  };
+  const page = (totalCount: number) => ({
+    entries: [],
+    hasNextPage: totalCount > 0,
+    hasPreviousPage: false,
+    totalCount,
+  });
+
+  it("answers each item type, every drink and the loved recipes", async () => {
+    const { invoke, calls } = stubSidecar({
+      "FavoritesCollectionActor.list": (_id, _ctx, _page, types) => {
+        const only = types as readonly string[] | null;
+        return page(
+          only === null
+            ? 10
+            : only.reduce(
+                (sum, type) => sum + (favouritesByType[type] ?? 0),
+                0,
+              ),
+        );
+      },
+      "UserActor.lovedRecipes": () => page(5),
+    });
+    const result = await run(
+      `{ me { lovedCounts { drinks recipes wine beer spirit coffee sake tea } } }`,
+      testContext(invoke, alice),
+    );
+    expect(result.errors).toBeUndefined();
+    expect(result.data?.me).toEqual({
+      lovedCounts: {
+        drinks: 10,
+        recipes: 5,
+        wine: 4,
+        beer: 2,
+        spirit: 0,
+        coffee: 1,
+        sake: 0,
+        tea: 3,
+      },
+    });
+    // A page of one per count: nothing is paged through to count it.
+    for (const call of calls) {
+      expect(call.args[1]).toMatchObject({ first: 1 });
+    }
+  });
+
+  it("asks only for the counts a query selects", async () => {
+    const { invoke, calls } = stubSidecar({
+      "FavoritesCollectionActor.list": () => page(4),
+    });
+    const result = await run(
+      `{ me { lovedCounts { wine } } }`,
+      testContext(invoke, alice),
+    );
+    expect(result.errors).toBeUndefined();
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.args[2]).toEqual(["WINE"]);
+  });
+});
+
+describe("account settings (H-119 / FR-21)", () => {
+  it("me.settings reads the viewer's own actor, and only it", async () => {
+    const { invoke, calls } = stubSidecar({
+      "UserActor.settings": () => ({ defaultCellarPrivacy: "FRIENDS" }),
+    });
+    const result = await run(
+      "{ me { settings { defaultCellarPrivacy } } }",
+      testContext(invoke, alice),
+    );
+    expect(result.errors).toBeUndefined();
+    expect(result.data?.me).toEqual({
+      settings: { defaultCellarPrivacy: "FRIENDS" },
+    });
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toMatchObject({
+      actorType: "UserActor",
+      actorId: alice.id,
+      method: "settings",
+    });
+  });
+
+  it("setDefaultCellarPrivacy writes the viewer's own actor; anonymous is refused with no call", async () => {
+    const { invoke, calls } = stubSidecar({
+      "UserActor.setDefaultCellarPrivacy": (_actorId, _ctx, input) => ({
+        defaultCellarPrivacy: (input as { privacy: string }).privacy,
+      }),
+    });
+    const set = await run(
+      `mutation { setDefaultCellarPrivacy(privacy: PUBLIC) {
+         __typename ... on UserSettings { defaultCellarPrivacy } } }`,
+      testContext(invoke, alice),
+    );
+    expect(set.errors).toBeUndefined();
+    expect(set.data?.setDefaultCellarPrivacy).toEqual({
+      __typename: "UserSettings",
+      defaultCellarPrivacy: "PUBLIC",
+    });
+    expect(calls[0]).toMatchObject({
+      actorId: alice.id,
+      method: "setDefaultCellarPrivacy",
+    });
+    expect(calls[0]?.args[1]).toEqual({ privacy: "PUBLIC" });
+
+    const anonymous = await run(
+      `mutation { setDefaultCellarPrivacy(privacy: PUBLIC) { __typename } }`,
+      testContext(invoke),
+    );
+    expect(
+      (anonymous.data?.setDefaultCellarPrivacy as { __typename: string })
+        ?.__typename,
+    ).not.toBe("UserSettings");
+    expect(calls).toHaveLength(1);
   });
 });

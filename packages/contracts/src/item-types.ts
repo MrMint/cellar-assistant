@@ -97,7 +97,20 @@ export type ItemAttributeSpec = {
   readonly vocabulary: ItemVocabularySpec | null;
   /** One line for a human: what the value is and where it is stored. */
   readonly description: string;
+  /**
+   * X19: `null` is a statement, not a gap — the item is **non-vintage** (NV).
+   * Only `wines.vintage`: the forms ask for a year *or* "NV" there, so a
+   * stored `NULL` was always answered, never skipped. A label read may answer
+   * `"NV"` for it (`NON_VINTAGE`), which the client turns into that `NULL`.
+   */
+  readonly nonVintage?: true;
 };
+
+/**
+ * What a label read (or a form) says for a non-vintage wine, in place of a
+ * year. Never stored: the column holds `NULL` for it (`nonVintage`).
+ */
+export const NON_VINTAGE = "NV";
 
 /** The columns every item table shares that take part in an embedding. */
 export const ITEM_CORE_EMBEDDED_FIELDS = [
@@ -123,7 +136,11 @@ export type ItemTypeSpec = {
    * onboarding flow (`ItemActor.create` refuses without an id).
    */
   readonly onboardingRequired: boolean;
-  /** `description NOT NULL` — `coffees` only. */
+  /**
+   * `description NOT NULL`. `false` for all six since X19 dropped coffee's
+   * (`20261008233536_nv_wines_optional_coffee_description`); kept as a flag so
+   * a future type that needs one says so here rather than in a check.
+   */
   readonly descriptionRequired: boolean;
   readonly attributes: { readonly [key: string]: ItemAttributeSpec };
   /** Ordered: what `regenerateVector` embeds. See the module doc. */
@@ -146,9 +163,12 @@ export const ITEM_TYPE_SPECS = {
       vintage: {
         kind: "date",
         column: "vintage",
-        required: true,
+        // X19: nullable, and NULL means non-vintage (`nonVintage`).
+        required: false,
+        nonVintage: true,
         vocabulary: null,
-        description: "The vintage, as a calendar date (`wines.vintage`).",
+        description:
+          "The vintage, as a calendar date (`wines.vintage`); null is a non-vintage (NV) wine.",
       },
       style: {
         kind: "text",
@@ -304,7 +324,7 @@ export const ITEM_TYPE_SPECS = {
     bag: "coffee",
     graphql: { object: "Coffee", input: "CoffeeAttributesInput" },
     onboardingRequired: true,
-    descriptionRequired: true,
+    descriptionRequired: false,
     attributes: {
       // Declared vocabulary-first: this is the order the item-defaults schema
       // has always listed them in, and property order is generation order.

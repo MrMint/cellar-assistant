@@ -44,6 +44,14 @@
  */
 
 /**
+ * Where every landing goes when nothing else was asked for (X01, decision
+ * D1): sign-in, sign-up — password or social — and the installed app's
+ * `start_url`. `/` is Home; until X10 gives it a page of its own it
+ * redirects to `/search`, so nothing lands on a screen that does not exist.
+ */
+export const HOME_PATH = "/";
+
+/**
  * A base to resolve against. Reserved by RFC 2606, so no real deployment can
  * collide with it — and if a candidate somehow named it, the value returned
  * would still be a bare path, because that is all this function ever returns.
@@ -75,4 +83,22 @@ export function sanitizeReturnTo(
   if (resolved.origin !== SENTINEL_ORIGIN) return undefined;
 
   return `${resolved.pathname}${resolved.search}${resolved.hash}`;
+}
+
+/**
+ * `path` carrying `returnTo` along, for the links between `/sign-in` and
+ * `/sign-up` and for the social provider's error redirect (D19): a viewer
+ * bounced to sign-in from a shared link who chooses "Sign up" instead — or
+ * whose provider sends them back with an error — still lands on that link
+ * afterwards. The value is sanitised again here, so a caller cannot launder
+ * an unchecked one through it; anything that fails is simply dropped.
+ */
+export function withReturnTo(
+  path: string,
+  returnTo: string | undefined | null,
+): string {
+  const safe = sanitizeReturnTo(returnTo);
+  return safe === undefined
+    ? path
+    : `${path}?returnTo=${encodeURIComponent(safe)}`;
 }

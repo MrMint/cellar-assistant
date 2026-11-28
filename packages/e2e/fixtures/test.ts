@@ -4,6 +4,7 @@ import {
   type BrowserContext,
   test as base,
   expect,
+  type Locator,
   type Page,
   request,
 } from "@playwright/test";
@@ -36,8 +37,6 @@ const IGNORED = [
   /\[Fast Refresh\]/,
   /Download the React DevTools/,
   /webpack-hmr|__nextjs/,
-  // Joy UI's SSR/hydration warnings about `sx` are pre-existing and unrelated.
-  /MUI: The `sx` prop/,
   // maplibre asks for a WebGL context the headless shell may not grant.
   /WebGL|webgl/i,
   // Service worker registration is disabled in dev.
@@ -400,4 +399,33 @@ export async function fillDate(
     await input.inputValue(),
     `the ${label} date input did not take the value`,
   ).toBe(isoDate);
+}
+
+/**
+ * B25 · the strict-locator race (F-24).
+ *
+ * React 19.2 holds streamed segments in hidden `S:n` divs for 0.3 to 2.3 s, so
+ * a locator that matches one element on screen can match two for a moment, and
+ * Playwright's strict mode fails fast on that with no retry. Narrow to what the
+ * person can see: the hidden twin is never counted.
+ */
+export function visibleOnly(locator: Locator): Locator {
+  return locator.filter({ visible: true });
+}
+
+/**
+ * Scope a selector to the page's `main` landmark and to what is visible there.
+ * Use it for a strict-mode `locator` that also appears in a hidden streamed
+ * segment or a header.
+ */
+export function inMain(page: Page, selector: string): Locator {
+  return visibleOnly(page.locator("main").locator(selector));
+}
+
+/**
+ * The search field. It is `type="search"`, so its role is `searchbox`, not
+ * `textbox` (`ClientSearchInterface.tsx`, `shell/SearchField.tsx`).
+ */
+export function searchBox(page: Page): Locator {
+  return page.getByRole("searchbox").first();
 }

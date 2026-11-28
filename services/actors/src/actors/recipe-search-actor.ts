@@ -36,22 +36,29 @@
  * `id`, so the offset cursor §1.5 gives search actors means the same thing on
  * the next page.
  *
- * ## Viewer: not in the key
+ * ## Viewer: in the key, since X15
  *
- * `recipes` has no privacy column and today's Hasura select permission is
- * `filter: {}` for role `user`. Catalog data, B3's rule: any signed-in viewer,
- * anonymous refused, one activation shared by everyone.
+ * Recipes are private first (D22): the answer is the viewer's own recipes and
+ * drafts, their friends' FRIENDS ones and everyone's PUBLIC ones —
+ * `recipeVisibleSql` (`../lib/recipe-visibility.ts`), inside both queries so
+ * the vector scan keeps going until `limit` *visible* rows pass. So the
+ * activation is the viewer's (`recipeSearchActorId` hashes the viewer id) and
+ * a cached result set can never be handed to someone else. The menu
+ * matcher's `system` ctx has its own (viewer `null`) activation and sees
+ * shared recipes only — its answer lands on a place's menu.
  */
 import type {
   ActorCategory,
   Ctx,
-  Page,
   PageArgs,
   RecipeSearchActorInterface,
   RecipeSearchHit,
   RecipeSearchInput,
+  SearchPage,
 } from "@cellar-assistant/contracts";
 import {
+  RECIPE_HYBRID_DISTANCE_GAP,
+  RECIPE_HYBRID_MAX_DISTANCE,
   RECIPE_SEARCH_MAX_DISTANCE,
   RECIPE_SEARCH_RESULT_CAP,
   RecipeSearchActorDescriptor,
@@ -66,9 +73,16 @@ import type { EmbedQuery } from "../lib/embedding-client.ts";
 import { daprEmbedQuery } from "../lib/embedding-client.ts";
 import { requireSignedIn } from "../lib/guards.ts";
 import { withHnswScan } from "../lib/hnsw.ts";
-import { SearchActorBase } from "../lib/search-actor-base.ts";
+import { recipeScope, recipeVisibleSql } from "../lib/recipe-visibility.ts";
+import {
+  type CountedHits,
+  cappedTotal,
+  exactTotal,
+  SearchActorBase,
+} from "../lib/search-actor-base.ts";
 import { toVectorLiteral } from "../lib/vectors.ts";
 import { escapeLike } from "./brand-search-actor.ts";
+import { embeddingUnavailable } from "./item-search-actor.ts";
 
 type Row = {
   readonly id: string;
@@ -102,7 +116,10 @@ export class RecipeSearchActor
     return recipeSearchActorId(input, viewerId);
   }
 
-  /** Catalog data: `recipes` has no privacy column (module doc). */
+  /**
+   * Signed in, or the `system` menu matcher (`requireSignedIn` admits it).
+   * The rows themselves are narrowed per viewer inside the query (module doc).
+   */
   protected override async authorize(ctx: Ctx): Promise<"allow"> {
     requireSignedIn(ctx, "search recipes");
     return "allow";
@@ -112,7 +129,7 @@ export class RecipeSearchActor
     ctx: Ctx,
     input: RecipeSearchInput,
     page: PageArgs,
-  ): Promise<Page<RecipeSearchHit>> {
+  ): Promise<SearchPage<RecipeSearchHit>> {
     return this.pageOf(ctx, input, page);
   }
 
@@ -126,7 +143,7 @@ export class RecipeSearchActor
   protected async runSearch(
     ctx: Ctx,
     input: RecipeSearchInput,
-  ): Promise<readonly RecipeSearchHit[]> {
+  ): Promise<CountedHits<RecipeSearchHit>> {
     const term = (input.term ?? "").trim();
     const semanticQuery = (input.semanticQuery ?? "").trim();
     const type = (input.type ?? "").trim();
@@ -134,6 +151,17 @@ export class RecipeSearchActor
     const maxDistance = requireDistance(
       input.maxDistance ?? RECIPE_SEARCH_MAX_DISTANCE,
     );
+
+    if (input.hybrid === true) {
+      return this.#hybrid(ctx, {
+        term,
+        type,
+        limit,
+        maxDistance: requireDistance(
+          input.maxDistance ?? RECIPE_HYBRID_MAX_DISTANCE,
+        ),
+      });
+    }
 
     const pattern = term === "" ? null : `%${escapeLike(term)}%`;
     const lexical =
@@ -143,20 +171,27 @@ export class RecipeSearchActor
                or coalesce(r.description, '') ilike ${pattern} escape '\\'
                or r.type ilike ${pattern} escape '\\')`;
     const typeFilter = type === "" ? sql`true` : sql`r.type = ${type}`;
+    const visible = recipeVisibleSql(await recipeScope(this.db, ctx));
 
     if (semanticQuery === "") {
       const { rows } = await this.db.execute<Row>(sql`
         select r.id, r.name, r.description, r.type, r.recipe_group_id,
                null::float8 as distance
         from public.recipes r
-        where ${lexical} and ${typeFilter}
+        where ${lexical} and ${typeFilter} and ${visible}
         order by (lower(r.name) = ${term.toLowerCase()}) desc,
                  r.created_at desc nulls last,
                  lower(r.name) asc,
                  r.id asc
         limit ${limit}
       `);
-      return rows.map(toHit);
+      // Lexical, so exact (L3): the same `where`, counted without the limit.
+      const { rows: counted } = await this.db.execute<{ n: number }>(sql`
+        select count(*)::int as n
+        from public.recipes r
+        where ${lexical} and ${typeFilter} and ${visible}
+      `);
+      return exactTotal(rows.map(toHit), counted[0]?.n ?? 0);
     }
 
     const literal = toVectorLiteral(await this.#embed(ctx, semanticQuery));
@@ -174,8 +209,9 @@ export class RecipeSearchActor
           from public.recipe_vectors rv
           join public.recipes r on r.id = rv.recipe_id
           where rv.vector is not null and ${lexical} and ${typeFilter}
+            and ${visible}
           order by rv.vector <=> ${literal}::halfvec
-          limit ${limit}
+          limit ${limit + 1}
         )
         select id, name, description, type, recipe_group_id, distance
         from nearest
@@ -183,9 +219,113 @@ export class RecipeSearchActor
         order by distance asc, lower(name) asc, id asc
       `),
     );
-    return rows.map(toHit);
+    // Semantic: one row past the limit says "more" (shown "200+"), and since
+    // the scan is nearest-first, a cut-off row means every later one is too.
+    return cappedTotal(rows.map(toHit), limit);
+  }
+
+  /**
+   * X12 / D9 — universal search's Recipes: the recipes whose **name**
+   * contains the term, then the ones whose meaning is near it.
+   *
+   * Names only in the lexical half: a description match on a short term is
+   * mostly noise ("gin" is in "ginger"), and the semantic half finds the
+   * recipes a description makes relevant. The semantic half is cut twice —
+   * at `maxDistance`, and at {@link RECIPE_HYBRID_DISTANCE_GAP} past the
+   * nearest recipe — so a phrase about something else entirely returns
+   * nothing rather than the least-unrelated recipes.
+   */
+  async #hybrid(
+    ctx: Ctx,
+    q: {
+      readonly term: string;
+      readonly type: string;
+      readonly limit: number;
+      readonly maxDistance: number;
+    },
+  ): Promise<CountedHits<RecipeSearchHit>> {
+    if (q.term === "") {
+      throw new ValidationError("a hybrid recipe search needs a term");
+    }
+    const contains = `%${escapeLike(q.term)}%`;
+    const startsWith = `${escapeLike(q.term)}%`;
+    const typeFilter = q.type === "" ? sql`true` : sql`r.type = ${q.type}`;
+    // X15 (D22): both halves are the viewer's, like the plain search — the
+    // filter sits inside the vector scan so it keeps going until `limit`
+    // visible recipes pass.
+    const visible = recipeVisibleSql(await recipeScope(this.db, ctx));
+    const { rows: named } = await this.db.execute<Row>(sql`
+      select r.id, r.name, r.description, r.type, r.recipe_group_id,
+             null::float8 as distance
+      from public.recipes r
+      where r.name ilike ${contains} escape '\\' and ${typeFilter}
+        and ${visible}
+      order by (lower(r.name) = ${q.term.toLowerCase()}) desc,
+               (r.name ilike ${startsWith} escape '\\') desc,
+               length(r.name) asc,
+               lower(r.name) asc,
+               r.id asc
+      limit ${q.limit + 1}
+    `);
+
+    let vector: readonly number[];
+    try {
+      vector = await this.#embed(ctx, q.term);
+    } catch (error) {
+      if (!embeddingUnavailable(error)) throw error;
+      // D25 parity: the names still answer. Not cached — the embedding may
+      // be back on the next turn.
+      this.doNotCache();
+      return cappedTotal(named.map(toHit), q.limit);
+    }
+    const literal = toVectorLiteral(vector);
+    const { rows: near } = await withHnswScan(this.db, (tx) =>
+      tx.execute<Row>(sql`
+        with nearest as materialized (
+          select r.id, r.name, r.description, r.type, r.recipe_group_id,
+                 (rv.vector <=> ${literal}::halfvec)::float8 as distance
+          from public.recipe_vectors rv
+          join public.recipes r on r.id = rv.recipe_id
+          where rv.vector is not null and ${typeFilter} and ${visible}
+          order by rv.vector <=> ${literal}::halfvec
+          limit ${q.limit + 1}
+        )
+        select id, name, description, type, recipe_group_id, distance
+        from nearest
+        where distance <= ${q.maxDistance}
+        order by distance asc, lower(name) asc, id asc
+      `),
+    );
+    // Both halves read one row past the limit, so a merge longer than the
+    // limit proves more matches; one at or under it is every match.
+    return cappedTotal(
+      mergeHybridRecipes(named.map(toHit), near.map(toHit), q.limit + 1),
+      q.limit,
+    );
   }
 }
+
+/**
+ * The name matches, then the semantic hits within
+ * {@link RECIPE_HYBRID_DISTANCE_GAP} of the nearest one that are not
+ * already listed, capped at `limit`. Pure, for `recipe-search-actor.test.ts`.
+ */
+export const mergeHybridRecipes = (
+  named: readonly RecipeSearchHit[],
+  near: readonly RecipeSearchHit[],
+  limit: number,
+): RecipeSearchHit[] => {
+  const nearest = near[0]?.distance ?? null;
+  const listed = new Set(named.map((hit) => hit.recipeId));
+  const semantic = near.filter(
+    (hit) =>
+      !listed.has(hit.recipeId) &&
+      nearest !== null &&
+      hit.distance !== null &&
+      hit.distance <= nearest + RECIPE_HYBRID_DISTANCE_GAP,
+  );
+  return [...named, ...semantic].slice(0, limit);
+};
 
 const toHit = (row: Row): RecipeSearchHit => ({
   recipeId: row.id,

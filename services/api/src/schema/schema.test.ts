@@ -132,9 +132,15 @@ describe("every paging root field degrades per field (A7e)", () => {
    * The count is asserted, not just the emptiness: a regex over the SDL was
    * how the plan first counted these, and it was wrong twice. Nineteen is what
    * the schema actually has today, and a twentieth should be a deliberate edit
-   * here rather than something that slips in under a green suite.
+   * here rather than something that slips in under a green suite. X14 made it
+   * twenty, deliberately: `lovedRecipes` (D9), a union like the rest. X04
+   * made it twenty-one: `cellarSearchElsewhere`, the cross-cellar fan-out.
+   * X15 made it twenty-two: `myRecipes`, the viewer's own recipes and drafts.
+   * SV-B made it twenty-three: `needsDetails`, the viewer's unfinished drafts.
+   * SV-A made it twenty-four: `myAiQuota`, the viewer's own AI allowance.
+   * F-114 made it twenty-five: `recipeBaseSpiritCounts`, the kind chips.
    */
-  it("has nineteen of them", () => {
+  it("has twenty-five of them", () => {
     const queryType = schema.getQueryType();
     const paging = Object.values(queryType?.getFields() ?? {}).filter(
       (field) => {
@@ -142,7 +148,7 @@ describe("every paging root field degrades per field (A7e)", () => {
         return CONNECTION_ARGS.every((argument) => args.has(argument));
       },
     );
-    expect(paging).toHaveLength(19);
+    expect(paging).toHaveLength(25);
   });
 });
 

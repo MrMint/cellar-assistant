@@ -35,6 +35,7 @@ import { useMemo } from "react";
 import { type Client, useClient } from "urql";
 import { uploadFile } from "@/lib/api/files";
 import { failureFromTransport, unwrapResult } from "@/lib/api/result";
+import type { MenuPlaceHint } from "@/lib/capture/menu-place";
 import {
   type DuplicatePlace,
   duplicateFrom,
@@ -63,6 +64,7 @@ import {
   MenuScanStatusQuery,
   PlaceByIdQuery,
   PlaceSearchQuery,
+  ResubmitPlaceMutation,
   ReverseGeocodeQuery,
   SEMANTIC_RESULT_LIMIT,
 } from "./queries";
@@ -245,6 +247,13 @@ export interface CreatePlaceInput {
   description?: string;
   /** Bound after creation through enrichment; never posted with the place. */
   google_place_id?: string;
+  /**
+   * The creation's idempotency key (§8.4). The form mints it once and sends
+   * the same one on every retry, so a retry of a creation that did land
+   * returns that row instead of being refused as a duplicate of itself (N09).
+   * Minted here when absent.
+   */
+  placeId?: string;
 }
 
 export interface GoogleNearbyPlace {
@@ -275,6 +284,11 @@ export interface GooglePlacePrefill {
 export interface CreatePlaceResult {
   success: boolean;
   placeId?: string;
+  /**
+   * X27: a new place is always PENDING — saved, and visible to its creator
+   * alone until the review shares it.
+   */
+  reviewStatus?: "PENDING" | "APPROVED" | "REJECTED";
   error?: string;
   duplicates?: DuplicatePlace[];
 }
@@ -342,6 +356,31 @@ const blankToNull = (value?: string): string | null => {
   const trimmed = value?.trim() ?? "";
   return trimmed === "" ? null : trimmed;
 };
+
+/**
+ * `createPlace`'s `input` from the form's fields. The `placeId` is the
+ * caller's when it has one — the form keeps one per creation, so a retry
+ * converges (N09) — and freshly minted only when it does not.
+ */
+export function createPlaceMutationInput(
+  input: CreatePlaceInput,
+  mint: () => string = () => crypto.randomUUID(),
+) {
+  return {
+    placeId: input.placeId ?? mint(),
+    name: input.name.trim(),
+    categories: input.categories,
+    location: { lat: input.latitude, lng: input.longitude },
+    streetAddress: blankToNull(input.street_address),
+    locality: blankToNull(input.locality),
+    region: blankToNull(input.region),
+    postcode: blankToNull(input.postcode),
+    countryCode: blankToNull(input.country_code)?.toUpperCase() ?? null,
+    phone: blankToNull(input.phone),
+    website: normalizeWebsite(input.website),
+    description: blankToNull(input.description),
+  };
+}
 
 export function usePlaceActions() {
   const client = useClient();
@@ -558,23 +597,9 @@ export function usePlaceActions() {
       const invalid = validateCreatePlaceInput(input);
       if (invalid) return { success: false, error: invalid };
 
-      const placeId = crypto.randomUUID();
       const response = await client
         .mutation(CreatePlaceMutation, {
-          input: {
-            placeId,
-            name: input.name.trim(),
-            categories: input.categories,
-            location: { lat: input.latitude, lng: input.longitude },
-            streetAddress: blankToNull(input.street_address),
-            locality: blankToNull(input.locality),
-            region: blankToNull(input.region),
-            postcode: blankToNull(input.postcode),
-            countryCode: blankToNull(input.country_code)?.toUpperCase() ?? null,
-            phone: blankToNull(input.phone),
-            website: normalizeWebsite(input.website),
-            description: blankToNull(input.description),
-          },
+          input: createPlaceMutationInput(input),
         })
         .toPromise();
       if (response.error) {
@@ -597,14 +622,52 @@ export function usePlaceActions() {
           googlePlaceId: input.google_place_id,
         }).catch(() => undefined);
       }
-      return { success: true, placeId: result.data.place.id };
+      return {
+        success: true,
+        placeId: result.data.place.id,
+        reviewStatus: result.data.place.reviewStatus,
+      };
+    };
+
+    /**
+     * X27: edit a pending or rejected place and send it for review again —
+     * the whole place, validated as a creation is.
+     */
+    const resubmitPlaceAction = async (
+      placeId: string,
+      input: CreatePlaceInput,
+    ): Promise<CreatePlaceResult> => {
+      const invalid = validateCreatePlaceInput(input);
+      if (invalid) return { success: false, error: invalid };
+      const { placeId: _minted, ...fields } = createPlaceMutationInput(input);
+      const response = await client
+        .mutation(ResubmitPlaceMutation, { placeId, input: fields })
+        .toPromise();
+      if (response.error) {
+        return {
+          success: false,
+          error: failureFromTransport(response.error).message,
+        };
+      }
+      const result = unwrapResult(response.data?.resubmitPlace, "Place");
+      if (!result.ok) return { success: false, error: result.error.message };
+      return {
+        success: true,
+        placeId: result.data.id,
+        reviewStatus: result.data.reviewStatus,
+      };
     };
 
     // -- menu scanning (the old `menuScanning.ts`) --------------------------
 
+    /**
+     * `placeHint` is a place id (the place page's scanner), or the capture
+     * surface's whole hint (X06): the place the person confirmed, the nearest
+     * guess, and where they stood (`lib/capture/menu-place.ts`).
+     */
     const uploadAndProcessMenuScan = async (
       file: File,
-      placeId: string,
+      placeHint: string | MenuPlaceHint,
     ): Promise<{ success: boolean; scanId?: string; error?: string }> => {
       try {
         const fileId = await uploadFile(client, file, "menu-scan", {
@@ -613,7 +676,13 @@ export function usePlaceActions() {
         const response = await client
           .mutation(CreateMenuScanMutation, {
             menuScanId: crypto.randomUUID(),
-            input: { originalImageId: fileId, placeHint: { placeId } },
+            input: {
+              originalImageId: fileId,
+              placeHint:
+                typeof placeHint === "string"
+                  ? { placeId: placeHint }
+                  : placeHint,
+            },
           })
           .toPromise();
         if (response.error) {
@@ -656,6 +725,7 @@ export function usePlaceActions() {
       googlePlaceDetailsAction,
       enrichPlaceAction,
       createUserPlaceAction,
+      resubmitPlaceAction,
       uploadAndProcessMenuScan,
       getMenuScanStatus,
     };

@@ -13,8 +13,10 @@
  *   4. reordering is safe under a concurrent second reorder of the same list,
  *      because Dapr guarantees one turn at a time per actor id — demonstrated
  *      both as "sequential turns compose correctly" and, in contrast, "two
- *      stale activations of the same id do not", which is exactly the failure
- *      mode the guarantee rules out in production.
+ *      stale activations of the same id do not" (since D4 the second one's
+ *      write is refused by the history log's unique `seq` rather than
+ *      corrupting the board), which is exactly the failure mode the
+ *      guarantee rules out in production.
  *
  * Also covered: `addItem`'s idempotency and natural-uniqueness conflict,
  * `removeItem`'s renumbering, and `generateInsights`'s throttle/min-item gate
@@ -25,18 +27,26 @@ import type { Ctx, PermissionType } from "@cellar-assistant/contracts";
 import {
   adminCtx,
   anonymousCtx,
+  BudgetExceededError,
   ConflictError,
   ForbiddenError,
+  NO_AI_CAPABILITIES,
   NotFoundError,
   pageArgs,
   systemCtx,
   userCtx,
   ValidationError,
 } from "@cellar-assistant/contracts";
-import { outbox, tierListItems, tierLists } from "@cellar-assistant/db";
+import {
+  outbox,
+  tierListHistory,
+  tierListItems,
+  tierLists,
+} from "@cellar-assistant/db";
 import { and, eq, sql } from "@cellar-assistant/db/orm";
 import { ActorId, DaprClient } from "@dapr/dapr";
 import { afterAll, describe, expect, it } from "vitest";
+import { setAiCapabilities } from "../lib/ai/capabilities.ts";
 import type { DbOrTx } from "../lib/db.ts";
 import {
   activate,
@@ -47,7 +57,7 @@ import {
   withTestDb,
 } from "../lib/testing.ts";
 import type { InsightsGenerator } from "./tier-list-actor.ts";
-import { TierListActor } from "./tier-list-actor.ts";
+import { cloneName, TierListActor } from "./tier-list-actor.ts";
 
 const daprClient = (): DaprClient =>
   new DaprClient({ daprHost: "127.0.0.1", daprPort: "3502" });
@@ -332,10 +342,11 @@ describe.skipIf(skip)("TierListActor (B7)", () => {
 
         const updated = await actor.update(userCtx(owner, "r"), {
           name: "Renamed",
-          isEditingLocked: true,
         });
         expect(updated.name).toBe("Renamed");
-        expect(updated.isEditingLocked).toBe(true);
+        // X16: the padlock is retired — Arrange replaced it — so the DTO no
+        // longer carries it (the column stays until a contract migration).
+        expect(updated).not.toHaveProperty("isEditingLocked");
         expect(updated.contentUpdatedAt).toBe(before.contentUpdatedAt);
         expect(await outboxRowsFor(db, id)).toHaveLength(0);
       });
@@ -487,6 +498,254 @@ describe.skipIf(skip)("TierListActor (B7)", () => {
         );
       });
     });
+  });
+
+  describe("places under review (X27)", () => {
+    const makeUnshared = async (db: DbOrTx, creator: string, name: string) => {
+      const id = await seedPlace(db, name);
+      await db.execute(sql`
+        update public.places
+        set review_status = 'pending', created_by = ${creator}::uuid
+        where id = ${id}::uuid
+      `);
+      return id;
+    };
+
+    it("a creator may rank their own pending place; anybody else naming it gets the NotFound an unknown id gets", async () => {
+      await withTestDb(async (db) => {
+        const creator = await seedUser(db);
+        const stranger = await seedUser(db);
+        const pending = await makeUnshared(db, creator, "Pending Bar");
+
+        const mine = await activate(
+          newTierListActor(
+            await seedTierList(db, { createdById: creator }),
+            db,
+          ),
+        );
+        const added = await mine.addItem(userCtx(creator, "r1"), {
+          entry: { type: "PLACE", id: pending },
+        });
+        expect(added.entry).toEqual({ type: "PLACE", id: pending });
+
+        const theirs = await activate(
+          newTierListActor(
+            await seedTierList(db, { createdById: stranger }),
+            db,
+          ),
+        );
+        const hidden = await theirs
+          .addItem(userCtx(stranger, "r2"), {
+            entry: { type: "PLACE", id: pending },
+          })
+          .catch((error: unknown) => error);
+        const absentId = randomUUID();
+        const absent = await theirs
+          .addItem(userCtx(stranger, "r3"), {
+            entry: { type: "PLACE", id: absentId },
+          })
+          .catch((error: unknown) => error);
+        expect(hidden).toBeInstanceOf(NotFoundError);
+        expect(absent).toBeInstanceOf(NotFoundError);
+        expect(String((hidden as Error).message).replace(pending, "<id>")).toBe(
+          String((absent as Error).message).replace(absentId, "<id>"),
+        );
+      });
+    });
+
+    it("a public list's entry for its creator's pending place is shown to the creator and silently left out for everyone else", async () => {
+      await withTestDb(async (db) => {
+        const creator = await seedUser(db);
+        const stranger = await seedUser(db);
+        const pending = await makeUnshared(db, creator, "Pending Bar");
+        const shared = await seedPlace(db, "Shared Bar");
+        const id = await seedTierList(db, {
+          createdById: creator,
+          privacy: "PUBLIC",
+        });
+        const actor = await activate(newTierListActor(id, db));
+        for (const placeId of [pending, shared]) {
+          await actor.addItem(userCtx(creator, `r-${placeId}`), {
+            entry: { type: "PLACE", id: placeId },
+          });
+        }
+
+        const forCreator = await actor.items(userCtx(creator, "r1"), page);
+        expect(forCreator.entries.map((e) => e.node.entry.id).sort()).toEqual(
+          [pending, shared].sort(),
+        );
+        const forStranger = await actor.items(userCtx(stranger, "r2"), page);
+        expect(forStranger.entries.map((e) => e.node.entry.id)).toEqual([
+          shared,
+        ]);
+
+        // …and the count agrees with the rows: "2 entries" over one row would
+        // say a hidden place is on the list.
+        expect((await actor.get(userCtx(creator, "r3"))).itemCount).toBe(2);
+        expect((await actor.get(userCtx(stranger, "r4"))).itemCount).toBe(1);
+        // F-85: the band counts agree with the rows the same way.
+        expect((await actor.get(userCtx(creator, "r5"))).bandCounts).toEqual([
+          2, 0, 0, 0, 0, 0,
+        ]);
+        expect((await actor.get(userCtx(stranger, "r6"))).bandCounts).toEqual([
+          1, 0, 0, 0, 0, 0,
+        ]);
+      });
+    });
+
+    it("F-85: bandCounts holds one count per band, bottom (0) to top (5), past any page size", async () => {
+      await withTestDb(async (db) => {
+        const owner = await seedUser(db);
+        const id = await seedTierList(db, { createdById: owner });
+        const actor = await activate(newTierListActor(id, db));
+        const layout: Array<[band: number, n: number]> = [
+          [5, 3],
+          [3, 1],
+          [0, 2],
+        ];
+        for (const [band, n] of layout) {
+          for (let i = 0; i < n; i += 1) {
+            const placeId = await seedPlace(db, `Bar ${band}-${i}`);
+            await actor.addItem(userCtx(owner, `r-${band}-${i}`), {
+              entry: { type: "PLACE", id: placeId },
+              band,
+            });
+          }
+        }
+        const dto = await actor.get(userCtx(owner, "read"));
+        expect(dto.bandCounts).toEqual([2, 0, 0, 1, 0, 3]);
+        expect(dto.bandCounts.reduce((a, b) => a + b, 0)).toBe(dto.itemCount);
+      });
+    });
+  });
+
+  /* ------------------------------------------------------------------ */
+  /* getShared — the X17 public share page                               */
+  /* ------------------------------------------------------------------ */
+
+  describe("getShared (X17): PUBLIC only, the same answer for every caller", () => {
+    it("describes a PUBLIC list's entries for an anonymous caller", async () => {
+      await withTestDb(async (db) => {
+        const owner = await seedUser(db, { displayName: "Riley" });
+        const id = await seedTierList(db, {
+          createdById: owner,
+          privacy: "PUBLIC",
+          name: "Fridge beers",
+        });
+        const actor = await activate(newTierListActor(id, db));
+        const wineId = await seedWine(db, owner, "Ridge Monte Bello");
+        const placeId = await seedPlace(db, "The Wine Bar");
+        await actor.addItem(userCtx(owner, "r1"), {
+          entry: { type: "WINE", id: wineId },
+          band: 5,
+          notes: "the benchmark",
+        });
+        await actor.addItem(userCtx(owner, "r2"), {
+          entry: { type: "PLACE", id: placeId },
+          band: 3,
+        });
+        // A public photo of the wine, and a newer private one that must lose.
+        const publicFile = randomUUID();
+        const privateFile = randomUUID();
+        for (const [fileId, isPublic] of [
+          [publicFile, true],
+          [privateFile, false],
+        ] as const) {
+          await db.execute(sql`
+            insert into public.files (id, bucket, key, uploaded_by, verified_at)
+            values (${fileId}::uuid, 'cellar-files', ${`item-image/${fileId}`},
+                    ${owner}::uuid, now())
+          `);
+          await db.execute(sql`
+            insert into public.item_image (file_id, user_id, wine_id, is_public, created_at)
+            values (${fileId}::uuid, ${owner}::uuid, ${wineId}::uuid, ${isPublic},
+                    now() + ${isPublic ? "0 seconds" : "1 minute"}::interval)
+          `);
+        }
+
+        const shared = await actor.getShared(anonymousCtx("r-anon"));
+        expect(shared).toMatchObject({
+          id,
+          name: "Fridge beers",
+          privacy: "PUBLIC",
+          ownerDisplayName: "Riley",
+        });
+        expect(shared.entries).toEqual([
+          expect.objectContaining({
+            band: 5,
+            entryType: "WINE",
+            entryId: wineId,
+            name: "Ridge Monte Bello",
+            notes: "the benchmark",
+            imageFileId: publicFile,
+          }),
+          expect.objectContaining({
+            band: 3,
+            entryType: "PLACE",
+            entryId: placeId,
+            name: "The Wine Bar",
+            imageFileId: null,
+          }),
+        ]);
+        // Nothing viewer-relative or internal crosses.
+        const serialised = JSON.stringify(shared);
+        expect(serialised).not.toContain(owner);
+        expect(serialised).not.toContain(privateFile);
+        expect(shared).not.toHaveProperty("aiInsights");
+      });
+    });
+
+    it("never prints an email-shaped display name", async () => {
+      await withTestDb(async (db) => {
+        const owner = await seedUser(db, { displayName: "riley@example.com" });
+        const id = await seedTierList(db, {
+          createdById: owner,
+          privacy: "PUBLIC",
+        });
+        const actor = await activate(newTierListActor(id, db));
+        expect(
+          (await actor.getShared(anonymousCtx("r"))).ownerDisplayName,
+        ).toBeNull();
+      });
+    });
+
+    it.each(["PRIVATE", "FRIENDS"] as const)(
+      "%s: refused to everyone — owner and friend included — exactly as a missing list",
+      async (privacy) => {
+        await withTestDb(async (db) => {
+          const owner = await seedUser(db);
+          const friend = await seedUser(db);
+          await seedFriendship(db, owner, friend);
+          await seedFriendship(db, friend, owner);
+          const id = await seedTierList(db, { createdById: owner, privacy });
+          const absent = randomUUID();
+          const missing = await refusalOf(
+            async () =>
+              (await activate(newTierListActor(absent, db))).getShared(
+                anonymousCtx("r"),
+              ),
+            absent,
+          );
+          for (const ctx of [
+            anonymousCtx("r"),
+            userCtx(owner, "r"),
+            userCtx(friend, "r"),
+          ]) {
+            const refused = await refusalOf(
+              async () =>
+                (await activate(newTierListActor(id, db))).getShared(ctx),
+              id,
+            );
+            expect(refused).toEqual(missing);
+          }
+          // The signed-in path is unchanged: the owner still reads it there.
+          const actor = await activate(newTierListActor(id, db));
+          await expect(actor.get(userCtx(owner, "r"))).resolves.toMatchObject({
+            id,
+          });
+        });
+      },
+    );
   });
 
   /* ------------------------------------------------------------------ */
@@ -866,7 +1125,7 @@ describe.skipIf(skip)("TierListActor (B7)", () => {
       });
     });
 
-    it("shows why the guarantee matters: two stale activations of the same id corrupt state", async () => {
+    it("shows why the guarantee matters: a second, stale activation's write is refused, not merged", async () => {
       await withTestDb(async (db) => {
         const owner = await seedUser(db);
         const id = await seedTierList(db, { createdById: owner });
@@ -895,46 +1154,51 @@ describe.skipIf(skip)("TierListActor (B7)", () => {
         // its own stale in-memory copy of the aggregate loaded *before*
         // either has written anything. In production this cannot happen —
         // Dapr places exactly one activation per actor id and serialises
-        // every call into it. Simulating the violation here is what proves
-        // the guarantee is load-bearing: without it, `reorderBand`'s
-        // "compute from the cache, no lock" design is unsafe.
+        // every call into it.
         const stale1 = await activate(newTierListActor(id, db));
         const stale2 = await activate(newTierListActor(id, db));
 
         // Both computed their reorder from the *same* pre-write snapshot.
         await stale1.reorderBand(userCtx(owner, "r1"), 0, [c.id, b.id, a.id]);
-        // stale2 never reloaded after stale1's write — exactly what a second
-        // concurrent activation would do, and exactly what Dapr never allows.
-        await stale2.reorderBand(userCtx(owner, "r2"), 0, [b.id, a.id, c.id]);
 
-        // `#writePositions` skips writing a row whose *own stale cache*
-        // already shows it at the target `(band, position)` — a real
-        // optimisation (it keeps a reorder's write set to what actually
-        // moved) that becomes a correctness bug the instant two activations
-        // are alive at once: `stale2` thinks `c` is still at position 2 (its
-        // own snapshot), so it never re-writes `c`, leaving `c` at whatever
-        // `stale1` last wrote it to (position 0) while `stale2` also writes
-        // `b` to position 0. The result is two rows sharing one position —
-        // the exact invariant `reorderBand` exists to guarantee never
-        // happens. This is *not* a bug to fix in `TierListActor`: it is the
-        // failure the single-activation guarantee prevents, and why
-        // `reorderBand` may trust its in-memory cache without a version
-        // column or a `SELECT ... FOR UPDATE` — because in production there
-        // is never a `stale2`.
+        // Before D4, stale2's write landed: `#writePositions` skips a row
+        // its own stale cache already shows in place, so `c` kept stale1's
+        // position 0 while `b` was written to 0 too — two rows sharing one
+        // position, the invariant `reorderBand` exists to keep. Every
+        // recorded edit now also appends `tier_list_history` row
+        // `lastSeq + 1`, and `(tier_list_id, seq)` is unique: stale2's
+        // snapshot names the same next `seq` stale1 just took, so its whole
+        // transaction is refused instead of merged. The log is not a
+        // substitute for the guarantee (`update` writes no history), but a
+        // stale edit now fails loudly rather than corrupting the board.
+        await expect(
+          stale2.reorderBand(userCtx(owner, "r2"), 0, [b.id, a.id, c.id]),
+        ).rejects.toBeInstanceOf(ConflictError);
+
         const rows = await db
           .select({ id: tierListItems.id, position: tierListItems.position })
           .from(tierListItems)
           .where(eq(tierListItems.tierListId, id))
           .orderBy(tierListItems.position);
-        console.log(
-          "two stale activations (guarantee violated), final rows:",
-          JSON.stringify(rows, null, 2),
-        );
-        const positions = rows.map((r) => r.position);
-        // The corruption, precisely: a duplicate position where "clean
-        // sequential, never duplicated" is the whole point of this method.
-        expect(new Set(positions).size).toBeLessThan(positions.length);
-        expect(positions.sort((x, y) => x - y)).not.toEqual([0, 1, 2]);
+        expect(rows).toEqual([
+          { id: c.id, position: 0 },
+          { id: b.id, position: 1 },
+          { id: a.id, position: 2 },
+        ]);
+
+        // The refusal also rebuilt stale2's cache, so it is not wedged: the
+        // retry computes from the list as it now is, and lands cleanly.
+        await stale2.reorderBand(userCtx(owner, "r3"), 0, [b.id, a.id, c.id]);
+        const retried = await db
+          .select({ id: tierListItems.id, position: tierListItems.position })
+          .from(tierListItems)
+          .where(eq(tierListItems.tierListId, id))
+          .orderBy(tierListItems.position);
+        expect(retried).toEqual([
+          { id: b.id, position: 0 },
+          { id: a.id, position: 1 },
+          { id: c.id, position: 2 },
+        ]);
       });
     });
   });
@@ -1059,6 +1323,480 @@ describe.skipIf(skip)("TierListActor (B7)", () => {
           actor.generateInsights(systemCtx("r")),
         ).rejects.toBeInstanceOf(ConflictError);
       });
+    });
+  });
+
+  /* ------------------------------------------------------------------ */
+  /* N07: insightsStatus                                                  */
+  /* ------------------------------------------------------------------ */
+
+  describe("insightsStatus (N07)", () => {
+    const withInsightsAvailable = async <T>(
+      available: boolean,
+      run: () => Promise<T>,
+    ): Promise<T> => {
+      setAiCapabilities({
+        ...NO_AI_CAPABILITIES,
+        tierListInsights: available,
+      });
+      try {
+        return await run();
+      } finally {
+        setAiCapabilities(NO_AI_CAPABILITIES);
+      }
+    };
+
+    const seedThree = async (
+      db: DbOrTx,
+      actor: TierListActor,
+      owner: string,
+    ): Promise<void> => {
+      const wines = await Promise.all(
+        ["A", "B", "C"].map((n) => seedWine(db, owner, n)),
+      );
+      for (const wineId of wines) {
+        await actor.addItem(userCtx(owner, `add-${wineId}`), {
+          entry: { type: "WINE", id: wineId },
+        });
+      }
+    };
+
+    it("goes NOT_ENOUGH_ENTRIES → PENDING → READY, never a guess", async () => {
+      await withInsightsAvailable(true, () =>
+        withTestDb(async (db) => {
+          const owner = await seedUser(db);
+          const id = await seedTierList(db, { createdById: owner });
+          const actor = await activate(
+            newTierListActor(id, db, async () => ({ summary: "ok" })),
+          );
+          const viewer = userCtx(owner, "read");
+          expect((await actor.get(viewer)).insightsStatus).toBe(
+            "NOT_ENOUGH_ENTRIES",
+          );
+
+          await seedThree(db, actor, owner);
+          expect(await actor.get(viewer)).toMatchObject({
+            insightsStatus: "PENDING",
+            insightsFailureReason: null,
+          });
+
+          await actor.generateInsights(systemCtx("deliver"));
+          expect((await actor.get(viewer)).insightsStatus).toBe("READY");
+        }),
+      );
+    });
+
+    it("is UNAVAILABLE, not PENDING, when no AI provider is installed", async () => {
+      await withInsightsAvailable(false, () =>
+        withTestDb(async (db) => {
+          const owner = await seedUser(db);
+          const id = await seedTierList(db, { createdById: owner });
+          const actor = await activate(newTierListActor(id, db));
+          await seedThree(db, actor, owner);
+          expect((await actor.get(userCtx(owner, "r"))).insightsStatus).toBe(
+            "UNAVAILABLE",
+          );
+        }),
+      );
+    });
+
+    it("records a failed attempt with its reason and retry time, and still fails the delivery", async () => {
+      await withInsightsAvailable(true, () =>
+        withTestDb(async (db) => {
+          const owner = await seedUser(db);
+          const id = await seedTierList(db, { createdById: owner });
+          const refusal = new BudgetExceededError(
+            "per-user cap reached",
+            "USER_CAP",
+            new Date(Date.now() + 30 * 60_000).toISOString(),
+          );
+          const actor = await activate(
+            newTierListActor(id, db, async () => {
+              throw refusal;
+            }),
+          );
+          await seedThree(db, actor, owner);
+
+          await expect(
+            actor.generateInsights(systemCtx("deliver")),
+          ).rejects.toBe(refusal);
+          expect(await actor.get(userCtx(owner, "r"))).toMatchObject({
+            insightsStatus: "FAILED",
+            insightsFailureReason: "USER_CAP",
+            insightsRetryAt: refusal.retryAt,
+          });
+
+          const [row] = await db
+            .select({ failure: tierLists.insightsFailure })
+            .from(tierLists)
+            .where(eq(tierLists.id, id));
+          expect(row?.failure).toMatch(/^BUDGET_EXCEEDED\[USER_CAP\]: /);
+        }),
+      );
+    });
+
+    it("tells only the creator that their own allowance ran out", async () => {
+      await withInsightsAvailable(true, () =>
+        withTestDb(async (db) => {
+          const owner = await seedUser(db);
+          const stranger = await seedUser(db);
+          const id = await seedTierList(db, {
+            createdById: owner,
+            privacy: "PUBLIC",
+          });
+          const actor = await activate(
+            newTierListActor(id, db, async () => {
+              throw new BudgetExceededError(
+                "per-user cap reached",
+                "USER_CAP",
+                new Date(Date.now() + 30 * 60_000).toISOString(),
+              );
+            }),
+          );
+          await seedThree(db, actor, owner);
+          await expect(
+            actor.generateInsights(systemCtx("deliver")),
+          ).rejects.toBeInstanceOf(BudgetExceededError);
+
+          // The creator's usage window is theirs: another viewer sees a
+          // failure, with no reason and no time read off it.
+          expect(await actor.get(userCtx(stranger, "r"))).toMatchObject({
+            insightsStatus: "FAILED",
+            insightsFailureReason: null,
+            insightsRetryAt: null,
+          });
+          expect(
+            (await actor.get(userCtx(owner, "r"))).insightsFailureReason,
+          ).toBe("USER_CAP");
+        }),
+      );
+    });
+
+    it("clears the failure when a later attempt succeeds", async () => {
+      await withInsightsAvailable(true, () =>
+        withTestDb(async (db) => {
+          const owner = await seedUser(db);
+          const id = await seedTierList(db, { createdById: owner });
+          let fail = true;
+          const actor = await activate(
+            newTierListActor(id, db, async () => {
+              if (fail) throw new ConflictError("unreachable");
+              return { summary: "ok" };
+            }),
+          );
+          await seedThree(db, actor, owner);
+          await expect(
+            actor.generateInsights(systemCtx("one")),
+          ).rejects.toBeInstanceOf(ConflictError);
+          fail = false;
+          await actor.generateInsights(systemCtx("two"));
+          expect(await actor.get(userCtx(owner, "r"))).toMatchObject({
+            insightsStatus: "READY",
+            insightsFailureReason: null,
+            insightsRetryAt: null,
+          });
+        }),
+      );
+    });
+
+    it("a change inside the 24h throttle queues the refresh for when it lifts", async () => {
+      await withInsightsAvailable(true, () =>
+        withTestDb(async (db) => {
+          const owner = await seedUser(db);
+          const generatedAt = new Date(Date.now() - 60 * 60_000); // an hour ago
+          const id = await seedTierList(db, {
+            createdById: owner,
+            insightsGeneratedAt: generatedAt,
+          });
+          const actor = await activate(
+            newTierListActor(id, db, async () => ({ summary: "ok" })),
+          );
+          await seedThree(db, actor, owner);
+          // The rows the adds queued have been delivered: this is that
+          // delivery, arriving inside the throttle.
+          await db
+            .update(outbox)
+            .set({ status: "delivered" })
+            .where(eq(outbox.targetId, id));
+
+          const result = await actor.generateInsights(systemCtx("deliver"));
+          expect(result.reason).toBe("throttled");
+
+          const [deferred] = await db
+            .select({ runAfter: outbox.runAfter })
+            .from(outbox)
+            .where(and(eq(outbox.targetId, id), eq(outbox.status, "pending")));
+          const lifts = generatedAt.getTime() + 24 * 60 * 60_000;
+          expect(
+            Math.abs((deferred?.runAfter.getTime() ?? 0) - lifts),
+          ).toBeLessThan(60_000);
+
+          const dto = await actor.get(userCtx(owner, "r"));
+          expect(dto.insightsStatus).toBe("PENDING");
+          expect(Date.parse(dto.insightsRetryAt ?? "")).toBe(lifts);
+        }),
+      );
+    });
+  });
+
+  /* ------------------------------------------------------------------ */
+  /* SV-A (L12): requestInsights — the open-time trigger                 */
+  /* ------------------------------------------------------------------ */
+
+  describe("requestInsights (SV-A, L12)", () => {
+    const withInsights = async <T>(run: () => Promise<T>): Promise<T> => {
+      setAiCapabilities({ ...NO_AI_CAPABILITIES, tierListInsights: true });
+      try {
+        return await run();
+      } finally {
+        setAiCapabilities(NO_AI_CAPABILITIES);
+      }
+    };
+
+    /**
+     * A list of `n` entries that was never asked for insights — what a list
+     * created before the auto-write existed looks like: IDLE.
+     */
+    const seedIdleList = async (
+      db: DbOrTx,
+      owner: string,
+      n: number,
+      privacy: PermissionType = "PRIVATE",
+    ): Promise<{ id: string; actor: TierListActor }> => {
+      const id = await seedTierList(db, { createdById: owner, privacy });
+      const seeder = await activate(newTierListActor(id, db));
+      for (let i = 0; i < n; i += 1) {
+        const wineId = await seedWine(db, owner, `W${i}`);
+        await seeder.addItem(userCtx(owner, `add-${wineId}`), {
+          entry: { type: "WINE", id: wineId },
+        });
+      }
+      await db.delete(outbox).where(eq(outbox.targetId, id));
+      await db
+        .update(tierLists)
+        .set({ insightsRequestedAt: null })
+        .where(eq(tierLists.id, id));
+      return { id, actor: await activate(newTierListActor(id, db)) };
+    };
+
+    const attributionOf = async (db: DbOrTx, id: string) =>
+      db
+        .select({ attributedTo: outbox.attributedTo, method: outbox.method })
+        .from(outbox)
+        .where(and(eq(outbox.targetId, id), eq(outbox.status, "pending")));
+
+    it("asks once from IDLE, attributed to the owner, and is a no-op when asked again", async () => {
+      await withInsights(() =>
+        withTestDb(async (db) => {
+          const owner = await seedUser(db);
+          const { id, actor } = await seedIdleList(db, owner, 3);
+          const me = userCtx(owner, "open");
+          expect((await actor.get(me)).insightsStatus).toBe("IDLE");
+
+          const first = await actor.requestInsights(me);
+          expect(first.insightsStatus).toBe("PENDING");
+          // Attributed to the owner: the delivery's reservation is booked to
+          // them, which is how it counts against their allowance.
+          expect(await attributionOf(db, id)).toEqual([
+            { attributedTo: owner, method: "generateInsights" },
+          ]);
+
+          const again = await actor.requestInsights(me);
+          expect(again.insightsStatus).toBe("PENDING");
+          expect(await liveOutboxRowsFor(db, id)).toHaveLength(1);
+        }),
+      );
+    });
+
+    it("is a no-op under three entries and once insights exist", async () => {
+      await withInsights(() =>
+        withTestDb(async (db) => {
+          const owner = await seedUser(db);
+          const me = userCtx(owner, "open");
+          const short = await seedIdleList(db, owner, 2);
+          expect((await short.actor.requestInsights(me)).insightsStatus).toBe(
+            "NOT_ENOUGH_ENTRIES",
+          );
+          expect(await outboxRowsFor(db, short.id)).toEqual([]);
+
+          const done = await seedIdleList(db, owner, 3);
+          await db
+            .update(tierLists)
+            .set({
+              aiInsights: { summary: "ok" },
+              insightsGeneratedAt: new Date(),
+            })
+            .where(eq(tierLists.id, done.id));
+          const ready = await activate(newTierListActor(done.id, db));
+          expect((await ready.requestInsights(me)).insightsStatus).toBe(
+            "READY",
+          );
+          expect(await outboxRowsFor(db, done.id)).toEqual([]);
+        }),
+      );
+    });
+
+    it("refuses anybody but the owner, and writes nothing for them", async () => {
+      await withInsights(() =>
+        withTestDb(async (db) => {
+          const owner = await seedUser(db);
+          const stranger = await seedUser(db);
+          const visible = await seedIdleList(db, owner, 3, "PUBLIC");
+          await expect(
+            visible.actor.requestInsights(userCtx(stranger, "open")),
+          ).rejects.toBeInstanceOf(ForbiddenError);
+          const hidden = await seedIdleList(db, owner, 3, "PRIVATE");
+          await expect(
+            hidden.actor.requestInsights(userCtx(stranger, "open")),
+          ).rejects.toBeInstanceOf(NotFoundError);
+          await expect(
+            visible.actor.requestInsights(anonymousCtx("anon")),
+          ).rejects.toThrow();
+          expect(await outboxRowsFor(db, visible.id)).toEqual([]);
+          expect(await outboxRowsFor(db, hidden.id)).toEqual([]);
+          expect(
+            (await visible.actor.get(userCtx(owner, "r"))).insightsStatus,
+          ).toBe("IDLE");
+        }),
+      );
+    });
+  });
+
+  /* ------------------------------------------------------------------ */
+  /* F-86: rewriteInsights — a fresh write once READY                    */
+  /* ------------------------------------------------------------------ */
+
+  describe("rewriteInsights (F-86)", () => {
+    const withInsights = async <T>(run: () => Promise<T>): Promise<T> => {
+      setAiCapabilities({ ...NO_AI_CAPABILITIES, tierListInsights: true });
+      try {
+        return await run();
+      } finally {
+        setAiCapabilities(NO_AI_CAPABILITIES);
+      }
+    };
+
+    /** A list of three wines whose insights were written just now: READY. */
+    const seedReadyList = async (db: DbOrTx, owner: string) => {
+      let calls = 0;
+      const generator: InsightsGenerator = async () => {
+        calls += 1;
+        return { summary: `take ${calls}` };
+      };
+      const id = await seedTierList(db, { createdById: owner });
+      const actor = await activate(newTierListActor(id, db, generator));
+      for (const name of ["A", "B", "C"]) {
+        const wineId = await seedWine(db, owner, name);
+        await actor.addItem(userCtx(owner, `add-${wineId}`), {
+          entry: { type: "WINE", id: wineId },
+        });
+      }
+      await actor.generateInsights(systemCtx("first"));
+      await db.delete(outbox).where(eq(outbox.targetId, id));
+      const reopen = () => activate(newTierListActor(id, db, generator));
+      return { id, actor, calls: () => calls, reopen };
+    };
+
+    const pendingRowsOf = async (db: DbOrTx, id: string) =>
+      db
+        .select({
+          payload: outbox.payload,
+          attributedTo: outbox.attributedTo,
+        })
+        .from(outbox)
+        .where(and(eq(outbox.targetId, id), eq(outbox.status, "pending")));
+
+    it("asks for a fresh write from READY, inside the daily throttle, attributed to the owner", async () => {
+      await withInsights(() =>
+        withTestDb(async (db) => {
+          const owner = await seedUser(db);
+          const { id, actor, calls } = await seedReadyList(db, owner);
+          const me = userCtx(owner, "rewrite");
+          expect((await actor.get(me)).insightsStatus).toBe("READY");
+          expect(calls()).toBe(1);
+
+          const asked = await actor.rewriteInsights(me);
+          expect(asked.insightsStatus).toBe("PENDING");
+          expect(await pendingRowsOf(db, id)).toEqual([
+            { payload: { rewrite: true }, attributedTo: owner },
+          ]);
+
+          // The delivery carries the rewrite, so the throttle does not skip it.
+          const result = await actor.generateInsights(systemCtx("deliver"), {
+            rewrite: true,
+          });
+          expect(result).toMatchObject({ skipped: false, reason: "generated" });
+          expect(calls()).toBe(2);
+          const after = await actor.get(me);
+          expect(after.insightsStatus).toBe("READY");
+          expect(after.aiInsights).toEqual({ summary: "take 2" });
+
+          // A plain redelivery inside the throttle still skips.
+          expect(
+            await actor.generateInsights(systemCtx("again")),
+          ).toMatchObject({ skipped: true, reason: "throttled" });
+          expect(calls()).toBe(2);
+        }),
+      );
+    });
+
+    it("turns a refresh already waiting out the throttle into the rewrite, leaving one row", async () => {
+      await withInsights(() =>
+        withTestDb(async (db) => {
+          const owner = await seedUser(db);
+          const seeded = await seedReadyList(db, owner);
+          const { id } = seeded;
+          // An edit inside the throttle: the delivery defers to tomorrow.
+          await db
+            .update(tierLists)
+            .set({ contentUpdatedAt: new Date(Date.now() + 1000) })
+            .where(eq(tierLists.id, id));
+          const actor = await seeded.reopen();
+          await actor.generateInsights(systemCtx("throttled"));
+          expect(await pendingRowsOf(db, id)).toHaveLength(1);
+
+          await actor.rewriteInsights(userCtx(owner, "rewrite"));
+          const rows = await pendingRowsOf(db, id);
+          expect(rows).toHaveLength(1);
+          expect(rows[0]?.payload).toEqual({ rewrite: true });
+          const [due] = await db
+            .select({ runAfter: outbox.runAfter })
+            .from(outbox)
+            .where(and(eq(outbox.targetId, id), eq(outbox.status, "pending")));
+          expect((due?.runAfter ?? new Date(0)).getTime()).toBeLessThanOrEqual(
+            Date.now() + 1000,
+          );
+        }),
+      );
+    });
+
+    it("is a no-op unless READY, and refuses anybody but the owner", async () => {
+      await withInsights(() =>
+        withTestDb(async (db) => {
+          const owner = await seedUser(db);
+          const stranger = await seedUser(db);
+          const id = await seedTierList(db, {
+            createdById: owner,
+            privacy: "PUBLIC",
+          });
+          const empty = await activate(newTierListActor(id, db));
+          expect(
+            (await empty.rewriteInsights(userCtx(owner, "r"))).insightsStatus,
+          ).toBe("NOT_ENOUGH_ENTRIES");
+          expect(await outboxRowsFor(db, id)).toEqual([]);
+
+          const ready = await seedReadyList(db, owner);
+          await db
+            .update(tierLists)
+            .set({ privacy: "PUBLIC" })
+            .where(eq(tierLists.id, ready.id));
+          const reopened = await ready.reopen();
+          await expect(
+            reopened.rewriteInsights(userCtx(stranger, "r")),
+          ).rejects.toBeInstanceOf(ForbiddenError);
+          expect(await outboxRowsFor(db, ready.id)).toEqual([]);
+        }),
+      );
     });
   });
 
@@ -1236,6 +1974,7 @@ describe.skipIf(skip)("TierListActor concealment", () => {
     (actor: TierListActor, ctx: Ctx) => Promise<unknown>,
   ][] = [
     ["get", "NOT_FOUND", (actor, ctx) => actor.get(ctx)],
+    ["getShared", "NOT_FOUND", (actor, ctx) => actor.getShared(ctx)],
     ["items", "NOT_FOUND", (actor, ctx) => actor.items(ctx, page)],
     ["update", "NOT_FOUND", (actor, ctx) => actor.update(ctx, { name: "x" })],
     ["delete", "NOT_FOUND", (actor, ctx) => actor.delete(ctx)],
@@ -1246,6 +1985,9 @@ describe.skipIf(skip)("TierListActor concealment", () => {
       "NOT_FOUND",
       (actor, ctx) => actor.reorderBand(ctx, 3, [ENTRY]),
     ],
+    ["editHistory", "NOT_FOUND", (actor, ctx) => actor.editHistory(ctx)],
+    ["undo", "NOT_FOUND", (actor, ctx) => actor.undo(ctx, 1)],
+    ["redo", "NOT_FOUND", (actor, ctx) => actor.redo(ctx, 1)],
     [
       "generateInsights",
       "FORBIDDEN",
@@ -1274,6 +2016,701 @@ describe.skipIf(skip)("TierListActor concealment", () => {
       );
       expect(hidden).toEqual(missing);
       expect(hidden.code).toBe(code);
+    });
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/* D4 — the edit history: every edit recorded, Undo and Redo replayed         */
+/* -------------------------------------------------------------------------- */
+
+describe.skipIf(skip)("TierListActor edit history (D4)", () => {
+  afterAll(closeTestDb);
+
+  /** Where every entry stands, as `band:name` per band in order. */
+  const board = async (actor: TierListActor, ctx: Ctx) => {
+    const rows = (await actor.items(ctx, page)).entries.map((e) => e.node);
+    return rows
+      .slice()
+      .sort((a, b) => b.band - a.band || a.position - b.position)
+      .map((row) => `${row.band}:${row.position}:${row.entry.id}`);
+  };
+
+  const setup = async (db: DbOrTx, names = ["A", "B", "C"]) => {
+    const owner = await seedUser(db);
+    const id = await seedTierList(db, { createdById: owner });
+    const actor = await activate(newTierListActor(id, db));
+    const wines = [];
+    for (const name of names) wines.push(await seedWine(db, owner, name));
+    return { owner, id, actor, wines, ctx: userCtx(owner, "r-owner") };
+  };
+
+  /** Undo / Redo the way the page does: naming the step its history shows. */
+  const undoTop = async (actor: TierListActor, ctx: Ctx) =>
+    actor.undo(ctx, (await actor.editHistory(ctx))?.undo?.seq ?? -1);
+  const redoTop = async (actor: TierListActor, ctx: Ctx) =>
+    actor.redo(ctx, (await actor.editHistory(ctx))?.redo?.seq ?? -1);
+
+  it("a stale tab cannot undo or redo an edit it never saw (expectedSeq)", async () => {
+    await withTestDb(async (db) => {
+      const { id, actor, wines, ctx } = await setup(db);
+      await actor.addItem(ctx, { entry: { type: "WINE", id: wines[0] ?? "" } });
+      // Tab A reads the history: its Undo button names edit 1.
+      const tabA = await actor.editHistory(ctx);
+      expect(tabA?.undo?.seq).toBe(1);
+
+      // Tab B (another device) adds a second wine — edit 2.
+      await actor.addItem(ctx, { entry: { type: "WINE", id: wines[1] ?? "" } });
+      const logBefore = await db
+        .select({ seq: tierListHistory.seq })
+        .from(tierListHistory)
+        .where(eq(tierListHistory.tierListId, id));
+
+      // Tab A's Undo still names edit 1. It used to take back edit 2.
+      const refused = await actor.undo(ctx, tabA?.undo?.seq ?? 0).then(
+        () => null,
+        (error: unknown) => error,
+      );
+      expect(refused).toBeInstanceOf(ConflictError);
+      expect(refused).toMatchObject({ reason: "TIER_LIST_HISTORY_MOVED" });
+      // Nothing written: both wines still ranked, no UNDO row.
+      expect(await board(actor, ctx)).toHaveLength(2);
+      expect(
+        await db
+          .select({ seq: tierListHistory.seq })
+          .from(tierListHistory)
+          .where(eq(tierListHistory.tierListId, id)),
+      ).toHaveLength(logBefore.length);
+
+      // Naming the edit on top works, and Redo is held to the same rule.
+      const step = await actor.undo(ctx, 2);
+      expect(step.applied).toMatchObject({ seq: 2, kind: "ADD" });
+      expect(step.history.redo?.seq).toBe(2);
+      await expect(actor.redo(ctx, 1)).rejects.toMatchObject({
+        code: "CONFLICT",
+        reason: "TIER_LIST_HISTORY_MOVED",
+      });
+      await expect(actor.redo(ctx, 2)).resolves.toMatchObject({
+        applied: { seq: 2 },
+      });
+      // An undo naming no step at all is malformed, not a conflict.
+      for (const bad of [0, -1, 1.5, Number.NaN, "2" as never]) {
+        await expect(actor.undo(ctx, bad)).rejects.toBeInstanceOf(
+          ValidationError,
+        );
+      }
+    });
+  });
+
+  it("records every edit, and nothing for a no-op reorder", async () => {
+    await withTestDb(async (db) => {
+      const { id, actor, wines, ctx } = await setup(db);
+      const added = [];
+      for (const wineId of wines) {
+        added.push(
+          await actor.addItem(ctx, { entry: { type: "WINE", id: wineId } }),
+        );
+      }
+      const ids = added.map((row) => row.id);
+      await actor.reorderBand(ctx, 0, ids); // already in this order
+      await actor.reorderBand(ctx, 5, [ids[2] ?? ""]);
+      await actor.removeItem(ctx, ids[0] ?? "");
+
+      const log = await db
+        .select({ seq: tierListHistory.seq, kind: tierListHistory.kind })
+        .from(tierListHistory)
+        .where(eq(tierListHistory.tierListId, id))
+        .orderBy(tierListHistory.seq);
+      expect(log).toEqual([
+        { seq: 1, kind: "ADD" },
+        { seq: 2, kind: "ADD" },
+        { seq: 3, kind: "ADD" },
+        { seq: 4, kind: "MOVE" },
+        { seq: 5, kind: "REMOVE" },
+      ]);
+      const history = await actor.editHistory(ctx);
+      expect(history).toMatchObject({
+        editCount: 5,
+        undo: {
+          seq: 5,
+          kind: "REMOVE",
+          entry: { type: "WINE", id: wines[0] },
+          entryName: "A",
+          fromBand: 0,
+          toBand: null,
+        },
+        redo: null,
+      });
+    });
+  });
+
+  it("undoes and redoes a removal, back at its own place and id", async () => {
+    await withTestDb(async (db) => {
+      const { actor, wines, ctx } = await setup(db);
+      const rows = [];
+      for (const wineId of wines) {
+        rows.push(
+          await actor.addItem(ctx, {
+            entry: { type: "WINE", id: wineId },
+            band: 3,
+            notes: wineId === wines[1] ? "the middle one" : null,
+          }),
+        );
+      }
+      const middle = rows[1];
+      if (middle === undefined) throw new Error("fixture");
+      const before = await board(actor, ctx);
+      await actor.removeItem(ctx, middle.id);
+      expect(await board(actor, ctx)).toHaveLength(2);
+
+      const step = await undoTop(actor, ctx);
+      expect(step.applied).toMatchObject({ kind: "REMOVE", entryName: "B" });
+      expect(step.history.redo).toMatchObject({ kind: "REMOVE" });
+      expect(await board(actor, ctx)).toEqual(before);
+      const restored = (await actor.items(ctx, page)).entries.find(
+        (e) => e.node.id === middle.id,
+      );
+      expect(restored?.node.notes).toBe("the middle one");
+
+      await redoTop(actor, ctx);
+      expect(await board(actor, ctx)).toEqual(
+        before
+          .filter((cell) => !cell.endsWith(String(wines[1])))
+          .map((cell, index) => cell.replace(/^3:\d+:/, `3:${index}:`)),
+      );
+    });
+  });
+
+  it("undoes an add, and a cross-band move back into both bands", async () => {
+    await withTestDb(async (db) => {
+      const { actor, wines, ctx } = await setup(db);
+      const rows = [];
+      for (const wineId of wines) {
+        rows.push(
+          await actor.addItem(ctx, { entry: { type: "WINE", id: wineId } }),
+        );
+      }
+      const start = await board(actor, ctx);
+      const first = rows[0];
+      if (first === undefined) throw new Error("fixture");
+      await actor.reorderBand(ctx, 5, [first.id]);
+      expect((await actor.editHistory(ctx))?.undo).toMatchObject({
+        kind: "MOVE",
+        entry: { id: wines[0] },
+        fromBand: 0,
+        toBand: 5,
+      });
+
+      await undoTop(actor, ctx);
+      expect(await board(actor, ctx)).toEqual(start);
+
+      // Undo the third ADD too: the newest add leaves, the rest stay put.
+      await undoTop(actor, ctx);
+      expect(await board(actor, ctx)).toEqual(start.slice(0, 2));
+      expect(await actor.editHistory(ctx)).toMatchObject({
+        undo: { kind: "ADD", entry: { id: wines[1] } },
+        redo: { kind: "ADD", entry: { id: wines[2] } },
+      });
+
+      // Redo both, in order.
+      await redoTop(actor, ctx);
+      expect(await board(actor, ctx)).toEqual(start);
+      await redoTop(actor, ctx);
+      expect((await board(actor, ctx))[0]).toBe(`5:0:${wines[0]}`);
+      expect((await actor.editHistory(ctx))?.redo).toBeNull();
+    });
+  });
+
+  it("a new edit after an undo clears redo; nothing to undo is a conflict", async () => {
+    await withTestDb(async (db) => {
+      const { actor, wines, ctx } = await setup(db);
+      await expect(actor.undo(ctx, 1)).rejects.toBeInstanceOf(ConflictError);
+      await actor.addItem(ctx, { entry: { type: "WINE", id: wines[0] ?? "" } });
+      await undoTop(actor, ctx);
+      expect((await actor.editHistory(ctx))?.redo).not.toBeNull();
+      await actor.addItem(ctx, { entry: { type: "WINE", id: wines[1] ?? "" } });
+      expect(await actor.editHistory(ctx)).toMatchObject({
+        editCount: 2,
+        redo: null,
+      });
+      await expect(actor.redo(ctx, 2)).rejects.toBeInstanceOf(ConflictError);
+    });
+  });
+
+  it("survives a new activation — the stacks are a replay of the log", async () => {
+    await withTestDb(async (db) => {
+      const { id, actor, wines, ctx } = await setup(db);
+      await actor.addItem(ctx, { entry: { type: "WINE", id: wines[0] ?? "" } });
+      await actor.addItem(ctx, { entry: { type: "WINE", id: wines[1] ?? "" } });
+      await undoTop(actor, ctx);
+
+      const fresh = await activate(newTierListActor(id, db));
+      expect(await fresh.editHistory(ctx)).toMatchObject({
+        editCount: 2,
+        undo: { kind: "ADD", entry: { id: wines[0] } },
+        redo: { kind: "ADD", entry: { id: wines[1] } },
+      });
+      await redoTop(fresh, ctx);
+      expect(await board(fresh, ctx)).toHaveLength(2);
+    });
+  });
+
+  it("is the owner's alone: a friend sees null and may not undo", async () => {
+    await withTestDb(async (db) => {
+      const owner = await seedUser(db);
+      const friend = await seedUser(db);
+      await seedFriendship(db, owner, friend);
+      const id = await seedTierList(db, {
+        createdById: owner,
+        privacy: "FRIENDS",
+      });
+      const actor = await activate(newTierListActor(id, db));
+      const wineId = await seedWine(db, owner);
+      await actor.addItem(userCtx(owner, "r"), {
+        entry: { type: "WINE", id: wineId },
+      });
+      const friendCtx = userCtx(friend, "r-friend");
+      expect(await actor.editHistory(friendCtx)).toBeNull();
+      await expect(actor.undo(friendCtx, 1)).rejects.toBeInstanceOf(
+        ForbiddenError,
+      );
+    });
+  });
+
+  it("an edit whose snapshot no longer parses is stepped past, not thrown on after commit", async () => {
+    await withTestDb(async (db) => {
+      const { id, owner, wines, ctx } = await setup(db);
+      const first = await activate(newTierListActor(id, db));
+      await first.addItem(ctx, { entry: { type: "WINE", id: wines[0] ?? "" } });
+      // A row the actor never writes (a hand edit): an ADD with no snapshot.
+      await db.insert(tierListHistory).values({
+        tierListId: id,
+        seq: 2,
+        kind: "ADD",
+        targetSeq: null,
+        change: {},
+        userId: owner,
+      });
+      const fresh = await activate(newTierListActor(id, db));
+      const before = await board(fresh, ctx);
+      // The history names it (by seq and kind), so the page can offer the
+      // step — Undo takes the seq it names.
+      expect((await fresh.editHistory(ctx))?.undo).toMatchObject({
+        seq: 2,
+        kind: "ADD",
+        entryName: null,
+      });
+
+      const step = await undoTop(fresh, ctx);
+      expect(step.applied).toMatchObject({
+        seq: 2,
+        kind: "ADD",
+        entry: null,
+        entryName: null,
+      });
+      // Nothing to apply, so the board is as it was — and the stacks moved:
+      // the next Undo is the real add beneath it.
+      expect(await board(fresh, ctx)).toEqual(before);
+      expect(step.history.undo).toMatchObject({ seq: 1, kind: "ADD" });
+      const log = await db
+        .select({ seq: tierListHistory.seq, kind: tierListHistory.kind })
+        .from(tierListHistory)
+        .where(eq(tierListHistory.tierListId, id))
+        .orderBy(tierListHistory.seq);
+      expect(log.at(-1)).toEqual({ seq: 3, kind: "UNDO" });
+    });
+  });
+
+  it("the log is append-only: an UPDATE is refused by the database", async () => {
+    await withTestDb(async (db) => {
+      const { id, actor, wines, ctx } = await setup(db);
+      await actor.addItem(ctx, { entry: { type: "WINE", id: wines[0] ?? "" } });
+      const refused = await db
+        .execute(sql`
+          update public.tier_list_history set kind = 'MOVE'
+          where tier_list_id = ${id}::uuid
+        `)
+        .then(
+          () => null,
+          (error: unknown) => error,
+        );
+      // Drizzle wraps the driver's error; the trigger's words are its cause.
+      expect(String((refused as { cause?: unknown })?.cause)).toMatch(
+        /append-only/,
+      );
+    });
+  });
+
+  it("an undo bumps content and asks for insights, like any edit", async () => {
+    await withTestDb(async (db) => {
+      const { id, actor, wines, ctx } = await setup(db);
+      await actor.addItem(ctx, { entry: { type: "WINE", id: wines[0] ?? "" } });
+      const before = await contentUpdatedAt(db, id);
+      await db.execute(
+        sql`update public.outbox set status = 'delivered' where target_id = ${id}`,
+      );
+      await undoTop(actor, ctx);
+      const after = await contentUpdatedAt(db, id);
+      expect(after?.getTime()).toBeGreaterThanOrEqual(before?.getTime() ?? 0);
+      expect(await liveOutboxRowsFor(db, id)).toHaveLength(1);
+    });
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/* M7 — the positioned add (wave C "pairwise")                                 */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Pairwise placement ends in one `addItem` with `band` and `position`: the
+ * entry goes in at that index, the band below it moves down one, and all of
+ * that is one `ADD` history entry — one Undo takes the placement back, one
+ * Redo puts it back in the same place (L20).
+ */
+describe.skipIf(skip)("TierListActor positioned add (M7)", () => {
+  afterAll(closeTestDb);
+
+  /** `band:position:entryId` for every row, board order. */
+  const board = async (actor: TierListActor, ctx: Ctx) =>
+    (await actor.items(ctx, page)).entries
+      .map((e) => e.node)
+      .slice()
+      .sort((a, b) => b.band - a.band || a.position - b.position)
+      .map((row) => `${row.band}:${row.position}:${row.entry.id}`);
+
+  /** A list with `names` appended to band 4 in order, and one more wine. */
+  const setup = async (db: DbOrTx, names = ["A", "B", "C"]) => {
+    const owner = await seedUser(db);
+    const ctx = userCtx(owner, "r-owner");
+    const id = await seedTierList(db, { createdById: owner });
+    const actor = await activate(newTierListActor(id, db));
+    const ranked: string[] = [];
+    for (const name of names) {
+      const wine = await seedWine(db, owner, name);
+      await actor.addItem(ctx, { entry: { type: "WINE", id: wine }, band: 4 });
+      ranked.push(wine);
+    }
+    const newcomer = await seedWine(db, owner, "New");
+    return { owner, ctx, id, actor, ranked, newcomer };
+  };
+
+  const historyRows = async (db: DbOrTx, id: string) =>
+    db
+      .select({ seq: tierListHistory.seq, kind: tierListHistory.kind })
+      .from(tierListHistory)
+      .where(eq(tierListHistory.tierListId, id));
+
+  it("inserts at the position and moves the rest of the band down one", async () => {
+    await withTestDb(async (db) => {
+      const { ctx, actor, ranked, newcomer } = await setup(db);
+      const [a, b, c] = ranked;
+
+      const placed = await actor.addItem(ctx, {
+        entry: { type: "WINE", id: newcomer },
+        band: 4,
+        position: 1,
+      });
+      expect(placed).toMatchObject({ band: 4, position: 1 });
+      expect(await board(actor, ctx)).toEqual([
+        `4:0:${a}`,
+        `4:1:${newcomer}`,
+        `4:2:${b}`,
+        `4:3:${c}`,
+      ]);
+    });
+  });
+
+  it("is one history entry: one Undo takes it back, one Redo restores the place", async () => {
+    await withTestDb(async (db) => {
+      const { id, ctx, actor, ranked, newcomer } = await setup(db);
+      const [a, b, c] = ranked;
+      const before = await board(actor, ctx);
+      const rowsBefore = await historyRows(db, id);
+
+      await actor.addItem(ctx, {
+        entry: { type: "WINE", id: newcomer },
+        band: 4,
+        position: 0,
+      });
+      const added = (await historyRows(db, id)).filter(
+        (row) => !rowsBefore.some((old) => old.seq === row.seq),
+      );
+      expect(added.map((row) => row.kind)).toEqual(["ADD"]);
+
+      const history = await actor.editHistory(ctx);
+      const undone = await actor.undo(ctx, history?.undo?.seq ?? -1);
+      expect(undone.applied.kind).toBe("ADD");
+      expect(await board(actor, ctx)).toEqual(before);
+
+      const again = await actor.editHistory(ctx);
+      await actor.redo(ctx, again?.redo?.seq ?? -1);
+      expect(await board(actor, ctx)).toEqual([
+        `4:0:${newcomer}`,
+        `4:1:${a}`,
+        `4:2:${b}`,
+        `4:3:${c}`,
+      ]);
+    });
+  });
+
+  it("appends at the band's length, and into an empty band at 0", async () => {
+    await withTestDb(async (db) => {
+      const { owner, ctx, actor, ranked, newcomer } = await setup(db);
+      await actor.addItem(ctx, {
+        entry: { type: "WINE", id: newcomer },
+        band: 4,
+        position: ranked.length,
+      });
+      const lone = await seedWine(db, owner, "Lone");
+      const first = await actor.addItem(ctx, {
+        entry: { type: "WINE", id: lone },
+        band: 2,
+        position: 0,
+      });
+      expect(first).toMatchObject({ band: 2, position: 0 });
+      expect((await board(actor, ctx)).slice(0, 4)).toEqual([
+        ...ranked.map((wine, i) => `4:${i}:${wine}`),
+        `4:3:${newcomer}`,
+      ]);
+    });
+  });
+
+  it.each([
+    ["below the top", { band: 4, position: -1 }],
+    ["past the end", { band: 4, position: 4 }],
+    ["not an integer", { band: 4, position: 1.5 }],
+    ["without a band", { position: 0 }],
+    ["in a band that does not exist", { band: 6, position: 0 }],
+  ])("refuses a position %s, writing nothing", async (_case, where) => {
+    await withTestDb(async (db) => {
+      const { id, ctx, actor, newcomer } = await setup(db);
+      const rowsBefore = await historyRows(db, id);
+      await expect(
+        actor.addItem(ctx, { entry: { type: "WINE", id: newcomer }, ...where }),
+      ).rejects.toBeInstanceOf(ValidationError);
+      expect(await historyRows(db, id)).toHaveLength(rowsBefore.length);
+      expect(await board(actor, ctx)).toHaveLength(3);
+    });
+  });
+
+  it("addItems appends and refuses a position", async () => {
+    await withTestDb(async (db) => {
+      const { ctx, actor, newcomer } = await setup(db);
+      await expect(
+        actor.addItems(ctx, [
+          { entry: { type: "WINE", id: newcomer }, band: 4, position: 0 },
+        ]),
+      ).rejects.toBeInstanceOf(ValidationError);
+    });
+  });
+
+  describe("write auth", () => {
+    const positioned = (wine: string) => ({
+      entry: { type: "WINE" as const, id: wine },
+      band: 4,
+      position: 0,
+    });
+
+    it("another user's private list answers exactly as a list that does not exist", async () => {
+      await withTestDb(async (db) => {
+        const { id, actor, newcomer } = await setup(db);
+        const stranger = userCtx(await seedUser(db), "r-stranger");
+        const absent = randomUUID();
+
+        const hidden = await refusalOf(
+          () => actor.addItem(stranger, positioned(newcomer)),
+          id,
+        );
+        const missing = await refusalOf(
+          async () =>
+            (await activate(newTierListActor(absent, db))).addItem(
+              stranger,
+              positioned(newcomer),
+            ),
+          absent,
+        );
+        expect(hidden.code).toBe("NOT_FOUND");
+        expect(hidden).toEqual(missing);
+      });
+    });
+
+    it("an out-of-range position from a stranger is still NotFound, not a validation oracle", async () => {
+      await withTestDb(async (db) => {
+        const { id, actor, newcomer } = await setup(db);
+        const stranger = userCtx(await seedUser(db), "r-stranger");
+        const refused = await refusalOf(
+          () =>
+            actor.addItem(stranger, {
+              entry: { type: "WINE", id: newcomer },
+              band: 9,
+              position: 99,
+            }),
+          id,
+        );
+        expect(refused.code).toBe("NOT_FOUND");
+      });
+    });
+
+    it("another user's public list is Forbidden, and nothing moves", async () => {
+      await withTestDb(async (db) => {
+        const owner = await seedUser(db);
+        const ownerCtx = userCtx(owner, "r-owner");
+        const id = await seedTierList(db, {
+          createdById: owner,
+          privacy: "PUBLIC",
+        });
+        const actor = await activate(newTierListActor(id, db));
+        const wine = await seedWine(db, owner, "A");
+        await actor.addItem(ownerCtx, {
+          entry: { type: "WINE", id: wine },
+          band: 4,
+        });
+        const before = await board(actor, ownerCtx);
+        const stranger = await seedUser(db);
+        const theirs = await seedWine(db, stranger, "Theirs");
+
+        await expect(
+          actor.addItem(userCtx(stranger, "r-x"), positioned(theirs)),
+        ).rejects.toBeInstanceOf(ForbiddenError);
+        expect(await board(actor, ownerCtx)).toEqual(before);
+        expect(await historyRows(db, id)).toHaveLength(1);
+      });
+    });
+  });
+});
+
+describe("cloneName (W-19)", () => {
+  const viewer = "00000000-0000-4000-8000-000000000001";
+  const friend = "00000000-0000-4000-8000-000000000002";
+  it("names a friend's copy after its owner, by first name", () => {
+    expect(
+      cloneName("Sam's reds", { id: friend, name: "Sam Ortiz" }, viewer),
+    ).toBe("Sam's reds (from Sam)");
+  });
+  it("calls a copy of your own list a copy", () => {
+    expect(cloneName("Reds", { id: viewer, name: "Riley" }, viewer)).toBe(
+      "Reds (copy)",
+    );
+  });
+  it("never shows an email, and stays inside 200 characters", () => {
+    expect(
+      cloneName("Reds", { id: friend, name: "sam@example.com" }, viewer),
+    ).not.toMatch(/@/);
+    expect(
+      cloneName("x".repeat(200), { id: friend, name: "Sam" }, viewer).length,
+    ).toBeLessThanOrEqual(200);
+  });
+});
+
+describe.skipIf(skip)("TierListActor clone (L03)", () => {
+  afterAll(closeTestDb);
+
+  /** A friend's list of three wines across two bands, with a note. */
+  const setup = async (db: DbOrTx, privacy: PermissionType) => {
+    const owner = await seedUser(db, { displayName: "Maya Lin" });
+    const viewer = await seedUser(db);
+    await seedFriendship(db, owner, viewer);
+    const ownerCtx = userCtx(owner, "r-owner");
+    const id = await seedTierList(db, {
+      createdById: owner,
+      privacy,
+      name: "Maya's reds",
+    });
+    const source = await activate(newTierListActor(id, db));
+    const wines: string[] = [];
+    for (const [name, band] of [
+      ["A", 5],
+      ["B", 5],
+      ["C", 3],
+    ] as const) {
+      const wine = await seedWine(db, owner, name);
+      await source.addItem(ownerCtx, {
+        entry: { type: "WINE", id: wine },
+        band,
+        notes: "the owner's words",
+      });
+      wines.push(wine);
+    }
+    return { owner, viewer, id, wines, viewerCtx: userCtx(viewer, "r-v") };
+  };
+
+  it("copies a visible list into a new PRIVATE list of yours, in band and order, without notes", async () => {
+    await withTestDb(async (db) => {
+      const { viewer, id, wines, viewerCtx } = await setup(db, "FRIENDS");
+      const copyId = randomUUID();
+      const copy = await activate(newTierListActor(copyId, db));
+      const dto = await copy.clone(viewerCtx, { sourceTierListId: id });
+      expect(dto).toMatchObject({
+        id: copyId,
+        // W-19: the copy reads as yours, and says whose it was.
+        name: "Maya's reds (from Maya)",
+        privacy: "PRIVATE",
+        createdById: viewer,
+      });
+      const rows = (await copy.items(viewerCtx, page)).entries.map(
+        (e) => e.node,
+      );
+      expect(rows.map((r) => `${r.band}:${r.position}:${r.entry.id}`)).toEqual([
+        `5:0:${wines[0]}`,
+        `5:1:${wines[1]}`,
+        `3:0:${wines[2]}`,
+      ]);
+      expect(rows.every((r) => r.notes === null)).toBe(true);
+      // Undo is a delete of the copy; the source is untouched.
+      await copy.delete(viewerCtx);
+      const [left] = await db
+        .select({ id: tierLists.id })
+        .from(tierLists)
+        .where(eq(tierLists.id, id));
+      expect(left?.id).toBe(id);
+    });
+  });
+
+  it("a list you cannot see answers exactly like a missing one", async () => {
+    await withTestDb(async (db) => {
+      const { id, viewerCtx } = await setup(db, "PRIVATE");
+      const refusal = async (sourceTierListId: string) => {
+        const actor = await activate(newTierListActor(randomUUID(), db));
+        return refusalOf(
+          () => actor.clone(viewerCtx, { sourceTierListId }),
+          sourceTierListId,
+        );
+      };
+      const hidden = await refusal(id);
+      const missing = await refusal(randomUUID());
+      expect(hidden).toEqual({
+        code: "NOT_FOUND",
+        message: "tier list <id> does not exist",
+      });
+      expect(missing).toEqual(hidden);
+      expect(await refusal("not-a-uuid")).toEqual(hidden);
+      // Nothing was created at either id.
+      const mine = await db
+        .select({ id: tierLists.id })
+        .from(tierLists)
+        .where(eq(tierLists.createdById, viewerCtx.viewerId ?? ""));
+      expect(mine).toHaveLength(0);
+    });
+  });
+
+  it("refuses an id that already holds a list, and a signed-out caller", async () => {
+    await withTestDb(async (db) => {
+      const { owner, id, viewerCtx } = await setup(db, "PUBLIC");
+      const taken = await seedTierList(db, { createdById: owner });
+      const actor = await activate(newTierListActor(taken, db));
+      expect(
+        await refusalOf(
+          () => actor.clone(viewerCtx, { sourceTierListId: id }),
+          taken,
+        ),
+      ).toMatchObject({ code: "CONFLICT" });
+      const fresh = await activate(newTierListActor(randomUUID(), db));
+      expect(
+        await refusalOf(
+          () => fresh.clone(anonymousCtx("r-anon"), { sourceTierListId: id }),
+          id,
+        ),
+      ).toMatchObject({ code: "FORBIDDEN" });
     });
   });
 });

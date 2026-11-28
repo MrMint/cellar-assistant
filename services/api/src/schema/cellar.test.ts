@@ -64,6 +64,13 @@ const cellarItem = {
   distance: null,
   createdAt: "2026-09-09T00:00:00.000Z",
   updatedAt: "2026-09-09T00:00:00.000Z",
+  packagedOn: null,
+  acquiredOn: "2026-03-12",
+  drinkFrom: null,
+  drinkUntil: "2036-12-31",
+  priceAmount: 58,
+  priceCurrency: "EUR",
+  location: "Rack B, row 3",
 };
 
 const checkIn = {
@@ -73,6 +80,27 @@ const checkIn = {
   createdAt: "2026-09-09T00:00:00.000Z",
   updatedAt: "2026-09-09T00:00:00.000Z",
 };
+
+/** What `CheckInActor.log` answers for `rows` written from the bottle. */
+const logged = (rows: readonly { id: string; userId: string }[]) => ({
+  entry: {
+    id: rows[0]?.id ?? checkIn.id,
+    userId: rows[0]?.userId ?? viewer.id,
+    createdById: viewer.id,
+    item: { type: "WINE" as const, id: WINE_ID },
+    score: null,
+    note: null,
+    tags: [],
+    placeId: null,
+    photoFileId: null,
+    companionIds: rows.slice(1).map((row) => row.userId),
+    fromCellar: true,
+    createdAt: checkIn.createdAt,
+    updatedAt: checkIn.updatedAt,
+  },
+  rows,
+  cellarItemId: cellarItem.id,
+});
 
 const wine = {
   id: WINE_ID,
@@ -295,13 +323,14 @@ describe("cellar mutations (§8.3)", () => {
   });
 
   it("bulkCheckIn returns a connection, and surfaces ForbiddenError typed", async () => {
+    // X02: `bulkCheckIn` is `CheckInActor.log` with the ids as companions.
     const { invoke, calls } = stubSidecar({
-      "CellarActor.bulkCheckIn": (_actorId, _ctx, _cellarItemId, userIds) =>
-        (userIds as string[]).map((userId, index) => ({
-          ...checkIn,
-          id: `id-${index}`,
-          userId,
-        })),
+      "CheckInActor.log": (_actorId, _ctx, input) =>
+        logged(
+          ((input as { companionIds: string[] }).companionIds ?? []).map(
+            (userId, index) => ({ id: `id-${index}`, userId }),
+          ),
+        ),
     });
     const result = await run(
       `mutation { bulkCheckIn(
@@ -327,12 +356,15 @@ describe("cellar mutations (§8.3)", () => {
       },
     });
     expect(calls[0]?.args.slice(1)).toEqual([
-      cellarItem.id,
-      [viewer.id, "friend"],
+      {
+        bottle: { cellarId: CELLAR_ID, cellarItemId: cellarItem.id },
+        companionIds: [viewer.id, "friend"],
+        includeSelf: false,
+      },
     ]);
 
     const denied = stubSidecar({
-      "CellarActor.bulkCheckIn": () => {
+      "CheckInActor.log": () => {
         throw new ForbiddenError(
           "cannot check in on behalf of x: not a friend",
         );
@@ -351,6 +383,34 @@ describe("cellar mutations (§8.3)", () => {
     });
   });
 
+  it("restoreCellarItem sends the bottle back with its own id and createdAt (F-79)", async () => {
+    const { invoke, calls } = stubSidecar({
+      "CellarActor.restoreItem": () => cellarItem,
+      "ItemActor.get": () => wine,
+    });
+    const result = await run(
+      `mutation {
+         restoreCellarItem(cellarId: "${CELLAR_ID}", cellarItemId: "${cellarItem.id}",
+           createdAt: "2026-11-01T10:00:00.000Z",
+           input: { item: { type: WINE, id: "${WINE_ID}" }, percentageRemaining: 40, location: "Rack A" }) {
+           __typename
+         }
+       }`,
+      testContext(invoke, viewer),
+    );
+    expect(result.errors).toBeUndefined();
+    expect(calls.map((call) => [call.actorId, call.method])).toEqual([
+      [CELLAR_ID, "restoreItem"],
+    ]);
+    expect(calls[0]?.args[1]).toMatchObject({
+      item: { type: "WINE", id: WINE_ID },
+      cellarItemId: cellarItem.id,
+      createdAt: "2026-11-01T10:00:00.000Z",
+      percentageRemaining: 40,
+      location: "Rack A",
+    });
+  });
+
   it("every other command maps onto exactly one actor method", async () => {
     const { invoke, calls } = stubSidecar({
       "CellarActor.delete": () => ({ id: CELLAR_ID }),
@@ -359,7 +419,7 @@ describe("cellar mutations (§8.3)", () => {
       "CellarActor.setItemPercentage": () => cellarItem,
       "CellarActor.openItem": () => cellarItem,
       "CellarActor.emptyItem": () => cellarItem,
-      "CellarActor.checkIn": () => checkIn,
+      "CheckInActor.log": () => logged([{ id: checkIn.id, userId: viewer.id }]),
       "ItemActor.get": () => wine,
     });
     const result = await run(
@@ -382,16 +442,87 @@ describe("cellar mutations (§8.3)", () => {
       "setItemPercentage",
       "openItem",
       "emptyItem",
-      "checkIn",
+      "log",
     ]);
     // An explicitly-null `openAt` means "clear it" and must survive the trip.
     expect(calls[2]?.args[2]).toEqual({ openAt: null });
-    // An omitted `checkInId` is `undefined`, never a fabricated id.
+    // X02: the bottle check-in is a log poured from that bottle.
     expect(calls[6]?.args).toEqual([
       { viewerId: viewer.id, kind: "user", requestId: "req-test" },
-      cellarItem.id,
-      undefined,
+      { bottle: { cellarId: CELLAR_ID, cellarItemId: cellarItem.id } },
     ]);
+  });
+});
+
+describe("ux-c L02: a bottle's dates, price and place", () => {
+  it("updateCellarItem passes each field through, null meaning clear", async () => {
+    const { invoke, calls } = stubSidecar({
+      "CellarActor.updateItem": () => cellarItem,
+    });
+    const result = await run(
+      `mutation {
+         updateCellarItem(cellarId: "${CELLAR_ID}", cellarItemId: "${cellarItem.id}", input: {
+           acquiredOn: "2026-03-12", drinkUntil: "2036-12-31",
+           priceAmount: 58, priceCurrency: "EUR", location: null
+         }) {
+           __typename
+           ... on CellarItem { acquiredOn drinkUntil priceAmount priceCurrency location packagedOn }
+         }
+       }`,
+      testContext(invoke, viewer),
+    );
+    expect(result.errors).toBeUndefined();
+    expect(calls[0]?.args[2]).toEqual({
+      acquiredOn: "2026-03-12",
+      drinkUntil: "2036-12-31",
+      priceAmount: 58,
+      priceCurrency: "EUR",
+      location: null,
+    });
+    expect(result.data?.updateCellarItem).toEqual({
+      __typename: "CellarItem",
+      acquiredOn: "2026-03-12",
+      drinkUntil: "2036-12-31",
+      priceAmount: 58,
+      priceCurrency: "EUR",
+      location: "Rack B, row 3",
+      packagedOn: null,
+    });
+  });
+
+  it("refuses a malformed date before it reaches the actor", async () => {
+    const { invoke, calls } = stubSidecar({
+      "CellarActor.updateItem": () => cellarItem,
+    });
+    const result = await run(
+      `mutation {
+         updateCellarItem(cellarId: "${CELLAR_ID}", cellarItemId: "${cellarItem.id}", input: { packagedOn: "last week" }) { __typename }
+       }`,
+      testContext(invoke, viewer),
+    );
+    expect(result.errors?.length).toBeGreaterThan(0);
+    expect(calls).toEqual([]);
+  });
+
+  it("addItemToCellar carries them on the new bottle", async () => {
+    const { invoke, calls } = stubSidecar({
+      "CellarActor.addItem": () => cellarItem,
+      "ItemActor.get": () => wine,
+    });
+    const result = await run(
+      `mutation {
+         addItemToCellar(cellarId: "${CELLAR_ID}", input: {
+           item: { type: WINE, id: "${WINE_ID}" }, acquiredOn: "2026-03-12", location: "Rack B"
+         }) { __typename }
+       }`,
+      testContext(invoke, viewer),
+    );
+    expect(result.errors).toBeUndefined();
+    expect(calls[0]?.args[1]).toMatchObject({
+      acquiredOn: "2026-03-12",
+      location: "Rack B",
+      packagedOn: null,
+    });
   });
 });
 
@@ -511,6 +642,54 @@ describe("UI parity wave A: counts, filters, stats", () => {
     ]);
   });
 
+  it("X12: me.bottleSearch is one call to the viewer's own collection actor", async () => {
+    const { invoke, calls } = stubSidecar({
+      "CellarsCollectionActor.findBottles": () => ({
+        hits: [
+          {
+            cellarItemId: "ci-1",
+            cellarId: "c-1",
+            cellarName: "Bar Cart",
+            item: { type: "SPIRIT", id: "s-1" },
+            itemName: "Lagavulin 16",
+            bottleCount: 2,
+          },
+        ],
+        totalCount: 4,
+      }),
+    });
+    const result = await run(
+      `{ me { bottleSearch(term: "lagavulin", limit: 3, first: 3) {
+           totalCount edges { node { cellarItemId cellarId cellarName bottleCount } }
+         } } }`,
+      testContext(invoke, viewer),
+    );
+    expect(result.errors).toBeUndefined();
+    expect(result.data?.me).toEqual({
+      bottleSearch: {
+        totalCount: 4,
+        edges: [
+          {
+            node: {
+              cellarItemId: "ci-1",
+              cellarId: "c-1",
+              cellarName: "Bar Cart",
+              bottleCount: 2,
+            },
+          },
+        ],
+      },
+    });
+    expect(calls).toMatchObject([
+      {
+        actorType: "CellarsCollectionActor",
+        actorId: viewer.id,
+        method: "findBottles",
+      },
+    ]);
+    expect(calls[0]?.args.at(-1)).toEqual({ term: "lagavulin", limit: 3 });
+  });
+
   it("G36: an anonymous viewer has no `me`, so no stats call", async () => {
     const { invoke, calls } = stubSidecar({});
     const result = await run(
@@ -520,5 +699,71 @@ describe("UI parity wave A: counts, filters, stats", () => {
     expect(result.errors).toBeUndefined();
     expect(result.data?.me).toBeNull();
     expect(calls).toEqual([]);
+  });
+});
+
+describe("SV-B MC-move: updateCellarItem(input: { cellarId })", () => {
+  const DEST = "55555555-5555-4555-8555-555555555555";
+
+  it("passes the destination to the source cellar's actor, which does the move", async () => {
+    const { invoke, calls } = stubSidecar({
+      "CellarActor.updateItem": () => ({
+        ...cellarItem,
+        cellarId: DEST,
+        location: null,
+      }),
+    });
+    const result = await run(
+      `mutation {
+         updateCellarItem(cellarId: "${CELLAR_ID}", cellarItemId: "${cellarItem.id}", input: { cellarId: "${DEST}" }) {
+           __typename
+           ... on CellarItem { cellarId location }
+         }
+       }`,
+      testContext(invoke, viewer),
+    );
+    expect(result.errors).toBeUndefined();
+    expect(calls[0]?.actorId).toBe(CELLAR_ID);
+    expect(calls[0]?.args[2]).toEqual({ cellarId: DEST });
+    expect(result.data?.updateCellarItem).toEqual({
+      __typename: "CellarItem",
+      cellarId: DEST,
+      location: null,
+    });
+  });
+
+  it("null is no move: the key is not sent", async () => {
+    const { invoke, calls } = stubSidecar({
+      "CellarActor.updateItem": () => cellarItem,
+    });
+    const result = await run(
+      `mutation {
+         updateCellarItem(cellarId: "${CELLAR_ID}", cellarItemId: "${cellarItem.id}", input: { cellarId: null, percentageRemaining: 50 }) { __typename }
+       }`,
+      testContext(invoke, viewer),
+    );
+    expect(result.errors).toBeUndefined();
+    expect(calls[0]?.args[2]).toEqual({ percentageRemaining: 50 });
+  });
+
+  it("a destination the viewer cannot write comes back as the actor's NotFound", async () => {
+    const { invoke } = stubSidecar({
+      "CellarActor.updateItem": () => {
+        throw new NotFoundError(`CellarActor(${DEST}) has no row`);
+      },
+    });
+    const result = await run(
+      `mutation {
+         updateCellarItem(cellarId: "${CELLAR_ID}", cellarItemId: "${cellarItem.id}", input: { cellarId: "${DEST}" }) {
+           __typename
+           ... on NotFoundError { message }
+         }
+       }`,
+      testContext(invoke, viewer),
+    );
+    expect(result.errors).toBeUndefined();
+    expect(result.data?.updateCellarItem).toMatchObject({
+      __typename: "NotFoundError",
+    });
   });
 });

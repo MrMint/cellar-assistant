@@ -35,43 +35,91 @@
 import { randomUUID } from "node:crypto";
 import type {
   AddTierListItemInput as AddTierListItemInputType,
+  AddTierListItemsResult,
   CreateTierListInput as CreateTierListInputType,
   DeletedTierList,
   ItemType,
   PermissionType,
   RemovedTierListItem,
   TierListDto,
+  TierListEditDto,
+  TierListEditHistoryDto,
   TierListEntryRef,
   TierListEntryType,
+  TierListHistoryStepResult,
   TierListItemDto,
+  TierListSuggestionDto,
+  TierListTemplateDto,
+  TierListTryNextDto,
   UpdateTierListInput as UpdateTierListInputType,
 } from "@cellar-assistant/contracts";
 import {
   ForbiddenError,
+  ItemActorDescriptor,
   itemActorId,
+  MAX_BATCH_ADD,
   offsetPage,
+  SUGGESTIONS_PER_SECTION,
+  TIER_LIST_EDIT_KINDS,
   TIER_LIST_ENTRY_TYPES,
+  TIER_LIST_INSIGHTS_STATUSES,
+  TIER_LIST_STARTS,
+  TIER_LIST_SUGGESTION_SECTIONS,
   TierListActorDescriptor,
   TierListsCollectionActorDescriptor,
+  TRY_NEXT_LIMIT,
+  TRY_NEXT_REASONS,
   viewerCollectionActorId,
 } from "@cellar-assistant/contracts";
 import type { ApiContext } from "../context.ts";
 import { builder } from "./builder.ts";
-import { PermissionTypeEnum } from "./enums.ts";
-import { ItemInterface } from "./item.ts";
+import { CollectionSectionEnum, PermissionTypeEnum } from "./enums.ts";
+import { ActorErrorReasonEnum } from "./errors.ts";
+import { ItemInterface, ItemReviewType } from "./item.ts";
 import { connectionFromPage, toPageArgs } from "./pagination.ts";
 import { type PatchPolicy, patch, present } from "./patch.ts";
+import { UserProfileType } from "./user.ts";
+import { Viewer } from "./viewer.ts";
 
 /* -------------------------------------------------------------------------- */
 /* Enums                                                                       */
 /* -------------------------------------------------------------------------- */
 
-const TierListEntryTypeEnum = builder.enumType("TierListEntryType", {
+export const TierListEntryTypeEnum = builder.enumType("TierListEntryType", {
   description:
     "Everything a tier list can rank: the six Item types, plus PLACE — the " +
     "value `item_type` (a Postgres enum) cannot represent, which is why " +
     "`tier_list_items.type` stays `text` (A3's finding).",
   values: TIER_LIST_ENTRY_TYPES,
+});
+
+const TierListStartEnum = builder.enumType("TierListStart", {
+  description:
+    "X16: how a new list starts — EMPTY, or RATINGS: pre-banded from " +
+    "everything of its type you have rated.",
+  values: TIER_LIST_STARTS,
+});
+
+const TierListSuggestionSectionEnum = builder.enumType(
+  "TierListSuggestionSection",
+  {
+    description:
+      "X16: Add entry's sections. IN_CELLARS: items of the list's type in a " +
+      "cellar you made or co-own. TASTED: what you rated or logged (a place " +
+      "list: rated, visited, or a drink logged there). FRIENDS_RANKED: what " +
+      "friends ranked on their own lists you may see. An entry is in the " +
+      "first section that has it; none is on the list already.",
+    values: TIER_LIST_SUGGESTION_SECTIONS,
+  },
+);
+
+const TierListTryNextReasonEnum = builder.enumType("TierListTryNextReason", {
+  description:
+    "X16: why a card is in Try this next. FRIEND_RANKED: a friend put it in " +
+    "one of their top two bands. LIKE_TOP: it sits next to one of this " +
+    "list's top-two-band entries in the catalog. LIKE_LOVED: next to an item " +
+    "you love. Never a score.",
+  values: TRY_NEXT_REASONS,
 });
 
 /* -------------------------------------------------------------------------- */
@@ -157,58 +205,492 @@ const loadTierLists = async (
     }),
   );
 
-export const TierListType = builder
-  .loadableObjectRef<TierListDto, string>("TierList", {
-    load: loadTierLists,
-    toKey: (tierList) => tierList.id,
-  })
+/** N07: `TierListDto.insightsStatus`, as an enum. */
+const TierListInsightsStatusEnum = builder.enumType("TierListInsightsStatus", {
+  description:
+    "Where a tier list's generated insights stand. NOT_ENOUGH_ENTRIES: too " +
+    "few entries to describe. UNAVAILABLE: this deployment has no AI for " +
+    "insights. PENDING: asked for, not yet answered (see insightsRetryAt for " +
+    "a scheduled refresh). FAILED: the latest attempt failed (see " +
+    "insightsFailureReason). READY: aiInsights is current. IDLE: nothing " +
+    "generated or asked for yet; the next change asks.",
+  values: TIER_LIST_INSIGHTS_STATUSES,
+});
+
+/* -------------------------------------------------------------------------- */
+/* Edit history (D4)                                                           */
+/* -------------------------------------------------------------------------- */
+
+const TierListEditKindEnum = builder.enumType("TierListEditKind", {
+  description:
+    "What a tier-list edit did: ADD an entry, REMOVE one, or MOVE entries " +
+    "(a reorder within a band, or into another band).",
+  values: TIER_LIST_EDIT_KINDS,
+});
+
+const TierListEditType = builder
+  .objectRef<TierListEditDto>("TierListEdit")
   .implement({
     description:
-      "A ranked list of items and/or places. Visible when PUBLIC, or " +
-      "FRIENDS and you are a friend of its creator, or you are its creator " +
-      "— there is no co-owner concept here, unlike Cellar.",
+      "One recorded edit to a tier list's entries, as Undo and Redo name it.",
     fields: (t) => ({
-      id: t.exposeID("id"),
-      name: t.exposeString("name"),
-      description: t.exposeString("description", { nullable: true }),
-      createdById: t.exposeID("createdById"),
-      privacy: t.field({
-        type: PermissionTypeEnum,
-        resolve: (tierList) => tierList.privacy,
+      seq: t.exposeInt("seq", {
+        description: "Per list, from 1, in the order the edits happened.",
       }),
-      listType: t.exposeString("listType", {
+      kind: t.field({
+        type: TierListEditKindEnum,
+        resolve: (edit) => edit.kind,
+      }),
+      entryType: t.field({
+        type: TierListEntryTypeEnum,
+        nullable: true,
         description:
-          "`tier_lists.list_type` — free text, settable only at creation.",
+          "What the edited entry ranks. Null for a reorder that moved " +
+          "several entries at once, and for a multi-add.",
+        resolve: (edit) => edit.entry?.type ?? null,
       }),
-      isEditingLocked: t.exposeBoolean("isEditingLocked"),
-      itemCount: t.exposeInt("itemCount"),
-      aiInsights: t.field({
-        type: "JSON",
+      entryId: t.id({
         nullable: true,
-        description: "`generateInsights`'s output. Null until first generated.",
-        resolve: (tierList) => tierList.aiInsights,
+        description: "The item's or place's id (not the row's).",
+        resolve: (edit) => edit.entry?.id ?? null,
       }),
-      insightsGeneratedAt: t.expose("insightsGeneratedAt", {
-        type: "DateTime",
+      entryName: t.exposeString("entryName", {
         nullable: true,
+        description: "Its name as it reads now; null when unreadable.",
       }),
-      contentUpdatedAt: t.expose("contentUpdatedAt", { type: "DateTime" }),
-      createdAt: t.expose("createdAt", { type: "DateTime", nullable: true }),
-      updatedAt: t.expose("updatedAt", { type: "DateTime", nullable: true }),
+      fromBand: t.exposeInt("fromBand", {
+        nullable: true,
+        description: "The band it left; null for ADD.",
+      }),
+      toBand: t.exposeInt("toBand", {
+        nullable: true,
+        description:
+          "The band it landed in; null for REMOVE, and for a multi-add " +
+          "whose entries went to more than one band.",
+      }),
+      entryCount: t.exposeInt("entryCount", {
+        description:
+          "X16: how many entries the edit added or removed — more than one " +
+          "for a multi-add or a list started from your ratings, which Undo " +
+          "takes back whole. For a MOVE, the entries that changed place.",
+      }),
+      at: t.expose("at", { type: "DateTime" }),
+    }),
+  });
 
-      items: t.field({
-        type: TierListItemConnection,
-        description: "Every ranked entry, `band desc, position asc`.",
-        args: t.arg.connectionArgs(),
-        resolve: async (tierList, args, context) =>
-          connectionFromPage(
-            await context
-              .actor(TierListActorDescriptor, tierList.id)
-              .items(toPageArgs(args)),
-          ),
+const TierListEditHistoryType = builder
+  .objectRef<TierListEditHistoryDto>("TierListEditHistory")
+  .implement({
+    description:
+      "Where a tier list's edit history stands for its owner (D4): the edit " +
+      "Undo would take back and the one Redo would put back. The log behind " +
+      "it is append-only and kept for the life of the list.",
+    fields: (t) => ({
+      editCount: t.exposeInt("editCount", {
+        description: "Edits recorded so far, undone ones included.",
+      }),
+      canUndo: t.boolean({ resolve: (history) => history.undo !== null }),
+      canRedo: t.boolean({ resolve: (history) => history.redo !== null }),
+      undo: t.field({
+        type: TierListEditType,
+        nullable: true,
+        resolve: (history) => history.undo,
+      }),
+      redo: t.field({
+        type: TierListEditType,
+        nullable: true,
+        resolve: (history) => history.redo,
       }),
     }),
   });
+
+const TierListHistoryStepType = builder
+  .objectRef<TierListHistoryStepResult>("TierListHistoryStep")
+  .implement({
+    description: "What an Undo or Redo did, and where the history stands now.",
+    fields: (t) => ({
+      applied: t.field({
+        type: TierListEditType,
+        resolve: (step) => step.applied,
+      }),
+      history: t.field({
+        type: TierListEditHistoryType,
+        resolve: (step) => step.history,
+      }),
+    }),
+  });
+
+/** Kept apart from `.implement()`, whose result no longer carries the loader. */
+const TierListLoadable = builder.loadableObjectRef<TierListDto, string>(
+  "TierList",
+  {
+    load: loadTierLists,
+    toKey: (tierList) => tierList.id,
+  },
+);
+
+export const TierListType = TierListLoadable.implement({
+  description:
+    "A ranked list of items and/or places. Visible when PUBLIC, or " +
+    "FRIENDS and you are a friend of its creator, or you are its creator " +
+    "— there is no co-owner concept here, unlike Cellar.",
+  fields: (t) => ({
+    id: t.exposeID("id"),
+    name: t.exposeString("name"),
+    description: t.exposeString("description", { nullable: true }),
+    createdById: t.exposeID("createdById"),
+    privacy: t.field({
+      type: PermissionTypeEnum,
+      resolve: (tierList) => tierList.privacy,
+    }),
+    listType: t.exposeString("listType", {
+      description:
+        "`tier_lists.list_type` — free text, settable only at creation.",
+    }),
+    itemCount: t.exposeInt("itemCount"),
+    bandCounts: t.exposeIntList("bandCounts", {
+      description:
+        "F-85: entries per band, indexed by band — `[0]` the bottom band, " +
+        "`[5]` the top — always six long, and adding up to `itemCount` " +
+        "however many entries the list holds (past any page of `items`).",
+    }),
+    aiInsights: t.field({
+      type: "JSON",
+      nullable: true,
+      description: "`generateInsights`'s output. Null until first generated.",
+      resolve: (tierList) => tierList.aiInsights,
+    }),
+    insightsGeneratedAt: t.expose("insightsGeneratedAt", {
+      type: "DateTime",
+      nullable: true,
+    }),
+    insightsStatus: t.field({
+      type: TierListInsightsStatusEnum,
+      description:
+        "Where the generated insights stand (N07). Render this; do not " +
+        'infer "generating" from a null `aiInsights`.',
+      resolve: (tierList) => tierList.insightsStatus,
+    }),
+    insightsFailureReason: t.field({
+      type: ActorErrorReasonEnum,
+      nullable: true,
+      description:
+        "Why the latest attempt failed, when `insightsStatus` is FAILED " +
+        "and the failure carried a reason.",
+      resolve: (tierList) => tierList.insightsFailureReason,
+    }),
+    insightsRetryAt: t.expose("insightsRetryAt", {
+      type: "DateTime",
+      nullable: true,
+      description:
+        "When the next attempt can or will happen: a budget window on " +
+        "FAILED, or the end of the once-a-day refresh limit on PENDING.",
+    }),
+    contentUpdatedAt: t.expose("contentUpdatedAt", { type: "DateTime" }),
+    createdAt: t.expose("createdAt", { type: "DateTime", nullable: true }),
+    updatedAt: t.expose("updatedAt", { type: "DateTime", nullable: true }),
+
+    editHistory: t.field({
+      type: TierListEditHistoryType,
+      nullable: true,
+      description:
+        "D4: Undo / Redo for the list's owner. Null for anyone else who " +
+        "may see the list — the history is the owner's tool.",
+      resolve: async (tierList, _args, context) =>
+        await context.actor(TierListActorDescriptor, tierList.id).editHistory(),
+    }),
+
+    items: t.field({
+      type: TierListItemConnection,
+      description: "Every ranked entry, `band desc, position asc`.",
+      args: t.arg.connectionArgs(),
+      resolve: async (tierList, args, context) =>
+        connectionFromPage(
+          await context
+            .actor(TierListActorDescriptor, tierList.id)
+            .items(toPageArgs(args)),
+        ),
+    }),
+  }),
+});
+
+/**
+ * X23, after `TierListType` because it reads the list through that type's
+ * loader — declared inside `TierListItem`'s own fields, the two types'
+ * inference would chase each other.
+ */
+builder.objectField(TierListItemType, "ownerReview", (t) =>
+  t.field({
+    type: ItemReviewType,
+    nullable: true,
+    description:
+      "X23: the list owner's own newest review of this entry's item — " +
+      "the verdict a ranked row should show on someone else's list, " +
+      "where `item.myReview` is only yours. Reviews are readable by any " +
+      "signed-in viewer, so this widens nothing. Null for a PLACE entry " +
+      "(a place rating is private to the person who gave it), for an " +
+      "anonymous viewer, and when the owner has not reviewed it.",
+    resolve: async (row, _args, context) => {
+      if (row.entry.type === "PLACE" || context.ctx.viewerId === null) {
+        return null;
+      }
+      // The list through its loader: one `get` per list per request,
+      // however many rows ask, and `canSeeTierList` applied again.
+      const list = await TierListLoadable.getDataloader(context)
+        .load(row.tierListId)
+        .catch(() => null);
+      if (list === null) return null;
+      return await context
+        .actor(ItemActorDescriptor, itemActorId(toItemRef(row.entry)))
+        .reviewBy(list.createdById);
+    },
+  }),
+);
+
+/* -------------------------------------------------------------------------- */
+/* X16 — adding without typing, and what to try next                          */
+/* -------------------------------------------------------------------------- */
+
+const TierListSuggestionType = builder
+  .objectRef<TierListSuggestionDto>("TierListSuggestion")
+  .implement({
+    description:
+      "One row of Add entry's sections, with the facts that say why it is " +
+      "there. Exactly one of `item` and `place` is set, by `entryType`.",
+    fields: (t) => ({
+      section: t.field({
+        type: TierListSuggestionSectionEnum,
+        resolve: (row) => row.section,
+      }),
+      entryType: t.field({
+        type: TierListEntryTypeEnum,
+        resolve: (row) => row.entry.type,
+      }),
+      item: t.field({
+        type: ItemInterface,
+        nullable: true,
+        resolve: (row) =>
+          row.entry.type === "PLACE" ? null : itemActorId(toItemRef(row.entry)),
+      }),
+      place: t.field({
+        type: PlaceStubType,
+        nullable: true,
+        resolve: (row) =>
+          row.entry.type === "PLACE" ? { id: row.entry.id } : null,
+      }),
+      myScore: t.exposeFloat("myScore", {
+        nullable: true,
+        description:
+          "Your verdict, which picks the band it lands in: your newest " +
+          "review's score (a place: your rating), else your newest scored " +
+          "drink log's.",
+      }),
+      cellarName: t.exposeString("cellarName", {
+        nullable: true,
+        description: "IN_CELLARS: the cellar you touched it in most recently.",
+      }),
+      bottleCount: t.exposeInt("bottleCount", {
+        nullable: true,
+        description: "IN_CELLARS: bottles of it not finished.",
+      }),
+      logCount: t.exposeInt("logCount", {
+        nullable: true,
+        description: "TASTED: your drink logs of it (at it, for a place).",
+      }),
+      lastTastedAt: t.expose("lastTastedAt", {
+        type: "DateTime",
+        nullable: true,
+        description: "TASTED: when you last rated, logged or visited it.",
+      }),
+      friend: t.field({
+        type: UserProfileType,
+        nullable: true,
+        description:
+          "FRIENDS_RANKED: the friend who ranked it highest (newest list on " +
+          "a tie).",
+        resolve: (row) => row.friendId,
+      }),
+      friendBand: t.exposeInt("friendBand", {
+        nullable: true,
+        description: "FRIENDS_RANKED: that friend's band for it.",
+      }),
+      friendCount: t.exposeInt("friendCount", {
+        nullable: true,
+        description: "FRIENDS_RANKED: how many friends rank it.",
+      }),
+    }),
+  });
+
+const TierListTryNextType = builder
+  .objectRef<TierListTryNextDto>("TierListTryNext")
+  .implement({
+    description:
+      "X16: one card of Try this next, with the fact that put it there. " +
+      "Exactly one of `item` and `place` is set, by `entryType`.",
+    fields: (t) => ({
+      reason: t.field({
+        type: TierListTryNextReasonEnum,
+        resolve: (row) => row.reason,
+      }),
+      entryType: t.field({
+        type: TierListEntryTypeEnum,
+        resolve: (row) => row.entry.type,
+      }),
+      item: t.field({
+        type: ItemInterface,
+        nullable: true,
+        resolve: (row) =>
+          row.entry.type === "PLACE" ? null : itemActorId(toItemRef(row.entry)),
+      }),
+      place: t.field({
+        type: PlaceStubType,
+        nullable: true,
+        resolve: (row) =>
+          row.entry.type === "PLACE" ? { id: row.entry.id } : null,
+      }),
+      friend: t.field({
+        type: UserProfileType,
+        nullable: true,
+        description: "FRIEND_RANKED: who ranked it highest.",
+        resolve: (row) => row.friendId,
+      }),
+      friendBand: t.exposeInt("friendBand", {
+        nullable: true,
+        description: "FRIEND_RANKED: their band for it (4 or 5).",
+      }),
+      friendCount: t.exposeInt("friendCount", {
+        nullable: true,
+        description: "FRIEND_RANKED: friends who rank it that high.",
+      }),
+      likeName: t.exposeString("likeName", {
+        nullable: true,
+        description: "LIKE_TOP / LIKE_LOVED: the entry it is like, by name.",
+      }),
+      likeBand: t.exposeInt("likeBand", {
+        nullable: true,
+        description: "LIKE_TOP: that entry's band on this list.",
+      }),
+    }),
+  });
+
+const TierListTemplateType = builder
+  .objectRef<TierListTemplateDto>("TierListTemplate")
+  .implement({
+    description:
+      "X16: what a list started from your ratings would hold, per type.",
+    fields: (t) => ({
+      listType: t.exposeString("listType", {
+        description: "The `listType` to create it with.",
+      }),
+      entryType: t.field({
+        type: TierListEntryTypeEnum,
+        resolve: (row) => row.entryType,
+      }),
+      ratedCount: t.exposeInt("ratedCount", {
+        description:
+          "Distinct items you reviewed, or places you rated, of this type.",
+      }),
+    }),
+  });
+
+const TierListSuggestionConnection = builder.connectionObject(
+  { type: TierListSuggestionType, name: "TierListSuggestionConnection" },
+  { name: "TierListSuggestionEdge" },
+);
+
+const TierListTryNextConnection = builder.connectionObject(
+  { type: TierListTryNextType, name: "TierListTryNextConnection" },
+  { name: "TierListTryNextEdge" },
+);
+
+const TierListTemplateConnection = builder.connectionObject(
+  { type: TierListTemplateType, name: "TierListTemplateConnection" },
+  { name: "TierListTemplateEdge" },
+);
+
+const AddTierListItemsPayloadType = builder
+  .objectRef<AddTierListItemsResult>("AddTierListItemsPayload")
+  .implement({
+    description: "X16's multi-add: what went on, as one edit.",
+    fields: (t) => ({
+      added: t.field({
+        type: TierListItemConnection,
+        description: `The rows added, in the order asked; at most ${MAX_BATCH_ADD}.`,
+        args: t.arg.connectionArgs(),
+        resolve: (payload, args) =>
+          connectionFromPage(offsetPage(payload.added, toPageArgs(args))),
+      }),
+      skippedCount: t.int({
+        description:
+          "Entries not added: already on the list, named twice, or no " +
+          "longer readable.",
+        resolve: (payload) => payload.skipped,
+      }),
+    }),
+  });
+
+builder.objectFields(TierListType, (t) => ({
+  addSuggestions: t.field({
+    type: TierListSuggestionConnection,
+    description:
+      "X16: Add entry's sections for the list's own type — In your cellars, " +
+      "Tasted (not ranked), Friends ranked — in that order, none of them on " +
+      `it already, at most ${SUGGESTIONS_PER_SECTION} a section. The ` +
+      "owner's alone: empty for anyone else.",
+    args: t.arg.connectionArgs(),
+    resolve: async (tierList, args, context) =>
+      connectionFromPage(
+        offsetPage(
+          await context
+            .actor(TierListActorDescriptor, tierList.id)
+            .addSuggestions(),
+          toPageArgs(args),
+        ),
+      ),
+  }),
+  tryNext: t.field({
+    type: TierListTryNextConnection,
+    description:
+      "X16: Try this next, for you — entries of the list's type you have " +
+      "not had, each with the fact that put it there, at most " +
+      `${TRY_NEXT_LIMIT * 2} (\`first\`, default ${TRY_NEXT_LIMIT}). No ` +
+      "model call; empty rather than padded.",
+    args: t.arg.connectionArgs(),
+    resolve: async (tierList, args, context) => {
+      const limit = Math.min(args.first ?? TRY_NEXT_LIMIT, TRY_NEXT_LIMIT * 2);
+      return connectionFromPage(
+        offsetPage(
+          await context
+            .actor(TierListActorDescriptor, tierList.id)
+            .tryNext(limit),
+          toPageArgs(args),
+        ),
+      );
+    },
+  }),
+}));
+
+builder.objectField(Viewer, "tierListTemplates", (t) =>
+  t.field({
+    type: TierListTemplateConnection,
+    description:
+      "X16: for each of the seven list types, how many of them you have " +
+      "rated — what `createTierList(startFrom: RATINGS)` would start with.",
+    args: t.arg.connectionArgs(),
+    resolve: async (viewer, args, context) =>
+      connectionFromPage(
+        offsetPage(
+          await context
+            .actor(
+              TierListsCollectionActorDescriptor,
+              viewerCollectionActorId(viewer.id),
+            )
+            .templates(),
+          toPageArgs(args),
+        ),
+      ),
+  }),
+);
 
 const DeletedTierListType = builder
   .objectRef<DeletedTierList>("DeletedTierList")
@@ -269,6 +751,15 @@ const CreateTierListInput = builder.inputType("CreateTierListInput", {
       required: false,
       description: "Defaults to `'place'`. Settable only at creation.",
     }),
+    startFrom: t.field({
+      type: TierListStartEnum,
+      required: false,
+      description:
+        "X16: RATINGS starts the list pre-banded with everything of its " +
+        "type you have rated, each in the band your rating gives it, best " +
+        `first, at most ${MAX_BATCH_ADD} — one edit, which one Undo takes ` +
+        "back. Omitted or EMPTY: an empty list.",
+    }),
   }),
 });
 
@@ -278,7 +769,6 @@ const UpdateTierListInput = builder.inputType("UpdateTierListInput", {
     name: t.string({ required: false }),
     description: t.string({ required: false }),
     privacy: t.field({ type: PermissionTypeEnum, required: false }),
-    isEditingLocked: t.boolean({ required: false }),
   }),
 });
 
@@ -286,12 +776,30 @@ const AddTierListItemInput = builder.inputType("AddTierListItemInput", {
   fields: (t) => ({
     entry: t.field({ type: TierListEntryRefInput, required: true }),
     band: t.int({ required: false, description: "Defaults to 0." }),
+    position: t.int({
+      required: false,
+      description:
+        "M7: with `band`, insert at this index of the band (0 is its top, " +
+        "its length its end) and move the rest down one, as one history " +
+        "edit. Without it the entry is appended. `addTierListItem` only; " +
+        "`addTierListItems` refuses it.",
+    }),
     notes: t.string({ required: false }),
     tierListItemId: t.id({
       required: false,
       description:
         "Mint it yourself to make the call idempotent (§8.4); otherwise " +
         "the server does.",
+    }),
+  }),
+});
+
+const AddTierListItemsInput = builder.inputType("AddTierListItemsInput", {
+  fields: (t) => ({
+    entries: t.field({
+      type: [AddTierListItemInput],
+      required: true,
+      description: `1 to ${MAX_BATCH_ADD} entries, each appended to its band in order.`,
     }),
   }),
 });
@@ -310,28 +818,31 @@ const toCreateInput = (input: {
   description?: string | null;
   privacy?: PermissionType | null;
   listType?: string | null;
+  startFrom?: (typeof TIER_LIST_STARTS)[number] | null;
 }): CreateTierListInputType => ({
   name: input.name,
   description: input.description ?? null,
   ...(present(input.privacy) ? { privacy: input.privacy } : {}),
   ...(present(input.listType) ? { listType: input.listType } : {}),
+  ...(present(input.startFrom) ? { startFrom: input.startFrom } : {}),
 });
 
 const UPDATE_TIER_LIST = {
   name: "keep",
   description: "clearable",
   privacy: "keep",
-  isEditingLocked: "keep",
 } satisfies PatchPolicy<typeof UpdateTierListInput.$inferInput>;
 
 const toAddItemInput = (input: {
   entry: { type: TierListEntryType; id: string };
   band?: number | null;
+  position?: number | null;
   notes?: string | null;
   tierListItemId?: string | null;
 }): AddTierListItemInputType => ({
   entry: toEntryRef(input.entry),
   ...(present(input.band) ? { band: input.band } : {}),
+  ...(present(input.position) ? { position: input.position } : {}),
   notes: input.notes ?? null,
   ...(present(input.tierListItemId)
     ? { tierListItemId: String(input.tierListItemId) }
@@ -368,8 +879,17 @@ builder.queryField("myTierLists", (t) =>
       "changed first (C3's `TierListsCollectionActor`, §2.2). Ids from the " +
       "collection, hydrated by the `TierList` DataLoader (§1.5). The " +
       "visibility rule is `canSeeTierList`, the same one `TierListActor` and " +
-      "the map's tier-list filter use.",
-    args: t.arg.connectionArgs(),
+      "the map's tier-list filter use. `section` narrows to one part of " +
+      "that set — Yours, From friends or Discover (decision D2).",
+    args: {
+      ...t.arg.connectionArgs(),
+      section: t.arg({
+        type: CollectionSectionEnum,
+        required: false,
+        description:
+          "Omit for every visible tier list; `MINE` for the viewer's own only.",
+      }),
+    },
     errors: {},
     resolve: async (_root, args, context) => {
       const viewerId = context.ctx.viewerId;
@@ -382,7 +902,7 @@ builder.queryField("myTierLists", (t) =>
             TierListsCollectionActorDescriptor,
             viewerCollectionActorId(viewerId),
           )
-          .list(toPageArgs(args)),
+          .list(toPageArgs(args), args.section ?? null),
       );
     },
   }),
@@ -404,11 +924,32 @@ builder.mutationField("createTierList", (t) =>
   }),
 );
 
+builder.mutationField("cloneTierList", (t) =>
+  t.field({
+    type: TierListType,
+    description:
+      "L03: copies a tier list you may see into a new PRIVATE list of " +
+      "yours — the entries in band and order, not the notes. A list you " +
+      "may not see answers NotFound, like a missing one. Undo is " +
+      "`deleteTierList` on the copy.",
+    errors: {},
+    args: {
+      sourceTierListId: t.arg.id({ required: true }),
+      name: t.arg.string({ required: false }),
+    },
+    resolve: (_root, args, context) =>
+      context.actor(TierListActorDescriptor, randomUUID()).clone({
+        sourceTierListId: String(args.sourceTierListId),
+        name: args.name ?? null,
+      }),
+  }),
+);
+
 builder.mutationField("updateTierList", (t) =>
   t.field({
     type: TierListType,
     description:
-      "Header fields only — name, description, privacy, lock. Creator only.",
+      "Header fields only — name, description, privacy. Creator only.",
     errors: {},
     args: {
       tierListId: t.arg.id({ required: true }),
@@ -439,7 +980,8 @@ builder.mutationField("addTierListItem", (t) =>
     type: TierListItemType,
     description:
       "Appends to the end of the given band (position computed in-turn, " +
-      "no read-modify-write race). Refuses a duplicate entry.",
+      "no read-modify-write race), or with `position` inserts there (M7). " +
+      "Refuses a duplicate entry.",
     errors: {},
     args: {
       tierListId: t.arg.id({ required: true }),
@@ -449,6 +991,25 @@ builder.mutationField("addTierListItem", (t) =>
       context
         .actor(TierListActorDescriptor, String(args.tierListId))
         .addItem(toAddItemInput(args.input)),
+  }),
+);
+
+builder.mutationField("addTierListItems", (t) =>
+  t.field({
+    type: AddTierListItemsPayloadType,
+    description:
+      "X16's multi-add: several entries in one transaction and one history " +
+      "edit, so one Undo takes them all back. Entries already on the list, " +
+      "named twice or unreadable are skipped and counted, not refused.",
+    errors: {},
+    args: {
+      tierListId: t.arg.id({ required: true }),
+      input: t.arg({ type: AddTierListItemsInput, required: true }),
+    },
+    resolve: (_root, args, context) =>
+      context
+        .actor(TierListActorDescriptor, String(args.tierListId))
+        .addItems(args.input.entries.map(toAddItemInput)),
   }),
 );
 
@@ -488,5 +1049,93 @@ builder.mutationField("reorderTierListBand", (t) =>
         .reorderBand(args.band, args.orderedIds.map(String));
       return { band: args.band, items };
     },
+  }),
+);
+
+builder.mutationField("undoTierListEdit", (t) =>
+  t.field({
+    type: TierListHistoryStepType,
+    description:
+      "D4: takes back the latest edit not already undone (an add, a " +
+      "removal, a move) and records that in the list's append-only history. " +
+      "Creator only. `expectedSeq` is the `editHistory.undo.seq` the caller " +
+      "showed: if anything else is on top (the list changed in another tab, " +
+      "or there is nothing left to undo) it is a `ConflictError` with reason " +
+      "TIER_LIST_HISTORY_MOVED and nothing is written.",
+    errors: {},
+    args: {
+      tierListId: t.arg.id({ required: true }),
+      expectedSeq: t.arg.int({
+        required: true,
+        description: "The `seq` of the edit to take back.",
+      }),
+    },
+    resolve: (_root, args, context) =>
+      context
+        .actor(TierListActorDescriptor, String(args.tierListId))
+        .undo(args.expectedSeq),
+  }),
+);
+
+builder.mutationField("redoTierListEdit", (t) =>
+  t.field({
+    type: TierListHistoryStepType,
+    description:
+      "D4: puts back the latest undone edit. A new edit after an undo " +
+      "clears what Redo can put back. Creator only. `expectedSeq` is the " +
+      "`editHistory.redo.seq` the caller showed; anything else on top is a " +
+      "`ConflictError` with reason TIER_LIST_HISTORY_MOVED, and no write.",
+    errors: {},
+    args: {
+      tierListId: t.arg.id({ required: true }),
+      expectedSeq: t.arg.int({
+        required: true,
+        description: "The `seq` of the undone edit to put back.",
+      }),
+    },
+    resolve: (_root, args, context) =>
+      context
+        .actor(TierListActorDescriptor, String(args.tierListId))
+        .redo(args.expectedSeq),
+  }),
+);
+
+builder.mutationField("requestTierListInsights", (t) =>
+  t.field({
+    type: TierListType,
+    description:
+      "SV-A (L12): write this list's Insights now. The client sends it when " +
+      "it sees `insightsStatus: IDLE` on a list of 3+ entries the viewer " +
+      "owns; a read never writes. Idempotent: from any other status (too few " +
+      "entries, pending, failed, ready, no provider) it changes nothing and " +
+      "returns the list as it is. Creator only. The generation counts " +
+      "against the viewer's `ai_model/tier_list_insights` allowance " +
+      "(`myAiQuota`); a refusal shows as FAILED with reason USER_CAP and " +
+      "`insightsRetryAt` at the reset.",
+    errors: {},
+    args: { tierListId: t.arg.id({ required: true }) },
+    resolve: (_root, args, context) =>
+      context
+        .actor(TierListActorDescriptor, String(args.tierListId))
+        .requestInsights(),
+  }),
+);
+
+builder.mutationField("rewriteTierListInsights", (t) =>
+  t.field({
+    type: TierListType,
+    description:
+      'F-86: "Rewrite" — write this list\'s Insights afresh once they are ' +
+      "READY, without waiting out the once-a-day throttle. Creator only. From " +
+      "any other status it changes nothing and returns the list as it is. The " +
+      "list reads PENDING until the new write lands. The generation counts " +
+      "against the viewer's `ai_model/tier_list_insights` allowance " +
+      "(`myAiQuota`); a refusal shows as FAILED with reason USER_CAP.",
+    errors: {},
+    args: { tierListId: t.arg.id({ required: true }) },
+    resolve: (_root, args, context) =>
+      context
+        .actor(TierListActorDescriptor, String(args.tierListId))
+        .rewriteInsights(),
   }),
 );

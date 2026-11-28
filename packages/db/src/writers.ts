@@ -38,6 +38,7 @@ export const ACTOR_WRITERS = [
   "BudgetActor",
   "CategoryVectorsActor",
   "CellarActor",
+  "CheckInActor",
   "FileActor",
   "ItemActor",
   "ItemOnboardingActor",
@@ -100,8 +101,9 @@ export type InfrastructureWriter = (typeof INFRASTRUCTURE_WRITERS)[number];
  * - `lib/profile-store` — B4's declared seam. `UserActor.updateProfile` cannot
  *   call better-auth's session-shaped HTTP API from inside a turn (§2.1 forbids
  *   a network round trip there), so the proxy is at the storage layer instead:
- *   the same three columns better-auth's adapter writes, and nothing else.
- *   `role`, `disabled` and `emailVerified` are deliberately not writable there.
+ *   the profile columns only — `name`, `image`, `avatarFileId`, `locale` and
+ *   `updatedAt` — and nothing else. `role`, `disabled` and `emailVerified` are
+ *   deliberately not writable there.
  *
  * Paths are relative to `services/actors/src`, matched as a file or as a directory
  * prefix — the same rule `writerModule()` gets for an actor.
@@ -118,7 +120,13 @@ export const TABLE_WRITERS = {
   cellars: "CellarActor",
   cellar_owners: "CellarActor",
   cellar_items: "CellarActor",
-  check_ins: "CellarActor",
+  // X02: a drink log is about an item and only optionally a bottle, so it is
+  // no longer part of the cellar aggregate. `CellarActor` reads it (its
+  // cellar-scoped check-in list) and never writes it; removing a bottle nulls
+  // `cellar_item_id` through the foreign key instead of deleting the history.
+  check_ins: "CheckInActor",
+  // X03: a removed log, held for its Undo (`CheckInActor.restore`).
+  check_in_trash: "CheckInActor",
 
   // ItemActor — one actor per `type:itemId`; the six physical item tables and
   // their satellites are hidden behind it.
@@ -138,8 +146,17 @@ export const TABLE_WRITERS = {
   // UserActor — rows where `user_id` is the actor's user.
   item_favorites: "UserActor",
   user_place_interactions: "UserActor",
+  want_to_try: "UserActor",
+  // ux-c seams (M1): brew settings, one row per person and item.
+  item_brew_prefs: "UserActor",
   friends: "UserActor",
   friend_requests: "UserActor",
+  // X14 / D23 and D9: the Bar pantry toggles and recipe Love.
+  bar_pantry_items: "UserActor",
+  recipe_favorites: "UserActor",
+  friend_invites: "UserActor",
+  // B15C (H-119): account settings — the default privacy of a new cellar.
+  user_settings: "UserActor",
 
   item_onboardings: "ItemOnboardingActor",
   barcodes: "BarcodeActor",
@@ -170,6 +187,7 @@ export const TABLE_WRITERS = {
 
   tier_lists: "TierListActor",
   tier_list_items: "TierListActor",
+  tier_list_history: "TierListActor",
 
   menu_scans: "MenuScanActor",
   item_match_suggestions: "MenuScanActor",

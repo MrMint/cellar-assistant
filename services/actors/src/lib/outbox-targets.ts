@@ -200,6 +200,7 @@ import {
   PingActorDescriptor,
   PlaceActorDescriptor,
   PlaceRefreshJobActorDescriptor,
+  PlaceReviewActorDescriptor,
   RecipeActorDescriptor,
   RecipeGroupActorDescriptor,
   RecipePhotoJobActorDescriptor,
@@ -488,6 +489,20 @@ export const OUTBOX_TARGETS = defineOutboxTargets({
     ],
   }),
 
+  "CellarActor.createStarter": target(CellarActorDescriptor, "createStarter", {
+    enqueuedBy: [
+      {
+        module: "auth/auth.ts",
+        targetId: "derived",
+        note:
+          "`starterCellarId(user.id)` — derived from the `user` row better-auth " +
+          "has just inserted, in its `user.create` after-hook (N15). No caller " +
+          "input reaches the id or the payload's `ownerId`; the far end " +
+          "refuses a key not derived from that `ownerId`.",
+      },
+    ],
+  }),
+
   /* ------------------------------------------------------------------ File */
 
   "FileActor.delete": target(FileActorDescriptor, "delete", {
@@ -643,17 +658,15 @@ export const OUTBOX_TARGETS = defineOutboxTargets({
             "place_id ?? estimated_place_id` on this actor's own `menu_scans` " +
             "row. It reads as `derived`, and one hop back it is not: " +
             "`MenuScanActor.create` takes `input.placeHint.placeId` and stores " +
-            "it after `requireUuid` and nothing else, so the caller chooses " +
-            "which place this delivery writes menus into.",
-          authorization: null,
-          accepted:
-            "Places are shared reference entities, not user-owned aggregates — " +
-            "`PlaceActor` has no owner column to check against, and attaching a " +
-            "menu to a place is the product's intended behaviour for any signed-" +
-            "in user. Recorded rather than fixed, and deliberately classified " +
-            "`caller` rather than `derived`: the inventory test below is the " +
-            "standing reminder that the id is caller-chosen and lands with " +
-            "policy off.",
+            "it, so the caller chooses which place this delivery writes menus " +
+            "into.",
+          authorization:
+            "X27: `MenuScanActor.create` refuses a hinted place the caller " +
+            "cannot see (`placeIsVisible`) with the foreign key's own " +
+            "NotFound, so a scan can only be filed into a shared place or one " +
+            "of the caller's own places under review. Attaching a menu to a " +
+            "shared place is still the product's intended behaviour for any " +
+            "signed-in user — places have no owner to defer to once shared.",
         },
       ],
     },
@@ -685,6 +698,17 @@ export const OUTBOX_TARGETS = defineOutboxTargets({
       ],
     },
   ),
+
+  "PlaceReviewActor.review": target(PlaceReviewActorDescriptor, "review", {
+    note:
+      "X27 / D28: the AI review of a pending user place, queued in the " +
+      "same transaction as the insert (`create`) or the resubmission " +
+      "(`editUnshared`). Keyed by the place's own id — the row `PlaceActor` " +
+      "is writing — so it can only ever review that place, and its verdict " +
+      "comes back through `PlaceActor.applyReview`, which re-checks the " +
+      "submission it names.",
+    enqueuedBy: [{ module: "actors/place-actor.ts", targetId: "self" }],
+  }),
 
   "PlaceActor.verifyMenuItemMatch": target(
     PlaceActorDescriptor,
@@ -722,6 +746,41 @@ export const OUTBOX_TARGETS = defineOutboxTargets({
             "the ids this site reaches are recipes whose creators each chose to " +
             "be here, and the delivery recomputes a vector from that recipe's " +
             "own content (and skips when it is fresh).",
+        },
+      ],
+    },
+  ),
+
+  "RecipeActor.backfillIngredientMeta": target(
+    RecipeActorDescriptor,
+    "backfillIngredientMeta",
+    {
+      enqueuedBy: [
+        {
+          module: "actors/maintenance-actor.ts",
+          targetId: "derived",
+          note:
+            "`row.recipe_id` — `recipe_ingredients` rows the backfill's own " +
+            "query selected (a null `kind` or `role`). No caller input reaches " +
+            "this id; the delivery writes only null cells of that recipe's own " +
+            "rows, from that recipe's own ingredients.",
+        },
+      ],
+    },
+  ),
+
+  "RecipeGroupActor.backfillBaseSpirit": target(
+    RecipeGroupActorDescriptor,
+    "backfillBaseSpirit",
+    {
+      enqueuedBy: [
+        {
+          module: "actors/maintenance-actor.ts",
+          targetId: "derived",
+          note:
+            "`row.id` — `recipe_groups` rows the backfill's own query selected " +
+            "(members, no `base_spirit`). No caller input reaches this id; the " +
+            "delivery writes `base_spirit` only while it is still null.",
         },
       ],
     },

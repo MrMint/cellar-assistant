@@ -6,8 +6,12 @@
 import { describe, expect, it } from "vitest";
 import {
   bandOf,
+  deriveMatchStatus,
+  isMatchStatusSettled,
   MATCH_AUTO_CONFIDENCE,
   MATCH_MIN_CONFIDENCE,
+  type MatchStatusFacts,
+  MENU_SCAN_MATCH_STATUSES,
 } from "./menu-scans.ts";
 
 describe("bandOf", () => {
@@ -23,5 +27,85 @@ describe("bandOf", () => {
     expect(bandOf(0.4)).toBe("verify");
     expect(bandOf(0.3999)).toBe("drop");
     expect(bandOf(0)).toBe("drop");
+  });
+});
+
+describe("deriveMatchStatus (N06a)", () => {
+  const eligible: MatchStatusFacts = {
+    processingStatus: "completed",
+    effectivePlaceId: "place-1",
+    itemsDetected: 8,
+    jobStatus: null,
+    matchQueued: false,
+    matchDeadLettered: false,
+  };
+
+  it("is waiting while extraction has not finished, whatever else is true", () => {
+    for (const processingStatus of ["pending", "processing"] as const) {
+      expect(
+        deriveMatchStatus({
+          ...eligible,
+          processingStatus,
+          jobStatus: "completed",
+          matchQueued: true,
+        }),
+      ).toBe("waiting");
+    }
+  });
+
+  it("is skipped when there is nothing to match", () => {
+    expect(deriveMatchStatus({ ...eligible, processingStatus: "failed" })).toBe(
+      "skipped",
+    );
+    expect(deriveMatchStatus({ ...eligible, effectivePlaceId: null })).toBe(
+      "skipped",
+    );
+    expect(deriveMatchStatus({ ...eligible, itemsDetected: 0 })).toBe(
+      "skipped",
+    );
+  });
+
+  it("follows the job once it exists, ahead of any outbox fact", () => {
+    const withJob = (jobStatus: string) =>
+      deriveMatchStatus({
+        ...eligible,
+        jobStatus,
+        matchQueued: true,
+        matchDeadLettered: true,
+      });
+    expect(withJob("pending")).toBe("running");
+    expect(withJob("running")).toBe("running");
+    expect(withJob("completed")).toBe("completed");
+    expect(withJob("failed")).toBe("failed");
+    expect(withJob("cancelled")).toBe("failed");
+  });
+
+  it("is queued while the outbox still carries the start, failed once it is dead", () => {
+    expect(deriveMatchStatus({ ...eligible, matchQueued: true })).toBe(
+      "queued",
+    );
+    expect(deriveMatchStatus({ ...eligible, matchDeadLettered: true })).toBe(
+      "failed",
+    );
+    // A live retry outranks an older dead row: something is still coming.
+    expect(
+      deriveMatchStatus({
+        ...eligible,
+        matchQueued: true,
+        matchDeadLettered: true,
+      }),
+    ).toBe("queued");
+  });
+
+  it("settles an eligible scan with no trace of a run, so nobody polls forever", () => {
+    expect(deriveMatchStatus(eligible)).toBe("completed");
+  });
+
+  it("calls exactly completed, failed and skipped settled", () => {
+    expect(MENU_SCAN_MATCH_STATUSES.filter(isMatchStatusSettled)).toEqual([
+      "completed",
+      "failed",
+      "skipped",
+    ]);
   });
 });

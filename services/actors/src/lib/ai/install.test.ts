@@ -29,23 +29,28 @@ import type { Ctx } from "@cellar-assistant/contracts";
 import {
   BudgetExceededError,
   formatStoredFailure,
+  NO_AI_CAPABILITIES,
   ValidationError,
 } from "@cellar-assistant/contracts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ModelReserveInput } from "../../actors/budget-actor.ts";
 import { MODEL_SEAMS } from "../../actors/budget-actor.ts";
 import { placeReviewer } from "../../actors/place-creation-actor.ts";
+import { tastePhraser } from "../../actors/taste-actor.ts";
 import { insightsGenerator } from "../../actors/tier-list-actor.ts";
 import { embedder } from "../embeddings.ts";
+import { flavourTagSuggester } from "../flavour-tags.ts";
 import {
   documentImageEmbedder,
   queryImageEmbedder,
 } from "../image-embeddings.ts";
 import { itemDefaultsProvider } from "../item-defaults.ts";
+import { itemSuggestionsProvider } from "../item-suggestions.ts";
 import { menuExtractionProvider, menuMatchVerifier } from "../menu-ai.ts";
 import { recipePhotoExtractor } from "../recipe-photo-ai.ts";
 import { embeddingModel, setEmbeddingModel } from "../vectors.ts";
 import type { ModelBudget } from "./budget.ts";
+import { aiCapabilities, setAiCapabilities } from "./capabilities.ts";
 import { readAIProviderConfig } from "./config.ts";
 import type { ImageLoader } from "./images.ts";
 import { embeddingModelIdentity, installAI } from "./install.ts";
@@ -124,6 +129,14 @@ const ANSWER = {
   instructions: [{ instructionText: "Stir." }],
   // place review
   approved: true,
+  // flavour tags (X02)
+  noteDescribesTaste: true,
+  // item suggestions (X19)
+  productNote: "Château Margaux, the Bordeaux first growth.",
+  recognised: true,
+  // taste phrase (L03, H-10)
+  factsSupportALine: true,
+  line: "You lean towards Nebbiolo.",
 };
 
 const loadImages: ImageLoader = async (_c, ids) =>
@@ -173,6 +186,7 @@ const budgetThat = (
         };
       },
       settle: async () => {},
+      release: async () => {},
     },
   };
 };
@@ -190,6 +204,12 @@ const asImageModel = async <T>(run: () => Promise<T>): Promise<T> => {
 /** Each seam, with an input that gets past its own pre-model gate. */
 const drive: Readonly<Record<string, (c: Ctx) => Promise<unknown>>> = {
   embedding: (c) => embedder()({ text: "pinot noir" }, c),
+  flavour_tags: (c) =>
+    flavourTagSuggester()(c, {
+      note: "dark cherry and smoke",
+      itemType: "WINE",
+      existing: [],
+    }),
   // G32: the two image slots' pre-model gate is the embedding model's
   // capability, which `ENV` (Ollama's text-only model) would refuse before
   // charging — correctly, and `image-embedder.test.ts` holds that. Here the
@@ -198,6 +218,17 @@ const drive: Readonly<Record<string, (c: Ctx) => Promise<unknown>>> = {
     asImageModel(() => documentImageEmbedder()(c, { fileId: "f-1" })),
   image_search: (c) =>
     asImageModel(() => queryImageEmbedder()(c, { fileId: "f-1" })),
+  taste_phrase: (c) =>
+    tastePhraser()(c, {
+      ratingCount: 10,
+      types: [{ type: "WINE", count: 10 }],
+      archetype: {
+        key: "DEVOTED",
+        title: "Devoted to Nebbiolo",
+        loves: [{ type: "WINE", label: "Nebbiolo", count: 4, average: 5 }],
+        lessKeen: [],
+      },
+    }),
   tier_list_insights: (c) =>
     insightsGenerator()(c, {
       tierListId: "t-1",
@@ -225,6 +256,14 @@ const drive: Readonly<Record<string, (c: Ctx) => Promise<unknown>>> = {
       backLabelImageId: null,
       barcode: null,
       barcodeType: null,
+    }),
+  item_suggestions: (c) =>
+    itemSuggestionsProvider()(c, {
+      itemType: "WINE",
+      name: "Château Margaux",
+      brandName: null,
+      known: {},
+      wanted: [{ field: "country", on: "input" }],
     }),
   menu_extraction: (c) =>
     menuExtractionProvider()(c, {
@@ -319,6 +358,48 @@ describe("installSeams records which embedding every vector is made by", () => {
       embeddingModelIdentity("openai-compatible", "gemini-embedding-2")
         .acceptsImages,
     ).toBe(false);
+  });
+});
+
+describe("installSeams records what a client may offer (N07, D25)", () => {
+  afterEach(() => {
+    setEmbeddingModel(null);
+    setAiCapabilities(NO_AI_CAPABILITIES);
+  });
+
+  it("reports every chat feature, and photo search only for an image-capable embedder", () => {
+    installAI({ env: ENV, provider, loadImages });
+    expect(aiCapabilities()).toEqual({
+      semanticSearch: true,
+      imageSearch: false,
+      labelRead: true,
+      menuScan: true,
+      recipePhoto: true,
+      tierListInsights: true,
+      detailSuggestions: true,
+    });
+  });
+
+  it("reports photo search on the local llama.cpp multimodal path too (D25 parity)", () => {
+    installAI({
+      env: {
+        AI_PROVIDER: "openai-compatible",
+        OPENAI_COMPAT_EMBEDDING_ENDPOINT: "http://localhost:8091",
+        OPENAI_COMPAT_EMBEDDING_INPUT: "llamacpp-multimodal",
+      },
+      loadImages,
+    });
+    expect(aiCapabilities().imageSearch).toBe(true);
+  });
+
+  it("reports nothing when AI_PROVIDER is unset", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      expect(installAI({ env: {} }).installed).toBe(false);
+      expect(aiCapabilities()).toEqual(NO_AI_CAPABILITIES);
+    } finally {
+      warn.mockRestore();
+    }
   });
 });
 
@@ -505,7 +586,9 @@ describe("a refusal is a refusal, on every seam", () => {
     installAI({ env: ENV, provider, loadImages, budget });
 
     const error = await drive.menu_extraction?.(ctx).catch((e: unknown) => e);
-    expect(formatStoredFailure(error)).toMatch(/^BUDGET_EXCEEDED: /);
+    expect(formatStoredFailure(error)).toMatch(
+      /^BUDGET_EXCEEDED\[SERVICE_BUDGET\]: /,
+    );
     // Not CONFLICT ("being retried automatically") and not VALIDATION ("the
     // photo was rejected"): both would describe a refusal as a defect in the
     // photograph the person took.

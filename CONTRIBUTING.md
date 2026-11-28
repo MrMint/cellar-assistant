@@ -80,9 +80,12 @@ cost real time. Read it before a first substantial change. The short version:
   config for either.
 - **Avoid non-null assertions (`!`).** Use `??` instead.
 - **Use `satisfies`** to type-check without widening.
-- **UI is MUI Joy.** Prefer Joy components and its design tokens; prefer the
-  `sx` prop over stylesheets; reach for Emotion only when Joy genuinely can't
-  do it.
+- **UI is shadcn/ui (Radix) + Tailwind CSS v4 + `motion`.** Use the app
+  primitives in `services/client/src/components/app/` first, then the vendored
+  `ui/*` components, then Tailwind utilities on the `globals.css` tokens. No
+  CSS-in-JS: MUI Joy, Emotion and `sx` were removed, and a guard test plus
+  Biome fail on any import of them. The rules are in `AGENTS.md` ("UI and
+  styling").
 - **State**: XState for complex machines, React Hook Form for forms, URQL for
   GraphQL state and caching.
 - **GraphQL** goes through gql.tada. Fragments live beside each domain's own

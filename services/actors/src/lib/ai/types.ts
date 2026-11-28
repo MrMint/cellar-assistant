@@ -79,6 +79,13 @@ export type GenerateContentRequest = {
   readonly images?: readonly Uint8Array[];
   /** When set, the provider is asked for JSON matching this shape. */
   readonly schema?: JsonSchema;
+  /**
+   * N09: the caller stopped waiting. Aborting it cancels the HTTP request
+   * (alongside the provider's own `timeoutMs`), so a call nobody will read is
+   * not left running — and, once the metering wrapper sees it aborted, not
+   * reserved or settled as an answered call either. Never sent on the wire.
+   */
+  readonly signal?: AbortSignal;
 };
 
 export type GenerateContentResponse = {

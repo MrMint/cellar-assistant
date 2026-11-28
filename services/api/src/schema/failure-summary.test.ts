@@ -110,6 +110,30 @@ describe("failureSummary", () => {
     expect(failureSummary("BUDGET_EXCEEDED: anything")).toMatch(/allowance/i);
   });
 
+  it("uses a recorded AI reason over its code, and never names the server (N07)", () => {
+    expect(
+      failureSummary(
+        "CONFLICT[AI_UNCONFIGURED]: no AI provider. Set AI_PROVIDER=ollama …",
+      ),
+    ).toMatch(/not available right now/i);
+    expect(
+      failureSummary("CONFLICT[AI_UNCONFIGURED]: Set AI_PROVIDER=ollama"),
+    ).not.toMatch(/AI_PROVIDER|ollama/i);
+    expect(failureSummary("VALIDATION[NOTHING_READ]: no label")).toMatch(
+      /nothing could be read/i,
+    );
+    expect(failureSummary("BUDGET_EXCEEDED[USER_CAP]: cap")).toMatch(
+      /your allowance for AI processing is used up/i,
+    );
+    expect(failureSummary("BUDGET_EXCEEDED[SERVICE_BUDGET]: cap")).toBe(
+      failureSummary("BUDGET_EXCEEDED: cap"),
+    );
+    // A reason with no sentence of its own falls back to its code's.
+    expect(failureSummary("CONFLICT[ALREADY_FRIENDS]: x")).toBe(
+      failureSummary("CONFLICT: x"),
+    );
+  });
+
   it("every sentence gives the reader somewhere to go, and is short", () => {
     for (const sentence of USER_FACING_FAILURES) {
       expect(sentence.length).toBeLessThanOrEqual(160);

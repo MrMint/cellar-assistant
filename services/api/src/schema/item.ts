@@ -35,6 +35,7 @@ import type {
   ItemReviewDto,
   ItemScoreDto,
   ItemType,
+  Page,
   UnlinkedItemBrand,
   UpdateGenericItemInput as UpdateGenericItemInputType,
   UpdateItemInput as UpdateItemInputType,
@@ -48,8 +49,10 @@ import {
   ForbiddenError,
   GENERIC_ITEM_KINDS,
   genericItemActorId,
+  ITEM_CHECK_IN_SCOPES,
   ITEM_TYPES,
   ItemActorDescriptor,
+  ItemOnboardingActorDescriptor,
   itemActorId,
   mapPage,
   parseItemActorId,
@@ -181,6 +184,13 @@ export const ItemReviewType = builder
     }),
   });
 
+const NO_REVIEWS: Page<ItemReviewDto> = {
+  entries: [],
+  hasNextPage: false,
+  hasPreviousPage: false,
+  totalCount: 0,
+};
+
 const ItemReviewConnection = builder.connectionObject(
   { type: ItemReviewType, name: "ItemReviewConnection" },
   { name: "ItemReviewEdge" },
@@ -225,7 +235,15 @@ export const ItemBrandConnection = builder.connectionObject(
  */
 export const ItemCheckInType = builder.objectRef<ItemCheckInDto>("ItemCheckIn");
 
-const ItemCheckInConnection = builder.connectionObject(
+const ItemCheckInScopeEnum = builder.enumType("ItemCheckInScope", {
+  description:
+    "Whose entries `Item.checkIns` lists. ALL: yours, your companions', your " +
+    "friends', and any from a cellar you can see. MINE: the item page's " +
+    '"Your log" — entries about you only.',
+  values: ITEM_CHECK_IN_SCOPES,
+});
+
+export const ItemCheckInConnection = builder.connectionObject(
   { type: ItemCheckInType, name: "ItemCheckInConnection" },
   { name: "ItemCheckInEdge" },
 );
@@ -260,6 +278,22 @@ export const ItemInterface = builder.loadableInterface("Item", {
         "replaces the `_aggregate` calls (§2.1).",
       resolve: (item, _args, context) =>
         context.actor(ItemActorDescriptor, itemActorId(item)).score(),
+    }),
+
+    friendsScore: t.field({
+      type: ItemScoreType,
+      description:
+        "X09: the item page's taste header, Friends — the same average as " +
+        "`score`, over your friends' reviews only (one each, their newest; " +
+        "never yours). The friend set is resolved inside the actor from your " +
+        "own `friends` rows; nothing here names a user. `average` null with " +
+        "no friend reviews.",
+      resolve: (item, _args, context) =>
+        context.ctx.viewerId === null
+          ? { average: null, count: 0 }
+          : context
+              .actor(ItemActorDescriptor, itemActorId(item))
+              .friendsScore(),
     }),
 
     /**
@@ -375,6 +409,25 @@ export const ItemInterface = builder.loadableInterface("Item", {
         ),
     }),
 
+    friendsReviews: t.field({
+      type: ItemReviewConnection,
+      description:
+        "F-154 (H-106): the reviews `friendsScore` averages — one per " +
+        "friend, their newest, newest first — for the Friends' ratings " +
+        "sheet. The friend set is resolved inside the actor from your own " +
+        "`friends` rows, so a non-friend's review never appears; yours is " +
+        "not in it. Empty for an anonymous viewer.",
+      args: t.arg.connectionArgs(),
+      resolve: async (item, args, context) =>
+        connectionFromPage(
+          context.ctx.viewerId === null
+            ? NO_REVIEWS
+            : await context
+                .actor(ItemActorDescriptor, itemActorId(item))
+                .friendsReviews(toPageArgs(args)),
+        ),
+    }),
+
     reviews: t.field({
       type: ItemReviewConnection,
       args: t.arg.connectionArgs(),
@@ -409,11 +462,19 @@ export const ItemInterface = builder.loadableInterface("Item", {
     checkIns: t.field({
       type: ItemCheckInConnection,
       description:
-        "Who drank this, and when — yours plus your friends', across every " +
-        "cellar (`canSeeCheckIn`, §1.6). Deliberately does not say which " +
-        "cellar the bottle came from; `Cellar.checkIns` is the surface that " +
-        "does, and it is gated on the cellar instead.",
-      args: t.arg.connectionArgs(),
+        "Who drank this, and when — the drink log (X02): yours, your " +
+        "companions' and your friends', with or without a bottle " +
+        "(`canSeeCheckIn`). Deliberately does not say which cellar a bottle " +
+        "came from; `Cellar.checkIns` is the surface that does, and it is " +
+        'gated on the cellar instead. `scope: MINE` is "Your log" (D8).',
+      args: {
+        ...t.arg.connectionArgs(),
+        scope: t.arg({
+          type: ItemCheckInScopeEnum,
+          required: false,
+          description: "Defaults to ALL.",
+        }),
+      },
       resolve: async (item, args, context) => {
         const viewerId = context.ctx.viewerId;
         if (viewerId === null) {
@@ -425,7 +486,11 @@ export const ItemInterface = builder.loadableInterface("Item", {
               CheckInsCollectionActorDescriptor,
               viewerCollectionActorId(viewerId),
             )
-            .list({ type: item.type, id: item.id }, toPageArgs(args)),
+            .list(
+              { type: item.type, id: item.id },
+              toPageArgs(args),
+              args.scope ?? "ALL",
+            ),
         );
       },
     }),
@@ -434,8 +499,14 @@ export const ItemInterface = builder.loadableInterface("Item", {
 
 ItemCheckInType.implement({
   description:
-    "A check-in on this item. `cellarItemId` is deliberately absent — see " +
-    "`Item.checkIns`.",
+    "One drink-log entry on this item (X02): when, and optionally how it " +
+    "scored, what the drinker noticed, where, and who with. Its score is not " +
+    "the review — one rating per item, many logs (D5). `cellarItemId` is " +
+    "deliberately absent — see `Item.checkIns`. What the drinker said — " +
+    "score, note, tags, place, photo, companions — is shown to the drinker, " +
+    "their companions and their friends only; an entry you see only because " +
+    "its bottle sits in a cellar you can see comes without them " +
+    "(`canSeeCheckInDetails`).",
   fields: (t) => ({
     id: t.exposeID("id"),
     userId: t.exposeID("userId", {
@@ -443,10 +514,60 @@ ItemCheckInType.implement({
         "Who the check-in is *about*, which `bulkCheckIn` makes different " +
         "from who wrote it.",
     }),
+    createdById: t.exposeID("createdById", {
+      description: "Who wrote it — a friend, for a companion's entry.",
+    }),
+    score: t.exposeFloat("score", {
+      nullable: true,
+      description: "Half stars, 0.5–5, or null. Never the review.",
+    }),
+    note: t.exposeString("note", { nullable: true }),
+    tags: t.exposeStringList("tags", {
+      description: "Flavour words the drinker confirmed, lower case.",
+    }),
+    companionIds: t.exposeIDList("companionIds", {
+      description:
+        "The other drinkers in the same occasion. `companions` resolves them.",
+    }),
+    fromCellar: t.exposeBoolean("fromCellar", {
+      description:
+        "Poured from a cellar bottle. Only ever true to the drinker " +
+        "themself — to anyone else it says nothing about a cellar.",
+    }),
+    isMine: t.boolean({
+      description: "The entry is about you: you may edit it.",
+      resolve: (checkIn, _args, context) =>
+        context.ctx.viewerId !== null &&
+        checkIn.userId === context.ctx.viewerId,
+    }),
+    canRemove: t.boolean({
+      description:
+        "You may remove it: it is about you, or you wrote it and the drinker " +
+        "has not added a score, note, tags or photo of their own since.",
+      // A hint for the ⋯ menu only — `CheckInActor.remove` decides, with
+      // `canRemoveCheckIn` and `checkInIsClaimed` (`@cellar-assistant/policy`).
+      // This mirrors them; the api holds no policy of its own.
+      resolve: (checkIn, _args, context) => {
+        const viewer = context.ctx.viewerId;
+        if (viewer === null) return false;
+        if (checkIn.userId === viewer) return true;
+        const claimed =
+          checkIn.score !== null ||
+          (checkIn.note ?? "") !== "" ||
+          checkIn.tags.length > 0 ||
+          checkIn.photoFileId !== null;
+        return checkIn.createdById === viewer && !claimed;
+      },
+    }),
     item: t.field({
       type: ItemInterface,
-      description: "The item, echoed back. Resolved through its DataLoader.",
-      resolve: (checkIn) => itemActorId(checkIn.item),
+      nullable: true,
+      description:
+        "The item, echoed back. Resolved through its DataLoader. Null for a " +
+        'recipe log ("Made it", ux-c L08): then `recipe` names the recipe, ' +
+        "or is null too when the recipe was deleted since.",
+      resolve: (checkIn) =>
+        checkIn.item === null ? null : itemActorId(checkIn.item),
     }),
     createdAt: t.expose("createdAt", { type: "DateTime" }),
     updatedAt: t.expose("updatedAt", { type: "DateTime" }),
@@ -461,7 +582,14 @@ ItemCheckInType.implement({
 builder.objectRef<Extract<ItemDto, { type: "WINE" }>>("Wine").implement({
   interfaces: [ItemInterface],
   fields: (t) => ({
-    vintage: t.expose("vintage", { type: "Date", nullable: true }),
+    vintage: t.expose("vintage", {
+      type: "Date",
+      nullable: true,
+      description:
+        "Stored as `YYYY-01-01`; read it as a year. Null is a non-vintage " +
+        "(NV) wine (X19) — the forms ask for a year or NV, so it is an " +
+        "answer, not a gap.",
+    }),
     variety: t.exposeString("variety", { nullable: true }),
     region: t.exposeString("region", { nullable: true }),
     /**
@@ -715,7 +843,8 @@ const UnlinkedItemBrandType = builder
  * GraphQL has no input unions, so `CreateItemInput` carries all six attribute
  * bags and the actor requires the one matching `type` — which is also where
  * the per-table NOT NULL columns are enforced with a message a client can act
- * on (`wines.vintage`, `wines.style`, `spirits.type`, `coffees.description`).
+ * on (`wines.style`, `spirits.type`; `wines.vintage` and `coffees.description`
+ * were on this list until X19 made them nullable).
  */
 const WineAttributesInput = builder.inputType("WineAttributesInput", {
   fields: (t) => ({
@@ -1085,14 +1214,35 @@ builder.mutationField("updateItem", (t) =>
       type: t.arg({ type: ItemTypeEnum, required: true }),
       itemId: t.arg.id({ required: true }),
       input: t.arg({ type: UpdateItemInput, required: true }),
+      confirmedFields: t.arg.stringList({
+        required: false,
+        description:
+          "F-75: the label-read guesses you accepted as they are, by field " +
+          "name, so `unconfirmedFields` stops pointing at them. Recorded in " +
+          "the onboarding that created the item, after the update; ignored " +
+          "for an item made without one.",
+      }),
     },
-    resolve: (_root, args, context) =>
-      context
-        .actor(
-          ItemActorDescriptor,
-          itemActorId({ type: args.type, id: String(args.itemId) }),
-        )
-        .update(patch(args.input, UPDATE_ITEM) satisfies UpdateItemInputType),
+    resolve: async (_root, args, context) => {
+      const ref: ItemRef = { type: args.type, id: String(args.itemId) };
+      const item = await context
+        .actor(ItemActorDescriptor, itemActorId(ref))
+        .update(patch(args.input, UPDATE_ITEM) satisfies UpdateItemInputType);
+      const fields = args.confirmedFields ?? [];
+      if (fields.length > 0) {
+        // The update just passed the creator check, so a source is there;
+        // `null` would be a race with a delete, and there is nothing to mark.
+        const source = await context
+          .actor(ItemActorDescriptor, itemActorId(ref))
+          .correctionSource();
+        if (source?.onboardingId) {
+          await context
+            .actor(ItemOnboardingActorDescriptor, source.onboardingId)
+            .confirmItemFields({ item: ref, fields });
+        }
+      }
+      return item;
+    },
   }),
 );
 
@@ -1227,7 +1377,8 @@ builder.mutationField("linkItemBrand", (t) =>
     type: ItemBrandType,
     description:
       "The item creator's alone (today's `item_brands` insert check). " +
-      "`brandId` comes from `resolveBrand`, never from a client-invented id.",
+      "`brandId` comes from `resolveBrand`, never from a client-invented id; " +
+      "one that names no brand is a `NotFoundError`.",
     errors: {},
     args: {
       type: t.arg({ type: ItemTypeEnum, required: true }),
@@ -1251,6 +1402,10 @@ builder.mutationField("linkItemBrand", (t) =>
 builder.mutationField("unlinkItemBrand", (t) =>
   t.field({
     type: UnlinkedItemBrandType,
+    description:
+      "The item creator's alone. Idempotent: a brand that is not linked — " +
+      "never was, or an earlier call already unlinked it — answers the same " +
+      "`UnlinkedItemBrand`, so a retried clear succeeds instead of NotFound.",
     errors: {},
     args: {
       type: t.arg({ type: ItemTypeEnum, required: true }),

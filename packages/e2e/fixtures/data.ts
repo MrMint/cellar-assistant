@@ -1,9 +1,10 @@
+import { randomBytes } from "node:crypto";
 import type { AccountKey } from "./accounts.ts";
 import { Gql } from "./test.ts";
 
 /** A name nothing else in the database will collide with. */
 export const unique = (prefix: string): string =>
-  `${prefix} ${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+  `${prefix} ${Date.now().toString(36)}${randomBytes(3).toString("hex")}`;
 
 /**
  * Create a cellar through the API, for tests whose *subject* is something else.
@@ -219,4 +220,41 @@ export async function eventually<T>(
   throw new Error(
     `timed out after ${timeoutMs}ms waiting for ${what}${last ? `; last error: ${last}` : ""}`,
   );
+}
+
+/** What `viewer.aiCapabilities` reports for the signed-in account (N07, D25). */
+export type AiCapabilities = {
+  semanticSearch: boolean;
+  imageSearch: boolean;
+  labelRead: boolean;
+  menuScan: boolean;
+  recipePhoto: boolean;
+  tierListInsights: boolean;
+  detailSuggestions: boolean;
+};
+
+const AI_CAPABILITIES = `query { me { id aiCapabilities {
+  semanticSearch imageSearch labelRead menuScan recipePhoto tierListInsights
+  detailSuggestions
+} } }`;
+
+/**
+ * Ask the stack what its AI can do, rather than assume from the provider.
+ *
+ * Since N07/D25 a surface *hides* a feature its deployment cannot serve (the
+ * `/search` Photo button, the onboarding photo match) instead of offering it
+ * and refusing, so a spec that drives one has to know which page it is
+ * looking at. Throws when the answer is missing: a spec that guessed "on"
+ * would fail as a product bug, and one that guessed "off" would pass without
+ * testing anything.
+ */
+export async function aiCapabilities(api: Gql): Promise<AiCapabilities> {
+  const data = await api.query(AI_CAPABILITIES);
+  const capabilities = data?.me?.aiCapabilities as AiCapabilities | undefined;
+  if (capabilities === undefined || capabilities === null) {
+    throw new Error(
+      `me.aiCapabilities was not answered: ${JSON.stringify(data)}`,
+    );
+  }
+  return capabilities;
 }

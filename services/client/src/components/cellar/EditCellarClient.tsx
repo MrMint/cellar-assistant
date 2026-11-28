@@ -1,8 +1,8 @@
 "use client";
 
-import { Stack } from "@mui/joy";
 import { useRouter } from "next/navigation";
 import { useCallback } from "react";
+import { useNavigate } from "@/components/app/useNavigate";
 import {
   CellarForm,
   type Permission_Type_Enum,
@@ -41,13 +41,14 @@ interface EditCellarClientProps {
  */
 export const EditCellarClient = ({ cellar, viewer }: EditCellarClientProps) => {
   const router = useRouter();
+  const navigate = useNavigate();
 
   const friends = useAllFriends();
 
   const handleSubmitted = useCallback(() => {
-    router.push(`/cellars`);
+    navigate.push(`/cellars`);
     router.refresh();
-  }, [router]);
+  }, [navigate, router]);
 
   if (friends.loading) return <PageLoading />;
   if (friends.failure !== null && friends.rows.length === 0) {
@@ -57,7 +58,7 @@ export const EditCellarClient = ({ cellar, viewer }: EditCellarClientProps) => {
   const isCreator = viewer !== null && viewer.id === cellar.createdById;
 
   return (
-    <Stack spacing={2}>
+    <div className="flex flex-col gap-6">
       {friends.failure !== null && <ApiError error={friends.failure} />}
       <CellarForm
         id={cellar.id}
@@ -73,16 +74,17 @@ export const EditCellarClient = ({ cellar, viewer }: EditCellarClientProps) => {
           coOwners: cellar.coOwners,
         })}
         onSubmitted={handleSubmitted}
+        onCancel={() => navigate.back()}
       />
       {isCreator && (
-        <Stack direction="row" alignItems="center">
-          <DeleteCellarButton
-            cellarId={cellar.id}
-            cellarName={cellar.name}
-            itemCount={cellar.itemCount}
-          />
-        </Stack>
+        <DeleteCellarButton
+          cellarId={cellar.id}
+          cellarName={cellar.name}
+          itemCount={cellar.itemCount}
+          privacy={cellar.privacy}
+          coOwnerIds={cellar.coOwnerIds}
+        />
       )}
-    </Stack>
+    </div>
   );
 };

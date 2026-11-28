@@ -1,64 +1,74 @@
 "use client";
 
-import {
-  Box,
-  Button,
-  Modal,
-  ModalClose,
-  ModalDialog,
-  Typography,
-} from "@mui/joy";
-import { useState } from "react";
-import QRCode from "react-qr-code";
+import { useCallback, useSyncExternalStore } from "react";
+import { ShareSheet } from "@/components/app/overlays/ShareSheet";
 import type { ApiItemType } from "@/components/cellar-api/itemTypes";
+import { useShareLink } from "@/lib/share/use-share-link";
 import { itemShareUrl } from "./adapter";
 
 export type ItemShareProps = {
   itemId: string;
   itemType: ApiItemType;
+  /** Names the item in the share sheet ("Barolo 2016 on Cellar Assistant"). */
+  itemName?: string;
 };
+
+const noop = () => () => {};
+
+/** The page's origin, after hydration (none on the server). */
+function useOrigin(): string {
+  return useSyncExternalStore(
+    noop,
+    () => window.location.origin,
+    () => "",
+  );
+}
 
 /**
- * `82450ad1:src/components/item/ItemShare.tsx`, restored with two fixes the
- * inventory recorded (§7): `navigator.canShare` is feature-tested before it is
- * called (it is absent on desktop Firefox, where the old button threw), and
- * the QR code carries an absolute URL with its scheme — the old value was
- * `host/wines/<id>`, which a phone camera reads as text, not a link.
+ * The item and bottle pages' share link, without a sheet (X17's one share
+ * behaviour, `lib/share/share-link.ts`: the system share sheet, else the link
+ * copied with a toast). The URL is the item's own page, from a bottle too, so
+ * a share never carries the cellar, and it is the public page for someone
+ * signed out (`src/proxy.ts`).
  */
-export const ItemShare = ({ itemId, itemType }: ItemShareProps) => {
-  const [open, setOpen] = useState(false);
-  const [url, setUrl] = useState("");
-
-  const handleShareClick = async () => {
-    const target = itemShareUrl(window.location.origin, itemType, itemId);
-    setUrl(target);
-    if (
-      typeof navigator.canShare === "function" &&
-      navigator.canShare({ url: target })
-    ) {
-      try {
-        await navigator.share({ url: target });
-        return;
-      } catch {
-        // Dismissed, or refused: fall through to the QR code.
-      }
-    }
-    setOpen(true);
-  };
-  return (
-    <>
-      <Button onClick={handleShareClick} variant="outlined" color="neutral">
-        Share
-      </Button>
-      <Modal open={open} onClose={() => setOpen(false)}>
-        <ModalDialog>
-          <ModalClose />
-          <Typography level="title-lg">Link to item page</Typography>
-          <Box sx={{ padding: "1rem", backgroundColor: "#fff" }}>
-            <QRCode value={url} />
-          </Box>
-        </ModalDialog>
-      </Modal>
-    </>
+export function useItemShare({ itemId, itemType, itemName }: ItemShareProps) {
+  const share = useShareLink();
+  return useCallback(
+    () =>
+      share({
+        url: itemShareUrl(window.location.origin, itemType, itemId),
+        ...(itemName === undefined
+          ? {}
+          : { title: itemName, text: `${itemName} on Cellar Assistant` }),
+      }),
+    [share, itemId, itemType, itemName],
   );
-};
+}
+
+/**
+ * The item's Share (L14, L34): F2a's ShareSheet with a real QR code for the
+ * item's own page, then Copy link and More ways (the system share sheet,
+ * where there is one). "Anyone with the link": the item page is public.
+ */
+export function ItemShareSheet({
+  open,
+  onOpenChange,
+  itemId,
+  itemType,
+  itemName,
+}: ItemShareProps & {
+  itemName: string;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const origin = useOrigin();
+  return (
+    <ShareSheet
+      open={open}
+      onOpenChange={onOpenChange}
+      title={itemName}
+      subtitle="Share · anyone with the link"
+      url={itemShareUrl(origin, itemType, itemId)}
+    />
+  );
+}

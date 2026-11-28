@@ -16,6 +16,7 @@
 import { randomUUID } from "node:crypto";
 import {
   anonymousCtx,
+  brandFirstItemTypesActorId,
   brandItemCountsActorId,
   brandLinksCollectionActorId,
   ForbiddenError,
@@ -266,6 +267,40 @@ describe.skipIf(skip)("BrandLinksCollectionActor", () => {
     });
   });
 
+  it("X27: a link to a place still under review is listed — and counted — for its creator only", async () => {
+    await withTestDb(async (db) => {
+      const creator = await seedUser(db);
+      const stranger = await seedUser(db);
+      const brandId = await seedBrand(db, `zzz-x27-${randomUUID()}`);
+      const shared = await seedPlace(db, "zzz-x27 shared");
+      const pending = await seedPlace(db, "zzz-x27 pending");
+      await db.execute(sql`
+        update public.places
+        set review_status = 'pending', created_by = ${creator}::uuid
+        where id = ${pending}::uuid
+      `);
+      await linkPlace(db, shared, brandId, "serves");
+      await linkPlace(db, pending, brandId, "serves");
+
+      const actor = await actorFor(db, brandId);
+      const mine = await actor.places(
+        userCtx(creator, "r"),
+        { brandId },
+        pageArgs({ first: 10 }),
+      );
+      expect(mine.totalCount).toBe(2);
+      const theirs = await actor.places(
+        userCtx(stranger, "r"),
+        { brandId },
+        pageArgs({ first: 10 }),
+      );
+      expect(theirs.totalCount).toBe(1);
+      expect(theirs.entries.map((entry) => entry.node.placeId)).toEqual([
+        shared,
+      ]);
+    });
+  });
+
   it("refuses anonymous on every turn, warm or cold (§1.6, catalog rule)", async () => {
     await withTestDb(async (db) => {
       const viewer = await seedUser(db);
@@ -412,6 +447,53 @@ describe.skipIf(skip)("BrandLinksCollectionActor", () => {
         actor.itemCounts(anonymousCtx("r"), filter),
       ).rejects.toBeInstanceOf(ForbiddenError);
       expect(actor.queryCount).toBe(1);
+    });
+  });
+  it("firstItemTypes (X23): each brand's earliest-linked item's type, aligned", async () => {
+    await withTestDb(async (db) => {
+      const viewer = await seedUser(db);
+      const mixed = await seedBrand(db, `zzz-x23-mixed-${randomUUID()}`);
+      const empty = await seedBrand(db, `zzz-x23-empty-${randomUUID()}`);
+      // The beer was linked first, though the wine is primary: earliest wins.
+      await linkItem(
+        db,
+        "beer_id",
+        await seedBeer(db, viewer, "zzz-x23 beer"),
+        mixed,
+        false,
+        "2026-01-01T00:00:00Z",
+      );
+      await linkItem(
+        db,
+        "wine_id",
+        await seedWine(db, viewer, "zzz-x23 wine"),
+        mixed,
+        true,
+        "2026-02-01T00:00:00Z",
+      );
+      const filter = { brandIds: [empty, mixed] };
+      const actor = await activate(
+        createActor(
+          BrandLinksCollectionActor,
+          brandFirstItemTypesActorId(filter),
+          db,
+        ),
+      );
+      expect(await actor.firstItemTypes(userCtx(viewer, "r"), filter)).toEqual([
+        null,
+        "BEER",
+      ]);
+      expect(actor.queryCount).toBe(1);
+      // Its own key space: the counts' id for the same set is a different actor.
+      expect(brandFirstItemTypesActorId(filter)).not.toBe(
+        brandItemCountsActorId(filter),
+      );
+      await expect(
+        actor.firstItemTypes(userCtx(viewer, "r"), { brandIds: [mixed] }),
+      ).rejects.toBeInstanceOf(ValidationError);
+      await expect(
+        actor.firstItemTypes(anonymousCtx("r"), filter),
+      ).rejects.toBeInstanceOf(ForbiddenError);
     });
   });
 });

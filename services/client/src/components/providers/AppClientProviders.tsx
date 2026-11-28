@@ -1,11 +1,18 @@
 "use client";
 
+import { MotionConfig } from "motion/react";
 import type { ReactNode } from "react";
-import { IconContext } from "react-icons";
-import ThemeRegistry from "./ThemeRegistry";
+import { Toaster } from "@/components/app/Toaster";
+import { TooltipProvider } from "@/components/ui/tooltip";
 
 /**
- * The client-side context every page needs: icon defaults and the Joy theme.
+ * The client-side context every page needs: reduced motion, tooltips and the
+ * toast host.
+ *
+ * - `MotionConfig reducedMotion="user"` sits at the root, not the
+ *   authenticated layout, so sign-in's intro obeys it too (design §4.9).
+ * - `Toaster` is mounted once here so `notify()` works from any page; it sits
+ *   above the tab bar (`app/Toaster`).
  *
  * There is deliberately **no GraphQL provider here.** D2–D8 mount
  * `ApiUrqlProvider` per route group instead, which is what let the migration
@@ -25,18 +32,11 @@ export default function AppClientProviders({
   children: ReactNode;
 }) {
   return (
-    <IconContext.Provider
-      value={{
-        color: "var(--Icon-color)",
-        style: {
-          margin: "var(--Icon-margin)",
-          fontSize: "var(--Icon-fontSize, 20px)",
-          width: "0.75em",
-          height: "0.75em",
-        },
-      }}
-    >
-      <ThemeRegistry>{children}</ThemeRegistry>
-    </IconContext.Provider>
+    <MotionConfig reducedMotion="user">
+      <TooltipProvider delayDuration={300}>
+        {children}
+        <Toaster />
+      </TooltipProvider>
+    </MotionConfig>
   );
 }

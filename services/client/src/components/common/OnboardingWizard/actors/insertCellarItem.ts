@@ -1,4 +1,5 @@
 import { fromPromise } from "xstate";
+import { announceSave } from "@/components/pwa/install-prompt";
 import { AddItemToCellarFromItemMutation } from "@/lib/api/items";
 import { unwrapResult } from "@/lib/api/result";
 import type { InsertCellarItemInput, InsertCellarItemResult } from "./types";
@@ -20,6 +21,7 @@ export const insertCellarItem = fromPromise(
       cellarId,
       cellarItemId,
       displayImage,
+      displayImageFileId,
       urqlClient,
     },
   }: {
@@ -30,6 +32,7 @@ export const insertCellarItem = fromPromise(
       itemId,
       itemType,
       displayImage,
+      displayImageFileId,
     );
     const response = await urqlClient
       .mutation(AddItemToCellarFromItemMutation, {
@@ -45,6 +48,10 @@ export const insertCellarItem = fromPromise(
     if (!added.ok) {
       throw new Error(`Failed to add cellar item: ${added.error.message}`);
     }
+    // A bottle filed: the install prompt waits for the first (N15). This is
+    // the only save on the wizard's "it's one we know" path, which never
+    // reaches `createItem`.
+    announceSave();
     return { itemId: added.data.id };
   },
 );

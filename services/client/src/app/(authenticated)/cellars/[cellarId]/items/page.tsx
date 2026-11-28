@@ -1,20 +1,32 @@
-import { Box, Stack, Typography } from "@mui/joy";
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { Suspense } from "react";
+import { cache, Suspense } from "react";
+import { ErrorState } from "@/components/app/EmptyState";
 import { canAddToCellar } from "@/components/cellar/adapter";
-import { CellarItemsControls } from "@/components/cellar/CellarItemsControls";
-import { CellarItemsGridServer } from "@/components/cellar/CellarItemsGridServer";
 import { CellarItemsGridSkeleton } from "@/components/cellar/CellarItemsGridSkeleton";
-import { filterCountsFromItemCounts } from "@/components/cellar/cellarItemCounts";
+import { CellarSearchElsewhere } from "@/components/cellar/CellarSearchElsewhere";
+import type { CellarStatus } from "@/components/cellar/cellarItemsQuery";
+import { FinishedDiaryServer } from "@/components/cellar/FinishedDiaryServer";
 import {
   CellarInfoFragment,
   GetCellarInfoQuery,
 } from "@/components/cellar/fragments";
+import { CellarList } from "@/components/cellar/list/CellarList";
+import { EmptyShelf } from "@/components/cellar/list/EmptyShelf";
+import {
+  loadNeedsDetailsCount,
+  loadWholeCellar,
+} from "@/components/cellar/list/load";
 import { ViewerQuery } from "@/lib/api/cellars";
 import { readFragment } from "@/lib/api/graphql";
 import { isNotFound, unwrapResult } from "@/lib/api/result";
 import { apiServerQuery } from "@/lib/api/urql-server";
-import { itemsSearchParamsCache, parseItemTypes } from "./searchParams";
+import { getTimeZoneFromCookie } from "@/lib/time-zone/server";
+import {
+  itemsSearchParamsCache,
+  parseCellarStatus,
+  parseItemTypes,
+} from "./searchParams";
 
 interface CellarItemsPageProps {
   params: Promise<{ cellarId: string }>;
@@ -22,65 +34,122 @@ interface CellarItemsPageProps {
 }
 
 /**
- * `/cellars/[cellarId]/items` — the old page (`82450ad1`): `CellarItemsControls`
- * renders at once, the grid streams in under `Suspense`, keyed on the search
- * and filter so a change shows the skeleton rather than stale cards.
+ * `/cellars/[cellarId]/items` — the cellar list (C1; boards
+ * combined/Cellar-flow, areas/Cellars-Shelves, desktop/Cellar): the name and
+ * its bottles, the search and Arrange, the Open and kind counts, the
+ * Needs-details count, then every bottle as the Arrange sheet says (A–Z,
+ * by maker, by style, shelves, or a sort). The old overview at
+ * `/cellars/[cellarId]` redirects here.
+ *
+ * The server reads the whole cellar (`loadWholeCellar`); arranging and
+ * filtering happen on the client, so they are instant and the URL keeps
+ * them (`?sort=`, `?types=`, `?open=1`, `?view=rows`). A search and the Show
+ * segment (`?search=`, `?status=`) read again: a search narrows by name and
+ * meaning, and asks your other cellars too ("Lagavulin is in Bar Cart").
+ * Under "Finished" the list is the diary.
  */
 export const dynamic = "force-dynamic";
+
+/** One cellar header read per request, for the page and its title (X21). */
+const loadCellarInfo = cache((cellarId: string) =>
+  apiServerQuery(GetCellarInfoQuery, { cellarId }),
+);
+
+export async function generateMetadata({
+  params,
+}: Pick<CellarItemsPageProps, "params">): Promise<Metadata> {
+  const { cellarId } = await params;
+  const result = unwrapResult(
+    (await loadCellarInfo(cellarId)).cellar,
+    "Cellar",
+  );
+  return {
+    title: result.ok
+      ? readFragment(CellarInfoFragment, result.data).name
+      : "Cellar",
+  };
+}
 
 export default async function CellarItemsPage({
   params,
   searchParams,
 }: CellarItemsPageProps) {
   const { cellarId } = await params;
+  const parsed = itemsSearchParamsCache.parse(await searchParams);
+  const search = parsed.search;
+  const status = parseCellarStatus(parsed.status);
+  const searching = search.trim() !== "";
+  const finished = status === "finished";
 
-  // Parse search params using nuqs cache with validation
-  const resolvedSearchParams = await searchParams;
-  const { search, types } = itemsSearchParamsCache.parse(resolvedSearchParams);
-  const validTypes = parseItemTypes(types);
-
-  // Fetch cellar metadata immediately (for header)
-  const [data, viewer] = await Promise.all([
-    apiServerQuery(GetCellarInfoQuery, { cellarId }),
+  const [info, viewer, whole, needsDetails, timeZone] = await Promise.all([
+    loadCellarInfo(cellarId),
     apiServerQuery(ViewerQuery, {}),
+    finished ? null : loadWholeCellar(cellarId, { search, status }),
+    loadNeedsDetailsCount(cellarId),
+    getTimeZoneFromCookie(),
   ]);
 
-  const result = unwrapResult(data.cellar, "Cellar");
+  const result = unwrapResult(info.cellar, "Cellar");
   if (!result.ok) {
     // §1.6: "no such cellar" and "not yours to see" are one answer.
     if (isNotFound(result.error)) notFound();
-    return <Typography color="danger">{result.error.message}</Typography>;
+    return (
+      <ErrorState
+        title="Can't open this cellar"
+        reason={result.error.message}
+      />
+    );
+  }
+  if (whole !== null && !whole.ok) {
+    return (
+      <ErrorState title="Can't load the bottles" reason={whole.error.message} />
+    );
   }
 
   const cellar = readFragment(CellarInfoFragment, result.data);
   const canAdd = canAddToCellar(cellar, viewer.me?.id ?? null);
-  const counts = filterCountsFromItemCounts(cellar.itemCounts);
+  const inCellar = cellar.itemCounts.total;
+  const statusCounts: Record<CellarStatus, number> = {
+    "in-cellar": inCellar,
+    finished: cellar.finishedCount,
+    all: inCellar + cellar.finishedCount,
+  };
+  const empty = inCellar === 0 && cellar.finishedCount === 0;
+
+  const body = empty ? (
+    <EmptyShelf cellarId={cellarId} cellarName={cellar.name} canAdd={canAdd} />
+  ) : finished ? (
+    <Suspense key={`diary-${search}`} fallback={<CellarItemsGridSkeleton />}>
+      <FinishedDiaryServer
+        cellarId={cellarId}
+        search={search}
+        types={parseItemTypes(parsed.types)}
+        timeZone={timeZone ?? "UTC"}
+        canAdd={canAdd}
+      />
+    </Suspense>
+  ) : undefined;
 
   return (
-    <Box>
-      <Stack spacing={2}>
-        {/* Header renders immediately */}
-        <CellarItemsControls
-          cellarId={cellarId}
-          cellarName={cellar.name}
-          counts={counts}
-          canAdd={canAdd}
-          initialSearch={search}
-          initialTypes={validTypes}
-        />
-
-        {/* Items grid streams in with Suspense */}
-        <Suspense
-          key={`${search}-${JSON.stringify(types)}`}
-          fallback={<CellarItemsGridSkeleton />}
-        >
-          <CellarItemsGridServer
-            cellarId={cellarId}
-            search={search}
-            types={validTypes}
-          />
-        </Suspense>
-      </Stack>
-    </Box>
+    <CellarList
+      cellarId={cellarId}
+      cellarName={cellar.name}
+      bottles={whole?.bottles ?? []}
+      bottleCount={statusCounts[status]}
+      capped={whole?.capped ?? false}
+      search={search}
+      status={status}
+      statusCounts={statusCounts}
+      needsDetails={needsDetails}
+      canEdit={canAdd}
+      body={body}
+      elsewhere={
+        searching ? (
+          <Suspense key={`elsewhere-${search}`} fallback={null}>
+            <CellarSearchElsewhere cellarId={cellarId} search={search} />
+          </Suspense>
+        ) : undefined
+      }
+    />
   );
 }

@@ -25,3 +25,18 @@ export function getPriceLevelText(level?: number | null): string | null {
   if (!level) return null;
   return "$".repeat(level);
 }
+
+/**
+ * The toast after Mark visited. The first visit also takes the place off
+ * Want to try (the server does that — `UserActor.recordPlaceInteraction`),
+ * so the toast says so rather than letting the bookmark empty silently.
+ */
+export function visitToastText(
+  willBeVisited: boolean,
+  wasWantToTry: boolean,
+): { message: string; description?: string } {
+  if (!willBeVisited) return { message: "Unmarked" };
+  return wasWantToTry
+    ? { message: "Marked as visited", description: "Taken off Want to try." }
+    : { message: "Marked as visited" };
+}

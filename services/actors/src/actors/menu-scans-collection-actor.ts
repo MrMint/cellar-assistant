@@ -25,6 +25,7 @@
 import type {
   ActorCategory,
   Ctx,
+  MenuLineContextDto,
   MenuScansCollectionActorInterface,
   Page,
   PageArgs,
@@ -32,11 +33,17 @@ import type {
 import {
   MenuScansCollectionActorDescriptor,
   mapPage,
+  requireReverseEdgeBatch,
 } from "@cellar-assistant/contracts";
 import { sql } from "@cellar-assistant/db/orm";
 import type { KeysetCursor, PageScope } from "../lib/collection-actor-base.ts";
 import { ViewerCollectionActorBase } from "../lib/collection-actor-base.ts";
-import { keysetOrder, keysetWhere } from "../lib/collection-sql.ts";
+import {
+  keysetOrder,
+  keysetWhere,
+  requireUuidValue,
+} from "../lib/collection-sql.ts";
+import { readMenuLineContext } from "../lib/menu-line-context.ts";
 
 type ScanIdRow = { readonly id: string; readonly sort_key: string };
 
@@ -66,6 +73,27 @@ export class MenuScansCollectionActor
       ),
       (row) => row.id,
     );
+  }
+
+  /**
+   * X07 — `../lib/menu-line-context.ts` has the reads and why each is the
+   * viewer's to make. Keyed by the viewer like `list`: `batch` refuses any
+   * other caller before a statement runs, so one viewer's cellars, scores and
+   * friends never answer another's request.
+   */
+  async lineContext(
+    ctx: Ctx,
+    lineIds: readonly string[],
+  ): Promise<readonly MenuLineContextDto[]> {
+    requireReverseEdgeBatch(lineIds, "lineContext lineIds");
+    const ids = lineIds.map((id) =>
+      requireUuidValue(String(id), "lineId").toLowerCase(),
+    );
+    return await this.batch(ctx, null, [], async () => {
+      const viewer = ctx.viewerId;
+      if (viewer === null) return [];
+      return await readMenuLineContext(this.db, viewer, ids);
+    });
   }
 
   /**

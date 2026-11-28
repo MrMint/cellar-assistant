@@ -140,12 +140,13 @@ want to know *why* a line says what it says; don't work through it by hand.
   (password `123456789`). Do not run `bun run db:seed` bare in a worktree: its defaults are the
   **shared** lane's `:5433` and `:3002`. Use `bun run dev:seed`.
 - Optional: `ollama serve` + `ollama pull nomic-embed-text gemma3:4b` for the AI-backed features
-  (semantic search, tier-list insights, item-onboarding defaults, menu extraction, recipe-photo
-  vision — `services/actors/README.md`). Leave `AI_PROVIDER` unset to run with those features
-  deliberately erroring instead of silently degrading — that is a supported state, and
-  `dev:doctor` reports it as one rather than as a fault. One wrinkle it also reports: the
-  per-worktree lane's `export_passthrough` **defaults `AI_PROVIDER` to `ollama`**, so "I never
-  set it" does not mean "unset" there.
+  (semantic search, tier-list insights, item-onboarding defaults, "Suggest details" item
+  suggestions, flavour chips, place review, menu extraction, recipe-photo vision — every
+  `MODEL_SEAMS` entry, tabled in `services/actors/README.md`). Leave `AI_PROVIDER` unset to
+  run with those features deliberately erroring instead of silently degrading — that is a
+  supported state, and `dev:doctor` reports it as one rather than as a fault. One wrinkle it
+  also reports: the per-worktree lane's `export_passthrough` **defaults `AI_PROVIDER` to
+  `ollama`**, so "I never set it" does not mean "unset" there.
 
 ## HARD: never run `bun run dev` or `bun run build`
 
@@ -259,19 +260,81 @@ XState for complex state machines, React Hook Form for forms, URQL for GraphQL s
 
 ## UI and styling
 
-### Material-UI Joy guidelines
-- Prefer Joy UI components over custom components whenever possible.
-- Use Joy's design tokens for spacing, color and typography.
-- Follow Joy's composition patterns (`Card` + `CardContent`, etc.) and built-in variants/color
-  schemes over custom CSS.
-- Use Joy's responsive breakpoints and `theme.spacing()`.
-- Prefer the `sx` prop (Joy's CSS-in-JS) over external stylesheets.
-- Use Joy's semantic color tokens (`primary`, `neutral`, `success`, ...) over hardcoded colors.
+The client is **Tailwind CSS v4 + shadcn-derived primitives on Radix + `motion`** (decision D20,
+`docs/product/decisions.md`), in the look of the 2026-11 redesign: teal for action, Inter only,
+dark and light themes (`docs/design/2026-11/DECISIONS.md` 40a, 43, 46). Values come from
+`docs/design/2026-11/KIT.md`; the reasoning is `docs/product/design-direction.md`. MUI Joy,
+Emotion, `sx`, `react-icons` and `framer-motion` are gone: `ui-platform.test.ts` fails on any use
+of them in any file, and Biome's `noRestrictedImports` bans the imports.
+
+### Where things live
+- `services/client/src/app/globals.css` is the **only** stylesheet with values: `--ca-*` tokens
+  for both themes (dark is the default; `data-theme="dark"` or `"light"` on `<html>`, and
+  Settings offers Dark / Light / Phone), the shadcn semantic mapping in `@theme inline`, the
+  `t-*` type utilities, and breakpoints (`sm` 600 / `md` 900 / `lg` 1200 / `xl` 1536 — shared
+  with the JS `useMediaQuery` helpers so CSS and JS flip together). `src/lib/tokens.ts` holds the
+  same values for code that cannot read CSS variables (MapLibre paint, canvas, contrast tests);
+  `tokens-parity.test.ts` keeps them equal.
+- `src/components/ui/*` is **vendored shadcn**. Don't edit it in feature work. Add a component
+  with `bunx --bun shadcn@4.21.0 add <name>` from `services/client` (pin a CLI at least two
+  weeks old), review the diff, and keep `cva` exports in a `*-variants.ts` file without
+  `"use client"` (server components import them; `client-boundary.test.ts` fails otherwise).
+  **The CLI rewrites `@/lib/utils` imports to the `cn` npm package and adds `cn`/`next-themes`
+  to `package.json`** — revert all three; our `cn()` knows the custom tokens
+  (`vendored.test.tsx` checks).
+- `src/components/app/*` holds the **app primitives** (AppShell, TabBar, SideRail, AppBar, Page,
+  ListRow, BottomSheet, ResponsiveDialog, ConfirmSheet, `notify`/Toaster, SegmentedControl,
+  FilterChip, TypeChip/TypeGlyph, Score, RatingInput, EmptyState, AIDraftField, ActionBar,
+  IconButton, Link, UserAvatar, `icons`, …). Pages use these first, then `ui/*`, then Tailwind on
+  plain elements. `src/components/app/README.md` has the usage notes.
+- `src/lib/motion.ts` holds every motion token from `motion/SPEC.md`: `dur`, `ease`, `spring`,
+  `distance`, `calm`, `reduced`, `gesture`, `hold`, `stagger`, `skeleton`, `toastMs`,
+  `refreshMs`, `tween`/`tweenOut`. Durations and curves are mirrored as `--ca-dur-*` /
+  `--ca-ease-*`; route transitions are `src/app/view-transitions.css`.
+  `MotionConfig reducedMotion="user"` wraps the app.
+- `src/lib/feedback` is touch feedback: `feedback(name, { phase? })` fires the haptic and the
+  sound that share a name (`press`, `primary`, `toggle`, `tick`, `detent`, `hold`, `undo`,
+  `success`, `medium`, `big`, `refuse`), honouring the "Sound and haptics" setting
+  (`useFeedbackSettings`). `<HapticOverlay>` makes a press felt on an iPhone; the sounds are
+  self-hosted in `public/sounds/` with their MIT licence.
+
+### Rules
+- **Colour:** teal (`bg-primary`, ink `text-primary-foreground`) means *action* and nothing else.
+  The AI is marked by the sparkle glyph and its words ("Read from the label"), never by a colour.
+  Gold is only the owner's own verdict (their stars, the crown on their #1), never text alone.
+  The heart red is for hearts only. Danger is text and outline; solid danger only inside
+  `ConfirmSheet`. Shadcn's `accent` token is the pressed surface, **not** the action colour.
+- **Themes:** every colour is a role token with a dark and a light value; never write a colour
+  for one theme only. Contrast is 4.5:1 for text and 3:1 for glyphs and boundaries, on every
+  surface, in both themes (`palette-contrast.test.ts`).
+- **No raw values:** no hex/rgb in `.ts(x)` outside the allowlist, no arbitrary colour classes
+  (`bg-[#…]`) and no Tailwind default-palette classes (`text-red-500`), no literal springs,
+  durations, bézier curves or gesture thresholds outside `lib/motion.ts`. The
+  `src/lib/dev-checks/ui-platform.test.ts` guard enforces this.
+- **Type:** Inter only (Fraunces is gone). Use the `t-*` utilities (`t-score`, `t-title`,
+  `t-quote`, `t-head`, `t-body`, `t-cap`, `t-micro`, `t-pin`) and `tabular` for numbers.
+  Sentence case everywhere; no ALL CAPS.
+- **Layout:** mobile first at 390×844; 16 px gutter (`Page`); containers are tonal surfaces;
+  touch targets at least 44×44; `IconButton` requires `aria-label`; a glyph is never a touch
+  control's only label; tooltips only on `(hover:hover)`.
+- **Overlays:** phones get `BottomSheet` (vaul); from `md` up `ResponsiveDialog` becomes a Dialog.
+  Toasts go through `notify()` and sit above the tab bar; reversible actions get Undo instead of
+  a confirm.
+- **Motion:** import from `motion/react`, never `framer-motion`. Animate transform and opacity
+  only. Use the `lib/motion.ts` tokens and `useReducedMotion`; no per-component `matchMedia`.
+  Under reduced motion a movement becomes its `reduced` cross-fade (or its `calm` replacement).
+- **Feedback:** call `feedback()` only for what the person touches or holds, never for scroll,
+  loading or data arriving. On an iPhone a haptic is felt only inside the tap, so call it from
+  the click handler of an element holding a `<HapticOverlay>`; sound carries the rest.
+- **Icons:** `lucide-react` through `src/components/app/icons.ts`, stroke 1.75.
+- **Class merging:** always `cn()` from `@/lib/utils` (tailwind-merge is configured for the
+  custom tokens; plain string concatenation loses conflicts).
 
 ### Styling hierarchy
-Joy components → `sx` prop → Emotion `styled` → custom CSS (last resort). Use `sx` for one-off or
-responsive styling; reach for Emotion only when Joy can't do it; keep theme tokens consistent
-throughout.
+App primitive → `ui/*` component (variants via `cva`) → Tailwind utilities on plain elements →
+a new token or `@utility` in `globals.css` (last resort, reviewed). There is no CSS-in-JS: no
+`sx`, no Emotion, no `style` objects except for values computed at runtime (positions,
+progress).
 
 ## Code style
 
@@ -307,8 +370,8 @@ throughout.
   introspection with `agent-browser`. It needs a running `next dev`, so it applies **only when the
   user already has `bun run dev` up** — you may not start one. With no dev server, verify against
   the containerised client on 3003 instead; that gives you the browser half but not `/_next/mcp`,
-  since the image runs `next start`. (There is no committed design-principles or style-guide doc
-  in this repo to check against.)
+  since the image runs `next start`. Check UI against "UI and styling" above,
+  `services/client/src/components/app/README.md` and `docs/product/design-direction.md`.
 - Use the IDE `getDiagnostics` tool to check for problems in code.
 
 ### Three ways a suite result lies here

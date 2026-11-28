@@ -15,6 +15,8 @@ import {
   BudgetExceededError,
   ConflictError,
   ForbiddenError,
+  NotFoundError,
+  pageArgs,
   type ReserveInput,
   systemCtx,
   userCtx,
@@ -43,14 +45,23 @@ import type { ModelReserveInput } from "./budget-actor.ts";
 import {
   AI_MODEL_SERVICE,
   BudgetActor,
+  DEFAULT_GOOGLE_PLACES_MONTHLY_PAID_CENTS,
+  DEFAULT_GOOGLE_PLACES_USER_MONTHLY_CALLS,
+  GOOGLE_PLACES_BUDGET_SERVICE,
+  googlePlacesPoolRefusal,
   MODEL_RATES,
+  MODEL_SEAMS,
   MODEL_SPENDERS,
   modelCallNanoCents,
   monthStart,
   NANOCENTS_PER_CENT,
+  nextMonthStart,
+  parseGooglePlacesPaidCents,
   parseModelPrices,
   parseRequestCaps,
+  parseUserCapConfig,
   parseUserCaps,
+  periodLimit,
   readModelBudgetPolicy,
   UNKNOWN_PAID_RATE,
   USER_CAP_REASON,
@@ -1655,6 +1666,64 @@ describe("per-user caps: parsing (W4 security F4)", () => {
     }
   });
 
+  it("SV-A: parses an optional period cap and one period= entry", () => {
+    expect(
+      parseUserCapConfig(
+        "ai_model/tier_list_insights=30/150/40, period=week, ai_model/embedding=1/2",
+      ),
+    ).toEqual({
+      caps: {
+        "ai_model/tier_list_insights": { hourly: 30, daily: 150, period: 40 },
+        "ai_model/embedding": { hourly: 1, daily: 2 },
+      },
+      period: "week",
+      placesMonthly: null,
+    });
+    expect(parseUserCapConfig("period=month").period).toBe("month");
+    expect(parseUserCapConfig(undefined)).toEqual({
+      caps: {},
+      period: null,
+      placesMonthly: null,
+    });
+    for (const bad of [
+      "period=day",
+      "period=month,period=week",
+      "ai_model/embedding=1/2/0",
+      "ai_model/embedding=1/2/lots",
+      "ai_model/embedding=1/2/3/4",
+    ]) {
+      expect(() => parseUserCapConfig(bad), bad).toThrow(ValidationError);
+    }
+  });
+
+  it("F-230: parses google_places=<monthly> and refuses a period on a Places kind", () => {
+    expect(readModelBudgetPolicy({}).googlePlacesUserMonthlyCalls).toBe(
+      DEFAULT_GOOGLE_PLACES_USER_MONTHLY_CALLS,
+    );
+    expect(
+      readModelBudgetPolicy({ BUDGET_USER_CAPS: "google_places=40" })
+        .googlePlacesUserMonthlyCalls,
+    ).toBe(40);
+    for (const bad of [
+      "google_places=0",
+      "google_places=lots",
+      "google_places=1,google_places=2",
+      "google_places/autocomplete=1/2/3",
+    ]) {
+      expect(() => parseUserCapConfig(bad), bad).toThrow(ValidationError);
+    }
+  });
+
+  it("SV-A (L5): defaults to a UTC calendar month and ten days' worth per kind", () => {
+    const policy = readModelBudgetPolicy({});
+    expect(policy.userCapPeriod).toBe("month");
+    expect(periodLimit({ hourly: 30, daily: 150 })).toBe(1_500);
+    expect(periodLimit({ hourly: 30, daily: 150, period: 7 })).toBe(7);
+    expect(
+      readModelBudgetPolicy({ BUDGET_USER_CAPS: "period=week" }).userCapPeriod,
+    ).toBe("week");
+  });
+
   it("layers BUDGET_USER_CAPS over the defaults, and a malformed one stops the boot", () => {
     const policy = readModelBudgetPolicy({
       BUDGET_USER_CAPS: "ai_model/embedding=1/2",
@@ -1825,6 +1894,247 @@ describe.skipIf(skip)("per-user caps: enforcement (W4 security F4)", () => {
 });
 
 /**
+ * SV-A (L5): the period cap beside the rolling windows, and MC-quota's
+ * `myQuota` — the viewer's own allowance, never anybody else's.
+ */
+describe.skipIf(skip)("per-user period cap and myQuota (SV-A)", () => {
+  afterAll(closeTestDb);
+
+  const OTHER = "44444444-4444-4444-8444-444444444444";
+  const other = userCtx(OTHER, "r-other-quota");
+  const matchCall = (): ModelReserveInput => ({
+    seam: "menu_match",
+    provider: "vertex-ai",
+    model: "gemini-2.5-flash",
+    inputTokens: 10,
+    outputTokens: 10,
+    reservationId: `period-${crypto.randomUUID()}`,
+  });
+  const quotaFor = async (actor: BudgetActor, ctx: typeof user) => {
+    const page = await actor.myQuota(ctx, pageArgs({ first: 50 }));
+    return page.entries.find((e) => e.node.kind === "ai_model/menu_match")
+      ?.node;
+  };
+
+  it("refuses at the period cap with retryAt at the next period start, and counts nobody else's calls", async () => {
+    await withTestDb(async (db) => {
+      const actor = await withEnv(
+        { BUDGET_USER_CAPS: "ai_model/menu_match=10/10/2" },
+        () => reactivate(db),
+      );
+      expect((await actor.reserveForModel(user, matchCall())).allowed).toBe(
+        true,
+      );
+      expect((await actor.reserveForModel(user, matchCall())).allowed).toBe(
+        true,
+      );
+      const refused = await actor.reserveForModel(user, matchCall());
+      expect(refused.allowed).toBe(false);
+      expect(refused.refusal).toBe("USER_CAP");
+      expect(refused.reason).toMatch(
+        new RegExp(`^${USER_CAP_REASON}: .*2 of its 2 calls this month`),
+      );
+      expect(refused.retryAt).toBe(nextMonthStart().toISOString());
+      // Another account's period is its own.
+      expect((await actor.reserveForModel(other, matchCall())).allowed).toBe(
+        true,
+      );
+    });
+  });
+
+  it("lets the person through once a new period starts", async () => {
+    await withTestDb(async (db) => {
+      const actor = await withEnv(
+        { BUDGET_USER_CAPS: "ai_model/menu_match=10/10/2" },
+        () => reactivate(db),
+      );
+      await actor.reserveForModel(user, matchCall());
+      await actor.reserveForModel(user, matchCall());
+      expect((await actor.reserveForModel(user, matchCall())).allowed).toBe(
+        false,
+      );
+      // Both calls belong to the previous period now.
+      await db
+        .update(apiUsageLog)
+        .set({
+          createdAt: sql`(date_trunc('month', now() at time zone 'UTC') at time zone 'UTC') - interval '1 minute'`,
+        })
+        .where(eq(apiUsageLog.triggeredBy, USER));
+      expect((await actor.reserveForModel(user, matchCall())).allowed).toBe(
+        true,
+      );
+    });
+  });
+
+  it("names a Monday reset for period=week", async () => {
+    await withTestDb(async (db) => {
+      const actor = await withEnv(
+        { BUDGET_USER_CAPS: "period=week,ai_model/menu_match=10/10/1" },
+        () => reactivate(db),
+      );
+      await actor.reserveForModel(user, matchCall());
+      const refused = await actor.reserveForModel(user, matchCall());
+      expect(refused.allowed).toBe(false);
+      const reset = new Date(refused.retryAt ?? "");
+      expect(reset.getUTCDay()).toBe(1);
+      expect(reset.getUTCHours()).toBe(0);
+      const days = (reset.getTime() - Date.now()) / 86_400_000;
+      expect(days).toBeGreaterThan(0);
+      expect(days).toBeLessThanOrEqual(7);
+      expect(refused.reason).toMatch(/this week/);
+    });
+  });
+
+  it("myQuota reads only the viewer's own usage", async () => {
+    await withTestDb(async (db) => {
+      const actor = await withEnv(
+        { BUDGET_USER_CAPS: "ai_model/menu_match=10/10/5" },
+        () => reactivate(db),
+      );
+      const userBefore = (await quotaFor(actor, user))?.used ?? 0;
+      const otherBefore = (await quotaFor(actor, other))?.used ?? 0;
+      await actor.reserveForModel(user, matchCall());
+      await actor.reserveForModel(user, matchCall());
+      await actor.reserveForModel(other, matchCall());
+
+      const mine = await quotaFor(actor, user);
+      expect(mine).toEqual({
+        kind: "ai_model/menu_match",
+        used: userBefore + 2,
+        limit: 5,
+        resetsAt: nextMonthStart().toISOString(),
+      });
+      expect((await quotaFor(actor, other))?.used).toBe(otherBefore + 1);
+
+      // Every model seam is listed, each with its own limit, then (F-230)
+      // Google Places' one allowance.
+      const all = await actor.myQuota(user, pageArgs({ first: 50 }));
+      expect(all.entries.map((e) => e.node.kind)).toEqual([
+        ...MODEL_SEAMS.map((seam) => `${AI_MODEL_SERVICE}/${seam}`),
+        GOOGLE_PLACES_BUDGET_SERVICE,
+      ]);
+      expect(
+        all.entries.find((e) => e.node.kind === "ai_model/tier_list_insights")
+          ?.node.limit,
+      ).toBe(
+        periodLimit(
+          USER_CAPS["ai_model/tier_list_insights"] ?? { hourly: 0, daily: 0 },
+        ),
+      );
+    });
+  });
+
+  /*
+   * F-230 (FR-16): Google Places has its own monthly allowance per person,
+   * one count across every Places endpoint, separate from every AI kind —
+   * and `myQuota` shows it, so a Places refusal always has a visible reason.
+   */
+  const placesKinds = [
+    { service: "google_places", endpoint: "autocomplete" },
+    { service: "google_places", endpoint: "nearby_search" },
+  ] as const;
+  /** Config rows first: `setBudget` reloads, which re-reads the env. */
+  const openPlaces = async (db: DbOrTx) => {
+    const actor = await reactivate(db);
+    for (const kind of placesKinds) {
+      await actor.setBudget(admin, {
+        kind,
+        monthlyBudgetCents: 100_000,
+        freeTierMonthlyRequests: 100_000,
+        isEnabled: true,
+      });
+    }
+  };
+  const placesCall =
+    (ctx: typeof user, endpoint: 0 | 1) => async (actor: BudgetActor) =>
+      actor.reserveForSearch(ctx, {
+        kind: placesKinds[endpoint],
+        estimatedCostCents: 0,
+        reservationId: `places-${crypto.randomUUID()}`,
+      });
+
+  it("F-230: Places is one monthly allowance across its endpoints, apart from AI", async () => {
+    await withTestDb(async (db) => {
+      await openPlaces(db);
+      const actor = await withEnv(
+        {
+          BUDGET_USER_CAPS:
+            "google_places=3, ai_model/menu_match=10/10/10, period=week",
+        },
+        () => reactivate(db),
+      );
+      expect((await placesCall(user, 0)(actor)).allowed).toBe(true);
+      expect((await placesCall(user, 1)(actor)).allowed).toBe(true);
+      expect((await placesCall(user, 0)(actor)).allowed).toBe(true);
+      const refused = await placesCall(user, 1)(actor);
+      expect(refused.allowed).toBe(false);
+      expect(refused.refusal).toBe("USER_CAP");
+      expect(refused.reason).toMatch(
+        new RegExp(
+          `^${USER_CAP_REASON}: .*3 of its 3 Google Places calls this month`,
+        ),
+      );
+      // Monthly whatever the AI period is.
+      expect(refused.retryAt).toBe(nextMonthStart().toISOString());
+      // Spending Places leaves AI alone, and another person's month is theirs.
+      expect((await actor.reserveForModel(user, matchCall())).allowed).toBe(
+        true,
+      );
+      expect((await placesCall(other, 0)(actor)).allowed).toBe(true);
+
+      const page = await actor.myQuota(user, pageArgs({ first: 50 }));
+      expect(
+        page.entries.find((e) => e.node.kind === GOOGLE_PLACES_BUDGET_SERVICE)
+          ?.node,
+      ).toEqual({
+        kind: GOOGLE_PLACES_BUDGET_SERVICE,
+        used: 3,
+        limit: 3,
+        resetsAt: nextMonthStart().toISOString(),
+      });
+      // The AI rows still count the AI period (a week here), not Places'.
+      expect(
+        page.entries.find((e) => e.node.kind === "ai_model/menu_match")?.node
+          .used,
+      ).toBe(1);
+    });
+  });
+
+  it("F-230: a Places endpoint's own ten-days period no longer binds", async () => {
+    await withTestDb(async (db) => {
+      // 1/1 a day would be a period of ten under the old per-kind rule; the
+      // pooled allowance (5) is what binds now, and the rolling day is lifted
+      // here so only the month is in play.
+      await openPlaces(db);
+      const actor = await withEnv(
+        {
+          BUDGET_USER_CAPS: "google_places/autocomplete=50/50, google_places=5",
+        },
+        () => reactivate(db),
+      );
+      for (let i = 0; i < 5; i += 1) {
+        expect((await placesCall(user, 0)(actor)).allowed, `call ${i}`).toBe(
+          true,
+        );
+      }
+      expect((await placesCall(user, 0)(actor)).allowed).toBe(false);
+    });
+  });
+
+  it("myQuota refuses a caller with no viewer", async () => {
+    await withTestDb(async (db) => {
+      const actor = await reactivate(db);
+      await expect(
+        actor.myQuota(anonymous, pageArgs({ first: 10 })),
+      ).rejects.toBeInstanceOf(ForbiddenError);
+      await expect(
+        actor.myQuota(system, pageArgs({ first: 10 })),
+      ).rejects.toBeInstanceOf(ForbiddenError);
+    });
+  });
+});
+
+/**
  * Wave 6: the caps no longer depend on the singleton key.
  *
  * Two activations of `BudgetActor("singleton")` running at once is what a
@@ -1929,5 +2239,534 @@ describe.skipIf(skip)(
       ).toBe(true);
       expect(rows).toHaveLength(1);
     }, 30_000);
+  },
+);
+
+/*
+ * N07 / D17: a refusal says whose limit it was and when it clears, and a
+ * reservation whose call got no model response stops counting.
+ */
+describe.skipIf(skip)(
+  "typed refusals and released reservations (N07, D17)",
+  () => {
+    afterAll(closeTestDb);
+
+    const call = (
+      over: Partial<ModelReserveInput> = {},
+    ): ModelReserveInput => ({
+      seam: "menu_match",
+      provider: "vertex-ai",
+      model: "gemini-2.5-flash",
+      inputTokens: 1000,
+      outputTokens: 1000,
+      reservationId: `n07-${crypto.randomUUID()}`,
+      ...over,
+    });
+
+    const rowOf = async (db: DbOrTx, id: string | null) => {
+      const [row] = await db
+        .select()
+        .from(apiUsageLog)
+        .where(eq(apiUsageLog.id, id ?? ""));
+      return row;
+    };
+
+    it("nextMonthStart is the first instant of the following UTC month", () => {
+      expect(
+        nextMonthStart(new Date("2026-12-31T23:59:59.999Z")).toISOString(),
+      ).toBe("2027-01-01T00:00:00.000Z");
+      expect(
+        nextMonthStart(new Date("2026-10-07T12:00:00.000Z")).toISOString(),
+      ).toBe("2026-11-01T00:00:00.000Z");
+    });
+
+    it("a per-user refusal is USER_CAP, with when the window frees a slot", async () => {
+      await withTestDb(async (db) => {
+        const actor = await withEnv(
+          { BUDGET_USER_CAPS: "ai_model/menu_match=2/10" },
+          () => reactivate(db),
+        );
+        const first = await actor.reserveForModel(user, call());
+        await actor.reserveForModel(user, call());
+        const refused = await actor.reserveForModel(user, call());
+        expect(refused.allowed).toBe(false);
+        expect(refused.refusal).toBe("USER_CAP");
+
+        // The oldest of the two rows in the hour rolls off an hour after it
+        // was written; that is when the third call fits.
+        const oldest = await rowOf(db, first.usageId);
+        expect(Date.parse(refused.retryAt ?? "")).toBe(
+          (oldest?.createdAt?.getTime() ?? 0) + 3_600_000,
+        );
+
+        // `reserveForModel` itself never throws for a denial; the seam does,
+        // and an allow carries no refusal.
+        expect(first.refusal ?? null).toBeNull();
+      });
+    });
+
+    it("when the hour and the day are both full, retryAt waits for the day", async () => {
+      await withTestDb(async (db) => {
+        const actor = await withEnv(
+          { BUDGET_USER_CAPS: "ai_model/menu_match=2/2" },
+          () => reactivate(db),
+        );
+        const first = await actor.reserveForModel(user, call());
+        await actor.reserveForModel(user, call());
+        const refused = await actor.reserveForModel(user, call());
+        expect(refused.refusal).toBe("USER_CAP");
+        // The hour frees a slot an hour after the oldest row, but the day is
+        // still full then: the call fits only a day after it.
+        const oldest = await rowOf(db, first.usageId);
+        expect(Date.parse(refused.retryAt ?? "")).toBe(
+          (oldest?.createdAt?.getTime() ?? 0) + 86_400_000,
+        );
+      });
+    });
+
+    it("a monthly request cap is SERVICE_BUDGET, clearing when the month turns", async () => {
+      await withEnv({ AI_BUDGET_MAX_REQUESTS: "menu_match=1" }, async () => {
+        await withTestDb(async (db) => {
+          const actor = await activate(newBudgetActor(db));
+          await actor.reserveForModel(system, call());
+          const refused = await actor.reserveForModel(system, call());
+          expect(refused.allowed).toBe(false);
+          expect(refused.refusal).toBe("SERVICE_BUDGET");
+          expect(refused.retryAt).toBe(nextMonthStart().toISOString());
+        });
+      });
+    });
+
+    it("a disabled kind is SERVICE_BUDGET with no time that clears it", async () => {
+      await withTestDb(async (db) => {
+        const actor = await activate(newBudgetActor(db));
+        await actor.setBudget(admin, {
+          kind: { service: AI_MODEL_SERVICE, endpoint: "menu_match" },
+          monthlyBudgetCents: 100,
+          freeTierMonthlyRequests: 0,
+          isEnabled: false,
+        });
+        const refused = await actor.reserveForModel(system, call());
+        expect(refused).toMatchObject({
+          allowed: false,
+          refusal: "SERVICE_BUDGET",
+          retryAt: null,
+        });
+      });
+    });
+
+    it("reserveOrThrow carries the refusal onto BudgetExceededError", async () => {
+      await withTestDb(async (db) => {
+        const actor = await activate(newBudgetActor(db));
+        const error = await actor
+          .reserveOrThrow(system, {
+            kind: { service: fixtureService(), endpoint: "call" },
+            estimatedCostCents: 1,
+            reservationId: key(),
+          })
+          .catch((caught: unknown) => caught);
+        expect(error).toBeInstanceOf(BudgetExceededError);
+        expect(error).toMatchObject({
+          reason: "SERVICE_BUDGET",
+          retryAt: null,
+        });
+      });
+    });
+
+    it("a released reservation stops counting against the request cap", async () => {
+      await withEnv({ AI_BUDGET_MAX_REQUESTS: "menu_match=1" }, async () => {
+        await withTestDb(async (db) => {
+          const actor = await activate(newBudgetActor(db));
+          const unanswered = await actor.reserveForModel(system, call());
+          expect(unanswered.allowed).toBe(true);
+          await actor.releaseForModel(system, {
+            usageId: unanswered.usageId ?? "",
+            seam: "menu_match",
+          });
+          // The retry is free: the cap of one has not been used.
+          expect((await actor.reserveForModel(system, call())).allowed).toBe(
+            true,
+          );
+          expect((await actor.reserveForModel(system, call())).allowed).toBe(
+            false,
+          );
+
+          const row = await rowOf(db, unanswered.usageId);
+          expect(
+            (row?.metadata as Record<string, unknown> | undefined)?.released,
+          ).toBe(true);
+          const usage = await actor.usage(admin, {
+            from: monthStart().toISOString(),
+            to: new Date(Date.now() + 86_400_000).toISOString(),
+            service: AI_MODEL_SERVICE,
+            endpoint: "menu_match",
+          });
+          expect(usage.totalRequestCount).toBe(1);
+        });
+      });
+    });
+
+    it("a released reservation gives the caller's per-user slot back", async () => {
+      await withTestDb(async (db) => {
+        const actor = await withEnv(
+          { BUDGET_USER_CAPS: "ai_model/menu_match=1/10" },
+          () => reactivate(db),
+        );
+        const unanswered = await actor.reserveForModel(user, call());
+        await actor.releaseForModel(user, {
+          usageId: unanswered.usageId ?? "",
+          seam: "menu_match",
+        });
+        expect((await actor.reserveForModel(user, call())).allowed).toBe(true);
+        expect((await actor.reserveForModel(user, call())).refusal).toBe(
+          "USER_CAP",
+        );
+      });
+    });
+
+    it("re-derives a released paid row's cents so the carry never under-books", async () => {
+      await withTestDb(async (db) => {
+        const actor = await activate(newBudgetActor(db));
+        // 0.28 cents each (see "carries sub-cent prices"): the fourth books the
+        // cent all four crossed. Releasing that fourth one leaves 0.84 cents of
+        // real calls, so the month's booked cents may drop to zero — and must
+        // never drop below floor(sum(nanoCents) / 1e9).
+        const reserved = [];
+        for (let i = 0; i < 4; i += 1) {
+          reserved.push(await actor.reserveForModel(system, call()));
+        }
+        expect(reserved.map((r) => r.effectiveCostCents)).toEqual([0, 0, 0, 1]);
+        await actor.releaseForModel(system, {
+          usageId: reserved[3]?.usageId ?? "",
+          seam: "menu_match",
+        });
+        const [totals] = await db
+          .select({
+            cents: sql<string>`sum(${apiUsageLog.estimatedCostCents})`,
+            nano: sql<string>`sum((${apiUsageLog.metadata} ->> 'nanoCents')::numeric)`,
+          })
+          .from(apiUsageLog)
+          .where(
+            and(
+              eq(apiUsageLog.service, AI_MODEL_SERVICE),
+              eq(apiUsageLog.endpoint, "menu_match"),
+            ),
+          );
+        expect(Number(totals?.cents)).toBeGreaterThanOrEqual(
+          Math.floor(Number(totals?.nano) / NANOCENTS_PER_CENT),
+        );
+        expect(Number(totals?.nano)).toBe(3 * 280_000_000);
+      });
+    });
+
+    it("keepCost gives back the allowance but leaves the money booked", async () => {
+      await withEnv({ AI_BUDGET_MAX_REQUESTS: "menu_match=4" }, async () => {
+        await withTestDb(async (db) => {
+          const actor = await activate(newBudgetActor(db));
+          const reserved = [];
+          for (let i = 0; i < 4; i += 1) {
+            reserved.push(await actor.reserveForModel(system, call()));
+          }
+          // A timeout: the provider may have run (and billed) it.
+          await actor.releaseForModel(system, {
+            usageId: reserved[3]?.usageId ?? "",
+            seam: "menu_match",
+            keepCost: true,
+          });
+          const row = await rowOf(db, reserved[3]?.usageId ?? null);
+          expect(row?.metadata).toMatchObject({
+            released: true,
+            nanoCents: 280_000_000,
+          });
+          expect(row?.estimatedCostCents).toBe(1);
+          // The request cap of four has a slot again.
+          expect((await actor.reserveForModel(system, call())).allowed).toBe(
+            true,
+          );
+          expect((await actor.reserveForModel(system, call())).allowed).toBe(
+            false,
+          );
+        });
+      });
+    });
+
+    it("is idempotent, and never releases a call that was settled", async () => {
+      await withTestDb(async (db) => {
+        const actor = await activate(newBudgetActor(db));
+        const answered = await actor.reserveForModel(system, call());
+        await actor.settleForModel(system, {
+          usageId: answered.usageId ?? "",
+          seam: "menu_match",
+          provider: "vertex-ai",
+          model: "gemini-2.5-flash",
+          inputTokens: 10,
+          outputTokens: 10,
+        });
+        await actor.releaseForModel(system, {
+          usageId: answered.usageId ?? "",
+          seam: "menu_match",
+        });
+        const settled = await rowOf(db, answered.usageId);
+        expect(
+          (settled?.metadata as Record<string, unknown> | undefined)?.released,
+        ).toBeUndefined();
+
+        const unanswered = await actor.reserveForModel(system, call());
+        const release = () =>
+          actor.releaseForModel(system, {
+            usageId: unanswered.usageId ?? "",
+            seam: "menu_match",
+          });
+        await release();
+        await release();
+        const released = await rowOf(db, unanswered.usageId);
+        expect(
+          (released?.metadata as Record<string, unknown> | undefined)?.released,
+        ).toBe(true);
+      });
+    });
+
+    it("refuses another endpoint's row, a missing row and a non-seam", async () => {
+      await withTestDb(async (db) => {
+        const actor = await activate(newBudgetActor(db));
+        const reserved = await actor.reserveForModel(system, call());
+        await expect(
+          actor.releaseForModel(system, {
+            usageId: reserved.usageId ?? "",
+            seam: "embedding",
+          }),
+        ).rejects.toBeInstanceOf(ForbiddenError);
+        await expect(
+          actor.releaseForModel(system, {
+            usageId: crypto.randomUUID(),
+            seam: "menu_match",
+          }),
+        ).rejects.toBeInstanceOf(NotFoundError);
+        await expect(
+          actor.releaseForModel(system, {
+            usageId: reserved.usageId ?? "",
+            seam: "summarise_everything",
+          }),
+        ).rejects.toBeInstanceOf(ForbiddenError);
+        await expect(
+          actor.releaseForModel(anonymous, {
+            usageId: reserved.usageId ?? "",
+            seam: "menu_match",
+          }),
+        ).rejects.toBeInstanceOf(ForbiddenError);
+      });
+    });
+  },
+);
+
+/* -------------------------------------------------------------------------- */
+/* D16: one paid allowance for all of Google Places                            */
+/* -------------------------------------------------------------------------- */
+
+describe("Google Places paid allowance: parsing and the rule (D16)", () => {
+  it("defaults to about $5 beyond the free tier, and reads whole cents", () => {
+    expect(DEFAULT_GOOGLE_PLACES_MONTHLY_PAID_CENTS).toBe(500);
+    expect(parseGooglePlacesPaidCents(undefined)).toBe(500);
+    expect(parseGooglePlacesPaidCents("  ")).toBe(500);
+    expect(parseGooglePlacesPaidCents("0")).toBe(0);
+    expect(parseGooglePlacesPaidCents(" 750 ")).toBe(750);
+    for (const bad of ["-1", "5.5", "five", "1e3", "9".repeat(20)]) {
+      expect(() => parseGooglePlacesPaidCents(bad), bad).toThrow(
+        ValidationError,
+      );
+    }
+  });
+
+  it("is part of the boot-checked policy, so a malformed value stops the boot", () => {
+    expect(
+      readModelBudgetPolicy({ GOOGLE_PLACES_MONTHLY_PAID_CENTS: "" }),
+    ).toMatchObject({ googlePlacesMonthlyPaidCents: 500 });
+    expect(
+      readModelBudgetPolicy({ GOOGLE_PLACES_MONTHLY_PAID_CENTS: "120" }),
+    ).toMatchObject({ googlePlacesMonthlyPaidCents: 120 });
+    expect(() =>
+      readModelBudgetPolicy({ GOOGLE_PLACES_MONTHLY_PAID_CENTS: "lots" }),
+    ).toThrow(ValidationError);
+  });
+
+  it("allows up to the allowance and refuses the call that would cross it", () => {
+    const at = (servicePaidCents: number, cost: number, poolCents = 500) =>
+      googlePlacesPoolRefusal(
+        { servicePaidCents, cost, poolCents },
+        "google_places/place_details",
+      );
+    expect(at(0, 3)).toBeNull();
+    expect(at(497, 3)).toBeNull();
+    expect(at(498, 3)).toMatch(/paid allowance exhausted: 498 of 500/);
+    expect(at(0, 3, 0)).toMatch(/GOOGLE_PLACES_MONTHLY_PAID_CENTS=0/);
+  });
+});
+
+describe.skipIf(skip)(
+  "Google Places paid allowance against Postgres (D16)",
+  () => {
+    /** What Google Places has booked this month in this database already. */
+    const servicePaid = async (db: DbOrTx): Promise<number> => {
+      const [row] = await db
+        .select({
+          cents: sql<string>`coalesce(sum(${apiUsageLog.estimatedCostCents}), 0)`,
+        })
+        .from(apiUsageLog)
+        .where(
+          and(
+            eq(apiUsageLog.service, GOOGLE_PLACES_BUDGET_SERVICE),
+            sql`${apiUsageLog.createdAt} >= date_trunc('month', now(), 'UTC')`,
+          ),
+        );
+      return Number(row?.cents ?? 0);
+    };
+
+    /** Rows in this rolled-back transaction only; production's stay untouched. */
+    const freeTierOnly = async (
+      actor: BudgetActor,
+      endpoint: string,
+      freeTierMonthlyRequests = 0,
+    ) =>
+      actor.setBudget(admin, {
+        kind: { service: GOOGLE_PLACES_BUDGET_SERVICE, endpoint },
+        monthlyBudgetCents: 0,
+        freeTierMonthlyRequests,
+        isEnabled: true,
+      });
+
+    const reserve = (actor: BudgetActor, endpoint: string, cents: number) =>
+      actor.reserve(
+        system,
+        call({
+          kind: { service: GOOGLE_PLACES_BUDGET_SERVICE, endpoint },
+          estimatedCostCents: cents,
+        }),
+      );
+
+    it("past the free tier, every endpoint draws on one shared allowance until it is spent", async () => {
+      await withTestDb(async (db) => {
+        const baseline = await servicePaid(db);
+        await withEnv(
+          { GOOGLE_PLACES_MONTHLY_PAID_CENTS: String(baseline + 5) },
+          async () => {
+            const setup = await activate(newBudgetActor(db));
+            await freeTierOnly(setup, "place_details");
+            await freeTierOnly(setup, "photo");
+            const actor = await reactivate(db);
+
+            const details = await reserve(actor, "place_details", 3);
+            expect(details.allowed).toBe(true);
+            expect(details.effectiveCostCents).toBe(3);
+
+            expect((await reserve(actor, "photo", 1)).allowed).toBe(true);
+            expect((await reserve(actor, "photo", 1)).allowed).toBe(true);
+
+            // 5 of 5 spent, across two endpoints: the next call on either is out.
+            const over = await reserve(actor, "photo", 1);
+            expect(over.allowed).toBe(false);
+            expect(over.usageId).toBeNull();
+            expect(over.reason).toMatch(/paid allowance exhausted/);
+            // N07: typed like every other monthly service limit.
+            expect(over.refusal).toBe("SERVICE_BUDGET");
+            expect(over.retryAt).toBe(nextMonthStart().toISOString());
+            const overDetails = await reserve(actor, "place_details", 3);
+            expect(overDetails.allowed).toBe(false);
+          },
+        );
+      });
+    });
+
+    it("free-tier calls cost the allowance nothing", async () => {
+      await withTestDb(async (db) => {
+        const baseline = await servicePaid(db);
+        await withEnv(
+          { GOOGLE_PLACES_MONTHLY_PAID_CENTS: String(baseline + 3) },
+          async () => {
+            const setup = await activate(newBudgetActor(db));
+            await freeTierOnly(setup, "place_details", 2);
+            const actor = await reactivate(db);
+
+            for (let i = 0; i < 2; i += 1) {
+              const free = await reserve(actor, "place_details", 3);
+              expect(free.allowed).toBe(true);
+              expect(free.effectiveCostCents).toBe(0);
+            }
+            const paid = await reserve(actor, "place_details", 3);
+            expect(paid.allowed).toBe(true);
+            expect(paid.effectiveCostCents).toBe(3);
+            expect((await reserve(actor, "place_details", 3)).allowed).toBe(
+              false,
+            );
+          },
+        );
+      });
+    });
+
+    it("an allowance of 0 is free tier only, as before D16", async () => {
+      await withTestDb(async (db) => {
+        await withEnv({ GOOGLE_PLACES_MONTHLY_PAID_CENTS: "0" }, async () => {
+          const setup = await activate(newBudgetActor(db));
+          await freeTierOnly(setup, "nearby_search", 1);
+          const actor = await reactivate(db);
+          expect((await reserve(actor, "nearby_search", 4)).allowed).toBe(true);
+          const over = await reserve(actor, "nearby_search", 4);
+          expect(over.allowed).toBe(false);
+          expect(over.reason).toMatch(/free tier exhausted/);
+        });
+      });
+    });
+
+    it("an endpoint with its own paid budget still stops at it, inside the allowance", async () => {
+      await withTestDb(async (db) => {
+        const baseline = await servicePaid(db);
+        await withEnv(
+          { GOOGLE_PLACES_MONTHLY_PAID_CENTS: String(baseline + 100) },
+          async () => {
+            const setup = await activate(newBudgetActor(db));
+            await setup.setBudget(admin, {
+              kind: {
+                service: GOOGLE_PLACES_BUDGET_SERVICE,
+                endpoint: "text_search",
+              },
+              monthlyBudgetCents: 4,
+              freeTierMonthlyRequests: 0,
+              isEnabled: true,
+            });
+            const actor = await reactivate(db);
+            expect((await reserve(actor, "text_search", 4)).allowed).toBe(true);
+            const over = await reserve(actor, "text_search", 4);
+            expect(over.allowed).toBe(false);
+            expect(over.reason).toMatch(/monthly budget exhausted/);
+          },
+        );
+      });
+    });
+
+    it("services other than Google Places are untouched by the allowance", async () => {
+      await withTestDb(async (db) => {
+        await withEnv(
+          { GOOGLE_PLACES_MONTHLY_PAID_CENTS: "1000" },
+          async () => {
+            const service = fixtureService();
+            const actor = await activate(newBudgetActor(db));
+            await actor.setBudget(admin, {
+              kind: { service, endpoint: "call" },
+              monthlyBudgetCents: 0,
+              freeTierMonthlyRequests: 0,
+              isEnabled: true,
+            });
+            const result = await actor.reserve(
+              system,
+              call({
+                kind: { service, endpoint: "call" },
+                estimatedCostCents: 1,
+              }),
+            );
+            expect(result.allowed).toBe(false);
+            expect(result.reason).toMatch(/no paid budget is configured/);
+          },
+        );
+      });
+    });
   },
 );

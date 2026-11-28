@@ -9,24 +9,63 @@
  * verification off in development.
  */
 
-import {
-  Box,
-  Button,
-  Divider,
-  FormControl,
-  FormHelperText,
-  FormLabel,
-  Input,
-  Sheet,
-  Stack,
-  Typography,
-} from "@mui/joy";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { type FormEvent, useCallback, useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Spinner } from "@/components/ui/spinner";
+import { PressLink } from "@/components/user/PressLink";
+import { usePurgeUserCachesOnMount } from "@/hooks/usePurgeUserCachesOnMount";
 import { authClient, useAuthAction } from "@/lib/api/auth-client";
 import type { PasswordMode } from "@/lib/auth/password-mode";
+import { feedback } from "@/lib/feedback";
+import { HOME_PATH, withReturnTo } from "@/utilities/sanitize-return-to";
+import {
+  AuthBack,
+  AuthField,
+  AuthPage,
+  AuthPanel,
+  WordDivider,
+} from "./AuthCard";
 import { SocialButtons, useSocialSignIn } from "./SocialButtons";
+import { useLanding } from "./useLanding";
+
+/** "Have an account? Sign in", under both versions of the form. */
+function SignInInstead({ returnTo }: { returnTo?: string }) {
+  return (
+    <p className="t-body m-0 text-center text-ink-2">
+      Have an account?{" "}
+      <PressLink
+        href={withReturnTo("/sign-in", returnTo)}
+        underline="always"
+        className="font-semibold text-act-ink"
+      >
+        Sign in
+      </PressLink>
+    </p>
+  );
+}
+
+/** Back, the title, then the providers: the head of both versions. */
+function SignUpHead({ returnTo, busy }: { returnTo?: string; busy?: boolean }) {
+  const { ssoError, redirectingTo, start } = useSocialSignIn(
+    returnTo ?? HOME_PATH,
+  );
+  return (
+    <>
+      <AuthBack
+        href={withReturnTo("/sign-in", returnTo)}
+        title="Create an account"
+      />
+      <div className="flex flex-col gap-2">
+        <SocialButtons
+          busy={busy === true || redirectingTo !== null}
+          redirectingTo={redirectingTo}
+          ssoError={ssoError}
+          onSelect={(provider) => void start(provider)}
+        />
+      </div>
+    </>
+  );
+}
 
 /**
  * The actor host's floor — `minPasswordLength: 9` in
@@ -51,61 +90,41 @@ const EMAIL_SHAPED = /[^\s@]+@[^\s@]+\.[^\s@]+/;
  * creates the account on a new user's first social sign-in.
  */
 export function SignUpApiClient({
+  returnTo,
   passwordMode = "enabled",
 }: {
+  /** Already sanitised by the page; where the viewer was going (D19). */
+  returnTo?: string;
   passwordMode?: PasswordMode;
 }) {
-  if (passwordMode !== "enabled") return <SocialSignUp />;
-  return <PasswordSignUp />;
+  usePurgeUserCachesOnMount();
+  if (passwordMode !== "enabled") return <SocialSignUp returnTo={returnTo} />;
+  return <PasswordSignUp returnTo={returnTo} />;
 }
 
-function SocialSignUp() {
-  const { ssoError, redirectingTo, start } = useSocialSignIn("/cellars");
+function SocialSignUp({ returnTo }: { returnTo?: string }) {
   return (
-    <Box
-      sx={{
-        display: "flex",
-        justifyContent: "center",
-        alignItems: "center",
-        flexGrow: 1,
-      }}
-    >
-      <Sheet
-        variant="outlined"
-        sx={{
-          width: { xs: "100%", sm: "400px" },
-          maxWidth: "400px",
-          display: "flex",
-          flexDirection: "column",
-          padding: 3,
-          margin: 2,
-          borderRadius: "lg",
-        }}
-      >
-        <Stack gap={2}>
-          <Typography level="h3">Sign up for Cellar Assistant</Typography>
-          <Stack gap={1}>
-            <SocialButtons
-              busy={redirectingTo !== null}
-              redirectingTo={redirectingTo}
-              ssoError={ssoError}
-              onSelect={(provider) => void start(provider)}
-            />
-          </Stack>
-          <Divider />
-          <Typography level="body-sm">
-            Already have an account? <Link href="/sign-in">Sign in</Link>
-          </Typography>
-        </Stack>
-      </Sheet>
-    </Box>
+    <AuthPage>
+      <AuthPanel>
+        <SignUpHead returnTo={returnTo} />
+        <WordDivider />
+        <SignInInstead returnTo={returnTo} />
+      </AuthPanel>
+    </AuthPage>
   );
 }
 
-function PasswordSignUp() {
-  const router = useRouter();
+function PasswordSignUp({ returnTo }: { returnTo?: string }) {
+  const destination = returnTo ?? HOME_PATH;
+  const { land, landing } = useLanding(destination);
   const [localError, setLocalError] = useState<string | null>(null);
-  const { run, pending, error } = useAuthAction(authClient.signUp.email);
+  const {
+    run,
+    pending: requesting,
+    error,
+  } = useAuthAction(authClient.signUp.email);
+  // Through the request and on until the next page commits (X01).
+  const pending = requesting || landing;
 
   const handleSubmit = useCallback(
     async (event: FormEvent<HTMLFormElement>) => {
@@ -114,101 +133,75 @@ function PasswordSignUp() {
       const form = new FormData(event.currentTarget);
       const password = String(form.get("password") ?? "");
       if (password.length < MIN_PASSWORD_LENGTH) {
-        setLocalError(
-          `Password must be at least ${MIN_PASSWORD_LENGTH} characters.`,
-        );
+        feedback("refuse");
+        setLocalError(`Needs ${MIN_PASSWORD_LENGTH} or more characters`);
         return;
       }
       const email = String(form.get("email") ?? "");
       const name = String(form.get("name") ?? "").trim();
       if (EMAIL_SHAPED.test(name)) {
-        setLocalError(
-          "Your display name is shown to other users, so it can't be an email address.",
-        );
+        feedback("refuse");
+        setLocalError("Friends see your name, so it can't be an email");
         return;
       }
       // Blank stays blank: the server gives a neutral handle. It used to send
       // the email here, which made every such address public (W4 security F2).
-      const ok = await run({ email, password, name });
-      if (!ok) return;
-      router.replace("/cellars");
-      router.refresh();
+      await run({ email, password, name }, land);
     },
-    [run, router],
+    [run, land],
   );
 
   const formError = localError ?? error?.message ?? null;
 
   return (
-    <Box
-      sx={{
-        display: "flex",
-        justifyContent: "center",
-        alignItems: "center",
-        flexGrow: 1,
-      }}
-    >
-      <Sheet
-        variant="outlined"
-        sx={{
-          width: { xs: "100%", sm: "400px" },
-          maxWidth: "400px",
-          display: "flex",
-          flexDirection: "column",
-          padding: 3,
-          margin: 2,
-          borderRadius: "lg",
-        }}
-      >
-        <form onSubmit={handleSubmit}>
-          <Stack gap={2}>
-            <Typography level="h3">Sign up for Cellar Assistant</Typography>
-            <FormControl>
-              <FormLabel>Display name</FormLabel>
-              <Input
-                name="name"
-                autoComplete="nickname"
-                placeholder="Optional"
-                disabled={pending}
-              />
-              <FormHelperText>
-                Shown to other users. Leave it blank and you'll get a neutral
-                handle you can change later — your email is never shown.
-              </FormHelperText>
-            </FormControl>
-            <FormControl required error={formError !== null}>
-              <FormLabel>Email</FormLabel>
-              <Input
-                type="email"
-                name="email"
-                autoComplete="email"
-                required
-                disabled={pending}
-              />
-            </FormControl>
-            <FormControl required error={formError !== null}>
-              <FormLabel>Password</FormLabel>
-              <Input
-                type="password"
-                name="password"
-                autoComplete="new-password"
-                required
-                disabled={pending}
-              />
-              {formError !== null && (
-                <FormHelperText>{formError}</FormHelperText>
-              )}
-            </FormControl>
-            <Button loading={pending} type="submit" sx={{ mt: 1 }}>
-              Sign up
-            </Button>
-            <Divider />
-            <Typography level="body-sm">
-              Already have an account? <Link href="/sign-in">Sign in</Link>
-            </Typography>
-          </Stack>
+    <AuthPage>
+      <AuthPanel>
+        <SignUpHead returnTo={returnTo} busy={pending} />
+        <WordDivider>or</WordDivider>
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+          <AuthField
+            id="sign-up-name"
+            label="Name"
+            optional
+            name="name"
+            autoComplete="nickname"
+            disabled={pending}
+            description="Friends see this, never your email"
+          />
+          <AuthField
+            id="sign-up-email"
+            label="Email"
+            type="email"
+            name="email"
+            autoComplete="email"
+            required
+            invalid={formError !== null}
+            disabled={pending}
+          />
+          <AuthField
+            id="sign-up-password"
+            label="Password"
+            type="password"
+            name="password"
+            autoComplete="new-password"
+            required
+            invalid={formError !== null}
+            message={formError}
+            description={`${MIN_PASSWORD_LENGTH} or more characters`}
+            disabled={pending}
+          />
+          <Button
+            type="submit"
+            disabled={pending}
+            aria-busy={pending || undefined}
+            className="mt-1"
+          >
+            {pending && <Spinner aria-hidden />}
+            Create account
+          </Button>
         </form>
-      </Sheet>
-    </Box>
+        <SignInInstead returnTo={returnTo} />
+      </AuthPanel>
+    </AuthPage>
   );
 }

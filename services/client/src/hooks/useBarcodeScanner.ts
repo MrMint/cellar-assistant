@@ -5,6 +5,7 @@ import {
 } from "barcode-detector/ponyfill";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { type Barcode, BarcodeType } from "@/constants";
+import { createStreamGate, stopStream } from "@/lib/camera/stream-gate";
 
 // Self-hosted zxing-wasm reader, served same-origin so it works under the
 // app's strict CSP (connect-src 'self') and offline (PWA). The file is copied
@@ -59,6 +60,26 @@ const formatMap: Record<string, BarcodeType> = {
 interface UseBarcodeScannerOptions {
   onDetect: (barcode: Barcode) => void;
   constraints?: MediaStreamConstraints;
+  /**
+   * X05's one camera: a read pauses detection but keeps the stream, so the
+   * same viewfinder goes on to photograph the label. The default (`false`)
+   * is the scanner's old behaviour — the stream stops on the first read.
+   */
+  keepStream?: boolean;
+  /**
+   * Where to look: the old centre band (`"band"`, the barcode step and
+   * search, which draw a frame there), or the whole picture (`"full"`, the
+   * capture camera, where the barcode is wherever the bottle's back is).
+   */
+  region?: "band" | "full";
+  /**
+   * Run detection at most this often. A full 1080p frame through the WASM
+   * reader every animation frame is wasted battery on a phone; the capture
+   * camera asks every ~250 ms. `0` (the default): every frame, as before.
+   */
+  intervalMs?: number;
+  /** `false`: the stream runs but nothing is decoded (no barcode wanted). */
+  detect?: boolean;
 }
 
 interface UseBarcodeScannerReturn {
@@ -66,12 +87,21 @@ interface UseBarcodeScannerReturn {
   isSupported: boolean;
   isStreaming: boolean;
   error: string | null;
+  /** The `getUserMedia` failure itself (its `name` says why) — N04. */
+  failure: unknown;
   startScanning: () => Promise<void>;
   stopScanning: () => void;
   toggleTorch: () => Promise<void>;
   torchSupported: boolean;
   torchEnabled: boolean;
   usingNativeAPI: boolean;
+  /**
+   * The current frame as a JPEG data URL, at the stream's full size — the
+   * capture camera's shutter. `null` before the video has a frame.
+   */
+  captureFrame: () => string | null;
+  /** After a `keepStream` read: look for a barcode again. */
+  resumeDetection: () => void;
 }
 
 export const useBarcodeScanner = ({
@@ -83,12 +113,17 @@ export const useBarcodeScanner = ({
       facingMode: "environment",
     },
   },
+  keepStream = false,
+  region = "band",
+  intervalMs = 0,
+  detect = true,
 }: UseBarcodeScannerOptions): UseBarcodeScannerReturn => {
   // State
   const [isReady, setIsReady] = useState(false);
   const [usingNativeAPI, setUsingNativeAPI] = useState(false);
   const [isStreaming, setIsStreaming] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [failure, setFailure] = useState<unknown>(null);
   const [torchSupported, setTorchSupported] = useState(false);
   const [torchEnabled, setTorchEnabled] = useState(false);
 
@@ -100,6 +135,17 @@ export const useBarcodeScanner = ({
   const animationFrameRef = useRef<number | undefined>(undefined);
   const canvasRef = useRef<HTMLCanvasElement | undefined>(undefined);
   const detectBarcodesRef = useRef<(() => void) | undefined>(undefined);
+  const detectTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(
+    undefined,
+  );
+  // A `keepStream` read pauses the loop without stopping the stream.
+  const pausedRef = useRef(false);
+  // Read when the stream starts, which is not a render.
+  const detectRef = useRef(detect);
+  detectRef.current = detect;
+  // Which getUserMedia request is still wanted: a stream that answers after
+  // Try again or Skip is stopped instead of adopted (`stream-gate.ts`).
+  const gateRef = useRef(createStreamGate());
 
   // Select the detector once on mount: native `BarcodeDetector` first (fast,
   // OS-accelerated, zero-download on Chrome/Edge/Android), the WASM ponyfill as
@@ -162,14 +208,16 @@ export const useBarcodeScanner = ({
 
   // Stop scanning function
   const stopScanning = useCallback(() => {
+    // Voids a request still pending, so its stream is stopped on arrival.
+    gateRef.current.cancel();
+
     if (animationFrameRef.current) {
       cancelAnimationFrame(animationFrameRef.current);
     }
+    clearTimeout(detectTimerRef.current);
 
     if (streamRef.current) {
-      for (const track of streamRef.current.getTracks()) {
-        track.stop();
-      }
+      stopStream(streamRef.current);
       streamRef.current = null;
     }
 
@@ -182,11 +230,26 @@ export const useBarcodeScanner = ({
     isInitializedRef.current = false; // Reset initialization state when stopping
   }, []);
 
+  /** The next pass: the next frame, or after `intervalMs` when throttled. */
+  const scheduleNext = useCallback(() => {
+    const next = () => {
+      animationFrameRef.current = requestAnimationFrame(() =>
+        detectBarcodesRef.current?.(),
+      );
+    };
+    if (intervalMs > 0) {
+      detectTimerRef.current = setTimeout(next, intervalMs);
+    } else {
+      next();
+    }
+  }, [intervalMs]);
+
   // Barcode detection loop (drives both native and WASM detectors)
   const detectBarcodes = useCallback(async () => {
     if (!videoRef.current || !detectorRef.current || !canvasRef.current) {
       return;
     }
+    if (pausedRef.current) return;
 
     const video = videoRef.current;
     const canvas = canvasRef.current;
@@ -206,11 +269,13 @@ export const useBarcodeScanner = ({
     // Draw current video frame to canvas
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-    // Focus detection on the center region
-    const centerX = canvas.width * 0.15;
-    const centerY = canvas.height * 0.35;
-    const regionWidth = canvas.width * 0.7;
-    const regionHeight = canvas.height * 0.3;
+    // Focus detection on the center region — or, for the capture camera,
+    // the whole frame.
+    const full = region === "full";
+    const centerX = full ? 0 : canvas.width * 0.15;
+    const centerY = full ? 0 : canvas.height * 0.35;
+    const regionWidth = full ? canvas.width : canvas.width * 0.7;
+    const regionHeight = full ? canvas.height : canvas.height * 0.3;
 
     // Create a smaller canvas for the detection region
     const regionCanvas = document.createElement("canvas");
@@ -245,13 +310,22 @@ export const useBarcodeScanner = ({
         const detectedBarcode = barcodes[0];
         const barcodeType = formatMap[detectedBarcode.format];
 
+        // Stopped (or paused) while this frame was being decoded: the read
+        // belongs to nobody now.
+        if (pausedRef.current) return;
+
         onDetect({
           text: detectedBarcode.rawValue,
           type: barcodeType,
         });
 
-        // Stop scanning after successful detection
-        stopScanning();
+        if (keepStream) {
+          // X05: the viewfinder stays live for the label photo.
+          pausedRef.current = true;
+        } else {
+          // Stop scanning after successful detection
+          stopScanning();
+        }
         return;
       }
     } catch (_err) {
@@ -259,10 +333,8 @@ export const useBarcodeScanner = ({
     }
 
     // Continue scanning
-    animationFrameRef.current = requestAnimationFrame(() =>
-      detectBarcodesRef.current?.(),
-    );
-  }, [onDetect, stopScanning]);
+    scheduleNext();
+  }, [onDetect, stopScanning, keepStream, region, scheduleNext]);
 
   // Update the ref with the latest detectBarcodes function
   detectBarcodesRef.current = detectBarcodes;
@@ -274,12 +346,18 @@ export const useBarcodeScanner = ({
   const startScanning = useCallback(async () => {
     if (!detectorRef.current || isInitializedRef.current) return; // Wait for detector and prevent double init
 
+    const gate = gateRef.current;
+    const ticket = gate.begin();
     try {
       setError(null);
+      setFailure(null);
       isInitializedRef.current = true;
 
       const stream =
         await navigator.mediaDevices.getUserMedia(stableConstraints);
+      // Stopped (Skip, unmount) or superseded (Try again) while the camera
+      // was being asked: this stream is nobody's, so it is stopped here.
+      if (!gate.adopt(ticket, stream)) return;
       streamRef.current = stream;
 
       if (videoRef.current) {
@@ -295,6 +373,10 @@ export const useBarcodeScanner = ({
           }
         });
 
+        // Stopped while the video was loading: `stopScanning` has already
+        // stopped this stream's tracks; do not start detecting on it.
+        if (!gate.isCurrent(ticket)) return;
+
         setIsStreaming(true);
 
         // Check for torch support
@@ -305,10 +387,14 @@ export const useBarcodeScanner = ({
         setTorchSupported(!!capabilities?.torch);
 
         // Start barcode detection
+        pausedRef.current = !detectRef.current;
         detectBarcodesRef.current?.();
       }
     } catch (err) {
+      // A refusal for a request nobody wants any more says nothing now.
+      if (!gate.isCurrent(ticket)) return;
       setError(err instanceof Error ? err.message : "Failed to start camera");
+      setFailure(err ?? new Error("Failed to start camera"));
       setIsStreaming(false);
       isInitializedRef.current = false; // Reset initialization state on error
     }
@@ -333,6 +419,31 @@ export const useBarcodeScanner = ({
     }
   }, [torchSupported, torchEnabled]);
 
+  const captureFrame = useCallback((): string | null => {
+    const video = videoRef.current;
+    if (video === null || video.videoWidth === 0) return null;
+    const canvas = document.createElement("canvas");
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext("2d");
+    if (ctx === null) return null;
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    return canvas.toDataURL("image/jpeg", 0.92);
+  }, []);
+
+  const resumeDetection = useCallback(() => {
+    if (!pausedRef.current || streamRef.current === null) return;
+    pausedRef.current = false;
+    detectBarcodesRef.current?.();
+  }, []);
+
+  // `detect` switched on a running stream (a barcode cleared, a mode
+  // changed): look again; switched off: stop looking, keep the picture.
+  useEffect(() => {
+    if (detect) resumeDetection();
+    else pausedRef.current = true;
+  }, [detect, resumeDetection]);
+
   // Cleanup on unmount
   useEffect(() => {
     return () => {
@@ -345,11 +456,14 @@ export const useBarcodeScanner = ({
     isSupported: isReady,
     isStreaming,
     error,
+    failure,
     startScanning,
     stopScanning,
     toggleTorch,
     torchSupported,
     torchEnabled,
     usingNativeAPI,
+    captureFrame,
+    resumeDetection,
   };
 };

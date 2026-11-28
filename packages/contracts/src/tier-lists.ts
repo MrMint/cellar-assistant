@@ -48,8 +48,10 @@
 import type { ActorDescriptor } from "./actors.ts";
 import type { Ctx } from "./ctx.ts";
 import type { PermissionType } from "./enums.ts";
+import type { ActorErrorReason } from "./errors.ts";
 import { ITEM_TYPES, type ItemType } from "./items.ts";
 import type { Page, PageArgs } from "./page.ts";
+import type { SharedTierListDto } from "./share.ts";
 
 /* -------------------------------------------------------------------------- */
 /* The wider entry type — items, plus places                                   */
@@ -87,6 +89,25 @@ export type TierListEntryRef = {
 export const MIN_BAND = 0;
 export const MAX_BAND = 5;
 
+export { bandForScore } from "./bands.ts";
+
+/**
+ * `tier_lists.list_type` (free text: `'place'`, `'wine'`, …) → the entry type
+ * its entries carry, or `null` for a value that names none. Every list made
+ * through the app carries one of the seven; an older free-text value is not
+ * guessed at.
+ */
+export const entryTypeOfListType = (
+  listType: string,
+): TierListEntryType | null => {
+  const upper = listType.trim().toUpperCase();
+  return isTierListEntryType(upper) ? upper : null;
+};
+
+/** The inverse: `WINE` → `'wine'`. */
+export const listTypeOfEntryType = (type: TierListEntryType): string =>
+  type.toLowerCase();
+
 /* -------------------------------------------------------------------------- */
 /* Wire shapes                                                                 */
 /* -------------------------------------------------------------------------- */
@@ -99,9 +120,16 @@ export type TierListDto = {
   readonly privacy: PermissionType;
   /** `tier_lists.list_type` — free text (`'place'` by default), not an enum. */
   readonly listType: string;
-  readonly isEditingLocked: boolean;
   /** Cheap: `loadAggregate` reads every `tier_list_items` row on activate. */
   readonly itemCount: number;
+  /**
+   * F-85: how many entries sit in each band, indexed by band — `[0]` the
+   * bottom band (`MIN_BAND`), `[5]` the top (`MAX_BAND`) — always six long.
+   * Counts the same entries `itemCount` does (an entry for a place under
+   * review is its creator's alone, X27), so the six add up to `itemCount`
+   * however many entries the list holds, past any page of `items`.
+   */
+  readonly bandCounts: readonly number[];
   /** `ai_insights`, `generateInsights`'s output. `null` until first generated. */
   readonly aiInsights: Record<string, unknown> | null;
   readonly insightsGeneratedAt: string | null;
@@ -112,10 +140,57 @@ export type TierListDto = {
    * `tier_list_items_content_changed` trigger it used to be.
    */
   readonly contentUpdatedAt: string;
+  /**
+   * N07: where this list's generated insights stand, decided by the actor
+   * from what it knows (`tierListInsightsStatus` in
+   * `services/actors/src/lib/tier-list-insights-status.ts`). A client renders
+   * this rather than inferring "generating" from `aiInsights === null`,
+   * which is how a list whose generation could never happen showed
+   * "Generating Insights" forever.
+   */
+  readonly insightsStatus: TierListInsightsStatus;
+  /**
+   * Why the latest attempt failed (`FAILED`), when the actor recorded a
+   * reason — `AI_UNCONFIGURED`, `USER_CAP`, `SERVICE_BUDGET`,
+   * `NOTHING_READ`. `null` otherwise.
+   */
+  readonly insightsFailureReason: ActorErrorReason | null;
+  /**
+   * When the next attempt can or will happen: the budget window's `retryAt`
+   * on a `FAILED` refusal, or the end of the once-a-day throttle on a
+   * `PENDING` refresh. `null` when there is no such time.
+   */
+  readonly insightsRetryAt: string | null;
   /** See the module doc: nullable in the live schema, unlike `cellars`. */
   readonly createdAt: string | null;
   readonly updatedAt: string | null;
 };
+
+/**
+ * N07's states for a tier list's generated insights.
+ *
+ * - `NOT_ENOUGH_ENTRIES` — fewer entries than insights need; nothing runs.
+ * - `UNAVAILABLE` — this deployment has no AI provider (and no earlier
+ *   insights to show); nothing will run until one is configured.
+ * - `PENDING` — asked for and not yet answered: queued, generating, retrying
+ *   or waiting out the once-a-day throttle (`insightsRetryAt`).
+ * - `FAILED` — the latest attempt failed (`insightsFailureReason`).
+ * - `READY` — `aiInsights` holds the latest answer.
+ * - `IDLE` — enough entries, nothing generated and nothing asked for (a list
+ *   last changed before insights were requested on change). The next change
+ *   asks.
+ */
+export const TIER_LIST_INSIGHTS_STATUSES = [
+  "NOT_ENOUGH_ENTRIES",
+  "UNAVAILABLE",
+  "PENDING",
+  "FAILED",
+  "READY",
+  "IDLE",
+] as const;
+
+export type TierListInsightsStatus =
+  (typeof TIER_LIST_INSIGHTS_STATUSES)[number];
 
 export type TierListItemDto = {
   readonly id: string;
@@ -127,6 +202,72 @@ export type TierListItemDto = {
   readonly entry: TierListEntryRef;
   readonly createdAt: string | null;
   readonly updatedAt: string | null;
+};
+
+/* -------------------------------------------------------------------------- */
+/* Edit history (D4)                                                           */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * D4: the edits a tier list's history records and Undo/Redo step through.
+ * `MOVE` is any `reorderBand` that moved something — within a band, or into
+ * another one (a band change).
+ */
+export const TIER_LIST_EDIT_KINDS = ["ADD", "REMOVE", "MOVE"] as const;
+
+export type TierListEditKind = (typeof TIER_LIST_EDIT_KINDS)[number];
+
+/**
+ * One recorded edit, as Undo and Redo describe it: "Undo: moved Barolo to
+ * Outstanding". The history row itself is `tier_list_history`; this is the
+ * part a person needs.
+ */
+export type TierListEditDto = {
+  /** Per list, from 1, in the order the edits happened. */
+  readonly seq: number;
+  readonly kind: TierListEditKind;
+  /**
+   * What the edit was about: the entry added or removed, or the one that
+   * moved. `null` for a reorder that moved several entries at once, where
+   * no single entry is the subject.
+   */
+  readonly entry: TierListEntryRef | null;
+  /**
+   * The entry's display name, read when the history is asked for (so a
+   * renamed item reads as it is now). `null` when there is no single entry,
+   * or its row could not be read.
+   */
+  readonly entryName: string | null;
+  /** The band it left; `null` for an `ADD`. */
+  readonly fromBand: number | null;
+  /** The band it landed in; `null` for a `REMOVE`. */
+  readonly toBand: number | null;
+  /**
+   * X16: how many entries the edit added or removed — more than one for a
+   * multi-add from Add entry or a list started from your ratings, which
+   * Undo takes back whole. `1` for a single add or removal; for a MOVE, the
+   * entries that changed band or place.
+   */
+  readonly entryCount: number;
+  readonly at: string;
+};
+
+/**
+ * Where the list's history stands for its owner: the edit Undo would take
+ * back and the one Redo would put back, each `null` when there is none. A
+ * new edit after an undo clears Redo, as everywhere else.
+ */
+export type TierListEditHistoryDto = {
+  /** Edits recorded so far (ADD, REMOVE, MOVE), undone ones included. */
+  readonly editCount: number;
+  readonly undo: TierListEditDto | null;
+  readonly redo: TierListEditDto | null;
+};
+
+/** What `undo` / `redo` did, and where the history stands after it. */
+export type TierListHistoryStepResult = {
+  readonly applied: TierListEditDto;
+  readonly history: TierListEditHistoryDto;
 };
 
 /* -------------------------------------------------------------------------- */
@@ -142,21 +283,52 @@ export type CreateTierListInput = {
    *  the Hasura permissions this replaces never allowed changing it later,
    *  and `UpdateTierListInput` below preserves that. */
   readonly listType?: string;
+  /**
+   * X16: `RATINGS` starts the list pre-banded — every entry of its type you
+   * have rated (an item review, a place rating), each in the band
+   * `bandForScore` gives it, best first, at most {@link MAX_BATCH_ADD}. One
+   * edit in the list's history, so a single Undo empties it again.
+   * Omitted (or `EMPTY`), the list starts empty, as before.
+   */
+  readonly startFrom?: TierListStart;
 };
+
+/**
+ * L03: copy a list you may see into a new PRIVATE list of yours. Entries keep
+ * their band and order; notes and the description stay the owner's. A list
+ * you may not see answers like a missing one.
+ */
+export type CloneTierListInput = {
+  readonly sourceTierListId: string;
+  /** Defaults to the source list's name. */
+  readonly name?: string | null;
+};
+
+export const TIER_LIST_STARTS = ["EMPTY", "RATINGS"] as const;
+export type TierListStart = (typeof TIER_LIST_STARTS)[number];
 
 /** Every field is optional; only the present ones are written. Creator only. */
 export type UpdateTierListInput = {
   readonly name?: string;
   readonly description?: string | null;
   readonly privacy?: PermissionType;
-  readonly isEditingLocked?: boolean;
 };
 
 export type AddTierListItemInput = {
   readonly entry: TierListEntryRef;
-  /** Defaults to `0`. Position within the band is computed in-turn (§2.1) —
-   *  there is no way to request a specific position; append, then reorder. */
+  /** Defaults to `0`. Without `position`, the entry is appended to the
+   *  band's end, its position computed in-turn (§2.1). */
   readonly band?: number;
+  /**
+   * M7, the positioned add (wave C "pairwise"): with `band` too, the entry is
+   * inserted at this index of that band — `0` is the band's top, the band's
+   * current length its end — and the entries at and after it move down one,
+   * all as **one** `ADD` history entry, so one Undo takes the placement back
+   * and one Redo puts it in the same place. Out of `0..length`, or without
+   * `band`, is a `ValidationError`. `addOne` only: `addItems` appends, and
+   * refuses a `position`.
+   */
+  readonly position?: number;
   readonly notes?: string | null;
   /**
    * The row id, minted by the caller. **The §8.4 idempotency key.** Falls
@@ -165,6 +337,123 @@ export type AddTierListItemInput = {
    * uuid.
    */
   readonly tierListItemId?: string;
+};
+
+/**
+ * X16: the most entries one `addItems` (or a `RATINGS` start) writes — the
+ * same 100 the API caps every page at, so a list made in one call can be
+ * read back in one page.
+ */
+export const MAX_BATCH_ADD = 100;
+
+/** X16's multi-add: what went on, and how many asks were passed over. */
+export type AddTierListItemsResult = {
+  readonly added: readonly TierListItemDto[];
+  /**
+   * Entries not added: already on the list, named twice in the call, or no
+   * longer readable (a place you cannot see, an item that is gone).
+   */
+  readonly skipped: number;
+};
+
+/* -------------------------------------------------------------------------- */
+/* X16 — adding without typing, and what to try next                          */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Add entry's sections, in the order the sheet draws them. An entry is in
+ * the first section that claims it, so no row appears twice:
+ *
+ *  - `IN_CELLARS` — items of the list's type in a cellar you made or
+ *    co-own (never a place list);
+ *  - `TASTED` — what you have rated or logged (a review, a drink log; for a
+ *    place list, a place you rated, marked visited or logged a drink at);
+ *  - `FRIENDS_RANKED` — what your friends ranked (band 1 and up) on their
+ *    own lists you may see — never a stranger's, however public.
+ *
+ * None of it is on the list already.
+ */
+export const TIER_LIST_SUGGESTION_SECTIONS = [
+  "IN_CELLARS",
+  "TASTED",
+  "FRIENDS_RANKED",
+] as const;
+export type TierListSuggestionSection =
+  (typeof TIER_LIST_SUGGESTION_SECTIONS)[number];
+
+/** One row of Add entry's sections, with the facts that say why it is there. */
+export type TierListSuggestionDto = {
+  readonly section: TierListSuggestionSection;
+  readonly entry: TierListEntryRef;
+  /**
+   * Your own verdict, which picks the band it lands in: your newest review's
+   * score (a place: your rating), else the score on your newest drink log
+   * that has one. `null` when you have given neither.
+   */
+  readonly myScore: number | null;
+  /** IN_CELLARS: the cellar you touched it in most recently. */
+  readonly cellarName: string | null;
+  /** IN_CELLARS: bottles of it not finished, across your cellars. */
+  readonly bottleCount: number | null;
+  /** TASTED: your drink logs of it (at it, for a place). */
+  readonly logCount: number | null;
+  /** TASTED: when you last rated, logged or visited it. */
+  readonly lastTastedAt: string | null;
+  /** FRIENDS_RANKED: the friend who ranked it highest (newest list on a tie). */
+  readonly friendId: string | null;
+  /** FRIENDS_RANKED: that friend's band for it. */
+  readonly friendBand: number | null;
+  /** FRIENDS_RANKED: how many friends rank it. */
+  readonly friendCount: number | null;
+};
+
+/** At most this many rows per section. */
+export const SUGGESTIONS_PER_SECTION = 30;
+
+/**
+ * Why "Try this next" shows a card — each reason a fact the viewer can
+ * check, never a score:
+ *
+ *  - `FRIEND_RANKED` — a friend put it in one of their top two bands;
+ *  - `LIKE_TOP` — it sits next to one of this list's top-two-band entries in
+ *    the catalog (N08's retrieval: the stored item vectors and the names'
+ *    trigrams, fused by rank);
+ *  - `LIKE_LOVED` — the same, next to an item you love.
+ *
+ * Never something you have rated, logged, keep in a cellar, or that is on
+ * the list.
+ */
+export const TRY_NEXT_REASONS = [
+  "FRIEND_RANKED",
+  "LIKE_TOP",
+  "LIKE_LOVED",
+] as const;
+export type TryNextReason = (typeof TRY_NEXT_REASONS)[number];
+
+export type TierListTryNextDto = {
+  readonly reason: TryNextReason;
+  readonly entry: TierListEntryRef;
+  /** FRIEND_RANKED: who, their band, and how many friends rank it that high. */
+  readonly friendId: string | null;
+  readonly friendBand: number | null;
+  readonly friendCount: number | null;
+  /** LIKE_TOP / LIKE_LOVED: the entry it is like, by name as it reads now. */
+  readonly likeName: string | null;
+  /** LIKE_TOP: that entry's band on this list. */
+  readonly likeBand: number | null;
+};
+
+/** At most this many cards. */
+export const TRY_NEXT_LIMIT = 6;
+
+/**
+ * X16's templates: for each entry type, how many of them you have rated —
+ * what a list started from your ratings would hold.
+ */
+export type TierListTemplateDto = {
+  readonly listType: string;
+  readonly entryType: TierListEntryType;
+  readonly ratedCount: number;
 };
 
 export type DeletedTierList = { readonly id: string };
@@ -205,7 +494,15 @@ export type GenerateInsightsResult = {
  */
 export type TierListActorInterface = {
   get(ctx: Ctx): Promise<TierListDto>;
+  /**
+   * X17: the public share page's read — PUBLIC lists only, the same answer
+   * for every caller (anonymous included), `NotFoundError` for a list that is
+   * missing or not PUBLIC alike. See `share.ts`.
+   */
+  getShared(ctx: Ctx): Promise<SharedTierListDto>;
   create(ctx: Ctx, input: CreateTierListInput): Promise<TierListDto>;
+  /** L03: a PRIVATE copy of a visible list, at this (caller-minted) id. */
+  clone(ctx: Ctx, input: CloneTierListInput): Promise<TierListDto>;
   update(ctx: Ctx, input: UpdateTierListInput): Promise<TierListDto>;
   delete(ctx: Ctx): Promise<DeletedTierList>;
 
@@ -219,6 +516,35 @@ export type TierListActorInterface = {
    * already present throws `ConflictError` rather than silently duplicating.
    */
   addItem(ctx: Ctx, input: AddTierListItemInput): Promise<TierListItemDto>;
+  /**
+   * X16's multi-add: several entries in one transaction and **one** history
+   * edit, so the toast's Undo takes them all back. Each is appended to the
+   * end of its band, in the order given. Entries already on the list, named
+   * twice, or unreadable are skipped and counted, never refused — a sheet of
+   * suggestions can be stale by the time it is sent. At most
+   * {@link MAX_BATCH_ADD}; none at all is a `ValidationError`.
+   */
+  addItems(
+    ctx: Ctx,
+    inputs: readonly AddTierListItemInput[],
+  ): Promise<AddTierListItemsResult>;
+  /**
+   * X16: Add entry's sections ({@link TierListSuggestionSection}) for the
+   * list's own type, none of them already on it. Creator only: anyone else
+   * who may see the list gets `[]`. A list whose type names no entry type
+   * gets `[]`.
+   */
+  addSuggestions(ctx: Ctx): Promise<readonly TierListSuggestionDto[]>;
+  /**
+   * X16's grounded "Try this next", for the viewer: at most `limit` (default
+   * {@link TRY_NEXT_LIMIT}) entries of the list's type, each with the fact
+   * that put it there ({@link TryNextReason}). Deterministic — no model call
+   * — and empty rather than padded when nothing qualifies.
+   */
+  tryNext(
+    ctx: Ctx,
+    limit?: number | null,
+  ): Promise<readonly TierListTryNextDto[]>;
   removeItem(ctx: Ctx, tierListItemId: string): Promise<RemovedTierListItem>;
   /**
    * One transaction. `orderedIds` is the **complete** post-reorder membership
@@ -234,6 +560,51 @@ export type TierListActorInterface = {
     band: number,
     orderedIds: readonly string[],
   ): Promise<readonly TierListItemDto[]>;
+
+  /**
+   * D4: where the edit history stands — **creator only**. `null` for anyone
+   * else who may see the list: the history is the owner's tool, not part of
+   * what a shared list shows. Not visible at all → `NotFound`, as `get`.
+   */
+  editHistory(ctx: Ctx): Promise<TierListEditHistoryDto | null>;
+  /**
+   * D4: take back the latest edit not already undone, and record that as a
+   * new `UNDO` row (the log is append-only). Creator only. A content change
+   * like any other edit: bumps `content_updated_at` and asks for insights.
+   *
+   * `expectedSeq` is the `seq` of the edit the caller means to take back —
+   * the `undo` its history showed. Anything else on top (or nothing) is a
+   * `ConflictError` with reason `TIER_LIST_HISTORY_MOVED` and no write, so a
+   * stale tab cannot undo an edit made since it last read the list.
+   */
+  undo(ctx: Ctx, expectedSeq: number): Promise<TierListHistoryStepResult>;
+  /**
+   * D4: put back the latest undone edit — `undo`'s mirror; a `REDO` row.
+   * `expectedSeq` is the edit the caller means to put back (`redo`).
+   */
+  redo(ctx: Ctx, expectedSeq: number): Promise<TierListHistoryStepResult>;
+
+  /**
+   * SV-A (L12): "write my Insights now" — the explicit, idempotent trigger the
+   * client sends when it sees `IDLE` on a list of 3+ entries it owns (a read
+   * never writes). Creator only: anybody else gets the same refusal as any
+   * other creator-only write. Asks only from `IDLE`; every other status —
+   * too few entries, already pending, failed, ready, no provider — is a
+   * no-op that returns the list as it is, so a panel that re-renders cannot
+   * re-request in a loop. The generation it enqueues is attributed to the
+   * caller and counts against their `ai_model/tier_list_insights` allowance.
+   */
+  requestInsights(ctx: Ctx): Promise<TierListDto>;
+
+  /**
+   * F-86: "Rewrite" — ask for a fresh write of insights that are READY,
+   * without waiting out the once-a-day throttle. Creator only, like
+   * `requestInsights`; from any other status it is a no-op that returns the
+   * list as it is. The list reads `PENDING` until the new write lands. The
+   * generation is attributed to the caller and counts against their
+   * `ai_model/tier_list_insights` allowance, which is what bounds how often.
+   */
+  rewriteInsights(ctx: Ctx): Promise<TierListDto>;
 
   /**
    * `system`, via the outbox — replaces the `tier_list_items_content_changed`
@@ -256,13 +627,28 @@ export const TierListActorDescriptor: ActorDescriptor<TierListActorInterface> =
     // Each edit enqueues `generateInsights`, an LLM call.
     methods: {
       get: {},
-      create: {},
+      getShared: {},
+      // X16: a list started from your ratings has entries, which enqueues
+      // `generateInsights` like any other edit.
+      create: { modelBacked: true },
+      // L03: a copy has entries, which enqueues `generateInsights`.
+      clone: { modelBacked: true },
       update: {},
       delete: {},
       items: {},
       addItem: { modelBacked: true },
+      addItems: { modelBacked: true },
+      addSuggestions: {},
+      tryNext: {},
       removeItem: { modelBacked: true },
       reorderBand: { modelBacked: true },
+      editHistory: {},
+      undo: { modelBacked: true },
+      redo: { modelBacked: true },
+      // SV-A: enqueues `generateInsights` from IDLE.
+      requestInsights: { modelBacked: true },
+      // F-86: enqueues `generateInsights` past the throttle, from READY.
+      rewriteInsights: { modelBacked: true },
       generateInsights: {},
     },
   };

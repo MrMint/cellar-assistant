@@ -15,6 +15,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import type { Ctx, UploadTarget } from "@cellar-assistant/contracts";
 import {
+  anonymousCtx,
   ConflictError,
   ForbiddenError,
   NotFoundError,
@@ -33,6 +34,12 @@ import {
   readUrlWindowSettings,
   stableReadWindow,
 } from "../lib/s3-presign.ts";
+import {
+  seedCellar,
+  seedCellarItem,
+  seedCheckIn,
+  seedFriendship,
+} from "../lib/search-testing.ts";
 import {
   activate,
   closeTestDb,
@@ -742,6 +749,69 @@ describe.skipIf(skip)("FileActor (A8)", () => {
         expect(read.url).toBe("https://example.test/signed-get");
         // …and the metadata too, which is what `ItemImage.url` needs.
         expect((await actor.get(userCtx(strangerId, "r4"))).id).toBe(fileId);
+      });
+    });
+
+    it("SV-D: a profile picture is for anyone who may see the profile, and only once it is one", async () => {
+      await withTestDb(async (db) => {
+        const ownerId = await seedUser(db);
+        const strangerId = await seedUser(db);
+        const { fileId, actor } = await verifiedFile(db, ownerId);
+
+        // Not yet anyone's picture: private to its uploader.
+        await expect(
+          actor.presignRead(userCtx(strangerId, "r3")),
+        ).rejects.toThrow(NotFoundError);
+
+        await db.execute(
+          sql`update public."user" set avatar_file_id = ${fileId}::uuid where id = ${ownerId}::uuid`,
+        );
+        const read = await actor.presignRead(userCtx(strangerId, "r4"));
+        expect(read.url).toBe("https://example.test/signed-get");
+        // A profile is for signed-in viewers (`canSeeProfile`), so is its picture.
+        await expect(actor.presignRead(anonymousCtx("r5"))).rejects.toThrow();
+      });
+    });
+
+    it("X02: a drink log's photo is for whoever sees what the drinker said — not for a cellar's visitors", async () => {
+      await withTestDb(async (db) => {
+        const drinkerId = await seedUser(db);
+        const friendId = await seedUser(db);
+        const strangerId = await seedUser(db);
+        await seedFriendship(db, drinkerId, friendId);
+        const { fileId, actor } = await verifiedFile(db, drinkerId);
+        const wine = {
+          type: "WINE" as const,
+          id: await seedWine(db, drinkerId),
+        };
+        // Poured from a bottle in a PUBLIC cellar: the stranger may see the
+        // entry through the cellar, and still not its photo.
+        const cellarId = await seedCellar(db, {
+          createdById: drinkerId,
+          privacy: "PUBLIC",
+        });
+        const cellarItemId = await seedCellarItem(
+          db,
+          cellarId,
+          drinkerId,
+          wine,
+        );
+        const logId = await seedCheckIn(db, {
+          userId: drinkerId,
+          item: wine,
+          cellarItemId,
+        });
+        await db.execute(sql`
+          update public.check_ins set photo_file_id = ${fileId}::uuid
+          where id = ${logId}::uuid
+        `);
+
+        expect((await actor.presignRead(userCtx(friendId, "r3"))).url).toBe(
+          "https://example.test/signed-get",
+        );
+        await expect(
+          actor.presignRead(userCtx(strangerId, "r4")),
+        ).rejects.toBeInstanceOf(NotFoundError);
       });
     });
 
@@ -1481,3 +1551,96 @@ describe.skipIf(skip)(
     });
   },
 );
+
+describe.skipIf(skip)("FileActor.presignAvatars (F-89)", () => {
+  afterAll(closeTestDb);
+
+  const uploaded = async (
+    db: DbOrTx,
+    uploaderId: string,
+    verify = true,
+  ): Promise<string> => {
+    const fileId = freshId();
+    const actor = await activate(
+      newFileActor(
+        fileId,
+        db,
+        fakeBinding({ stat: vi.fn(async () => ({ size: 1, etag: "e" })) }),
+      ),
+    );
+    await actor.createUploadTarget(userCtx(uploaderId, "r1"), {
+      kind: "item-image",
+    });
+    if (verify) await actor.verify(userCtx(uploaderId, "r2"));
+    return fileId;
+  };
+
+  const setAvatar = async (db: DbOrTx, userId: string, fileId: string) => {
+    await db.execute(
+      sql`update public."user" set avatar_file_id = ${fileId}::uuid where id = ${userId}::uuid`,
+    );
+  };
+
+  it("signs every visible profile picture in one turn, aligned, and nothing that is not one", async () => {
+    await withTestDb(async (db) => {
+      const viewer = await seedUser(db);
+      const ana = await seedUser(db);
+      const ben = await seedUser(db);
+      const cai = await seedUser(db);
+      const anaPic = await uploaded(db, ana);
+      const benPic = await uploaded(db, ben);
+      const caiPic = await uploaded(db, cai, false);
+      const notAPicture = await uploaded(db, ana);
+      await setAvatar(db, ana, anaPic);
+      await setAvatar(db, ben, benPic);
+      await setAvatar(db, cai, caiPic);
+
+      const presign = vi.fn(
+        async (key: string) => `https://signed.test/${key}`,
+      );
+      const batch = await activate(
+        newFileActor(viewer, db, fakeBinding({ presignGetPublic: presign })),
+      );
+      const ctx = userCtx(viewer, "r");
+      const targets = await batch.presignAvatars(ctx, {
+        fileIds: [anaPic, notAPicture, benPic, caiPic, randomUUID()],
+      });
+      expect(targets.map((target) => target !== null)).toEqual([
+        true,
+        // A file that is nobody's picture is never signed here, even one a
+        // viewer could read some other way.
+        false,
+        true,
+        // Not verified yet: no URL, as `presignRead` refuses it.
+        false,
+        false,
+      ]);
+      expect(targets[0]?.url).toMatch(/^https:\/\/signed\.test\//);
+      expect(presign).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  it("answers nothing to an anonymous viewer, and is the viewer's own batch", async () => {
+    await withTestDb(async (db) => {
+      const viewer = await seedUser(db);
+      const other = await seedUser(db);
+      const pic = await uploaded(db, viewer);
+      await setAvatar(db, viewer, pic);
+      const batch = await activate(newFileActor(viewer, db));
+      await expect(
+        batch.presignAvatars(anonymousCtx("r"), { fileIds: [pic] }),
+      ).rejects.toBeInstanceOf(ForbiddenError);
+      await expect(
+        batch.presignAvatars(userCtx(other, "r"), { fileIds: [pic] }),
+      ).rejects.toBeInstanceOf(ForbiddenError);
+      await expect(
+        batch.presignAvatars(userCtx(viewer, "r"), {
+          fileIds: Array.from({ length: 101 }, () => randomUUID()),
+        }),
+      ).rejects.toBeInstanceOf(ValidationError);
+      await expect(
+        batch.presignAvatars(userCtx(viewer, "r"), { fileIds: ["nope"] }),
+      ).rejects.toBeInstanceOf(ValidationError);
+    });
+  });
+});

@@ -1,12 +1,14 @@
 /**
  * `UserActor` — B4 (migration plan §2.1, §1.7, §3).
  *
- * Owns four tables, all of them scoped to *this* user:
+ * Owns five tables, all of them scoped to *this* user:
  *
  *   - `friends` — rows where `user_id = me`
  *   - `friend_requests` — rows where `user_id = me` (i.e. the ones **I** sent)
  *   - `item_favorites` — rows where `user_id = me`
  *   - `user_place_interactions` — rows where `user_id = me`
+ *   - `want_to_try` — rows where `user_id = me` (X08)
+ *   - `friend_invites` — the one row where `user_id = me` (X17)
  *
  * Profile fields are not on that list: there is no `public.users` table, and
  * A6 moved identity to better-auth's `user` table in its own database
@@ -62,6 +64,22 @@
  *
  * ## Reading both directions
  *
+ * ## Friend invites (X17)
+ *
+ * A fifth owned table, `friend_invites`: at most one live invite secret per
+ * user, minted by `ensureFriendInvite` and rotated by `resetFriendInvite`.
+ * The link's token packs the inviter's id with that secret
+ * (`packages/contracts/src/share.ts`), so `previewFriendInvite` runs on the
+ * **inviter's** actor — anonymous allowed, since the holder of the link was
+ * given it — and `acceptFriendInvite` on the **invitee's**, which reads the
+ * inviter's row fresh (another key's row, like `#incomingRequests`) and then
+ * makes the same two-sided write `acceptFriendRequest` does: its own
+ * `friends` row now, the inviter's through the outbox's `confirmFriendship`.
+ * A wrong or rotated secret is `NotFoundError` worded as a missing user, so a
+ * guessed token learns nothing about who exists.
+ *
+ * ## Reading both directions
+ *
  * Every friend decision here reads `friends` rows where `user_id = me` **or**
  * `friend_id = me`. Writing is one-sided; reading is not, and the difference
  * matters: between step 1 and step 2 above only one row exists, and a viewer
@@ -84,7 +102,7 @@
  * | `friends(*, me)` | `UserActor(other)` | **no** — read fresh |
  * | `friend_requests(me, *)` | this actor | yes — `aggregate.outgoing` |
  * | `friend_requests(*, me)` | `UserActor(other)` | **no** — read fresh |
- * | `item_favorites`, `user_place_interactions` | this actor | yes |
+ * | `item_favorites`, `user_place_interactions`, `want_to_try` | this actor | yes |
  *
  * `TABLE_WRITERS` cannot express that distinction — it is keyed by table, and
  * `UserActor` really is the sole writer *class* of both tables — which is why
@@ -115,13 +133,22 @@
  * Postgres and the profile store's Postgres. `user-actor.test.ts` asserts that
  * statically against this file's own source.
  */
+import { randomBytes, timingSafeEqual } from "node:crypto";
 import type {
+  AcceptFriendInviteInput,
+  AcceptFriendInviteResult,
   AcceptFriendRequestResult,
   ActorCategory,
+  AiCapabilities,
+  BarKind,
+  BarPantryItemDto,
+  BrewPrefsDto,
   ConfirmFriendshipPayload,
   ConfirmFriendshipResult,
   Ctx,
   FriendDto,
+  FriendInviteDto,
+  FriendInvitePreviewDto,
   FriendRequestDirection,
   FriendRequestDto,
   ItemRef,
@@ -130,35 +157,70 @@ import type {
   PageArgs,
   PlaceInteractionDto,
   RecordPlaceInteractionInput,
-  ToggleFavoriteResult,
+  SetAvatarInput,
+  SetBarPantryItemInput,
+  SetBrewPrefsInput,
+  SetDefaultCellarPrivacyInput,
+  SetFavoriteResult,
+  SetRecipeLoveResult,
+  SetWantToTryResult,
   UpdateProfileInput,
   UserActorInterface,
+  UserCountsDto,
   UserProfileDto,
+  UserSettingsDto,
+  WantToTryEntryDto,
+  WantToTryKind,
+  WantToTryTarget,
 } from "@cellar-assistant/contracts";
 import {
+  AVATAR_FILE_KIND,
+  BREW_PREF_ITEM_TYPES,
   ConflictError,
   ForbiddenError,
+  formatInviteToken,
+  isInviteSecret,
   isItemType,
+  isPantryKind,
+  isWantToTryKind,
   itemActorId,
   NotFoundError,
   offsetPage,
+  PANTRY_KINDS,
+  PERMISSION_TYPES,
+  PROFILE_NOT_SHARED,
   requireReverseEdgeBatch,
   UserActorDescriptor,
   ValidationError,
+  wantToTryKey,
 } from "@cellar-assistant/contracts";
 import {
+  barPantryItems,
+  files,
+  friendInvites,
   friendRequests,
   friends,
+  itemBrewPrefs,
   itemFavorites,
-  places,
+  recipeFavorites,
+  recipes,
   userPlaceInteractions,
+  userSettings,
   user as userTable,
+  wantToTry,
 } from "@cellar-assistant/db";
 import { and, eq, inArray, or, sql } from "@cellar-assistant/db/orm";
-import { type Friendship, isFriend, isOwner } from "@cellar-assistant/policy";
+import {
+  canSeeProfile,
+  type Friendship,
+  isFriend,
+  isOwner,
+} from "@cellar-assistant/policy";
 import type { ActorId, DaprClient } from "@dapr/dapr";
-import { isEmailShaped } from "../auth/display-name.ts";
-import { EntityActorBase } from "../lib/actor-base.ts";
+import { handleForId, isEmailShaped } from "../auth/display-name.ts";
+import { absentRow, EntityActorBase } from "../lib/actor-base.ts";
+import { aiCapabilities } from "../lib/ai/capabilities.ts";
+import { cellarOwnedBySql } from "../lib/cellar-ownership.ts";
 import type { DbOrTx } from "../lib/db.ts";
 import { actorDb } from "../lib/db.ts";
 import { deliveryOf } from "../lib/delivery.ts";
@@ -167,14 +229,31 @@ import { ARCS } from "../lib/item-arcs.ts";
 import { ITEM_TABLES } from "../lib/item-bindings.ts";
 import { enqueueOutbox } from "../lib/outbox.ts";
 import { OUTBOX_TARGETS } from "../lib/outbox-targets.ts";
-import type { ProfileFields, ProfileStore } from "../lib/profile-store.ts";
+import type {
+  ProfileFields,
+  ProfilePatch,
+  ProfileStore,
+} from "../lib/profile-store.ts";
 import { betterAuthProfileStore } from "../lib/profile-store.ts";
+import { visibleRecipeIds } from "../lib/recipe-visibility.ts";
+import { placeIsVisible, placeRefVisibleSql } from "../lib/unshared-places.ts";
 import { isUuid, requireUuid } from "../lib/uuid.ts";
 
 export type FriendRow = typeof friends.$inferSelect;
 export type FriendRequestRow = typeof friendRequests.$inferSelect;
 export type FavoriteRow = typeof itemFavorites.$inferSelect;
 export type PlaceInteractionRow = typeof userPlaceInteractions.$inferSelect;
+export type WantToTryRow = typeof wantToTry.$inferSelect;
+export type BarPantryRow = typeof barPantryItems.$inferSelect;
+export type RecipeLoveRow = typeof recipeFavorites.$inferSelect;
+
+/**
+ * X15: how many of a user's own recipes `myRecipes` reads. A person's own
+ * recipes are a handful — the cap keeps the read bounded (§1.5) without a
+ * keyset for a list nobody pages past a screen or two of.
+ */
+const MY_RECIPES_CAP = 200;
+export type FriendInviteRow = typeof friendInvites.$inferSelect;
 
 /**
  * **Only the rows this actor writes** — see the module doc's "Only the rows
@@ -188,6 +267,14 @@ export type UserAggregate = {
   readonly outgoing: readonly FriendRequestRow[];
   readonly favorites: readonly FavoriteRow[];
   readonly interactions: readonly PlaceInteractionRow[];
+  /** `want_to_try` where `user_id = me` — items and recipes (X08). */
+  readonly wishes: readonly WantToTryRow[];
+  /** X14 / D23: pantry toggles that are on. */
+  readonly pantry: readonly BarPantryRow[];
+  /** X14 / D9: loved recipes. */
+  readonly recipeLoves: readonly RecipeLoveRow[];
+  /** `friend_invites` where `user_id = me` — at most one row (X17). */
+  readonly invite: FriendInviteRow | null;
 };
 
 /** The owned rows plus a *fresh* read of the ones another key writes. */
@@ -238,6 +325,96 @@ const favoriteRef = (row: FavoriteRow): ItemRef | null => {
   return ref !== null && ref.type === row.type ? ref : null;
 };
 
+/** `want_to_try`'s item arc; the seventh column, `recipe_id`, is read beside it. */
+const WISHES = ARCS.wantToTry;
+const BREW_PREFS = ARCS.itemBrewPrefs;
+
+type BrewPrefsRow = typeof itemBrewPrefs.$inferSelect;
+
+const toBrewPrefsDto = (item: ItemRef, row: BrewPrefsRow): BrewPrefsDto => ({
+  item,
+  waterTempC: row.waterTempC,
+  steepSeconds: row.steepSeconds,
+  doseGrams: row.doseGrams,
+  waterMl: row.waterMl,
+  updatedAt: new Date(row.updatedAt).toISOString(),
+});
+
+/**
+ * One override: absent or `null` clears it; otherwise a finite number inside
+ * the table's check (`item_brew_prefs_*`), refused before Postgres would.
+ */
+const brewNumber = (
+  value: unknown,
+  what: string,
+  {
+    min,
+    max,
+    integer,
+    positive,
+  }: { min?: number; max?: number; integer?: boolean; positive?: boolean },
+): number | null => {
+  if (value === null || value === undefined) return null;
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    throw new ValidationError(`${what} must be a number`);
+  }
+  if (integer === true && !Number.isInteger(value)) {
+    throw new ValidationError(`${what} must be a whole number`);
+  }
+  // `positive` is the contract's and the DB check's "> 0" exactly (CB-2):
+  // any value above zero, however small, and never zero itself.
+  if (positive === true && !(value > 0)) {
+    throw new ValidationError(`${what} must be more than 0`);
+  }
+  if (
+    (min !== undefined && value < min) ||
+    (max !== undefined && value > max)
+  ) {
+    throw new ValidationError(
+      `${what} must be between ${min ?? "0"} and ${max ?? "any amount"}`,
+    );
+  }
+  return value;
+};
+
+/** What a `want_to_try` row names; `null` only for a row its check forbids. */
+const wishTarget = (row: WantToTryRow): WantToTryTarget | null => {
+  if (row.recipeId !== null) return { kind: "RECIPE", recipeId: row.recipeId };
+  const ref = WISHES.refOf(row);
+  return ref === null ? null : { kind: "ITEM", item: ref };
+};
+
+/**
+ * A target with its ids canonical (lower-case uuids) and its kind checked —
+ * the cached rows are compared with `===`, so an upper-case id would miss an
+ * existing row and fail on the unique constraint (the old `toggleFavorite` bug).
+ */
+const canonicalTarget = (target: WantToTryTarget): WantToTryTarget => {
+  const kind: unknown = target?.kind;
+  if (!isWantToTryKind(kind)) {
+    throw new ValidationError(`not a want-to-try kind: ${String(kind)}`);
+  }
+  switch (target.kind) {
+    case "ITEM": {
+      const type: unknown = target.item?.type;
+      if (typeof type !== "string" || !isItemType(type)) {
+        throw new ValidationError(`not an item type: ${String(type)}`);
+      }
+      return {
+        kind: "ITEM",
+        item: { type, id: requireUuid(target.item.id, "item.id") },
+      };
+    }
+    case "RECIPE":
+      return {
+        kind: "RECIPE",
+        recipeId: requireUuid(target.recipeId, "recipeId"),
+      };
+    case "PLACE":
+      return { kind: "PLACE", placeId: requireUuid(target.placeId, "placeId") };
+  }
+};
+
 const iso = (value: Date | string | null): string | null => {
   if (value === null) return null;
   return value instanceof Date ? value.toISOString() : value;
@@ -270,6 +447,24 @@ export class UserActor
     this.#profiles = profiles;
   }
 
+  /**
+   * Leftovers 5 (L6, D24): every "no such user" this actor gives is one
+   * key-free message, the one a refused profile gets everywhere
+   * ({@link PROFILE_NOT_SHARED}). The base's wording names the key
+   * (`UserActor(<key>) has no row`), so a missing uuid and a malformed id
+   * answered in different bytes, and both differed from a hidden profile.
+   * This covers the base's pre-turn refusal of a malformed key, a missing
+   * row, a profile `canSeeProfile` hides, and a wrong invite secret.
+   */
+  protected override refuseAsAbsent(): never {
+    throw new NotFoundError(PROFILE_NOT_SHARED);
+  }
+
+  /** Who may know this user exists: `canSeeProfile`, the one rule. */
+  protected override canSee(ctx: Ctx, _aggregate: UserAggregate): boolean {
+    return canSeeProfile(ctx, { userId: this.key });
+  }
+
   /* ---------------------------------------------------------------------- */
   /* Activation                                                              */
   /* ---------------------------------------------------------------------- */
@@ -292,28 +487,47 @@ export class UserActor
     // Only `user_id = me`, in both cases: the mirrored rows are another
     // `UserActor` key's to write, so caching them here goes stale with nothing
     // to invalidate it (module doc). `#snapshot()` reads those fresh.
-    const [ownFriends, outgoing, favoriteRows, interactionRows] =
-      await Promise.all([
-        this.db.select().from(friends).where(eq(friends.userId, id)),
-        this.db
-          .select()
-          .from(friendRequests)
-          .where(eq(friendRequests.userId, id)),
-        this.db
-          .select()
-          .from(itemFavorites)
-          .where(eq(itemFavorites.userId, id)),
-        this.db
-          .select()
-          .from(userPlaceInteractions)
-          .where(eq(userPlaceInteractions.userId, id)),
-      ]);
+    const [
+      ownFriends,
+      outgoing,
+      favoriteRows,
+      interactionRows,
+      wishRows,
+      pantryRows,
+      recipeLoveRows,
+      inviteRows,
+    ] = await Promise.all([
+      this.db.select().from(friends).where(eq(friends.userId, id)),
+      this.db
+        .select()
+        .from(friendRequests)
+        .where(eq(friendRequests.userId, id)),
+      this.db.select().from(itemFavorites).where(eq(itemFavorites.userId, id)),
+      this.db
+        .select()
+        .from(userPlaceInteractions)
+        .where(eq(userPlaceInteractions.userId, id)),
+      this.db.select().from(wantToTry).where(eq(wantToTry.userId, id)),
+      this.db
+        .select()
+        .from(barPantryItems)
+        .where(eq(barPantryItems.userId, id)),
+      this.db
+        .select()
+        .from(recipeFavorites)
+        .where(eq(recipeFavorites.userId, id)),
+      this.db.select().from(friendInvites).where(eq(friendInvites.userId, id)),
+    ]);
 
     return {
       ownFriends,
       outgoing,
       favorites: favoriteRows,
       interactions: interactionRows,
+      wishes: wishRows,
+      pantry: pantryRows,
+      recipeLoves: recipeLoveRows,
+      invite: inviteRows[0] ?? null,
     };
   }
 
@@ -322,19 +536,24 @@ export class UserActor
   /* ---------------------------------------------------------------------- */
 
   /**
-   * Every `friends` row touching this user, in **both** directions: the owned
-   * half from the aggregate, the mirrored half read fresh.
+   * Every `friends` row touching this user, in **both** directions, read
+   * fresh.
    *
-   * One indexed select on `friends.friend_id`. Deliberately not cached — the
-   * whole of the module doc's "Only the rows this actor *writes* are cached".
+   * The owned half is fresh too, not the aggregate's copy: `removeFriend`
+   * on the other side deletes this user's row in its own transaction, and
+   * this activation only hears of it when the outbox delivers
+   * `removeFriendOtherSide`. A check made in that window read the deleted
+   * row and answered "already friends". An invite accepted then wrote
+   * nothing, and the friendship never reached the inviter (FR-11,
+   * m06-share). Still not cached, per the module doc's "Only the rows this
+   * actor *writes* are cached": another actor deletes these rows as well.
    */
   async #friendRows(): Promise<readonly FriendRow[]> {
-    const { ownFriends } = this.requireAggregate();
-    const reverse = await this.db
+    this.requireAggregate();
+    return await this.db
       .select()
       .from(friends)
-      .where(eq(friends.friendId, this.key));
-    return [...ownFriends, ...reverse];
+      .where(or(eq(friends.userId, this.key), eq(friends.friendId, this.key)));
   }
 
   /**
@@ -378,9 +597,23 @@ export class UserActor
    * is what gives this method a real owner/friend/stranger distinction.
    */
   async getProfile(ctx: Ctx): Promise<UserProfileDto> {
-    this.requireAggregate();
+    // Signed in first: the other order told an anonymous caller NotFound for
+    // an id that names nobody and Forbidden for one that does (leftovers 5).
     requireSignedIn(ctx, "view a profile");
+    await this.requireVisible(ctx);
     return this.#toProfile(ctx, await this.#profileFields(this.key));
+  }
+
+  /**
+   * N07/D25: the process's AI capabilities (`lib/ai/capabilities.ts`), for
+   * `viewer.aiCapabilities`. Not secret, but asked only of one's own actor —
+   * `viewer` is the only place a client reads it, and refusing everyone else
+   * keeps this from activating a stranger's actor for no reason.
+   */
+  async aiCapabilities(ctx: Ctx): Promise<AiCapabilities> {
+    this.requireAggregate();
+    this.#requireSelf(ctx, "read these capabilities");
+    return aiCapabilities();
   }
 
   /** Owner (or admin) only. Proxies to better-auth's `user` table. */
@@ -423,6 +656,95 @@ export class UserActor
       throw new ValidationError("updateProfile was given nothing to change");
     }
 
+    const updated = await this.#profiles.update(this.key, patch);
+    if (updated === null) {
+      throw new NotFoundError(`user ${this.key} has no profile row`);
+    }
+    return this.#toProfile(ctx, updated);
+  }
+
+  /**
+   * SV-D (MC-avatar, L17): the profile picture is a file id, presigned at
+   * read. Only a verified `avatar` upload of this user's own may be named.
+   */
+  async setAvatar(ctx: Ctx, input: SetAvatarInput): Promise<UserProfileDto> {
+    this.requireAggregate();
+    this.#requireSelf(ctx, "set this profile picture");
+    const id = requireUuid(input.fileId, "fileId");
+    const [file] = await this.db
+      .select({
+        uploadedBy: files.uploadedBy,
+        verifiedAt: files.verifiedAt,
+        kind: sql<string | null>`${files.metadata} ->> 'kind'`,
+      })
+      .from(files)
+      .where(eq(files.id, id));
+    // Someone else's file is answered exactly like a missing one: `files`
+    // rows are private to their uploader (`FileActor.canSee`), so naming one
+    // must not tell the caller it exists.
+    if (file === undefined || file.uploadedBy !== this.key) {
+      throw new NotFoundError(`file ${id} not found`);
+    }
+    if (file.kind !== AVATAR_FILE_KIND) {
+      throw new ValidationError(
+        `file ${id} is not a profile picture upload (kind "${AVATAR_FILE_KIND}")`,
+      );
+    }
+    if (file.verifiedAt === null) {
+      throw new ConflictError(
+        `file ${id} is not verified yet — finish the upload first`,
+      );
+    }
+    return this.#writeProfile(ctx, { avatarFileId: id });
+  }
+
+  /** SV-D: clear the picture; `avatarUrl` falls back to `user.image`. */
+  async removeAvatar(ctx: Ctx): Promise<UserProfileDto> {
+    this.requireAggregate();
+    this.#requireSelf(ctx, "remove this profile picture");
+    return this.#writeProfile(ctx, { avatarFileId: null });
+  }
+
+  /** H-119 / FR-21: self only. No row is the column default, PRIVATE. */
+  async settings(ctx: Ctx): Promise<UserSettingsDto> {
+    this.requireAggregate();
+    this.#requireSelf(ctx, "read these settings");
+    const [row] = await this.db
+      .select({ privacy: userSettings.defaultCellarPrivacy })
+      .from(userSettings)
+      .where(eq(userSettings.userId, this.key));
+    return { defaultCellarPrivacy: row?.privacy ?? "PRIVATE" };
+  }
+
+  /**
+   * H-119 / FR-21: self only. The default a NEW cellar takes when created
+   * without a privacy (`CellarActor.create`); no existing cellar is touched.
+   */
+  async setDefaultCellarPrivacy(
+    ctx: Ctx,
+    input: SetDefaultCellarPrivacyInput,
+  ): Promise<UserSettingsDto> {
+    this.requireAggregate();
+    this.#requireSelf(ctx, "change these settings");
+    const privacy = input.privacy;
+    if (!(PERMISSION_TYPES as readonly string[]).includes(privacy)) {
+      throw new ValidationError(
+        `not a cellar privacy: ${JSON.stringify(privacy)}`,
+      );
+    }
+    await this.tx(async (tx) => {
+      await tx
+        .insert(userSettings)
+        .values({ userId: this.key, defaultCellarPrivacy: privacy })
+        .onConflictDoUpdate({
+          target: userSettings.userId,
+          set: { defaultCellarPrivacy: privacy },
+        });
+    });
+    return { defaultCellarPrivacy: privacy };
+  }
+
+  async #writeProfile(ctx: Ctx, patch: ProfilePatch): Promise<UserProfileDto> {
     const updated = await this.#profiles.update(this.key, patch);
     if (updated === null) {
       throw new NotFoundError(`user ${this.key} has no profile row`);
@@ -904,6 +1226,9 @@ export class UserActor
    * is the only stale copy left, and it still repairs a legacy half-state left
    * by an older `removeFriend`.
    *
+   * And only a row older than the removal: one written after it belongs to a
+   * newer friendship, which a late delivery must not undo (F-31).
+   *
    * Deliberately still one-sided: a `system` ctx could delete both directions,
    * but widening it would make a redelivery that lands *after* the two have
    * re-friended destroy the new friendship's rows instead of one of them.
@@ -917,17 +1242,201 @@ export class UserActor
     this.requireAggregate();
     requirePrivileged(ctx, deliveredOnly("removeFriendOtherSide"));
     const friendId = requireUuid(payload?.friendId, "friendId");
+    // F-31 (FR-11): only a row that predates the removal is the removal's to
+    // delete. A delivery that lands after the two have re-friended (Alice
+    // removes, then asks again and Bob accepts before this arrives) would
+    // otherwise delete Bob's new row and leave the new friendship half-made.
+    // The removal's moment is its outbox row's `created_at` — `removeFriend`'s
+    // own transaction — which redeliveries keep; a direct privileged call
+    // with no delivery is a removal made now.
+    const outboxId = deliveryOf(ctx)?.outboxId ?? null;
+    const removedAt =
+      outboxId === null
+        ? sql`clock_timestamp()`
+        : sql`(select o.created_at from public.outbox o where o.id = ${outboxId}::uuid)`;
 
     const deleted = await this.tx(async (tx) =>
       tx
         .delete(friends)
         .where(
-          and(eq(friends.userId, this.key), eq(friends.friendId, friendId)),
+          and(
+            eq(friends.userId, this.key),
+            eq(friends.friendId, friendId),
+            sql`${friends.createdAt} < ${removedAt}`,
+          ),
         )
         .returning({ userId: friends.userId }),
     );
     await this.reload();
     return deleted.length > 0;
+  }
+
+  /* ---------------------------------------------------------------------- */
+  /* Friend invites (X17)                                                    */
+  /* ---------------------------------------------------------------------- */
+
+  /** The viewer's own live invite, or `null`. Self only. */
+  async friendInvite(ctx: Ctx): Promise<FriendInviteDto | null> {
+    const { invite } = this.requireAggregate();
+    this.#requireSelf(ctx, "read this invite link");
+    return invite === null ? null : this.#toInviteDto(invite);
+  }
+
+  /**
+   * The live invite, minted on first use. Idempotent: a second call returns
+   * the same secret (`on conflict do nothing`, then the row that is there).
+   */
+  async ensureFriendInvite(ctx: Ctx): Promise<FriendInviteDto> {
+    const { invite } = this.requireAggregate();
+    this.#requireSelf(ctx, "create an invite link");
+    if (invite !== null) return this.#toInviteDto(invite);
+    await this.tx(async (tx) =>
+      tx
+        .insert(friendInvites)
+        .values({ userId: this.key, secret: newInviteSecret() })
+        .onConflictDoNothing(),
+    );
+    await this.reload();
+    return this.#requireInvite();
+  }
+
+  /** A new secret in place of the old one: every earlier link stops working. */
+  async resetFriendInvite(ctx: Ctx): Promise<FriendInviteDto> {
+    this.requireAggregate();
+    this.#requireSelf(ctx, "reset this invite link");
+    const secret = newInviteSecret();
+    await this.tx(async (tx) =>
+      tx
+        .insert(friendInvites)
+        .values({ userId: this.key, secret })
+        .onConflictDoUpdate({
+          target: friendInvites.userId,
+          set: { secret, createdAt: sql`now()` },
+        }),
+    );
+    await this.reload();
+    return this.#requireInvite();
+  }
+
+  /**
+   * On the inviter's actor: who sent this invite, and where the viewer stands
+   * with them. Anonymous allowed. A wrong or rotated secret is refused with
+   * exactly the bytes a nonexistent user gets (`refuseAsAbsent`).
+   *
+   * The name shown is the display name every signed-in user already sees,
+   * except one shaped like an email address (a pre-rule row), which becomes
+   * the neutral handle instead.
+   */
+  async previewFriendInvite(
+    ctx: Ctx,
+    secret: string,
+  ): Promise<FriendInvitePreviewDto> {
+    const { invite } = this.requireAggregate();
+    if (!secretMatches(invite, secret)) this.refuseAsAbsent();
+
+    const profile = await this.#profileFields(this.key);
+    const viewer = ctx.viewerId;
+    let status: FriendInvitePreviewDto["status"];
+    if (viewer === null) status = "SIGNED_OUT";
+    else if (viewer === this.key) status = "OWN_INVITE";
+    else {
+      const { friendships } = await this.#snapshot();
+      status = this.#areFriends(friendships, viewer)
+        ? "ALREADY_FRIENDS"
+        : "CAN_ACCEPT";
+    }
+    return {
+      inviterId: this.key,
+      inviterDisplayName: isEmailShaped(profile.displayName)
+        ? handleForId(this.key)
+        : profile.displayName,
+      inviterAvatarUrl: profile.avatarUrl,
+      status,
+    };
+  }
+
+  /**
+   * On the invitee's — the viewer's own — actor. Step 1 of §1.7, the same
+   * shape as `acceptFriendRequest`, with the invite standing in for the
+   * request: this user's `friends` row and the outbox row carrying
+   * `confirmFriendship` to the inviter, in one transaction. A pending request
+   * this user had sent the inviter is closed in the same transaction (it is
+   * this actor's own row); one the inviter had sent is closed by
+   * `confirmFriendship` on their side, as it always is.
+   *
+   * Idempotent: already friends (either direction, as `isFriend` reads it)
+   * writes nothing and says so.
+   */
+  async acceptFriendInvite(
+    ctx: Ctx,
+    input: AcceptFriendInviteInput,
+  ): Promise<AcceptFriendInviteResult> {
+    this.requireAggregate();
+    this.#requireSelf(ctx, "accept a friend invite as this user");
+    const inviterId = requireUuid(input?.inviterId, "inviterId");
+
+    // The inviter's row, read fresh: their actor rotates it in its own turns.
+    const [invite] = await this.db
+      .select()
+      .from(friendInvites)
+      .where(eq(friendInvites.userId, inviterId));
+    if (!secretMatches(invite ?? null, input?.secret)) {
+      throw absentRow(USER_ACTOR_TYPE, inviterId);
+    }
+    if (inviterId === this.key) {
+      throw new ValidationError(
+        "this is your own invite link",
+        "CANNOT_FRIEND_SELF",
+      );
+    }
+
+    const { friendships } = await this.#snapshot();
+    if (this.#areFriends(friendships, inviterId)) {
+      return { friendId: inviterId, becameFriends: false };
+    }
+
+    await this.tx(async (tx) => {
+      await tx
+        .insert(friends)
+        .values({ userId: this.key, friendId: inviterId })
+        .onConflictDoNothing();
+      await tx
+        .delete(friendRequests)
+        .where(
+          and(
+            eq(friendRequests.userId, this.key),
+            eq(friendRequests.friendId, inviterId),
+          ),
+        );
+      await enqueueOutbox(
+        tx,
+        OUTBOX_TARGETS["UserActor.confirmFriendship"],
+        {
+          targetId: inviterId,
+          payload: { friendId: this.key } satisfies ConfirmFriendshipPayload,
+        },
+        { attributeTo: ctx },
+      );
+    });
+    await this.reload();
+    return { friendId: inviterId, becameFriends: true };
+  }
+
+  #requireInvite(): FriendInviteDto {
+    const { invite } = this.requireAggregate();
+    if (invite === null) {
+      throw new ConflictError(
+        `no invite row for ${this.key} after writing one`,
+      );
+    }
+    return this.#toInviteDto(invite);
+  }
+
+  #toInviteDto(invite: FriendInviteRow): FriendInviteDto {
+    return {
+      token: formatInviteToken(this.key, invite.secret),
+      createdAt: requiredIso(invite.createdAt),
+    };
   }
 
   /* ---------------------------------------------------------------------- */
@@ -1039,7 +1548,11 @@ export class UserActor
   }
 
   /**
-   * Add or remove one favourite, returning the state after the toggle.
+   * Favourite one item, or stop: `favorited` is the state asked for, and a
+   * request for the state already held writes nothing and answers
+   * `changed: false` (wave B hardening). It used to be `toggleFavorite`,
+   * which flipped — so a retried request, or one whose answer was lost and
+   * was sent again, put the heart back the way it was.
    *
    * Read-then-write is safe here because Dapr runs one turn at a time per
    * actor id and every `item_favorites` row this touches has
@@ -1053,12 +1566,16 @@ export class UserActor
    * violation instead of leaving a duplicate row — not be absorbed as an
    * idempotent toggle.
    */
-  async toggleFavorite(
+  async setFavorite(
     ctx: Ctx,
     requested: ItemRef,
-  ): Promise<ToggleFavoriteResult> {
+    favorited: boolean,
+  ): Promise<SetFavoriteResult> {
     const aggregate = this.requireAggregate();
     this.#requireSelf(ctx, "change these favourites");
+    if (typeof favorited !== "boolean") {
+      throw new ValidationError("favorited must be true or false");
+    }
     if (typeof requested?.type !== "string" || !isItemType(requested.type)) {
       throw new ValidationError(`not an item type: ${String(requested?.type)}`);
     }
@@ -1077,13 +1594,15 @@ export class UserActor
       );
     });
 
-    if (existing !== undefined) {
+    if (!favorited) {
+      if (existing === undefined) return { ref, favorited, changed: false };
       await this.tx(async (tx) => {
         await tx.delete(itemFavorites).where(eq(itemFavorites.id, existing.id));
       });
       await this.reload();
-      return { ref, favorited: false };
+      return { ref, favorited, changed: true };
     }
+    if (existing !== undefined) return { ref, favorited, changed: false };
 
     if (!(await this.#itemExists(ref))) {
       throw new NotFoundError(`${ref.type.toLowerCase()} ${ref.id} not found`);
@@ -1092,7 +1611,7 @@ export class UserActor
       await tx.insert(itemFavorites).values(favoriteValues(this.key, ref));
     });
     await this.reload();
-    return { ref, favorited: true };
+    return { ref, favorited, changed: true };
   }
 
   /* ---------------------------------------------------------------------- */
@@ -1207,7 +1726,10 @@ export class UserActor
           ? null
           : normaliseTags(input.tags);
 
-    if (!(await this.#placeExists(placeId))) {
+    // X27: "exists" means "exists for this viewer" — a place still under
+    // review is its creator's alone, and anybody else saving it would learn
+    // it exists. Absent and hidden are one answer.
+    if (!(await this.#placeVisible(ctx, placeId))) {
       throw new NotFoundError(`place ${placeId} not found`);
     }
 
@@ -1237,7 +1759,13 @@ export class UserActor
         placeId,
         isFavorite: input.isFavorite ?? current?.isFavorite ?? false,
         isVisited: willBeVisited,
-        wantToVisit: input.wantToVisit ?? current?.wantToVisit ?? false,
+        // X08/D11: "Want to try" is a list of places you have not been to
+        // yet, so the first visit takes a place off it — unless this same
+        // call says otherwise. Only on the transition, so re-saving a place
+        // you have already visited sticks.
+        wantToVisit:
+          input.wantToVisit ??
+          (visitLogged ? false : (current?.wantToVisit ?? false)),
         rating:
           input.rating === undefined ? (current?.rating ?? null) : input.rating,
         notes:
@@ -1275,6 +1803,555 @@ export class UserActor
     });
     await this.reload();
     return toInteractionDto(row);
+  }
+
+  /* ---------------------------------------------------------------------- */
+  /* Want to try (X08)                                                       */
+  /* ---------------------------------------------------------------------- */
+
+  /**
+   * The list, newest first: `want_to_try` rows and the places marked
+   * `want_to_visit`. Owner (or admin) only.
+   *
+   * Read fresh, not from the activation's rows. This key is the only writer
+   * of those rows, but not the only thing that removes them: a recipe's
+   * author deleting it (`RecipeActor.delete`) cascades every user's wish for
+   * it away underneath their activations. A cached row would then be listed
+   * as an entry whose recipe no longer resolves — a field error, which fails
+   * the whole `/want-to-try` read (`runApiOperation` throws on any error).
+   * Two indexed reads of one user's rows; `wantToTryStates` keeps answering
+   * from the cache, where a stale key is harmless.
+   */
+  async wantToTry(
+    ctx: Ctx,
+    page: PageArgs,
+    kinds?: readonly WantToTryKind[] | null,
+  ): Promise<Page<WantToTryEntryDto>> {
+    this.requireAggregate();
+    this.#requireSelf(ctx, "view this want-to-try list");
+    if (kinds !== null && kinds !== undefined && !Array.isArray(kinds)) {
+      throw new ValidationError("kinds must be a list");
+    }
+    for (const kind of kinds ?? []) {
+      if (!isWantToTryKind(kind)) {
+        throw new ValidationError(`not a want-to-try kind: ${String(kind)}`);
+      }
+    }
+    const only = new Set<WantToTryKind>(
+      kinds === null || kinds === undefined || kinds.length === 0
+        ? ["ITEM", "RECIPE", "PLACE"]
+        : kinds,
+    );
+
+    const [wishRows, placeRows] = await Promise.all([
+      only.has("ITEM") || only.has("RECIPE")
+        ? this.db.select().from(wantToTry).where(eq(wantToTry.userId, this.key))
+        : Promise.resolve([]),
+      only.has("PLACE")
+        ? this.db
+            .select()
+            .from(userPlaceInteractions)
+            .where(
+              and(
+                eq(userPlaceInteractions.userId, this.key),
+                eq(userPlaceInteractions.wantToVisit, true),
+                // X27/D28: a place under review is its creator's alone. A
+                // row saved before review moved it out of reach must drop
+                // out silently — the list resolves each place by id, and a
+                // hidden one would fail the whole page (or name it).
+                placeRefVisibleSql(ctx, sql`${userPlaceInteractions.placeId}`),
+              ),
+            )
+        : Promise.resolve([]),
+    ]);
+
+    // X15: a recipe made private (or deleted) since it was saved drops out
+    // silently — the list resolves each recipe by id, and a hidden one would
+    // fail the whole page or name it.
+    const recipesShown = await visibleRecipeIds(
+      this.db,
+      ctx,
+      wishRows.flatMap((row) => (row.recipeId === null ? [] : [row.recipeId])),
+    );
+    const entries: { entry: WantToTryEntryDto; at: number; id: string }[] = [];
+    for (const row of wishRows) {
+      const target = wishTarget(row);
+      if (target === null || !only.has(target.kind)) continue;
+      if (target.kind === "RECIPE" && !recipesShown.has(target.recipeId)) {
+        continue;
+      }
+      entries.push({
+        entry: { target, savedAt: requiredIso(row.createdAt) },
+        at: row.createdAt?.getTime() ?? 0,
+        id: row.id,
+      });
+    }
+    for (const row of placeRows) {
+      const at = row.updatedAt ?? row.createdAt;
+      entries.push({
+        entry: {
+          target: { kind: "PLACE", placeId: row.placeId },
+          savedAt: requiredIso(at),
+        },
+        at: at?.getTime() ?? 0,
+        id: row.id,
+      });
+    }
+    // Newest first; the row id breaks ties so paging is stable.
+    entries.sort((a, b) => b.at - a.at || a.id.localeCompare(b.id));
+    return offsetPage(
+      entries.map(({ entry }) => entry),
+      page,
+    );
+  }
+
+  /**
+   * Which of `targets` are on the list, as `wantToTryKey`s — the matching
+   * subset, from the cached rows (the `favoriteStates` shape and reasoning).
+   */
+  async wantToTryStates(
+    ctx: Ctx,
+    targets: readonly WantToTryTarget[],
+  ): Promise<readonly string[]> {
+    const aggregate = this.requireAggregate();
+    this.#requireSelf(ctx, "view this want-to-try list");
+    if (!Array.isArray(targets)) {
+      throw new ValidationError("wantToTryStates takes a list of targets");
+    }
+    const saved = this.#savedKeys(aggregate);
+    const answer: string[] = [];
+    const seen = new Set<string>();
+    for (const requested of targets) {
+      const key = wantToTryKey(canonicalTarget(requested));
+      if (seen.has(key)) continue;
+      seen.add(key);
+      if (saved.has(key)) answer.push(key);
+    }
+    return answer;
+  }
+
+  /**
+   * Put a target on the list (`wantToTry: true`) or take it off. `set`, not
+   * `toggle`: asking for the state it is already in changes nothing and says
+   * so (`changed: false`), so an Undo, a double tap or a retried request can
+   * never flip it the wrong way.
+   *
+   * Items and recipes are `want_to_try` rows; read-then-write is safe for the
+   * reason `setFavorite` gives (one turn at a time, and every row here is
+   * this key's), and the per-column unique constraints make a duplicate fail
+   * loudly rather than stick. A place goes through `recordPlaceInteraction`,
+   * which owns `user_place_interactions`' upsert — one writer of that row.
+   */
+  async setWantToTry(
+    ctx: Ctx,
+    requested: WantToTryTarget,
+    on: boolean,
+  ): Promise<SetWantToTryResult> {
+    const aggregate = this.requireAggregate();
+    this.#requireSelf(ctx, "change this want-to-try list");
+    if (typeof on !== "boolean") {
+      throw new ValidationError("wantToTry must be true or false");
+    }
+    const target = canonicalTarget(requested);
+    const key = wantToTryKey(target);
+    const already = this.#savedKeys(aggregate).has(key);
+    if (already === on) return { target, wantToTry: on, changed: false };
+
+    if (target.kind === "PLACE") {
+      const row = await this.recordPlaceInteraction(ctx, {
+        placeId: target.placeId,
+        wantToVisit: on,
+      });
+      return { target, wantToTry: row.wantToVisit, changed: true };
+    }
+
+    if (!on) {
+      const existing = aggregate.wishes.find((row) => {
+        const current = wishTarget(row);
+        return current !== null && wantToTryKey(current) === key;
+      });
+      if (existing !== undefined) {
+        await this.tx(async (tx) => {
+          await tx.delete(wantToTry).where(eq(wantToTry.id, existing.id));
+        });
+        await this.reload();
+      }
+      return { target, wantToTry: false, changed: existing !== undefined };
+    }
+
+    if (target.kind === "ITEM") {
+      if (!(await this.#itemExists(target.item))) {
+        throw new NotFoundError(
+          `${target.item.type.toLowerCase()} ${target.item.id} not found`,
+        );
+      }
+      await this.tx(async (tx) => {
+        await tx
+          .insert(wantToTry)
+          .values({ userId: this.key, ...WISHES.values(target.item) });
+      });
+    } else {
+      // X15: a recipe the viewer may not see is "not found", exactly like
+      // one that does not exist — saving it must not confirm it exists.
+      if (!(await this.#recipeVisible(ctx, target.recipeId))) {
+        throw new NotFoundError(`recipe ${target.recipeId} not found`);
+      }
+      await this.tx(async (tx) => {
+        await tx
+          .insert(wantToTry)
+          .values({ userId: this.key, recipeId: target.recipeId });
+      });
+    }
+    await this.reload();
+    return { target, wantToTry: true, changed: true };
+  }
+
+  /** Every key on the list: `want_to_try` rows plus `want_to_visit` places. */
+  #savedKeys(aggregate: UserAggregate): Set<string> {
+    const keys = new Set<string>();
+    for (const row of aggregate.wishes) {
+      const target = wishTarget(row);
+      if (target !== null) keys.add(wantToTryKey(target));
+    }
+    for (const row of aggregate.interactions) {
+      if (row.wantToVisit === true) {
+        keys.add(wantToTryKey({ kind: "PLACE", placeId: row.placeId }));
+      }
+    }
+    return keys;
+  }
+
+  /* ---------------------------------------------------------------------- */
+  /* Bar pantry (D23)                                                        */
+  /* ---------------------------------------------------------------------- */
+
+  /**
+   * The toggles that are on, in pantry-screen order. A stored kind this build
+   * no longer lists is dropped from the answer, not the table: renaming a kind
+   * is a migration, and until it runs the row is simply not a toggle.
+   */
+  async barPantry(ctx: Ctx): Promise<readonly BarKind[]> {
+    const aggregate = this.requireAggregate();
+    this.#requireSelf(ctx, "read this bar pantry");
+    const on = new Set(aggregate.pantry.map((row) => row.kind));
+    return PANTRY_KINDS.filter((kind) => on.has(kind));
+  }
+
+  /**
+   * One toggle. `have: true` inserts (a no-op if the row is there — the
+   * primary key is `(user_id, kind)`), `have: false` deletes. Only the
+   * ~30 `PANTRY_KINDS`: cellar spirits count automatically (D23) and are not
+   * a toggle.
+   */
+  async setBarPantryItem(
+    ctx: Ctx,
+    input: SetBarPantryItemInput,
+  ): Promise<BarPantryItemDto> {
+    const aggregate = this.requireAggregate();
+    this.#requireSelf(ctx, "change this bar pantry");
+    if (!isPantryKind(input?.kind)) {
+      throw new ValidationError(
+        `not a Bar pantry item: ${JSON.stringify(input?.kind)} (one of ` +
+          `${PANTRY_KINDS.join(", ")})`,
+      );
+    }
+    if (typeof input.have !== "boolean") {
+      throw new ValidationError("`have` must be true or false");
+    }
+    const kind = input.kind;
+    const present = aggregate.pantry.some((row) => row.kind === kind);
+    if (present === input.have) return { kind, have: input.have };
+    await this.tx(async (tx) => {
+      if (input.have) {
+        await tx
+          .insert(barPantryItems)
+          .values({ userId: this.key, kind })
+          .onConflictDoNothing();
+      } else {
+        await tx
+          .delete(barPantryItems)
+          .where(
+            and(
+              eq(barPantryItems.userId, this.key),
+              eq(barPantryItems.kind, kind),
+            ),
+          );
+      }
+    });
+    await this.reload();
+    return { kind, have: input.have };
+  }
+
+  /* ---------------------------------------------------------------------- */
+  /* Recipe Love (D9)                                                        */
+  /* ---------------------------------------------------------------------- */
+
+  async recipeLoveStates(
+    ctx: Ctx,
+    recipeIds: readonly string[],
+  ): Promise<readonly string[]> {
+    const aggregate = this.requireAggregate();
+    this.#requireSelf(ctx, "read these loves");
+    if (!Array.isArray(recipeIds)) {
+      throw new ValidationError("recipeLoveStates takes a list of recipe ids");
+    }
+    const loved = new Set(aggregate.recipeLoves.map((row) => row.recipeId));
+    return recipeIds.filter(
+      (id) => typeof id === "string" && loved.has(id.toLowerCase()),
+    );
+  }
+
+  /**
+   * Love on, or off — the state asked for, so a retry cannot flip it back
+   * (`setFavorite`'s reason). Same turn-lock argument as `setFavorite`, and
+   * the same database backstop: `recipe_favorites_user_id_recipe_id_key`.
+   */
+  async setRecipeLove(
+    ctx: Ctx,
+    requested: string,
+    loved: boolean,
+  ): Promise<SetRecipeLoveResult> {
+    const aggregate = this.requireAggregate();
+    this.#requireSelf(ctx, "love recipes as this user");
+    const recipeId = requireUuid(requested, "recipeId");
+    if (typeof loved !== "boolean") {
+      throw new ValidationError("loved must be true or false");
+    }
+    const existing = aggregate.recipeLoves.find(
+      (row) => row.recipeId === recipeId,
+    );
+    if (!loved) {
+      if (existing === undefined) return { recipeId, loved, changed: false };
+      await this.tx(async (tx) => {
+        await tx
+          .delete(recipeFavorites)
+          .where(eq(recipeFavorites.id, existing.id));
+      });
+      await this.reload();
+      return { recipeId, loved, changed: true };
+    }
+    if (existing !== undefined) return { recipeId, loved, changed: false };
+    // X15: Love on a recipe the viewer may not see is "not found", the same
+    // answer as an id that names nothing — no existence oracle.
+    if (!(await this.#recipeVisible(ctx, recipeId))) {
+      throw new NotFoundError(`recipe ${recipeId} not found`);
+    }
+    await this.tx(async (tx) => {
+      // The wall clock, not the column's `now()` default: `now()` is the
+      // transaction's start, and "newest Love first" needs the moment of the
+      // tap.
+      await tx
+        .insert(recipeFavorites)
+        .values({ userId: this.key, recipeId, createdAt: new Date() });
+    });
+    await this.reload();
+    return { recipeId, loved, changed: true };
+  }
+
+  /**
+   * Newest Love first. A recipe deleted since is left out: its row went with
+   * it (`ON DELETE CASCADE`, written by `RecipeActor`'s delete, not this
+   * actor), so the cached aggregate can still hold it — and handing its id
+   * to the API would fail the whole list on one dead node. So is one its
+   * author has made private since (X15): the Love stays, and comes back if
+   * the recipe is shared again, but the list never names a hidden recipe.
+   */
+  async lovedRecipes(ctx: Ctx, page: PageArgs): Promise<Page<string>> {
+    const aggregate = this.requireAggregate();
+    this.#requireSelf(ctx, "view these loves");
+    const ids = [...aggregate.recipeLoves]
+      .sort(
+        (a, b) =>
+          b.createdAt.getTime() - a.createdAt.getTime() ||
+          a.id.localeCompare(b.id),
+      )
+      .map((row) => row.recipeId);
+    const alive = await visibleRecipeIds(this.db, ctx, ids);
+    return offsetPage(
+      ids.filter((id) => alive.has(id)),
+      page,
+    );
+  }
+
+  /**
+   * X15: the recipes this user wrote, newest change first. Read fresh —
+   * `recipes` is `RecipeActor`'s table, and a recipe written or published a
+   * moment ago must be listed now. Self only (`UserActorInterface`).
+   */
+  async myRecipes(
+    ctx: Ctx,
+    page: PageArgs,
+    drafts?: boolean | null,
+  ): Promise<Page<string>> {
+    this.requireAggregate();
+    this.#requireSelf(ctx, "list these recipes");
+    if (
+      drafts !== null &&
+      drafts !== undefined &&
+      typeof drafts !== "boolean"
+    ) {
+      throw new ValidationError("drafts must be a boolean");
+    }
+    const rows = await this.db
+      .select({ id: recipes.id })
+      .from(recipes)
+      .where(
+        drafts === null || drafts === undefined
+          ? eq(recipes.createdById, this.key)
+          : and(eq(recipes.createdById, this.key), eq(recipes.isDraft, drafts)),
+      )
+      .orderBy(
+        sql`coalesce(${recipes.updatedAt}, ${recipes.createdAt}) desc nulls last`,
+        sql`${recipes.id} asc`,
+      )
+      .limit(MY_RECIPES_CAP);
+    return offsetPage(
+      rows.map((row) => row.id),
+      page,
+    );
+  }
+
+  /**
+   * X18: the Me hub's four counts (`UserCountsDto` says what each one means).
+   * One statement of four indexed sub-selects, every one bounded by this
+   * user's own rows, read fresh — the activation's cached rows hold none of
+   * them except the place interactions, and a log or bottle written by
+   * another actor a moment ago must count.
+   *
+   * Self (or admin/system) only, like every other list of "mine" here. The
+   * counts are the owner's whatever the caller is allowed to see: an admin
+   * asking gets *their own* numbers, because this actor is keyed by them.
+   */
+  /* ---------------------------------------------------------------------- */
+  /* Brew prefs — ux-c L08                                                    */
+  /* ---------------------------------------------------------------------- */
+
+  /**
+   * The refusal for every brew-prefs call that may not proceed: somebody
+   * else's prefs, an item that does not exist, and a tea or coffee id that
+   * names nothing all answer this one `NotFound` (L6) — a stranger's call
+   * cannot tell "not yours" from "no such item".
+   */
+  #brewPrefsAbsent(item: ItemRef): NotFoundError {
+    return new NotFoundError(
+      `brew prefs for ${String(item?.type).toLowerCase()} ${String(item?.id)} not found`,
+    );
+  }
+
+  /** The ref, checked: a tea or a coffee that exists, asked by this user. */
+  async #requireBrewItem(ctx: Ctx, item: ItemRef): Promise<ItemRef> {
+    // The viewer's own prefs only — not even an admin reads someone's.
+    if (ctx.viewerId !== this.key) throw this.#brewPrefsAbsent(item);
+    const type: unknown = item?.type;
+    if (
+      typeof type !== "string" ||
+      !(BREW_PREF_ITEM_TYPES as readonly string[]).includes(type) ||
+      !isItemType(type)
+    ) {
+      throw new ValidationError("brew prefs are for a tea or a coffee");
+    }
+    if (!isUuid(item.id)) throw this.#brewPrefsAbsent(item);
+    const ref: ItemRef = { type, id: String(item.id).toLowerCase() };
+    if (!(await this.#itemExists(ref))) throw this.#brewPrefsAbsent(ref);
+    return ref;
+  }
+
+  async #brewPrefsRow(ref: ItemRef): Promise<BrewPrefsRow | null> {
+    const [row] = await this.db
+      .select()
+      .from(itemBrewPrefs)
+      .where(and(eq(itemBrewPrefs.userId, this.key), BREW_PREFS.where(ref)));
+    return row ?? null;
+  }
+
+  async brewPrefs(ctx: Ctx, item: ItemRef): Promise<BrewPrefsDto | null> {
+    const ref = await this.#requireBrewItem(ctx, item);
+    const row = await this.#brewPrefsRow(ref);
+    return row === null ? null : toBrewPrefsDto(ref, row);
+  }
+
+  async setBrewPrefs(
+    ctx: Ctx,
+    input: SetBrewPrefsInput,
+  ): Promise<BrewPrefsDto | null> {
+    const ref = await this.#requireBrewItem(ctx, input?.item);
+    const values = {
+      waterTempC: brewNumber(input.waterTempC, "waterTempC", {
+        min: 1,
+        max: 100,
+        integer: true,
+      }),
+      steepSeconds: brewNumber(input.steepSeconds, "steepSeconds", {
+        positive: true,
+        integer: true,
+      }),
+      doseGrams: brewNumber(input.doseGrams, "doseGrams", { positive: true }),
+      waterMl: brewNumber(input.waterMl, "waterMl", { positive: true }),
+    };
+    const empty = Object.values(values).every((value) => value === null);
+    await this.tx(async (tx) => {
+      // All four cleared is "back to typical": no row at all.
+      if (empty) {
+        await tx
+          .delete(itemBrewPrefs)
+          .where(
+            and(eq(itemBrewPrefs.userId, this.key), BREW_PREFS.where(ref)),
+          );
+        return;
+      }
+      const updated = await tx
+        .update(itemBrewPrefs)
+        .set({ ...values, updatedAt: new Date() })
+        .where(and(eq(itemBrewPrefs.userId, this.key), BREW_PREFS.where(ref)))
+        .returning({ id: itemBrewPrefs.id });
+      if (updated.length > 0) return;
+      await tx
+        .insert(itemBrewPrefs)
+        .values({ userId: this.key, ...BREW_PREFS.values(ref), ...values });
+    });
+    const row = await this.#brewPrefsRow(ref);
+    return row === null ? null : toBrewPrefsDto(ref, row);
+  }
+
+  async counts(ctx: Ctx): Promise<UserCountsDto> {
+    this.requireAggregate();
+    this.#requireSelf(ctx, "see these counts");
+    const me = this.key;
+    const { rows } = await this.db.execute<{
+      bottles: number | string;
+      logs: number | string;
+      places: number | string;
+      tier_lists: number | string;
+    }>(sql`
+      select
+        (select count(*)
+           from public.cellar_items ci
+           join public.cellars c on c.id = ci.cellar_id
+          where ci.empty_at is null and ${cellarOwnedBySql(me, "c")}
+        ) as bottles,
+        (select count(*) from public.check_ins k where k.user_id = ${me}::uuid
+        ) as logs,
+        (select count(distinct been.place_id)
+           from (
+             select upi.place_id from public.user_place_interactions upi
+              where upi.user_id = ${me}::uuid and upi.is_visited = true
+             union
+             select k.place_id from public.check_ins k
+              where k.user_id = ${me}::uuid and k.place_id is not null
+           ) been
+          where ${placeRefVisibleSql(ctx, sql`been.place_id`)}
+        ) as places,
+        (select count(*) from public.tier_lists t
+          where t.created_by_id = ${me}::uuid
+        ) as tier_lists
+    `);
+    const row = rows[0];
+    return {
+      bottles: Number(row?.bottles ?? 0),
+      logs: Number(row?.logs ?? 0),
+      places: Number(row?.places ?? 0),
+      tierLists: Number(row?.tier_lists ?? 0),
+    };
   }
 
   /* ---------------------------------------------------------------------- */
@@ -1345,12 +2422,12 @@ export class UserActor
     return row !== undefined;
   }
 
-  async #placeExists(placeId: string): Promise<boolean> {
-    const [row] = await this.db
-      .select({ id: places.id })
-      .from(places)
-      .where(eq(places.id, placeId));
-    return row !== undefined;
+  #placeVisible(ctx: Ctx, placeId: string): Promise<boolean> {
+    return placeIsVisible(this.db, ctx, placeId);
+  }
+
+  async #recipeVisible(ctx: Ctx, recipeId: string): Promise<boolean> {
+    return (await visibleRecipeIds(this.db, ctx, [recipeId])).has(recipeId);
   }
 
   /**
@@ -1386,6 +2463,7 @@ export class UserActor
       id: fields.id,
       displayName: fields.displayName,
       avatarUrl: fields.avatarUrl,
+      avatarFileId: fields.avatarFileId,
       locale: fields.locale,
       email: isOwner(ctx, fields.id) ? fields.email : null,
     };
@@ -1395,6 +2473,23 @@ export class UserActor
 /* -------------------------------------------------------------------------- */
 /* Module-level helpers                                                       */
 /* -------------------------------------------------------------------------- */
+
+/** 16 random bytes, base64url: the 22 characters `friend_invites` checks. */
+const newInviteSecret = (): string => randomBytes(16).toString("base64url");
+
+/**
+ * Whether `candidate` is this invite's secret. Constant-time over equal
+ * lengths; anything that is not secret-shaped is simply not a match.
+ */
+const secretMatches = (
+  invite: FriendInviteRow | null,
+  candidate: unknown,
+): boolean => {
+  if (invite === null || !isInviteSecret(candidate)) return false;
+  const expected = Buffer.from(invite.secret);
+  const given = Buffer.from(candidate);
+  return expected.length === given.length && timingSafeEqual(expected, given);
+};
 
 const byId = (a: { id: string }, b: { id: string }): number =>
   a.id.localeCompare(b.id);
@@ -1435,6 +2530,7 @@ const missingProfile = (userId: string): ProfileFields => ({
   id: userId,
   displayName: userId,
   avatarUrl: null,
+  avatarFileId: null,
   locale: null,
   email: null,
 });

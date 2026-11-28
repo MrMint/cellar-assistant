@@ -6,6 +6,7 @@
  */
 import type { Ctx, RecipeSearchInput } from "@cellar-assistant/contracts";
 import {
+  ConflictError,
   ForbiddenError,
   recipeSearchActorId,
 } from "@cellar-assistant/contracts";
@@ -28,7 +29,10 @@ import {
   seedUser,
   withTestDb,
 } from "../lib/testing.ts";
-import { RecipeSearchActor } from "./recipe-search-actor.ts";
+import {
+  mergeHybridRecipes,
+  RecipeSearchActor,
+} from "./recipe-search-actor.ts";
 
 const { skip } = await resolveTestDatabase();
 
@@ -94,6 +98,140 @@ describe.skipIf(skip)("RecipeSearchActor (§2.3)", () => {
         );
         expect(hits.map((h) => h.name)).toEqual(["Negroni Cake"]);
       });
+    });
+  });
+
+  describe("hybrid, for universal search (X12 / D9)", () => {
+    const seedBar = async (db: DbOrTx) => {
+      const negroni = await seedRecipe(db, { name: "Negroni" });
+      const boulevardier = await seedRecipe(db, {
+        name: "Boulevardier",
+        description: "A negroni with whiskey",
+      });
+      const americano = await seedRecipe(db, { name: "Americano" });
+      const mojito = await seedRecipe(db, { name: "Mojito" });
+      const cake = await seedRecipe(db, {
+        name: "Chocolate Cake",
+        type: "food",
+      });
+      await seedRecipeVector(db, negroni, blendedVector(0, 1, 0.9));
+      await seedRecipeVector(db, boulevardier, blendedVector(0, 1, 0.1));
+      await seedRecipeVector(db, americano, blendedVector(0, 1, 0.2));
+      await seedRecipeVector(db, mojito, blendedVector(0, 1, 0.3));
+      await seedRecipeVector(db, cake, blendedVector(0, 1, 0.9));
+    };
+
+    it("lists name matches first, then the near ones within the gap", async () => {
+      await withTestDb(async (db) => {
+        const viewer = await seedUser(db);
+        await seedBar(db);
+        const input: RecipeSearchInput = { term: "negroni", hybrid: true };
+        const hits = await newActor(input, db, viewer).all(
+          userCtx(viewer),
+          input,
+        );
+        // Negroni by name (its vector is far); Boulevardier and Americano by
+        // meaning; Mojito is 0.097 past the nearest, the cake past 0.45.
+        expect(hits.map((h) => h.name)).toEqual([
+          "Negroni",
+          "Boulevardier",
+          "Americano",
+        ]);
+        expect(hits[0]?.distance).toBeNull();
+      });
+    });
+
+    it("X15: both halves are the viewer's — a private recipe is found by its author, never by anyone else", async () => {
+      await withTestDb(async (db) => {
+        const author = await seedUser(db);
+        const stranger = await seedUser(db);
+        await seedBar(db);
+        // One hidden by name, one hidden by meaning (its vector is the
+        // nearest of all), and a draft that would be both.
+        const byName = await seedRecipe(db, {
+          name: "Negroni Secret",
+          createdById: author,
+          privacy: "PRIVATE",
+        });
+        const byMeaning = await seedRecipe(db, {
+          name: "House Aperitivo",
+          createdById: author,
+          privacy: "PRIVATE",
+        });
+        const draft = await seedRecipe(db, {
+          name: "Negroni Draft",
+          createdById: author,
+          privacy: "PUBLIC",
+          isDraft: true,
+        });
+        await seedRecipeVector(db, byName, blendedVector(0, 1, 0.9));
+        await seedRecipeVector(db, byMeaning, blendedVector(0, 1, 0.05));
+        await seedRecipeVector(db, draft, blendedVector(0, 1, 0.05));
+        const input: RecipeSearchInput = { term: "negroni", hybrid: true };
+        const names = async (viewer: string) =>
+          (await newActor(input, db, viewer).all(userCtx(viewer), input)).map(
+            (h) => h.name,
+          );
+        const theirs = await names(stranger);
+        expect(theirs).not.toContain("Negroni Secret");
+        expect(theirs).not.toContain("House Aperitivo");
+        expect(theirs).not.toContain("Negroni Draft");
+        expect(theirs).toContain("Negroni");
+        const own = await names(author);
+        expect(own).toContain("Negroni Secret");
+        expect(own).toContain("House Aperitivo");
+        expect(own).toContain("Negroni Draft");
+      });
+    });
+
+    it("answers with the names alone when the term cannot be embedded (D25)", async () => {
+      await withTestDb(async (db) => {
+        const viewer = await seedUser(db);
+        await seedBar(db);
+        const input: RecipeSearchInput = { term: "negroni", hybrid: true };
+        const unconfigured: EmbedQuery = async () => {
+          throw new ConflictError("no embedding provider", "AI_UNCONFIGURED");
+        };
+        const hits = await newActor(input, db, viewer, unconfigured).all(
+          userCtx(viewer),
+          input,
+        );
+        expect(hits.map((h) => h.name)).toEqual(["Negroni"]);
+      });
+    });
+
+    it("joins the key only when set", () => {
+      expect(
+        recipeSearchActorId({ term: "negroni", hybrid: false }, null),
+      ).toBe(recipeSearchActorId({ term: "negroni" }, null));
+      expect(
+        recipeSearchActorId({ term: "negroni", hybrid: true }, null),
+      ).not.toBe(recipeSearchActorId({ term: "negroni" }, null));
+    });
+
+    it("merges without repeating a recipe both halves found", () => {
+      const hit = (recipeId: string, distance: number | null) => ({
+        recipeId,
+        name: recipeId,
+        description: null,
+        type: "cocktail",
+        recipeGroupId: null,
+        distance,
+      });
+      expect(
+        mergeHybridRecipes(
+          [hit("negroni", null)],
+          [hit("negroni", 0.1), hit("americano", 0.12), hit("mojito", 0.2)],
+          10,
+        ).map((h) => h.recipeId),
+      ).toEqual(["negroni", "americano"]);
+      expect(
+        mergeHybridRecipes(
+          [hit("a", null), hit("b", null)],
+          [hit("c", 0.1)],
+          2,
+        ),
+      ).toHaveLength(2);
     });
   });
 
@@ -241,6 +379,53 @@ describe.skipIf(skip)("RecipeSearchActor (§2.3)", () => {
     });
   });
 
+  it("X15: a viewer finds their own recipes and drafts, friends' FRIENDS ones and everyone's PUBLIC ones; the menu matcher only PUBLIC", async () => {
+    await withTestDb(async (db) => {
+      const owner = await seedUser(db);
+      const friend = await seedUser(db);
+      const stranger = await seedUser(db);
+      await seedFriendship(db, owner, friend);
+      const tag = `x15${Date.now()}`;
+      await seedRecipe(db, { name: `${tag} public`, createdById: owner });
+      await seedRecipe(db, {
+        name: `${tag} friends`,
+        createdById: owner,
+        privacy: "FRIENDS",
+      });
+      await seedRecipe(db, {
+        name: `${tag} private`,
+        createdById: owner,
+        privacy: "PRIVATE",
+      });
+      await seedRecipe(db, {
+        name: `${tag} draft`,
+        createdById: owner,
+        privacy: "PUBLIC",
+        isDraft: true,
+      });
+
+      const input: RecipeSearchInput = { term: tag };
+      const names = async (viewer: string | null, ctx: Ctx) =>
+        (await newActor(input, db, viewer).all(ctx, input))
+          .map((hit) => hit.name.slice(tag.length + 1))
+          .sort();
+      expect(await names(owner, userCtx(owner))).toEqual([
+        "draft",
+        "friends",
+        "private",
+        "public",
+      ]);
+      expect(await names(friend, userCtx(friend))).toEqual([
+        "friends",
+        "public",
+      ]);
+      expect(await names(stranger, userCtx(stranger))).toEqual(["public"]);
+      expect(
+        await names(null, { viewerId: null, kind: "system", requestId: "r" }),
+      ).toEqual(["public"]);
+    });
+  });
+
   it("shows the same catalog to owner, friend and stranger; refuses anonymous", async () => {
     await withTestDb(async (db) => {
       const owner = await seedUser(db);
@@ -263,6 +448,66 @@ describe.skipIf(skip)("RecipeSearchActor (§2.3)", () => {
       await expect(
         newActor(input, db, null).all(userCtx(null), input),
       ).rejects.toThrow(ForbiddenError);
+    });
+  });
+
+  describe("section totals (MC-search, L3)", () => {
+    const seedSours = async (db: DbOrTx) => {
+      for (const name of ["Qzx Sour", "Qzx Sour Royale", "Qzx Sour Fizz"]) {
+        const recipe = await seedRecipe(db, { name });
+        await seedRecipeVector(db, recipe, unitVector(0));
+      }
+    };
+
+    it("a lexical search counts every match, past the cap too", async () => {
+      await withTestDb(async (db) => {
+        const viewer = await seedUser(db);
+        await seedSours(db);
+        const input: RecipeSearchInput = { term: "qzx", limit: 2 };
+        const page = await newActor(input, db, viewer).results(
+          userCtx(viewer),
+          input,
+          { first: 10, after: null },
+        );
+        expect(page.entries).toHaveLength(2);
+        expect(page.totalCount).toBe(3);
+        expect(page.totalIsLowerBound).toBe(false);
+      });
+    });
+
+    it("a semantic search is the full count under the cap, and a lower bound at it", async () => {
+      await withTestDb(async (db) => {
+        const viewer = await seedUser(db);
+        await seedSours(db);
+        const inputs: readonly [RecipeSearchInput, RecipeSearchInput][] = [
+          [
+            { semanticQuery: "tart", limit: 3 },
+            { semanticQuery: "tart", limit: 2 },
+          ],
+          [
+            { term: "qzx", hybrid: true, limit: 3 },
+            { term: "qzx", hybrid: true, limit: 2 },
+          ],
+        ];
+        for (const [under, capped] of inputs) {
+          const all = await newActor(under, db, viewer).results(
+            userCtx(viewer),
+            under,
+            { first: 1, after: null },
+          );
+          expect(all.totalCount).toBe(3);
+          expect(all.totalIsLowerBound).toBe(false);
+
+          const page = await newActor(capped, db, viewer).results(
+            userCtx(viewer),
+            capped,
+            { first: 10, after: null },
+          );
+          expect(page.entries).toHaveLength(2);
+          expect(page.totalCount).toBe(2);
+          expect(page.totalIsLowerBound).toBe(true);
+        }
+      });
     });
   });
 });

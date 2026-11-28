@@ -7,9 +7,11 @@
  * visible from both sides; and request direction is computed relative to the
  * viewer rather than stored.
  */
+import { randomUUID } from "node:crypto";
 import {
   type ActivityFilter,
   ForbiddenError,
+  type FriendsFeedFilter,
   pageArgs,
   userCtx,
   ValidationError,
@@ -21,9 +23,11 @@ import type { DbOrTx } from "../lib/db.ts";
 import {
   seedCellar,
   seedCellarItem,
+  seedCheckIn,
   seedFriendship,
   seedItemReview,
   seedPlace,
+  seedRecipe,
   seedTierList,
   seedTierListPlace,
   seedWine,
@@ -192,6 +196,165 @@ describe.skipIf(skip)("FriendsCollectionActor", () => {
         where ${where}
       `);
     };
+
+    it("X27: a friend ranking their own place under review is not in the viewer's feed — and is in the friend's own", async () => {
+      await withTestDb(async (db) => {
+        const viewer = await seedUser(db);
+        const friend = await seedUser(db);
+        await seedFriendship(db, viewer, friend);
+        const pending = await seedPlace(db, {
+          name: "Friend's pending bar",
+          lng: 0,
+          lat: 0,
+          reviewStatus: "pending",
+          createdBy: friend,
+        });
+        const list = await seedTierList(db, {
+          createdById: friend,
+          privacy: "PUBLIC",
+        });
+        await seedTierListPlace(db, list, pending);
+
+        const { entries } = await activityOf(db, viewer);
+        expect(entries.map((e) => e.placeId)).not.toContain(pending);
+        const own = await activityOf(db, friend);
+        expect(own.entries.map((e) => e.placeId)).toContain(pending);
+      });
+    });
+
+    it("CHECKED_IN (X02): the viewer's and friends' logs, one entry per occasion, a stranger's never", async () => {
+      await withTestDb(async (db) => {
+        const viewer = await seedUser(db);
+        const friend = await seedUser(db);
+        const stranger = await seedUser(db);
+        await seedFriendship(db, viewer, friend);
+        const wine = await seedWine(db, viewer, "Logged");
+
+        // A table's round the friend logged for themself and the viewer: one
+        // occasion, two rows — it must appear once.
+        const round = await seedCheckIn(db, { userId: friend, item: wine });
+        await seedCheckIn(db, {
+          userId: viewer,
+          item: wine,
+          createdById: friend,
+          groupId: round,
+        });
+        const mine = await seedCheckIn(db, { userId: viewer, item: wine });
+        const theirs = await seedCheckIn(db, { userId: stranger, item: wine });
+
+        const { entries } = await activityOf(db, viewer, {
+          kinds: ["CHECKED_IN"],
+          limit: 6,
+        });
+        const ids = entries.map((e) => e.id);
+        expect(ids.sort()).toEqual([round, mine].sort());
+        expect(ids).not.toContain(theirs);
+        const roundEntry = entries.find((e) => e.id === round);
+        expect(roundEntry?.kind).toBe("CHECKED_IN");
+        expect(roundEntry?.userId).toBe(friend);
+        expect(roundEntry?.checkIn?.companionIds).toEqual([viewer]);
+        expect(roundEntry?.item).toEqual(wine);
+      });
+    });
+
+    it("CHECKED_IN (ux-c L08): a friend's Made-it log shows only when the viewer may see its recipe", async () => {
+      await withTestDb(async (db) => {
+        const viewer = await seedUser(db);
+        const friend = await seedUser(db);
+        await seedFriendship(db, viewer, friend);
+        const open = await seedRecipe(db, {
+          name: "Feed spritz",
+          createdById: friend,
+        });
+        const secret = await seedRecipe(db, {
+          name: "Friend's private shrub",
+          createdById: friend,
+          privacy: "PRIVATE",
+        });
+        const gone = await seedRecipe(db, {
+          name: "Deleted daiquiri",
+          createdById: friend,
+        });
+        const recipeLog = async (recipeId: string): Promise<string> => {
+          const id = randomUUID();
+          await db.execute(sql`
+            insert into public.check_ins
+              (id, group_id, user_id, created_by_id, recipe_id)
+            values (${id}::uuid, ${id}::uuid, ${friend}::uuid,
+                    ${friend}::uuid, ${recipeId}::uuid)
+          `);
+          return id;
+        };
+        const openLog = await recipeLog(open);
+        const secretLog = await recipeLog(secret);
+        const goneLog = await recipeLog(gone);
+        await db.execute(
+          sql`delete from public.recipes where id = ${gone}::uuid`,
+        );
+
+        const { entries } = await activityOf(db, viewer, {
+          kinds: ["CHECKED_IN"],
+          limit: 6,
+        });
+        const ids = entries.map((e) => e.id);
+        expect(ids.sort()).toEqual([openLog, goneLog].sort());
+        expect(ids).not.toContain(secretLog);
+        const made = entries.find((e) => e.id === openLog);
+        expect(made?.item).toBeNull();
+        expect(made?.checkIn?.recipe).toEqual({ id: open });
+        // L44: the recipe went; the log stays, naming nothing.
+        const orphan = entries.find((e) => e.id === goneLog);
+        expect(orphan?.checkIn).toMatchObject({ item: null, recipe: null });
+
+        // The friend's profile log follows the same rule.
+        const actor = await activate(
+          createActor(FriendsCollectionActor, viewer, db),
+        );
+        const logs = await actor.profileLogs(
+          userCtx(viewer, "r"),
+          { profileOf: friend },
+          pageArgs({ first: 10 }),
+        );
+        expect(logs.entries.map((e) => e.node.id).sort()).toEqual(
+          [openLog, goneLog].sort(),
+        );
+      });
+    });
+
+    it("CHECKED_IN (X02 x X27): a friend's log at their own place under review names no place", async () => {
+      await withTestDb(async (db) => {
+        const viewer = await seedUser(db);
+        const friend = await seedUser(db);
+        await seedFriendship(db, viewer, friend);
+        const wine = await seedWine(db, friend, "Logged at a pending bar");
+        const pending = await seedPlace(db, {
+          name: "Friend's pending bar",
+          lng: 0,
+          lat: 0,
+          reviewStatus: "pending",
+          createdBy: friend,
+        });
+        const id = await seedCheckIn(db, { userId: friend, item: wine });
+        await db.execute(
+          sql`update public.check_ins set place_id = ${pending}::uuid where id = ${id}::uuid`,
+        );
+
+        const { entries } = await activityOf(db, viewer, {
+          kinds: ["CHECKED_IN"],
+          limit: 6,
+        });
+        const entry = entries.find((e) => e.id === id);
+        expect(entry?.checkIn).toBeDefined();
+        expect(entry?.checkIn?.placeId).toBeNull();
+        const own = await activityOf(db, friend, {
+          kinds: ["CHECKED_IN"],
+          limit: 6,
+        });
+        expect(own.entries.find((e) => e.id === id)?.checkIn?.placeId).toBe(
+          pending,
+        );
+      });
+    });
 
     it("tier-list entries: the viewer's and friends' lists exactly as canSeeTierList admits them", async () => {
       await withTestDb(async (db) => {
@@ -420,4 +583,432 @@ describe.skipIf(skip)("FriendsCollectionActor", () => {
       });
     });
   });
+
+  /**
+   * X10: Home's Friends section. Friends only, every kind's rule kept, and
+   * paged for real — a cursor names one point in the merged order, so no
+   * page skips or repeats a row however the kinds interleave.
+   */
+  describe("friendsFeed", () => {
+    const feedPage = async (
+      actor: FriendsCollectionActor,
+      viewer: string,
+      first: number,
+      after: string | null = null,
+      kinds: FriendsFeedFilter["kinds"] = [],
+    ) =>
+      await actor.friendsFeed(
+        userCtx(viewer, "r"),
+        { kinds },
+        pageArgs({ first, after }),
+      );
+
+    it("lists friends' activity, never the viewer's own or a stranger's", async () => {
+      await withTestDb(async (db) => {
+        const viewer = await seedUser(db);
+        const friend = await seedUser(db);
+        const stranger = await seedUser(db);
+        await seedFriendship(db, viewer, friend);
+        const wine = await seedWine(db, viewer, "Feed wine");
+        await seedItemReview(db, friend, wine, 4);
+        await seedItemReview(db, viewer, wine, 3);
+        await seedItemReview(db, stranger, wine, 2);
+        const actor = await activate(
+          createActor(FriendsCollectionActor, viewer, db),
+        );
+        const page = await feedPage(actor, viewer, 10);
+        expect(page.entries.map((e) => e.node.userId)).toEqual([friend]);
+        expect(page.hasNextPage).toBe(false);
+      });
+    });
+
+    it("keeps canSeeTierList and canSeeCellar: a friend's PRIVATE list or cellar never reaches the feed", async () => {
+      await withTestDb(async (db) => {
+        const viewer = await seedUser(db);
+        const friend = await seedUser(db);
+        await seedFriendship(db, viewer, friend);
+        const place = await seedPlace(db, { name: "P", lng: 0, lat: 0 });
+        const wine = await seedWine(db, friend, "Feed privacy wine");
+        type Privacy = "PRIVATE" | "FRIENDS" | "PUBLIC";
+        const lists = {} as Record<Privacy, string>;
+        const cellars = {} as Record<Privacy, string>;
+        for (const privacy of ["PRIVATE", "FRIENDS", "PUBLIC"] as const) {
+          const list = await seedTierList(db, {
+            createdById: friend,
+            privacy,
+          });
+          await seedTierListPlace(db, list, place);
+          lists[privacy] = list;
+          const cellar = await seedCellar(db, {
+            createdById: friend,
+            privacy,
+          });
+          await seedCellarItem(db, cellar, friend, wine);
+          cellars[privacy] = cellar;
+        }
+        const actor = await activate(
+          createActor(FriendsCollectionActor, viewer, db),
+        );
+        const { entries } = await feedPage(actor, viewer, 20);
+        const listIds = entries.map((e) => e.node.tierListItem?.tierListId);
+        const cellarIds = entries.map((e) => e.node.cellarId);
+        for (const privacy of ["PRIVATE", "FRIENDS", "PUBLIC"] as const) {
+          const ctx = userCtx(viewer, "r");
+          expect(listIds.includes(lists[privacy]), `list ${privacy}`).toBe(
+            canSeeTierList(ctx, {
+              createdById: friend,
+              privacy,
+              viewerIsFriendOfCreator: true,
+            }),
+          );
+          expect(
+            cellarIds.includes(cellars[privacy]),
+            `cellar ${privacy}`,
+          ).toBe(
+            canSeeCellar(ctx, {
+              createdById: friend,
+              privacy,
+              coOwnerIds: [],
+              viewerIsFriendOfCreator: true,
+            }),
+          );
+        }
+        // The two PRIVATE rows exist; the feed just never names them.
+        expect(listIds).not.toContain(lists.PRIVATE);
+        expect(cellarIds).not.toContain(cellars.PRIVATE);
+      });
+    });
+
+    it("is empty without friends, and refuses another viewer", async () => {
+      await withTestDb(async (db) => {
+        const viewer = await seedUser(db);
+        const other = await seedUser(db);
+        const actor = await activate(
+          createActor(FriendsCollectionActor, viewer, db),
+        );
+        expect((await feedPage(actor, viewer, 5)).entries).toEqual([]);
+        await expect(
+          actor.friendsFeed(
+            userCtx(other, "r"),
+            { kinds: [] },
+            pageArgs({ first: 5 }),
+          ),
+        ).rejects.toBeInstanceOf(ForbiddenError);
+        await expect(
+          actor.friendsFeed(
+            userCtx(viewer, "r"),
+            { kinds: ["SHARED"] } as unknown as FriendsFeedFilter,
+            pageArgs({ first: 5 }),
+          ),
+        ).rejects.toBeInstanceOf(ValidationError);
+        await expect(
+          feedPage(actor, viewer, 5, "offset:3"),
+        ).rejects.toBeInstanceOf(ValidationError);
+      });
+    });
+
+    it("walks every row exactly once across pages, kinds interleaved and tied", async () => {
+      await withTestDb(async (db) => {
+        const viewer = await seedUser(db);
+        const friend = await seedUser(db);
+        await seedFriendship(db, viewer, friend);
+        const cellar = await seedCellar(db, {
+          createdById: friend,
+          privacy: "FRIENDS",
+        });
+        const wines = [];
+        for (let i = 0; i < 4; i += 1) {
+          wines.push(await seedWine(db, friend, `Paged ${i}`));
+        }
+        // Two kinds at the very same instant, and two rows of one kind at
+        // another, so the cursor has to break ties on kind and on id.
+        const tied = "2026-10-01T12:00:00.000Z";
+        const tiedPair = "2026-10-01T11:00:00.000Z";
+        for (const [i, wine] of wines.entries()) {
+          await seedCellarItem(db, cellar, friend, wine);
+          await seedCheckIn(db, {
+            userId: friend,
+            item: wine,
+            createdAt: i < 2 ? tiedPair : `2026-10-0${2 + i}T09:00:00.000Z`,
+          });
+        }
+        await db.execute(sql`
+          update public.cellar_items set created_at = ${tied}::timestamptz
+          where cellar_id = ${cellar}::uuid
+        `);
+        const firstWine = wines[0];
+        if (firstWine === undefined) throw new Error("no wine seeded");
+        await seedCheckIn(db, {
+          userId: friend,
+          item: firstWine,
+          createdAt: tied,
+        });
+
+        const actor = await activate(
+          createActor(FriendsCollectionActor, viewer, db),
+        );
+        const everything = await feedPage(actor, viewer, 50);
+        const all = everything.entries.map(
+          (e) => `${e.node.kind}:${e.node.id}`,
+        );
+        expect(all).toHaveLength(9);
+
+        const walked: string[] = [];
+        let after: string | null = null;
+        for (let pages = 0; pages < 20; pages += 1) {
+          const page = await feedPage(actor, viewer, 2, after);
+          walked.push(
+            ...page.entries.map((e) => `${e.node.kind}:${e.node.id}`),
+          );
+          if (!page.hasNextPage) break;
+          after = page.entries.at(-1)?.cursor ?? null;
+        }
+        expect(walked).toEqual(all);
+        // Newest first, ties by kind A→Z.
+        const ats = everything.entries.map((e) => e.node.occurredAt);
+        expect([...ats].sort().reverse()).toEqual(ats);
+      });
+    });
+
+    it("keeps the kind filter across pages", async () => {
+      await withTestDb(async (db) => {
+        const viewer = await seedUser(db);
+        const friend = await seedUser(db);
+        await seedFriendship(db, viewer, friend);
+        const wine = await seedWine(db, friend, "Only logs");
+        await seedItemReview(db, friend, wine, 4);
+        await seedCheckIn(db, { userId: friend, item: wine });
+        const actor = await activate(
+          createActor(FriendsCollectionActor, viewer, db),
+        );
+        const page = await feedPage(actor, viewer, 5, null, ["CHECKED_IN"]);
+        expect(page.entries.map((e) => e.node.kind)).toEqual(["CHECKED_IN"]);
+      });
+    });
+  });
 });
+
+describe.skipIf(skip)(
+  "FriendsCollectionActor — a friend's profile pages past 20 (leftovers 6)",
+  () => {
+    afterAll(closeTestDb);
+
+    it("walks tier lists and cellars past the first 20 with `after`, each once", async () => {
+      await withTestDb(async (db) => {
+        const viewer = await seedUser(db);
+        const friend = await seedUser(db);
+        await seedFriendship(db, viewer, friend);
+        const lists: string[] = [];
+        const cellars: string[] = [];
+        for (let index = 0; index < 25; index += 1) {
+          lists.push(
+            await seedTierList(db, {
+              createdById: friend,
+              privacy: "FRIENDS",
+              name: `List ${index}`,
+            }),
+          );
+          cellars.push(
+            await seedCellar(db, {
+              createdById: friend,
+              privacy: "FRIENDS",
+              name: `Cellar ${index}`,
+            }),
+          );
+        }
+        const actor = await activate(
+          createActor(FriendsCollectionActor, viewer, db),
+        );
+        const ctx = userCtx(viewer, "r");
+        const filter = { profileOf: friend };
+
+        for (const read of [
+          (page: ReturnType<typeof pageArgs>) =>
+            actor.profileTierLists(ctx, filter, page),
+          (page: ReturnType<typeof pageArgs>) =>
+            actor.profileCellars(ctx, filter, page),
+        ]) {
+          const first = await read(pageArgs({ first: 20 }));
+          expect(first.entries).toHaveLength(20);
+          expect(first.hasNextPage).toBe(true);
+          expect(first.totalCount).toBe(25);
+          const after = first.entries.at(-1)?.cursor ?? null;
+          const rest = await read(pageArgs({ first: 20, after }));
+          expect(rest.entries).toHaveLength(5);
+          expect(rest.hasNextPage).toBe(false);
+          const seen = [...first.entries, ...rest.entries].map((e) => e.node);
+          expect(new Set(seen).size).toBe(25);
+        }
+        const all = await actor.profileTierLists(
+          ctx,
+          filter,
+          pageArgs({ first: 20 }),
+        );
+        expect(lists).toEqual(
+          expect.arrayContaining(all.entries.map((e) => e.node)),
+        );
+        const someCellars = await actor.profileCellars(
+          ctx,
+          filter,
+          pageArgs({ first: 20 }),
+        );
+        expect(cellars).toEqual(
+          expect.arrayContaining(someCellars.entries.map((e) => e.node)),
+        );
+      });
+    });
+  },
+);
+
+describe.skipIf(skip)(
+  "FriendsCollectionActor — latest activity and mutual friends (F-51, F-94)",
+  () => {
+    afterAll(closeTestDb);
+
+    const actorOf = (db: DbOrTx, viewer: string) =>
+      activate(createActor(FriendsCollectionActor, viewer, db));
+
+    const ago = async (
+      db: DbOrTx,
+      table: "item_reviews" | "tier_list_items" | "cellar_items",
+      where: ReturnType<typeof sql>,
+      minutesAgo: number,
+    ) => {
+      await db.execute(sql`
+        update ${sql.identifier("public")}.${sql.identifier(table)}
+        set created_at = now() - make_interval(mins => ${minutesAgo})
+        where ${where}
+      `);
+    };
+
+    it("F-51: each friend's newest entry the viewer may see, aligned, and null for a stranger", async () => {
+      await withTestDb(async (db) => {
+        const viewer = await seedUser(db);
+        const ana = await seedUser(db);
+        const ben = await seedUser(db);
+        const cai = await seedUser(db);
+        const stranger = await seedUser(db);
+        for (const friend of [ana, ben, cai]) {
+          await seedFriendship(db, viewer, friend);
+        }
+        const wine = await seedWine(db, ana, "F-51 wine");
+
+        // Ana: a review, then a bottle in a PUBLIC cellar — the bottle wins.
+        await seedItemReview(db, ana, wine, 4);
+        await ago(db, "item_reviews", sql`user_id = ${ana}::uuid`, 30);
+        const anaCellar = await seedCellar(db, {
+          createdById: ana,
+          privacy: "PUBLIC",
+        });
+        const anaBottle = await seedCellarItem(db, anaCellar, ana, wine);
+        await ago(db, "cellar_items", sql`id = ${anaBottle}::uuid`, 10);
+
+        // Ben: a review, then a bottle in a PRIVATE cellar — the review wins.
+        await seedItemReview(db, ben, wine, 3);
+        await ago(db, "item_reviews", sql`user_id = ${ben}::uuid`, 60);
+        const benCellar = await seedCellar(db, {
+          createdById: ben,
+          privacy: "PRIVATE",
+        });
+        const benBottle = await seedCellarItem(db, benCellar, ben, wine);
+        await ago(db, "cellar_items", sql`id = ${benBottle}::uuid`, 1);
+
+        // Cai: only an entry on a PRIVATE list — nothing to show.
+        const place = await seedPlace(db, { name: "P", lng: 0, lat: 0 });
+        const caiList = await seedTierList(db, {
+          createdById: cai,
+          privacy: "PRIVATE",
+        });
+        await seedTierListPlace(db, caiList, place);
+
+        // A stranger's activity is never read, though the id is asked for.
+        await seedItemReview(db, stranger, wine, 5);
+
+        const actor = await actorOf(db, viewer);
+        const latest = await actor.latestActivity(userCtx(viewer, "r"), {
+          latestOf: [ana, ben, cai, stranger],
+        });
+        expect(latest.map((entry) => entry?.kind ?? null)).toEqual([
+          "ADDED",
+          "REVIEWED",
+          null,
+          null,
+        ]);
+        expect(latest[0]?.cellarItemId).toBe(anaBottle);
+        expect(latest[0]?.userId).toBe(ana);
+        expect(latest[1]?.userId).toBe(ben);
+        expect(actor.queryCount).toBe(1);
+      });
+    });
+
+    it("F-51: refuses another viewer, a malformed id list and more than a page", async () => {
+      await withTestDb(async (db) => {
+        const viewer = await seedUser(db);
+        const other = await seedUser(db);
+        const actor = await actorOf(db, viewer);
+        await expect(
+          actor.latestActivity(userCtx(other, "r"), { latestOf: [] }),
+        ).rejects.toBeInstanceOf(ForbiddenError);
+        await expect(
+          actor.latestActivity(userCtx(viewer, "r"), {
+            latestOf: ["not-a-uuid"],
+          }),
+        ).rejects.toBeInstanceOf(ValidationError);
+        await expect(
+          actor.latestActivity(userCtx(viewer, "r"), {
+            latestOf: Array.from({ length: 101 }, () => randomUUID()),
+          }),
+        ).rejects.toBeInstanceOf(ValidationError);
+        expect(
+          await actor.latestActivity(userCtx(viewer, "r"), { latestOf: [] }),
+        ).toEqual([]);
+      });
+    });
+
+    it("F-94: counts the viewer's own friends who are the other's friends, for a non-friend, first by name", async () => {
+      await withTestDb(async (db) => {
+        const viewer = await seedUser(db);
+        const target = await seedUser(db);
+        const zed = await seedUser(db, { displayName: "Zed F94" });
+        const amy = await seedUser(db, { displayName: "Amy F94" });
+        const onlyTargets = await seedUser(db);
+        const onlyMine = await seedUser(db);
+        for (const mutual of [zed, amy]) {
+          await seedFriendship(db, viewer, mutual);
+          await seedFriendship(db, mutual, viewer);
+        }
+        await seedFriendship(db, viewer, onlyMine);
+        // Both directions of the target's side, one mid-handshake.
+        await seedFriendship(db, target, zed);
+        await seedFriendship(db, amy, target);
+        await seedFriendship(db, target, onlyTargets);
+
+        const actor = await actorOf(db, viewer);
+        const ctx = userCtx(viewer, "r");
+        expect(await actor.mutualFriends(ctx, { mutualWith: target })).toEqual({
+          count: 2,
+          firstUserId: amy,
+        });
+        // The target's friends the viewer does not know are never named.
+        const none = { count: 0, firstUserId: null };
+        const nobody = await seedUser(db);
+        expect(await actor.mutualFriends(ctx, { mutualWith: nobody })).toEqual(
+          none,
+        );
+        // Yourself, an id that names nobody and a malformed one: one answer.
+        expect(await actor.mutualFriends(ctx, { mutualWith: viewer })).toEqual(
+          none,
+        );
+        expect(
+          await actor.mutualFriends(ctx, { mutualWith: randomUUID() }),
+        ).toEqual(none);
+        expect(
+          await actor.mutualFriends(ctx, { mutualWith: "not-a-uuid" }),
+        ).toEqual(none);
+        await expect(
+          actor.mutualFriends(userCtx(target, "r"), { mutualWith: viewer }),
+        ).rejects.toBeInstanceOf(ForbiddenError);
+      });
+    });
+  },
+);

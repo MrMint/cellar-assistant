@@ -1,7 +1,6 @@
-"use client";
-
-import { Box, Chip, Typography } from "@mui/joy";
-import { MdStar, MdVerified } from "react-icons/md";
+import { Star, Verified } from "@/components/app/icons";
+import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 
 export type CanonicalRecipeBadgeProps = {
   size?: "sm" | "md" | "lg";
@@ -10,53 +9,56 @@ export type CanonicalRecipeBadgeProps = {
   showText?: boolean;
 };
 
+const ICON_SIZE = { sm: "size-3", md: "size-4", lg: "size-5" } as const;
+/** The badge sizes its own `> svg`, which outranks a class on the icon. */
+const BADGE_ICON_SIZE = {
+  sm: "[&>svg]:size-3",
+  md: "[&>svg]:size-4",
+  lg: "[&>svg]:size-5",
+} as const;
+
+/**
+ * The community's pick. Success is text and a tint, never a solid slab
+ * (design §3.1), so the old solid green chip is a success-tinted badge.
+ */
 export const CanonicalRecipeBadge = ({
   size = "md",
   variant = "chip",
   showIcon = true,
   showText = true,
 }: CanonicalRecipeBadgeProps) => {
-  const iconSize = size === "sm" ? 12 : size === "lg" ? 20 : 16;
-  const chipSize = size === "sm" ? "sm" : size === "lg" ? "lg" : "md";
-
   if (variant === "banner") {
     return (
-      <Box
-        sx={{
-          display: "flex",
-          alignItems: "center",
-          gap: 1,
-          bgcolor: "success.100",
-          color: "success.700",
-          px: 2,
-          py: 1,
-          borderRadius: "md",
-          border: "1px solid",
-          borderColor: "success.300",
-        }}
-      >
-        {showIcon && <MdStar size={iconSize} />}
+      <div className="flex items-center gap-2 rounded-md bg-success/10 px-4 py-2 text-success">
+        {showIcon && (
+          <Star aria-hidden className={cn(ICON_SIZE[size], "fill-current")} />
+        )}
         {showText && (
-          <Typography
-            level={
-              size === "sm" ? "body-xs" : size === "lg" ? "title-sm" : "body-sm"
-            }
+          <span
+            className={cn(
+              size === "sm" && "t-cap text-ink-3 text-success",
+              size === "md" && "t-cap",
+              size === "lg" && "t-cap font-semibold",
+            )}
           >
             Community's Preferred Version
-          </Typography>
+          </span>
         )}
-      </Box>
+      </div>
     );
   }
 
   return (
-    <Chip
-      size={chipSize}
-      variant="solid"
-      color="success"
-      startDecorator={showIcon ? <MdVerified size={iconSize} /> : undefined}
+    <Badge
+      variant="outline"
+      className={cn(
+        "border-success/50 bg-success/10 text-success",
+        BADGE_ICON_SIZE[size],
+        size === "lg" && "px-3 py-1 text-sm",
+      )}
     >
+      {showIcon && <Verified aria-hidden />}
       {showText ? (size === "sm" ? "Preferred" : "Community Preferred") : ""}
-    </Chip>
+    </Badge>
   );
 };

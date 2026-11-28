@@ -84,8 +84,13 @@
  * `NOT NULL`. So only `RecipeReviewDto`'s two timestamps are bare strings.
  */
 import type { ActorDescriptor } from "./actors.ts";
+import type { BarKind, IngredientRole } from "./bar.ts";
 import type { Ctx } from "./ctx.ts";
-import type { InstructionType, RecipeCategory } from "./enums.ts";
+import type {
+  InstructionType,
+  PermissionType,
+  RecipeCategory,
+} from "./enums.ts";
 import { ValidationError } from "./errors.ts";
 import {
   type CreateGenericItemInput,
@@ -94,6 +99,7 @@ import {
   isItemType,
 } from "./items.ts";
 import type { Page, PageArgs } from "./page.ts";
+import type { SharedRecipeDto } from "./share.ts";
 
 /* -------------------------------------------------------------------------- */
 /* Small closed sets that are `text` + CHECK in the database, not `pgEnum`      */
@@ -113,6 +119,9 @@ export const isRecipeType = (value: string): value is RecipeType =>
 
 /** `recipe_votes_vote_type_check`: `vote_type = ANY (ARRAY['upvote', 'downvote'])`. */
 export const RECIPE_VOTE_TYPES = ["downvote", "upvote"] as const;
+
+/** MC-pick: the least net votes from others a version needs to be the pick. */
+export const COMMUNITY_PICK_MIN_NET = 3;
 export type RecipeVoteType = (typeof RECIPE_VOTE_TYPES)[number];
 
 export const isRecipeVoteType = (value: string): value is RecipeVoteType =>
@@ -195,6 +204,18 @@ export type RecipeDto = {
    */
   readonly ingredientCount: number;
   readonly instructionCount: number;
+  /**
+   * X15 / D22: who may see it, by the four-branch rule (`canSeeRecipe` in
+   * `@cellar-assistant/policy`). New recipes start `PRIVATE`; every recipe
+   * from before the column is `PUBLIC`.
+   */
+  readonly privacy: PermissionType;
+  /**
+   * AI output nobody has reviewed yet — its creator's alone, whatever
+   * `privacy` says. Saving it in the editor (`update` with `isDraft: false`)
+   * publishes it at its privacy.
+   */
+  readonly isDraft: boolean;
   readonly createdAt: string | null;
   readonly updatedAt: string | null;
 };
@@ -210,6 +231,18 @@ export type RecipeIngredientDto = {
   readonly isOptional: boolean;
   readonly substitutionNotes: string | null;
   readonly createdAt: string | null;
+  /**
+   * X14: what the ingredient does in the drink. Stored, else inferred from
+   * the recipe's ingredients together (`inferIngredientMeta` in `bar.ts`) —
+   * so a recipe written before the column existed still answers.
+   */
+  readonly role: IngredientRole | null;
+  /** X14: the `BAR_KINDS` value availability compares. Stored, else inferred. */
+  readonly kind: BarKind | null;
+  /** X14: the amount as printed. Prefer it to `quantity`/`unit` for display. */
+  readonly quantityText: string | null;
+  /** X14: a brand the recipe line named, as printed. */
+  readonly brandMentioned: string | null;
 };
 
 export type RecipeInstructionDto = {
@@ -286,6 +319,15 @@ export type RecipeGroupDto = {
   readonly createdById: string | null;
   /** Recomputed in-turn by `vote`; `null` until a group has recipes and votes. */
   readonly canonicalRecipeId: string | null;
+  /**
+   * MC-pick / L15: the version with the most net votes from people other than
+   * its author, at least {@link COMMUNITY_PICK_MIN_NET}, oldest winning ties;
+   * `null` when none has that many, or the viewer may not see it. A label
+   * computed from votes, never the canonical. Absent (`undefined`) on a
+   * projection that did not compute it (`RecipeGroupsCollectionActor`);
+   * `services/api` asks `RecipeGroupActor.get` then.
+   */
+  readonly communityPickId?: string | null;
   readonly recipeCount: number;
   readonly createdAt: string | null;
   readonly updatedAt: string | null;
@@ -336,6 +378,10 @@ export type CreateRecipeInput = {
   readonly prepTimeMinutes?: number | null;
   readonly servingSize?: number | null;
   readonly imageUrl?: string | null;
+  /** Defaults to `PRIVATE` (D22: private first). */
+  readonly privacy?: PermissionType | null;
+  /** Defaults to `false`. The recipe-photo job writes `true` (AI output). */
+  readonly isDraft?: boolean | null;
 };
 
 export type UpdateRecipeInput = {
@@ -347,6 +393,9 @@ export type UpdateRecipeInput = {
   readonly prepTimeMinutes?: number | null;
   readonly servingSize?: number | null;
   readonly imageUrl?: string | null;
+  readonly privacy?: PermissionType;
+  /** `false` publishes a draft. A published recipe cannot become a draft. */
+  readonly isDraft?: boolean;
 };
 
 /**
@@ -367,7 +416,17 @@ export type RecipeIngredientInput = {
   readonly unit?: string | null;
   readonly isOptional?: boolean | null;
   readonly substitutionNotes?: string | null;
+  /** X14 — `INGREDIENT_ROLES`. Omitted is inferred on read. */
+  readonly role?: IngredientRole | null;
+  /** X14 — a `BAR_KINDS` key. Anything else is refused. Omitted is inferred. */
+  readonly kind?: BarKind | null;
+  /** X14 — the amount as printed, at most {@link QUANTITY_TEXT_MAX} characters. */
+  readonly quantityText?: string | null;
+  readonly brandMentioned?: string | null;
 };
+
+/** `recipe_ingredients_quantity_text_check`. */
+export const QUANTITY_TEXT_MAX = 80;
 
 /** `CreateGenericItemInput` (B2), re-exported under the name this file uses. */
 export type NewGenericIngredientInput = CreateGenericItemInput;
@@ -458,11 +517,23 @@ export const requireOneIngredientSource = (
 
 export type RecipeActorInterface = {
   get(ctx: Ctx): Promise<RecipeDto>;
+  /**
+   * X17: the public share page's read — the recipe, its ingredients by name
+   * and its steps, the same answer for every caller, anonymous included.
+   * Whether a recipe may be shared is `canShareRecipeAnonymously` in
+   * `@cellar-assistant/policy`. See `share.ts`.
+   */
+  getShared(ctx: Ctx): Promise<SharedRecipeDto>;
   ingredients(ctx: Ctx, page: PageArgs): Promise<Page<RecipeIngredientDto>>;
   instructions(ctx: Ctx, page: PageArgs): Promise<Page<RecipeInstructionDto>>;
   reviews(ctx: Ctx, page: PageArgs): Promise<Page<RecipeReviewDto>>;
   /** Computed in memory from the loaded reviews; replaces `_aggregate` (§2.1). */
   score(ctx: Ctx): Promise<RecipeScoreDto>;
+  /**
+   * F-120: how many times the viewer has logged this recipe (their own
+   * `check_ins` naming it). Gated like every read; 0 for none.
+   */
+  viewerLogCount(ctx: Ctx): Promise<number>;
 
   /** Provisional-id pattern: the caller mints the id and addresses the actor by it. */
   create(ctx: Ctx, input: CreateRecipeInput): Promise<RecipeDto>;
@@ -519,6 +590,34 @@ export type RecipeActorInterface = {
     ctx: Ctx,
     payload?: Record<string, unknown>,
   ): Promise<RegenerateRecipeVectorResult>;
+
+  /**
+   * X14's backfill, `system` only (the outbox, enqueued by
+   * `MaintenanceActor.backfillRecipeMeta`). Writes the inferred `kind` and
+   * `role` onto this recipe's ingredient rows **where they are null** — a
+   * stored value is never overwritten — and nothing else. Naturally
+   * idempotent: a second delivery finds nothing null and writes nothing.
+   */
+  backfillIngredientMeta(
+    ctx: Ctx,
+    payload?: Record<string, unknown>,
+  ): Promise<RecipeMetaBackfillResult>;
+};
+
+export type RecipeMetaBackfillResult = {
+  readonly recipeId: string;
+  /** Rows whose `kind` or `role` this call wrote. */
+  readonly updated: number;
+  /** Rows still without a kind: nothing could place them. */
+  readonly unplaced: number;
+};
+
+/** What `RecipeGroupActor.backfillBaseSpirit` did. */
+export type RecipeGroupBaseSpiritResult = {
+  readonly groupId: string;
+  readonly baseSpirit: string | null;
+  /** `false` when the group already had one, or none could be derived. */
+  readonly written: boolean;
 };
 
 export const RecipeActorDescriptor: ActorDescriptor<RecipeActorInterface> = {
@@ -529,10 +628,12 @@ export const RecipeActorDescriptor: ActorDescriptor<RecipeActorInterface> = {
   // `regenerateVector` (an embedding), directly or through its group.
   methods: {
     get: {},
+    getShared: {},
     ingredients: {},
     instructions: {},
     reviews: {},
     score: {},
+    viewerLogCount: {},
     create: { timeoutMs: 20_000, modelBacked: true },
     update: { modelBacked: true },
     setIngredients: { timeoutMs: 20_000, modelBacked: true },
@@ -544,6 +645,7 @@ export const RecipeActorDescriptor: ActorDescriptor<RecipeActorInterface> = {
     // An embedding through `EmbeddingActor.embedDocument` (90s), plus the
     // turn around it — `ItemActorDescriptor`'s number, for the same call.
     regenerateVector: { timeoutMs: 100_000 },
+    backfillIngredientMeta: {},
   },
 };
 
@@ -611,6 +713,17 @@ export type RecipeGroupActorInterface = {
    * shape rather than the tier-list one. Move or delete the versions first.
    */
   delete(ctx: Ctx): Promise<DeletedRecipeGroup>;
+
+  /**
+   * X14's backfill for `recipe_groups.base_spirit` — "baseSpirit is never
+   * written" (T7). `system` only, via the outbox. Derives the base spirit
+   * from the canonical member's ingredients (else the oldest member's) and
+   * writes it **only if the column is null**: an author's own value stands.
+   */
+  backfillBaseSpirit(
+    ctx: Ctx,
+    payload?: Record<string, unknown>,
+  ): Promise<RecipeGroupBaseSpiritResult>;
 };
 
 export const RecipeGroupActorDescriptor: ActorDescriptor<RecipeGroupActorInterface> =
@@ -631,5 +744,6 @@ export const RecipeGroupActorDescriptor: ActorDescriptor<RecipeGroupActorInterfa
       voteSummaries: {},
       recomputeCanonical: {},
       delete: {},
+      backfillBaseSpirit: {},
     },
   };

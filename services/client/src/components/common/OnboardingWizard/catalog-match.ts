@@ -1,0 +1,399 @@
+/**
+ * "Is it this one? +1 bottle" — which catalogue item a label read already
+ * names (N19), and whether that match is strong enough to add a bottle of it
+ * unattended (N02).
+ *
+ * Plain module: no React, no URQL. The wizard's `searchCatalog` actor fetches
+ * candidates (`itemSearch(text:, itemTypes:)`) and hands them here.
+ *
+ * ## The rule
+ *
+ * A candidate is a match only if it is the type being added and its vintage
+ * **equals** the vintage read off the label — compared explicitly, because a
+ * text embedding puts "Château Margaux 2015" right next to "Château Margaux
+ * 2016" and the bottle in hand is one of them. A type with no vintage
+ * (coffee, tea) compares as equal on both sides, which is why the unattended
+ * path also needs the name (below).
+ *
+ * **A wine's vintage is never "absent" (X19).** Its NULL means non-vintage, so
+ * "NV" is a vintage like 2015: an NV read matches an NV item and nothing
+ * else, and an NV item never matches a dated read. A wine read with *no*
+ * vintage at all (nothing legible, no NV either) matches nothing — it is not
+ * evidence the bottle is the NV one. Beers and spirits keep "both absent".
+ *
+ * `exact` is the stronger claim the 15 s quick-add needs (`canQuickAdd`): a
+ * barcode hit (the code names the product) or a search hit whose name is the
+ * name read, letter for letter once case, accents and punctuation are set
+ * aside, **and whose brand does not contradict the read** — names repeat
+ * across producers ("Reserve Cabernet Sauvignon", "Ethiopia Yirgacheffe"), so
+ * a same-name hit filed under a brand the label did not name is only offered.
+ * A semantic neighbour that is merely close is offered with a button the
+ * person taps (D25: the AI never adds anything without a tap) — never counted
+ * down.
+ *
+ * ## What may be offered at all
+ *
+ * Embedding distance alone is not enough to put an item in front of someone
+ * with a one-tap "+1 bottle": with a small catalogue, the nearest
+ * same-vintage item can be an unrelated wine well inside the cutoff (a read
+ * of "Muga Reserva Rioja" 2019 offered "Catena Zapata Malbec Argentino" at
+ * 0.479). So a near-miss is offered only when its words agree with the read
+ * ({@link wordsAgree}: at least half of them shared, producer boilerplate
+ * like "Bodega" or "Château" set aside) and, when the label named a brand,
+ * its brand is not another producer's ({@link brandCompatible}).
+ */
+
+import { formatScore } from "@/components/app/Score";
+import type { ApiItemType } from "@/components/cellar-api/itemTypes";
+import type { ItemCardItem } from "@/components/item/ItemCard/types";
+import type { ItemFormValues } from "@/components/item/ItemForm";
+import {
+  isNonVintageText,
+  NON_VINTAGE,
+} from "@/components/item-api/itemFormRules";
+import type { ExistingItem } from "./adapter";
+
+export type CatalogCandidate = ExistingItem & {
+  source: "barcode" | "search";
+  /** Cosine distance from `itemSearch`; lower is closer. Search hits only. */
+  distance?: number;
+  /** The catalogue item's (primary) brand, when it has one. */
+  brandName?: string;
+};
+
+export type CatalogMatch = CatalogCandidate & {
+  /** A barcode hit, or a search hit with the very name (and brand) read. */
+  exact: boolean;
+};
+
+/** The attribute that holds a type's vintage in the form, if it has one. */
+const VINTAGE_KEY: Readonly<Record<ApiItemType, string | null>> = {
+  WINE: "vintage",
+  BEER: "vintage",
+  SPIRIT: "vintage",
+  SAKE: "vintageYear",
+  // The card carries no year for these two (`itemCardFromItem`), so there is
+  // nothing to compare on the catalogue's side.
+  COFFEE: null,
+  TEA: null,
+};
+
+/** A year (`2015`, `2015-01-01`), or "NV" — `undefined` for anything else. */
+const vintageOf = (value: string | undefined): string | undefined => {
+  if (value !== undefined && isNonVintageText(value)) return NON_VINTAGE;
+  const year = value?.trim().slice(0, 4);
+  return year !== undefined && /^\d{4}$/.test(year) ? year : undefined;
+};
+
+/**
+ * The vintage the label gave, as a year or "NV" — `undefined` when it gave
+ * none.
+ */
+export const readVintage = (
+  type: ApiItemType,
+  values: ItemFormValues,
+): string | undefined => {
+  const key = VINTAGE_KEY[type];
+  return key === null ? undefined : vintageOf(values.attributes[key]);
+};
+
+/**
+ * Explicit vintage compare: the same year, or both NV — and, for a beer,
+ * spirit or sake, both absent. A wine with no vintage read matches nothing
+ * (see the module doc).
+ */
+export const sameVintage = (
+  type: ApiItemType,
+  read: string | undefined,
+  item: Pick<ItemCardItem, "vintage">,
+): boolean => {
+  if (VINTAGE_KEY[type] === null) return true;
+  const ours = vintageOf(read);
+  if (type === "WINE" && ours === undefined) return false;
+  return ours === vintageOf(item.vintage);
+};
+
+// Built with `new RegExp` because the client's tsconfig target predates the
+// `u` flag in literals (TS1501); every browser the app supports has it.
+// biome-ignore lint/complexity/useRegexLiterals: a literal is TS1501 here
+const MARKS = new RegExp("\\p{M}", "gu");
+// biome-ignore lint/complexity/useRegexLiterals: a literal is TS1501 here
+const NOT_LETTER_OR_DIGIT = new RegExp("[^\\p{L}\\p{N}]+", "gu");
+
+/**
+ * A name with case, accents, punctuation and spacing set aside. Letters are
+ * Unicode letters, so a sake's kanji name compares as itself.
+ */
+export const normalizeName = (name: string): string =>
+  name
+    .normalize("NFD")
+    .replace(MARKS, "")
+    .toLowerCase()
+    .replace(NOT_LETTER_OR_DIGIT, " ")
+    .trim();
+
+const sameName = (
+  candidate: string,
+  read: { name: string; brandName: string },
+): boolean => {
+  const target = normalizeName(candidate);
+  if (target === "") return false;
+  const name = normalizeName(read.name);
+  const branded = normalizeName(`${read.brandName} ${read.name}`);
+  return target === name || target === branded;
+};
+
+/**
+ * Whether a candidate's brand is consistent with the read: it has none, or it
+ * is the brand read, or the name read carries it as whole words. A brand the
+ * label did not name is a different producer's bottle as far as an
+ * unattended add is concerned.
+ */
+const brandAgrees = (
+  candidateBrand: string | undefined,
+  read: { name: string; brandName: string },
+): boolean => {
+  const brand = normalizeName(candidateBrand ?? "");
+  if (brand === "") return true;
+  if (normalizeName(read.brandName) === brand) return true;
+  return ` ${normalizeName(read.name)} `.includes(` ${brand} `);
+};
+
+/**
+ * Words that say nothing about which bottle it is: articles and the
+ * producer boilerplate ("Bodegas", "Château", "Estate") that two unrelated
+ * producers share. A four-digit year is set aside too — the vintage is
+ * compared on its own.
+ */
+const FILLER = new Set([
+  "a",
+  "and",
+  "the",
+  "of",
+  "de",
+  "del",
+  "della",
+  "di",
+  "da",
+  "do",
+  "du",
+  "des",
+  "la",
+  "le",
+  "les",
+  "el",
+  "los",
+  "las",
+  "y",
+  "e",
+  "et",
+  "bodega",
+  "bodegas",
+  "chateau",
+  "domaine",
+  "dom",
+  "maison",
+  "tenuta",
+  "cantina",
+  "cantine",
+  "weingut",
+  "quinta",
+  "estate",
+  "estates",
+  "winery",
+  "wines",
+  "vineyard",
+  "vineyards",
+  "cellars",
+  "brewery",
+  "brewing",
+  "distillery",
+  "company",
+  "co",
+]);
+
+/** The telling words of a name (or brand), normalized. */
+export const tellingWords = (...parts: readonly string[]): Set<string> =>
+  new Set(
+    parts
+      .flatMap((part) => normalizeName(part).split(" "))
+      .filter(
+        (word) => word !== "" && !FILLER.has(word) && !/^\d{4}$/.test(word),
+      ),
+  );
+
+/**
+ * Whether a near-miss's name and brand share enough telling words with the
+ * read's to be worth offering: a Dice coefficient of at least one half. "Muga
+ * Rioja Reserva" against "Muga Reserva Rioja" agrees; "Muga Reserva Rioja"
+ * against "Catena Zapata Malbec Argentino" shares nothing.
+ */
+export const wordsAgree = (
+  candidate: { name: string; brandName?: string },
+  read: { name: string; brandName: string },
+): boolean => {
+  const theirs = tellingWords(candidate.name, candidate.brandName ?? "");
+  const ours = tellingWords(read.name, read.brandName);
+  if (theirs.size === 0 || ours.size === 0) return false;
+  const shared = Array.from(theirs).filter((word) => ours.has(word)).length;
+  return (2 * shared) / (theirs.size + ours.size) >= 0.5;
+};
+
+/**
+ * Whether a near-miss's brand can be the producer the label named. Only a
+ * named brand can contradict: when the read has none, or the item has none,
+ * nothing is ruled out. Otherwise the item's brand must share a telling word
+ * with what the label said (its brand or its name) — "Bodegas Muga" and
+ * "Muga" agree, "Other Estate" and "Jordan" do not.
+ */
+export const brandCompatible = (
+  candidateBrand: string | undefined,
+  read: { name: string; brandName: string },
+): boolean => {
+  const theirs = tellingWords(candidateBrand ?? "");
+  const named = tellingWords(read.brandName);
+  if (theirs.size === 0 || named.size === 0) return true;
+  const said = tellingWords(read.brandName, read.name);
+  return Array.from(theirs).some((word) => said.has(word));
+};
+
+/** A barcode hit, or a search hit with the very name — and brand — read. */
+const isExact = (
+  candidate: CatalogCandidate,
+  read: { name: string; brandName: string },
+): boolean =>
+  candidate.source === "barcode" ||
+  (sameName(candidate.item.name, read) &&
+    brandAgrees(candidate.brandName, read));
+
+/**
+ * The text `itemSearch` is asked for: the name as read, with the brand in
+ * front when the name does not already carry it. `null` when nothing was read
+ * — searching for an empty string would only return the catalogue's nearest
+ * noise.
+ */
+export const catalogSearchText = ({
+  name,
+  brandName,
+}: {
+  name: string;
+  brandName: string;
+}): string | null => {
+  const trimmed = name.trim();
+  if (trimmed === "") return null;
+  const brand = brandName.trim();
+  return brand !== "" && !normalizeName(trimmed).includes(normalizeName(brand))
+    ? `${brand} ${trimmed}`
+    : trimmed;
+};
+
+/**
+ * The best match among the candidates, or `null`.
+ *
+ * Barcode hits lead (a code is a product key), then search hits nearest
+ * first. `excludeItemIds` are items the person already said no to — the
+ * barcode chooser's "Create New" — and are never offered back.
+ *
+ * `maxDistance` bounds the near-misses only. Since N08, a text `itemSearch`
+ * also returns what the name match brought in, which can lie beyond the
+ * vector cutoff or have no distance at all (no embedding yet): such a hit is
+ * offered when it is exact — the very name and brand read — and never as a
+ * "nearest" guess.
+ */
+export const findCatalogMatch = ({
+  type,
+  values,
+  brandName,
+  candidates,
+  excludeItemIds = [],
+  maxDistance,
+}: {
+  type: ApiItemType;
+  values: ItemFormValues;
+  brandName: string;
+  candidates: readonly CatalogCandidate[];
+  excludeItemIds?: readonly string[];
+  maxDistance?: number;
+}): CatalogMatch | null => {
+  const vintage = readVintage(type, values);
+  const eligible = candidates.filter(
+    (candidate) =>
+      candidate.type === type &&
+      !excludeItemIds.includes(candidate.item.itemId) &&
+      sameVintage(type, vintage, candidate.item),
+  );
+  const ranked = [
+    ...eligible.filter((c) => c.source === "barcode"),
+    ...eligible
+      .filter((c) => c.source === "search")
+      .sort(
+        (a, b) =>
+          (a.distance ?? Number.POSITIVE_INFINITY) -
+          (b.distance ?? Number.POSITIVE_INFINITY),
+      ),
+  ];
+  const read = { name: values.name, brandName };
+  // An exact one anywhere in the list beats a nearer near-miss.
+  const near = (c: CatalogCandidate): boolean =>
+    c.source === "barcode" ||
+    ((maxDistance === undefined ||
+      (c.distance !== undefined && c.distance <= maxDistance)) &&
+      wordsAgree({ name: c.item.name, brandName: c.brandName }, read) &&
+      brandCompatible(c.brandName, read));
+  const best =
+    ranked.find((c) => isExact(c, read)) ?? ranked.find((c) => near(c));
+  if (best === undefined) return null;
+  return { ...best, exact: isExact(best, read) };
+};
+
+/**
+ * The catalogue item's own details line — its vintage and the card's
+ * subtitle — for the "Is it this one?" card and prompt. Never the label
+ * read's: the card names the item a tap will file.
+ */
+export const catalogMatchSummary = (match: CatalogMatch): string =>
+  [match.item.vintage, match.item.subtitle]
+    .filter((part): part is string => part !== undefined && part !== "")
+    .join(" · ");
+
+/** Fewer letters than this offer no quick-add row (F-60). */
+export const TYPE_AHEAD_MIN = 3;
+
+/**
+ * F-60 (board add-bottle-17): Type it's quick-add row under Name. The first
+ * search result — the search's own rank — where every typed word starts a
+ * word of the item's name, skipping items the person already declined. A
+ * prefix rule, not `findCatalogMatch`'s exact one: the person is still
+ * typing, and the row only offers; nothing is filed until they tap Add.
+ */
+export const typeAheadMatch = ({
+  typed,
+  candidates,
+  excludeItemIds,
+}: {
+  typed: string;
+  candidates: readonly CatalogCandidate[];
+  excludeItemIds: readonly string[];
+}): CatalogCandidate | null => {
+  const wanted = normalizeName(typed);
+  if (wanted.replace(/\s/g, "").length < TYPE_AHEAD_MIN) return null;
+  const words = wanted.split(" ");
+  return (
+    candidates.find((candidate) => {
+      if (excludeItemIds.includes(candidate.item.itemId)) return false;
+      const own = normalizeName(candidate.item.name).split(" ");
+      return words.every((word) => own.some((part) => part.startsWith(word)));
+    }) ?? null
+  );
+};
+
+/** The row's second line: "Kazematten · You gave it 5", either half alone. */
+export const typeAheadLine = (match: CatalogCandidate): string | undefined => {
+  const parts = [
+    match.brandName,
+    typeof match.item.myScore === "number"
+      ? `You gave it ${formatScore(match.item.myScore)}`
+      : undefined,
+  ].filter((part): part is string => part !== undefined && part !== "");
+  return parts.length === 0 ? undefined : parts.join(" · ");
+};

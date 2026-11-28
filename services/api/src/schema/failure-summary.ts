@@ -50,7 +50,10 @@
  * "Failed to load … items/page/data") — that spec was already narrowed once
  * because this very column collided with it.
  */
-import type { ActorErrorCode } from "@cellar-assistant/contracts";
+import type {
+  ActorErrorCode,
+  ActorErrorReason,
+} from "@cellar-assistant/contracts";
 import { parseStoredFailure } from "@cellar-assistant/contracts";
 
 const SUMMARY: Record<ActorErrorCode, string> = {
@@ -81,6 +84,34 @@ const SUMMARY: Record<ActorErrorCode, string> = {
 };
 
 /**
+ * N07: a recorded reason is more specific than its code, so it wins when
+ * there is a sentence for it. Only the AI reasons have one — the rest (friends,
+ * recipes) cannot reach a background job's column — and a reason with no
+ * sentence falls back to its code's.
+ *
+ * Both budget sentences keep the words "allowance for AI processing is used
+ * up", which `packages/e2e/specs/09-menu-scan.spec.ts` recognises a spent
+ * budget by.
+ */
+const REASON_SUMMARY: Partial<Record<ActorErrorReason, string>> = {
+  /** This account's hourly or daily window; it rolls on its own. */
+  USER_CAP:
+    "Your allowance for AI processing is used up for now. It frees up on its own; try again a little later.",
+  /** Service-wide; the month turning is usually what clears it. */
+  SERVICE_BUDGET:
+    "The allowance for AI processing is used up for now. Try again later.",
+  /** No provider: retrying will not help, entering it by hand will. */
+  AI_UNCONFIGURED:
+    "Reading photos is not available right now. Enter the details by hand, or try again later.",
+  /** The model ran and found nothing to read. */
+  NOTHING_READ:
+    "Nothing could be read from that photo. Retake it with the writing in focus and upload it again.",
+  /** X05: the label read abstained on what it took for a menu. */
+  LOOKS_LIKE_MENU:
+    "That photo looks like a menu, not a label. Scan it as a menu, or retake it on the bottle's own label.",
+};
+
+/**
  * No class was recorded. Honest about the two things the person can rely on —
  * it is retried, and they can try again — and about nothing else.
  */
@@ -93,6 +124,7 @@ const UNCLASSIFIED =
  */
 export const USER_FACING_FAILURES: readonly string[] = Object.freeze([
   ...Object.values(SUMMARY),
+  ...Object.values(REASON_SUMMARY),
   UNCLASSIFIED,
 ]);
 
@@ -103,6 +135,9 @@ export const USER_FACING_FAILURES: readonly string[] = Object.freeze([
  */
 export const failureSummary = (stored: string | null): string | null => {
   if (stored === null || stored.trim() === "") return null;
-  const code = parseStoredFailure(stored).code;
-  return code === null ? UNCLASSIFIED : SUMMARY[code];
+  const { code, reason } = parseStoredFailure(stored);
+  if (code === null) return UNCLASSIFIED;
+  return (
+    (reason === null ? undefined : REASON_SUMMARY[reason]) ?? SUMMARY[code]
+  );
 };

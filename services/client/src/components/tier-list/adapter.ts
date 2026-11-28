@@ -8,8 +8,25 @@
  * lives here as plain functions so it can be tested without a server.
  */
 
-import { formatVintage } from "@/utilities";
+import {
+  type ApiItemType,
+  ITEM_TYPES,
+} from "@/components/cellar-api/itemTypes";
+import type { ActorErrorReason } from "@/lib/api/errors";
+import { formatItemVintage } from "@/utilities";
+import {
+  formatBeerStyle,
+  formatCountry,
+  formatPlaceCategory,
+  formatSakeCategory,
+  formatSpiritType,
+  formatTeaCategory,
+  formatWineVariety,
+} from "@/utilities/formatters";
+import { displayItemName } from "@/utilities/smart-title-case";
 import { BANDS, type TierListEntityType } from "./constants";
+import type { TierListHistoryView } from "./history";
+import type { InsightsStatus } from "./insights/insights-view";
 import type {
   TierListAIInsights,
   TierListData,
@@ -17,7 +34,6 @@ import type {
   TierListInsightsItem,
   TierListItemDisplay,
 } from "./types";
-import { formatCategoryName } from "./utils";
 
 /** The unmasked `TierListItem` fragment, as the page reads it. */
 export type TierListItemNode = {
@@ -25,6 +41,8 @@ export type TierListItemNode = {
   band: number;
   position: number;
   entryType: string;
+  /** X23: the list owner's review of an item entry; null for places. */
+  ownerReview?: { score: number } | null;
   place: {
     id: string;
     name: string;
@@ -38,6 +56,8 @@ export type TierListItemNode = {
       googleRating: number | null;
       googleUserRatingsTotal: number | null;
     } | null;
+    /** F-15: the row's thumb (optional: the pairwise board reads no photo). */
+    photos?: FirstPhoto;
   } | null;
   item: {
     __typename?: string;
@@ -46,6 +66,9 @@ export type TierListItemNode = {
     name: string;
     country: string | null;
     myReview: { score: number } | null;
+    /** F-15: the crowd's rating, "4.2 (37)" at the row's right. */
+    score?: { average: number | null; count: number } | null;
+    images?: FirstPhoto;
     wineVariety?: string | null;
     wineVintage?: string | null;
     wineRegion?: string | null;
@@ -58,6 +81,15 @@ export type TierListItemNode = {
   } | null;
 };
 
+/** `photos(first: 1)` / `images(first: 1)`: only the file's URL is read. */
+type FirstPhoto =
+  | { edges: { node: { file: { url: string | null } | null } }[] }
+  | null
+  | undefined;
+
+const firstPhotoUrl = (photos: FirstPhoto): string | null =>
+  photos?.edges[0]?.node.file?.url ?? null;
+
 export type TierListCoreNode = {
   id: string;
   name: string;
@@ -65,9 +97,12 @@ export type TierListCoreNode = {
   createdById: string;
   privacy: string;
   listType: string;
-  isEditingLocked: boolean;
   aiInsights: unknown;
   contentUpdatedAt: string | null;
+  /** N07; optional so a fixture written before it still adapts. */
+  insightsStatus?: InsightsStatus | null;
+  insightsFailureReason?: ActorErrorReason | null;
+  insightsRetryAt?: string | null;
 };
 
 const joinParts = (parts: ReadonlyArray<string | number | null | undefined>) =>
@@ -78,6 +113,69 @@ const joinParts = (parts: ReadonlyArray<string | number | null | undefined>) =>
     )
     .join(" · ");
 
+/** The place fields a board row or a picker row describes a place with. */
+export type EntryPlaceFields = {
+  primaryCategory: string | null;
+  locality: string | null;
+  countryCode: string | null;
+};
+
+/** The item fields a board row or a picker row describes an item with. */
+export type EntryItemFields = Pick<
+  NonNullable<TierListItemNode["item"]>,
+  | "type"
+  | "country"
+  | "wineVariety"
+  | "wineVintage"
+  | "beerStyle"
+  | "spiritKind"
+  | "sakeCategory"
+  | "sakeRegion"
+  | "teaCategory"
+  | "teaRegion"
+>;
+
+/** `Wine Bar · Austin · US`. */
+export function placeEntrySubtitle(place: EntryPlaceFields): string {
+  return joinParts([
+    formatPlaceCategory(place.primaryCategory),
+    place.locality,
+    place.countryCode,
+  ]);
+}
+
+/**
+ * The per-type line under an item's name, the old board's fields — formatted
+ * through `utilities/formatters.ts` (N17), so `PINOT_NOIR` reads `Pinot Noir`
+ * and `UNITED_STATES` reads `United States`, as on the item page. The board
+ * and the Add entry picker both call this, so they cannot disagree.
+ */
+export function itemEntrySubtitle(item: EntryItemFields): string {
+  switch (item.type) {
+    case "WINE":
+      return joinParts([
+        formatWineVariety(item.wineVariety),
+        formatItemVintage("WINE", item.wineVintage) ?? null,
+        formatCountry(item.country),
+      ]);
+    case "BEER":
+      return formatBeerStyle(item.beerStyle) ?? "";
+    case "SPIRIT":
+      return formatSpiritType(item.spiritKind) ?? "";
+    case "COFFEE":
+      return formatCountry(item.country) ?? "";
+    case "SAKE":
+      return joinParts([
+        formatSakeCategory(item.sakeCategory),
+        item.sakeRegion,
+      ]);
+    case "TEA":
+      return joinParts([formatTeaCategory(item.teaCategory), item.teaRegion]);
+    default:
+      return "";
+  }
+}
+
 /** `/wines/<id>`, `/places/<id>`, … — the old `getItemHref`. */
 export function entryHref(node: TierListItemNode): string {
   if (node.place !== null) return `/places/${node.place.id}`;
@@ -87,57 +185,46 @@ export function entryHref(node: TierListItemNode): string {
 }
 
 /**
- * One board row, exactly as the old page resolved it: the viewer's own score
- * (item review, or place rating) and, for places, Google's rating and count.
+ * One board row: the **owner's** score (X23 — the old board showed the
+ * viewer's own, so a friend's list carried the friend's verdicts under the
+ * owner's ranking), the viewer's own beside it, and for places Google's
+ * rating and count. A place rating is private to whoever gave it, so on
+ * someone else's place list the owner's score is absent rather than guessed.
  * The old page showed a vintage as the stored date; it is the year here.
  */
 export function itemDisplayFromNode(
   node: TierListItemNode,
+  viewerIsOwner = true,
 ): TierListItemDisplay {
   let name = "Unknown item";
   let subtitle = "";
-  let reviewScore: number | null = null;
+  let ownerScore: number | null = null;
+  let viewerScore: number | null = null;
   let publicRating: number | null = null;
   let publicRatingCount: number | null = null;
+  let photoUrl: string | null = null;
 
   const { place, item } = node;
   if (place !== null) {
     name = place.displayName ?? place.name;
-    subtitle = joinParts([
-      place.primaryCategory ? formatCategoryName(place.primaryCategory) : null,
-      place.locality,
-      place.countryCode,
-    ]);
-    reviewScore = place.myInteraction?.rating ?? null;
+    subtitle = placeEntrySubtitle(place);
+    viewerScore = place.myInteraction?.rating ?? null;
+    ownerScore = viewerIsOwner ? viewerScore : null;
     publicRating = place.enrichment?.googleRating ?? null;
     publicRatingCount = place.enrichment?.googleUserRatingsTotal ?? null;
+    photoUrl = firstPhotoUrl(place.photos);
   } else if (item !== null) {
-    name = item.name;
-    reviewScore = item.myReview?.score ?? null;
-    switch (item.type) {
-      case "WINE":
-        subtitle = joinParts([
-          item.wineVariety,
-          item.wineVintage ? formatVintage(item.wineVintage) : null,
-          item.country,
-        ]);
-        break;
-      case "BEER":
-        subtitle = item.beerStyle ?? "";
-        break;
-      case "SPIRIT":
-        subtitle = item.spiritKind ?? "";
-        break;
-      case "COFFEE":
-        subtitle = item.country ?? "";
-        break;
-      case "SAKE":
-        subtitle = joinParts([item.sakeCategory, item.sakeRegion]);
-        break;
-      case "TEA":
-        subtitle = joinParts([item.teaCategory, item.teaRegion]);
-        break;
+    name = displayItemName(item.name);
+    viewerScore = item.myReview?.score ?? null;
+    ownerScore =
+      node.ownerReview?.score ?? (viewerIsOwner ? viewerScore : null);
+    subtitle = itemEntrySubtitle(item);
+    // F-15: the crowd's average, with its count; nobody yet is no rating.
+    if (item.score?.average != null && item.score.count > 0) {
+      publicRating = item.score.average;
+      publicRatingCount = item.score.count;
     }
+    photoUrl = firstPhotoUrl(item.images);
   }
 
   return {
@@ -147,9 +234,11 @@ export function itemDisplayFromNode(
     name,
     subtitle,
     href: entryHref(node),
-    reviewScore,
+    ownerScore,
+    viewerScore,
     publicRating,
     publicRatingCount,
+    photoUrl,
   };
 }
 
@@ -177,7 +266,7 @@ export function insightsItemsFromNodes(
       : {
           id: node.id,
           band: node.band,
-          name: node.item?.name ?? "Unknown",
+          name: displayItemName(node.item?.name) ?? "Unknown",
           countryCode: null,
           region: null,
           primaryCategory: null,
@@ -214,8 +303,10 @@ export function tierListDataFrom(
   core: TierListCoreNode,
   nodes: readonly TierListItemNode[],
   viewerId: string | null,
+  history: TierListHistoryView | null = null,
 ): { data: TierListData; insightsData: TierListInsightsData } {
-  const items = nodes.map(itemDisplayFromNode);
+  const isOwner = viewerId !== null && core.createdById === viewerId;
+  const items = nodes.map((node) => itemDisplayFromNode(node, isOwner));
   return {
     data: {
       id: core.id,
@@ -223,15 +314,19 @@ export function tierListDataFrom(
       description: core.description ?? null,
       privacy: core.privacy,
       listType: core.listType,
-      isOwner: viewerId !== null && core.createdById === viewerId,
-      isEditingLocked: core.isEditingLocked,
+      isOwner,
+      createdById: core.createdById,
       itemCount: items.length,
       items,
+      history: isOwner ? history : null,
     },
     insightsData: {
       items: insightsItemsFromNodes(nodes),
       aiInsights: aiInsightsFromJson(core.aiInsights),
       contentUpdatedAt: core.contentUpdatedAt ?? null,
+      status: core.insightsStatus ?? null,
+      failureReason: core.insightsFailureReason ?? null,
+      retryAt: core.insightsRetryAt ?? null,
       showPlaceStats: core.listType === "place",
     },
   };
@@ -271,6 +366,80 @@ export function reorderCallFor(
   const orderedIds = after[destBand] ?? [];
   if (orderedIds.length === 0) return null;
   return { band: destBand, orderedIds: [...orderedIds] };
+}
+
+/** An entry's rank on the board: 1-based, best band first; null if absent. */
+export function rankOf(map: BandMap, id: string): number | null {
+  let seen = 0;
+  for (const band of BANDS) {
+    const ids = map[band] ?? [];
+    const at = ids.indexOf(id);
+    if (at >= 0) return seen + at + 1;
+    seen += ids.length;
+  }
+  return null;
+}
+
+/** The five ranked bands, best first: where a move may land (no Unrated). */
+const MOVE_BANDS = [5, 4, 3, 2, 1] as const;
+
+export type EntryMove =
+  | { kind: "up" }
+  | { kind: "down" }
+  | { kind: "band"; band: number };
+
+/**
+ * One Arrange move (SPEC 16) as the board it leaves and the one call it
+ * needs. Up and down step one place, crossing into the neighbouring band at
+ * a band's edge (to its end going up, its top going down, an empty band
+ * included); "Move to band" lands last in that band. `rank` is computed once,
+ * here, from `after` — the toast and the row read this one number
+ * (CROSS-LOT "One placement, one rank"). Null when nothing would move.
+ */
+export function moveEntry(
+  before: BandMap,
+  id: string,
+  move: EntryMove,
+): {
+  after: BandMap;
+  call: { band: number; orderedIds: string[] };
+  band: number;
+  rank: number;
+} | null {
+  const from = BANDS.find((band) => (before[band] ?? []).includes(id));
+  if (from === undefined) return null;
+  const after: BandMap = {};
+  for (const band of BANDS) after[band] = [...(before[band] ?? [])];
+  const source = after[from] ?? [];
+  const index = source.indexOf(id);
+  let to: number = from;
+
+  if (move.kind === "band") {
+    if (move.band === from) return null;
+    to = move.band;
+    source.splice(index, 1);
+    after[to] = [...(after[to] ?? []), id];
+  } else {
+    const step = move.kind === "up" ? -1 : 1;
+    const next = index + step;
+    if (next >= 0 && next < source.length) {
+      source.splice(index, 1);
+      source.splice(next, 0, id);
+    } else {
+      const at = MOVE_BANDS.indexOf(from as (typeof MOVE_BANDS)[number]);
+      const neighbour = at < 0 ? undefined : MOVE_BANDS[at + step];
+      if (neighbour === undefined) return null;
+      to = neighbour;
+      source.splice(index, 1);
+      const dest = after[to] ?? [];
+      after[to] = move.kind === "up" ? [...dest, id] : [id, ...dest];
+    }
+  }
+
+  const call = reorderCallFor(before, after, from, to);
+  const rank = rankOf(after, id);
+  if (call === null || rank === null) return null;
+  return { after, call, band: to, rank };
 }
 
 export function bandMapOf(
@@ -341,3 +510,58 @@ export const entryTypeOf = (
     | "SPIRIT"
     | "TEA"
     | "WINE";
+
+/**
+ * The board href a picker candidate would get once added — `entryHref`'s
+ * rule, from the candidate's side — so the picker can tell what is already
+ * on the list without a second query.
+ */
+export const candidateHref = (candidate: {
+  id: string;
+  entityType: TierListEntityType;
+}): string =>
+  candidate.entityType === "place"
+    ? `/places/${candidate.id}`
+    : `/${candidate.entityType}s/${candidate.id}`;
+
+/** The hrefs of everything on the board, for {@link candidateHref}. */
+export const onListHrefs = (
+  items: readonly Pick<TierListItemDisplay, "href">[],
+): ReadonlySet<string> => new Set(items.map((item) => item.href));
+
+/**
+ * What the in-page add says when `addTierListItem` refuses. Never the actor's
+ * `message`: that is written for a log ("WINE <uuid> is already in tier list
+ * <uuid>"), not for a person. The one `CONFLICT` `addItem` can raise for a
+ * caller is the entry already being on the list (the others are invariant
+ * breaches its own comments call unreachable).
+ */
+export function addEntryFailureMessage(failure: {
+  code: string;
+  message: string;
+}): string {
+  switch (failure.code) {
+    case "CONFLICT":
+      return "That's already on this list.";
+    case "FORBIDDEN":
+      return "Only the list's owner can add to it.";
+    case "NOT_FOUND":
+      return "That list or entry isn't available any more.";
+    case "TRANSPORT":
+      // `lib/api/result.ts`'s own words for no answer, already for a person.
+      return failure.message;
+    default:
+      return "Couldn't add that. Try again.";
+  }
+}
+
+/**
+ * A list's item type, for what only an item list offers (X08's "Try This
+ * Next" catalog lookup); `null` for a place list or an unknown type.
+ */
+export const itemTypeOfList = (listType: string): ApiItemType | null => {
+  const upper = listType.toUpperCase();
+  return (ITEM_TYPES as readonly string[]).includes(upper)
+    ? (upper as ApiItemType)
+    : null;
+};

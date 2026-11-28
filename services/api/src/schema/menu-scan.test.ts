@@ -40,6 +40,7 @@ const scanDto = {
   processedImageId: null,
   extractedText: "WINES\nChateau Test 2019",
   processingStatus: "completed" as const,
+  matchStatus: "running" as const,
   processingError: null,
   confidenceScore: 0.85,
   processingModel: "fake-vision-1",
@@ -80,7 +81,7 @@ describe("Query.menuScan", () => {
     });
     const result = await run(
       `{ menuScan(id: "${SCAN_ID}") { __typename ... on MenuScan {
-         id processingStatus itemsDetected itemsMatched place { id }
+         id processingStatus matchStatus itemsDetected itemsMatched place { id }
        } } }`,
       testContext(invoke, viewer),
     );
@@ -89,6 +90,8 @@ describe("Query.menuScan", () => {
       __typename: "MenuScan",
       id: SCAN_ID,
       processingStatus: "completed",
+      // N06a: the match run's own status, so a client polls until it settles.
+      matchStatus: "running",
       itemsDetected: 2,
       itemsMatched: 1,
       place: { id: PLACE_ID },
@@ -98,6 +101,47 @@ describe("Query.menuScan", () => {
       actorId: SCAN_ID,
       method: "get",
     });
+  });
+
+  it("headerName (L10) is the scan's stored proposal, null when the read abstained or predates it", async () => {
+    for (const [dto, expected] of [
+      [{ ...scanDto, headerName: "Bar Lumen" }, "Bar Lumen"],
+      [{ ...scanDto, headerName: null }, null],
+      [scanDto, null],
+    ] as const) {
+      const { invoke } = stubSidecar({ "MenuScanActor.get": () => dto });
+      const result = await run(
+        `{ menuScan(id: "${SCAN_ID}") { ... on MenuScan { headerName } } }`,
+        testContext(invoke, viewer),
+      );
+      expect(result.errors).toBeUndefined();
+      expect(result.data?.menuScan).toEqual({ headerName: expected });
+    }
+  });
+
+  it("matchCounts is served by MenuScanActor.matchCounts, only when selected", async () => {
+    const { invoke, calls } = stubSidecar({
+      "MenuScanActor.get": () => scanDto,
+      "MenuScanActor.matchCounts": () => ({
+        lines: 8,
+        matched: 2,
+        toConfirm: 3,
+      }),
+    });
+    const result = await run(
+      `{ menuScan(id: "${SCAN_ID}") { ... on MenuScan {
+         matchCounts { lines matched toConfirm }
+       } } }`,
+      testContext(invoke, viewer),
+    );
+    expect(result.errors).toBeUndefined();
+    expect(result.data?.menuScan).toEqual({
+      matchCounts: { lines: 8, matched: 2, toConfirm: 3 },
+    });
+    expect(calls.map((call) => `${call.actorType}.${call.method}`)).toEqual([
+      "MenuScanActor.get",
+      "MenuScanActor.matchCounts",
+    ]);
   });
 
   it("processingError is summarised, so the provider's endpoint never reaches a client", async () => {

@@ -63,6 +63,7 @@ import type {
   GenericItemKind,
   ItemActorInterface,
   ItemBrandDto,
+  ItemCorrectionSource,
   ItemDto,
   ItemImageDto,
   ItemRef,
@@ -73,7 +74,12 @@ import type {
   Page,
   PageArgs,
   RegenerateVectorResult,
+  ReplaceItemBrandInput,
+  SeenAtDto,
+  SeenAtInput,
   SetItemBarcodeInput,
+  SharedAttributeValue,
+  SharedItemDto,
   UnlinkedItemBrand,
   UpdateGenericItemInput,
   UpdateItemInput,
@@ -96,6 +102,7 @@ import {
 } from "@cellar-assistant/contracts";
 import {
   beers,
+  brands as brandsTable,
   coffees,
   genericItems,
   itemBrands,
@@ -109,10 +116,11 @@ import {
   teas,
   wines,
 } from "@cellar-assistant/db";
-import { and, eq, sql } from "@cellar-assistant/db/orm";
+import { and, eq, inArray, sql } from "@cellar-assistant/db/orm";
 import {
   bypassesPolicy,
   canSeeItemImage,
+  canShareItemImageAnonymously,
   isOwner,
 } from "@cellar-assistant/policy";
 import type { ActorId, DaprClient } from "@dapr/dapr";
@@ -142,6 +150,7 @@ import {
   attributeColumns,
   EMBEDDING_PROPERTIES,
   embeddingTextFor,
+  embeddingTextKey,
   ITEM_TABLES,
   type ItemInsertOf,
   type ItemRow,
@@ -149,6 +158,7 @@ import {
 } from "../lib/item-bindings.ts";
 import { enqueueOutbox } from "../lib/outbox.ts";
 import { OUTBOX_TARGETS } from "../lib/outbox-targets.ts";
+import { loadSeenAt } from "../lib/seen-at.ts";
 import { requireUuid } from "../lib/uuid.ts";
 import {
   embeddingModel,
@@ -159,6 +169,7 @@ import {
   type StoredVector,
   storedVector,
 } from "../lib/vectors.ts";
+import { friendIdsOf, friendshipsOf } from "../lib/visibility.ts";
 
 /* -------------------------------------------------------------------------- */
 /* Rows                                                                        */
@@ -180,6 +191,33 @@ const vectorDisplayFileId = (images: readonly ItemImageRow[]): string | null =>
   images.find((image) => image.isPublic)?.fileId ?? null;
 type ItemReviewRow = typeof itemReviews.$inferSelect;
 type ItemBrandRow = typeof itemBrands.$inferSelect;
+
+/**
+ * §2.1: "computed from reviews in memory; replaces the `_aggregate` calls".
+ * `average` is `null` with no reviews — not `0`, which reads as "everyone
+ * hated it". Rounded to 2dp so a `float4` sum does not leak
+ * `3.6666666666666665` into the API.
+ */
+const scoreOf = (reviews: readonly ItemReviewRow[]): ItemScoreDto => {
+  const count = reviews.length;
+  if (count === 0) return { average: null, count: 0 };
+  const total = reviews.reduce((sum, row) => sum + Number(row.score), 0);
+  return { average: Math.round((total / count) * 100) / 100, count };
+};
+
+/** A value that may cross on a share page: scalars only, dates as ISO. */
+const sharedValue = (value: unknown): SharedAttributeValue => {
+  if (value === null || value === undefined) return null;
+  if (value instanceof Date) return value.toISOString();
+  if (
+    typeof value === "string" ||
+    typeof value === "number" ||
+    typeof value === "boolean"
+  ) {
+    return value;
+  }
+  return null;
+};
 
 export type ItemAggregate =
   | {
@@ -297,6 +335,9 @@ const imageRowToDto = (type: ItemType, row: ItemImageRow): ItemImageDto => ({
   updatedAt: iso(row.updatedAt),
 });
 
+/** F-148: how long a deleted review can be put back with its `createdAt`. */
+export const REVIEW_RESTORE_WINDOW_MS = 15 * 60 * 1000;
+
 const reviewRowToDto = (type: ItemType, row: ItemReviewRow): ItemReviewDto => ({
   id: row.id,
   itemId: REVIEWS.refOf(row)?.id ?? "",
@@ -348,6 +389,21 @@ export class ItemActor
   readonly #verifyFile: VerifyFile;
   readonly #embed: EmbedDocument;
   readonly #embedImage: EmbedImage;
+  /**
+   * F-148 (H-102): the reviews this activation deleted in the last
+   * {@link REVIEW_RESTORE_WINDOW_MS}, by id — who wrote each and when, so an
+   * Undo of "Remove my rating" (`addReview` with the same `reviewId`, by the
+   * same viewer) puts back the review it removed, `createdAt` included, and
+   * Recap does not count it as new. Nothing a caller sends can set a
+   * `createdAt`: only a tombstone this actor wrote can, and only for its own
+   * author. In memory on purpose — a restore after the activation is gone (or
+   * the window has passed) is an ordinary new review, which is what every
+   * Undo was before this.
+   */
+  readonly #removedReviews = new Map<
+    string,
+    { readonly userId: string; readonly createdAt: Date; readonly at: number }
+  >();
 
   constructor(
     daprClient: DaprClient,
@@ -401,6 +457,7 @@ export class ItemActor
           updatedAt: itemVectors.updatedAt,
           embeddingModel: itemVectors.embeddingModel,
           embeddingImages: itemVectors.embeddingImages,
+          embeddingText: itemVectors.embeddingText,
         })
         .from(itemVectors)
         .where(VECTORS.where(ref))
@@ -539,22 +596,120 @@ export class ItemActor
     );
   }
 
-  /**
-   * §2.1: "computed from reviews in memory; replaces the `_aggregate` calls".
-   * `average` is `null` with no reviews — not `0`, which reads as "everyone
-   * hated it". Rounded to 2dp so a `float4` sum does not leak
-   * `3.6666666666666665` into the API.
-   */
+  /** {@link scoreOf}, over every review this actor holds. */
   async score(ctx: Ctx): Promise<ItemScoreDto> {
     const aggregate = this.#requireItem();
     requireSignedIn(ctx, "view an item score");
-    const count = aggregate.reviews.length;
-    if (count === 0) return { average: null, count: 0 };
-    const total = aggregate.reviews.reduce(
-      (sum, row) => sum + Number(row.score),
-      0,
+    return scoreOf(aggregate.reviews);
+  }
+
+  /**
+   * X09: {@link scoreOf} over the reviews of the viewer's friends — the item
+   * page's taste header, "Friends".
+   *
+   * The friend set is read here, fresh, from the viewer's own `friends` rows
+   * (either direction, as `friendshipsOf` matches: an acceptance is two rows
+   * delivered by the outbox), never taken from the caller — `RankingsActor`'s
+   * `FRIENDS` scope, applied to one item. `friends` belongs to another actor,
+   * so it is not cached across turns (§1.3). The reviews are this actor's own
+   * and already world-readable to a signed-in viewer (`reviews`), so the
+   * answer reveals nothing a viewer could not page through; what the server
+   * owns is *whose* reviews count.
+   */
+  async friendsScore(ctx: Ctx): Promise<ItemScoreDto> {
+    const aggregate = this.#requireItem();
+    requireSignedIn(ctx, "view an item score");
+    return scoreOf(await this.#friendsNewestReviews(ctx, aggregate));
+  }
+
+  /**
+   * F-154 (H-106): the reviews behind {@link friendsScore} — one per friend,
+   * their newest, newest first — for the item page's Friends' ratings sheet.
+   * The same friend set, read the same way (fresh, from the viewer's own
+   * `friends` rows), so the sheet and the number beside it never disagree and
+   * a non-friend's review never appears. The viewer's own is not in it.
+   */
+  async friendsReviews(ctx: Ctx, page: PageArgs): Promise<Page<ItemReviewDto>> {
+    const aggregate = this.#requireItem();
+    requireSignedIn(ctx, "view item reviews");
+    const rows = await this.#friendsNewestReviews(ctx, aggregate);
+    return offsetPage(
+      rows.map((row) => reviewRowToDto(aggregate.ref.type, row)),
+      page,
     );
-    return { average: Math.round((total / count) * 100) / 100, count };
+  }
+
+  async #friendsNewestReviews(
+    ctx: Ctx,
+    aggregate: Extract<ItemAggregate, { kind: "item" }>,
+  ): Promise<ItemReviewRow[]> {
+    const viewer = ctx.viewerId;
+    if (viewer === null) return [];
+    const friendIds = new Set(
+      friendIdsOf(viewer, await friendshipsOf(this.db, viewer)),
+    );
+    // One review per friend: the newest, as `myReview` reads the viewer's own
+    // (`item_reviews` has no one-per-user constraint; the cache is newest
+    // first), so a friend who reviewed twice is not counted twice.
+    const seen = new Set<string>();
+    return aggregate.reviews.filter((row) => {
+      if (!friendIds.has(row.userId) || seen.has(row.userId)) return false;
+      seen.add(row.userId);
+      return true;
+    });
+  }
+
+  /**
+   * L10 (wave C seenat): where this item was seen — on a scanned menu, in the
+   * viewer's own log, or a friend's — as far as the viewer may see each place
+   * and each log (`lib/seen-at.ts`, composing `canSeePlace` and
+   * `canSeeCheckInDetails`). It reads the key, not the aggregate, on purpose:
+   * a missing item answers `[]`, exactly as an item seen only at places or in
+   * logs the viewer may not see, so the list is never an existence oracle (L6).
+   */
+  async seenAt(
+    ctx: Ctx,
+    input: SeenAtInput = {},
+  ): Promise<readonly SeenAtDto[]> {
+    requireSignedIn(ctx, "see where an item was seen");
+    const parsed = parseItemActorKey(this.key);
+    if (parsed === null || parsed.kind !== "item") return [];
+    return loadSeenAt(this.db, ctx, parsed.ref, input);
+  }
+
+  /**
+   * X17's public share page: the one read here an anonymous caller may make.
+   * Items are catalog data — what makes this safe is the shape, a closed
+   * whitelist (`SharedItemDto`): the name, the type's spec attributes, the
+   * newest **public** photo and the everyone score. Not `createdById`, not the
+   * barcode, not a review, and never a private upload, whoever asks — the
+   * answer does not depend on `ctx` at all (`canShareAnonymously`).
+   */
+  async getShared(_ctx: Ctx): Promise<SharedItemDto> {
+    const aggregate = this.#requireItem();
+    const { type } = aggregate.ref;
+    const dto = itemRowToDto(type, aggregate.row) as unknown as Record<
+      string,
+      unknown
+    >;
+    const attributes: Record<string, SharedAttributeValue> = {};
+    for (const name of Object.keys(ITEM_TYPE_SPECS[type].attributes)) {
+      attributes[name] = sharedValue(dto[name]);
+    }
+    const image = aggregate.images.find(canShareItemImageAnonymously) ?? null;
+    const score = scoreOf(aggregate.reviews);
+    return {
+      id: aggregate.row.id,
+      type,
+      name: aggregate.row.name,
+      description: aggregate.row.description,
+      country: aggregate.row.country,
+      attributes,
+      imageFileId: image?.fileId ?? null,
+      imagePlaceholder: image?.placeholder ?? null,
+      scoreAverage: score.average,
+      scoreCount: score.count,
+    };
   }
 
   /**
@@ -572,6 +727,19 @@ export class ItemActor
     if (viewerId === null) return null;
     const mine = aggregate.reviews.find((row) => row.userId === viewerId);
     return mine === undefined ? null : reviewRowToDto(aggregate.ref.type, mine);
+  }
+
+  /**
+   * X23: `userId`'s newest review, or `null` — the owner's verdict beside an
+   * entry on their tier list. The same rows `reviews` pages through for any
+   * signed-in viewer, so nothing is visible here that was not already.
+   */
+  async reviewBy(ctx: Ctx, userId: string): Promise<ItemReviewDto | null> {
+    const aggregate = this.#requireItem();
+    requireSignedIn(ctx, "view an item review");
+    const wanted = requireUuid(userId, "userId");
+    const row = aggregate.reviews.find((review) => review.userId === wanted);
+    return row === undefined ? null : reviewRowToDto(aggregate.ref.type, row);
   }
 
   async brands(ctx: Ctx, page: PageArgs): Promise<Page<ItemBrandDto>> {
@@ -908,6 +1076,34 @@ export class ItemActor
     return vectorDisplayFileId(images);
   }
 
+  /**
+   * N08: the item's brands are part of its embedded text, so linking,
+   * unlinking or re-ranking one re-embeds it — in the same transaction as the
+   * link, like `update`'s enqueue. Nothing else would: no item column
+   * changed. `regenerateVector` compares the text key, so a redelivery, or a
+   * link that leaves the text as it was, costs a `SELECT` and no model call.
+   *
+   * It also covers onboarding: `ItemOnboardingActor.confirm` enqueues
+   * `create` (whose own `regenerateVector` runs before any brand exists) and
+   * then `linkBrand`, so the item's vector is embedded a second time, with
+   * its brand.
+   */
+  async #enqueueBrandRegenerate(
+    tx: DbOrTx,
+    ctx: Ctx,
+    ref: ItemRef,
+  ): Promise<void> {
+    await enqueueOutbox(
+      tx,
+      OUTBOX_TARGETS["ItemActor.regenerateVector"],
+      {
+        targetId: this.key,
+        payload: { reason: "brand", itemType: ref.type, itemId: ref.id },
+      },
+      { attributeTo: ctx },
+    );
+  }
+
   async #enqueueImageRegenerate(
     tx: DbOrTx,
     ctx: Ctx,
@@ -1035,6 +1231,7 @@ export class ItemActor
     }
 
     const score = requireScore(input.score);
+    const restored = this.#takeRemovedReview(reviewId, userId);
     await this.tx(async (tx) => {
       await tx
         .insert(itemReviews)
@@ -1043,6 +1240,7 @@ export class ItemActor
           userId,
           score,
           text: parseReviewText(input.text),
+          ...(restored === null ? {} : { createdAt: restored }),
           ...REVIEWS.values(aggregate.ref),
         })
         .onConflictDoNothing({ target: itemReviews.id });
@@ -1110,8 +1308,31 @@ export class ItemActor
     await this.tx(async (tx) => {
       await tx.delete(itemReviews).where(eq(itemReviews.id, reviewId));
     });
+    this.#removedReviews.set(reviewId, {
+      userId: row.userId,
+      createdAt: row.createdAt,
+      at: Date.now(),
+    });
     await this.reload();
     return { id: reviewId };
+  }
+
+  /**
+   * F-148: the original `createdAt` of `reviewId` if this activation deleted
+   * it within the window and `userId` wrote it — consumed, so it restores
+   * once — else `null`. Someone else re-using the id gets a fresh stamp.
+   */
+  #takeRemovedReview(reviewId: string, userId: string): Date | null {
+    const now = Date.now();
+    for (const [id, entry] of this.#removedReviews) {
+      if (now - entry.at > REVIEW_RESTORE_WINDOW_MS) {
+        this.#removedReviews.delete(id);
+      }
+    }
+    const entry = this.#removedReviews.get(reviewId);
+    if (entry === undefined || entry.userId !== userId) return null;
+    this.#removedReviews.delete(reviewId);
+    return entry.createdAt;
   }
 
   /* ---------------------------------------------------------------------- */
@@ -1125,6 +1346,10 @@ export class ItemActor
    *
    * Idempotent on `(item, brandId)`, which is also how a re-delivered
    * `ItemOnboardingActor.confirm` produces one link rather than two.
+   *
+   * A `brandId` that names no brand is a `NotFoundError` (wave B hardening):
+   * it used to reach the insert and come back as a raw
+   * `item_brands_brand_id_brands_id_fkey` violation — a 500.
    */
   async linkBrand(ctx: Ctx, input: LinkItemBrandInput): Promise<ItemBrandDto> {
     const aggregate = this.#requireItem();
@@ -1142,6 +1367,8 @@ export class ItemActor
           .update(itemBrands)
           .set({ isPrimary })
           .where(eq(itemBrands.id, existing.id));
+        // Primary first is the embedded order (`#brandNames`).
+        await this.#enqueueBrandRegenerate(tx, ctx, aggregate.ref);
       });
       await this.reload();
       const reloaded = this.#requireItem();
@@ -1152,6 +1379,7 @@ export class ItemActor
       return brandRowToDto(reloaded.ref.type, row);
     }
 
+    await this.#requireBrandExists(brandId);
     const linkId = randomUUID();
     await this.tx(async (tx) => {
       await tx.insert(itemBrands).values({
@@ -1160,6 +1388,9 @@ export class ItemActor
         isPrimary,
         ...BRANDS.values(aggregate.ref),
       });
+      await this.#enqueueBrandRegenerate(tx, ctx, aggregate.ref);
+    }).catch((error: unknown) => {
+      throw translateBrandForeignKey(error, brandId);
     });
     await this.reload();
     const reloaded = this.#requireItem();
@@ -1170,6 +1401,15 @@ export class ItemActor
     return brandRowToDto(reloaded.ref.type, row);
   }
 
+  /**
+   * Item creator only. **Idempotent** (wave B hardening): a brand that is
+   * not linked — never was, or a previous call already unlinked it — is the
+   * state asked for, so the answer is the same `{ brandId }` and nothing is
+   * written. It used to be a `NotFoundError`, which made a retried clear
+   * (the edit form's, after its first answer was lost) fail forever: the
+   * page still showed the brand, and every Save asked to unlink a link that
+   * was already gone.
+   */
   async unlinkBrand(ctx: Ctx, brandId: string): Promise<UnlinkedItemBrand> {
     brandId = requireUuid(brandId, "brandId");
     const aggregate = this.#requireItem();
@@ -1179,15 +1419,148 @@ export class ItemActor
       "unlink a brand from it",
     );
     const row = aggregate.brands.find((brand) => brand.brandId === brandId);
-    if (row === undefined) {
-      throw new NotFoundError(`brand ${brandId} is not linked to ${this.key}`);
-    }
+    if (row === undefined) return { brandId };
 
     await this.tx(async (tx) => {
       await tx.delete(itemBrands).where(eq(itemBrands.id, row.id));
+      await this.#enqueueBrandRegenerate(tx, ctx, aggregate.ref);
     });
     await this.reload();
     return { brandId };
+  }
+
+  /**
+   * X19 / D8 — "Wrong brand? Change it", as one turn: `brandId` becomes the
+   * primary, `replacesBrandId` (the brand the page showed) is unlinked, and
+   * any other primary is demoted, so the item ends with exactly one. Creator
+   * only, like `linkBrand` — whose two calls this replaces, which could leave
+   * an item with both brands (or neither) when the second failed.
+   *
+   * Idempotent: when `brandId` is already the only primary and
+   * `replacesBrandId` is no longer linked, nothing is written — so a retried
+   * request, or an Undo of an Undo, is a no-op rather than an error. A
+   * `brandId` that names no brand is a `NotFoundError`, never a raw FK. One
+   * `regenerateVector` is enqueued when anything changed (the brand names are
+   * embedded, N08).
+   */
+  async replacePrimaryBrand(
+    ctx: Ctx,
+    input: ReplaceItemBrandInput,
+  ): Promise<ItemBrandDto> {
+    const aggregate = this.#requireItem();
+    this.#requireCreator(ctx, aggregate.row.createdById, "change its brand");
+    const brandId = requireUuid(input.brandId, "brandId");
+    const replacesBrandId =
+      input.replacesBrandId === null || input.replacesBrandId === undefined
+        ? null
+        : requireUuid(input.replacesBrandId, "replacesBrandId");
+
+    const links = aggregate.brands;
+    const target = links.find((row) => row.brandId === brandId);
+    const toUnlink =
+      replacesBrandId === null || replacesBrandId === brandId
+        ? undefined
+        : links.find((row) => row.brandId === replacesBrandId);
+    const toDemote = links.filter(
+      (row) =>
+        row.brandId !== brandId &&
+        row.id !== toUnlink?.id &&
+        (row.isPrimary ?? false),
+    );
+    const settled =
+      target !== undefined &&
+      (target.isPrimary ?? false) &&
+      toUnlink === undefined &&
+      toDemote.length === 0;
+
+    if (!settled) {
+      // Only a new link can name a brand that does not exist; an existing
+      // link's brand row is there (`ON DELETE CASCADE` would have taken it).
+      if (target === undefined) await this.#requireBrandExists(brandId);
+      await this.tx(async (tx) => {
+        if (toUnlink !== undefined) {
+          await tx.delete(itemBrands).where(eq(itemBrands.id, toUnlink.id));
+        }
+        if (toDemote.length > 0) {
+          await tx
+            .update(itemBrands)
+            .set({ isPrimary: false })
+            .where(
+              inArray(
+                itemBrands.id,
+                toDemote.map((row) => row.id),
+              ),
+            );
+        }
+        if (target === undefined) {
+          await tx.insert(itemBrands).values({
+            id: randomUUID(),
+            brandId,
+            isPrimary: true,
+            ...BRANDS.values(aggregate.ref),
+          });
+        } else if (!(target.isPrimary ?? false)) {
+          await tx
+            .update(itemBrands)
+            .set({ isPrimary: true })
+            .where(eq(itemBrands.id, target.id));
+        }
+        await this.#enqueueBrandRegenerate(tx, ctx, aggregate.ref);
+      }).catch((error: unknown) => {
+        throw translateBrandForeignKey(error, brandId);
+      });
+      await this.reload();
+    }
+    const reloaded = this.#requireItem();
+    const row = reloaded.brands.find((brand) => brand.brandId === brandId);
+    if (row === undefined) {
+      throw new ConflictError(`item brand ${brandId} was not written`);
+    }
+    return brandRowToDto(reloaded.ref.type, row);
+  }
+
+  /**
+   * The brand a new link names has to exist. Checked before the write so the
+   * answer is a typed `NotFoundError`; `translateBrandForeignKey` covers the
+   * brand that disappears between this read and the insert.
+   */
+  async #requireBrandExists(brandId: string): Promise<void> {
+    const [row] = await this.db
+      .select({ id: brandsTable.id })
+      .from(brandsTable)
+      .where(eq(brandsTable.id, brandId))
+      .limit(1);
+    if (row === undefined) {
+      throw new NotFoundError(`brand ${brandId} not found`);
+    }
+  }
+
+  /**
+   * X19 — where the creator's "Re-read label" and "Suggest details" would run.
+   * `null` for anyone but the creator: the edit page shows neither, and the
+   * GraphQL field says nothing about another person's onboarding.
+   *
+   * Reads `item_onboardings` (§1.2 governs writers; `#embeddingImageIds` reads
+   * the same two columns). The model calls themselves run in
+   * `ItemOnboardingActor`, never here — `no-external-calls.test.ts`.
+   */
+  async correctionSource(ctx: Ctx): Promise<ItemCorrectionSource | null> {
+    const aggregate = this.#requireItem();
+    if (!isOwner(ctx, aggregate.row.createdById)) return null;
+    const onboardingId = aggregate.row.itemOnboardingId;
+    if (onboardingId === null) return { onboardingId: null, hasLabel: false };
+    const [labels] = await this.db
+      .select({
+        front: itemOnboardings.frontLabelImageId,
+        back: itemOnboardings.backLabelImageId,
+      })
+      .from(itemOnboardings)
+      .where(eq(itemOnboardings.id, onboardingId));
+    if (labels === undefined) return { onboardingId: null, hasLabel: false };
+    return {
+      onboardingId,
+      hasLabel: labels.front !== null || labels.back !== null,
+    };
   }
 
   /* ---------------------------------------------------------------------- */
@@ -1222,12 +1595,20 @@ export class ItemActor
         ? await this.#embeddingImageIds(aggregate)
         : [];
     const images = imageSetKey(imageFileIds);
+    // N08: the text names the item's brands, and its key is part of the
+    // vector's identity — so a brand linked since, or an older text format,
+    // reads as stale even though no item column changed.
+    const text = embeddingTextFor(
+      ref,
+      row,
+      await this.#brandNames(aggregate.brands),
+    );
+    const textKey = embeddingTextKey(text);
     const outcome = await regenerateIfStale(
       vector,
       [row.updatedAt],
       {
-        embed: () =>
-          this.#embed(ctx, { text: embeddingTextFor(ref, row), imageFileIds }),
+        embed: () => this.#embed(ctx, { text, imageFileIds }),
         // One upsert on the item's own unique column, whether or not a row
         // was seen (`item_vectors_one_per_item`). Two activations of one item
         // that both found no vector — a placement split-brain — used to race
@@ -1242,6 +1623,7 @@ export class ItemActor
               updatedAt: sql`now()`,
               embeddingModel: embedded.model,
               embeddingImages: images,
+              embeddingText: textKey,
             };
             await tx
               .insert(itemVectors)
@@ -1252,7 +1634,9 @@ export class ItemActor
               });
           }),
       },
-      model === null ? null : { model: model.key, images },
+      model === null
+        ? { text: textKey }
+        : { model: model.key, images, text: textKey },
     );
     if (outcome === "fresh") {
       return {
@@ -1275,6 +1659,46 @@ export class ItemActor
             ? "embedding changed"
             : "item changed",
     };
+  }
+
+  /**
+   * The names of the brands linked to this item, primary first and then by
+   * name — the order `embeddingTextFor` writes them in, so the text (and its
+   * key) does not change with the order the links happen to load in.
+   *
+   * `brands` is `BrandActor`'s table; this reads it fresh, inside
+   * `regenerateVector`, and caches nothing (§1.3).
+   */
+  async #brandNames(links: readonly ItemBrandRow[]): Promise<string[]> {
+    if (links.length === 0) return [];
+    const rows = await this.db
+      .select({ id: brandsTable.id, name: brandsTable.name })
+      .from(brandsTable)
+      .where(
+        inArray(
+          brandsTable.id,
+          links.map((link) => link.brandId),
+        ),
+      );
+    const nameOf = new Map(rows.map((row) => [row.id, row.name]));
+    // Code-unit order, not `localeCompare`: the text is hashed into
+    // `embedding_text`, and an ICU or locale difference between processes
+    // must not make an unchanged item read as stale.
+    return links
+      .map((link) => ({
+        primary: link.isPrimary === true,
+        name: nameOf.get(link.brandId),
+      }))
+      .filter(
+        (link): link is { primary: boolean; name: string } =>
+          link.name !== undefined,
+      )
+      .sort(
+        (a, b) =>
+          Number(b.primary) - Number(a.primary) ||
+          (a.name < b.name ? -1 : a.name > b.name ? 1 : 0),
+      )
+      .map((link) => link.name);
   }
 
   /**
@@ -1561,6 +1985,19 @@ const pgErrorOf = (
     code?: unknown;
     constraint?: unknown;
   };
+};
+
+/**
+ * A link insert that lost its brand mid-turn: the brand row was deleted
+ * between `#requireBrandExists` and the insert. The same `NotFoundError` the
+ * check gives, not a raw 23503.
+ */
+const translateBrandForeignKey = (error: unknown, brandId: string): unknown => {
+  const pg = pgErrorOf(error);
+  return pg?.code === "23503" &&
+    pg.constraint === "item_brands_brand_id_brands_id_fkey"
+    ? new NotFoundError(`brand ${brandId} not found`)
+    : error;
 };
 
 /** `idx_generic_items_name_category` is a UNIQUE CONSTRAINT, not an index. */

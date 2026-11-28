@@ -12,6 +12,8 @@
  * GraphQL round trip.
  */
 
+import type { PlateStyleFields } from "@/components/app/LabelPlate";
+import { inferBrandType } from "@/components/brand/adapter";
 import {
   type ApiItemType,
   cellarItemHref,
@@ -23,24 +25,39 @@ import {
   ItemBrandFragment,
   ItemCoreFragment,
 } from "@/lib/api/items";
-import { formatAsPercentage, formatEnum, formatVintage } from "@/utilities";
+import { type LabelPlateData, labelPlateFrom } from "@/lib/items/label-plate";
+import {
+  formatAsPercentage,
+  formatEnum,
+  formatItemVintage,
+  formatVintage,
+} from "@/utilities";
 import {
   formatBeerStyle,
   formatCountry,
   formatSpiritType,
   formatWineVariety,
 } from "@/utilities/formatters";
+import { displayItemName } from "@/utilities/smart-title-case";
 import {
+  ItemPageBottlesFragment,
   ItemPageItemFragment,
   ItemPageRecipesFragment,
   ItemPageRelationsFragment,
   ItemPageReviewFragment,
 } from "./fragments";
 import type { ItemBrand } from "./ItemBrands";
+import { plateStyleFields } from "./ItemCard/adapter";
 import type { ItemCellar, ItemCellarUser } from "./ItemCellars";
 import type { ItemRecipeIngredient } from "./ItemRecipes";
 import type { Review } from "./ItemReviews";
 import type { ItemTierListEntry } from "./ItemTierLists";
+import {
+  type Fact,
+  itemFacts,
+  type ScoreSummary,
+  type YourBottle,
+} from "./item-page-model";
 
 /* -------------------------------------------------------------------------- */
 /* Routes                                                                      */
@@ -146,7 +163,11 @@ export const itemSubtitlePhrases = (
   switch (type) {
     case "WINE":
       return [
-        formatVintage(str(attributes.vintage)),
+        // X19: a NULL wine vintage is non-vintage, and says so.
+        formatItemVintage(
+          "WINE",
+          attributes.vintage === null ? null : str(attributes.vintage),
+        ),
         formatWineVariety(str(attributes.variety)),
         country,
         str(attributes.region),
@@ -332,13 +353,32 @@ export const reviewFromRow = (row: ReviewSource): Review => {
   };
 };
 
-/** `Item.myReview` → `AddReview`'s pre-fill. */
+/**
+ * `Item.myReview` → `AddReview`'s pre-fill, and (F-151) when you last rated
+ * it, for "Your rating · Nov 3".
+ */
 export const myReviewFromRow = (
-  row: { id: string; score: number; text?: unknown } | null | undefined,
-): { id: string; score: number; text: string | null } | null =>
+  row:
+    | { id: string; score: number; text?: unknown; updatedAt?: unknown }
+    | null
+    | undefined,
+): MyReview | null =>
   row === null || row === undefined
     ? null
-    : { id: row.id, score: row.score, text: richTextFromReviewText(row.text) };
+    : {
+        id: row.id,
+        score: row.score,
+        text: richTextFromReviewText(row.text),
+        ratedAt: typeof row.updatedAt === "string" ? row.updatedAt : null,
+      };
+
+export type MyReview = {
+  id: string;
+  score: number;
+  text: string | null;
+  /** F-151: when you last rated it; null when the read did not say. */
+  ratedAt?: string | null;
+};
 
 export type CellarSource = {
   id: string;
@@ -410,6 +450,8 @@ export const brandFromNode = (node: {
     id: string;
     name: string;
     brandType?: string | null;
+    /** X23: the earliest-linked item's type, when `brandType` says nothing. */
+    firstItemType?: ApiItemType | null;
     logoUrl?: string | null;
   };
 }): ItemBrand => ({
@@ -419,7 +461,9 @@ export const brandFromNode = (node: {
     id: node.brand.id,
     name: node.brand.name,
     logo_url: node.brand.logoUrl ?? null,
-    brand_type: node.brand.brandType ?? null,
+    // The same inference as the brand pages (X23): a stored type, else the
+    // producer of its first item, else nothing — never "Other".
+    brand_type: inferBrandType(node.brand.brandType, node.brand.firstItemType),
   },
 });
 
@@ -505,8 +549,11 @@ export type ItemView = {
   description: string | null;
   createdById: string;
   isFavorite: boolean;
+  /** X08: on the viewer's Want to try list. */
+  isWantToTry: boolean;
   subTitlePhrases: Array<string | undefined>;
-  characteristics: Characteristic[];
+  /** X09: the fact sheet — every recorded attribute, for all six types. */
+  facts: Fact[];
   flavorProfile: string | null;
   ingredients: string | null;
   image: { url: string; placeholder: string | null } | null;
@@ -514,8 +561,57 @@ export type ItemView = {
   reviews: Review[];
   reviewsEndCursor: string | null;
   reviewsHasNextPage: boolean;
-  myReview: { id: string; score: number; text: string | null } | null;
+  myReview: MyReview | null;
+  /** X09's taste header: everyone's average (`Item.score`)… */
+  everyone: ScoreSummary;
+  /** …and the viewer's friends' (`Item.friendsScore`). */
+  friends: ScoreSummary;
+  /** The hero's LabelPlate when there is no photo (N28). */
+  plate: LabelPlateData;
+  /** That plate's `styleFields`: the item's style vessel (imagery, H-2). */
+  plateStyle: PlateStyleFields | null;
 };
+
+/**
+ * The plate an item page draws in place of a missing photo: the primary
+ * brand (else the first) as producer, and the vintage, region/country and
+ * ABV the page's own attributes already carry.
+ */
+export const itemPlate = (
+  type: ApiItemType,
+  core: ItemCoreSource,
+  attributes: ItemAttributesSource,
+  brands: readonly ItemBrand[],
+): LabelPlateData =>
+  labelPlateFrom({
+    type,
+    name: core.name,
+    producer: (brands.find((brand) => brand.is_primary === true) ?? brands[0])
+      ?.brand.name,
+    vintage: str(attributes.vintage),
+    vintageYear: num(attributes.vintageYear),
+    region: str(attributes.region),
+    country: core.country,
+    alcoholContentPercentage: num(attributes.alcoholContentPercentage),
+  });
+
+/**
+ * The style fields an item page's plate reads (H-2), off the page's own
+ * `...ItemAttributes` (which aliases Wine's `style` as `wineStyle`).
+ */
+export const itemPlateStyle = (
+  type: ApiItemType,
+  attributes: ItemAttributesSource,
+): PlateStyleFields | null =>
+  plateStyleFields(type, {
+    wineStyle: str(attributes.wineStyle),
+    variety: str(attributes.variety),
+    beerStyle: str(attributes.beerStyle),
+    spiritType: str(attributes.spiritType),
+    spiritStyle: str(attributes.spiritStyle),
+    category: str(attributes.category),
+    form: str(attributes.form),
+  });
 
 /** `...ItemPageItem` → {@link ItemView}. */
 export const itemViewFromFragment = (
@@ -530,30 +626,61 @@ export const itemViewFromFragment = (
   const type = core.type as ApiItemType;
   const image = item.images.edges[0]?.node ?? null;
   const tea = teaTextCards(type, attributes);
+  const brands = item.brands.edges.map((edge) =>
+    brandFromNode(readFragment(ItemBrandFragment, edge.node)),
+  );
   return {
     itemId: core.id,
     type,
-    name: core.name,
+    name: displayItemName(core.name),
     description: core.description ?? null,
     createdById: core.createdById,
     isFavorite: item.isFavorite,
+    isWantToTry: item.isWantToTry,
     subTitlePhrases: itemSubtitlePhrases(type, core, attributes),
-    characteristics: itemCharacteristics(type, attributes),
+    facts: itemFacts(type, core, attributes),
     flavorProfile: tea.flavorProfile,
     ingredients: tea.ingredients,
     image:
       image === null
         ? null
         : { url: image.file.url, placeholder: image.placeholder ?? null },
-    brands: item.brands.edges.map((edge) =>
-      brandFromNode(readFragment(ItemBrandFragment, edge.node)),
-    ),
+    brands,
     reviews: item.reviews.edges.map((edge) =>
       reviewFromRow(readFragment(ItemPageReviewFragment, edge.node)),
     ),
     reviewsEndCursor: item.reviews.pageInfo.endCursor ?? null,
     reviewsHasNextPage: item.reviews.pageInfo.hasNextPage,
     myReview: myReviewFromRow(item.myReview),
+    everyone: {
+      average: core.score.average ?? null,
+      count: core.score.count,
+    },
+    friends: {
+      average: item.friendsScore.average ?? null,
+      count: item.friendsScore.count,
+    },
+    plate: itemPlate(type, core, attributes, brands),
+    plateStyle: itemPlateStyle(type, attributes),
+  };
+};
+
+/** `...ItemPageBottles` → X09's "Your bottles", in the API's order. */
+export const yourBottlesFromFragment = (
+  data: FragmentOf<typeof ItemPageBottlesFragment>,
+): { bottles: YourBottle[]; total: number | null } => {
+  const connection = readFragment(ItemPageBottlesFragment, data).myBottles;
+  return {
+    bottles: connection.edges.map(({ node }) => ({
+      id: node.id,
+      cellarId: node.cellarId,
+      cellarName: node.cellar?.name ?? null,
+      openAt: (node.openAt as string | null) ?? null,
+      emptyAt: (node.emptyAt as string | null) ?? null,
+      percentageRemaining: node.percentageRemaining,
+      levelBeforeEmpty: node.levelBeforeEmpty ?? null,
+    })),
+    total: connection.totalCount ?? null,
   };
 };
 
@@ -605,3 +732,64 @@ export const heldBackNote = (
   total === null || total === undefined || total <= shown
     ? null
     : `Showing the ${order} ${shown} of ${total} ${noun}.`;
+
+/** F-145: the bottle as `BottleForRestoreQuery` read it. */
+export type BottleRestoreRow = {
+  id: string;
+  cellarId: string;
+  createdAt: unknown;
+  acquiredOn?: unknown;
+  displayImageId?: string | null;
+  drinkFrom?: unknown;
+  drinkUntil?: unknown;
+  emptyAt?: unknown;
+  location?: string | null;
+  openAt?: unknown;
+  packagedOn?: unknown;
+  percentageRemaining: number;
+  priceAmount?: number | null;
+  priceCurrency?: string | null;
+  sourceMenuItemId?: string | null;
+  sourcePlaceId?: string | null;
+  sourceType?: "import" | "manual" | "menu_discovery" | "menu_scan" | null;
+  item: { id: string; type: string };
+};
+
+const asDate = (value: unknown): string | null =>
+  typeof value === "string" ? value : null;
+
+/**
+ * F-145: `restoreCellarItem`'s variables from the bottle read before it was
+ * deleted — the same id and `createdAt`, so it returns to its place, and
+ * every field it had. No read is no restore (null): the Undo is then not
+ * offered rather than one that would put back a different bottle.
+ */
+export const restoreBottleVariables = (
+  row: BottleRestoreRow | null | undefined,
+) => {
+  if (row === null || row === undefined) return null;
+  const createdAt = asDate(row.createdAt);
+  if (createdAt === null) return null;
+  return {
+    cellarId: row.cellarId,
+    cellarItemId: row.id,
+    createdAt,
+    input: {
+      item: { id: row.item.id, type: row.item.type as ApiItemType },
+      acquiredOn: asDate(row.acquiredOn),
+      displayImageId: row.displayImageId ?? null,
+      drinkFrom: asDate(row.drinkFrom),
+      drinkUntil: asDate(row.drinkUntil),
+      emptyAt: asDate(row.emptyAt),
+      location: row.location ?? null,
+      openAt: asDate(row.openAt),
+      packagedOn: asDate(row.packagedOn),
+      percentageRemaining: row.percentageRemaining,
+      priceAmount: row.priceAmount ?? null,
+      priceCurrency: row.priceCurrency ?? null,
+      sourceMenuItemId: row.sourceMenuItemId ?? null,
+      sourcePlaceId: row.sourcePlaceId ?? null,
+      sourceType: row.sourceType ?? null,
+    },
+  };
+};

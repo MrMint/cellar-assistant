@@ -16,6 +16,7 @@
  */
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { readModelBudgetPolicy } from "../../actors/budget-actor.ts";
 import { type Env, readAIProviderConfig } from "./config.ts";
 
 const REPO = new URL("../../../../../", import.meta.url);
@@ -106,6 +107,37 @@ describe("AI configuration reaches the actor host in both dev lanes", () => {
     const listed = hostRunPassthrough();
     expect(listed.size).toBeGreaterThan(20);
     expect([...names].filter((name) => !listed.has(name))).toEqual([]);
+  });
+});
+
+/**
+ * The same rule for `BudgetActor`'s spend overrides, read by
+ * `readModelBudgetPolicy` — including D16's `GOOGLE_PLACES_MONTHLY_PAID_CENTS`.
+ * An override that never reaches the host is a cap nobody can change.
+ */
+describe("spend overrides reach the actor host in both dev lanes", () => {
+  const names = (() => {
+    const seen = new Set<string>();
+    const env = new Proxy({} as Record<string, string | undefined>, {
+      get: (target, name) => {
+        if (typeof name === "string") seen.add(name);
+        return target[name as string];
+      },
+    });
+    readModelBudgetPolicy(env);
+    return seen;
+  })();
+
+  it("the probe sees the policy's variables (scan is not vacuous)", () => {
+    expect(names).toContain("BUDGET_USER_CAPS");
+    expect(names).toContain("GOOGLE_PLACES_MONTHLY_PAID_CENTS");
+  });
+
+  it("infra/docker-compose.yml and scripts/stack/stack.sh pass every one", () => {
+    const compose = composeActorsEnvironment();
+    const hostRun = hostRunPassthrough();
+    expect([...names].filter((name) => !compose.has(name))).toEqual([]);
+    expect([...names].filter((name) => !hostRun.has(name))).toEqual([]);
   });
 });
 

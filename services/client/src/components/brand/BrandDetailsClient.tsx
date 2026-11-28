@@ -1,8 +1,9 @@
 "use client";
 
-import { Box, Button } from "@mui/joy";
 import { useMemo } from "react";
 import { ApiError } from "@/components/cellar-api/ApiError";
+import { Button } from "@/components/ui/button";
+import { Spinner } from "@/components/ui/spinner";
 import { readFragment } from "@/lib/api/graphql";
 import { unwrapResult } from "@/lib/api/result";
 import {
@@ -20,6 +21,7 @@ import {
   itemLinkFromFragment,
 } from "./adapter";
 import { BrandDetails } from "./BrandDetails";
+import { BrandShelf } from "./BrandShelf";
 import {
   BRAND_CHILDREN_PAGE_SIZE,
   BRAND_ITEMS_REST_PAGE_SIZE,
@@ -41,21 +43,22 @@ function ShowMore<TRow>({
   title: string;
   loadMore: () => void;
 }) {
+  const loading = list.status === "loadingMore";
   return (
     <>
       {list.failure !== null && <ApiError error={list.failure} title={title} />}
       {list.hasNextPage && (
-        <Box sx={{ mt: 2 }}>
+        <div className="mt-4">
           <Button
-            variant="outlined"
-            size="sm"
-            loading={list.status === "loadingMore"}
-            disabled={!list.canLoadMore}
+            variant="quiet"
+            aria-busy={loading}
+            disabled={loading || !list.canLoadMore}
             onClick={loadMore}
           >
+            {loading && <Spinner aria-hidden />}
             Show more
           </Button>
-        </Box>
+        </div>
       )}
     </>
   );
@@ -148,32 +151,43 @@ export function BrandDetailsClient({
     [brand, children.rows, places.rows, items.rows],
   );
 
+  const tiles = useMemo(
+    () =>
+      items.rows.flatMap((row) => (row.tile === undefined ? [] : [row.tile])),
+    [items.rows],
+  );
+
   return (
-    <BrandDetails
-      brand={details}
-      itemTotal={items.totalCount}
-      placeTotal={places.totalCount}
-      itemsFooter={
+    <BrandShelf
+      name={brand.name}
+      tiles={tiles}
+      total={items.totalCount}
+      footer={
         <ShowMore
           list={items}
-          title="Items"
+          title="Drinks"
           loadMore={() => void items.loadMore()}
         />
       }
-      childrenFooter={
-        <ShowMore
-          list={children}
-          title="Brands"
-          loadMore={() => void children.loadMore()}
-        />
-      }
-      placesFooter={
-        <ShowMore
-          list={places}
-          title="Places"
-          loadMore={() => void places.loadMore()}
-        />
-      }
-    />
+    >
+      <BrandDetails
+        brand={details}
+        placeTotal={places.totalCount}
+        childrenFooter={
+          <ShowMore
+            list={children}
+            title="Brands"
+            loadMore={() => void children.loadMore()}
+          />
+        }
+        placesFooter={
+          <ShowMore
+            list={places}
+            title="Places"
+            loadMore={() => void places.loadMore()}
+          />
+        }
+      />
+    </BrandShelf>
   );
 }

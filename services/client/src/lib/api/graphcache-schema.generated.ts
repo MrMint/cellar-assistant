@@ -63,6 +63,36 @@ export const graphcacheSchema: MinifiedIntrospection = {
     types: [
       {
         kind: "OBJECT",
+        name: "AcceptFriendInvitePayload",
+        fields: [
+          {
+            name: "becameFriends",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "Boolean" },
+            },
+          },
+          {
+            name: "friendId",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "ID" } },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "UNION",
+        name: "AcceptFriendInviteResult",
+        possibleTypes: [
+          { kind: "OBJECT", name: "AcceptFriendInvitePayload" },
+          { kind: "OBJECT", name: "BudgetExceededError" },
+          { kind: "OBJECT", name: "ConflictError" },
+          { kind: "OBJECT", name: "ForbiddenError" },
+          { kind: "OBJECT", name: "NotFoundError" },
+          { kind: "OBJECT", name: "ValidationError" },
+        ],
+      },
+      {
+        kind: "OBJECT",
         name: "AcceptFriendRequestPayload",
         fields: [
           {
@@ -97,6 +127,18 @@ export const graphcacheSchema: MinifiedIntrospection = {
       },
       {
         kind: "UNION",
+        name: "AcceptPlaceSuggestionResult",
+        possibleTypes: [
+          { kind: "OBJECT", name: "BudgetExceededError" },
+          { kind: "OBJECT", name: "ConflictError" },
+          { kind: "OBJECT", name: "ForbiddenError" },
+          { kind: "OBJECT", name: "NotFoundError" },
+          { kind: "OBJECT", name: "Place" },
+          { kind: "OBJECT", name: "ValidationError" },
+        ],
+      },
+      {
+        kind: "UNION",
         name: "ActOnMenuScanSuggestionResult",
         possibleTypes: [
           { kind: "OBJECT", name: "BudgetExceededError" },
@@ -113,6 +155,7 @@ export const graphcacheSchema: MinifiedIntrospection = {
         fields: [
           { name: "cellar", type: { kind: "OBJECT", name: "Cellar" } },
           { name: "cellarItemId", type: { kind: "SCALAR", name: "ID" } },
+          { name: "checkIn", type: { kind: "OBJECT", name: "ItemCheckIn" } },
           {
             name: "id",
             type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "ID" } },
@@ -215,6 +258,7 @@ export const graphcacheSchema: MinifiedIntrospection = {
             },
           },
           { name: "reason", type: { kind: "ENUM", name: "ActorErrorReason" } },
+          { name: "retryAt", type: { kind: "SCALAR", name: "DateTime" } },
         ],
         interfaces: [{ kind: "INTERFACE", name: "Error" }],
       },
@@ -267,6 +311,279 @@ export const graphcacheSchema: MinifiedIntrospection = {
         ],
       },
       {
+        kind: "OBJECT",
+        name: "AddTierListItemsPayload",
+        fields: [
+          {
+            name: "added",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "TierListItemConnection" },
+            },
+          },
+          {
+            name: "skippedCount",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "UNION",
+        name: "AddTierListItemsResult",
+        possibleTypes: [
+          { kind: "OBJECT", name: "AddTierListItemsPayload" },
+          { kind: "OBJECT", name: "BudgetExceededError" },
+          { kind: "OBJECT", name: "ConflictError" },
+          { kind: "OBJECT", name: "ForbiddenError" },
+          { kind: "OBJECT", name: "NotFoundError" },
+          { kind: "OBJECT", name: "ValidationError" },
+        ],
+      },
+      {
+        kind: "OBJECT",
+        name: "AiCapabilities",
+        fields: [
+          {
+            name: "detailSuggestions",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "Boolean" },
+            },
+          },
+          {
+            name: "imageSearch",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "Boolean" },
+            },
+          },
+          {
+            name: "labelRead",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "Boolean" },
+            },
+          },
+          {
+            name: "menuScan",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "Boolean" },
+            },
+          },
+          {
+            name: "recipePhoto",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "Boolean" },
+            },
+          },
+          {
+            name: "semanticSearch",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "Boolean" },
+            },
+          },
+          {
+            name: "tierListInsights",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "Boolean" },
+            },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "AiJob",
+        fields: [
+          { name: "count", type: { kind: "SCALAR", name: "Int" } },
+          {
+            name: "failureCode",
+            type: { kind: "ENUM", name: "ActorErrorCode" },
+          },
+          {
+            name: "failureReason",
+            type: { kind: "ENUM", name: "ActorErrorReason" },
+          },
+          { name: "finishedAt", type: { kind: "SCALAR", name: "DateTime" } },
+          {
+            name: "id",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "ID" } },
+          },
+          { name: "itemType", type: { kind: "ENUM", name: "ItemType" } },
+          {
+            name: "kind",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "ENUM", name: "AiJobKind" },
+            },
+          },
+          { name: "placeId", type: { kind: "SCALAR", name: "ID" } },
+          { name: "placeName", type: { kind: "SCALAR", name: "String" } },
+          { name: "recipeId", type: { kind: "SCALAR", name: "ID" } },
+          { name: "recipeName", type: { kind: "SCALAR", name: "String" } },
+          { name: "retryAt", type: { kind: "SCALAR", name: "DateTime" } },
+          {
+            name: "startedAt",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "DateTime" },
+            },
+          },
+          {
+            name: "status",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "ENUM", name: "AiJobStatus" },
+            },
+          },
+          {
+            name: "subjectId",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "ID" } },
+          },
+          { name: "tierListName", type: { kind: "SCALAR", name: "String" } },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "AiJobConnection",
+        fields: [
+          {
+            name: "edges",
+            type: {
+              kind: "NON_NULL",
+              ofType: {
+                kind: "LIST",
+                ofType: {
+                  kind: "NON_NULL",
+                  ofType: { kind: "OBJECT", name: "AiJobEdge" },
+                },
+              },
+            },
+          },
+          {
+            name: "pageInfo",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "PageInfo" },
+            },
+          },
+          { name: "totalCount", type: { kind: "SCALAR", name: "Int" } },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "AiJobEdge",
+        fields: [
+          {
+            name: "cursor",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "String" },
+            },
+          },
+          {
+            name: "node",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "AiJob" },
+            },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "AiQuota",
+        fields: [
+          {
+            name: "kind",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "String" },
+            },
+          },
+          {
+            name: "limit",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
+          {
+            name: "resetsAt",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "DateTime" },
+            },
+          },
+          {
+            name: "service",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "ENUM", name: "AiQuotaService" },
+            },
+          },
+          {
+            name: "used",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "AiQuotaConnection",
+        fields: [
+          {
+            name: "edges",
+            type: {
+              kind: "NON_NULL",
+              ofType: {
+                kind: "LIST",
+                ofType: {
+                  kind: "NON_NULL",
+                  ofType: { kind: "OBJECT", name: "AiQuotaEdge" },
+                },
+              },
+            },
+          },
+          {
+            name: "pageInfo",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "PageInfo" },
+            },
+          },
+          { name: "totalCount", type: { kind: "SCALAR", name: "Int" } },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "AiQuotaEdge",
+        fields: [
+          {
+            name: "cursor",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "String" },
+            },
+          },
+          {
+            name: "node",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "AiQuota" },
+            },
+          },
+        ],
+        interfaces: [],
+      },
+      {
         kind: "UNION",
         name: "AttachItemImageResult",
         possibleTypes: [
@@ -277,6 +594,149 @@ export const graphcacheSchema: MinifiedIntrospection = {
           { kind: "OBJECT", name: "NotFoundError" },
           { kind: "OBJECT", name: "ValidationError" },
         ],
+      },
+      {
+        kind: "OBJECT",
+        name: "BarPantry",
+        fields: [
+          {
+            name: "have",
+            type: {
+              kind: "NON_NULL",
+              ofType: {
+                kind: "LIST",
+                ofType: {
+                  kind: "NON_NULL",
+                  ofType: { kind: "ENUM", name: "IngredientKind" },
+                },
+              },
+            },
+          },
+          {
+            name: "kinds",
+            type: {
+              kind: "NON_NULL",
+              ofType: {
+                kind: "LIST",
+                ofType: {
+                  kind: "NON_NULL",
+                  ofType: { kind: "ENUM", name: "IngredientKind" },
+                },
+              },
+            },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "BarPantryEntry",
+        fields: [
+          {
+            name: "have",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "Boolean" },
+            },
+          },
+          {
+            name: "kind",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "ENUM", name: "IngredientKind" },
+            },
+          },
+          {
+            name: "label",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "String" },
+            },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "BarRecipeMatch",
+        fields: [
+          {
+            name: "makeability",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "RecipeMakeability" },
+            },
+          },
+          {
+            name: "name",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "String" },
+            },
+          },
+          {
+            name: "recipe",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "Recipe" },
+            },
+          },
+          { name: "recipeGroupId", type: { kind: "SCALAR", name: "ID" } },
+          {
+            name: "recipeId",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "ID" } },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "BarRecipeMatchConnection",
+        fields: [
+          {
+            name: "edges",
+            type: {
+              kind: "NON_NULL",
+              ofType: {
+                kind: "LIST",
+                ofType: {
+                  kind: "NON_NULL",
+                  ofType: { kind: "OBJECT", name: "BarRecipeMatchEdge" },
+                },
+              },
+            },
+          },
+          {
+            name: "pageInfo",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "PageInfo" },
+            },
+          },
+          { name: "totalCount", type: { kind: "SCALAR", name: "Int" } },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "BarRecipeMatchEdge",
+        fields: [
+          {
+            name: "cursor",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "String" },
+            },
+          },
+          {
+            name: "node",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "BarRecipeMatch" },
+            },
+          },
+        ],
+        interfaces: [],
       },
       {
         kind: "OBJECT",
@@ -330,6 +790,14 @@ export const graphcacheSchema: MinifiedIntrospection = {
               ofType: { kind: "OBJECT", name: "ItemCheckInConnection" },
             },
           },
+          {
+            name: "cocktails",
+            type: { kind: "OBJECT", name: "ItemCocktails" },
+          },
+          {
+            name: "correction",
+            type: { kind: "OBJECT", name: "ItemCorrection" },
+          },
           { name: "country", type: { kind: "SCALAR", name: "String" } },
           {
             name: "createdAt",
@@ -346,6 +814,20 @@ export const graphcacheSchema: MinifiedIntrospection = {
           {
             name: "favoriteCount",
             type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
+          {
+            name: "friendsReviews",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "ItemReviewConnection" },
+            },
+          },
+          {
+            name: "friendsScore",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "ItemScore" },
+            },
           },
           {
             name: "id",
@@ -369,6 +851,21 @@ export const graphcacheSchema: MinifiedIntrospection = {
               ofType: { kind: "SCALAR", name: "Boolean" },
             },
           },
+          {
+            name: "isWantToTry",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "Boolean" },
+            },
+          },
+          {
+            name: "myBottles",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "CellarItemConnection" },
+            },
+          },
+          { name: "myBrewPrefs", type: { kind: "OBJECT", name: "BrewPrefs" } },
           { name: "myReview", type: { kind: "OBJECT", name: "ItemReview" } },
           {
             name: "name",
@@ -398,6 +895,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
               ofType: { kind: "OBJECT", name: "ItemScore" },
             },
           },
+          {
+            name: "seenAt",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "SeenAtConnection" },
+            },
+          },
           { name: "style", type: { kind: "SCALAR", name: "String" } },
           {
             name: "tierListEntries",
@@ -414,6 +918,19 @@ export const graphcacheSchema: MinifiedIntrospection = {
             },
           },
           {
+            name: "unconfirmedFields",
+            type: {
+              kind: "NON_NULL",
+              ofType: {
+                kind: "LIST",
+                ofType: {
+                  kind: "NON_NULL",
+                  ofType: { kind: "SCALAR", name: "String" },
+                },
+              },
+            },
+          },
+          {
             name: "updatedAt",
             type: {
               kind: "NON_NULL",
@@ -423,6 +940,103 @@ export const graphcacheSchema: MinifiedIntrospection = {
           { name: "vintage", type: { kind: "SCALAR", name: "Date" } },
         ],
         interfaces: [{ kind: "INTERFACE", name: "Item" }],
+      },
+      {
+        kind: "OBJECT",
+        name: "BottleLogSummary",
+        fields: [
+          {
+            name: "count",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
+          { name: "firstAt", type: { kind: "SCALAR", name: "DateTime" } },
+          { name: "lastAt", type: { kind: "SCALAR", name: "DateTime" } },
+          { name: "lastNote", type: { kind: "SCALAR", name: "String" } },
+          { name: "lastScore", type: { kind: "SCALAR", name: "Float" } },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "BottleSearchConnection",
+        fields: [
+          {
+            name: "edges",
+            type: {
+              kind: "NON_NULL",
+              ofType: {
+                kind: "LIST",
+                ofType: {
+                  kind: "NON_NULL",
+                  ofType: { kind: "OBJECT", name: "BottleSearchEdge" },
+                },
+              },
+            },
+          },
+          {
+            name: "pageInfo",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "PageInfo" },
+            },
+          },
+          { name: "totalCount", type: { kind: "SCALAR", name: "Int" } },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "BottleSearchEdge",
+        fields: [
+          {
+            name: "cursor",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "String" },
+            },
+          },
+          {
+            name: "node",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "BottleSearchHit" },
+            },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "BottleSearchHit",
+        fields: [
+          {
+            name: "bottleCount",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
+          {
+            name: "cellarId",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "ID" } },
+          },
+          {
+            name: "cellarItemId",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "ID" } },
+          },
+          {
+            name: "cellarName",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "String" },
+            },
+          },
+          {
+            name: "item",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "INTERFACE", name: "Item" },
+            },
+          },
+        ],
+        interfaces: [],
       },
       {
         kind: "OBJECT",
@@ -444,6 +1058,7 @@ export const graphcacheSchema: MinifiedIntrospection = {
             },
           },
           { name: "description", type: { kind: "SCALAR", name: "String" } },
+          { name: "firstItemType", type: { kind: "ENUM", name: "ItemType" } },
           {
             name: "id",
             type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "ID" } },
@@ -567,6 +1182,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
             },
           },
           { name: "totalCount", type: { kind: "SCALAR", name: "Int" } },
+          {
+            name: "totalIsLowerBound",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "Boolean" },
+            },
+          },
         ],
         interfaces: [],
       },
@@ -620,6 +1242,57 @@ export const graphcacheSchema: MinifiedIntrospection = {
       },
       {
         kind: "OBJECT",
+        name: "BreadthStamp",
+        fields: [
+          {
+            name: "count",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
+          {
+            name: "kind",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "ENUM", name: "BreadthStampKind" },
+            },
+          },
+          {
+            name: "tier",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "BreadthStamps",
+        fields: [
+          { name: "recipes", type: { kind: "OBJECT", name: "BreadthStamp" } },
+          { name: "regions", type: { kind: "OBJECT", name: "BreadthStamp" } },
+          { name: "styles", type: { kind: "OBJECT", name: "BreadthStamp" } },
+          { name: "types", type: { kind: "OBJECT", name: "BreadthStamp" } },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "BrewPrefs",
+        fields: [
+          { name: "doseGrams", type: { kind: "SCALAR", name: "Float" } },
+          { name: "steepSeconds", type: { kind: "SCALAR", name: "Int" } },
+          {
+            name: "updatedAt",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "DateTime" },
+            },
+          },
+          { name: "waterMl", type: { kind: "SCALAR", name: "Float" } },
+          { name: "waterTempC", type: { kind: "SCALAR", name: "Int" } },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
         name: "BudgetExceededError",
         fields: [
           {
@@ -637,6 +1310,7 @@ export const graphcacheSchema: MinifiedIntrospection = {
             },
           },
           { name: "reason", type: { kind: "ENUM", name: "ActorErrorReason" } },
+          { name: "retryAt", type: { kind: "SCALAR", name: "DateTime" } },
         ],
         interfaces: [
           { kind: "INTERFACE", name: "ActorError" },
@@ -730,6 +1404,24 @@ export const graphcacheSchema: MinifiedIntrospection = {
             type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "ID" } },
           },
           {
+            name: "dashboard",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "CellarDashboard" },
+            },
+          },
+          {
+            name: "drinkSoon",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "DrinkSoonConnection" },
+            },
+          },
+          {
+            name: "finishedCount",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
+          {
             name: "id",
             type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "ID" } },
           },
@@ -743,6 +1435,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
             type: {
               kind: "NON_NULL",
               ofType: { kind: "OBJECT", name: "ItemTypeCounts" },
+            },
+          },
+          {
+            name: "itemGroups",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "CellarItemGroupConnection" },
             },
           },
           {
@@ -806,6 +1505,72 @@ export const graphcacheSchema: MinifiedIntrospection = {
       },
       {
         kind: "OBJECT",
+        name: "CellarDashboard",
+        fields: [
+          {
+            name: "addedRecently",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
+          {
+            name: "almostEmptyAt",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
+          {
+            name: "almostEmptyCount",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
+          {
+            name: "bottleCount",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
+          {
+            name: "currentMonth",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "String" },
+            },
+          },
+          {
+            name: "finishedCount",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
+          {
+            name: "finishedThisMonth",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
+          {
+            name: "logsByMonth",
+            type: {
+              kind: "NON_NULL",
+              ofType: {
+                kind: "LIST",
+                ofType: {
+                  kind: "NON_NULL",
+                  ofType: { kind: "SCALAR", name: "Int" },
+                },
+              },
+            },
+          },
+          {
+            name: "openCount",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
+          {
+            name: "recentDays",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
+          {
+            name: "timeZone",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "String" },
+            },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
         name: "CellarEdge",
         fields: [
           {
@@ -829,6 +1594,8 @@ export const graphcacheSchema: MinifiedIntrospection = {
         kind: "OBJECT",
         name: "CellarItem",
         fields: [
+          { name: "acquiredOn", type: { kind: "SCALAR", name: "Date" } },
+          { name: "cellar", type: { kind: "OBJECT", name: "Cellar" } },
           {
             name: "cellarId",
             type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "ID" } },
@@ -854,6 +1621,8 @@ export const graphcacheSchema: MinifiedIntrospection = {
           { name: "displayImage", type: { kind: "OBJECT", name: "ItemImage" } },
           { name: "displayImageId", type: { kind: "SCALAR", name: "ID" } },
           { name: "distance", type: { kind: "SCALAR", name: "Float" } },
+          { name: "drinkFrom", type: { kind: "SCALAR", name: "Date" } },
+          { name: "drinkUntil", type: { kind: "SCALAR", name: "Date" } },
           { name: "emptyAt", type: { kind: "SCALAR", name: "DateTime" } },
           {
             name: "id",
@@ -866,7 +1635,11 @@ export const graphcacheSchema: MinifiedIntrospection = {
               ofType: { kind: "INTERFACE", name: "Item" },
             },
           },
+          { name: "levelBeforeEmpty", type: { kind: "SCALAR", name: "Float" } },
+          { name: "location", type: { kind: "SCALAR", name: "String" } },
+          { name: "myLog", type: { kind: "OBJECT", name: "BottleLogSummary" } },
           { name: "openAt", type: { kind: "SCALAR", name: "DateTime" } },
+          { name: "packagedOn", type: { kind: "SCALAR", name: "Date" } },
           {
             name: "percentageRemaining",
             type: {
@@ -874,6 +1647,8 @@ export const graphcacheSchema: MinifiedIntrospection = {
               ofType: { kind: "SCALAR", name: "Float" },
             },
           },
+          { name: "priceAmount", type: { kind: "SCALAR", name: "Float" } },
+          { name: "priceCurrency", type: { kind: "SCALAR", name: "String" } },
           { name: "sourceMenuItemId", type: { kind: "SCALAR", name: "ID" } },
           { name: "sourcePlaceId", type: { kind: "SCALAR", name: "ID" } },
           {
@@ -934,6 +1709,102 @@ export const graphcacheSchema: MinifiedIntrospection = {
             type: {
               kind: "NON_NULL",
               ofType: { kind: "OBJECT", name: "CellarItem" },
+            },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "CellarItemGroup",
+        fields: [
+          {
+            name: "bottleIds",
+            type: {
+              kind: "NON_NULL",
+              ofType: {
+                kind: "LIST",
+                ofType: {
+                  kind: "NON_NULL",
+                  ofType: { kind: "SCALAR", name: "ID" },
+                },
+              },
+            },
+          },
+          {
+            name: "count",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
+          {
+            name: "lead",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "CellarItem" },
+            },
+          },
+          { name: "match", type: { kind: "ENUM", name: "CellarSearchMatch" } },
+          {
+            name: "openCount",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "CellarItemGroupConnection",
+        fields: [
+          {
+            name: "bottleCount",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
+          {
+            name: "edges",
+            type: {
+              kind: "NON_NULL",
+              ofType: {
+                kind: "LIST",
+                ofType: {
+                  kind: "NON_NULL",
+                  ofType: { kind: "OBJECT", name: "CellarItemGroupEdge" },
+                },
+              },
+            },
+          },
+          {
+            name: "meaning",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "ENUM", name: "CellarSearchMeaning" },
+            },
+          },
+          {
+            name: "pageInfo",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "PageInfo" },
+            },
+          },
+          { name: "totalCount", type: { kind: "SCALAR", name: "Int" } },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "CellarItemGroupEdge",
+        fields: [
+          {
+            name: "cursor",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "String" },
+            },
+          },
+          {
+            name: "node",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "CellarItemGroup" },
             },
           },
         ],
@@ -1002,6 +1873,76 @@ export const graphcacheSchema: MinifiedIntrospection = {
             type: {
               kind: "NON_NULL",
               ofType: { kind: "INTERFACE", name: "Item" },
+            },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "CellarSearchElsewhereConnection",
+        fields: [
+          {
+            name: "edges",
+            type: {
+              kind: "NON_NULL",
+              ofType: {
+                kind: "LIST",
+                ofType: {
+                  kind: "NON_NULL",
+                  ofType: { kind: "OBJECT", name: "CellarSearchElsewhereEdge" },
+                },
+              },
+            },
+          },
+          {
+            name: "pageInfo",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "PageInfo" },
+            },
+          },
+          { name: "totalCount", type: { kind: "SCALAR", name: "Int" } },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "CellarSearchElsewhereEdge",
+        fields: [
+          {
+            name: "cursor",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "String" },
+            },
+          },
+          {
+            name: "node",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "CellarSearchElsewhereHit" },
+            },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "CellarSearchElsewhereHit",
+        fields: [
+          {
+            name: "cellar",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "Cellar" },
+            },
+          },
+          {
+            name: "group",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "CellarItemGroup" },
             },
           },
         ],
@@ -1103,6 +2044,30 @@ export const graphcacheSchema: MinifiedIntrospection = {
         ],
       },
       {
+        kind: "UNION",
+        name: "CloneTierListResult",
+        possibleTypes: [
+          { kind: "OBJECT", name: "BudgetExceededError" },
+          { kind: "OBJECT", name: "ConflictError" },
+          { kind: "OBJECT", name: "ForbiddenError" },
+          { kind: "OBJECT", name: "NotFoundError" },
+          { kind: "OBJECT", name: "TierList" },
+          { kind: "OBJECT", name: "ValidationError" },
+        ],
+      },
+      {
+        kind: "UNION",
+        name: "CloseItemOnboardingResult",
+        possibleTypes: [
+          { kind: "OBJECT", name: "BudgetExceededError" },
+          { kind: "OBJECT", name: "ConflictError" },
+          { kind: "OBJECT", name: "ForbiddenError" },
+          { kind: "OBJECT", name: "ItemOnboarding" },
+          { kind: "OBJECT", name: "NotFoundError" },
+          { kind: "OBJECT", name: "ValidationError" },
+        ],
+      },
+      {
         kind: "OBJECT",
         name: "Coffee",
         fields: [
@@ -1128,6 +2093,14 @@ export const graphcacheSchema: MinifiedIntrospection = {
               ofType: { kind: "OBJECT", name: "ItemCheckInConnection" },
             },
           },
+          {
+            name: "cocktails",
+            type: { kind: "OBJECT", name: "ItemCocktails" },
+          },
+          {
+            name: "correction",
+            type: { kind: "OBJECT", name: "ItemCorrection" },
+          },
           { name: "country", type: { kind: "SCALAR", name: "String" } },
           {
             name: "createdAt",
@@ -1147,6 +2120,20 @@ export const graphcacheSchema: MinifiedIntrospection = {
             type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
           },
           {
+            name: "friendsReviews",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "ItemReviewConnection" },
+            },
+          },
+          {
+            name: "friendsScore",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "ItemScore" },
+            },
+          },
+          {
             name: "id",
             type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "ID" } },
           },
@@ -1164,6 +2151,21 @@ export const graphcacheSchema: MinifiedIntrospection = {
               ofType: { kind: "SCALAR", name: "Boolean" },
             },
           },
+          {
+            name: "isWantToTry",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "Boolean" },
+            },
+          },
+          {
+            name: "myBottles",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "CellarItemConnection" },
+            },
+          },
+          { name: "myBrewPrefs", type: { kind: "OBJECT", name: "BrewPrefs" } },
           { name: "myReview", type: { kind: "OBJECT", name: "ItemReview" } },
           {
             name: "name",
@@ -1195,6 +2197,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
               ofType: { kind: "OBJECT", name: "ItemScore" },
             },
           },
+          {
+            name: "seenAt",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "SeenAtConnection" },
+            },
+          },
           { name: "species", type: { kind: "SCALAR", name: "String" } },
           {
             name: "tierListEntries",
@@ -1208,6 +2217,19 @@ export const graphcacheSchema: MinifiedIntrospection = {
             type: {
               kind: "NON_NULL",
               ofType: { kind: "ENUM", name: "ItemType" },
+            },
+          },
+          {
+            name: "unconfirmedFields",
+            type: {
+              kind: "NON_NULL",
+              ofType: {
+                kind: "LIST",
+                ofType: {
+                  kind: "NON_NULL",
+                  ofType: { kind: "SCALAR", name: "String" },
+                },
+              },
             },
           },
           {
@@ -1295,6 +2317,7 @@ export const graphcacheSchema: MinifiedIntrospection = {
             },
           },
           { name: "reason", type: { kind: "ENUM", name: "ActorErrorReason" } },
+          { name: "retryAt", type: { kind: "SCALAR", name: "DateTime" } },
         ],
         interfaces: [
           { kind: "INTERFACE", name: "ActorError" },
@@ -1445,6 +2468,18 @@ export const graphcacheSchema: MinifiedIntrospection = {
       },
       {
         kind: "UNION",
+        name: "DeleteDrinkLogResult",
+        possibleTypes: [
+          { kind: "OBJECT", name: "BudgetExceededError" },
+          { kind: "OBJECT", name: "ConflictError" },
+          { kind: "OBJECT", name: "DeletedDrinkLogPayload" },
+          { kind: "OBJECT", name: "ForbiddenError" },
+          { kind: "OBJECT", name: "NotFoundError" },
+          { kind: "OBJECT", name: "ValidationError" },
+        ],
+      },
+      {
+        kind: "UNION",
         name: "DeleteFileResult",
         possibleTypes: [
           { kind: "OBJECT", name: "BudgetExceededError" },
@@ -1462,6 +2497,18 @@ export const graphcacheSchema: MinifiedIntrospection = {
           { kind: "OBJECT", name: "BudgetExceededError" },
           { kind: "OBJECT", name: "ConflictError" },
           { kind: "OBJECT", name: "DeletedItemReview" },
+          { kind: "OBJECT", name: "ForbiddenError" },
+          { kind: "OBJECT", name: "NotFoundError" },
+          { kind: "OBJECT", name: "ValidationError" },
+        ],
+      },
+      {
+        kind: "UNION",
+        name: "DeletePlaceResult",
+        possibleTypes: [
+          { kind: "OBJECT", name: "BudgetExceededError" },
+          { kind: "OBJECT", name: "ConflictError" },
+          { kind: "OBJECT", name: "DeletedPlace" },
           { kind: "OBJECT", name: "ForbiddenError" },
           { kind: "OBJECT", name: "NotFoundError" },
           { kind: "OBJECT", name: "ValidationError" },
@@ -1528,6 +2575,26 @@ export const graphcacheSchema: MinifiedIntrospection = {
       },
       {
         kind: "OBJECT",
+        name: "DeletedDrinkLogPayload",
+        fields: [
+          {
+            name: "ids",
+            type: {
+              kind: "NON_NULL",
+              ofType: {
+                kind: "LIST",
+                ofType: {
+                  kind: "NON_NULL",
+                  ofType: { kind: "SCALAR", name: "ID" },
+                },
+              },
+            },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
         name: "DeletedFile",
         fields: [
           {
@@ -1543,6 +2610,17 @@ export const graphcacheSchema: MinifiedIntrospection = {
         fields: [
           {
             name: "id",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "ID" } },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "DeletedPlace",
+        fields: [
+          {
+            name: "placeId",
             type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "ID" } },
           },
         ],
@@ -1611,6 +2689,129 @@ export const graphcacheSchema: MinifiedIntrospection = {
           {
             name: "id",
             type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "ID" } },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "UNION",
+        name: "DiscardDraftResult",
+        possibleTypes: [
+          { kind: "OBJECT", name: "BudgetExceededError" },
+          { kind: "OBJECT", name: "ConflictError" },
+          { kind: "OBJECT", name: "ForbiddenError" },
+          { kind: "OBJECT", name: "ItemOnboarding" },
+          { kind: "OBJECT", name: "NotFoundError" },
+          { kind: "OBJECT", name: "ValidationError" },
+        ],
+      },
+      {
+        kind: "UNION",
+        name: "DismissPlaceSuggestionsResult",
+        possibleTypes: [
+          { kind: "OBJECT", name: "BudgetExceededError" },
+          { kind: "OBJECT", name: "ConflictError" },
+          { kind: "OBJECT", name: "ForbiddenError" },
+          { kind: "OBJECT", name: "NotFoundError" },
+          { kind: "OBJECT", name: "Place" },
+          { kind: "OBJECT", name: "ValidationError" },
+        ],
+      },
+      {
+        kind: "OBJECT",
+        name: "DrinkSoonBottle",
+        fields: [
+          {
+            name: "bottle",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "CellarItem" },
+            },
+          },
+          { name: "openDays", type: { kind: "SCALAR", name: "Int" } },
+          { name: "openLifeFromDays", type: { kind: "SCALAR", name: "Int" } },
+          { name: "openLifeUntilDays", type: { kind: "SCALAR", name: "Int" } },
+          {
+            name: "reason",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "ENUM", name: "DrinkSoonReason" },
+            },
+          },
+          { name: "typicalFor", type: { kind: "SCALAR", name: "String" } },
+          {
+            name: "urgency",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "ENUM", name: "DrinkSoonUrgency" },
+            },
+          },
+          { name: "window", type: { kind: "OBJECT", name: "DrinkWindow" } },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "DrinkSoonConnection",
+        fields: [
+          {
+            name: "edges",
+            type: {
+              kind: "NON_NULL",
+              ofType: {
+                kind: "LIST",
+                ofType: {
+                  kind: "NON_NULL",
+                  ofType: { kind: "OBJECT", name: "DrinkSoonEdge" },
+                },
+              },
+            },
+          },
+          {
+            name: "pageInfo",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "PageInfo" },
+            },
+          },
+          { name: "totalCount", type: { kind: "SCALAR", name: "Int" } },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "DrinkSoonEdge",
+        fields: [
+          {
+            name: "cursor",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "String" },
+            },
+          },
+          {
+            name: "node",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "DrinkSoonBottle" },
+            },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "DrinkWindow",
+        fields: [
+          { name: "from", type: { kind: "SCALAR", name: "Date" } },
+          {
+            name: "fromSource",
+            type: { kind: "ENUM", name: "DrinkWindowSource" },
+          },
+          { name: "until", type: { kind: "SCALAR", name: "Date" } },
+          {
+            name: "untilSource",
+            type: { kind: "ENUM", name: "DrinkWindowSource" },
           },
         ],
         interfaces: [],
@@ -1787,6 +2988,18 @@ export const graphcacheSchema: MinifiedIntrospection = {
         ],
       },
       {
+        kind: "UNION",
+        name: "EnsureFriendInviteResult",
+        possibleTypes: [
+          { kind: "OBJECT", name: "BudgetExceededError" },
+          { kind: "OBJECT", name: "ConflictError" },
+          { kind: "OBJECT", name: "ForbiddenError" },
+          { kind: "OBJECT", name: "FriendInvite" },
+          { kind: "OBJECT", name: "NotFoundError" },
+          { kind: "OBJECT", name: "ValidationError" },
+        ],
+      },
+      {
         kind: "INTERFACE",
         name: "Error",
         fields: [
@@ -1867,6 +3080,100 @@ export const graphcacheSchema: MinifiedIntrospection = {
       },
       {
         kind: "OBJECT",
+        name: "FlavourTagSuggestion",
+        fields: [
+          {
+            name: "evidence",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "String" },
+            },
+          },
+          {
+            name: "tag",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "String" },
+            },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "FlavourTagSuggestionConnection",
+        fields: [
+          {
+            name: "edges",
+            type: {
+              kind: "NON_NULL",
+              ofType: {
+                kind: "LIST",
+                ofType: {
+                  kind: "NON_NULL",
+                  ofType: { kind: "OBJECT", name: "FlavourTagSuggestionEdge" },
+                },
+              },
+            },
+          },
+          {
+            name: "pageInfo",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "PageInfo" },
+            },
+          },
+          { name: "totalCount", type: { kind: "SCALAR", name: "Int" } },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "FlavourTagSuggestionEdge",
+        fields: [
+          {
+            name: "cursor",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "String" },
+            },
+          },
+          {
+            name: "node",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "FlavourTagSuggestion" },
+            },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "FlavourTagSuggestionsPayload",
+        fields: [
+          {
+            name: "abstained",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "Boolean" },
+            },
+          },
+          {
+            name: "suggestions",
+            type: {
+              kind: "NON_NULL",
+              ofType: {
+                kind: "OBJECT",
+                name: "FlavourTagSuggestionConnection",
+              },
+            },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
         name: "ForbiddenError",
         fields: [
           {
@@ -1884,6 +3191,7 @@ export const graphcacheSchema: MinifiedIntrospection = {
             },
           },
           { name: "reason", type: { kind: "ENUM", name: "ActorErrorReason" } },
+          { name: "retryAt", type: { kind: "SCALAR", name: "DateTime" } },
         ],
         interfaces: [
           { kind: "INTERFACE", name: "ActorError" },
@@ -1894,6 +3202,10 @@ export const graphcacheSchema: MinifiedIntrospection = {
         kind: "OBJECT",
         name: "Friend",
         fields: [
+          {
+            name: "latestActivity",
+            type: { kind: "OBJECT", name: "ActivityEntry" },
+          },
           {
             name: "since",
             type: {
@@ -1955,6 +3267,102 @@ export const graphcacheSchema: MinifiedIntrospection = {
             type: {
               kind: "NON_NULL",
               ofType: { kind: "OBJECT", name: "Friend" },
+            },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "FriendInvite",
+        fields: [
+          {
+            name: "createdAt",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "DateTime" },
+            },
+          },
+          {
+            name: "token",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "String" },
+            },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "FriendInvitePreview",
+        fields: [
+          {
+            name: "inviterAvatarUrl",
+            type: { kind: "SCALAR", name: "String" },
+          },
+          {
+            name: "inviterDisplayName",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "String" },
+            },
+          },
+          {
+            name: "inviterId",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "ID" } },
+          },
+          {
+            name: "status",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "ENUM", name: "FriendInviteStatus" },
+            },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "FriendProfile",
+        fields: [
+          {
+            name: "cellars",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "CellarConnection" },
+            },
+          },
+          {
+            name: "checkIns",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "ItemCheckInConnection" },
+            },
+          },
+          {
+            name: "id",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "ID" } },
+          },
+          {
+            name: "since",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "DateTime" },
+            },
+          },
+          {
+            name: "tierLists",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "TierListConnection" },
+            },
+          },
+          {
+            name: "user",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "UserProfile" },
             },
           },
         ],
@@ -2331,6 +3739,29 @@ export const graphcacheSchema: MinifiedIntrospection = {
         interfaces: [],
       },
       {
+        kind: "OBJECT",
+        name: "IngredientAvailability",
+        fields: [
+          { name: "cellarId", type: { kind: "SCALAR", name: "ID" } },
+          { name: "cellarItemId", type: { kind: "SCALAR", name: "ID" } },
+          { name: "label", type: { kind: "SCALAR", name: "String" } },
+          { name: "opened", type: { kind: "SCALAR", name: "Boolean" } },
+          {
+            name: "source",
+            type: { kind: "ENUM", name: "AvailabilitySource" },
+          },
+          {
+            name: "status",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "ENUM", name: "AvailabilityStatus" },
+            },
+          },
+          { name: "via", type: { kind: "ENUM", name: "IngredientKind" } },
+        ],
+        interfaces: [],
+      },
+      {
         kind: "INTERFACE",
         name: "Item",
         fields: [
@@ -2356,6 +3787,14 @@ export const graphcacheSchema: MinifiedIntrospection = {
               ofType: { kind: "OBJECT", name: "ItemCheckInConnection" },
             },
           },
+          {
+            name: "cocktails",
+            type: { kind: "OBJECT", name: "ItemCocktails" },
+          },
+          {
+            name: "correction",
+            type: { kind: "OBJECT", name: "ItemCorrection" },
+          },
           { name: "country", type: { kind: "SCALAR", name: "String" } },
           {
             name: "createdAt",
@@ -2372,6 +3811,20 @@ export const graphcacheSchema: MinifiedIntrospection = {
           {
             name: "favoriteCount",
             type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
+          {
+            name: "friendsReviews",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "ItemReviewConnection" },
+            },
+          },
+          {
+            name: "friendsScore",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "ItemScore" },
+            },
           },
           {
             name: "id",
@@ -2391,6 +3844,21 @@ export const graphcacheSchema: MinifiedIntrospection = {
               ofType: { kind: "SCALAR", name: "Boolean" },
             },
           },
+          {
+            name: "isWantToTry",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "Boolean" },
+            },
+          },
+          {
+            name: "myBottles",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "CellarItemConnection" },
+            },
+          },
+          { name: "myBrewPrefs", type: { kind: "OBJECT", name: "BrewPrefs" } },
           { name: "myReview", type: { kind: "OBJECT", name: "ItemReview" } },
           {
             name: "name",
@@ -2421,6 +3889,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
             },
           },
           {
+            name: "seenAt",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "SeenAtConnection" },
+            },
+          },
+          {
             name: "tierListEntries",
             type: {
               kind: "NON_NULL",
@@ -2432,6 +3907,19 @@ export const graphcacheSchema: MinifiedIntrospection = {
             type: {
               kind: "NON_NULL",
               ofType: { kind: "ENUM", name: "ItemType" },
+            },
+          },
+          {
+            name: "unconfirmedFields",
+            type: {
+              kind: "NON_NULL",
+              ofType: {
+                kind: "LIST",
+                ofType: {
+                  kind: "NON_NULL",
+                  ofType: { kind: "SCALAR", name: "String" },
+                },
+              },
             },
           },
           {
@@ -2548,6 +4036,33 @@ export const graphcacheSchema: MinifiedIntrospection = {
         name: "ItemCheckIn",
         fields: [
           {
+            name: "canRemove",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "Boolean" },
+            },
+          },
+          {
+            name: "companionIds",
+            type: {
+              kind: "NON_NULL",
+              ofType: {
+                kind: "LIST",
+                ofType: {
+                  kind: "NON_NULL",
+                  ofType: { kind: "SCALAR", name: "ID" },
+                },
+              },
+            },
+          },
+          {
+            name: "companions",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "UserProfileConnection" },
+            },
+          },
+          {
             name: "createdAt",
             type: {
               kind: "NON_NULL",
@@ -2555,14 +4070,44 @@ export const graphcacheSchema: MinifiedIntrospection = {
             },
           },
           {
+            name: "createdById",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "ID" } },
+          },
+          {
+            name: "fromCellar",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "Boolean" },
+            },
+          },
+          {
             name: "id",
             type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "ID" } },
           },
           {
-            name: "item",
+            name: "isMine",
             type: {
               kind: "NON_NULL",
-              ofType: { kind: "INTERFACE", name: "Item" },
+              ofType: { kind: "SCALAR", name: "Boolean" },
+            },
+          },
+          { name: "item", type: { kind: "INTERFACE", name: "Item" } },
+          { name: "note", type: { kind: "SCALAR", name: "String" } },
+          { name: "photo", type: { kind: "OBJECT", name: "File" } },
+          { name: "place", type: { kind: "OBJECT", name: "Place" } },
+          { name: "recipe", type: { kind: "OBJECT", name: "Recipe" } },
+          { name: "score", type: { kind: "SCALAR", name: "Float" } },
+          {
+            name: "tags",
+            type: {
+              kind: "NON_NULL",
+              ofType: {
+                kind: "LIST",
+                ofType: {
+                  kind: "NON_NULL",
+                  ofType: { kind: "SCALAR", name: "String" },
+                },
+              },
             },
           },
           {
@@ -2631,6 +4176,33 @@ export const graphcacheSchema: MinifiedIntrospection = {
       },
       {
         kind: "OBJECT",
+        name: "ItemCocktails",
+        fields: [
+          { name: "kind", type: { kind: "ENUM", name: "IngredientKind" } },
+          { name: "kindLabel", type: { kind: "SCALAR", name: "String" } },
+          {
+            name: "recipes",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "BarRecipeMatchConnection" },
+            },
+          },
+          {
+            name: "total",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
+          {
+            name: "useItUp",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "Boolean" },
+            },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
         name: "ItemConnection",
         fields: [
           {
@@ -2654,6 +4226,50 @@ export const graphcacheSchema: MinifiedIntrospection = {
             },
           },
           { name: "totalCount", type: { kind: "SCALAR", name: "Int" } },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "ItemCorrection",
+        fields: [
+          {
+            name: "canRereadLabel",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "Boolean" },
+            },
+          },
+          {
+            name: "canSuggestDetails",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "Boolean" },
+            },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "ItemDetailSuggestions",
+        fields: [
+          {
+            name: "abstained",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "Boolean" },
+            },
+          },
+          {
+            name: "defaults",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "JSON" },
+            },
+          },
+          { name: "model", type: { kind: "SCALAR", name: "String" } },
+          { name: "note", type: { kind: "SCALAR", name: "String" } },
         ],
         interfaces: [],
       },
@@ -2788,13 +4404,56 @@ export const graphcacheSchema: MinifiedIntrospection = {
       },
       {
         kind: "OBJECT",
+        name: "ItemLabelReading",
+        fields: [
+          { name: "brandName", type: { kind: "SCALAR", name: "String" } },
+          {
+            name: "confidence",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "Float" },
+            },
+          },
+          {
+            name: "defaults",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "JSON" },
+            },
+          },
+          {
+            name: "model",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "String" },
+            },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
         name: "ItemOnboarding",
         fields: [
           { name: "aiModel", type: { kind: "SCALAR", name: "String" } },
           { name: "backLabelImageId", type: { kind: "SCALAR", name: "ID" } },
           { name: "barcode", type: { kind: "SCALAR", name: "String" } },
           { name: "barcodeType", type: { kind: "SCALAR", name: "String" } },
+          { name: "cellarId", type: { kind: "SCALAR", name: "ID" } },
           { name: "confidence", type: { kind: "SCALAR", name: "Float" } },
+          {
+            name: "confirmedFields",
+            type: {
+              kind: "NON_NULL",
+              ofType: {
+                kind: "LIST",
+                ofType: {
+                  kind: "NON_NULL",
+                  ofType: { kind: "SCALAR", name: "String" },
+                },
+              },
+            },
+          },
           {
             name: "createdAt",
             type: {
@@ -2803,11 +4462,20 @@ export const graphcacheSchema: MinifiedIntrospection = {
             },
           },
           { name: "defaults", type: { kind: "SCALAR", name: "JSON" } },
+          {
+            name: "detectedItemType",
+            type: { kind: "ENUM", name: "ItemType" },
+          },
+          { name: "displayMaker", type: { kind: "SCALAR", name: "String" } },
+          { name: "displayName", type: { kind: "SCALAR", name: "String" } },
+          { name: "draftFields", type: { kind: "SCALAR", name: "JSON" } },
           { name: "frontLabelImageId", type: { kind: "SCALAR", name: "ID" } },
           {
             name: "id",
             type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "ID" } },
           },
+          { name: "imageId", type: { kind: "SCALAR", name: "ID" } },
+          { name: "imageUrl", type: { kind: "SCALAR", name: "String" } },
           {
             name: "itemType",
             type: {
@@ -2833,6 +4501,41 @@ export const graphcacheSchema: MinifiedIntrospection = {
             name: "userId",
             type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "ID" } },
           },
+          {
+            name: "vintageAnswer",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "ENUM", name: "VintageAnswer" },
+            },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "ItemOnboardingConnection",
+        fields: [
+          {
+            name: "edges",
+            type: {
+              kind: "NON_NULL",
+              ofType: {
+                kind: "LIST",
+                ofType: {
+                  kind: "NON_NULL",
+                  ofType: { kind: "OBJECT", name: "ItemOnboardingEdge" },
+                },
+              },
+            },
+          },
+          {
+            name: "pageInfo",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "PageInfo" },
+            },
+          },
+          { name: "totalCount", type: { kind: "SCALAR", name: "Int" } },
         ],
         interfaces: [],
       },
@@ -2847,6 +4550,27 @@ export const graphcacheSchema: MinifiedIntrospection = {
           { kind: "OBJECT", name: "NotFoundError" },
           { kind: "OBJECT", name: "ValidationError" },
         ],
+      },
+      {
+        kind: "OBJECT",
+        name: "ItemOnboardingEdge",
+        fields: [
+          {
+            name: "cursor",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "String" },
+            },
+          },
+          {
+            name: "node",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "ItemOnboarding" },
+            },
+          },
+        ],
+        interfaces: [],
       },
       {
         kind: "OBJECT",
@@ -2983,6 +4707,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
             },
           },
           { name: "totalCount", type: { kind: "SCALAR", name: "Int" } },
+          {
+            name: "totalIsLowerBound",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "Boolean" },
+            },
+          },
         ],
         interfaces: [],
       },
@@ -3011,13 +4742,7 @@ export const graphcacheSchema: MinifiedIntrospection = {
         kind: "OBJECT",
         name: "ItemSearchResult",
         fields: [
-          {
-            name: "distance",
-            type: {
-              kind: "NON_NULL",
-              ofType: { kind: "SCALAR", name: "Float" },
-            },
-          },
+          { name: "distance", type: { kind: "SCALAR", name: "Float" } },
           {
             name: "id",
             type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "ID" } },
@@ -3172,6 +4897,64 @@ export const graphcacheSchema: MinifiedIntrospection = {
         interfaces: [],
       },
       {
+        kind: "UNION",
+        name: "LogDrinkResult",
+        possibleTypes: [
+          { kind: "OBJECT", name: "BudgetExceededError" },
+          { kind: "OBJECT", name: "ConflictError" },
+          { kind: "OBJECT", name: "ForbiddenError" },
+          { kind: "OBJECT", name: "LoggedDrinkPayload" },
+          { kind: "OBJECT", name: "NotFoundError" },
+          { kind: "OBJECT", name: "ValidationError" },
+        ],
+      },
+      {
+        kind: "OBJECT",
+        name: "LoggedDrinkPayload",
+        fields: [
+          {
+            name: "drinkerCount",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
+          {
+            name: "entry",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "ItemCheckIn" },
+            },
+          },
+          {
+            name: "entryIds",
+            type: {
+              kind: "NON_NULL",
+              ofType: {
+                kind: "LIST",
+                ofType: {
+                  kind: "NON_NULL",
+                  ofType: { kind: "SCALAR", name: "ID" },
+                },
+              },
+            },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "LovedCounts",
+        fields: [
+          { name: "beer", type: { kind: "SCALAR", name: "Int" } },
+          { name: "coffee", type: { kind: "SCALAR", name: "Int" } },
+          { name: "drinks", type: { kind: "SCALAR", name: "Int" } },
+          { name: "recipes", type: { kind: "SCALAR", name: "Int" } },
+          { name: "sake", type: { kind: "SCALAR", name: "Int" } },
+          { name: "spirit", type: { kind: "SCALAR", name: "Int" } },
+          { name: "tea", type: { kind: "SCALAR", name: "Int" } },
+          { name: "wine", type: { kind: "SCALAR", name: "Int" } },
+        ],
+        interfaces: [],
+      },
+      {
         kind: "OBJECT",
         name: "MapCluster",
         fields: [
@@ -3268,6 +5051,7 @@ export const graphcacheSchema: MinifiedIntrospection = {
           },
           { name: "isVerified", type: { kind: "SCALAR", name: "Boolean" } },
           { name: "location", type: { kind: "OBJECT", name: "LngLat" } },
+          { name: "myBand", type: { kind: "SCALAR", name: "Int" } },
           {
             name: "name",
             type: {
@@ -3275,8 +5059,20 @@ export const graphcacheSchema: MinifiedIntrospection = {
               ofType: { kind: "SCALAR", name: "String" },
             },
           },
+          { name: "photo", type: { kind: "OBJECT", name: "File" } },
           { name: "primaryCategory", type: { kind: "SCALAR", name: "String" } },
           { name: "rating", type: { kind: "SCALAR", name: "Float" } },
+          {
+            name: "ratingCount",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
+          {
+            name: "reviewStatus",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "ENUM", name: "PlaceReviewStatus" },
+            },
+          },
         ],
         interfaces: [],
       },
@@ -3428,12 +5224,58 @@ export const graphcacheSchema: MinifiedIntrospection = {
       },
       {
         kind: "OBJECT",
+        name: "MenuLineForYou",
+        fields: [
+          { name: "cellar", type: { kind: "OBJECT", name: "Cellar" } },
+          {
+            name: "friendsWhoLovedCount",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
+          {
+            name: "friendsWhoLovedNames",
+            type: {
+              kind: "NON_NULL",
+              ofType: {
+                kind: "LIST",
+                ofType: {
+                  kind: "NON_NULL",
+                  ofType: { kind: "SCALAR", name: "String" },
+                },
+              },
+            },
+          },
+          {
+            name: "likeYouRated",
+            type: { kind: "OBJECT", name: "MenuLineLikeYouRated" },
+          },
+          { name: "yourScore", type: { kind: "SCALAR", name: "Float" } },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "MenuLineLikeYouRated",
+        fields: [
+          { name: "item", type: { kind: "INTERFACE", name: "Item" } },
+          {
+            name: "score",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "Float" },
+            },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
         name: "MenuScan",
         fields: [
           { name: "confidenceScore", type: { kind: "SCALAR", name: "Float" } },
           { name: "createdAt", type: { kind: "SCALAR", name: "DateTime" } },
           { name: "estimatedPlaceId", type: { kind: "SCALAR", name: "ID" } },
           { name: "extractedText", type: { kind: "SCALAR", name: "String" } },
+          { name: "headerName", type: { kind: "SCALAR", name: "String" } },
           {
             name: "id",
             type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "ID" } },
@@ -3447,6 +5289,20 @@ export const graphcacheSchema: MinifiedIntrospection = {
             type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
           },
           { name: "manualPlaceOverride", type: { kind: "SCALAR", name: "ID" } },
+          {
+            name: "matchCounts",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "MenuScanMatchCounts" },
+            },
+          },
+          {
+            name: "matchStatus",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "ENUM", name: "MenuScanMatchStatus" },
+            },
+          },
           {
             name: "menuItems",
             type: {
@@ -3542,13 +5398,46 @@ export const graphcacheSchema: MinifiedIntrospection = {
       },
       {
         kind: "OBJECT",
+        name: "MenuScanMatchCounts",
+        fields: [
+          {
+            name: "lines",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
+          {
+            name: "matched",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
+          {
+            name: "toConfirm",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
         name: "Mutation",
         fields: [
+          {
+            name: "acceptFriendInvite",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "UNION", name: "AcceptFriendInviteResult" },
+            },
+          },
           {
             name: "acceptFriendRequest",
             type: {
               kind: "NON_NULL",
               ofType: { kind: "UNION", name: "AcceptFriendRequestResult" },
+            },
+          },
+          {
+            name: "acceptPlaceSuggestion",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "UNION", name: "AcceptPlaceSuggestionResult" },
             },
           },
           {
@@ -3587,6 +5476,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
             },
           },
           {
+            name: "addTierListItems",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "UNION", name: "AddTierListItemsResult" },
+            },
+          },
+          {
             name: "attachItemImage",
             type: {
               kind: "NON_NULL",
@@ -3612,6 +5508,20 @@ export const graphcacheSchema: MinifiedIntrospection = {
             type: {
               kind: "NON_NULL",
               ofType: { kind: "UNION", name: "CheckInResult" },
+            },
+          },
+          {
+            name: "cloneTierList",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "UNION", name: "CloneTierListResult" },
+            },
+          },
+          {
+            name: "closeItemOnboarding",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "UNION", name: "CloseItemOnboardingResult" },
             },
           },
           {
@@ -3692,6 +5602,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
             },
           },
           {
+            name: "deleteDrinkLog",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "UNION", name: "DeleteDrinkLogResult" },
+            },
+          },
+          {
             name: "deleteFile",
             type: {
               kind: "NON_NULL",
@@ -3703,6 +5620,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
             type: {
               kind: "NON_NULL",
               ofType: { kind: "UNION", name: "DeleteItemReviewResult" },
+            },
+          },
+          {
+            name: "deletePlace",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "UNION", name: "DeletePlaceResult" },
             },
           },
           {
@@ -3741,6 +5665,20 @@ export const graphcacheSchema: MinifiedIntrospection = {
             },
           },
           {
+            name: "discardDraft",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "UNION", name: "DiscardDraftResult" },
+            },
+          },
+          {
+            name: "dismissPlaceSuggestions",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "UNION", name: "DismissPlaceSuggestionsResult" },
+            },
+          },
+          {
             name: "emptyCellarItem",
             type: {
               kind: "NON_NULL",
@@ -3759,6 +5697,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
             type: {
               kind: "NON_NULL",
               ofType: { kind: "UNION", name: "EnsureBarcodeResult" },
+            },
+          },
+          {
+            name: "ensureFriendInvite",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "UNION", name: "EnsureFriendInviteResult" },
             },
           },
           {
@@ -3790,10 +5735,24 @@ export const graphcacheSchema: MinifiedIntrospection = {
             },
           },
           {
+            name: "logDrink",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "UNION", name: "LogDrinkResult" },
+            },
+          },
+          {
             name: "openCellarItem",
             type: {
               kind: "NON_NULL",
               ofType: { kind: "UNION", name: "OpenCellarItemResult" },
+            },
+          },
+          {
+            name: "openItemDraft",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "UNION", name: "OpenItemDraftResult" },
             },
           },
           {
@@ -3818,10 +5777,24 @@ export const graphcacheSchema: MinifiedIntrospection = {
             },
           },
           {
+            name: "redoTierListEdit",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "UNION", name: "RedoTierListEditResult" },
+            },
+          },
+          {
             name: "rejectFriendRequest",
             type: {
               kind: "NON_NULL",
               ofType: { kind: "UNION", name: "RejectFriendRequestResult" },
+            },
+          },
+          {
+            name: "removeAvatar",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "UNION", name: "RemoveAvatarResult" },
             },
           },
           {
@@ -3860,10 +5833,73 @@ export const graphcacheSchema: MinifiedIntrospection = {
             },
           },
           {
+            name: "replaceItemBrand",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "UNION", name: "ReplaceItemBrandResult" },
+            },
+          },
+          {
+            name: "requestTierListInsights",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "UNION", name: "RequestTierListInsightsResult" },
+            },
+          },
+          {
+            name: "rereadItemLabel",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "UNION", name: "RereadItemLabelResult" },
+            },
+          },
+          {
+            name: "resetFriendInvite",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "UNION", name: "ResetFriendInviteResult" },
+            },
+          },
+          {
             name: "resolveBrand",
             type: {
               kind: "NON_NULL",
               ofType: { kind: "UNION", name: "ResolveBrandResult" },
+            },
+          },
+          {
+            name: "restoreCellarItem",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "UNION", name: "RestoreCellarItemResult" },
+            },
+          },
+          {
+            name: "restoreDrinkLog",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "UNION", name: "RestoreDrinkLogResult" },
+            },
+          },
+          {
+            name: "resubmitPlace",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "UNION", name: "ResubmitPlaceResult" },
+            },
+          },
+          {
+            name: "rewriteTierListInsights",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "UNION", name: "RewriteTierListInsightsResult" },
+            },
+          },
+          {
+            name: "saveDraft",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "UNION", name: "SaveDraftResult" },
             },
           },
           {
@@ -3874,6 +5910,20 @@ export const graphcacheSchema: MinifiedIntrospection = {
             },
           },
           {
+            name: "setAvatar",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "UNION", name: "SetAvatarResult" },
+            },
+          },
+          {
+            name: "setBarPantryItem",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "UNION", name: "SetBarPantryItemResult" },
+            },
+          },
+          {
             name: "setBrandParent",
             type: {
               kind: "NON_NULL",
@@ -3881,10 +5931,38 @@ export const graphcacheSchema: MinifiedIntrospection = {
             },
           },
           {
+            name: "setBrewPrefs",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "UNION", name: "SetBrewPrefsResult" },
+            },
+          },
+          {
             name: "setCellarItemPercentage",
             type: {
               kind: "NON_NULL",
               ofType: { kind: "UNION", name: "SetCellarItemPercentageResult" },
+            },
+          },
+          {
+            name: "setDefaultCellarPrivacy",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "UNION", name: "SetDefaultCellarPrivacyResult" },
+            },
+          },
+          {
+            name: "setDrinkLogCompanions",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "UNION", name: "SetDrinkLogCompanionsResult" },
+            },
+          },
+          {
+            name: "setFavorite",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "UNION", name: "SetFavoriteResult" },
             },
           },
           {
@@ -3902,6 +5980,20 @@ export const graphcacheSchema: MinifiedIntrospection = {
             },
           },
           {
+            name: "setRecipeLove",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "UNION", name: "SetRecipeLoveResult" },
+            },
+          },
+          {
+            name: "setWantToTry",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "UNION", name: "SetWantToTryResult" },
+            },
+          },
+          {
             name: "startItemOnboarding",
             type: {
               kind: "NON_NULL",
@@ -3916,10 +6008,38 @@ export const graphcacheSchema: MinifiedIntrospection = {
             },
           },
           {
-            name: "toggleFavorite",
+            name: "startRecipeTextJob",
             type: {
               kind: "NON_NULL",
-              ofType: { kind: "UNION", name: "ToggleFavoriteResult" },
+              ofType: { kind: "UNION", name: "StartRecipeTextJobResult" },
+            },
+          },
+          {
+            name: "suggestFlavourTags",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "UNION", name: "SuggestFlavourTagsResult" },
+            },
+          },
+          {
+            name: "suggestItemDetails",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "UNION", name: "SuggestItemDetailsResult" },
+            },
+          },
+          {
+            name: "suggestNewItemDetails",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "UNION", name: "SuggestNewItemDetailsResult" },
+            },
+          },
+          {
+            name: "undoTierListEdit",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "UNION", name: "UndoTierListEditResult" },
             },
           },
           {
@@ -3948,6 +6068,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
             type: {
               kind: "NON_NULL",
               ofType: { kind: "UNION", name: "UpdateCellarItemResult" },
+            },
+          },
+          {
+            name: "updateDrinkLog",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "UNION", name: "UpdateDrinkLogResult" },
             },
           },
           {
@@ -4060,6 +6187,18 @@ export const graphcacheSchema: MinifiedIntrospection = {
       },
       {
         kind: "OBJECT",
+        name: "MutualFriends",
+        fields: [
+          {
+            name: "count",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
+          { name: "first", type: { kind: "OBJECT", name: "UserProfile" } },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
         name: "NearbyPlace",
         fields: [
           {
@@ -4147,6 +6286,7 @@ export const graphcacheSchema: MinifiedIntrospection = {
             },
           },
           { name: "reason", type: { kind: "ENUM", name: "ActorErrorReason" } },
+          { name: "retryAt", type: { kind: "SCALAR", name: "DateTime" } },
         ],
         interfaces: [
           { kind: "INTERFACE", name: "ActorError" },
@@ -4161,6 +6301,18 @@ export const graphcacheSchema: MinifiedIntrospection = {
           { kind: "OBJECT", name: "CellarItem" },
           { kind: "OBJECT", name: "ConflictError" },
           { kind: "OBJECT", name: "ForbiddenError" },
+          { kind: "OBJECT", name: "NotFoundError" },
+          { kind: "OBJECT", name: "ValidationError" },
+        ],
+      },
+      {
+        kind: "UNION",
+        name: "OpenItemDraftResult",
+        possibleTypes: [
+          { kind: "OBJECT", name: "BudgetExceededError" },
+          { kind: "OBJECT", name: "ConflictError" },
+          { kind: "OBJECT", name: "ForbiddenError" },
+          { kind: "OBJECT", name: "ItemOnboarding" },
           { kind: "OBJECT", name: "NotFoundError" },
           { kind: "OBJECT", name: "ValidationError" },
         ],
@@ -4311,7 +6463,16 @@ export const graphcacheSchema: MinifiedIntrospection = {
           { name: "primaryCategory", type: { kind: "SCALAR", name: "String" } },
           { name: "rating", type: { kind: "SCALAR", name: "Float" } },
           { name: "region", type: { kind: "SCALAR", name: "String" } },
+          { name: "rejectionReason", type: { kind: "SCALAR", name: "String" } },
           { name: "reviewCount", type: { kind: "SCALAR", name: "Int" } },
+          {
+            name: "reviewStatus",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "ENUM", name: "PlaceReviewStatus" },
+            },
+          },
+          { name: "reviewedAt", type: { kind: "SCALAR", name: "DateTime" } },
           {
             name: "source",
             type: {
@@ -4320,6 +6481,23 @@ export const graphcacheSchema: MinifiedIntrospection = {
             },
           },
           { name: "streetAddress", type: { kind: "SCALAR", name: "String" } },
+          {
+            name: "suggestedCategories",
+            type: {
+              kind: "NON_NULL",
+              ofType: {
+                kind: "LIST",
+                ofType: {
+                  kind: "NON_NULL",
+                  ofType: { kind: "SCALAR", name: "String" },
+                },
+              },
+            },
+          },
+          {
+            name: "suggestedDescription",
+            type: { kind: "SCALAR", name: "String" },
+          },
           {
             name: "tierListEntries",
             type: {
@@ -4734,6 +6912,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
         kind: "OBJECT",
         name: "PlaceMenuItem",
         fields: [
+          {
+            name: "canCorrectMatch",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "Boolean" },
+            },
+          },
           { name: "confidenceScore", type: { kind: "SCALAR", name: "Float" } },
           { name: "createdAt", type: { kind: "SCALAR", name: "DateTime" } },
           { name: "description", type: { kind: "SCALAR", name: "String" } },
@@ -4745,6 +6930,7 @@ export const graphcacheSchema: MinifiedIntrospection = {
             name: "extractedAttributes",
             type: { kind: "SCALAR", name: "JSON" },
           },
+          { name: "forYou", type: { kind: "OBJECT", name: "MenuLineForYou" } },
           {
             name: "id",
             type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "ID" } },
@@ -5007,6 +7193,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
             },
           },
           { name: "totalCount", type: { kind: "SCALAR", name: "Int" } },
+          {
+            name: "totalIsLowerBound",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "Boolean" },
+            },
+          },
         ],
         interfaces: [],
       },
@@ -5087,6 +7280,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
           { name: "primaryCategory", type: { kind: "SCALAR", name: "String" } },
           { name: "rating", type: { kind: "SCALAR", name: "Float" } },
           { name: "region", type: { kind: "SCALAR", name: "String" } },
+          {
+            name: "reviewStatus",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "ENUM", name: "PlaceReviewStatus" },
+            },
+          },
           { name: "streetAddress", type: { kind: "SCALAR", name: "String" } },
           {
             name: "textRank",
@@ -5146,6 +7346,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
         name: "Query",
         fields: [
           {
+            name: "barPantry",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "UNION", name: "QueryBarPantryResult" },
+            },
+          },
+          {
             name: "barcode",
             type: {
               kind: "NON_NULL",
@@ -5174,6 +7381,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
             },
           },
           {
+            name: "breadthStamps",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "UNION", name: "QueryBreadthStampsResult" },
+            },
+          },
+          {
             name: "cellar",
             type: {
               kind: "NON_NULL",
@@ -5188,6 +7402,16 @@ export const graphcacheSchema: MinifiedIntrospection = {
             },
           },
           {
+            name: "cellarSearchElsewhere",
+            type: {
+              kind: "NON_NULL",
+              ofType: {
+                kind: "UNION",
+                name: "QueryCellarSearchElsewhereResult",
+              },
+            },
+          },
+          {
             name: "duplicatePlaces",
             type: {
               kind: "NON_NULL",
@@ -5199,6 +7423,20 @@ export const graphcacheSchema: MinifiedIntrospection = {
             type: {
               kind: "NON_NULL",
               ofType: { kind: "UNION", name: "QueryFileResult" },
+            },
+          },
+          {
+            name: "friendInvitePreview",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "UNION", name: "QueryFriendInvitePreviewResult" },
+            },
+          },
+          {
+            name: "friendProfile",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "UNION", name: "QueryFriendProfileResult" },
             },
           },
           {
@@ -5245,6 +7483,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
             },
           },
           {
+            name: "lovedRecipes",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "UNION", name: "QueryLovedRecipesResult" },
+            },
+          },
+          {
             name: "mapBrowse",
             type: {
               kind: "NON_NULL",
@@ -5257,6 +7502,20 @@ export const graphcacheSchema: MinifiedIntrospection = {
             type: {
               kind: "NON_NULL",
               ofType: { kind: "UNION", name: "QueryMenuScanResult" },
+            },
+          },
+          {
+            name: "mutualFriends",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "MutualFriends" },
+            },
+          },
+          {
+            name: "myAiQuota",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "UNION", name: "QueryMyAiQuotaResult" },
             },
           },
           {
@@ -5306,11 +7565,29 @@ export const graphcacheSchema: MinifiedIntrospection = {
             },
           },
           {
+            name: "myRecipes",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "UNION", name: "QueryMyRecipesResult" },
+            },
+          },
+          {
             name: "myTierLists",
             type: {
               kind: "NON_NULL",
               ofType: { kind: "UNION", name: "QueryMyTierListsResult" },
             },
+          },
+          {
+            name: "needsDetails",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "UNION", name: "QueryNeedsDetailsResult" },
+            },
+          },
+          {
+            name: "needsDetailsCount",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
           },
           {
             name: "ping",
@@ -5341,10 +7618,34 @@ export const graphcacheSchema: MinifiedIntrospection = {
             },
           },
           {
+            name: "recap",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "UNION", name: "QueryRecapResult" },
+            },
+          },
+          {
+            name: "recapPeriods",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "UNION", name: "QueryRecapPeriodsResult" },
+            },
+          },
+          {
             name: "recipe",
             type: {
               kind: "NON_NULL",
               ofType: { kind: "UNION", name: "QueryRecipeResult" },
+            },
+          },
+          {
+            name: "recipeBaseSpiritCounts",
+            type: {
+              kind: "NON_NULL",
+              ofType: {
+                kind: "UNION",
+                name: "QueryRecipeBaseSpiritCountsResult",
+              },
             },
           },
           {
@@ -5387,6 +7688,48 @@ export const graphcacheSchema: MinifiedIntrospection = {
             type: { kind: "OBJECT", name: "ReverseGeocodeResult" },
           },
           {
+            name: "sharedItem",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "UNION", name: "QuerySharedItemResult" },
+            },
+          },
+          {
+            name: "sharedRecipe",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "UNION", name: "QuerySharedRecipeResult" },
+            },
+          },
+          {
+            name: "sharedTierList",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "UNION", name: "QuerySharedTierListResult" },
+            },
+          },
+          {
+            name: "tasteAgreement",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "UNION", name: "QueryTasteAgreementResult" },
+            },
+          },
+          {
+            name: "tasteCompare",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "UNION", name: "QueryTasteCompareResult" },
+            },
+          },
+          {
+            name: "tasteProfile",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "UNION", name: "QueryTasteProfileResult" },
+            },
+          },
+          {
             name: "tierList",
             type: {
               kind: "NON_NULL",
@@ -5407,8 +7750,27 @@ export const graphcacheSchema: MinifiedIntrospection = {
               ofType: { kind: "UNION", name: "QueryUserSearchResult" },
             },
           },
+          {
+            name: "whatCanIMake",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "UNION", name: "QueryWhatCanIMakeResult" },
+            },
+          },
         ],
         interfaces: [],
+      },
+      {
+        kind: "UNION",
+        name: "QueryBarPantryResult",
+        possibleTypes: [
+          { kind: "OBJECT", name: "BarPantry" },
+          { kind: "OBJECT", name: "BudgetExceededError" },
+          { kind: "OBJECT", name: "ConflictError" },
+          { kind: "OBJECT", name: "ForbiddenError" },
+          { kind: "OBJECT", name: "NotFoundError" },
+          { kind: "OBJECT", name: "ValidationError" },
+        ],
       },
       {
         kind: "UNION",
@@ -5460,6 +7822,18 @@ export const graphcacheSchema: MinifiedIntrospection = {
       },
       {
         kind: "UNION",
+        name: "QueryBreadthStampsResult",
+        possibleTypes: [
+          { kind: "OBJECT", name: "BreadthStamps" },
+          { kind: "OBJECT", name: "BudgetExceededError" },
+          { kind: "OBJECT", name: "ConflictError" },
+          { kind: "OBJECT", name: "ForbiddenError" },
+          { kind: "OBJECT", name: "NotFoundError" },
+          { kind: "OBJECT", name: "ValidationError" },
+        ],
+      },
+      {
+        kind: "UNION",
         name: "QueryCellarItemSearchResult",
         possibleTypes: [
           { kind: "OBJECT", name: "BudgetExceededError" },
@@ -5476,6 +7850,18 @@ export const graphcacheSchema: MinifiedIntrospection = {
         possibleTypes: [
           { kind: "OBJECT", name: "BudgetExceededError" },
           { kind: "OBJECT", name: "Cellar" },
+          { kind: "OBJECT", name: "ConflictError" },
+          { kind: "OBJECT", name: "ForbiddenError" },
+          { kind: "OBJECT", name: "NotFoundError" },
+          { kind: "OBJECT", name: "ValidationError" },
+        ],
+      },
+      {
+        kind: "UNION",
+        name: "QueryCellarSearchElsewhereResult",
+        possibleTypes: [
+          { kind: "OBJECT", name: "BudgetExceededError" },
+          { kind: "OBJECT", name: "CellarSearchElsewhereConnection" },
           { kind: "OBJECT", name: "ConflictError" },
           { kind: "OBJECT", name: "ForbiddenError" },
           { kind: "OBJECT", name: "NotFoundError" },
@@ -5502,6 +7888,30 @@ export const graphcacheSchema: MinifiedIntrospection = {
           { kind: "OBJECT", name: "ConflictError" },
           { kind: "OBJECT", name: "File" },
           { kind: "OBJECT", name: "ForbiddenError" },
+          { kind: "OBJECT", name: "NotFoundError" },
+          { kind: "OBJECT", name: "ValidationError" },
+        ],
+      },
+      {
+        kind: "UNION",
+        name: "QueryFriendInvitePreviewResult",
+        possibleTypes: [
+          { kind: "OBJECT", name: "BudgetExceededError" },
+          { kind: "OBJECT", name: "ConflictError" },
+          { kind: "OBJECT", name: "ForbiddenError" },
+          { kind: "OBJECT", name: "FriendInvitePreview" },
+          { kind: "OBJECT", name: "NotFoundError" },
+          { kind: "OBJECT", name: "ValidationError" },
+        ],
+      },
+      {
+        kind: "UNION",
+        name: "QueryFriendProfileResult",
+        possibleTypes: [
+          { kind: "OBJECT", name: "BudgetExceededError" },
+          { kind: "OBJECT", name: "ConflictError" },
+          { kind: "OBJECT", name: "ForbiddenError" },
+          { kind: "OBJECT", name: "FriendProfile" },
           { kind: "OBJECT", name: "NotFoundError" },
           { kind: "OBJECT", name: "ValidationError" },
         ],
@@ -5570,6 +7980,18 @@ export const graphcacheSchema: MinifiedIntrospection = {
       },
       {
         kind: "UNION",
+        name: "QueryLovedRecipesResult",
+        possibleTypes: [
+          { kind: "OBJECT", name: "BudgetExceededError" },
+          { kind: "OBJECT", name: "ConflictError" },
+          { kind: "OBJECT", name: "ForbiddenError" },
+          { kind: "OBJECT", name: "NotFoundError" },
+          { kind: "OBJECT", name: "RecipeConnection" },
+          { kind: "OBJECT", name: "ValidationError" },
+        ],
+      },
+      {
+        kind: "UNION",
         name: "QueryMapBrowseResult",
         possibleTypes: [
           { kind: "OBJECT", name: "BudgetExceededError" },
@@ -5588,6 +8010,18 @@ export const graphcacheSchema: MinifiedIntrospection = {
           { kind: "OBJECT", name: "ConflictError" },
           { kind: "OBJECT", name: "ForbiddenError" },
           { kind: "OBJECT", name: "MenuScan" },
+          { kind: "OBJECT", name: "NotFoundError" },
+          { kind: "OBJECT", name: "ValidationError" },
+        ],
+      },
+      {
+        kind: "UNION",
+        name: "QueryMyAiQuotaResult",
+        possibleTypes: [
+          { kind: "OBJECT", name: "AiQuotaConnection" },
+          { kind: "OBJECT", name: "BudgetExceededError" },
+          { kind: "OBJECT", name: "ConflictError" },
+          { kind: "OBJECT", name: "ForbiddenError" },
           { kind: "OBJECT", name: "NotFoundError" },
           { kind: "OBJECT", name: "ValidationError" },
         ],
@@ -5678,6 +8112,18 @@ export const graphcacheSchema: MinifiedIntrospection = {
       },
       {
         kind: "UNION",
+        name: "QueryMyRecipesResult",
+        possibleTypes: [
+          { kind: "OBJECT", name: "BudgetExceededError" },
+          { kind: "OBJECT", name: "ConflictError" },
+          { kind: "OBJECT", name: "ForbiddenError" },
+          { kind: "OBJECT", name: "NotFoundError" },
+          { kind: "OBJECT", name: "RecipeConnection" },
+          { kind: "OBJECT", name: "ValidationError" },
+        ],
+      },
+      {
+        kind: "UNION",
         name: "QueryMyTierListsResult",
         possibleTypes: [
           { kind: "OBJECT", name: "BudgetExceededError" },
@@ -5685,6 +8131,18 @@ export const graphcacheSchema: MinifiedIntrospection = {
           { kind: "OBJECT", name: "ForbiddenError" },
           { kind: "OBJECT", name: "NotFoundError" },
           { kind: "OBJECT", name: "TierListConnection" },
+          { kind: "OBJECT", name: "ValidationError" },
+        ],
+      },
+      {
+        kind: "UNION",
+        name: "QueryNeedsDetailsResult",
+        possibleTypes: [
+          { kind: "OBJECT", name: "BudgetExceededError" },
+          { kind: "OBJECT", name: "ConflictError" },
+          { kind: "OBJECT", name: "ForbiddenError" },
+          { kind: "OBJECT", name: "ItemOnboardingConnection" },
+          { kind: "OBJECT", name: "NotFoundError" },
           { kind: "OBJECT", name: "ValidationError" },
         ],
       },
@@ -5721,6 +8179,62 @@ export const graphcacheSchema: MinifiedIntrospection = {
           { kind: "OBJECT", name: "ForbiddenError" },
           { kind: "OBJECT", name: "NotFoundError" },
           { kind: "OBJECT", name: "RankingsConnection" },
+          { kind: "OBJECT", name: "ValidationError" },
+        ],
+      },
+      {
+        kind: "UNION",
+        name: "QueryRecapPeriodsResult",
+        possibleTypes: [
+          { kind: "OBJECT", name: "BudgetExceededError" },
+          { kind: "OBJECT", name: "ConflictError" },
+          { kind: "OBJECT", name: "ForbiddenError" },
+          { kind: "OBJECT", name: "NotFoundError" },
+          { kind: "OBJECT", name: "QueryRecapPeriodsSuccess" },
+          { kind: "OBJECT", name: "ValidationError" },
+        ],
+      },
+      {
+        kind: "OBJECT",
+        name: "QueryRecapPeriodsSuccess",
+        fields: [
+          {
+            name: "data",
+            type: {
+              kind: "NON_NULL",
+              ofType: {
+                kind: "LIST",
+                ofType: {
+                  kind: "NON_NULL",
+                  ofType: { kind: "SCALAR", name: "String" },
+                },
+              },
+            },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "UNION",
+        name: "QueryRecapResult",
+        possibleTypes: [
+          { kind: "OBJECT", name: "BudgetExceededError" },
+          { kind: "OBJECT", name: "ConflictError" },
+          { kind: "OBJECT", name: "ForbiddenError" },
+          { kind: "OBJECT", name: "NotFoundError" },
+          { kind: "OBJECT", name: "Recap" },
+          { kind: "OBJECT", name: "ValidationError" },
+        ],
+      },
+      {
+        kind: "UNION",
+        name: "QueryRecipeBaseSpiritCountsResult",
+        possibleTypes: [
+          { kind: "OBJECT", name: "BudgetExceededError" },
+          { kind: "OBJECT", name: "ConflictError" },
+          { kind: "OBJECT", name: "ForbiddenError" },
+          { kind: "OBJECT", name: "NotFoundError" },
+          { kind: "OBJECT", name: "RecipeBaseSpiritCountConnection" },
           { kind: "OBJECT", name: "ValidationError" },
         ],
       },
@@ -5798,6 +8312,78 @@ export const graphcacheSchema: MinifiedIntrospection = {
       },
       {
         kind: "UNION",
+        name: "QuerySharedItemResult",
+        possibleTypes: [
+          { kind: "OBJECT", name: "BudgetExceededError" },
+          { kind: "OBJECT", name: "ConflictError" },
+          { kind: "OBJECT", name: "ForbiddenError" },
+          { kind: "OBJECT", name: "NotFoundError" },
+          { kind: "OBJECT", name: "SharedItem" },
+          { kind: "OBJECT", name: "ValidationError" },
+        ],
+      },
+      {
+        kind: "UNION",
+        name: "QuerySharedRecipeResult",
+        possibleTypes: [
+          { kind: "OBJECT", name: "BudgetExceededError" },
+          { kind: "OBJECT", name: "ConflictError" },
+          { kind: "OBJECT", name: "ForbiddenError" },
+          { kind: "OBJECT", name: "NotFoundError" },
+          { kind: "OBJECT", name: "SharedRecipe" },
+          { kind: "OBJECT", name: "ValidationError" },
+        ],
+      },
+      {
+        kind: "UNION",
+        name: "QuerySharedTierListResult",
+        possibleTypes: [
+          { kind: "OBJECT", name: "BudgetExceededError" },
+          { kind: "OBJECT", name: "ConflictError" },
+          { kind: "OBJECT", name: "ForbiddenError" },
+          { kind: "OBJECT", name: "NotFoundError" },
+          { kind: "OBJECT", name: "SharedTierList" },
+          { kind: "OBJECT", name: "ValidationError" },
+        ],
+      },
+      {
+        kind: "UNION",
+        name: "QueryTasteAgreementResult",
+        possibleTypes: [
+          { kind: "OBJECT", name: "BudgetExceededError" },
+          { kind: "OBJECT", name: "ConflictError" },
+          { kind: "OBJECT", name: "ForbiddenError" },
+          { kind: "OBJECT", name: "NotFoundError" },
+          { kind: "OBJECT", name: "TasteAgreement" },
+          { kind: "OBJECT", name: "ValidationError" },
+        ],
+      },
+      {
+        kind: "UNION",
+        name: "QueryTasteCompareResult",
+        possibleTypes: [
+          { kind: "OBJECT", name: "BudgetExceededError" },
+          { kind: "OBJECT", name: "ConflictError" },
+          { kind: "OBJECT", name: "ForbiddenError" },
+          { kind: "OBJECT", name: "NotFoundError" },
+          { kind: "OBJECT", name: "TasteCompare" },
+          { kind: "OBJECT", name: "ValidationError" },
+        ],
+      },
+      {
+        kind: "UNION",
+        name: "QueryTasteProfileResult",
+        possibleTypes: [
+          { kind: "OBJECT", name: "BudgetExceededError" },
+          { kind: "OBJECT", name: "ConflictError" },
+          { kind: "OBJECT", name: "ForbiddenError" },
+          { kind: "OBJECT", name: "NotFoundError" },
+          { kind: "OBJECT", name: "TasteProfile" },
+          { kind: "OBJECT", name: "ValidationError" },
+        ],
+      },
+      {
+        kind: "UNION",
         name: "QueryTierListResult",
         possibleTypes: [
           { kind: "OBJECT", name: "BudgetExceededError" },
@@ -5830,6 +8416,18 @@ export const graphcacheSchema: MinifiedIntrospection = {
           { kind: "OBJECT", name: "NotFoundError" },
           { kind: "OBJECT", name: "UserSearchConnection" },
           { kind: "OBJECT", name: "ValidationError" },
+        ],
+      },
+      {
+        kind: "UNION",
+        name: "QueryWhatCanIMakeResult",
+        possibleTypes: [
+          { kind: "OBJECT", name: "BudgetExceededError" },
+          { kind: "OBJECT", name: "ConflictError" },
+          { kind: "OBJECT", name: "ForbiddenError" },
+          { kind: "OBJECT", name: "NotFoundError" },
+          { kind: "OBJECT", name: "ValidationError" },
+          { kind: "OBJECT", name: "WhatCanIMake" },
         ],
       },
       {
@@ -5919,6 +8517,132 @@ export const graphcacheSchema: MinifiedIntrospection = {
       },
       {
         kind: "OBJECT",
+        name: "Recap",
+        fields: [
+          {
+            name: "cards",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "RecapCards" },
+            },
+          },
+          {
+            name: "period",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "String" },
+            },
+          },
+          {
+            name: "stamps",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "BreadthStamps" },
+            },
+          },
+          {
+            name: "timeZone",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "String" },
+            },
+          },
+          {
+            name: "totals",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "RecapTotals" },
+            },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "RecapCard",
+        fields: [
+          {
+            name: "chips",
+            type: {
+              kind: "NON_NULL",
+              ofType: {
+                kind: "LIST",
+                ofType: {
+                  kind: "NON_NULL",
+                  ofType: { kind: "SCALAR", name: "String" },
+                },
+              },
+            },
+          },
+          {
+            name: "count",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
+          {
+            name: "itemTypes",
+            type: {
+              kind: "NON_NULL",
+              ofType: {
+                kind: "LIST",
+                ofType: {
+                  kind: "NON_NULL",
+                  ofType: { kind: "ENUM", name: "ItemType" },
+                },
+              },
+            },
+          },
+          {
+            name: "kind",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "ENUM", name: "RecapCardKind" },
+            },
+          },
+          { name: "newCount", type: { kind: "SCALAR", name: "Int" } },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "RecapCards",
+        fields: [
+          {
+            name: "earned",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "BreadthStamps" },
+            },
+          },
+          { name: "newToYou", type: { kind: "OBJECT", name: "RecapCard" } },
+          { name: "recipes", type: { kind: "OBJECT", name: "RecapCard" } },
+          { name: "regions", type: { kind: "OBJECT", name: "RecapCard" } },
+          { name: "styles", type: { kind: "OBJECT", name: "RecapCard" } },
+          { name: "topRated", type: { kind: "OBJECT", name: "RecapCard" } },
+          { name: "types", type: { kind: "OBJECT", name: "RecapCard" } },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "RecapTotals",
+        fields: [
+          {
+            name: "bottlesAdded",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
+          {
+            name: "checkIns",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
+          {
+            name: "ratings",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
         name: "Recipe",
         fields: [
           { name: "canonicalRecipeId", type: { kind: "SCALAR", name: "ID" } },
@@ -5958,6 +8682,31 @@ export const graphcacheSchema: MinifiedIntrospection = {
               ofType: { kind: "OBJECT", name: "RecipeInstructionConnection" },
             },
           },
+          {
+            name: "isDraft",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "Boolean" },
+            },
+          },
+          {
+            name: "isLoved",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "Boolean" },
+            },
+          },
+          {
+            name: "isWantToTry",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "Boolean" },
+            },
+          },
+          {
+            name: "makeability",
+            type: { kind: "OBJECT", name: "RecipeMakeability" },
+          },
           { name: "myVote", type: { kind: "ENUM", name: "RecipeVoteType" } },
           {
             name: "name",
@@ -5971,6 +8720,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
             type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
           },
           { name: "prepTimeMinutes", type: { kind: "SCALAR", name: "Int" } },
+          {
+            name: "privacy",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "ENUM", name: "PermissionType" },
+            },
+          },
           {
             name: "recipeGroup",
             type: { kind: "OBJECT", name: "RecipeGroup" },
@@ -6006,6 +8762,77 @@ export const graphcacheSchema: MinifiedIntrospection = {
           {
             name: "version",
             type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
+          {
+            name: "viewerLogCount",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "RecipeBaseSpiritCount",
+        fields: [
+          {
+            name: "baseSpirit",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "String" },
+            },
+          },
+          {
+            name: "count",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "RecipeBaseSpiritCountConnection",
+        fields: [
+          {
+            name: "edges",
+            type: {
+              kind: "NON_NULL",
+              ofType: {
+                kind: "LIST",
+                ofType: {
+                  kind: "NON_NULL",
+                  ofType: { kind: "OBJECT", name: "RecipeBaseSpiritCountEdge" },
+                },
+              },
+            },
+          },
+          {
+            name: "pageInfo",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "PageInfo" },
+            },
+          },
+          { name: "totalCount", type: { kind: "SCALAR", name: "Int" } },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "RecipeBaseSpiritCountEdge",
+        fields: [
+          {
+            name: "cursor",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "String" },
+            },
+          },
+          {
+            name: "node",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "RecipeBaseSpiritCount" },
+            },
           },
         ],
         interfaces: [],
@@ -6073,6 +8900,7 @@ export const graphcacheSchema: MinifiedIntrospection = {
               ofType: { kind: "ENUM", name: "RecipeCategory" },
             },
           },
+          { name: "communityPickId", type: { kind: "SCALAR", name: "ID" } },
           { name: "createdAt", type: { kind: "SCALAR", name: "DateTime" } },
           { name: "createdById", type: { kind: "SCALAR", name: "ID" } },
           { name: "description", type: { kind: "SCALAR", name: "String" } },
@@ -6176,6 +9004,18 @@ export const graphcacheSchema: MinifiedIntrospection = {
         kind: "OBJECT",
         name: "RecipeIngredient",
         fields: [
+          {
+            name: "amount",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "String" },
+            },
+          },
+          {
+            name: "availability",
+            type: { kind: "OBJECT", name: "IngredientAvailability" },
+          },
+          { name: "brandMentioned", type: { kind: "SCALAR", name: "String" } },
           { name: "createdAt", type: { kind: "SCALAR", name: "DateTime" } },
           {
             name: "genericItem",
@@ -6193,7 +9033,10 @@ export const graphcacheSchema: MinifiedIntrospection = {
             },
           },
           { name: "item", type: { kind: "INTERFACE", name: "Item" } },
+          { name: "kind", type: { kind: "ENUM", name: "IngredientKind" } },
+          { name: "kindLabel", type: { kind: "SCALAR", name: "String" } },
           { name: "quantity", type: { kind: "SCALAR", name: "Float" } },
+          { name: "quantityText", type: { kind: "SCALAR", name: "String" } },
           {
             name: "recipe",
             type: {
@@ -6212,6 +9055,7 @@ export const graphcacheSchema: MinifiedIntrospection = {
               ofType: { kind: "ENUM", name: "RecipeIngredientType" },
             },
           },
+          { name: "role", type: { kind: "ENUM", name: "IngredientRole" } },
           {
             name: "substitutionNotes",
             type: { kind: "SCALAR", name: "String" },
@@ -6397,6 +9241,58 @@ export const graphcacheSchema: MinifiedIntrospection = {
           {
             name: "recipeId",
             type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "ID" } },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "RecipeMakeability",
+        fields: [
+          {
+            name: "haveCount",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
+          {
+            name: "missing",
+            type: {
+              kind: "NON_NULL",
+              ofType: {
+                kind: "LIST",
+                ofType: {
+                  kind: "NON_NULL",
+                  ofType: { kind: "SCALAR", name: "String" },
+                },
+              },
+            },
+          },
+          {
+            name: "missingKinds",
+            type: {
+              kind: "NON_NULL",
+              ofType: {
+                kind: "LIST",
+                ofType: {
+                  kind: "NON_NULL",
+                  ofType: { kind: "ENUM", name: "IngredientKind" },
+                },
+              },
+            },
+          },
+          {
+            name: "requiredCount",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
+          {
+            name: "status",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "ENUM", name: "MakeabilityStatus" },
+            },
+          },
+          {
+            name: "substituteCount",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
           },
         ],
         interfaces: [],
@@ -6604,6 +9500,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
             },
           },
           { name: "totalCount", type: { kind: "SCALAR", name: "Int" } },
+          {
+            name: "totalIsLowerBound",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "Boolean" },
+            },
+          },
         ],
         interfaces: [],
       },
@@ -6826,6 +9729,18 @@ export const graphcacheSchema: MinifiedIntrospection = {
         interfaces: [],
       },
       {
+        kind: "UNION",
+        name: "RedoTierListEditResult",
+        possibleTypes: [
+          { kind: "OBJECT", name: "BudgetExceededError" },
+          { kind: "OBJECT", name: "ConflictError" },
+          { kind: "OBJECT", name: "ForbiddenError" },
+          { kind: "OBJECT", name: "NotFoundError" },
+          { kind: "OBJECT", name: "TierListHistoryStep" },
+          { kind: "OBJECT", name: "ValidationError" },
+        ],
+      },
+      {
         kind: "OBJECT",
         name: "ReferenceRow",
         fields: [
@@ -6916,6 +9831,18 @@ export const graphcacheSchema: MinifiedIntrospection = {
           { kind: "OBJECT", name: "ForbiddenError" },
           { kind: "OBJECT", name: "NotFoundError" },
           { kind: "OBJECT", name: "RejectFriendRequestPayload" },
+          { kind: "OBJECT", name: "ValidationError" },
+        ],
+      },
+      {
+        kind: "UNION",
+        name: "RemoveAvatarResult",
+        possibleTypes: [
+          { kind: "OBJECT", name: "BudgetExceededError" },
+          { kind: "OBJECT", name: "ConflictError" },
+          { kind: "OBJECT", name: "ForbiddenError" },
+          { kind: "OBJECT", name: "NotFoundError" },
+          { kind: "OBJECT", name: "UserProfile" },
           { kind: "OBJECT", name: "ValidationError" },
         ],
       },
@@ -7061,6 +9988,54 @@ export const graphcacheSchema: MinifiedIntrospection = {
       },
       {
         kind: "UNION",
+        name: "ReplaceItemBrandResult",
+        possibleTypes: [
+          { kind: "OBJECT", name: "BudgetExceededError" },
+          { kind: "OBJECT", name: "ConflictError" },
+          { kind: "OBJECT", name: "ForbiddenError" },
+          { kind: "OBJECT", name: "ItemBrand" },
+          { kind: "OBJECT", name: "NotFoundError" },
+          { kind: "OBJECT", name: "ValidationError" },
+        ],
+      },
+      {
+        kind: "UNION",
+        name: "RequestTierListInsightsResult",
+        possibleTypes: [
+          { kind: "OBJECT", name: "BudgetExceededError" },
+          { kind: "OBJECT", name: "ConflictError" },
+          { kind: "OBJECT", name: "ForbiddenError" },
+          { kind: "OBJECT", name: "NotFoundError" },
+          { kind: "OBJECT", name: "TierList" },
+          { kind: "OBJECT", name: "ValidationError" },
+        ],
+      },
+      {
+        kind: "UNION",
+        name: "RereadItemLabelResult",
+        possibleTypes: [
+          { kind: "OBJECT", name: "BudgetExceededError" },
+          { kind: "OBJECT", name: "ConflictError" },
+          { kind: "OBJECT", name: "ForbiddenError" },
+          { kind: "OBJECT", name: "ItemLabelReading" },
+          { kind: "OBJECT", name: "NotFoundError" },
+          { kind: "OBJECT", name: "ValidationError" },
+        ],
+      },
+      {
+        kind: "UNION",
+        name: "ResetFriendInviteResult",
+        possibleTypes: [
+          { kind: "OBJECT", name: "BudgetExceededError" },
+          { kind: "OBJECT", name: "ConflictError" },
+          { kind: "OBJECT", name: "ForbiddenError" },
+          { kind: "OBJECT", name: "FriendInvite" },
+          { kind: "OBJECT", name: "NotFoundError" },
+          { kind: "OBJECT", name: "ValidationError" },
+        ],
+      },
+      {
+        kind: "UNION",
         name: "ResolveBrandResult",
         possibleTypes: [
           { kind: "OBJECT", name: "Brand" },
@@ -7068,6 +10043,69 @@ export const graphcacheSchema: MinifiedIntrospection = {
           { kind: "OBJECT", name: "ConflictError" },
           { kind: "OBJECT", name: "ForbiddenError" },
           { kind: "OBJECT", name: "NotFoundError" },
+          { kind: "OBJECT", name: "ValidationError" },
+        ],
+      },
+      {
+        kind: "UNION",
+        name: "RestoreCellarItemResult",
+        possibleTypes: [
+          { kind: "OBJECT", name: "BudgetExceededError" },
+          { kind: "OBJECT", name: "CellarItem" },
+          { kind: "OBJECT", name: "ConflictError" },
+          { kind: "OBJECT", name: "ForbiddenError" },
+          { kind: "OBJECT", name: "NotFoundError" },
+          { kind: "OBJECT", name: "ValidationError" },
+        ],
+      },
+      {
+        kind: "UNION",
+        name: "RestoreDrinkLogResult",
+        possibleTypes: [
+          { kind: "OBJECT", name: "BudgetExceededError" },
+          { kind: "OBJECT", name: "ConflictError" },
+          { kind: "OBJECT", name: "ForbiddenError" },
+          { kind: "OBJECT", name: "NotFoundError" },
+          { kind: "OBJECT", name: "RestoredDrinkLogPayload" },
+          { kind: "OBJECT", name: "ValidationError" },
+        ],
+      },
+      {
+        kind: "OBJECT",
+        name: "RestoredDrinkLogPayload",
+        fields: [
+          {
+            name: "entry",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "ItemCheckIn" },
+            },
+          },
+          {
+            name: "ids",
+            type: {
+              kind: "NON_NULL",
+              ofType: {
+                kind: "LIST",
+                ofType: {
+                  kind: "NON_NULL",
+                  ofType: { kind: "SCALAR", name: "ID" },
+                },
+              },
+            },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "UNION",
+        name: "ResubmitPlaceResult",
+        possibleTypes: [
+          { kind: "OBJECT", name: "BudgetExceededError" },
+          { kind: "OBJECT", name: "ConflictError" },
+          { kind: "OBJECT", name: "ForbiddenError" },
+          { kind: "OBJECT", name: "NotFoundError" },
+          { kind: "OBJECT", name: "Place" },
           { kind: "OBJECT", name: "ValidationError" },
         ],
       },
@@ -7082,6 +10120,18 @@ export const graphcacheSchema: MinifiedIntrospection = {
           { name: "streetAddress", type: { kind: "SCALAR", name: "String" } },
         ],
         interfaces: [],
+      },
+      {
+        kind: "UNION",
+        name: "RewriteTierListInsightsResult",
+        possibleTypes: [
+          { kind: "OBJECT", name: "BudgetExceededError" },
+          { kind: "OBJECT", name: "ConflictError" },
+          { kind: "OBJECT", name: "ForbiddenError" },
+          { kind: "OBJECT", name: "NotFoundError" },
+          { kind: "OBJECT", name: "TierList" },
+          { kind: "OBJECT", name: "ValidationError" },
+        ],
       },
       {
         kind: "OBJECT",
@@ -7116,6 +10166,14 @@ export const graphcacheSchema: MinifiedIntrospection = {
               ofType: { kind: "OBJECT", name: "ItemCheckInConnection" },
             },
           },
+          {
+            name: "cocktails",
+            type: { kind: "OBJECT", name: "ItemCocktails" },
+          },
+          {
+            name: "correction",
+            type: { kind: "OBJECT", name: "ItemCorrection" },
+          },
           { name: "country", type: { kind: "SCALAR", name: "String" } },
           {
             name: "createdAt",
@@ -7132,6 +10190,20 @@ export const graphcacheSchema: MinifiedIntrospection = {
           {
             name: "favoriteCount",
             type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
+          {
+            name: "friendsReviews",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "ItemReviewConnection" },
+            },
+          },
+          {
+            name: "friendsScore",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "ItemScore" },
+            },
           },
           {
             name: "id",
@@ -7151,6 +10223,21 @@ export const graphcacheSchema: MinifiedIntrospection = {
               ofType: { kind: "SCALAR", name: "Boolean" },
             },
           },
+          {
+            name: "isWantToTry",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "Boolean" },
+            },
+          },
+          {
+            name: "myBottles",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "CellarItemConnection" },
+            },
+          },
+          { name: "myBrewPrefs", type: { kind: "OBJECT", name: "BrewPrefs" } },
           { name: "myReview", type: { kind: "OBJECT", name: "ItemReview" } },
           {
             name: "name",
@@ -7186,6 +10273,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
             },
           },
           {
+            name: "seenAt",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "SeenAtConnection" },
+            },
+          },
+          {
             name: "servingTemperature",
             type: { kind: "SCALAR", name: "String" },
           },
@@ -7204,6 +10298,19 @@ export const graphcacheSchema: MinifiedIntrospection = {
             },
           },
           {
+            name: "unconfirmedFields",
+            type: {
+              kind: "NON_NULL",
+              ofType: {
+                kind: "LIST",
+                ofType: {
+                  kind: "NON_NULL",
+                  ofType: { kind: "SCALAR", name: "String" },
+                },
+              },
+            },
+          },
+          {
             name: "updatedAt",
             type: {
               kind: "NON_NULL",
@@ -7217,12 +10324,128 @@ export const graphcacheSchema: MinifiedIntrospection = {
       },
       {
         kind: "UNION",
+        name: "SaveDraftResult",
+        possibleTypes: [
+          { kind: "OBJECT", name: "BudgetExceededError" },
+          { kind: "OBJECT", name: "ConflictError" },
+          { kind: "OBJECT", name: "ForbiddenError" },
+          { kind: "OBJECT", name: "ItemOnboarding" },
+          { kind: "OBJECT", name: "NotFoundError" },
+          { kind: "OBJECT", name: "ValidationError" },
+        ],
+      },
+      {
+        kind: "OBJECT",
+        name: "SeenAtConnection",
+        fields: [
+          {
+            name: "edges",
+            type: {
+              kind: "NON_NULL",
+              ofType: {
+                kind: "LIST",
+                ofType: {
+                  kind: "NON_NULL",
+                  ofType: { kind: "OBJECT", name: "SeenAtEdge" },
+                },
+              },
+            },
+          },
+          {
+            name: "pageInfo",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "PageInfo" },
+            },
+          },
+          { name: "totalCount", type: { kind: "SCALAR", name: "Int" } },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "SeenAtEdge",
+        fields: [
+          {
+            name: "cursor",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "String" },
+            },
+          },
+          {
+            name: "node",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "SeenAtPlace" },
+            },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "SeenAtPlace",
+        fields: [
+          { name: "at", type: { kind: "SCALAR", name: "DateTime" } },
+          { name: "distanceMeters", type: { kind: "SCALAR", name: "Float" } },
+          { name: "friendName", type: { kind: "SCALAR", name: "String" } },
+          {
+            name: "kind",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "ENUM", name: "SeenAtKind" },
+            },
+          },
+          {
+            name: "place",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "Place" },
+            },
+          },
+          {
+            name: "placeName",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "String" },
+            },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "UNION",
         name: "SendFriendRequestResult",
         possibleTypes: [
           { kind: "OBJECT", name: "BudgetExceededError" },
           { kind: "OBJECT", name: "ConflictError" },
           { kind: "OBJECT", name: "ForbiddenError" },
           { kind: "OBJECT", name: "FriendRequest" },
+          { kind: "OBJECT", name: "NotFoundError" },
+          { kind: "OBJECT", name: "ValidationError" },
+        ],
+      },
+      {
+        kind: "UNION",
+        name: "SetAvatarResult",
+        possibleTypes: [
+          { kind: "OBJECT", name: "BudgetExceededError" },
+          { kind: "OBJECT", name: "ConflictError" },
+          { kind: "OBJECT", name: "ForbiddenError" },
+          { kind: "OBJECT", name: "NotFoundError" },
+          { kind: "OBJECT", name: "UserProfile" },
+          { kind: "OBJECT", name: "ValidationError" },
+        ],
+      },
+      {
+        kind: "UNION",
+        name: "SetBarPantryItemResult",
+        possibleTypes: [
+          { kind: "OBJECT", name: "BarPantryEntry" },
+          { kind: "OBJECT", name: "BudgetExceededError" },
+          { kind: "OBJECT", name: "ConflictError" },
+          { kind: "OBJECT", name: "ForbiddenError" },
           { kind: "OBJECT", name: "NotFoundError" },
           { kind: "OBJECT", name: "ValidationError" },
         ],
@@ -7240,6 +10463,33 @@ export const graphcacheSchema: MinifiedIntrospection = {
         ],
       },
       {
+        kind: "OBJECT",
+        name: "SetBrewPrefsPayload",
+        fields: [
+          {
+            name: "item",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "INTERFACE", name: "Item" },
+            },
+          },
+          { name: "prefs", type: { kind: "OBJECT", name: "BrewPrefs" } },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "UNION",
+        name: "SetBrewPrefsResult",
+        possibleTypes: [
+          { kind: "OBJECT", name: "BudgetExceededError" },
+          { kind: "OBJECT", name: "ConflictError" },
+          { kind: "OBJECT", name: "ForbiddenError" },
+          { kind: "OBJECT", name: "NotFoundError" },
+          { kind: "OBJECT", name: "SetBrewPrefsPayload" },
+          { kind: "OBJECT", name: "ValidationError" },
+        ],
+      },
+      {
         kind: "UNION",
         name: "SetCellarItemPercentageResult",
         possibleTypes: [
@@ -7248,6 +10498,81 @@ export const graphcacheSchema: MinifiedIntrospection = {
           { kind: "OBJECT", name: "ConflictError" },
           { kind: "OBJECT", name: "ForbiddenError" },
           { kind: "OBJECT", name: "NotFoundError" },
+          { kind: "OBJECT", name: "ValidationError" },
+        ],
+      },
+      {
+        kind: "UNION",
+        name: "SetDefaultCellarPrivacyResult",
+        possibleTypes: [
+          { kind: "OBJECT", name: "BudgetExceededError" },
+          { kind: "OBJECT", name: "ConflictError" },
+          { kind: "OBJECT", name: "ForbiddenError" },
+          { kind: "OBJECT", name: "NotFoundError" },
+          { kind: "OBJECT", name: "UserSettings" },
+          { kind: "OBJECT", name: "ValidationError" },
+        ],
+      },
+      {
+        kind: "UNION",
+        name: "SetDrinkLogCompanionsResult",
+        possibleTypes: [
+          { kind: "OBJECT", name: "BudgetExceededError" },
+          { kind: "OBJECT", name: "ConflictError" },
+          { kind: "OBJECT", name: "ForbiddenError" },
+          { kind: "OBJECT", name: "ItemCheckIn" },
+          { kind: "OBJECT", name: "NotFoundError" },
+          { kind: "OBJECT", name: "ValidationError" },
+        ],
+      },
+      {
+        kind: "OBJECT",
+        name: "SetFavoritePayload",
+        fields: [
+          {
+            name: "changed",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "Boolean" },
+            },
+          },
+          {
+            name: "favorited",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "Boolean" },
+            },
+          },
+          {
+            name: "item",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "INTERFACE", name: "Item" },
+            },
+          },
+          {
+            name: "itemId",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "ID" } },
+          },
+          {
+            name: "itemType",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "ENUM", name: "ItemType" },
+            },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "UNION",
+        name: "SetFavoriteResult",
+        possibleTypes: [
+          { kind: "OBJECT", name: "BudgetExceededError" },
+          { kind: "OBJECT", name: "ConflictError" },
+          { kind: "OBJECT", name: "ForbiddenError" },
+          { kind: "OBJECT", name: "NotFoundError" },
+          { kind: "OBJECT", name: "SetFavoritePayload" },
           { kind: "OBJECT", name: "ValidationError" },
         ],
       },
@@ -7274,6 +10599,461 @@ export const graphcacheSchema: MinifiedIntrospection = {
           { kind: "OBJECT", name: "RecipeInstructionsPayload" },
           { kind: "OBJECT", name: "ValidationError" },
         ],
+      },
+      {
+        kind: "OBJECT",
+        name: "SetRecipeLovePayload",
+        fields: [
+          {
+            name: "changed",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "Boolean" },
+            },
+          },
+          {
+            name: "loved",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "Boolean" },
+            },
+          },
+          {
+            name: "recipe",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "Recipe" },
+            },
+          },
+          {
+            name: "recipeId",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "ID" } },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "UNION",
+        name: "SetRecipeLoveResult",
+        possibleTypes: [
+          { kind: "OBJECT", name: "BudgetExceededError" },
+          { kind: "OBJECT", name: "ConflictError" },
+          { kind: "OBJECT", name: "ForbiddenError" },
+          { kind: "OBJECT", name: "NotFoundError" },
+          { kind: "OBJECT", name: "SetRecipeLovePayload" },
+          { kind: "OBJECT", name: "ValidationError" },
+        ],
+      },
+      {
+        kind: "OBJECT",
+        name: "SetWantToTryPayload",
+        fields: [
+          {
+            name: "changed",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "Boolean" },
+            },
+          },
+          { name: "item", type: { kind: "INTERFACE", name: "Item" } },
+          {
+            name: "key",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "String" },
+            },
+          },
+          {
+            name: "kind",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "ENUM", name: "WantToTryKind" },
+            },
+          },
+          { name: "place", type: { kind: "OBJECT", name: "Place" } },
+          { name: "recipe", type: { kind: "OBJECT", name: "Recipe" } },
+          {
+            name: "wantToTry",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "Boolean" },
+            },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "UNION",
+        name: "SetWantToTryResult",
+        possibleTypes: [
+          { kind: "OBJECT", name: "BudgetExceededError" },
+          { kind: "OBJECT", name: "ConflictError" },
+          { kind: "OBJECT", name: "ForbiddenError" },
+          { kind: "OBJECT", name: "NotFoundError" },
+          { kind: "OBJECT", name: "SetWantToTryPayload" },
+          { kind: "OBJECT", name: "ValidationError" },
+        ],
+      },
+      {
+        kind: "OBJECT",
+        name: "SharedItem",
+        fields: [
+          {
+            name: "attributes",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "JSON" },
+            },
+          },
+          { name: "country", type: { kind: "SCALAR", name: "String" } },
+          { name: "description", type: { kind: "SCALAR", name: "String" } },
+          {
+            name: "id",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "ID" } },
+          },
+          {
+            name: "imagePlaceholder",
+            type: { kind: "SCALAR", name: "String" },
+          },
+          { name: "imageUrl", type: { kind: "SCALAR", name: "String" } },
+          {
+            name: "name",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "String" },
+            },
+          },
+          { name: "scoreAverage", type: { kind: "SCALAR", name: "Float" } },
+          {
+            name: "scoreCount",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
+          {
+            name: "type",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "ENUM", name: "ItemType" },
+            },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "SharedRecipe",
+        fields: [
+          { name: "description", type: { kind: "SCALAR", name: "String" } },
+          { name: "difficultyLevel", type: { kind: "SCALAR", name: "Int" } },
+          {
+            name: "id",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "ID" } },
+          },
+          { name: "imageUrl", type: { kind: "SCALAR", name: "String" } },
+          {
+            name: "ingredients",
+            type: {
+              kind: "NON_NULL",
+              ofType: {
+                kind: "OBJECT",
+                name: "SharedRecipeIngredientConnection",
+              },
+            },
+          },
+          {
+            name: "instructions",
+            type: {
+              kind: "NON_NULL",
+              ofType: {
+                kind: "OBJECT",
+                name: "SharedRecipeInstructionConnection",
+              },
+            },
+          },
+          {
+            name: "name",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "String" },
+            },
+          },
+          { name: "prepTimeMinutes", type: { kind: "SCALAR", name: "Int" } },
+          { name: "servingSize", type: { kind: "SCALAR", name: "Int" } },
+          {
+            name: "type",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "ENUM", name: "RecipeType" },
+            },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "SharedRecipeIngredient",
+        fields: [
+          {
+            name: "isOptional",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "Boolean" },
+            },
+          },
+          { name: "name", type: { kind: "SCALAR", name: "String" } },
+          { name: "quantity", type: { kind: "SCALAR", name: "Float" } },
+          { name: "unit", type: { kind: "SCALAR", name: "String" } },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "SharedRecipeIngredientConnection",
+        fields: [
+          {
+            name: "edges",
+            type: {
+              kind: "NON_NULL",
+              ofType: {
+                kind: "LIST",
+                ofType: {
+                  kind: "NON_NULL",
+                  ofType: {
+                    kind: "OBJECT",
+                    name: "SharedRecipeIngredientEdge",
+                  },
+                },
+              },
+            },
+          },
+          {
+            name: "pageInfo",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "PageInfo" },
+            },
+          },
+          { name: "totalCount", type: { kind: "SCALAR", name: "Int" } },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "SharedRecipeIngredientEdge",
+        fields: [
+          {
+            name: "cursor",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "String" },
+            },
+          },
+          {
+            name: "node",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "SharedRecipeIngredient" },
+            },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "SharedRecipeInstruction",
+        fields: [
+          {
+            name: "stepNumber",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
+          {
+            name: "text",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "String" },
+            },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "SharedRecipeInstructionConnection",
+        fields: [
+          {
+            name: "edges",
+            type: {
+              kind: "NON_NULL",
+              ofType: {
+                kind: "LIST",
+                ofType: {
+                  kind: "NON_NULL",
+                  ofType: {
+                    kind: "OBJECT",
+                    name: "SharedRecipeInstructionEdge",
+                  },
+                },
+              },
+            },
+          },
+          {
+            name: "pageInfo",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "PageInfo" },
+            },
+          },
+          { name: "totalCount", type: { kind: "SCALAR", name: "Int" } },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "SharedRecipeInstructionEdge",
+        fields: [
+          {
+            name: "cursor",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "String" },
+            },
+          },
+          {
+            name: "node",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "SharedRecipeInstruction" },
+            },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "SharedTierList",
+        fields: [
+          { name: "description", type: { kind: "SCALAR", name: "String" } },
+          {
+            name: "entries",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "SharedTierListEntryConnection" },
+            },
+          },
+          {
+            name: "id",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "ID" } },
+          },
+          {
+            name: "listType",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "String" },
+            },
+          },
+          {
+            name: "name",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "String" },
+            },
+          },
+          {
+            name: "ownerDisplayName",
+            type: { kind: "SCALAR", name: "String" },
+          },
+          {
+            name: "privacy",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "ENUM", name: "PermissionType" },
+            },
+          },
+          { name: "updatedAt", type: { kind: "SCALAR", name: "DateTime" } },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "SharedTierListEntry",
+        fields: [
+          {
+            name: "band",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
+          {
+            name: "entryId",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "ID" } },
+          },
+          {
+            name: "entryType",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "ENUM", name: "TierListEntryType" },
+            },
+          },
+          {
+            name: "id",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "ID" } },
+          },
+          { name: "imageUrl", type: { kind: "SCALAR", name: "String" } },
+          { name: "location", type: { kind: "SCALAR", name: "String" } },
+          { name: "name", type: { kind: "SCALAR", name: "String" } },
+          { name: "notes", type: { kind: "SCALAR", name: "String" } },
+          {
+            name: "position",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "SharedTierListEntryConnection",
+        fields: [
+          {
+            name: "edges",
+            type: {
+              kind: "NON_NULL",
+              ofType: {
+                kind: "LIST",
+                ofType: {
+                  kind: "NON_NULL",
+                  ofType: { kind: "OBJECT", name: "SharedTierListEntryEdge" },
+                },
+              },
+            },
+          },
+          {
+            name: "pageInfo",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "PageInfo" },
+            },
+          },
+          { name: "totalCount", type: { kind: "SCALAR", name: "Int" } },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "SharedTierListEntryEdge",
+        fields: [
+          {
+            name: "cursor",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "String" },
+            },
+          },
+          {
+            name: "node",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "SharedTierListEntry" },
+            },
+          },
+        ],
+        interfaces: [],
       },
       {
         kind: "OBJECT",
@@ -7305,6 +11085,14 @@ export const graphcacheSchema: MinifiedIntrospection = {
               ofType: { kind: "OBJECT", name: "ItemCheckInConnection" },
             },
           },
+          {
+            name: "cocktails",
+            type: { kind: "OBJECT", name: "ItemCocktails" },
+          },
+          {
+            name: "correction",
+            type: { kind: "OBJECT", name: "ItemCorrection" },
+          },
           { name: "country", type: { kind: "SCALAR", name: "String" } },
           {
             name: "createdAt",
@@ -7321,6 +11109,20 @@ export const graphcacheSchema: MinifiedIntrospection = {
           {
             name: "favoriteCount",
             type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
+          {
+            name: "friendsReviews",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "ItemReviewConnection" },
+            },
+          },
+          {
+            name: "friendsScore",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "ItemScore" },
+            },
           },
           {
             name: "id",
@@ -7340,6 +11142,21 @@ export const graphcacheSchema: MinifiedIntrospection = {
               ofType: { kind: "SCALAR", name: "Boolean" },
             },
           },
+          {
+            name: "isWantToTry",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "Boolean" },
+            },
+          },
+          {
+            name: "myBottles",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "CellarItemConnection" },
+            },
+          },
+          { name: "myBrewPrefs", type: { kind: "OBJECT", name: "BrewPrefs" } },
           { name: "myReview", type: { kind: "OBJECT", name: "ItemReview" } },
           {
             name: "name",
@@ -7370,6 +11187,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
             },
           },
           {
+            name: "seenAt",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "SeenAtConnection" },
+            },
+          },
+          {
             name: "spiritType",
             type: {
               kind: "NON_NULL",
@@ -7389,6 +11213,19 @@ export const graphcacheSchema: MinifiedIntrospection = {
             type: {
               kind: "NON_NULL",
               ofType: { kind: "ENUM", name: "ItemType" },
+            },
+          },
+          {
+            name: "unconfirmedFields",
+            type: {
+              kind: "NON_NULL",
+              ofType: {
+                kind: "LIST",
+                ofType: {
+                  kind: "NON_NULL",
+                  ofType: { kind: "SCALAR", name: "String" },
+                },
+              },
             },
           },
           {
@@ -7427,6 +11264,534 @@ export const graphcacheSchema: MinifiedIntrospection = {
         ],
       },
       {
+        kind: "UNION",
+        name: "StartRecipeTextJobResult",
+        possibleTypes: [
+          { kind: "OBJECT", name: "BudgetExceededError" },
+          { kind: "OBJECT", name: "ConflictError" },
+          { kind: "OBJECT", name: "ForbiddenError" },
+          { kind: "OBJECT", name: "NotFoundError" },
+          { kind: "OBJECT", name: "RecipePhotoJob" },
+          { kind: "OBJECT", name: "ValidationError" },
+        ],
+      },
+      {
+        kind: "UNION",
+        name: "SuggestFlavourTagsResult",
+        possibleTypes: [
+          { kind: "OBJECT", name: "BudgetExceededError" },
+          { kind: "OBJECT", name: "ConflictError" },
+          { kind: "OBJECT", name: "FlavourTagSuggestionsPayload" },
+          { kind: "OBJECT", name: "ForbiddenError" },
+          { kind: "OBJECT", name: "NotFoundError" },
+          { kind: "OBJECT", name: "ValidationError" },
+        ],
+      },
+      {
+        kind: "UNION",
+        name: "SuggestItemDetailsResult",
+        possibleTypes: [
+          { kind: "OBJECT", name: "BudgetExceededError" },
+          { kind: "OBJECT", name: "ConflictError" },
+          { kind: "OBJECT", name: "ForbiddenError" },
+          { kind: "OBJECT", name: "ItemDetailSuggestions" },
+          { kind: "OBJECT", name: "NotFoundError" },
+          { kind: "OBJECT", name: "ValidationError" },
+        ],
+      },
+      {
+        kind: "UNION",
+        name: "SuggestNewItemDetailsResult",
+        possibleTypes: [
+          { kind: "OBJECT", name: "BudgetExceededError" },
+          { kind: "OBJECT", name: "ConflictError" },
+          { kind: "OBJECT", name: "ForbiddenError" },
+          { kind: "OBJECT", name: "ItemDetailSuggestions" },
+          { kind: "OBJECT", name: "NotFoundError" },
+          { kind: "OBJECT", name: "ValidationError" },
+        ],
+      },
+      {
+        kind: "OBJECT",
+        name: "TasteAgreement",
+        fields: [
+          { name: "agreed", type: { kind: "SCALAR", name: "Int" } },
+          { name: "avatarUrl", type: { kind: "SCALAR", name: "String" } },
+          {
+            name: "byType",
+            type: {
+              kind: "NON_NULL",
+              ofType: {
+                kind: "OBJECT",
+                name: "TasteAgreementByTypeConnection",
+              },
+            },
+          },
+          {
+            name: "name",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "String" },
+            },
+          },
+          {
+            name: "shared",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
+          {
+            name: "userId",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "ID" } },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "TasteAgreementByType",
+        fields: [
+          { name: "agreed", type: { kind: "SCALAR", name: "Int" } },
+          {
+            name: "itemType",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "ENUM", name: "ItemType" },
+            },
+          },
+          {
+            name: "shared",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "TasteAgreementByTypeConnection",
+        fields: [
+          {
+            name: "edges",
+            type: {
+              kind: "NON_NULL",
+              ofType: {
+                kind: "LIST",
+                ofType: {
+                  kind: "NON_NULL",
+                  ofType: { kind: "OBJECT", name: "TasteAgreementByTypeEdge" },
+                },
+              },
+            },
+          },
+          {
+            name: "pageInfo",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "PageInfo" },
+            },
+          },
+          { name: "totalCount", type: { kind: "SCALAR", name: "Int" } },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "TasteAgreementByTypeEdge",
+        fields: [
+          {
+            name: "cursor",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "String" },
+            },
+          },
+          {
+            name: "node",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "TasteAgreementByType" },
+            },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "TasteAgreementConnection",
+        fields: [
+          {
+            name: "edges",
+            type: {
+              kind: "NON_NULL",
+              ofType: {
+                kind: "LIST",
+                ofType: {
+                  kind: "NON_NULL",
+                  ofType: { kind: "OBJECT", name: "TasteAgreementEdge" },
+                },
+              },
+            },
+          },
+          {
+            name: "pageInfo",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "PageInfo" },
+            },
+          },
+          { name: "totalCount", type: { kind: "SCALAR", name: "Int" } },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "TasteAgreementEdge",
+        fields: [
+          {
+            name: "cursor",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "String" },
+            },
+          },
+          {
+            name: "node",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "TasteAgreement" },
+            },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "TasteArchetype",
+        fields: [
+          {
+            name: "key",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "ENUM", name: "TasteArchetypeKey" },
+            },
+          },
+          {
+            name: "lessKeen",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "TasteStyleConnection" },
+            },
+          },
+          {
+            name: "loves",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "TasteStyleConnection" },
+            },
+          },
+          {
+            name: "title",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "String" },
+            },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "TasteCompare",
+        fields: [
+          {
+            name: "rows",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "TasteCompareRowConnection" },
+            },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "TasteCompareRow",
+        fields: [
+          {
+            name: "item",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "INTERFACE", name: "Item" },
+            },
+          },
+          {
+            name: "myScore",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "Float" },
+            },
+          },
+          {
+            name: "theirScore",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "Float" },
+            },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "TasteCompareRowConnection",
+        fields: [
+          {
+            name: "edges",
+            type: {
+              kind: "NON_NULL",
+              ofType: {
+                kind: "LIST",
+                ofType: {
+                  kind: "NON_NULL",
+                  ofType: { kind: "OBJECT", name: "TasteCompareRowEdge" },
+                },
+              },
+            },
+          },
+          {
+            name: "pageInfo",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "PageInfo" },
+            },
+          },
+          { name: "totalCount", type: { kind: "SCALAR", name: "Int" } },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "TasteCompareRowEdge",
+        fields: [
+          {
+            name: "cursor",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "String" },
+            },
+          },
+          {
+            name: "node",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "TasteCompareRow" },
+            },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "TasteProfile",
+        fields: [
+          {
+            name: "archetype",
+            type: { kind: "OBJECT", name: "TasteArchetype" },
+          },
+          {
+            name: "friends",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "UNION", name: "TasteProfileFriendsResult" },
+            },
+          },
+          {
+            name: "line",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "String" },
+            },
+          },
+          {
+            name: "linePhrasedByAi",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "Boolean" },
+            },
+          },
+          {
+            name: "ratingCount",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
+          {
+            name: "types",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "TasteTypeCountConnection" },
+            },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "UNION",
+        name: "TasteProfileFriendsResult",
+        possibleTypes: [
+          { kind: "OBJECT", name: "BudgetExceededError" },
+          { kind: "OBJECT", name: "ConflictError" },
+          { kind: "OBJECT", name: "ForbiddenError" },
+          { kind: "OBJECT", name: "NotFoundError" },
+          { kind: "OBJECT", name: "TasteAgreementConnection" },
+          { kind: "OBJECT", name: "ValidationError" },
+        ],
+      },
+      {
+        kind: "OBJECT",
+        name: "TasteStyle",
+        fields: [
+          {
+            name: "average",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "Float" },
+            },
+          },
+          {
+            name: "count",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
+          {
+            name: "itemType",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "ENUM", name: "ItemType" },
+            },
+          },
+          {
+            name: "label",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "String" },
+            },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "TasteStyleConnection",
+        fields: [
+          {
+            name: "edges",
+            type: {
+              kind: "NON_NULL",
+              ofType: {
+                kind: "LIST",
+                ofType: {
+                  kind: "NON_NULL",
+                  ofType: { kind: "OBJECT", name: "TasteStyleEdge" },
+                },
+              },
+            },
+          },
+          {
+            name: "pageInfo",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "PageInfo" },
+            },
+          },
+          { name: "totalCount", type: { kind: "SCALAR", name: "Int" } },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "TasteStyleEdge",
+        fields: [
+          {
+            name: "cursor",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "String" },
+            },
+          },
+          {
+            name: "node",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "TasteStyle" },
+            },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "TasteTypeCount",
+        fields: [
+          {
+            name: "count",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
+          {
+            name: "itemType",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "ENUM", name: "ItemType" },
+            },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "TasteTypeCountConnection",
+        fields: [
+          {
+            name: "edges",
+            type: {
+              kind: "NON_NULL",
+              ofType: {
+                kind: "LIST",
+                ofType: {
+                  kind: "NON_NULL",
+                  ofType: { kind: "OBJECT", name: "TasteTypeCountEdge" },
+                },
+              },
+            },
+          },
+          {
+            name: "pageInfo",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "PageInfo" },
+            },
+          },
+          { name: "totalCount", type: { kind: "SCALAR", name: "Int" } },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "TasteTypeCountEdge",
+        fields: [
+          {
+            name: "cursor",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "String" },
+            },
+          },
+          {
+            name: "node",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "TasteTypeCount" },
+            },
+          },
+        ],
+        interfaces: [],
+      },
+      {
         kind: "OBJECT",
         name: "Tea",
         fields: [
@@ -7454,6 +11819,14 @@ export const graphcacheSchema: MinifiedIntrospection = {
               ofType: { kind: "OBJECT", name: "ItemCheckInConnection" },
             },
           },
+          {
+            name: "cocktails",
+            type: { kind: "OBJECT", name: "ItemCocktails" },
+          },
+          {
+            name: "correction",
+            type: { kind: "OBJECT", name: "ItemCorrection" },
+          },
           { name: "country", type: { kind: "SCALAR", name: "String" } },
           {
             name: "createdAt",
@@ -7474,6 +11847,20 @@ export const graphcacheSchema: MinifiedIntrospection = {
           },
           { name: "flavorProfile", type: { kind: "SCALAR", name: "String" } },
           { name: "form", type: { kind: "SCALAR", name: "String" } },
+          {
+            name: "friendsReviews",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "ItemReviewConnection" },
+            },
+          },
+          {
+            name: "friendsScore",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "ItemScore" },
+            },
+          },
           { name: "harvestYear", type: { kind: "SCALAR", name: "Int" } },
           {
             name: "id",
@@ -7496,6 +11883,21 @@ export const graphcacheSchema: MinifiedIntrospection = {
             },
           },
           { name: "isOrganic", type: { kind: "SCALAR", name: "Boolean" } },
+          {
+            name: "isWantToTry",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "Boolean" },
+            },
+          },
+          {
+            name: "myBottles",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "CellarItemConnection" },
+            },
+          },
+          { name: "myBrewPrefs", type: { kind: "OBJECT", name: "BrewPrefs" } },
           { name: "myReview", type: { kind: "OBJECT", name: "ItemReview" } },
           {
             name: "name",
@@ -7529,6 +11931,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
             },
           },
           {
+            name: "seenAt",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "SeenAtConnection" },
+            },
+          },
+          {
             name: "steepingTemperature",
             type: { kind: "SCALAR", name: "String" },
           },
@@ -7548,6 +11957,19 @@ export const graphcacheSchema: MinifiedIntrospection = {
             },
           },
           {
+            name: "unconfirmedFields",
+            type: {
+              kind: "NON_NULL",
+              ofType: {
+                kind: "LIST",
+                ofType: {
+                  kind: "NON_NULL",
+                  ofType: { kind: "SCALAR", name: "String" },
+                },
+              },
+            },
+          },
+          {
             name: "updatedAt",
             type: {
               kind: "NON_NULL",
@@ -7561,7 +11983,27 @@ export const graphcacheSchema: MinifiedIntrospection = {
         kind: "OBJECT",
         name: "TierList",
         fields: [
+          {
+            name: "addSuggestions",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "TierListSuggestionConnection" },
+            },
+          },
           { name: "aiInsights", type: { kind: "SCALAR", name: "JSON" } },
+          {
+            name: "bandCounts",
+            type: {
+              kind: "NON_NULL",
+              ofType: {
+                kind: "LIST",
+                ofType: {
+                  kind: "NON_NULL",
+                  ofType: { kind: "SCALAR", name: "Int" },
+                },
+              },
+            },
+          },
           {
             name: "contentUpdatedAt",
             type: {
@@ -7577,18 +12019,30 @@ export const graphcacheSchema: MinifiedIntrospection = {
           },
           { name: "description", type: { kind: "SCALAR", name: "String" } },
           {
+            name: "editHistory",
+            type: { kind: "OBJECT", name: "TierListEditHistory" },
+          },
+          {
             name: "id",
             type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "ID" } },
+          },
+          {
+            name: "insightsFailureReason",
+            type: { kind: "ENUM", name: "ActorErrorReason" },
           },
           {
             name: "insightsGeneratedAt",
             type: { kind: "SCALAR", name: "DateTime" },
           },
           {
-            name: "isEditingLocked",
+            name: "insightsRetryAt",
+            type: { kind: "SCALAR", name: "DateTime" },
+          },
+          {
+            name: "insightsStatus",
             type: {
               kind: "NON_NULL",
-              ofType: { kind: "SCALAR", name: "Boolean" },
+              ofType: { kind: "ENUM", name: "TierListInsightsStatus" },
             },
           },
           {
@@ -7621,6 +12075,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
             type: {
               kind: "NON_NULL",
               ofType: { kind: "ENUM", name: "PermissionType" },
+            },
+          },
+          {
+            name: "tryNext",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "TierListTryNextConnection" },
             },
           },
           { name: "updatedAt", type: { kind: "SCALAR", name: "DateTime" } },
@@ -7678,6 +12139,91 @@ export const graphcacheSchema: MinifiedIntrospection = {
       },
       {
         kind: "OBJECT",
+        name: "TierListEdit",
+        fields: [
+          {
+            name: "at",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "DateTime" },
+            },
+          },
+          {
+            name: "entryCount",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
+          { name: "entryId", type: { kind: "SCALAR", name: "ID" } },
+          { name: "entryName", type: { kind: "SCALAR", name: "String" } },
+          {
+            name: "entryType",
+            type: { kind: "ENUM", name: "TierListEntryType" },
+          },
+          { name: "fromBand", type: { kind: "SCALAR", name: "Int" } },
+          {
+            name: "kind",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "ENUM", name: "TierListEditKind" },
+            },
+          },
+          {
+            name: "seq",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
+          { name: "toBand", type: { kind: "SCALAR", name: "Int" } },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "TierListEditHistory",
+        fields: [
+          {
+            name: "canRedo",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "Boolean" },
+            },
+          },
+          {
+            name: "canUndo",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "Boolean" },
+            },
+          },
+          {
+            name: "editCount",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
+          { name: "redo", type: { kind: "OBJECT", name: "TierListEdit" } },
+          { name: "undo", type: { kind: "OBJECT", name: "TierListEdit" } },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "TierListHistoryStep",
+        fields: [
+          {
+            name: "applied",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "TierListEdit" },
+            },
+          },
+          {
+            name: "history",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "TierListEditHistory" },
+            },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
         name: "TierListItem",
         fields: [
           {
@@ -7698,6 +12244,7 @@ export const graphcacheSchema: MinifiedIntrospection = {
           },
           { name: "item", type: { kind: "INTERFACE", name: "Item" } },
           { name: "notes", type: { kind: "SCALAR", name: "String" } },
+          { name: "ownerReview", type: { kind: "OBJECT", name: "ItemReview" } },
           { name: "place", type: { kind: "OBJECT", name: "Place" } },
           {
             name: "position",
@@ -7763,31 +12310,230 @@ export const graphcacheSchema: MinifiedIntrospection = {
       },
       {
         kind: "OBJECT",
-        name: "ToggleFavoritePayload",
+        name: "TierListSuggestion",
+        fields: [
+          { name: "bottleCount", type: { kind: "SCALAR", name: "Int" } },
+          { name: "cellarName", type: { kind: "SCALAR", name: "String" } },
+          {
+            name: "entryType",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "ENUM", name: "TierListEntryType" },
+            },
+          },
+          { name: "friend", type: { kind: "OBJECT", name: "UserProfile" } },
+          { name: "friendBand", type: { kind: "SCALAR", name: "Int" } },
+          { name: "friendCount", type: { kind: "SCALAR", name: "Int" } },
+          { name: "item", type: { kind: "INTERFACE", name: "Item" } },
+          { name: "lastTastedAt", type: { kind: "SCALAR", name: "DateTime" } },
+          { name: "logCount", type: { kind: "SCALAR", name: "Int" } },
+          { name: "myScore", type: { kind: "SCALAR", name: "Float" } },
+          { name: "place", type: { kind: "OBJECT", name: "Place" } },
+          {
+            name: "section",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "ENUM", name: "TierListSuggestionSection" },
+            },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "TierListSuggestionConnection",
         fields: [
           {
-            name: "favorited",
+            name: "edges",
             type: {
               kind: "NON_NULL",
-              ofType: { kind: "SCALAR", name: "Boolean" },
+              ofType: {
+                kind: "LIST",
+                ofType: {
+                  kind: "NON_NULL",
+                  ofType: { kind: "OBJECT", name: "TierListSuggestionEdge" },
+                },
+              },
             },
           },
           {
-            name: "item",
+            name: "pageInfo",
             type: {
               kind: "NON_NULL",
-              ofType: { kind: "INTERFACE", name: "Item" },
+              ofType: { kind: "OBJECT", name: "PageInfo" },
+            },
+          },
+          { name: "totalCount", type: { kind: "SCALAR", name: "Int" } },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "TierListSuggestionEdge",
+        fields: [
+          {
+            name: "cursor",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "String" },
             },
           },
           {
-            name: "itemId",
-            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "ID" } },
-          },
-          {
-            name: "itemType",
+            name: "node",
             type: {
               kind: "NON_NULL",
-              ofType: { kind: "ENUM", name: "ItemType" },
+              ofType: { kind: "OBJECT", name: "TierListSuggestion" },
+            },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "TierListTemplate",
+        fields: [
+          {
+            name: "entryType",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "ENUM", name: "TierListEntryType" },
+            },
+          },
+          {
+            name: "listType",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "String" },
+            },
+          },
+          {
+            name: "ratedCount",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "TierListTemplateConnection",
+        fields: [
+          {
+            name: "edges",
+            type: {
+              kind: "NON_NULL",
+              ofType: {
+                kind: "LIST",
+                ofType: {
+                  kind: "NON_NULL",
+                  ofType: { kind: "OBJECT", name: "TierListTemplateEdge" },
+                },
+              },
+            },
+          },
+          {
+            name: "pageInfo",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "PageInfo" },
+            },
+          },
+          { name: "totalCount", type: { kind: "SCALAR", name: "Int" } },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "TierListTemplateEdge",
+        fields: [
+          {
+            name: "cursor",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "String" },
+            },
+          },
+          {
+            name: "node",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "TierListTemplate" },
+            },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "TierListTryNext",
+        fields: [
+          {
+            name: "entryType",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "ENUM", name: "TierListEntryType" },
+            },
+          },
+          { name: "friend", type: { kind: "OBJECT", name: "UserProfile" } },
+          { name: "friendBand", type: { kind: "SCALAR", name: "Int" } },
+          { name: "friendCount", type: { kind: "SCALAR", name: "Int" } },
+          { name: "item", type: { kind: "INTERFACE", name: "Item" } },
+          { name: "likeBand", type: { kind: "SCALAR", name: "Int" } },
+          { name: "likeName", type: { kind: "SCALAR", name: "String" } },
+          { name: "place", type: { kind: "OBJECT", name: "Place" } },
+          {
+            name: "reason",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "ENUM", name: "TierListTryNextReason" },
+            },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "TierListTryNextConnection",
+        fields: [
+          {
+            name: "edges",
+            type: {
+              kind: "NON_NULL",
+              ofType: {
+                kind: "LIST",
+                ofType: {
+                  kind: "NON_NULL",
+                  ofType: { kind: "OBJECT", name: "TierListTryNextEdge" },
+                },
+              },
+            },
+          },
+          {
+            name: "pageInfo",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "PageInfo" },
+            },
+          },
+          { name: "totalCount", type: { kind: "SCALAR", name: "Int" } },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "TierListTryNextEdge",
+        fields: [
+          {
+            name: "cursor",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "String" },
+            },
+          },
+          {
+            name: "node",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "TierListTryNext" },
             },
           },
         ],
@@ -7795,13 +12541,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
       },
       {
         kind: "UNION",
-        name: "ToggleFavoriteResult",
+        name: "UndoTierListEditResult",
         possibleTypes: [
           { kind: "OBJECT", name: "BudgetExceededError" },
           { kind: "OBJECT", name: "ConflictError" },
           { kind: "OBJECT", name: "ForbiddenError" },
           { kind: "OBJECT", name: "NotFoundError" },
-          { kind: "OBJECT", name: "ToggleFavoritePayload" },
+          { kind: "OBJECT", name: "TierListHistoryStep" },
           { kind: "OBJECT", name: "ValidationError" },
         ],
       },
@@ -7860,6 +12606,18 @@ export const graphcacheSchema: MinifiedIntrospection = {
           { kind: "OBJECT", name: "Cellar" },
           { kind: "OBJECT", name: "ConflictError" },
           { kind: "OBJECT", name: "ForbiddenError" },
+          { kind: "OBJECT", name: "NotFoundError" },
+          { kind: "OBJECT", name: "ValidationError" },
+        ],
+      },
+      {
+        kind: "UNION",
+        name: "UpdateDrinkLogResult",
+        possibleTypes: [
+          { kind: "OBJECT", name: "BudgetExceededError" },
+          { kind: "OBJECT", name: "ConflictError" },
+          { kind: "OBJECT", name: "ForbiddenError" },
+          { kind: "OBJECT", name: "ItemCheckIn" },
           { kind: "OBJECT", name: "NotFoundError" },
           { kind: "OBJECT", name: "ValidationError" },
         ],
@@ -8094,6 +12852,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
             },
           },
           { name: "totalCount", type: { kind: "SCALAR", name: "Int" } },
+          {
+            name: "totalIsLowerBound",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "Boolean" },
+            },
+          },
         ],
         interfaces: [],
       },
@@ -8130,9 +12895,25 @@ export const graphcacheSchema: MinifiedIntrospection = {
               ofType: { kind: "SCALAR", name: "String" },
             },
           },
+          { name: "pendingRequestId", type: { kind: "SCALAR", name: "ID" } },
+          { name: "relation", type: { kind: "ENUM", name: "PersonRelation" } },
           {
             name: "userId",
             type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "ID" } },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "UserSettings",
+        fields: [
+          {
+            name: "defaultCellarPrivacy",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "ENUM", name: "PermissionType" },
+            },
           },
         ],
         interfaces: [],
@@ -8156,6 +12937,7 @@ export const graphcacheSchema: MinifiedIntrospection = {
             },
           },
           { name: "reason", type: { kind: "ENUM", name: "ActorErrorReason" } },
+          { name: "retryAt", type: { kind: "SCALAR", name: "DateTime" } },
         ],
         interfaces: [
           { kind: "INTERFACE", name: "ActorError" },
@@ -8191,10 +12973,45 @@ export const graphcacheSchema: MinifiedIntrospection = {
         name: "Viewer",
         fields: [
           {
+            name: "aiCapabilities",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "AiCapabilities" },
+            },
+          },
+          {
+            name: "aiJobs",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "AiJobConnection" },
+            },
+          },
+          {
+            name: "bottleSearch",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "BottleSearchConnection" },
+            },
+          },
+          {
             name: "collectionStats",
             type: {
               kind: "NON_NULL",
               ofType: { kind: "OBJECT", name: "CollectionStats" },
+            },
+          },
+          {
+            name: "counts",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "ViewerCounts" },
+            },
+          },
+          {
+            name: "drinkSoon",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "DrinkSoonConnection" },
             },
           },
           { name: "email", type: { kind: "SCALAR", name: "String" } },
@@ -8213,14 +13030,39 @@ export const graphcacheSchema: MinifiedIntrospection = {
             },
           },
           {
+            name: "friendInvite",
+            type: { kind: "OBJECT", name: "FriendInvite" },
+          },
+          {
+            name: "friendsFeed",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "ActivityEntryConnection" },
+            },
+          },
+          {
             name: "id",
             type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "ID" } },
+          },
+          {
+            name: "lovedCounts",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "LovedCounts" },
+            },
           },
           {
             name: "nearbyPlaces",
             type: {
               kind: "NON_NULL",
               ofType: { kind: "OBJECT", name: "NearbyPlaceConnection" },
+            },
+          },
+          {
+            name: "openBottles",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "CellarItemConnection" },
             },
           },
           {
@@ -8244,6 +13086,54 @@ export const graphcacheSchema: MinifiedIntrospection = {
               ofType: { kind: "ENUM", name: "ViewerRole" },
             },
           },
+          {
+            name: "settings",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "UserSettings" },
+            },
+          },
+          {
+            name: "tierListTemplates",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "TierListTemplateConnection" },
+            },
+          },
+          {
+            name: "unconfirmedBottleCount",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
+          {
+            name: "wantToTry",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "WantToTryConnection" },
+            },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "ViewerCounts",
+        fields: [
+          {
+            name: "bottles",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
+          {
+            name: "logs",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
+          {
+            name: "places",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
+          {
+            name: "tierLists",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
         ],
         interfaces: [],
       },
@@ -8258,6 +13148,127 @@ export const graphcacheSchema: MinifiedIntrospection = {
           { kind: "OBJECT", name: "RecipeVotePayload" },
           { kind: "OBJECT", name: "ValidationError" },
         ],
+      },
+      {
+        kind: "OBJECT",
+        name: "WantToTryConnection",
+        fields: [
+          {
+            name: "edges",
+            type: {
+              kind: "NON_NULL",
+              ofType: {
+                kind: "LIST",
+                ofType: {
+                  kind: "NON_NULL",
+                  ofType: { kind: "OBJECT", name: "WantToTryEdge" },
+                },
+              },
+            },
+          },
+          {
+            name: "pageInfo",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "PageInfo" },
+            },
+          },
+          { name: "totalCount", type: { kind: "SCALAR", name: "Int" } },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "WantToTryEdge",
+        fields: [
+          {
+            name: "cursor",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "String" },
+            },
+          },
+          {
+            name: "node",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "WantToTryEntry" },
+            },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "WantToTryEntry",
+        fields: [
+          { name: "item", type: { kind: "INTERFACE", name: "Item" } },
+          {
+            name: "key",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "String" },
+            },
+          },
+          {
+            name: "kind",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "ENUM", name: "WantToTryKind" },
+            },
+          },
+          { name: "place", type: { kind: "OBJECT", name: "Place" } },
+          { name: "recipe", type: { kind: "OBJECT", name: "Recipe" } },
+          {
+            name: "savedAt",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "DateTime" },
+            },
+          },
+        ],
+        interfaces: [],
+      },
+      {
+        kind: "OBJECT",
+        name: "WhatCanIMake",
+        fields: [
+          {
+            name: "bottleCount",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
+          {
+            name: "makeNow",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "BarRecipeMatchConnection" },
+            },
+          },
+          {
+            name: "makeNowCount",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
+          {
+            name: "oneBottleAway",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "BarRecipeMatchConnection" },
+            },
+          },
+          {
+            name: "oneBottleAwayCount",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
+          {
+            name: "pantryCount",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
+          {
+            name: "scanned",
+            type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
+        ],
+        interfaces: [],
       },
       {
         kind: "OBJECT",
@@ -8289,6 +13300,14 @@ export const graphcacheSchema: MinifiedIntrospection = {
               ofType: { kind: "OBJECT", name: "ItemCheckInConnection" },
             },
           },
+          {
+            name: "cocktails",
+            type: { kind: "OBJECT", name: "ItemCocktails" },
+          },
+          {
+            name: "correction",
+            type: { kind: "OBJECT", name: "ItemCorrection" },
+          },
           { name: "country", type: { kind: "SCALAR", name: "String" } },
           {
             name: "createdAt",
@@ -8305,6 +13324,20 @@ export const graphcacheSchema: MinifiedIntrospection = {
           {
             name: "favoriteCount",
             type: { kind: "NON_NULL", ofType: { kind: "SCALAR", name: "Int" } },
+          },
+          {
+            name: "friendsReviews",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "ItemReviewConnection" },
+            },
+          },
+          {
+            name: "friendsScore",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "ItemScore" },
+            },
           },
           {
             name: "id",
@@ -8324,6 +13357,21 @@ export const graphcacheSchema: MinifiedIntrospection = {
               ofType: { kind: "SCALAR", name: "Boolean" },
             },
           },
+          {
+            name: "isWantToTry",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "SCALAR", name: "Boolean" },
+            },
+          },
+          {
+            name: "myBottles",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "CellarItemConnection" },
+            },
+          },
+          { name: "myBrewPrefs", type: { kind: "OBJECT", name: "BrewPrefs" } },
           { name: "myReview", type: { kind: "OBJECT", name: "ItemReview" } },
           {
             name: "name",
@@ -8355,6 +13403,13 @@ export const graphcacheSchema: MinifiedIntrospection = {
             },
           },
           {
+            name: "seenAt",
+            type: {
+              kind: "NON_NULL",
+              ofType: { kind: "OBJECT", name: "SeenAtConnection" },
+            },
+          },
+          {
             name: "specialDesignation",
             type: { kind: "SCALAR", name: "String" },
           },
@@ -8371,6 +13426,19 @@ export const graphcacheSchema: MinifiedIntrospection = {
             type: {
               kind: "NON_NULL",
               ofType: { kind: "ENUM", name: "ItemType" },
+            },
+          },
+          {
+            name: "unconfirmedFields",
+            type: {
+              kind: "NON_NULL",
+              ofType: {
+                kind: "LIST",
+                ofType: {
+                  kind: "NON_NULL",
+                  ofType: { kind: "SCALAR", name: "String" },
+                },
+              },
             },
           },
           {

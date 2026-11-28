@@ -1,40 +1,56 @@
 /**
- * The rankings adapters, pinned against what `82450ad1`'s `RankingsClient`
- * computed: the toggles' meaning, the card's score/count source, and the
- * empty states the scope enum made necessary.
+ * The rankings adapters: the scope control (N15), the card's score/count
+ * source (pinned against `82450ad1`'s `RankingsClient`), rank numerals, and
+ * the empty states.
  */
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import { parseReviewersParam } from "@/utilities/reviewers-param";
 import {
+  RANKING_SEGMENTS,
+  rankingCount,
+  rankingCountLine,
   rankingRowFromEntry,
   rankingsCacheKey,
-  rankingsEmptyMessage,
-  scopeFromReviewers,
+  rankingsEmptyState,
+  scopeOfSegment,
+  segmentFromParam,
+  wearsCrown,
+  withRanks,
 } from "./adapter";
 
-describe("scopeFromReviewers (the old toggles → RankingScope)", () => {
-  test("the four states, one-for-one", () => {
-    assert.equal(scopeFromReviewers([]), "EVERYONE");
-    assert.equal(scopeFromReviewers(undefined), "EVERYONE");
-    assert.equal(scopeFromReviewers(["ME"]), "ME");
-    assert.equal(scopeFromReviewers(["FRIENDS"]), "FRIENDS");
-    assert.equal(scopeFromReviewers(["FRIENDS", "ME"]), "ME_AND_FRIENDS");
+describe("the scope control (N15: Me · Friends · Everyone, Me by default)", () => {
+  test("three labelled segments in that order, each a server scope", () => {
+    assert.deepEqual(
+      RANKING_SEGMENTS.map((s) => [s.label, s.scope]),
+      [
+        ["Me", "ME"],
+        ["Friends", "FRIENDS"],
+        ["Everyone", "EVERYONE"],
+      ],
+    );
+  });
+  test("?scope= is untrusted: absent, unknown or the old JSON is Me", () => {
+    assert.equal(segmentFromParam(null), "me");
+    assert.equal(segmentFromParam(undefined), "me");
+    assert.equal(segmentFromParam(""), "me");
+    assert.equal(segmentFromParam("ME_AND_FRIENDS"), "me");
+    assert.equal(segmentFromParam('["FRIENDS"]'), "me");
+    assert.equal(segmentFromParam("friends"), "friends");
+    assert.equal(segmentFromParam("everyone"), "everyone");
+  });
+  test("segment → scope", () => {
+    assert.equal(scopeOfSegment("me"), "ME");
+    assert.equal(scopeOfSegment("friends"), "FRIENDS");
+    assert.equal(scopeOfSegment("everyone"), "EVERYONE");
   });
 });
 
-describe("parseReviewersParam (the old ?reviewers= JSON, untrusted)", () => {
-  test("production links still filter", () => {
-    assert.deepEqual(parseReviewersParam('["ME","FRIENDS"]'), [
-      "ME",
-      "FRIENDS",
-    ]);
-  });
-  test("bad input is no filter, not a crash; unknowns and repeats drop", () => {
-    assert.deepEqual(parseReviewersParam("[ME"), []);
-    assert.deepEqual(parseReviewersParam('{"ME":1}'), []);
-    assert.deepEqual(parseReviewersParam(null), []);
-    assert.deepEqual(parseReviewersParam('["ME","x","ME"]'), ["ME"]);
+describe("withRanks", () => {
+  test("1-based, in board order", () => {
+    assert.deepEqual(
+      withRanks([{ id: "a" }, { id: "b" }, { id: "c" }]).map((r) => r.rank),
+      [1, 2, 3],
+    );
   });
 });
 
@@ -78,25 +94,64 @@ describe("rankingRowFromEntry", () => {
   });
 });
 
-describe("rankingsEmptyMessage", () => {
-  test("the old message outside a friends scope", () => {
-    assert.equal(rankingsEmptyMessage("EVERYONE", false), "No rankings found");
-    assert.equal(rankingsEmptyMessage("ME", true), "No rankings found");
+describe("rankingsEmptyState (one line, one action)", () => {
+  test("Me with nothing rated points at something to rate", () => {
+    const me = rankingsEmptyState("me", true, null);
+    assert.equal(me.title, "Nothing rated yet");
+    assert.deepEqual(me.action, { label: "Find drinks", href: "/search" });
   });
   test("no friends and friends-without-reviews read differently", () => {
-    const none = rankingsEmptyMessage("FRIENDS", false);
-    const quiet = rankingsEmptyMessage("FRIENDS", true);
-    assert.match(none, /no friends yet/);
-    assert.match(quiet, /friends have not reviewed/);
-    assert.notEqual(none, quiet);
-    assert.match(rankingsEmptyMessage("ME_AND_FRIENDS", false), /no friends/);
+    const none = rankingsEmptyState("friends", false, null);
+    const quiet = rankingsEmptyState("friends", true, null);
+    assert.notEqual(none.title, quiet.title);
+    assert.deepEqual(none.action, { label: "Add friend", href: "/friends" });
+    assert.equal(quiet.action, null);
+  });
+  test("a kind with nothing in it says the kind, and offers all kinds", () => {
+    const sake = rankingsEmptyState("me", true, "Sake");
+    assert.equal(sake.title, "No sake rated yet");
+    assert.equal(sake.action, "all-kinds");
+    assert.match(
+      rankingsEmptyState("friends", true, "Tea").title,
+      /by friends/,
+    );
+  });
+});
+
+describe("the count line and the crown (SR-1, CROSS-LOT ruling 1)", () => {
+  test("a count at the cap is never shown as a total", () => {
+    assert.equal(rankingCount(12, 200), "12");
+    assert.equal(rankingCount(200, 200), "200+");
+  });
+  test("each scope words its count", () => {
+    assert.equal(rankingCountLine("me", 190, false, 200), "190 rated");
+    assert.equal(
+      rankingCountLine("friends", 12, false, 200),
+      "12 rated by friends",
+    );
+    assert.equal(
+      rankingCountLine("everyone", 900, false, 200),
+      "Top 200 by everyone",
+    );
+    assert.equal(
+      rankingCountLine("everyone", 900, true, 200),
+      "Highest rated by everyone",
+    );
+    assert.equal(rankingCountLine("me", null, false, 200), null);
+  });
+  test("only the owner's own unfiltered #1 wears the crown", () => {
+    assert.equal(wearsCrown("me", false, 1), true);
+    assert.equal(wearsCrown("me", false, 2), false);
+    assert.equal(wearsCrown("me", true, 1), false);
+    assert.equal(wearsCrown("friends", false, 1), false);
+    assert.equal(wearsCrown("everyone", false, 1), false);
   });
 });
 
 test("rankingsCacheKey keeps scroll restore per filter", () => {
-  assert.equal(rankingsCacheKey(undefined, undefined), "rankings-all-all");
+  assert.equal(rankingsCacheKey(undefined, "me"), "rankings-all-me");
   assert.equal(
-    rankingsCacheKey(["WINE", "BEER"], ["ME"]),
-    "rankings-WINE,BEER-ME",
+    rankingsCacheKey(["WINE", "BEER"], "friends"),
+    "rankings-WINE,BEER-friends",
   );
 });

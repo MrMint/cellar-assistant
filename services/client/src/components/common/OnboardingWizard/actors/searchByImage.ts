@@ -2,12 +2,10 @@ import { isNil } from "ramda";
 import { fromPromise } from "xstate";
 import { itemCardFromFragment } from "@/components/item/ItemCard/adapter";
 import { ItemCardFragment } from "@/components/item/ItemCard/fragments";
+import { offeredBy } from "@/lib/ai/capabilities";
 import { readFragment } from "@/lib/api/graphql";
 import { unwrapResult } from "@/lib/api/result";
-import {
-  IMAGE_SEARCH_LIMIT,
-  uploadSearchPhoto,
-} from "@/lib/items/image-search";
+import { IMAGE_SEARCH_LIMIT } from "@/lib/items/image-search";
 import type { ExistingItem } from "../adapter";
 import { OnboardingImageMatchQuery } from "../queries";
 import type { SearchByImageInput } from "./types";
@@ -27,15 +25,22 @@ import type { SearchByImageInput } from "./types";
  * One narrowing the old query did not have: `itemTypes` is the type being
  * added. The old search offered wines while adding a beer, and choosing one
  * filed the bottle under the wizard's type with another type's id.
+ *
+ * **One upload (X06).** The query is the front label's own file, uploaded once
+ * at the shutter for the read — not a second `image-search` copy of the same
+ * bytes. `ItemSearchActor` discards only `image-search` files after a search,
+ * so the label the session reads (and the bottle's display image) survives.
  */
 export const searchByImage = fromPromise(
   async ({
-    input: { displayImage, urqlClient, itemType },
+    input: { imageFileId, urqlClient, itemType },
   }: {
     input: SearchByImageInput;
   }): Promise<ExistingItem[]> => {
-    if (isNil(displayImage)) return [];
-    const imageFileId = await uploadSearchPhoto(urqlClient, displayImage);
+    if (isNil(imageFileId)) return [];
+    // N07/D25: a deployment that cannot embed a photo is not asked to — no
+    // refusal; the wizard simply has nothing to offer.
+    if (!(await offeredBy(urqlClient, "imageSearch"))) return [];
     const response = await urqlClient
       .query(
         OnboardingImageMatchQuery,

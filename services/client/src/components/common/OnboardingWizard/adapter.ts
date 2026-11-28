@@ -20,15 +20,27 @@
  *   session's (scanned) or `ensureBarcode` + `linkBarcodeItem` (typed, X11).
  */
 
+import {
+  FIELD_CONFIDENCE_KEY,
+  sanitiseFieldConfidence,
+} from "@cellar-assistant/contracts/onboarding";
+import type { DraftConfidence } from "@/components/app/AIDraftField";
 import type { ApiItemType } from "@/components/cellar-api/itemTypes";
 import type { ItemCardItem } from "@/components/item/ItemCard/types";
 import type { ItemFormValues } from "@/components/item/ItemForm";
-import { dateFromYear, yearFromDate } from "@/components/item/itemFormLayout";
+import {
+  dateFromYear,
+  entryPath,
+  formLayout,
+  yearFromDate,
+} from "@/components/item/itemFormLayout";
 import {
   ATTRIBUTE_INPUT_KEY,
   attributesToSave,
   ITEM_FORM_RULES,
+  isNonVintageText,
   missingRequiredAttributes,
+  NON_VINTAGE,
   staticOptionValues,
 } from "@/components/item-api/itemFormRules";
 import { ITEM_TYPE_SEGMENTS } from "@/components/item-api/itemTypes";
@@ -37,7 +49,9 @@ import {
   mergeExtractedDefaults,
   type SkippedProposal,
 } from "@/lib/items/extraction-merge";
+import { smartTitleCase } from "@/utilities/smart-title-case";
 import type { QuickAddItemDefaults } from "../QuickAddCard";
+import type { CatalogMatch } from "./catalog-match";
 
 /** What the analyze step hands the form and the quick-add card. */
 export type OnboardingDefaults = {
@@ -46,6 +60,12 @@ export type OnboardingDefaults = {
   brandName: string;
   /** Proposals the form could not take, with the reason — shown, not dropped. */
   skipped: readonly SkippedProposal[];
+  /**
+   * X05: how sure the read was of each field it filled, by form path
+   * (`name`, `brandName`, `attributes.vintage`) — "Sure · Likely · Check
+   * this" on the field's `AIDraftField`. Empty when the model judged none.
+   */
+  confidences: Readonly<Record<string, DraftConfidence>>;
 };
 
 export const emptyFormValues = (): ItemFormValues => ({
@@ -59,7 +79,41 @@ export const emptyDefaults = (): OnboardingDefaults => ({
   values: emptyFormValues(),
   brandName: "",
   skipped: [],
+  confidences: {},
 });
+
+const TOP_LEVEL_PATHS = new Set([
+  "name",
+  "description",
+  "country",
+  "brandName",
+]);
+
+/**
+ * `defaults.fieldConfidence` (X05) → form paths. A top-level field keeps its
+ * name; a per-type attribute key (`vintage`, `region`) becomes
+ * `attributes.<key>` when this type's form has it. Anything else — a field
+ * the form does not show, a value that is not one of the three words — is
+ * dropped (`sanitiseFieldConfidence`), never guessed at.
+ */
+export const draftConfidences = (
+  type: ApiItemType,
+  defaults: unknown,
+): Readonly<Record<string, DraftConfidence>> => {
+  if (typeof defaults !== "object" || defaults === null) return {};
+  const judged = sanitiseFieldConfidence(
+    (defaults as Record<string, unknown>)[FIELD_CONFIDENCE_KEY],
+  );
+  const attributeKeys = new Set(
+    ITEM_FORM_RULES[type].attributes.map((field) => field.key),
+  );
+  const out: Record<string, DraftConfidence> = {};
+  for (const [key, level] of Object.entries(judged)) {
+    if (attributeKeys.has(key)) out[`attributes.${key}`] = level;
+    else if (TOP_LEVEL_PATHS.has(key)) out[key] = level;
+  }
+  return out;
+};
 
 /** The keys whose column is a `date` — the restored form edits them as a year. */
 const dateKeys = (type: ApiItemType): string[] =>
@@ -67,14 +121,24 @@ const dateKeys = (type: ApiItemType): string[] =>
     .filter((field) => field.kind === "date")
     .map((field) => field.key);
 
+const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
+
 /**
  * `ItemOnboarding.defaults` → the restored form's default values.
  *
  * The merge runs against an empty form (the old wizard showed the form only
  * once the analysis was back, so there is nothing typed to protect) but keeps
  * its other half: a value a field cannot hold is reported in `skipped`, and a
- * `static` picker only takes one of its own options. A `date` proposal
- * (`2015-06-01`) becomes the year the old form asked for (`2015`).
+ * `static` picker only takes one of its own options.
+ *
+ * A `date` column is a **year** here, because that is what this form edits
+ * (N02): the merge judges it as `kind: "year"`, so the bare `2015` the model
+ * is asked for — and usually answered even when told `YYYY-MM-DD` — fills
+ * the field, and a full `2015-06-01` is read as `2015`. A wine's "NV" (or
+ * "N.V.", "Non-Vintage") is a value since X19 and turns the NV chip on.
+ * Anything else ("June 2015", a beer's "NV") is still reported, not guessed at.
+ *
+ * An all-caps name or brand is smart-title-cased (N17).
  */
 export const formDefaultsFromOnboarding = (
   type: ApiItemType,
@@ -83,27 +147,100 @@ export const formDefaultsFromOnboarding = (
   const merged = mergeExtractedDefaults({
     defaults,
     bagKey: ATTRIBUTE_INPUT_KEY[type],
-    fields: ITEM_FORM_RULES[type].attributes,
+    fields: ITEM_FORM_RULES[type].attributes.map((field) =>
+      field.kind === "date" ? { ...field, kind: "year" as const } : field,
+    ),
     current: { ...emptyFormValues(), brandName: "" },
     edited: new Set(),
     allowedValues: (field) =>
       field.kind === "static" ? staticOptionValues(field.options) : null,
+    coerce: (field, value) =>
+      field.nonVintage === true && isNonVintageText(value)
+        ? NON_VINTAGE
+        : field.kind === "year" && ISO_DAY.test(value.trim())
+          ? yearFromDate(value.trim())
+          : value,
   });
-  const attributes: Record<string, string> = { ...merged.values.attributes };
-  for (const key of dateKeys(type)) {
-    if (attributes[key] !== undefined) {
-      attributes[key] = yearFromDate(attributes[key]);
-    }
-  }
   return {
     values: {
-      name: merged.values.name,
+      // N17: a label read comes back in capitals; the form is pre-filled with
+      // it smart-title-cased, so that is what the user confirms and what is
+      // stored. A name the user types is stored as typed.
+      name: smartTitleCase(merged.values.name),
       description: merged.values.description,
       country: merged.values.country,
-      attributes,
+      attributes: { ...merged.values.attributes },
     },
-    brandName: merged.values.brandName,
+    brandName: smartTitleCase(merged.values.brandName),
     skipped: merged.skipped,
+    confidences: draftConfidences(type, defaults),
+  };
+};
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+const DRAFT_TEXT_FIELDS = [
+  "name",
+  "description",
+  "country",
+  "brandName",
+] as const;
+
+/**
+ * F-59: a saved draft's form, resumed. What the person typed before "Finish
+ * later" (`ItemOnboarding.draftFields`, in `draftFieldsFrom`'s shape) wins
+ * over the read's guesses field by field, and a field they typed is no
+ * guess to check. Fields the draft left empty keep the read's value.
+ */
+export const formDefaultsFromDraft = (
+  type: ApiItemType,
+  read: OnboardingDefaults,
+  draftFields: unknown,
+): OnboardingDefaults => {
+  if (!isRecord(draftFields)) return read;
+  const text = (key: (typeof DRAFT_TEXT_FIELDS)[number]): string =>
+    typeof draftFields[key] === "string" ? String(draftFields[key]).trim() : "";
+  const attributes = isRecord(draftFields.attributes)
+    ? draftFields.attributes
+    : {};
+  // Through the same merge as a read, so a saved `YYYY-01-01` is a year
+  // again and a picker only takes its own options.
+  const saved = formDefaultsFromOnboarding(type, {
+    ...Object.fromEntries(DRAFT_TEXT_FIELDS.map((key) => [key, text(key)])),
+    [ATTRIBUTE_INPUT_KEY[type]]: attributes,
+  });
+  const typed = new Set<string>();
+  const pick = (path: string, value: string, fallback: string): string => {
+    if (value === "") return fallback;
+    typed.add(path);
+    return value;
+  };
+  const values: ItemFormValues = {
+    // Stored as typed: N17 title-cases only a label's read.
+    name: pick("name", text("name"), read.values.name),
+    description: pick(
+      "description",
+      saved.values.description,
+      read.values.description,
+    ),
+    country: pick("country", saved.values.country, read.values.country),
+    attributes: { ...read.values.attributes },
+  };
+  for (const [key, value] of Object.entries(saved.values.attributes)) {
+    values.attributes[key] = pick(
+      `attributes.${key}`,
+      value,
+      read.values.attributes[key] ?? "",
+    );
+  }
+  return {
+    ...read,
+    values,
+    brandName: pick("brandName", text("brandName"), read.brandName),
+    confidences: Object.fromEntries(
+      Object.entries(read.confidences).filter(([path]) => !typed.has(path)),
+    ),
   };
 };
 
@@ -119,9 +256,11 @@ const attributesForSave = (
   return out;
 };
 
-/** `ConfirmItemOnboardingInput`, from the restored form. No `cellarId`: the
- * old flow filed the bottle as its own step (`insertCellarItem`), with the
- * display photo, and so does this one. */
+/** `ConfirmItemOnboardingInput`, from the restored form. `cellarId: null`,
+ * never absent: the form files the bottle as its own step
+ * (`insertCellarItem`, with the display photo), and an absent `cellarId`
+ * tells confirm to file one into a saved draft's own cellar as well, so a
+ * draft finished here was filed twice (F-54). `null` files nothing. */
 export const confirmInputFrom = (
   type: ApiItemType,
   values: ItemFormValues,
@@ -136,31 +275,36 @@ export const confirmInputFrom = (
     type,
     attributesForSave(type, values.attributes),
   ),
+  cellarId: null,
 });
 
 /**
  * Why a save would fail in the outbox rather than here — `null` when it
- * would not. `wines.style`/`vintage`, `spirits.type` and `coffees.description`
- * are NOT NULL behind nullable GraphQL inputs (`itemFormRules.ts`).
+ * would not. `wines.style` and `spirits.type` are NOT NULL behind nullable
+ * GraphQL inputs (`itemFormRules.ts`); a wine's vintage is checked by the
+ * form's star (a year or NV), not here, since NULL is a legal answer (X19).
+ *
+ * Names **every** missing column at once (N03), so it never makes the person
+ * fix one field to be told about the next. The form shows it beside Add when
+ * the starred fields are filled but a column still is not — a whitespace-only
+ * value, which `required` lets through.
  */
 export const saveBlocker = (
   type: ApiItemType,
   values: ItemFormValues,
 ): string | null => {
-  if (values.name.trim() === "") return "Name cannot be empty.";
-  if (
-    ITEM_FORM_RULES[type].descriptionRequired &&
+  const missing = [
+    ...(values.name.trim() === "" ? ["Name"] : []),
+    ...(ITEM_FORM_RULES[type].descriptionRequired &&
     values.description.trim() === ""
-  ) {
-    return "Description cannot be empty.";
-  }
-  const missing = missingRequiredAttributes(
-    type,
-    attributesForSave(type, values.attributes),
-  );
-  return missing.length === 0
-    ? null
-    : `${missing.map((field) => field.label).join(", ")} cannot be empty.`;
+      ? ["Description"]
+      : []),
+    ...missingRequiredAttributes(
+      type,
+      attributesForSave(type, values.attributes),
+    ).map((field) => field.label),
+  ];
+  return missing.length === 0 ? null : `${missing.join(", ")} cannot be empty.`;
 };
 
 /**
@@ -168,27 +312,42 @@ export const saveBlocker = (
  *
  * The old guard was `confidence >= 0.9` alone, and E2c is what that cost: with
  * no photograph the model invented a Château d'Yquem at 0.9 and the card
- * saved it on its own. So, as well as the old threshold:
+ * saved it on its own. So, as well as the old threshold, a label photograph
+ * was actually uploaded and read (`labelSent`).
  *
- * - a label photograph was actually uploaded and read (`labelSent`), and
- * - nothing the database requires is missing, so an unattended save cannot
- *   become an outbox row that dies after the card said "added".
+ * **N02 (D25: the AI never adds a new catalogue item without a tap).** The
+ * countdown may only add *another bottle of a known item*:
+ *
+ * - there is an **exact** catalogue match (`catalog-match.ts`): a barcode hit,
+ *   or an `itemSearch` hit with the very name read — and in both cases an
+ *   equal vintage, compared explicitly;
+ * - the wizard is filing into a cellar (`inCellar`), since "another bottle"
+ *   means nothing anywhere else.
+ *
+ * Confirming the card files the matched item (`CONFIRM` in `machines.ts`); it
+ * never calls `confirmItemOnboarding`, so the countdown cannot create a
+ * catalogue row. A label that names nothing the catalogue holds always goes
+ * to the form. (The old "nothing required is missing" clause is gone with the
+ * create it protected: no form values are saved on this path.)
  */
 export const canQuickAdd = ({
-  type,
   labelSent,
   confidence,
   defaults,
+  match,
+  inCellar,
 }: {
-  type: ApiItemType;
   labelSent: boolean;
   confidence: number | undefined;
   defaults: OnboardingDefaults | undefined;
+  match: CatalogMatch | null | undefined;
+  inCellar: boolean;
 }): boolean =>
   labelSent &&
+  inCellar &&
   defaults !== undefined &&
   (confidence ?? 0) >= CONFIDENCE_THRESHOLDS.HIGH &&
-  saveBlocker(type, defaults.values) === null;
+  match?.exact === true;
 
 const nonEmpty = (value: string | undefined): string | undefined =>
   value === undefined || value.trim() === "" ? undefined : value;
@@ -237,6 +396,24 @@ export const quickAddDefaultsFrom = (
         caffeine_level: nonEmpty(a.caffeineLevel),
       };
   }
+};
+
+/**
+ * The merge's `skipped` proposals as lines the form shows (N19): what the
+ * label said, and why it is not in the field — never dropped quietly. Named by
+ * the label the form shows for that field, not the rules table's.
+ */
+export const skippedNotes = (
+  type: ApiItemType,
+  skipped: readonly SkippedProposal[],
+): readonly string[] => {
+  const labels = new Map(
+    formLayout(type, "create").map((entry) => [entryPath(entry), entry.label]),
+  );
+  return skipped.map(
+    (proposal) =>
+      `${labels.get(proposal.path) ?? proposal.label}: “${proposal.value}” (${proposal.detail})`,
+  );
 };
 
 /** One match for a scanned code, as `ExistingItems` draws it. */

@@ -1,12 +1,14 @@
 /**
  * Render tests for the restored brand components, asserting the **old**
  * markup (`82450ad1:src/components/brand/*`), server-rendered the way the
- * first paint is. `next/image` is stubbed: bun imports a `.png` as a path.
+ * first paint is. A brand with no logo shows a monogram plate, not the old
+ * `cellar1.png` (H-3, L22); `next/image` stays stubbed so any raster shows.
  */
 import { mock } from "bun:test";
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import { renderToStaticMarkup } from "react-dom/server";
+import { stripStyleBlocks, textOf } from "@/test-support/markup";
 
 mock.module("next/image", () => ({
   default: (props: { alt: string }) => (
@@ -18,7 +20,7 @@ const { BrandCard } = await import("./BrandCard");
 const { BrandDetails } = await import("./BrandDetails");
 
 const render = (node: Parameters<typeof renderToStaticMarkup>[0]) =>
-  renderToStaticMarkup(node).replace(/<style[^>]*>[^<]*<\/style>/g, "");
+  stripStyleBlocks(renderToStaticMarkup(node));
 
 const card = {
   id: "b1",
@@ -30,13 +32,18 @@ const card = {
 };
 
 describe("BrandCard (restored)", () => {
-  test("placeholder art, type chip, linked title, description, item count", () => {
+  test("monogram plate, type chip, linked title, description, item count", () => {
     const html = render(<BrandCard brand={card} href="/brands/b1" />);
-    assert.match(html, /^<div class="MuiCard-root/);
-    assert.match(html, /data-alt="Vietti placeholder"/);
-    assert.match(html, /MuiChip-root[\s\S]*Tea House/);
+    assert.match(
+      html,
+      /^(?:<[^>]+>)+<span data-slot="brand-plate"/,
+      "plate first",
+    );
+    assert.match(html, /data-slot="brand-plate"[^>]*>(?:<[^>]+>)*V</);
+    assert.doesNotMatch(html, /data-next-image/);
+    assert.match(html, /data-slot="brand-plate"[\s\S]*>Tea House</);
     assert.match(html, /href="\/brands\/b1"/);
-    assert.match(html, /MuiTypography-title-md[^>]*>Vietti</);
+    assert.match(html, /href="\/brands\/b1"[^>]*>(?:<[^>]+>)*Vietti</);
     assert.match(html, /Barolo producer/);
     assert.match(html, />7 items</);
     assert.doesNotMatch(html, /places/);
@@ -53,6 +60,17 @@ describe("BrandCard (restored)", () => {
     assert.match(html, /alt="Vietti logo"/);
   });
 
+  test('X23: one item is "1 item"; no type, no chip', () => {
+    const html = render(
+      <BrandCard
+        brand={{ ...card, item_count: 1, brand_type: null }}
+        href="/brands/b1"
+      />,
+    );
+    assert.match(html, />1 item</);
+    assert.doesNotMatch(html, /data-slot="brand-type-chip"/);
+  });
+
   test("no count when the API gave none", () => {
     const html = render(
       <BrandCard
@@ -64,24 +82,16 @@ describe("BrandCard (restored)", () => {
   });
 });
 
-describe("BrandDetails (restored)", () => {
+describe("BrandDetails: About and Places under the shelf (C1)", () => {
   const brand = {
     id: "b1",
     name: "Vietti",
     description: "Barolo producer",
     logo_url: null,
     brand_type: "winery",
-    created_at: "2019-06-01T00:00:00Z",
     parent_brand: { id: "b0", name: "Krause", brand_type: "manufacturer" },
     child_brands: [{ id: "b2", name: "Vietti Moscato", brand_type: "winery" }],
-    item_brands: [
-      {
-        id: "l1",
-        is_primary: true,
-        wine: { id: "w1", name: "Barolo", vintage: "2016" },
-      },
-      { id: "l2", is_primary: false, sake: { id: "s1", name: "Dassai" } },
-    ],
+    item_brands: [],
     place_brands: [
       {
         id: "pb1",
@@ -91,49 +101,44 @@ describe("BrandDetails (restored)", () => {
     ],
   };
 
-  test("header: h1 name, Since year, type chip, parent link, child chips", () => {
+  test("About: plate, type chip, parent link, child chips; no Since (X23)", () => {
     const html = render(<BrandDetails brand={brand} />);
-    assert.match(html, /<h1[^>]*>Vietti<\/h1>/);
-    assert.match(html, /Since 2019/);
+    assert.match(html, /data-slot="brand-plate"[^>]*>(?:<[^>]+>)*V</);
+    assert.doesNotMatch(html, /data-next-image/);
+    assert.match(html, /<h2[^>]*>About<\/h2>/);
+    assert.doesNotMatch(html, /Since/);
     assert.match(html, />Winery</);
-    assert.match(html, /Part of:/);
+    assert.match(html, /Part of/);
     assert.match(html, /href="\/brands\/b0"/);
-    assert.match(html, /Owns brands:/);
+    assert.match(html, /Makers it owns/);
     assert.match(html, /href="\/brands\/b2"/);
   });
 
-  test("items grouped by type with the Primary chip; places with relationship", () => {
-    const html = render(<BrandDetails brand={brand} itemTotal={30} />);
-    assert.match(html, /<h2[^>]*>Associated Items \(30\)<\/h2>/);
-    assert.match(html, />wines \(1\)</);
-    assert.match(html, />sakes \(1\)</);
-    assert.match(html, /href="\/wines\/w1"[\s\S]*2016 Barolo/);
-    assert.match(html, /href="\/sakes\/s1"/);
-    assert.equal([...html.matchAll(/>Primary</g)].length, 1);
-    assert.match(html, /<h2[^>]*>Associated Places \(1\)<\/h2>/);
+  test("places with their relationship and count", () => {
+    const html = render(<BrandDetails brand={brand} placeTotal={3} />);
+    assert.match(html, /Places<span[^>]*>3<\/span><\/h2>/);
     assert.match(html, /href="\/places\/p1"/);
     assert.match(html, />Owned By</);
   });
 
-  test("the old empty copy", () => {
+  test("nothing to say: neither section is drawn", () => {
     const html = render(
       <BrandDetails
         brand={{
           ...brand,
-          item_brands: [],
+          description: null,
+          brand_type: null,
           place_brands: [],
           parent_brand: null,
           child_brands: [],
         }}
       />,
     );
-    assert.match(html, /No items associated with this brand yet\./);
-    assert.match(html, /No places associated with this brand yet\./);
-    assert.doesNotMatch(html, /Part of:/);
+    assert.doesNotMatch(html, /About|Places/);
   });
 });
 
-describe("BrandDetailsClient: no silent caps (gaps #6, #7)", async () => {
+describe("BrandDetailsClient: the shelf and no silent caps (gaps #6, #7)", async () => {
   const { Client, Provider } = await import("urql");
   const { BrandDetailsClient } = await import("./BrandDetailsClient");
   const client = new Client({
@@ -147,8 +152,8 @@ describe("BrandDetailsClient: no silent caps (gaps #6, #7)", async () => {
 
   const brand = {
     id: "b1",
-    name: "Vietti",
-    brandType: "winery",
+    name: "Demo Brewing",
+    brandType: "brewery",
     createdAt: "2019-06-01T00:00:00Z",
     parentBrand: null,
   };
@@ -158,20 +163,27 @@ describe("BrandDetailsClient: no silent caps (gaps #6, #7)", async () => {
     hasNextPage,
     totalCount,
   });
-  // Thirteen wines and one sake: past the old 12-link first page, the sake
-  // would have been missing from the groups until "Show more".
-  const links = [
-    ...Array.from({ length: 13 }, (_, index) => ({
-      id: `l${index}`,
-      isPrimary: false,
-      item: { id: `w${index}`, type: "WINE" as const, name: `Wine ${index}` },
-    })),
-    {
-      id: "l-sake",
-      isPrimary: false,
-      item: { id: "s1", type: "SAKE" as const, name: "Dassai" },
+  const home = { id: "c1", name: "Home" };
+  // Fourteen beers, three of them in Home.
+  const links = Array.from({ length: 14 }, (_, index) => ({
+    id: `l${index}`,
+    isPrimary: false,
+    item: { id: `b${index}`, type: "BEER" as const, name: `Ale ${index}` },
+    tile: {
+      key: `l${index}`,
+      itemId: `b${index}`,
+      type: "BEER" as const,
+      name: `Ale ${index}`,
+      maker: "Demo Brewing",
+      style: "Pale ale",
+      photoUrl: null,
+      plate: null,
+      rating: null,
+      favorite: false,
+      href: `/beers/b${index}`,
+      cellars: index < 3 ? [home] : [],
     },
-  ];
+  }));
   const children = Array.from({ length: 24 }, (_, index) => ({
     id: `c${index}`,
     name: `Child ${index}`,
@@ -183,16 +195,20 @@ describe("BrandDetailsClient: no silent caps (gaps #6, #7)", async () => {
     place: { id: `p${index}`, name: `Place ${index}` },
   }));
 
-  test("groups are built from every item link the server read", () => {
+  test("the shelf: the name, kind and count, All · In Home, a tile per drink", () => {
     const html = renderClient({
       brand,
       initialItems: page(links, false, 14),
       initialChildren: page(children, false, 24),
       initialPlaces: page(places, false, 20),
     });
-    assert.match(html, />wines \(13\)</);
-    assert.match(html, />sakes \(1\)</);
-    assert.match(html, /<h2[^>]*>Associated Items \(14\)<\/h2>/);
+    const text = textOf(html);
+    assert.match(html, /<h1[^>]*>Demo Brewing<\/h1>/);
+    assert.match(text, /Beer · 14 drinks/);
+    assert.match(html, /aria-label="Show"/);
+    assert.match(text, /In Home/);
+    assert.equal([...html.matchAll(/data-slot="brand-tile"/g)].length, 14);
+    assert.equal([...html.matchAll(/>In Home</g)].length, 4); // segment + 3 badges
     assert.doesNotMatch(html, />Show more</);
   });
 
@@ -204,13 +220,11 @@ describe("BrandDetailsClient: no silent caps (gaps #6, #7)", async () => {
       initialPlaces: page(places, true, 45),
     });
     assert.equal([...html.matchAll(/>Show more</g)].length, 2);
-    assert.match(html, /<h2[^>]*>Associated Places \(45\)<\/h2>/);
-    // One under the "Owns brands:" chips, one under the place list.
-    const owns = html.indexOf("Owns brands:");
-    const placesHeading = html.indexOf("Associated Places");
+    const owns = html.indexOf("Makers it owns");
+    const placesHeading = html.indexOf(">Places<");
     const first = html.indexOf(">Show more<");
     const second = html.indexOf(">Show more<", first + 1);
-    assert.ok(owns < first && first < html.indexOf("Associated Items"));
+    assert.ok(owns < first && first < placesHeading);
     assert.ok(placesHeading < second);
   });
 
@@ -222,5 +236,6 @@ describe("BrandDetailsClient: no silent caps (gaps #6, #7)", async () => {
       initialPlaces: page(places, false, 20),
     });
     assert.equal([...html.matchAll(/>Show more</g)].length, 1);
+    assert.match(textOf(html), /40 drinks/);
   });
 });

@@ -45,7 +45,7 @@ import {
 } from "@cellar-assistant/contracts";
 import { builder } from "./builder.ts";
 import { CellarType } from "./cellar.ts";
-import { ItemInterface, ItemReviewType } from "./item.ts";
+import { ItemCheckInType, ItemInterface, ItemReviewType } from "./item.ts";
 import { connectionFromPage, toPageArgs } from "./pagination.ts";
 import { LngLatInput } from "./place.ts";
 import { PlaceStubType, TierListItemType } from "./tier-list.ts";
@@ -59,17 +59,17 @@ import { Viewer } from "./viewer.ts";
 const ActivityKindEnum = builder.enumType("ActivityKind", {
   description:
     "What happened: a bottle ADDED to a cellar, an item REVIEWED, an entry " +
-    "TIER_LISTED.",
+    "TIER_LISTED, a drink CHECKED_IN (logged — one entry per occasion).",
   values: ACTIVITY_KINDS,
 });
 
-const ActivityEntryType = builder
+export const ActivityEntryType = builder
   .objectRef<ActivityEntryDto>("ActivityEntry")
   .implement({
     description:
       "One row of the viewer's discovery feed — something the viewer or one " +
-      "of their friends did. Exactly one of `review`, `tierListItem` and " +
-      "`cellar` is set, by `kind`.",
+      "of their friends did. Exactly one of `review`, `tierListItem`, " +
+      "`cellar` and `checkIn` is set, by `kind`.",
     fields: (t) => ({
       id: t.id({
         description: "`<kind>:<source row id>` — unique across kinds.",
@@ -130,6 +130,14 @@ const ActivityEntryType = builder
         resolve: (entry) => entry.cellarId,
       }),
       cellarItemId: t.exposeID("cellarItemId", { nullable: true }),
+      checkIn: t.field({
+        type: ItemCheckInType,
+        nullable: true,
+        description:
+          "The drink-log entry, for CHECKED_IN (X02) — its score, note, " +
+          "tags, place and companions. `canSeeCheckIn` already admitted it.",
+        resolve: (entry) => entry.checkIn,
+      }),
     }),
   });
 
@@ -152,7 +160,7 @@ builder.objectField(Viewer, "recentActivity", (t) =>
       kinds: t.arg({
         type: [ActivityKindEnum],
         required: false,
-        description: "Only these kinds; omitted or empty means all three.",
+        description: "Only these kinds; omitted or empty means all of them.",
       }),
       limit: t.arg.int({
         required: false,
@@ -175,6 +183,33 @@ builder.objectField(Viewer, "recentActivity", (t) =>
         });
       return connectionFromPage(offsetPage(entries, toPageArgs(args)));
     },
+  }),
+);
+
+builder.objectField(Viewer, "friendsFeed", (t) =>
+  t.field({
+    type: ActivityEntryConnection,
+    description:
+      "Home's Friends section (X10): what your friends did — never your own " +
+      "rows — newest first, each kind under `recentActivity`'s rule, and " +
+      "paged for real: `after` takes an `edge.cursor` from the page before.",
+    args: {
+      ...t.arg.connectionArgs(),
+      kinds: t.arg({
+        type: [ActivityKindEnum],
+        required: false,
+        description: "Only these kinds; omitted or empty means all of them.",
+      }),
+    },
+    resolve: async (viewer, args, context) =>
+      connectionFromPage(
+        await context
+          .actor(
+            FriendsCollectionActorDescriptor,
+            viewerCollectionActorId(viewer.id),
+          )
+          .friendsFeed({ kinds: args.kinds ?? [] }, toPageArgs(args)),
+      ),
   }),
 );
 

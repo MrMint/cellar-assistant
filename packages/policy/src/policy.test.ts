@@ -14,16 +14,33 @@ import { describe, expect, it } from "vitest";
 import {
   bypassesPolicy,
   type CellarVisibility,
+  canEditCheckIn,
+  canRemoveCheckIn,
   canSee,
   canSeeCellar,
   canSeeCheckIn,
+  canSeeCheckInDetails,
   canSeeItemImage,
+  canSeePlace,
+  canSeeProfile,
+  canSeeRecipe,
   canSeeTierList,
+  canShareAnonymously,
+  canShareItemImageAnonymously,
+  canShareRecipeAnonymously,
+  canShareTierListAnonymously,
+  checkInIsClaimed,
   type Friendship,
   isFriend,
   isOwner,
+  isPlaceShared,
+  isPlaceVisibleToAudienceOf,
+  isRecipeShared,
+  PLACE_REVIEW_STATUSES,
+  type PlaceReviewStatus,
   PRIVACY_VALUES,
   type Privacy,
+  type RecipeVisibility,
 } from "./index.ts";
 
 const OWNER = "11111111-1111-1111-1111-111111111111";
@@ -297,6 +314,124 @@ describe("canSeeCheckIn", () => {
   });
 });
 
+describe("canSeeCheckIn — a bottle-less log (X02)", () => {
+  const log = (flags: { friend?: boolean; companion?: boolean }) => ({
+    userId: OWNER,
+    cellar: null,
+    viewerIsFriendOfCheckInUser: flags.friend ?? false,
+    viewerIsCompanion: flags.companion ?? false,
+  });
+
+  it("owner sees their own bottle-less entry", () => {
+    expect(canSeeCheckIn(owner, log({}))).toBe(true);
+  });
+
+  it("a friend of the drinker sees it", () => {
+    expect(canSeeCheckIn(friend, log({ friend: true }))).toBe(true);
+  });
+
+  it("a companion sees the entry that names them, friend or not", () => {
+    expect(canSeeCheckIn(stranger, log({ companion: true }))).toBe(true);
+  });
+
+  it("a stranger is denied: no cellar means no public way in", () => {
+    expect(canSeeCheckIn(stranger, log({}))).toBe(false);
+  });
+
+  it("an absent companion flag is never permission", () => {
+    expect(
+      canSeeCheckIn(stranger, {
+        userId: OWNER,
+        cellar: null,
+        viewerIsFriendOfCheckInUser: false,
+      }),
+    ).toBe(false);
+  });
+
+  it("anonymous is denied even if both flags arrive set", () => {
+    expect(
+      canSeeCheckIn(anonymous, log({ friend: true, companion: true })),
+    ).toBe(false);
+  });
+
+  it("a removed bottle keeps the drinker's and friends' access, drops the cellar's", () => {
+    // Same row before and after `CellarActor.removeItem`: the FK nulls
+    // `cellar_item_id`, so the public cellar branch is gone.
+    const before = {
+      userId: OWNER,
+      cellar: cellar("PUBLIC", { viewerIsFriendOfCreator: false }),
+      viewerIsFriendOfCheckInUser: false,
+    };
+    expect(canSeeCheckIn(stranger, before)).toBe(true);
+    expect(canSeeCheckIn(stranger, { ...before, cellar: null })).toBe(false);
+    expect(canSeeCheckIn(owner, { ...before, cellar: null })).toBe(true);
+  });
+});
+
+describe("canSeeCheckInDetails — what the drinker said (X02)", () => {
+  const entry = (flags: { friend?: boolean; companion?: boolean }) => ({
+    userId: OWNER,
+    viewerIsFriendOfCheckInUser: flags.friend ?? false,
+    viewerIsCompanion: flags.companion ?? false,
+  });
+
+  it("the drinker, a companion and a friend of the drinker see the details", () => {
+    expect(canSeeCheckInDetails(owner, entry({}))).toBe(true);
+    expect(canSeeCheckInDetails(friend, entry({ friend: true }))).toBe(true);
+    expect(canSeeCheckInDetails(stranger, entry({ companion: true }))).toBe(
+      true,
+    );
+  });
+
+  it("a viewer admitted only by a PUBLIC cellar sees the entry but not the details", () => {
+    const viaCellar = {
+      ...entry({}),
+      cellar: cellar("PUBLIC", { viewerIsFriendOfCreator: false }),
+    };
+    expect(canSeeCheckIn(stranger, viaCellar)).toBe(true);
+    expect(canSeeCheckInDetails(stranger, viaCellar)).toBe(false);
+  });
+
+  it("anonymous never sees details, whatever flags arrive", () => {
+    expect(
+      canSeeCheckInDetails(anonymous, entry({ friend: true, companion: true })),
+    ).toBe(false);
+  });
+});
+
+describe("canEditCheckIn / canRemoveCheckIn", () => {
+  const written = { userId: FRIEND, createdById: OWNER };
+  const unclaimed = { ...written, claimedByDrinker: false };
+  const claimed = { ...written, claimedByDrinker: true };
+
+  it("only the drinker edits — not whoever wrote the row for them", () => {
+    expect(canEditCheckIn(friend, written)).toBe(true);
+    expect(canEditCheckIn(owner, written)).toBe(false);
+    expect(canEditCheckIn(stranger, written)).toBe(false);
+  });
+
+  it("the drinker and the writer may both remove an unclaimed row; nobody else", () => {
+    expect(canRemoveCheckIn(friend, unclaimed)).toBe(true);
+    expect(canRemoveCheckIn(owner, unclaimed)).toBe(true);
+    expect(canRemoveCheckIn(stranger, unclaimed)).toBe(false);
+    expect(canRemoveCheckIn(anonymous, unclaimed)).toBe(false);
+  });
+
+  it("once the drinker has added their own words, only they remove it", () => {
+    expect(canRemoveCheckIn(friend, claimed)).toBe(true);
+    expect(canRemoveCheckIn(owner, claimed)).toBe(false);
+  });
+
+  it("a row is claimed by a score, a note, a tag or a photo — not by a place", () => {
+    const bare = { score: null, note: null, tags: [], photoFileId: null };
+    expect(checkInIsClaimed(bare)).toBe(false);
+    expect(checkInIsClaimed({ ...bare, score: 3 })).toBe(true);
+    expect(checkInIsClaimed({ ...bare, note: "plum" })).toBe(true);
+    expect(checkInIsClaimed({ ...bare, tags: ["plum"] })).toBe(true);
+    expect(checkInIsClaimed({ ...bare, photoFileId: "f" })).toBe(true);
+  });
+});
+
 describe("canSeeItemImage", () => {
   const image = (isPublic: boolean) => ({ userId: OWNER, isPublic });
 
@@ -316,5 +451,241 @@ describe("canSeeItemImage", () => {
   it("anonymous: sees a public image", () => {
     expect(canSeeItemImage(anonymous, image(true))).toBe(true);
     expect(canSeeItemImage(anonymous, image(false))).toBe(false);
+  });
+});
+
+describe("isPlaceVisibleToAudienceOf (the Google binding's no-oracle rule)", () => {
+  const at = (
+    reviewStatus: PlaceReviewStatus,
+    createdById: string | null = OWNER,
+  ) => ({ createdById, reviewStatus });
+
+  it("a shared other is visible to every place's audience", () => {
+    for (const place of [
+      at("approved"),
+      at("pending"),
+      at("rejected", STRANGER),
+      at("approved", null),
+    ]) {
+      expect(isPlaceVisibleToAudienceOf(place, at("approved", FRIEND))).toBe(
+        true,
+      );
+    }
+  });
+
+  it("an unshared other is never visible to a shared place's audience — not even its own creator's place", () => {
+    for (const status of ["pending", "rejected"] as const) {
+      expect(isPlaceVisibleToAudienceOf(at("approved"), at(status))).toBe(
+        false,
+      );
+      expect(
+        isPlaceVisibleToAudienceOf(at("approved", null), at(status, null)),
+      ).toBe(false);
+    }
+  });
+
+  it("an unshared place's audience is its creator: they see their own unshared places, nobody else's", () => {
+    expect(isPlaceVisibleToAudienceOf(at("pending"), at("rejected"))).toBe(
+      true,
+    );
+    expect(
+      isPlaceVisibleToAudienceOf(at("pending"), at("pending", STRANGER)),
+    ).toBe(false);
+    // No creator on either side is not a match.
+    expect(
+      isPlaceVisibleToAudienceOf(at("pending", null), at("pending", null)),
+    ).toBe(false);
+  });
+});
+
+describe("canSeePlace (X27 / D28)", () => {
+  const place = (
+    reviewStatus: PlaceReviewStatus,
+    createdById: string | null = OWNER,
+  ) => ({ createdById, reviewStatus });
+
+  it("an approved place is shared: owner, friend, stranger and anonymous", () => {
+    for (const ctx of [owner, friend, stranger, anonymous]) {
+      expect(canSeePlace(ctx, place("approved"))).toBe(true);
+    }
+    // An Overture row has no creator at all.
+    expect(canSeePlace(stranger, place("approved", null))).toBe(true);
+  });
+
+  it.each(["pending", "rejected"] as const)(
+    "a %s place is its creator's alone",
+    (status) => {
+      expect(canSeePlace(owner, place(status))).toBe(true);
+      expect(canSeePlace(friend, place(status))).toBe(false);
+      expect(canSeePlace(stranger, place(status))).toBe(false);
+      expect(canSeePlace(anonymous, place(status))).toBe(false);
+    },
+  );
+
+  it("an unshared row with no creator is nobody's (not even an anonymous null match)", () => {
+    expect(canSeePlace(anonymous, place("pending", null))).toBe(false);
+  });
+
+  it("system and admin bypass, as everywhere (the outbox delivers the review)", () => {
+    expect(canSeePlace(systemCtx("test"), place("pending"))).toBe(true);
+    expect(canSeePlace(adminCtx(STRANGER, "r"), place("rejected"))).toBe(true);
+  });
+
+  it("isPlaceShared is the approved status and nothing else", () => {
+    expect(
+      PLACE_REVIEW_STATUSES.filter((s) => isPlaceShared(place(s))),
+    ).toEqual(["approved"]);
+  });
+});
+
+describe("anonymous sharing (X17)", () => {
+  it("shares PUBLIC and nothing else", () => {
+    expect(
+      PRIVACY_VALUES.filter((privacy) => canShareAnonymously({ privacy })),
+    ).toEqual(["PUBLIC"]);
+  });
+
+  it("a FRIENDS tier list is not public, even though friends can see it", () => {
+    const tierList = { createdById: OWNER, privacy: "FRIENDS" as const };
+    expect(
+      canSeeTierList(friend, { ...tierList, viewerIsFriendOfCreator: true }),
+    ).toBe(true);
+    expect(canShareTierListAnonymously(tierList)).toBe(false);
+  });
+
+  it("is never wider than what an anonymous viewer may see", () => {
+    for (const privacy of PRIVACY_VALUES) {
+      const subject = {
+        privacy,
+        ownerIds: [OWNER],
+        viewerIsFriendOfCreator: false,
+      };
+      if (canShareAnonymously({ privacy })) {
+        expect(canSee(anonymous, subject)).toBe(true);
+      }
+    }
+  });
+
+  it("recipes: PUBLIC and not a draft, and nothing else (D22)", () => {
+    expect(
+      canShareRecipeAnonymously({ privacy: "PUBLIC", isDraft: false }),
+    ).toBe(true);
+    expect(
+      canShareRecipeAnonymously({ privacy: "PUBLIC", isDraft: true }),
+    ).toBe(false);
+    expect(
+      canShareRecipeAnonymously({ privacy: "FRIENDS", isDraft: false }),
+    ).toBe(false);
+    expect(
+      canShareRecipeAnonymously({ privacy: "PRIVATE", isDraft: false }),
+    ).toBe(false);
+  });
+
+  it("item images: public ones only, even the uploader's own private photo is not", () => {
+    expect(canShareItemImageAnonymously({ isPublic: true })).toBe(true);
+    expect(canShareItemImageAnonymously({ isPublic: false })).toBe(false);
+    // The contrast with the per-viewer rule, which is right on the owner's page.
+    expect(canSeeItemImage(owner, { userId: OWNER, isPublic: false })).toBe(
+      true,
+    );
+  });
+});
+
+describe("canSeeRecipe (X15 / D22)", () => {
+  const recipe = (
+    privacy: Privacy,
+    isDraft = false,
+    overrides: Partial<RecipeVisibility> = {},
+  ): RecipeVisibility => ({
+    createdById: OWNER,
+    privacy,
+    isDraft,
+    viewerIsFriendOfCreator: false,
+    ...overrides,
+  });
+  const recipeFor = (ctx: Ctx, privacy: Privacy, isDraft = false) =>
+    recipe(privacy, isDraft, {
+      viewerIsFriendOfCreator: isFriend(ctx, OWNER, FRIENDSHIPS),
+    });
+
+  it("is the four-branch rule for a published recipe", () => {
+    for (const privacy of PRIVACY_VALUES) {
+      for (const ctx of [owner, friend, stranger, anonymous]) {
+        expect(canSeeRecipe(ctx, recipeFor(ctx, privacy))).toBe(
+          canSee(ctx, {
+            privacy,
+            ownerIds: [OWNER],
+            viewerIsFriendOfCreator: isFriend(ctx, OWNER, FRIENDSHIPS),
+          }),
+        );
+      }
+    }
+  });
+
+  it("a draft is its creator's alone, whatever its privacy", () => {
+    for (const privacy of PRIVACY_VALUES) {
+      expect(canSeeRecipe(owner, recipeFor(owner, privacy, true))).toBe(true);
+      expect(canSeeRecipe(friend, recipeFor(friend, privacy, true))).toBe(
+        false,
+      );
+      expect(canSeeRecipe(stranger, recipeFor(stranger, privacy, true))).toBe(
+        false,
+      );
+      expect(canSeeRecipe(anonymous, recipeFor(anonymous, privacy, true))).toBe(
+        false,
+      );
+    }
+  });
+
+  it("admin and system see everything, drafts included", () => {
+    expect(
+      canSeeRecipe(adminCtx(STRANGER, "req"), recipe("PRIVATE", true)),
+    ).toBe(true);
+    expect(canSeeRecipe(systemCtx("req"), recipe("PRIVATE", true))).toBe(true);
+  });
+
+  it("a recipe whose author is gone is seen by its privacy alone", () => {
+    const orphan = recipe("PRIVATE", false, { createdById: null });
+    expect(canSeeRecipe(owner, orphan)).toBe(false);
+    expect(canSeeRecipe(owner, { ...orphan, privacy: "PUBLIC" })).toBe(true);
+  });
+
+  it("isRecipeShared is what an anonymous viewer may see", () => {
+    for (const privacy of PRIVACY_VALUES) {
+      for (const isDraft of [false, true]) {
+        expect(isRecipeShared({ privacy, isDraft })).toBe(
+          canSeeRecipe(anonymous, recipe(privacy, isDraft)),
+        );
+      }
+    }
+  });
+});
+
+describe("canSeeProfile (leftovers 5, L41)", () => {
+  const someone = { userId: "33333333-3333-4333-8333-333333333333" };
+  const viewer = userCtx("11111111-1111-4111-8111-111111111111", "req");
+
+  it("a signed-in viewer sees every profile: nobody is hidden yet (L41)", () => {
+    expect(canSeeProfile(viewer, someone)).toBe(true);
+    expect(
+      canSeeProfile(viewer, { userId: "11111111-1111-4111-8111-111111111111" }),
+    ).toBe(true);
+  });
+
+  it("no profile — a missing user or a malformed id — is never visible, to anyone", () => {
+    for (const ctx of [
+      viewer,
+      adminCtx("root", "req"),
+      systemCtx("req"),
+      anonymousCtx("req"),
+    ]) {
+      expect(canSeeProfile(ctx, null)).toBe(false);
+    }
+  });
+
+  it("an anonymous viewer sees no profile; admin and system see them all", () => {
+    expect(canSeeProfile(anonymousCtx("req"), someone)).toBe(false);
+    expect(canSeeProfile(adminCtx("root", "req"), someone)).toBe(true);
+    expect(canSeeProfile(systemCtx("req"), someone)).toBe(true);
   });
 });

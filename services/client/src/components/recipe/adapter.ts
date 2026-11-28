@@ -8,11 +8,13 @@
  * No `"use client"`: the server pages call these.
  */
 
+import { barKindLabel } from "@cellar-assistant/contracts/bar";
+import type { AvailabilityLike, MakeabilityLike } from "@/components/bar/copy";
 import type { ApiItemType } from "@/components/cellar-api/itemTypes";
 import { richTextFromReviewText } from "@/components/common/rich-text";
 import type { ResultOf } from "@/lib/api/graphql";
 import { RECIPE_PHOTO_STAGES } from "@/lib/api/recipe-photos";
-import { formatVintage } from "@/utilities";
+import { formatItemVintage } from "@/utilities";
 import type {
   RecipeDetailsFragment,
   RecipeGroupCardFragment,
@@ -44,6 +46,18 @@ export type RecipeIngredient = {
   id: string;
   quantity?: number | null;
   unit?: string | null;
+  /**
+   * X14: the amount from the one quantity formatter (printed text with
+   * Unicode fractions, else quantity + unit), as the API renders it.
+   */
+  amount?: string | null;
+  /** X14: what the line does in the drink; a garnish never blocks a drink. */
+  role?: string | null;
+  /** X14: the bar kind's words ("Sweet vermouth"), or null when untracked. */
+  kind_label?: string | null;
+  brand_mentioned?: string | null;
+  /** D9: real availability from the viewer's bottles and Bar pantry. */
+  availability?: AvailabilityLike | null;
   is_optional?: boolean | null;
   substitution_notes?: string | null;
   item?: {
@@ -92,8 +106,22 @@ export type RecipeDetailsItem = {
   image_url?: string | null;
   version?: number | null;
   canonical_recipe_id?: string | null;
+  /** X08: on the viewer's Want to try list; absent where nobody asked. */
+  is_want_to_try?: boolean;
+  /** X15 / D22: who may see it (`PRIVATE`, `FRIENDS`, `PUBLIC`). */
+  privacy?: string;
+  /** X15: AI output its author has not reviewed yet. */
+  is_draft?: boolean;
+  /** X15: the author — who may edit or delete it. */
+  created_by_id?: string | null;
+  /** The author's name, for "<name>'s friends" on a share (F-108). */
+  created_by_name?: string | null;
   instructions: RecipeInstruction[];
   ingredients: RecipeIngredient[];
+  /** D9: Love replaces the old heart. */
+  is_loved?: boolean;
+  /** G29: the viewer's verdict on this recipe; null when signed out. */
+  makeability?: MakeabilityLike | null;
   recipe_reviews?: RecipeReview[];
   canonical_recipe?: {
     id: string;
@@ -195,10 +223,10 @@ export const formatSpirit = (
 ): string | null =>
   value === null || value === undefined || value === ""
     ? null
-    : value
-        .replace(/_/g, " ")
-        .toLowerCase()
-        .replace(/\b\w/g, (letter) => letter.toUpperCase());
+    : // X14 writes `base_spirit` as a bar kind ("irish_whiskey"), and the
+      // vocabulary has its words ("Irish whiskey"); older rows hold free text,
+      // which `barKindLabel` humanises the way this used to.
+      barKindLabel(value);
 
 /** `recipeGroups` edge → the old `RecipeGroupCardData`. */
 export const recipeGroupCardFromNode = (
@@ -239,6 +267,11 @@ const ingredientFromNode = (
     id: node.id,
     quantity: node.quantity ?? null,
     unit: node.unit ?? null,
+    amount: node.amount ?? null,
+    role: node.role ?? null,
+    kind_label: node.kindLabel ?? null,
+    brand_mentioned: node.brandMentioned ?? null,
+    availability: node.availability ?? null,
     is_optional: node.isOptional,
     substitution_notes: node.substitutionNotes ?? null,
     item:
@@ -249,7 +282,9 @@ const ingredientFromNode = (
             name: item.name,
             type: item.type,
             vintage:
-              "vintage" in item ? (formatVintage(item.vintage) ?? null) : null,
+              "vintage" in item
+                ? (formatItemVintage(item.type, item.vintage) ?? null)
+                : null,
           },
     generic_item:
       generic === null
@@ -340,6 +375,11 @@ export const recipeDetailsFromNode = (
   image_url: node.imageUrl ?? null,
   version: node.version,
   canonical_recipe_id: node.canonicalRecipeId ?? null,
+  is_want_to_try: node.isWantToTry,
+  privacy: node.privacy,
+  is_draft: node.isDraft,
+  created_by_id: node.createdBy?.id ?? null,
+  created_by_name: node.createdBy?.displayName ?? null,
   instructions: node.instructions.edges.map((edge) =>
     instructionFromNode(edge.node),
   ),

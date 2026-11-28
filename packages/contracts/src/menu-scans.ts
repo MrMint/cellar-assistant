@@ -116,6 +116,106 @@ export const bandOf = (confidence: number): MatchBand => {
 };
 
 /* -------------------------------------------------------------------------- */
+/* Match status (N06a)                                                         */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Where the *matching* half of a scan's pipeline is — the half
+ * `processing_status` never described.
+ *
+ * `processing_status` turns `completed` when extraction finishes, which is
+ * before the menu is filed against the place and before `MenuMatchJobActor`
+ * has looked at a single line. A client that took `completed` as "done" (the
+ * scanner did, and so did the place page's refetch) read the menu while it was
+ * still empty, and the results page showed every line as "not yet matched"
+ * while the job was still running. This is the signal that says when it
+ * really is done. It is derived on every read, never stored — `jobs` and
+ * `outbox` are the facts it is derived from.
+ *
+ * - `waiting`: extraction has not finished (`pending` / `processing`).
+ * - `queued`: extraction finished and the match run is on its way through the
+ *   outbox (`MenuScanActor.match` or `MenuMatchJobActor.start` still live).
+ * - `running`: the `menu-match` job exists and has not finished.
+ * - `completed`: the job finished; every line has its suggestions, or none.
+ * - `failed`: the job failed, or the outbox gave up on starting it.
+ * - `skipped`: there is nothing to match — the extraction failed, found no
+ *   lines, or the scan has no place to file its lines against.
+ */
+export const MENU_SCAN_MATCH_STATUSES = [
+  "waiting",
+  "queued",
+  "running",
+  "completed",
+  "failed",
+  "skipped",
+] as const;
+export type MenuScanMatchStatus = (typeof MENU_SCAN_MATCH_STATUSES)[number];
+
+/** The three answers nothing will change by itself: stop polling. */
+export const isMatchStatusSettled = (status: MenuScanMatchStatus): boolean =>
+  status === "completed" || status === "failed" || status === "skipped";
+
+/**
+ * Everything `deriveMatchStatus` reads. `jobStatus` and the two outbox flags
+ * are only consulted once the scan is eligible for matching, so a caller may
+ * leave them unread (`null` / `false`) for a scan that is not —
+ * `MenuScanActor.get` does, and spends no query on a scan still extracting.
+ */
+export type MatchStatusFacts = {
+  readonly processingStatus: MenuScanStatus;
+  readonly effectivePlaceId: string | null;
+  readonly itemsDetected: number;
+  /** `jobs.status` of the scan's derived `menu-match` job, if the row exists. */
+  readonly jobStatus: string | null;
+  /** A live (`pending` / `delivering`) outbox row will start the match. */
+  readonly matchQueued: boolean;
+  /** An outbox row that would have started the match is `dead`. */
+  readonly matchDeadLettered: boolean;
+};
+
+/** True when `process` will have enqueued a match run for this scan. */
+export const isMatchEligible = (
+  facts: Pick<
+    MatchStatusFacts,
+    "processingStatus" | "effectivePlaceId" | "itemsDetected"
+  >,
+): boolean =>
+  facts.processingStatus === "completed" &&
+  facts.effectivePlaceId !== null &&
+  facts.itemsDetected > 0;
+
+export const deriveMatchStatus = (
+  facts: MatchStatusFacts,
+): MenuScanMatchStatus => {
+  if (
+    facts.processingStatus === "pending" ||
+    facts.processingStatus === "processing"
+  ) {
+    return "waiting";
+  }
+  if (!isMatchEligible(facts)) return "skipped";
+  switch (facts.jobStatus) {
+    case "pending":
+    case "running":
+      return "running";
+    case "completed":
+      return "completed";
+    case "failed":
+    case "cancelled":
+      return "failed";
+    default:
+      break;
+  }
+  if (facts.matchQueued) return "queued";
+  if (facts.matchDeadLettered) return "failed";
+  // Eligible, no job, nothing in flight and nothing dead: the match ran
+  // somewhere this database cannot see (a scan matched by the pre-migration
+  // pipeline left no `jobs` row). Nothing is coming, so it is settled —
+  // answering `queued` would make a client poll forever.
+  return "completed";
+};
+
+/* -------------------------------------------------------------------------- */
 /* DTOs                                                                        */
 /* -------------------------------------------------------------------------- */
 
@@ -135,6 +235,8 @@ export type MenuScanDto = {
   readonly processedImageId: string | null;
   readonly extractedText: string | null;
   readonly processingStatus: MenuScanStatus;
+  /** N06a: the matching half of the pipeline; see `deriveMatchStatus`. */
+  readonly matchStatus: MenuScanMatchStatus;
   readonly processingError: string | null;
   readonly confidenceScore: number | null;
   readonly processingModel: string | null;
@@ -145,6 +247,35 @@ export type MenuScanDto = {
   readonly processedAt: string | null;
   readonly createdAt: string | null;
   readonly updatedAt: string | null;
+  /**
+   * L10 (wave C seenat): the venue name the menu itself prints, read by the
+   * extraction seam with its abstention first (L4); `null` when it declined.
+   * A proposal only: the scan's place keeps its own name until its creator
+   * confirms a rename (L24). Optional so older producers omit it.
+   */
+  readonly headerName?: string | null;
+};
+
+/**
+ * How a scan's filed lines stand, counted by the server so a menu longer than
+ * one page still gets an honest headline (N06a follow-up).
+ *
+ * Every line is in exactly one bucket: `matched` (confirmed), `toConfirm`, or
+ * new (`lines - matched - toConfirm`). An AI suggestion nobody has accepted is
+ * **not** a match — the headline used to count it as one, and read
+ * "3 matched" beside "3 suggested matches to confirm".
+ */
+export type MenuScanMatchCounts = {
+  /** `place_menu_items` rows filed for this scan. */
+  readonly lines: number;
+  /**
+   * Confirmed: the line carries a verified item (`wine_id` … `tea_id`), a
+   * linked recipe (`menu_item_recipes`), or an accepted suggestion — the last
+   * because an acceptance reaches `place_menu_items` an outbox hop later.
+   */
+  readonly matched: number;
+  /** Not confirmed, with at least one suggestion awaiting Accept / Reject. */
+  readonly toConfirm: number;
 };
 
 /**
@@ -282,6 +413,8 @@ export type MenuScanActorInterface = {
    * then id. Scan owner only, exactly as `get`.
    */
   menuItems(ctx: Ctx, page: PageArgs): Promise<Page<PlaceMenuItemDto>>;
+  /** Counted fresh on every read; scan owner only, exactly as `get`. */
+  matchCounts(ctx: Ctx): Promise<MenuScanMatchCounts>;
   create(ctx: Ctx, input: CreateMenuScanInput): Promise<MenuScanDto>;
   actOnSuggestion(
     ctx: Ctx,
@@ -331,6 +464,7 @@ export const MenuScanActorDescriptor: ActorDescriptor<
     get: {},
     suggestions: {},
     menuItems: {},
+    matchCounts: {},
     // Enqueues menu extraction, then match verification.
     create: { modelBacked: true },
     actOnSuggestion: {},
@@ -371,3 +505,90 @@ export const MENU_MATCH_JOB_ACTOR_TYPE = "MenuMatchJobActor";
 
 /** `MenuScanActor.match` derives the job id from the scan id (§8.4). */
 export const MENU_MATCH_JOB_NAMESPACE = "menu-match";
+
+/* -------------------------------------------------------------------------- */
+/* X07 — what a menu line means to the viewer                                  */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * A friend's rating at or above this is "loved it" on a menu line. Half
+ * stars, so 4.5 and 5.
+ */
+export const MENU_LINE_FRIEND_LOVED_MIN_SCORE = 4.5;
+
+/**
+ * Only items the viewer rated at least this well can be named in "Like the
+ * Lagavulin 16 you rated ★4.5": a chip that recommends by comparison to
+ * something the viewer did not enjoy would be a strange reason to order.
+ */
+export const MENU_LINE_LIKE_MIN_SCORE = 4;
+
+/**
+ * The cosine distance (`<=>`, 0–2) between two `item_vectors` under which a
+ * matched line's item counts as "like" one the viewer rated — and only
+ * between items of the same kind (`menu-line-context.ts`: a wine's style and
+ * grape, a spirit's type, a beer's style). Deliberately tight — a miss is a
+ * missing chip, a false hit is a claim the viewer can see is wrong — and never
+ * shown: the chip names the item and the viewer's own score, not a similarity
+ * number (X07: no affinity percentages).
+ *
+ * Measured on N05's catalog with `nomic-embed-text`
+ * (`eval/retrieval/like-you-rated.live.test.ts`): of 2,699 same-type pairs,
+ * 0.2 admitted 15% (413) — Lagavulin beside The Macallan, any two Napa
+ * Cabernets. 0.1 with the kind rule admits 58 (2.15%), every one a sibling
+ * or a true neighbour: Ardbeg 10 ~ Laphroaig 10 at 0.090, Catena ~ Alamos
+ * Malbec, Patrón ~ Don Julio Blanco. The kind rule is what removed La Crema
+ * Chardonnay ~ La Crema Pinot Noir (0.079) and Cantillon Gueuze ~ Kriek; the
+ * cost is a few near-misses such as Lagavulin 16 ~ Laphroaig 10 (0.106).
+ */
+export const MENU_LINE_LIKE_MAX_DISTANCE = 0.1;
+
+/** How many friends' names a line carries for "Sam loved it". */
+export const MENU_LINE_FRIEND_NAMES = 3;
+
+/**
+ * X07's grounded reasons for one matched menu line, each a fact read from the
+ * viewer's own rows or their friends' public ratings — never a score the
+ * system made up. Every field is optional on its own; a line with none of them
+ * draws no chip.
+ */
+export type MenuLineForYouDto = {
+  /**
+   * A cellar the viewer created or co-owns that holds an unfinished bottle of
+   * the matched item — the one stocked most recently ("In Bar Cart").
+   */
+  readonly cellarId: string | null;
+  /** The viewer's own newest review score of the matched item ("You ★4.5"). */
+  readonly yourScore: number | null;
+  /**
+   * Friends whose newest review of the matched item is at least
+   * {@link MENU_LINE_FRIEND_LOVED_MIN_SCORE}, most recent first, at most
+   * {@link MENU_LINE_FRIEND_NAMES} of them ("Sam loved it").
+   */
+  readonly lovedByFriendNames: readonly string[];
+  /** How many friends that is in all ("Sam and 2 friends loved it"). */
+  readonly lovedByFriendCount: number;
+  /**
+   * The item of the same type the viewer rated at least
+   * {@link MENU_LINE_LIKE_MIN_SCORE} whose vector is nearest the matched
+   * item's, within {@link MENU_LINE_LIKE_MAX_DISTANCE} — and only when the
+   * viewer has not rated the matched item itself.
+   */
+  readonly likeYouRated: {
+    readonly item: ItemRef;
+    readonly score: number;
+  } | null;
+};
+
+/** One menu line, as the viewer sees it (X07). */
+export type MenuLineContextDto = {
+  readonly lineId: string;
+  /**
+   * The viewer scanned the menu this line came from, so they may correct its
+   * match (`PlaceActor.verifyMenuItemMatch`'s own rule, answered early so the
+   * UI only offers "Not this" to someone it will not refuse).
+   */
+  readonly canCorrectMatch: boolean;
+  /** `null` when the line has no matched item: nothing grounded to say. */
+  readonly forYou: MenuLineForYouDto | null;
+};

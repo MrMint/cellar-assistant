@@ -1,25 +1,18 @@
 import { createCellar, unique } from "../fixtures/data.ts";
 import { deleteCellarWithContents } from "../fixtures/db.ts";
-import {
-  bodyText,
-  expect,
-  settleNetwork,
-  test,
-  watch,
-} from "../fixtures/test.ts";
+import { expect, settleNetwork, test, watch } from "../fixtures/test.ts";
 
 /**
  * Onboard a wine, put it in a cellar, check it in.
  *
- * The longest chain in the app and the one with the most seams. Since UI
- * parity wave 4 it runs through the restored `82450ad1` wizard
- * (`components/common/OnboardingWizard`): a camera barcode step, back label,
- * front label and display photo — each with Skip — then `startItemOnboarding`,
- * the old `{T}Form` in create mode, `confirmItemOnboarding` (an id for a row
- * **the outbox has not written yet**, so the form waits for `ItemActor` to
- * write it), `addItemToCellar` and "Would you like to add another item?". The
- * headless browser has no camera, so the default flow is Skip ×4 — the same
- * path a person without a label to photograph takes.
+ * The longest chain in the app and the one with the most seams. Since X05 it
+ * runs through the snap-once capture (`components/common/OnboardingWizard`):
+ * one camera — no steps — then `startItemOnboarding`, the draft card (the old
+ * `{T}Form` in create mode), `confirmItemOnboarding` (an id for a row **the
+ * outbox has not written yet**, so the form waits for `ItemActor` to write
+ * it), `addItemToCellar` and N21's success sheet. The headless browser has no
+ * camera, so the flow is "Type it" — the same path a person
+ * without a label to photograph takes.
  *
  * The three standalone tests at the bottom are deliberately outside that chain:
  * each is a known-or-found defect in its own right, and a defect should not
@@ -53,27 +46,23 @@ test.describe("onboard → cellar → check in", () => {
 
     await primary.goto(`/cellars/${cellarId}/wines/add`);
     await expect(
-      primary.getByRole("heading", { name: "Add Wine" }),
+      primary.getByRole("heading", { name: `Add to ${cellarName}` }),
     ).toBeVisible();
 
-    // Barcode, back label, front label, display photo — Skip each. The
-    // barcode step's Skip is disabled once a code was scanned, never here.
-    for (const step of [
-      "Lets start by scanning the barcode",
-      "Lets take a picture of the back label",
-      "Lets take a picture of the front label",
-      "Lets take a photo that will be used for display",
-    ]) {
-      await expect(primary.getByText(step)).toBeVisible();
-      await primary.getByRole("button", { name: "Skip" }).click();
-    }
+    // X05: one camera, no steps to skip — and N21's copy is fixed.
+    await expect(primary.getByText(/^Lets /)).toHaveCount(0);
+    await primary.getByRole("button", { name: "Type it" }).click();
 
-    // "Analyzing..." while `startItemOnboarding` runs; with no photograph the
+    // "Opening the form…" while `startItemOnboarding` runs; with no photograph the
     // server refuses to invent (E2c), the session stays open, and the form
     // comes up empty. No alert for that: nothing was sent to be read.
-    const add = primary.getByRole("button", { name: "Add", exact: true });
+    const add = primary
+      .getByRole("main")
+      .getByRole("button", { name: "Add bottle", exact: true });
+    // F-60: until the floor is filled the primary button reads "N left to
+    // check" and is disabled, so wait for the footer, not for "Add bottle".
     await expect(
-      add,
+      primary.locator('[data-slot="draft-footer"]'),
       "the form never appeared — startItemOnboarding did not answer",
     ).toBeVisible({ timeout: 45_000 });
     expect(await primary.getByLabel("Name").inputValue()).toBe("");
@@ -90,18 +79,28 @@ test.describe("onboard → cellar → check in", () => {
     ).toBeVisible({ timeout: 15_000 });
     await style.click();
 
+    await expect(
+      add,
+      "the floor is filled, so the button names its verb",
+    ).toBeEnabled({
+      timeout: 15_000,
+    });
     await add.click();
 
     // Confirm → wait for the outbox to write the item → `addItemToCellar` →
-    // the old final prompt. Reaching it means the row exists and the bottle
+    // N21's success sheet. Reaching it means the row exists and the bottle
     // was filed.
+    const sheet = primary.getByRole("dialog", { name: "+1 bottle" });
     await expect(
-      primary.getByText("Would you like to add another item?"),
-      "the wizard never reached the final prompt — the confirm was rejected or the outbox did not deliver ItemActor.create",
+      sheet,
+      "the flow never reached the success sheet — the confirm was rejected or the outbox did not deliver ItemActor.create",
     ).toBeVisible({ timeout: 60_000 });
-    await primary.getByRole("button", { name: "No" }).click();
+    await expect(sheet).toContainText(name);
+    // X06: in a cellar the sheet's second action is "Open it now", which
+    // shows the bottle's page (it uncorks nothing); "View bottle" is gone.
+    await sheet.getByRole("button", { name: "Open it now" }).click();
 
-    // Decision 1: in a cellar, "No" lands on the bottle.
+    // Decision 1: in a cellar, the ending lands on the bottle.
     await expect(primary).toHaveURL(
       new RegExp(`/cellars/${cellarId}/wines/[0-9a-f-]{36}$`),
       { timeout: 30_000 },
@@ -174,7 +173,7 @@ test.describe("onboard → cellar → check in", () => {
     ).toBe("CheckIn");
   });
 
-  test("the wine is in the cellar and can be checked in from the page", async ({
+  test("the wine is in the cellar and can be poured from the page", async ({
     primary,
   }) => {
     test.skip(itemId === undefined, "no wine was onboarded");
@@ -184,25 +183,36 @@ test.describe("onboard → cellar → check in", () => {
       400,
     );
 
-    expect(
-      await bodyText(primary),
+    // The cellar home is a list of tiles now (no dashboard shelf): the new
+    // bottle is a tile, and Pour is the bottle row's own action on its page.
+    await expect(
+      primary
+        .getByText(/E2 Wine/)
+        .filter({ visible: true })
+        .first(),
       "the cellar page does not show its new item",
-    ).toMatch(/E2 Wine/);
-
-    // "Check in" opens a menu; "Just me" is the one-click path.
-    const checkIn = primary.getByRole("button", { name: "Check in" });
-    await expect(
-      checkIn.first(),
-      "no check-in control on the cellar page",
     ).toBeVisible({ timeout: 20_000 });
-    await checkIn.first().click();
-    await primary.getByRole("menuitem", { name: "Just me" }).click();
+    await primary
+      .getByRole("link", { name: /E2 Wine/ })
+      .filter({ visible: true })
+      .first()
+      .click();
 
-    // The check-in list is written by `CellarActor`; a check-in that only
-    // turned a spinner off has not been proved.
+    const pour = primary.getByRole("button", { name: /^Pour from / });
+    await expect(pour.first(), "no Pour on the item page").toBeVisible({
+      timeout: 20_000,
+    });
+    await pour.first().click();
+    await primary
+      .getByRole("dialog", { name: "Pour" })
+      .getByRole("button", { name: /^Pour (\d+ ml|the last of it)$/ })
+      .click();
+
+    // The log is written by `CheckInActor` and read back through the cellar:
+    // the toast says so.
     await expect(
-      primary.getByText(/check.?in/i).first(),
-      "the check-in did not produce any visible result",
+      primary.getByText(/^Poured /).first(),
+      "the log did not produce any visible result",
     ).toBeVisible({ timeout: 20_000 });
   });
 });

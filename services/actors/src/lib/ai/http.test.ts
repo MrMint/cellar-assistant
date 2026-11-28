@@ -14,7 +14,9 @@
  */
 import { ConflictError, ValidationError } from "@cellar-assistant/contracts";
 import { describe, expect, it } from "vitest";
-import { isTransientStatus, postJson } from "./http.ts";
+import { isTransientStatus, postJson, withImageContext } from "./http.ts";
+import { requireImageMime } from "./image-mime.ts";
+import { isNoModelResponse, mayHaveBeenBilled } from "./no-response.ts";
 import type { FetchLike } from "./types.ts";
 
 /** A `fetch` that answers one canned status, with a body worth reporting. */
@@ -81,5 +83,118 @@ describe("postJson picks the class from the status", () => {
       throw new Error("ECONNREFUSED");
     }) as unknown as FetchLike;
     await expect(call(refused)).rejects.toBeInstanceOf(ConflictError);
+  });
+});
+
+describe("D17: which failures prove no model answered", () => {
+  const caught = (promise: Promise<unknown>) =>
+    promise.then(
+      () => {
+        throw new Error("expected a rejection");
+      },
+      (error: unknown) => error,
+    );
+
+  it("marks an unreachable provider and every HTTP error status", async () => {
+    const refused: FetchLike = (async () => {
+      throw new Error("ECONNREFUSED");
+    }) as unknown as FetchLike;
+    const unreachable = await caught(call(refused));
+    expect(isNoModelResponse(unreachable)).toBe(true);
+    // The request may have reached the provider before the transport failed.
+    expect(mayHaveBeenBilled(unreachable)).toBe(true);
+    for (const status of [400, 401, 404, 429, 500, 503]) {
+      const error = await caught(call(answering(status)));
+      expect(isNoModelResponse(error)).toBe(true);
+      // An error status is a refusal: nothing ran, nothing to bill.
+      expect(mayHaveBeenBilled(error)).toBe(false);
+    }
+  });
+
+  it("N09: the caller's signal aborts the request; the cost stays booked, nothing counts as an answer", async () => {
+    let sent: AbortSignal | undefined;
+    const hanging: FetchLike = ((
+      _url: string,
+      init?: { signal?: AbortSignal },
+    ) =>
+      new Promise((_, reject) => {
+        sent = init?.signal;
+        init?.signal?.addEventListener("abort", () =>
+          reject(new Error("This operation was aborted")),
+        );
+      })) as unknown as FetchLike;
+    const controller = new AbortController();
+    const pending = caught(
+      postJson({
+        url: "http://provider.test/api/chat",
+        body: { prompt: "p" },
+        timeoutMs: 60_000,
+        provider: "ollama",
+        what: "generateContent",
+        fetchImpl: hanging,
+        signal: controller.signal,
+      }),
+    );
+    controller.abort();
+    const error = await pending;
+    expect(sent?.aborted).toBe(true);
+    expect(error).toBeInstanceOf(ConflictError);
+    expect(String((error as Error).message)).toContain("cancelled");
+    expect(isNoModelResponse(error)).toBe(true);
+    expect(mayHaveBeenBilled(error)).toBe(true);
+  });
+
+  it("N09: an already-aborted signal sends nothing, so nothing can be billed", async () => {
+    let calls = 0;
+    const counting: FetchLike = (async () => {
+      calls += 1;
+      return new Response("{}", { status: 200 });
+    }) as unknown as FetchLike;
+    const error = await caught(
+      postJson({
+        url: "http://provider.test/api/chat",
+        body: { prompt: "p" },
+        timeoutMs: 1_000,
+        provider: "ollama",
+        what: "generateContent",
+        fetchImpl: counting,
+        signal: AbortSignal.abort(),
+      }),
+    );
+    expect(calls).toBe(0);
+    expect(isNoModelResponse(error)).toBe(true);
+    expect(mayHaveBeenBilled(error)).toBe(false);
+  });
+
+  it("does not mark a 200 whose body could not be read — that was an answer", async () => {
+    const error = await caught(call(answering(200, "not json")));
+    expect(error).toBeInstanceOf(ConflictError);
+    expect(isNoModelResponse(error)).toBe(false);
+  });
+
+  it("keeps the mark, the class and the reason through withImageContext", async () => {
+    const image = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0, 0, 0, 0]);
+    const error = await caught(
+      withImageContext([image], () => call(answering(400))),
+    );
+    expect(error).toBeInstanceOf(ValidationError);
+    expect(isNoModelResponse(error)).toBe(true);
+  });
+
+  it("marks an image refused before the request was sent", () => {
+    let error: unknown;
+    try {
+      requireImageMime(new Uint8Array([1, 2, 3]), ["image/png"], "test");
+    } catch (thrown) {
+      error = thrown;
+    }
+    expect(error).toBeInstanceOf(ValidationError);
+    expect(isNoModelResponse(error)).toBe(true);
+  });
+
+  it("does not mark an ordinary error", () => {
+    expect(isNoModelResponse(new ConflictError("x"))).toBe(false);
+    expect(isNoModelResponse("a string")).toBe(false);
+    expect(isNoModelResponse(null)).toBe(false);
   });
 });

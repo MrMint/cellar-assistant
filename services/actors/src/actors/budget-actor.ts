@@ -31,8 +31,11 @@
  * `#reserve` and `settleForModel` transaction is `pg_advisory_xact_lock` on
  * its `(service, endpoint)` (`lockBudgetKind`), held to commit. Every cap here
  * — the replay lookup, the per-user windows, the request cap, the money and
- * its nanocent carry — is scoped to exactly one `(service, endpoint)`, and
- * there is no cap across kinds, so that one lock covers all of them.
+ * its nanocent carry — is scoped to exactly one `(service, endpoint)`, so
+ * that one lock covers all of them. The one cap *across* kinds is Google
+ * Places' paid allowance (D16, `DEFAULT_GOOGLE_PLACES_MONTHLY_PAID_CENTS`),
+ * and a Google Places reservation therefore takes a second, service-wide
+ * lock as well.
  *
  * Under the singleton the lock never waits (one turn at a time already), so
  * it changes nothing in the normal case; what it buys is that the caps no
@@ -127,13 +130,17 @@
  */
 import type {
   ActorCategory,
+  AiQuotaDto,
   BudgetActorInterface,
   BudgetConfigDto,
   BudgetKind,
   Ctx,
   InternalBudgetActorInterface,
+  ModelReleaseInput,
   ModelReserveInput,
   ModelSettleInput,
+  Page,
+  PageArgs,
   ReserveInput,
   ReserveResult,
   SetBudgetInput,
@@ -149,6 +156,7 @@ import {
   ConflictError,
   ForbiddenError,
   NotFoundError,
+  offsetPage,
   ValidationError,
 } from "@cellar-assistant/contracts";
 import { apiBudgetConfig, apiUsageLog, outbox } from "@cellar-assistant/db";
@@ -222,6 +230,19 @@ export const lockBudgetKind = (
       ADVISORY_LOCK_NAMESPACE.budgetKind,
       budgetKind(kind),
     ),
+    // D16: Google Places has one cap *across* its endpoints (the paid
+    // allowance), so every one of its reservations also serialises on the
+    // whole service — otherwise two endpoints could each see the same
+    // pre-spend total and both be allowed past it. `lockAll` sorts, so the
+    // pair is always taken in one order.
+    ...(kind.service === GOOGLE_PLACES_BUDGET_SERVICE
+      ? [
+          advisoryLockKeyForText(
+            ADVISORY_LOCK_NAMESPACE.budgetKind,
+            `${GOOGLE_PLACES_BUDGET_SERVICE}/*`,
+          ),
+        ]
+      : []),
   ]);
 
 const requireKind = (kind: BudgetKind): BudgetKind => {
@@ -270,6 +291,22 @@ const requireUuidOrNull = (
 /** `getMonthStart()` from the helper this replaces, in UTC. */
 export const monthStart = (now: Date = new Date()): Date =>
   new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+
+/**
+ * The first instant of the UTC month after `now`'s — when every monthly cap
+ * this actor keeps (request count, free tier, money) starts again from zero.
+ * A refusal's `retryAt` for a monthly limit; a hint for a person, so the host
+ * clock is good enough here where it is not for a cap (`inMonthOf`).
+ */
+export const nextMonthStart = (now: Date = new Date()): Date =>
+  new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
+
+/**
+ * The rows that count against a cap: every row but a model reservation
+ * `releaseForModel` gave back because its call never got an answer (D17).
+ * Applied to the month's request count, the per-user windows and `usage`.
+ */
+const countsAgainstCaps: SQL = sql`coalesce(${apiUsageLog.metadata} ->> 'released', 'false') <> 'true'`;
 
 /** "The month this transaction is in", by the database's clock. */
 const CURRENT_MONTH = "current" as const;
@@ -343,13 +380,18 @@ export const AI_MODEL_SERVICE = "ai_model";
  */
 export const MODEL_SEAMS = [
   "embedding",
+  "flavour_tags",
   "image_embedding",
   "image_search",
   "item_defaults",
+  // X19: "Suggest details", text only — the edit form's chips.
+  "item_suggestions",
   "menu_extraction",
   "menu_match",
   "place_review",
   "recipe_photo",
+  // L03/L47 (H-10): one sentence phrasing the deterministic taste archetype.
+  "taste_phrase",
   "tier_list_insights",
 ] as const;
 
@@ -451,6 +493,9 @@ export type ModelSpender = {
  */
 export const MODEL_SPENDERS: Readonly<Record<ModelSeam, ModelSpender>> = {
   embedding: { maxMonthlyRequests: 200_000, defaultMonthlyBudgetCents: 200 },
+  // X02. One short note on the "low" model — a few hundred tokens each way —
+  // asked at most once per log the drinker types a note into.
+  flavour_tags: { maxMonthlyRequests: 20_000, defaultMonthlyBudgetCents: 100 },
   // G32. One `gemini-embedding-2` image is ~$0.00012 (`EMBEDDING_IMAGE_TEXT_TOKENS`
   // in `../lib/ai/budget.ts`), so $5 is ~41,000 stored photos — the attach path
   // plus a backfill of a catalogue this size several times over — and $2 is
@@ -461,6 +506,13 @@ export const MODEL_SPENDERS: Readonly<Record<ModelSeam, ModelSpender>> = {
   },
   image_search: { maxMonthlyRequests: 20_000, defaultMonthlyBudgetCents: 200 },
   item_defaults: { maxMonthlyRequests: 5_000, defaultMonthlyBudgetCents: 500 },
+  // X19. A few hundred text tokens in, a short JSON out, at "medium" — a
+  // fraction of a label read, and asked for by a creator correcting their own
+  // item, so a label read's request cap with a fifth of its money.
+  item_suggestions: {
+    maxMonthlyRequests: 5_000,
+    defaultMonthlyBudgetCents: 100,
+  },
   menu_extraction: {
     maxMonthlyRequests: 5_000,
     defaultMonthlyBudgetCents: 500,
@@ -468,6 +520,9 @@ export const MODEL_SPENDERS: Readonly<Record<ModelSeam, ModelSpender>> = {
   menu_match: { maxMonthlyRequests: 20_000, defaultMonthlyBudgetCents: 200 },
   place_review: { maxMonthlyRequests: 20_000, defaultMonthlyBudgetCents: 200 },
   recipe_photo: { maxMonthlyRequests: 5_000, defaultMonthlyBudgetCents: 500 },
+  // L03 (H-10). A short prompt of computed facts in, one sentence (~60 tokens)
+  // out, on "low", at most once per taste-profile read with an archetype.
+  taste_phrase: { maxMonthlyRequests: 20_000, defaultMonthlyBudgetCents: 200 },
   tier_list_insights: {
     maxMonthlyRequests: 20_000,
     defaultMonthlyBudgetCents: 200,
@@ -743,8 +798,54 @@ export const parseRequestCaps = (
 /* Per-user caps (W4 security F4)                                              */
 /* -------------------------------------------------------------------------- */
 
-/** Rolling-window call counts one user may cause against one kind. */
-export type UserCap = { readonly hourly: number; readonly daily: number };
+/**
+ * Call counts one user may cause against one kind: two rolling windows, and
+ * (redesign-2026-11 SV-A, L5) one calendar period — the allowance a person can
+ * see (`myQuota`) and that resets on a nameable day. `period` absent means
+ * {@link defaultPeriodLimit}.
+ */
+export type UserCap = {
+  readonly hourly: number;
+  readonly daily: number;
+  readonly period?: number;
+};
+
+/**
+ * The calendar period every per-user period cap counts over, in UTC: `month`
+ * resets on the 1st at 00:00, `week` on Monday at 00:00 (ISO week).
+ */
+export type UserCapPeriod = "month" | "week";
+
+export const DEFAULT_USER_CAP_PERIOD: UserCapPeriod = "month";
+
+/**
+ * L5: until the owner sets real numbers, a kind's period allowance is ten of
+ * its days. A bound, like the rolling caps — a person who meets it has used
+ * ten heavy days' worth inside one month.
+ */
+export const DEFAULT_PERIOD_DAYS = 10;
+
+/** The period cap that binds for `cap`: its own, else ten days' worth. */
+export const periodLimit = (cap: UserCap): number =>
+  cap.period ?? cap.daily * DEFAULT_PERIOD_DAYS;
+
+/**
+ * The current period's first instant and the next one's, as SQL on the
+ * database's clock — the same clock the rolling windows read (`now()`), so a
+ * count and its reset never disagree about which period a row is in.
+ */
+const periodBounds = (
+  period: UserCapPeriod,
+): { readonly start: SQL; readonly next: SQL } => {
+  const unit = sql.raw(`'${period}'`);
+  const step = sql.raw(`interval '1 ${period}'`);
+  const start = sql`(date_trunc(${unit}, now() at time zone 'UTC') at time zone 'UTC')`;
+  return { start, next: sql`(${start} + ${step})` };
+};
+
+/** `timestamptz` as the fixed-width UTC ISO string every `retryAt` uses. */
+const isoSql = (value: SQL): SQL<string> =>
+  sql<string>`to_char(${value} at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')`;
 
 /**
  * **Per-user** caps, beside the global ones — the fairness bound that
@@ -788,6 +889,8 @@ export type UserCap = { readonly hourly: number; readonly daily: number };
  */
 export const USER_CAPS: Readonly<Record<string, UserCap>> = {
   "ai_model/embedding": { hourly: 300, daily: 2_000 },
+  // A suggestion per typed note; a person logging a whole tasting is ~30.
+  "ai_model/flavour_tags": { hourly: 60, daily: 300 },
   // A stored photo is embedded once per attach, so this is a person attaching
   // a photo a minute for an hour; the backfill runs as `system`.
   "ai_model/image_embedding": { hourly: 60, daily: 300 },
@@ -795,10 +898,15 @@ export const USER_CAPS: Readonly<Record<string, UserCap>> = {
   // photographing a whole shelf, and a loop stops inside two minutes.
   "ai_model/image_search": { hourly: 30, daily: 150 },
   "ai_model/item_defaults": { hourly: 30, daily: 150 },
+  // X19: one per "Suggest details" tap on an item's edit page — a person
+  // correcting their own entries, so a label read's share.
+  "ai_model/item_suggestions": { hourly: 30, daily: 150 },
   "ai_model/menu_extraction": { hourly: 20, daily: 60 },
   "ai_model/menu_match": { hourly: 400, daily: 1_500 },
   "ai_model/place_review": { hourly: 100, daily: 500 },
   "ai_model/recipe_photo": { hourly: 20, daily: 60 },
+  // L03: one per taste-profile read; a person reloading the page all hour.
+  "ai_model/taste_phrase": { hourly: 60, daily: 300 },
   "ai_model/tier_list_insights": { hourly: 30, daily: 150 },
   "google_places/autocomplete": { hourly: 300, daily: 1_500 },
   "google_places/nearby_search": { hourly: 60, daily: 300 },
@@ -814,38 +922,201 @@ export const DEFAULT_USER_CAP: UserCap = { hourly: 100, daily: 500 };
 export const USER_CAP_REASON = "per-user cap reached";
 
 /**
- * `BUDGET_USER_CAPS`, as `service/endpoint=<hourly>/<daily>` pairs:
- * `ai_model/embedding=600/4000`. Throws on anything malformed, including an
- * hourly cap above the daily one, which could never bind — the same rule as
- * {@link parseRequestCaps}, for the same reason.
+ * `BUDGET_USER_CAPS`, as comma-separated entries:
+ *
+ * - `service/endpoint=<hourly>/<daily>[/<period>]` — a kind's caps, e.g.
+ *   `ai_model/embedding=600/4000` or `ai_model/tier_list_insights=30/150/200`.
+ *   Without `<period>` the period cap is {@link periodLimit}'s default.
+ * - `period=month|week` — the calendar period every period cap counts over
+ *   (default {@link DEFAULT_USER_CAP_PERIOD}). At most one.
+ *
+ * Throws on anything malformed, including an hourly cap above the daily one,
+ * which could never bind — the same rule as {@link parseRequestCaps}, for the
+ * same reason. The period cap is only required to be at least 1: a weekly
+ * allowance below a day's burst is a reasonable thing for an owner to want.
  */
-export const parseUserCaps = (
+export const parseUserCapConfig = (
   raw: string | undefined,
-): Readonly<Record<string, UserCap>> => {
-  if (raw === undefined || raw.trim() === "") return {};
-  const out: Record<string, UserCap> = {};
+): {
+  readonly caps: Readonly<Record<string, UserCap>>;
+  readonly period: UserCapPeriod | null;
+  readonly placesMonthly: number | null;
+} => {
+  if (raw === undefined || raw.trim() === "") {
+    return { caps: {}, period: null, placesMonthly: null };
+  }
+  const caps: Record<string, UserCap> = {};
+  let period: UserCapPeriod | null = null;
+  let placesMonthly: number | null = null;
   for (const entry of raw.split(",")) {
     const text = entry.trim();
     if (text === "") continue;
-    const match = /^([a-z0-9_]+\/[a-z0-9_]*)=(\d+)\/(\d+)$/.exec(text);
+    // F-230: `google_places=<monthly>`, Places' one allowance per person.
+    const placesMatch = /^google_places=(.*)$/.exec(text);
+    if (placesMatch !== null) {
+      const calls = Number(placesMatch[1]);
+      if (placesMonthly !== null) {
+        throw new ValidationError(
+          "BUDGET_USER_CAPS names `google_places=` more than once",
+        );
+      }
+      if (
+        !/^\d+$/.test(placesMatch[1] ?? "") ||
+        !Number.isSafeInteger(calls) ||
+        calls < 1
+      ) {
+        throw new ValidationError(
+          `BUDGET_USER_CAPS entry ${JSON.stringify(text)} is not ` +
+            "`google_places=<monthly calls>` with monthly calls >= 1",
+        );
+      }
+      placesMonthly = calls;
+      continue;
+    }
+    const periodMatch = /^period=(month|week)$/.exec(text);
+    if (periodMatch !== null) {
+      if (period !== null) {
+        throw new ValidationError(
+          "BUDGET_USER_CAPS names `period=` more than once",
+        );
+      }
+      period = periodMatch[1] === "week" ? "week" : "month";
+      continue;
+    }
+    const match = /^([a-z0-9_]+\/[a-z0-9_]*)=(\d+)\/(\d+)(?:\/(\d+))?$/.exec(
+      text,
+    );
     const hourly = Number(match?.[2]);
     const daily = Number(match?.[3]);
+    const periodCap = match?.[4] === undefined ? undefined : Number(match[4]);
     if (
       match === null ||
       !Number.isSafeInteger(hourly) ||
       !Number.isSafeInteger(daily) ||
       hourly < 1 ||
-      daily < hourly
+      daily < hourly ||
+      (periodCap !== undefined &&
+        (!Number.isSafeInteger(periodCap) || periodCap < 1))
     ) {
       throw new ValidationError(
         `BUDGET_USER_CAPS entry ${JSON.stringify(text)} is not ` +
-          "`service/endpoint=<hourly>/<daily>` with 1 <= hourly <= daily, e.g. " +
-          "`ai_model/embedding=600/4000`",
+          "`service/endpoint=<hourly>/<daily>[/<period>]` with 1 <= hourly <= " +
+          "daily and period >= 1, nor `period=month|week`, e.g. " +
+          "`ai_model/embedding=600/4000` or `period=week`",
       );
     }
-    out[match[1] ?? ""] = { hourly, daily };
+    if (
+      periodCap !== undefined &&
+      (match[1] ?? "").startsWith(`${GOOGLE_PLACES_BUDGET_SERVICE}/`)
+    ) {
+      // F-230: a Places kind has no period of its own; `google_places=` is
+      // the month for all of them. Silently ignoring it would be worse.
+      throw new ValidationError(
+        `BUDGET_USER_CAPS entry ${JSON.stringify(text)} gives a Google Places ` +
+          "kind a period cap; Places has one monthly allowance for every " +
+          "endpoint, set with `google_places=<monthly calls>`",
+      );
+    }
+    caps[match[1] ?? ""] =
+      periodCap === undefined
+        ? { hourly, daily }
+        : { hourly, daily, period: periodCap };
   }
-  return out;
+  return { caps, period, placesMonthly };
+};
+
+/**
+ * F-230 (FR-16): **Google Places' own monthly allowance, per person** — one
+ * count across every `google_places/*` endpoint, separate from every AI kind,
+ * on a UTC calendar month whatever `period=` says for AI. It replaces the
+ * per-kind period cap for Places kinds (whose rolling hourly and daily caps
+ * still bind), which used to be ten days of each endpoint — invisible, since
+ * `myQuota` listed AI kinds only, and so a refusal with no visible reason.
+ * `myQuota` now lists it as kind `google_places`.
+ *
+ * A bound, not a forecast: autocomplete is a call per distinct prefix typed,
+ * so a person searching places every day for a month stays well inside it.
+ * Override with `BUDGET_USER_CAPS`'s `google_places=<monthly calls>`. The
+ * service-wide paid pool ({@link DEFAULT_GOOGLE_PLACES_MONTHLY_PAID_CENTS})
+ * still bounds the bill on top.
+ */
+export const DEFAULT_GOOGLE_PLACES_USER_MONTHLY_CALLS = 5_000;
+
+/** {@link parseUserCapConfig}'s per-kind caps alone. */
+export const parseUserCaps = (
+  raw: string | undefined,
+): Readonly<Record<string, UserCap>> => parseUserCapConfig(raw).caps;
+
+/* -------------------------------------------------------------------------- */
+/* Google Places: one paid allowance for the whole service (D16)               */
+/* -------------------------------------------------------------------------- */
+
+/** `api_budget_config.service` for every Google Places endpoint. */
+export const GOOGLE_PLACES_BUDGET_SERVICE = "google_places";
+
+/**
+ * D16's default: **about $5 a month beyond Google's free usage**, for all of
+ * Google Places together.
+ *
+ * Google's free usage is per SKU per month, and `api_budget_config` already
+ * models it per endpoint (`free_tier_monthly_requests`); a request inside it
+ * books 0 cents (`#reserve`, step 1). What production's rows never had was
+ * any *paid* room: every `google_places/*` row carries
+ * `monthly_budget_cents = 0`, so the first request past an endpoint's free
+ * tier was refused for the rest of the month. This is that paid room, shared
+ * by every endpoint rather than split across fifteen rows, because the
+ * decision was about the bill ("stay under ~$5/month beyond the free tier"),
+ * not about any one endpoint's share of it.
+ *
+ * Override with `GOOGLE_PLACES_MONTHLY_PAID_CENTS` (whole cents; `0` returns to
+ * free-tier-only). Read per activation like the other overrides, and checked
+ * at boot by `installAI` through {@link readModelBudgetPolicy}.
+ */
+export const DEFAULT_GOOGLE_PLACES_MONTHLY_PAID_CENTS = 500;
+
+/**
+ * `GOOGLE_PLACES_MONTHLY_PAID_CENTS`: a non-negative whole number of cents.
+ * Blank is the default. Anything else throws — the same refusal-to-start rule
+ * as every other spend override, because a typo here would otherwise be
+ * either an unbounded bill or a silently dark feature.
+ */
+export const parseGooglePlacesPaidCents = (raw: string | undefined): number => {
+  if (raw === undefined || raw.trim() === "") {
+    return DEFAULT_GOOGLE_PLACES_MONTHLY_PAID_CENTS;
+  }
+  const text = raw.trim();
+  const cents = Number(text);
+  if (!/^\d+$/.test(text) || !Number.isSafeInteger(cents)) {
+    throw new ValidationError(
+      `GOOGLE_PLACES_MONTHLY_PAID_CENTS must be a whole number of cents >= 0 ` +
+        `(500 is $5 a month beyond the free tier; 0 is free tier only), got ` +
+        JSON.stringify(text),
+    );
+  }
+  return cents;
+};
+
+/**
+ * Whether a paid (past-free-tier) Google Places call of `cost` cents fits the
+ * service-wide allowance, given what the service has already booked this
+ * month. Pure, so the rule is testable without a database; `#reserve` applies
+ * it under the service lock.
+ */
+export const googlePlacesPoolRefusal = (
+  input: {
+    readonly servicePaidCents: number;
+    readonly cost: number;
+    readonly poolCents: number;
+  },
+  kindLabel: string,
+): string | null => {
+  if (input.poolCents <= 0) {
+    return `${kindLabel} free tier exhausted and no paid Google Places allowance is configured (GOOGLE_PLACES_MONTHLY_PAID_CENTS=0)`;
+  }
+  if (input.servicePaidCents + input.cost > input.poolCents) {
+    return `google_places monthly paid allowance exhausted: ${input.servicePaidCents} of ${input.poolCents} cents spent beyond the free tier, ${input.cost} more requested by ${kindLabel}`;
+  }
+  return null;
 };
 
 /**
@@ -878,16 +1149,37 @@ export type ModelBudgetPolicy = {
   readonly freeProviders: FreeModelProviders;
   /** `BUDGET_USER_CAPS` over {@link USER_CAPS}; every kind, not only models. */
   readonly userCaps: Readonly<Record<string, UserCap>>;
+  /** `BUDGET_USER_CAPS`'s `period=`, else {@link DEFAULT_USER_CAP_PERIOD}. */
+  readonly userCapPeriod: UserCapPeriod;
+  /**
+   * D16: the paid cents all of Google Places may book in one UTC month,
+   * across every endpoint ({@link DEFAULT_GOOGLE_PLACES_MONTHLY_PAID_CENTS}).
+   */
+  readonly googlePlacesMonthlyPaidCents: number;
+  /**
+   * F-230: the calls one person may make to Google Places in one UTC month,
+   * across every endpoint ({@link DEFAULT_GOOGLE_PLACES_USER_MONTHLY_CALLS}).
+   */
+  readonly googlePlacesUserMonthlyCalls: number;
 };
 
 export const readModelBudgetPolicy = (
   env: Readonly<Record<string, string | undefined>> = process.env,
-): ModelBudgetPolicy => ({
-  modelPrices: parseModelPrices(env.AI_MODEL_PRICES),
-  modelRequestCaps: parseRequestCaps(env.AI_BUDGET_MAX_REQUESTS),
-  freeProviders: freeModelProviders(env),
-  userCaps: { ...USER_CAPS, ...parseUserCaps(env.BUDGET_USER_CAPS) },
-});
+): ModelBudgetPolicy => {
+  const userCapConfig = parseUserCapConfig(env.BUDGET_USER_CAPS);
+  return {
+    modelPrices: parseModelPrices(env.AI_MODEL_PRICES),
+    modelRequestCaps: parseRequestCaps(env.AI_BUDGET_MAX_REQUESTS),
+    freeProviders: freeModelProviders(env),
+    userCaps: { ...USER_CAPS, ...userCapConfig.caps },
+    userCapPeriod: userCapConfig.period ?? DEFAULT_USER_CAP_PERIOD,
+    googlePlacesMonthlyPaidCents: parseGooglePlacesPaidCents(
+      env.GOOGLE_PLACES_MONTHLY_PAID_CENTS,
+    ),
+    googlePlacesUserMonthlyCalls:
+      userCapConfig.placesMonthly ?? DEFAULT_GOOGLE_PLACES_USER_MONTHLY_CALLS,
+  };
+};
 
 /** The free-provider set that applies to one seam's calls. */
 const freeFor = (
@@ -946,7 +1238,7 @@ export const modelCallNanoCents = (
  * `InternalBudgetActorInterface` whose arguments they are; re-exported here so
  * this module's existing importers keep working.
  */
-export type { ModelReserveInput, ModelSettleInput };
+export type { ModelReleaseInput, ModelReserveInput, ModelSettleInput };
 
 /**
  * The `api_budget_config` row a model seam gets when nobody has written one.
@@ -1239,6 +1531,8 @@ export class BudgetActor
         isEnabled: false,
         reason: `no budget is configured for ${budgetKind(kind)}; configure one with setBudget before spending against it`,
         usageId: null,
+        refusal: "SERVICE_BUDGET",
+        retryAt: null,
       };
     }
 
@@ -1253,6 +1547,8 @@ export class BudgetActor
         isEnabled: false,
         reason: `${budgetKind(kind)} is disabled`,
         usageId: null,
+        refusal: "SERVICE_BUDGET",
+        retryAt: null,
       };
     }
 
@@ -1316,6 +1612,8 @@ export class BudgetActor
           kind,
           triggeredBy,
           aggregate.userCaps[budgetKind(kind)] ?? DEFAULT_USER_CAP,
+          aggregate.userCapPeriod,
+          aggregate.googlePlacesUserMonthlyCalls,
         );
         if (refusal !== null) {
           return {
@@ -1326,8 +1624,10 @@ export class BudgetActor
             requestCount: 0,
             freeTierLimit: config.freeTierMonthlyRequests,
             isEnabled: true,
-            reason: refusal,
+            reason: refusal.reason,
             usageId: null,
+            refusal: "USER_CAP",
+            retryAt: refusal.retryAt,
           };
         }
       }
@@ -1356,6 +1656,8 @@ export class BudgetActor
           effectiveCostCents: 0,
           reason: `${budgetKind(kind)} has made ${totals.requestCount} of its ${model.maxRequests} model calls allowed this month; raise it with AI_BUDGET_MAX_REQUESTS=${kind.endpoint}=<count> once you know why it ran that many`,
           usageId: null,
+          refusal: "SERVICE_BUDGET",
+          retryAt: nextMonthStart().toISOString(),
         };
       }
 
@@ -1380,7 +1682,42 @@ export class BudgetActor
 
       // 1. Inside the free tier: the request counts, and costs nothing.
       const free = totals.requestCount < config.freeTierMonthlyRequests;
-      if (!free) {
+      // D16: Google Places' paid calls draw on one service-wide allowance.
+      const googlePlaces =
+        model === undefined && kind.service === GOOGLE_PLACES_BUDGET_SERVICE;
+      if (!free && googlePlaces) {
+        const servicePaidCents = await this.#serviceMonthToDateCents(
+          tx,
+          kind.service,
+        );
+        const poolCents = aggregate.googlePlacesMonthlyPaidCents;
+        const refusal =
+          // An endpoint with its own paid budget still stops at it…
+          config.monthlyBudgetCents > 0 &&
+          totals.spendCents + cost > config.monthlyBudgetCents
+            ? `${budgetKind(kind)} monthly budget exhausted: ${totals.spendCents} of ${config.monthlyBudgetCents} cents spent, ${cost} more requested`
+            : // …and every endpoint stops at the service's allowance.
+              googlePlacesPoolRefusal(
+                { servicePaidCents, cost, poolCents },
+                budgetKind(kind),
+              );
+        if (refusal !== null) {
+          return {
+            ...base,
+            allowed: false,
+            effectiveCostCents: 0,
+            limitCents:
+              config.monthlyBudgetCents > 0
+                ? Math.min(config.monthlyBudgetCents, poolCents)
+                : poolCents,
+            reason: refusal,
+            usageId: null,
+            // N07: the allowance is monthly, like the other service limits.
+            refusal: "SERVICE_BUDGET",
+            retryAt: nextMonthStart().toISOString(),
+          };
+        }
+      } else if (!free) {
         // 2. Free tier exhausted with no paid budget — the common config.
         if (config.monthlyBudgetCents <= 0) {
           return {
@@ -1389,6 +1726,8 @@ export class BudgetActor
             effectiveCostCents: 0,
             reason: `${budgetKind(kind)} free tier exhausted (${totals.requestCount}/${config.freeTierMonthlyRequests} requests) and no paid budget is configured`,
             usageId: null,
+            refusal: "SERVICE_BUDGET",
+            retryAt: nextMonthStart().toISOString(),
           };
         }
         // 3. Paid, but this call would cross the cap.
@@ -1399,6 +1738,8 @@ export class BudgetActor
             effectiveCostCents: 0,
             reason: `${budgetKind(kind)} monthly budget exhausted: ${totals.spendCents} of ${config.monthlyBudgetCents} cents spent, ${cost} more requested`,
             usageId: null,
+            refusal: "SERVICE_BUDGET",
+            retryAt: nextMonthStart().toISOString(),
           };
         }
       }
@@ -1600,11 +1941,131 @@ export class BudgetActor
   }
 
   /**
+   * Give back a model reservation whose call never got an answer — D17,
+   * "only calls that got a model response count against the allowance".
+   *
+   * `lib/ai/budget.ts` calls this when the provider could not be reached,
+   * timed out, or answered with an HTTP error before generating anything
+   * (`isNoModelResponse`). Nothing was generated, so nothing should be used
+   * up: the row stops counting against the month's request cap, the free
+   * tier and the caller's per-user window (`countsAgainstCaps`), which is
+   * what makes a retry free. A call that got *any* response — even one that
+   * then fails to parse — is settled, never released.
+   *
+   * ## Why the row is marked rather than deleted
+   *
+   * The nanocent carry (`MODEL_RATES`). A row books the whole cents its
+   * nanocents pushed the month's exact total past; deleting the row that
+   * crossed a cent boundary would leave the month's booked cents *below*
+   * `floor(sum(nanoCents) / 1e9)` — the one direction the ledger must never
+   * err in. So the row stays, its nanocents go to zero, and its cents are
+   * re-derived from the other rows exactly as `settleForModel` does for a
+   * measurement of zero, clamped at zero. It also keeps the trail: an
+   * operator can still see that a call was attempted and released.
+   *
+   * `keepCost` (a timeout or reset connection, which the provider may have
+   * run and billed) marks the row released for the allowance and leaves its
+   * nanocents and cents exactly as booked.
+   *
+   * Idempotent: releasing a released row is a no-op, and so is releasing a
+   * settled one — a settlement means a response arrived, and that call counts.
+   */
+  async releaseForModel(ctx: Ctx, input: ModelReleaseInput): Promise<void> {
+    this.requireAggregate();
+    requireSignedIn(ctx, "spend against the budget");
+    const seam = input.seam?.trim() ?? "";
+    if (!isModelSeam(seam)) {
+      throw new ForbiddenError(`${seam} is not a model seam`);
+    }
+    const usageId = requireUuidOrNull(input.usageId, "usageId");
+    if (usageId === null) {
+      throw new ValidationError("releaseForModel needs the usage row's id");
+    }
+
+    await this.tx(async (tx) => {
+      await lockBudgetKind(tx, { service: AI_MODEL_SERVICE, endpoint: seam });
+      const [row] = await tx
+        .select({
+          service: apiUsageLog.service,
+          endpoint: apiUsageLog.endpoint,
+          cost: apiUsageLog.estimatedCostCents,
+          metadata: apiUsageLog.metadata,
+          createdAt: apiUsageLog.createdAt,
+        })
+        .from(apiUsageLog)
+        .where(eq(apiUsageLog.id, usageId))
+        .limit(1);
+      if (row === undefined) {
+        throw new NotFoundError(`api_usage_log row ${usageId} does not exist`);
+      }
+      if (row.service !== AI_MODEL_SERVICE || row.endpoint !== seam) {
+        throw new ForbiddenError(
+          `api_usage_log row ${usageId} is ${row.service}/${row.endpoint}, ` +
+            `not ${AI_MODEL_SERVICE}/${seam}; a release may only give back ` +
+            "the reservation it belongs to",
+        );
+      }
+      const metadata =
+        typeof row.metadata === "object" && row.metadata !== null
+          ? (row.metadata as Record<string, unknown>)
+          : {};
+      if (metadata.released === true || metadata.settled === true) return;
+
+      // A call that may have been billed keeps its money booked; only the
+      // allowance is given back (`ModelReleaseInput.keepCost`).
+      if (input.keepCost === true) {
+        await tx
+          .update(apiUsageLog)
+          .set({ metadata: { ...metadata, released: true, costKept: true } })
+          .where(eq(apiUsageLog.id, usageId));
+        return;
+      }
+
+      const ownNano = int(metadata.nanoCents);
+      let cost = row.cost;
+      if (ownNano > 0) {
+        // `settleForModel`'s carry, for a measurement of zero.
+        const totals = await this.#monthToDate(
+          tx,
+          { service: row.service, endpoint: row.endpoint },
+          true,
+          row.createdAt,
+        );
+        const othersNano = Math.max(0, totals.nanoCents - ownNano);
+        const othersCents = Math.max(0, totals.spendCents - row.cost);
+        cost = Math.max(
+          0,
+          Math.floor(othersNano / NANOCENTS_PER_CENT) - othersCents,
+        );
+      }
+
+      await tx
+        .update(apiUsageLog)
+        .set({
+          estimatedCostCents: cost,
+          metadata: {
+            ...metadata,
+            nanoCents: 0,
+            released: true,
+          },
+        })
+        .where(eq(apiUsageLog.id, usageId));
+    });
+  }
+
+  /**
    * The per-user refusal for one more call to `kind` by `userId`, or `null`.
    * Counts that user's rows for that kind over the last hour and the last 24
    * hours in one scan of the day, served by
    * `idx_api_usage_log_service_created`; a day of one service's rows is
-   * bounded by the global caps, so the scan is too.
+   * bounded by the global caps, so the scan is too. A released reservation
+   * (`releaseForModel`, D17) is not one of them: a call that got no answer
+   * does not use up anybody's window.
+   *
+   * N07: a refusal also says **when the window frees a slot** (`retryAt`):
+   * the moment the oldest row that has to roll off for the count to drop
+   * below the cap is an hour (or a day) old. Only computed on a refusal, which
+   * is rare, so the extra statement costs nothing on the allow path.
    *
    * `#private` for the reason `#deliveryAttribution` gives: it would
    * otherwise be a sidecar-callable "how much has user X used" oracle.
@@ -1614,7 +2075,15 @@ export class BudgetActor
     kind: BudgetKind,
     userId: string,
     cap: UserCap,
-  ): Promise<string | null> {
+    aiPeriod: UserCapPeriod,
+    placesMonthly: number,
+  ): Promise<{ reason: string; retryAt: string | null } | null> {
+    const mine = and(
+      eq(apiUsageLog.service, kind.service),
+      eq(apiUsageLog.endpoint, kind.endpoint),
+      eq(apiUsageLog.triggeredBy, userId),
+      countsAgainstCaps,
+    );
     const [row] = await tx
       .select({
         hour: sql<string>`count(*) filter (where ${apiUsageLog.createdAt} > now() - interval '1 hour')`,
@@ -1622,25 +2091,112 @@ export class BudgetActor
       })
       .from(apiUsageLog)
       .where(
-        and(
-          eq(apiUsageLog.service, kind.service),
-          eq(apiUsageLog.endpoint, kind.endpoint),
-          eq(apiUsageLog.triggeredBy, userId),
-          sql`${apiUsageLog.createdAt} > now() - interval '1 day'`,
-        ),
+        and(mine, sql`${apiUsageLog.createdAt} > now() - interval '1 day'`),
       );
     const hour = int(row?.hour);
     const day = int(row?.day);
-    const which =
-      hour >= cap.hourly
-        ? `${hour} of its ${cap.hourly} calls in the last hour`
-        : day >= cap.daily
-          ? `${day} of its ${cap.daily} calls in the last 24 hours`
-          : null;
-    return which === null
-      ? null
-      : `${USER_CAP_REASON}: this account has made ${which} to ${budgetKind(kind)}. ` +
-          "It frees up as the window rolls; the caps are BUDGET_USER_CAPS.";
+    const full = [
+      ...(hour >= cap.hourly
+        ? [{ count: hour, cap: cap.hourly, span: "1 hour", label: "hour" }]
+        : []),
+      ...(day >= cap.daily
+        ? [{ count: day, cap: cap.daily, span: "1 day", label: "24 hours" }]
+        : []),
+    ];
+
+    // SV-A (L5): the calendar period, counted from its first instant. Unlike
+    // the windows it does not roll — the whole allowance comes back at once,
+    // at `next`, which is what lets a person be told the day it resets.
+    // F-230: a Places kind counts Places' one monthly allowance instead —
+    // every `google_places/*` endpoint together, always a month.
+    const places = kind.service === GOOGLE_PLACES_BUDGET_SERVICE;
+    const period: UserCapPeriod = places ? "month" : aiPeriod;
+    const bounds = periodBounds(period);
+    const limit = places ? placesMonthly : periodLimit(cap);
+    const periodScope = places
+      ? and(
+          eq(apiUsageLog.service, GOOGLE_PLACES_BUDGET_SERVICE),
+          eq(apiUsageLog.triggeredBy, userId),
+          countsAgainstCaps,
+        )
+      : mine;
+    const [periodRow] = await tx
+      .select({
+        used: sql<string>`count(*)`,
+        resetsAt: isoSql(bounds.next),
+      })
+      .from(apiUsageLog)
+      .where(
+        and(periodScope, sql`${apiUsageLog.createdAt} >= ${bounds.start}`),
+      );
+    const used = int(periodRow?.used);
+    const periodFull =
+      used >= limit
+        ? { count: used, cap: limit, resetsAt: periodRow?.resetsAt ?? null }
+        : null;
+
+    const window = full[0];
+    if (window === undefined && periodFull === null) return null;
+
+    // For each full window, the (count - cap + 1)th oldest row in it is the
+    // one whose expiry brings that count back under its cap; `offset count -
+    // cap` because the cap may have been lowered below a count already
+    // reached. When both windows are full the call fits only once *both* have
+    // a slot, so the later of the two times is the answer — the hour freeing
+    // up first would otherwise promise a retry the day still refuses.
+    const freedAt = async (
+      w: (typeof full)[number],
+    ): Promise<string | null> => {
+      const span = sql.raw(`interval '${w.span}'`);
+      const [freed] = await tx
+        .select({
+          at: sql<string>`to_char((${apiUsageLog.createdAt} + ${span}) at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')`,
+        })
+        .from(apiUsageLog)
+        .where(and(mine, sql`${apiUsageLog.createdAt} > now() - ${span}`))
+        .orderBy(sql`${apiUsageLog.createdAt} asc`)
+        .offset(w.count - w.cap)
+        .limit(1);
+      return freed?.at ?? null;
+    };
+    // One statement at a time: they share this transaction's connection.
+    // The period's reset joins the windows' free times: the call fits only
+    // once every full bound has room, so the latest of them is the answer.
+    let retryAt: string | null = periodFull?.resetsAt ?? null;
+    let unknown = periodFull !== null && periodFull.resetsAt === null;
+    for (const w of full) {
+      if (unknown) break;
+      const at = await freedAt(w);
+      if (at === null) {
+        unknown = true;
+        break;
+      }
+      // Same fixed-width UTC format, so the string order is the time order.
+      if (retryAt === null || at > retryAt) retryAt = at;
+    }
+    if (unknown) retryAt = null;
+
+    if (periodFull !== null) {
+      return {
+        reason: places
+          ? `${USER_CAP_REASON}: this account has made ${periodFull.count} of ` +
+            `its ${periodFull.cap} Google Places calls this month ` +
+            `(${budgetKind(kind)} asked for one more). It resets at the ` +
+            "start of the next one; the allowance is BUDGET_USER_CAPS's google_places=."
+          : `${USER_CAP_REASON}: this account has made ${periodFull.count} of ` +
+            `its ${periodFull.cap} calls this ${period} to ${budgetKind(kind)}. ` +
+            "It resets at the start of the next one; the caps are BUDGET_USER_CAPS.",
+        retryAt,
+      };
+    }
+    const rolling = window ?? { count: 0, cap: 0, label: "" };
+    return {
+      reason:
+        `${USER_CAP_REASON}: this account has made ${rolling.count} of its ` +
+        `${rolling.cap} calls in the last ${rolling.label} to ${budgetKind(kind)}. ` +
+        "It frees up as the window rolls; the caps are BUDGET_USER_CAPS.",
+      retryAt,
+    };
   }
 
   /**
@@ -1680,6 +2236,8 @@ export class BudgetActor
     if (!result.allowed) {
       throw new BudgetExceededError(
         `${budgetKind(requireKind(input.kind))} refused: ${result.reason}`,
+        result.refusal ?? null,
+        result.retryAt ?? null,
       );
     }
     return result;
@@ -1688,6 +2246,81 @@ export class BudgetActor
   /* ---------------------------------------------------------------------- */
   /* Reporting and configuration                                             */
   /* ---------------------------------------------------------------------- */
+
+  /**
+   * MC-quota (SV-A): the viewer's own period allowance for every model seam —
+   * `used` counted exactly as `#userCapRefusal` counts it (this period, rows
+   * `triggered_by` the viewer, released reservations excluded), `limit` the
+   * period cap that binds, `resetsAt` the next period start.
+   *
+   * **Only ever the viewer's own.** The one user id this reads is
+   * `ctx.viewerId`; nothing in the input can name another, and an anonymous
+   * caller (or a system/admin ctx with no viewer) is refused — this is not the
+   * "how much has user X used" oracle `#userCapRefusal`'s doc keeps private.
+   * Read on the shared pool rather than under the kind locks: a count that is
+   * one call stale is a display, and the cap itself is enforced in `#reserve`.
+   */
+  async myQuota(ctx: Ctx, page: PageArgs): Promise<Page<AiQuotaDto>> {
+    const aggregate = this.requireAggregate();
+    if (ctx.viewerId === null) {
+      throw new ForbiddenError("sign in to see your AI allowance");
+    }
+    const viewerId = ctx.viewerId;
+    const bounds = periodBounds(aggregate.userCapPeriod);
+    const rows = await this.db
+      .select({
+        endpoint: apiUsageLog.endpoint,
+        used: sql<string>`count(*)`,
+      })
+      .from(apiUsageLog)
+      .where(
+        and(
+          eq(apiUsageLog.service, AI_MODEL_SERVICE),
+          eq(apiUsageLog.triggeredBy, viewerId),
+          countsAgainstCaps,
+          sql`${apiUsageLog.createdAt} >= ${bounds.start}`,
+        ),
+      )
+      .groupBy(apiUsageLog.endpoint);
+    const reset = await this.db.execute<{ resets_at: string }>(
+      sql`select ${isoSql(bounds.next)} as resets_at`,
+    );
+    const resetsAt = reset.rows[0]?.resets_at ?? nextMonthStart().toISOString();
+    const used = new Map(rows.map((row) => [row.endpoint, int(row.used)]));
+    const quotas: AiQuotaDto[] = MODEL_SEAMS.map((seam) => {
+      const kind = `${AI_MODEL_SERVICE}/${seam}`;
+      return {
+        kind,
+        used: used.get(seam) ?? 0,
+        limit: periodLimit(aggregate.userCaps[kind] ?? DEFAULT_USER_CAP),
+        resetsAt,
+      };
+    });
+    // F-230: Places' one allowance, counted as `#userCapRefusal` counts it —
+    // every Places endpoint together, this UTC month.
+    const month = periodBounds("month");
+    const [placesRow] = await this.db
+      .select({
+        used: sql<string>`count(*)`,
+        resetsAt: isoSql(month.next),
+      })
+      .from(apiUsageLog)
+      .where(
+        and(
+          eq(apiUsageLog.service, GOOGLE_PLACES_BUDGET_SERVICE),
+          eq(apiUsageLog.triggeredBy, viewerId),
+          countsAgainstCaps,
+          sql`${apiUsageLog.createdAt} >= ${month.start}`,
+        ),
+      );
+    quotas.push({
+      kind: GOOGLE_PLACES_BUDGET_SERVICE,
+      used: int(placesRow?.used),
+      limit: aggregate.googlePlacesUserMonthlyCalls,
+      resetsAt: placesRow?.resetsAt ?? nextMonthStart().toISOString(),
+    });
+    return offsetPage(quotas, page);
+  }
 
   async usage(ctx: Ctx, range: UsageRange): Promise<UsageReport> {
     this.requireAggregate();
@@ -1703,7 +2336,7 @@ export class BudgetActor
       .select({
         service: apiUsageLog.service,
         endpoint: apiUsageLog.endpoint,
-        requestCount: sql<string>`count(*)`,
+        requestCount: sql<string>`count(*) filter (where ${countsAgainstCaps})`,
         spendCents: sql<string>`coalesce(sum(${apiUsageLog.estimatedCostCents}), 0)`,
       })
       .from(apiUsageLog)
@@ -1801,6 +2434,21 @@ export class BudgetActor
   /* ---------------------------------------------------------------------- */
 
   /**
+   * D16: the paid cents every endpoint of `service` has booked this UTC month
+   * — the total the Google Places allowance is held against. Free-tier rows
+   * book 0, so this is exactly "spend beyond the free tier".
+   */
+  async #serviceMonthToDateCents(tx: DbOrTx, service: string): Promise<number> {
+    const [row] = await tx
+      .select({
+        spendCents: sql<string>`coalesce(sum(${apiUsageLog.estimatedCostCents}), 0)`,
+      })
+      .from(apiUsageLog)
+      .where(and(eq(apiUsageLog.service, service), inMonthOf(CURRENT_MONTH)));
+    return int(row?.spendCents);
+  }
+
+  /**
    * Requests and paid cents in one calendar month, for one endpoint — plus,
    * for a model endpoint, the exact nanocents behind those cents.
    *
@@ -1830,7 +2478,7 @@ export class BudgetActor
   }> {
     const [row] = await tx
       .select({
-        requestCount: sql<string>`count(*)`,
+        requestCount: sql<string>`count(*) filter (where ${countsAgainstCaps})`,
         spendCents: sql<string>`coalesce(sum(${apiUsageLog.estimatedCostCents}), 0)`,
         nanoCents: withNanoCents
           ? sql<string>`coalesce(sum(case when ${apiUsageLog.metadata} ->> 'nanoCents' ~ '^[0-9]+$' then (${apiUsageLog.metadata} ->> 'nanoCents')::numeric else 0 end), 0)`

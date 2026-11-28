@@ -15,14 +15,12 @@ export default function MapLayout({ children }: MapLayoutProps) {
     return <>{children}</>;
   }
 
+  // N22: the content area's height, not the viewport's. `100dvh` here sat
+  // inside a shell that already spends part of the viewport on the bottom
+  // nav (and the safe-area insets), so the map ran ~50 px under the nav and
+  // its attribution — a licensing obligation — was hidden behind it.
   return (
-    <div
-      style={{
-        height: "100dvh",
-        overflow: "hidden",
-        overscrollBehavior: "contain",
-      }}
-    >
+    <div className="flex h-full min-h-0 flex-auto flex-col overflow-hidden overscroll-contain">
       {children}
     </div>
   );

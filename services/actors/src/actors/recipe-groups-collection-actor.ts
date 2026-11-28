@@ -47,8 +47,14 @@
  * asc`. Both are keysets with an id tie-break, so groups created in the same
  * instant (a seed, a migration) page without skips or repeats.
  *
- * Catalog visibility (§1.6): any signed-in viewer. `recipe_groups` has no
- * privacy column, and B6 already treats the recipe catalog that way.
+ * ## Visibility (X15 / D22)
+ *
+ * `recipe_groups` has no privacy column; its *versions* do. A group is listed
+ * for a viewer when they created it or can see at least one version in it
+ * (`recipeVisibleSql`), its `recipeCount` counts only those, and the term
+ * matches only their names — so a private recipe never surfaces a group, a
+ * count or a name to anyone else. `ingredientUses` (an item's "Used in
+ * Recipes") lists only the lines of recipes the viewer may see.
  */
 import type {
   ActorCategory,
@@ -57,6 +63,7 @@ import type {
   ItemRef,
   Page,
   PageArgs,
+  RecipeBaseSpiritCountDto,
   RecipeCategory,
   RecipeGroupDto,
   RecipeGroupOrder,
@@ -66,7 +73,11 @@ import type {
   RecipeIngredientUsesFilter,
 } from "@cellar-assistant/contracts";
 import {
+  BAR_KIND_KEYS,
+  BAR_KINDS,
+  COMMUNITY_PICK_MIN_NET,
   ITEM_TYPES,
+  isBarKind,
   isItemType,
   mapPage,
   normalizeRecipeGroupOrder,
@@ -92,6 +103,12 @@ import {
 } from "../lib/collection-sql.ts";
 import { ARCS } from "../lib/item-arcs.ts";
 import { ingredientRowToDto } from "../lib/recipe-ingredients.ts";
+import {
+  type RecipeScope,
+  recipeRefVisibleSql,
+  recipeScope,
+  recipeVisibleSql,
+} from "../lib/recipe-visibility.ts";
 import { escapeLike } from "./brand-search-actor.ts";
 
 type GroupRow = {
@@ -104,6 +121,8 @@ type GroupRow = {
   readonly image_url: string | null;
   readonly created_by_id: string | null;
   readonly canonical_recipe_id: string | null;
+  /** F-88: `communityPickOf` in SQL, named only when the viewer may see it. */
+  readonly community_pick_id: string | null;
   readonly recipe_count: string | number;
   readonly created_at: Date | string | null;
   readonly updated_at: Date | string | null;
@@ -172,6 +191,22 @@ const requireCursorFor = (
   return after;
 };
 
+/**
+ * X14: the `base_spirit` values one filter value matches. A bar kind matches
+ * itself and the narrower kinds under it — "whiskey" finds the bourbon, rye,
+ * Scotch and Irish groups, as a whiskey bottle would serve them — and
+ * anything else (a value written before X14) matches only itself.
+ */
+export const baseSpiritMatches = (value: string): string[] =>
+  isBarKind(value)
+    ? [
+        value,
+        ...BAR_KIND_KEYS.filter(
+          (kind) => (BAR_KINDS[kind] as { parent?: string }).parent === value,
+        ),
+      ]
+    : [value];
+
 export class RecipeGroupsCollectionActor
   extends ScopedCollectionActorBase<RecipeGroupsFilter>
   implements RecipeGroupsCollectionActorInterface
@@ -205,6 +240,7 @@ export class RecipeGroupsCollectionActor
       recipeIngredientUsesActorId(filter),
       async () => {
         if (filter.refs.length === 0) return [];
+        const visible = recipeVisibleSql(await recipeScope(this.db, ctx));
         const arc = ARCS.recipeIngredients;
         const matches = ITEM_TYPES.flatMap((type) => {
           const ids = filter.refs
@@ -232,7 +268,7 @@ export class RecipeGroupsCollectionActor
                    (count(*) over (partition by ${partition}))::int as total
             from public.recipe_ingredients ri
             join public.recipes r on r.id = ri.recipe_id
-            where ${sql.join(matches, sql` or `)}
+            where (${sql.join(matches, sql` or `)}) and ${visible}
           ) ranked
           where rn <= ${REVERSE_EDGE_CAP}
           order by rn
@@ -293,14 +329,15 @@ export class RecipeGroupsCollectionActor
       );
     }
     const order = ORDERS[normalizeRecipeGroupOrder(filter.orderBy)];
+    const scope = await recipeScope(this.db, ctx);
     return mapPage(
       await this.paged<GroupRow>(
         ctx,
         filter,
         page,
-        (after, limit) => this.#read(filter, after, limit),
+        (after, limit) => this.#read(filter, scope, after, limit),
         order.cursorOf,
-        () => this.#scope(filter),
+        () => this.#scope(filter, scope),
       ),
       (row): RecipeGroupDto => {
         if (!isRecipeCategory(row.category)) {
@@ -318,6 +355,7 @@ export class RecipeGroupsCollectionActor
           imageUrl: row.image_url,
           createdById: row.created_by_id,
           canonicalRecipeId: row.canonical_recipe_id,
+          communityPickId: row.community_pick_id,
           recipeCount: Number(row.recipe_count),
           createdAt: toIso(row.created_at),
           updatedAt: toIso(row.updated_at),
@@ -326,8 +364,72 @@ export class RecipeGroupsCollectionActor
     );
   }
 
+  /**
+   * F-114: the kind chips' counts. One `group by` over the list's own scope
+   * (visibility, category, term — never `baseSpirit`, which would leave one
+   * chip), then each bar kind with narrower kinds present gets their sum, so
+   * a chip's count is what selecting it lists ({@link baseSpiritMatches}).
+   */
+  async baseSpiritCounts(
+    ctx: Ctx,
+    filter: RecipeGroupsFilter,
+  ): Promise<readonly RecipeBaseSpiritCountDto[]> {
+    const term = normalizeRecipeGroupTerm(filter.term);
+    if (term !== null && term.length > RECIPE_GROUP_TERM_MAX_LENGTH) {
+      throw new ValidationError(
+        `term must be at most ${RECIPE_GROUP_TERM_MAX_LENGTH} characters`,
+      );
+    }
+    return await this.batch(ctx, filter, [], async () => {
+      const scope = await recipeScope(this.db, ctx);
+      const { from, where } = this.#scope(
+        { ...filter, baseSpirit: null },
+        scope,
+      );
+      const { rows } = await this.db.execute<{
+        readonly base_spirit: string;
+        readonly n: number | string;
+      }>(sql`
+        select g.base_spirit, count(*) as n
+        from ${from}
+        where ${where} and g.base_spirit is not null
+        group by g.base_spirit
+      `);
+      const exact = new Map(
+        rows.map((row) => [row.base_spirit, Number(row.n)]),
+      );
+      const kinds = new Set(exact.keys());
+      for (const kind of BAR_KIND_KEYS) {
+        const parent = (BAR_KINDS[kind] as { parent?: string }).parent;
+        if (parent !== undefined && exact.has(kind)) kinds.add(parent);
+      }
+      return [...kinds]
+        .map((baseSpirit) => ({
+          baseSpirit,
+          count: baseSpiritMatches(baseSpirit).reduce(
+            (sum, value) => sum + (exact.get(value) ?? 0),
+            0,
+          ),
+        }))
+        .sort(
+          (a, b) =>
+            b.count - a.count || a.baseSpirit.localeCompare(b.baseSpirit),
+        );
+    });
+  }
+
   /** Shared by the page and its `count(*)` — see `PageScope`. */
-  #scope(filter: RecipeGroupsFilter): PageScope {
+  #scope(filter: RecipeGroupsFilter, scope: RecipeScope): PageScope {
+    const visible = recipeVisibleSql(scope);
+    const viewer =
+      scope.kind === "viewer"
+        ? sql`g.created_by_id = ${scope.viewer}::uuid or `
+        : sql``;
+    const listed =
+      scope.kind === "everything"
+        ? sql`true`
+        : sql`(${viewer}exists (select 1 from public.recipes r
+                     where r.recipe_group_id = g.id and ${visible}))`;
     const category =
       filter.category == null
         ? sql`true`
@@ -335,7 +437,10 @@ export class RecipeGroupsCollectionActor
     const baseSpirit =
       filter.baseSpirit == null
         ? sql`true`
-        : sql`g.base_spirit = ${filter.baseSpirit}`;
+        : sql`g.base_spirit in (${sql.join(
+            baseSpiritMatches(filter.baseSpirit).map((value) => sql`${value}`),
+            sql`, `,
+          )})`;
     // G26: the old page's one search box — name, description, or any
     // version's name. `escape '\\'` so a `%` or `_` someone typed is a
     // literal, as `RecipeSearchActor` and `BrandSearchActor` do it.
@@ -348,29 +453,59 @@ export class RecipeGroupsCollectionActor
             or coalesce(g.description, '') ilike ${pattern} escape '\\'
             or exists (select 1 from public.recipes r
                         where r.recipe_group_id = g.id
+                          and ${visible}
                           and r.name ilike ${pattern} escape '\\'))`;
     return {
       from: sql`public.recipe_groups g`,
-      where: sql`${category} and ${baseSpirit} and ${text}`,
+      where: sql`${listed} and ${category} and ${baseSpirit} and ${text}`,
     };
   }
 
   async #read(
     filter: RecipeGroupsFilter,
+    scope: RecipeScope,
     after: KeysetCursor | null,
     limit: number,
   ): Promise<readonly GroupRow[]> {
     const orderBy = normalizeRecipeGroupOrder(filter.orderBy);
     const { sort, cast, direction } = ORDERS[orderBy];
     const cursor = requireCursorFor(orderBy, after);
-    const { from, where } = this.#scope(filter);
+    const { from, where } = this.#scope(filter, scope);
     const { rows } = await this.db.execute<GroupRow>(sql`
       select g.id, g.name, g.description, g.category::text as category,
              g.base_spirit, g.tags, g.image_url, g.created_by_id,
-             g.canonical_recipe_id, g.created_at, g.updated_at,
+             -- X15: named only when the viewer may see it.
+             case when exists (
+               select 1 from public.recipes r
+               where r.id = g.canonical_recipe_id and ${recipeVisibleSql(scope)}
+             ) then g.canonical_recipe_id end as canonical_recipe_id,
+             -- F-88 / MC-pick: communityPickOf (recipe-group-actor.ts)
+             -- over the whole group — net votes from people other than the
+             -- version's author, at least the floor, never a draft, the
+             -- oldest winning a tie — then named only when visible (X15).
+             (select pick.id from (
+                select pr.id from public.recipes pr
+                cross join lateral (
+                  select coalesce(sum(
+                           case when v.vote_type = 'upvote' then 1 else -1 end
+                         ), 0) as net
+                  from public.recipe_votes v
+                  where v.recipe_id = pr.id
+                    and v.user_id is distinct from pr.created_by_id
+                ) votes
+                where pr.recipe_group_id = g.id
+                  and not pr.is_draft
+                  and votes.net >= ${COMMUNITY_PICK_MIN_NET}
+                order by votes.net desc, pr.created_at asc, pr.id asc
+                limit 1
+              ) pick
+              where ${recipeRefVisibleSql(scope, sql`pick.id`)}
+             ) as community_pick_id,
+             g.created_at, g.updated_at,
              (${ORDERS.NEWEST.sort})::text as sort_key,
              (select count(*) from public.recipes r
-               where r.recipe_group_id = g.id) as recipe_count
+               where r.recipe_group_id = g.id
+                 and ${recipeVisibleSql(scope)}) as recipe_count
       from ${from}
       where ${where}
         and ${keysetWhere(cursor, sort, ID, cast, direction)}

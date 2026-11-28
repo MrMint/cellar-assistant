@@ -1,7 +1,10 @@
-import { Box, CircularProgress, Typography } from "@mui/joy";
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { MenuScanResults } from "@/components/map/scanning/MenuScanResults";
+import { MenuLineSkeleton } from "@/components/map/scanning/ScanSteps";
+
+export const metadata: Metadata = { title: "Menu scan" };
 
 interface ScanDetailsPageProps {
   params: Promise<{
@@ -9,6 +12,10 @@ interface ScanDetailsPageProps {
   }>;
 }
 
+/**
+ * `/map/scans/[scanId]` — a menu scan's lines (Places-Menus). The shell's
+ * `<main data-app-scroller>` scrolls this page and supplies its gutter (D26).
+ */
 export default async function ScanDetailsPage({
   params,
 }: ScanDetailsPageProps) {
@@ -19,32 +26,8 @@ export default async function ScanDetailsPage({
   }
 
   return (
-    <Box
-      sx={{
-        height: "100dvh",
-        overflow: "auto",
-        p: 2,
-      }}
-    >
-      <Suspense
-        fallback={
-          <Box
-            sx={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              height: "50vh",
-              flexDirection: "column",
-              gap: 2,
-            }}
-          >
-            <CircularProgress />
-            <Typography>Loading scan results...</Typography>
-          </Box>
-        }
-      >
-        <MenuScanResults scanId={scanId} />
-      </Suspense>
-    </Box>
+    <Suspense fallback={<MenuLineSkeleton />}>
+      <MenuScanResults scanId={scanId} />
+    </Suspense>
   );
 }

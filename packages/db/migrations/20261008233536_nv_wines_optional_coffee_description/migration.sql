@@ -1,0 +1,26 @@
+-- Regenerated at merge as 20261008233536 (was 20261008214048 on wa/catalog),
+-- so it sorts after X27's 20261008214722/214724, X02's 20261008230209 and
+-- X08's 20261008231951 that other databases already have; the snapshot now
+-- chains from 3b40eba4 (want_to_try). The SQL below is unchanged.
+--
+-- X19 (catalog correction loop): two NOT NULLs the catalogue could not honour.
+--
+-- 1. `coffees.description`. Every other item table leaves `description`
+--    nullable; coffee alone required one, so a bag of beans could not be added
+--    without inventing prose about it (the UX review hit it seeding through the
+--    API: "a coffee needs description"). The form now treats it like the other
+--    five types' description.
+--
+-- 2. `wines.vintage`. A non-vintage wine (most Champagne, many fortified and
+--    sparkling wines, "NV" on the label) had no honest value: the column
+--    demanded a date, so the person typed a year that is not on the bottle.
+--    NULL now means **non-vintage** for a wine — the add and edit forms ask for
+--    a year *or* an explicit "NV", so a NULL is never "not read yet". Beers'
+--    and spirits' vintages were already nullable and keep their meaning.
+--
+-- Both are pure relaxations: no row changes, no default, nothing reads the
+-- columns as NOT NULL in SQL (no view, function or index depends on either
+-- being set). Existing rows keep their values; in particular no existing wine
+-- becomes NV, so no stored embedding text changes and nothing needs re-embedding.
+ALTER TABLE "coffees" ALTER COLUMN "description" DROP NOT NULL;--> statement-breakpoint
+ALTER TABLE "wines" ALTER COLUMN "vintage" DROP NOT NULL;

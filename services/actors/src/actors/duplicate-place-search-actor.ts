@@ -24,10 +24,13 @@
  * defaults, and `duplicate-place-search-actor.test.ts` asserts they agree.
  * Recorded in the C1 report.
  *
- * ## Viewer: not in the key
+ * ## Viewer: in the key (X27)
  *
- * `places` has no privacy column and no owner branch (B5). One activation
- * serves everyone.
+ * It used not to be — `places` had no owner branch (B5), so one activation
+ * served everyone. X27 gave it one: a place under review is its creator's
+ * alone. `find_duplicate_places` now answers with shared places only, and the
+ * viewer's own unshared places are added here (`ownUnsharedDuplicates`), so
+ * the activation — and its cached result — is per viewer.
  */
 import type {
   ActorCategory,
@@ -48,9 +51,12 @@ import {
   isLngLat,
   ValidationError,
 } from "@cellar-assistant/contracts";
+import { places } from "@cellar-assistant/db";
+import { inArray } from "@cellar-assistant/db/orm";
 import { requireSignedIn } from "../lib/guards.ts";
 import { decodePoint, findDuplicatePlaces } from "../lib/place-search-sql.ts";
 import { SearchActorBase } from "../lib/search-actor-base.ts";
+import { ownUnsharedDuplicates } from "../lib/unshared-places.ts";
 
 /**
  * B5's ceiling on the radius. Now `DUPLICATE_SEARCH_MAX_RADIUS_M` in
@@ -95,7 +101,7 @@ export class DuplicatePlaceSearchActor
   }
 
   protected async runSearch(
-    _ctx: Ctx,
+    ctx: Ctx,
     input: DuplicatePlaceSearchInput,
   ): Promise<readonly DuplicatePlaceHit[]> {
     const name = input.name.trim();
@@ -125,16 +131,65 @@ export class DuplicatePlaceSearchActor
       resultLimit,
     });
 
-    return rows.map((row) => ({
-      placeId: row.id,
-      name: row.name,
-      primaryCategory: row.primary_category,
-      location: decodePoint(row.location),
-      streetAddress: row.street_address,
-      locality: row.locality,
-      similarity: Number(row.similarity),
-      distanceMeters: Number(row.distance_m),
-    }));
+    const shared = rows.map(
+      (row): DuplicatePlaceHit => ({
+        placeId: row.id,
+        name: row.name,
+        primaryCategory: row.primary_category,
+        location: decodePoint(row.location),
+        streetAddress: row.street_address,
+        locality: row.locality,
+        similarity: Number(row.similarity),
+        distanceMeters: Number(row.distance_m),
+      }),
+    );
+    if (ctx.viewerId === null) return shared;
+
+    // X27: the SQL answers with shared places only. The viewer's own places
+    // under review are added — so "you already saved this" still warns — and
+    // nobody else's ever are; the key is viewer-scoped for that reason.
+    const own = await ownUnsharedDuplicates(this.db, ctx.viewerId, {
+      name,
+      location: input.location,
+      radiusMeters,
+      minSimilarity,
+      limit: resultLimit,
+    });
+    if (own.length === 0) return shared;
+    const details = await this.#detailsOf(own.map((hit) => hit.placeId));
+    const ownHits = own.map(
+      (hit): DuplicatePlaceHit => ({
+        placeId: hit.placeId,
+        name: hit.name,
+        primaryCategory: details.get(hit.placeId)?.primaryCategory ?? null,
+        location: details.get(hit.placeId)?.location ?? null,
+        streetAddress: details.get(hit.placeId)?.streetAddress ?? null,
+        locality: details.get(hit.placeId)?.locality ?? null,
+        similarity: hit.similarity,
+        distanceMeters: hit.distanceMeters,
+      }),
+    );
+    return [...ownHits, ...shared]
+      .sort(
+        (a, b) =>
+          b.similarity - a.similarity || a.distanceMeters - b.distanceMeters,
+      )
+      .slice(0, resultLimit);
+  }
+
+  /** The address columns `find_duplicate_places` returns, for own hits. */
+  async #detailsOf(ids: readonly string[]) {
+    const rows = await this.db
+      .select({
+        id: places.id,
+        primaryCategory: places.primaryCategory,
+        location: places.location,
+        streetAddress: places.streetAddress,
+        locality: places.locality,
+      })
+      .from(places)
+      .where(inArray(places.id, [...ids]));
+    return new Map(rows.map((row) => [row.id, row]));
   }
 }
 

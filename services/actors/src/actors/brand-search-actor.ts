@@ -40,8 +40,8 @@ import type {
   BrandSearchHit,
   BrandSearchInput,
   Ctx,
-  Page,
   PageArgs,
+  SearchPage,
 } from "@cellar-assistant/contracts";
 import {
   BRAND_SEARCH_DEFAULT_LIMIT,
@@ -51,9 +51,13 @@ import {
   ValidationError,
 } from "@cellar-assistant/contracts";
 import { brands } from "@cellar-assistant/db";
-import { asc, ilike, sql } from "@cellar-assistant/db/orm";
+import { asc, count, ilike, sql } from "@cellar-assistant/db/orm";
 import { requireSignedIn } from "../lib/guards.ts";
-import { SearchActorBase } from "../lib/search-actor-base.ts";
+import {
+  type CountedHits,
+  exactTotal,
+  SearchActorBase,
+} from "../lib/search-actor-base.ts";
 
 /**
  * `%`, `_` and `\` are pattern syntax in `LIKE`. A user typing them means the
@@ -82,7 +86,7 @@ export class BrandSearchActor
     ctx: Ctx,
     input: BrandSearchInput,
     page: PageArgs,
-  ): Promise<Page<BrandSearchHit>> {
+  ): Promise<SearchPage<BrandSearchHit>> {
     return this.pageOf(ctx, input, page);
   }
 
@@ -96,10 +100,14 @@ export class BrandSearchActor
   protected async runSearch(
     _ctx: Ctx,
     input: BrandSearchInput,
-  ): Promise<readonly BrandSearchHit[]> {
+  ): Promise<CountedHits<BrandSearchHit>> {
     const term = (input.term ?? "").trim();
     const limit = requireLimit(input.limit ?? BRAND_SEARCH_DEFAULT_LIMIT);
     const lowered = term.toLowerCase();
+    const matches =
+      term === ""
+        ? sql`true`
+        : ilike(brands.name, sql`${`%${escapeLike(term)}%`} escape '\\'`);
 
     const rows = await this.db
       .select({
@@ -109,11 +117,7 @@ export class BrandSearchActor
         logoUrl: brands.logoUrl,
       })
       .from(brands)
-      .where(
-        term === ""
-          ? sql`true`
-          : ilike(brands.name, sql`${`%${escapeLike(term)}%`} escape '\\'`),
-      )
+      .where(matches)
       .orderBy(
         sql`(lower(${brands.name}) = ${lowered}) desc`,
         sql`length(${brands.name}) asc`,
@@ -122,12 +126,21 @@ export class BrandSearchActor
       )
       .limit(limit);
 
-    return rows.map((row) => ({
-      id: row.id,
-      name: row.name,
-      brandType: row.brandType ?? null,
-      logoUrl: row.logoUrl ?? null,
-    }));
+    // Lexical, so exact (L3): the same `where`, counted without the limit.
+    const [counted] = await this.db
+      .select({ n: count() })
+      .from(brands)
+      .where(matches);
+
+    return exactTotal(
+      rows.map((row) => ({
+        id: row.id,
+        name: row.name,
+        brandType: row.brandType ?? null,
+        logoUrl: row.logoUrl ?? null,
+      })),
+      counted?.n ?? 0,
+    );
   }
 }
 

@@ -1,7 +1,13 @@
-import { Alert, Typography } from "@mui/joy";
-import { EditProfileClient } from "@/components/user/EditProfileClient";
+import type { Metadata } from "next";
+import { AppBar } from "@/components/app/AppBar";
+import { ICON_STROKE, Warning } from "@/components/app/icons";
+import { Page } from "@/components/app/Page";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { MyProfileQuery } from "@/components/user/fragments";
+import { ProfileEditor } from "@/components/user/ProfileEditor";
 import { apiServerQuery } from "@/lib/api/urql-server";
+
+export const metadata: Metadata = { title: "Edit profile" };
 
 /**
  * `/users/edit`.
@@ -16,16 +22,31 @@ import { apiServerQuery } from "@/lib/api/urql-server";
 export default async function EditProfile() {
   const data = await apiServerQuery(MyProfileQuery);
 
-  if (data.me === null) {
-    return (
-      <Alert color="warning" variant="soft">
-        <Typography level="body-md">
-          Your session ended while this page was loading. Sign in again to edit
-          your profile.
-        </Typography>
-      </Alert>
-    );
-  }
+  return (
+    <Page className="max-w-[480px]">
+      {/* Reached from Settings: Back goes there on a cold open. */}
+      <AppBar title="Edit profile" parent="/me/settings" />
+      {data.me === null ? (
+        <SessionEnded />
+      ) : (
+        <ProfileEditor
+          profile={{
+            displayName: data.me.profile.displayName,
+            avatarUrl: data.me.profile.avatarUrl ?? null,
+          }}
+        />
+      )}
+    </Page>
+  );
+}
 
-  return <EditProfileClient profile={data.me.profile} />;
+function SessionEnded() {
+  return (
+    <Alert>
+      <Warning aria-hidden strokeWidth={ICON_STROKE} />
+      <AlertDescription className="t-body text-ink">
+        Your session ended. Sign in again to edit your profile.
+      </AlertDescription>
+    </Alert>
+  );
 }

@@ -1,8 +1,8 @@
 "use client";
 
-import { Stack } from "@mui/joy";
 import { useRouter } from "next/navigation";
 import { useCallback } from "react";
+import { useNavigate } from "@/components/app/useNavigate";
 import { CellarForm } from "@/components/cellar/CellarForm";
 import { ApiError } from "@/components/cellar-api/ApiError";
 import { PageLoading } from "@/components/common/PageLoading";
@@ -19,15 +19,16 @@ import { useAllFriends } from "./useAllFriends";
  */
 export function AddCellarClient() {
   const router = useRouter();
+  const navigate = useNavigate();
 
   const friends = useAllFriends();
 
   const handleSubmitted = useCallback(
     (id: string) => {
-      router.push(`/cellars/${id}/items`);
+      navigate.push(`/cellars/${id}/items`);
       router.refresh();
     },
-    [router],
+    [navigate, router],
   );
 
   if (friends.loading) return <PageLoading />;
@@ -41,13 +42,14 @@ export function AddCellarClient() {
     <CellarForm
       friends={friends.rows.map(userFromProfile)}
       onSubmitted={handleSubmitted}
+      onCancel={() => navigate.back()}
     />
   );
   if (friends.failure === null) return form;
   return (
-    <Stack spacing={2}>
+    <div className="flex flex-col gap-4">
       <ApiError error={friends.failure} />
       {form}
-    </Stack>
+    </div>
   );
 }

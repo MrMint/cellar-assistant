@@ -7,6 +7,7 @@ import { mock } from "bun:test";
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import { renderToStaticMarkup } from "react-dom/server";
+import { stripStyleBlocks } from "@/test-support/markup";
 
 mock.module("next/navigation", () => ({
   useRouter: () => ({ replace: () => {}, push: () => {}, refresh: () => {} }),
@@ -20,7 +21,7 @@ const { FORMER_PASSWORD_USER_NOTE } = await import("./SocialButtons");
 const { readPasswordMode } = await import("@/lib/auth/password-mode");
 
 const render = (node: React.ReactNode) =>
-  renderToStaticMarkup(node).replace(/<style[^>]*>[^<]*<\/style>/g, "");
+  stripStyleBlocks(renderToStaticMarkup(node));
 
 const SOCIAL = [
   "Continue with Google",
@@ -30,13 +31,15 @@ const SOCIAL = [
 
 const assertSocialButtons = (html: string) => {
   for (const label of SOCIAL) assert.ok(html.includes(label), label);
-  // The production button: soft, neutral, full width.
-  const buttons = html.match(/<button[^>]*>/g) ?? [];
-  const social = buttons.filter((b) => b.includes("MuiButton-variantSoft"));
+  // The production button: one real button per provider, icon then label,
+  // never a submit (it must not post the password form it sits beside).
+  const social = [
+    ...html.matchAll(/<button([^>]*)>((?:(?!<\/button>)[\s\S])*)<\/button>/g),
+  ].filter(([, , inner]) => inner.includes("Continue with"));
   assert.equal(social.length, 3);
-  for (const b of social) {
-    assert.ok(b.includes("MuiButton-colorNeutral"), b);
-    assert.ok(b.includes("MuiButton-fullWidth"), b);
+  for (const [, attrs, inner] of social) {
+    assert.ok(!attrs.includes('type="submit"'), attrs);
+    assert.match(inner, /<svg[\s\S]*<\/svg>[\s\S]*Continue with/, inner);
   }
 };
 
@@ -74,8 +77,20 @@ describe("sign-in page", () => {
     assert.ok(html.includes(">or<"));
     assert.ok(hasPasswordInput(html));
     assert.ok(html.includes('type="email"'));
-    assert.ok(html.includes("New to Cellar Assistant?"));
-    assert.ok(html.includes('href="/sign-up"'));
+    assert.match(html, /<h1\b[^>]*>Cellar Assistant<\/h1>/);
+    assert.ok(html.includes("Sign in to your cellars"));
+    assert.match(html, /<a\b[^>]*href="\/sign-up"[^>]*>Create an account<\/a>/);
+    // Shell-Entry: the providers come before the password form.
+    assert.ok(
+      html.indexOf("Continue with Facebook") < html.indexOf('type="email"'),
+    );
+    // The password field's toggle is "Show", so the field alone is named
+    // "Password" (getByLabel("Password") finds one control).
+    assert.match(
+      html,
+      /<button\b[^>]*aria-pressed="false"[^>]*>Show<\/button>/,
+    );
+    assert.ok(!/aria-label="[^"]*[Pp]assword/.test(html));
     assert.ok(!html.includes(note));
     assert.ok(!html.includes("Sign in with your password"));
   });
@@ -112,23 +127,59 @@ describe("sign-in page", () => {
 });
 
 describe("sign-up page", () => {
-  test("enabled (default): the password sign-up form, no social buttons", () => {
+  test("enabled (default): providers first, then the password sign-up form", () => {
     const html = render(<SignUpApiClient />);
-    assert.ok(html.includes("Sign up for Cellar Assistant"));
+    assert.match(html, /<h1\b[^>]*>Create an account<\/h1>/);
+    assertSocialButtons(html);
+    assert.ok(html.includes(">or<"));
     assert.ok(hasPasswordInput(html));
-    assert.ok(html.includes("Display name"));
-    for (const label of SOCIAL) assert.ok(!html.includes(label));
+    assert.ok(
+      html.indexOf("Continue with Facebook") < html.indexOf('type="email"'),
+    );
+    assert.match(html, /<label\b[^>]*for="sign-up-name"[^>]*>Name<\/label>/);
+    assert.ok(html.includes("Optional"));
+    assert.ok(html.includes("Friends see this, never your email"));
+    assert.ok(html.includes("9 or more characters"));
+    assert.match(
+      html,
+      /<button\b[^>]*type="submit"[^>]*>[\s\S]*?Create account<\/button>/,
+    );
+    assert.ok(html.includes("Have an account?"));
   });
 
   for (const mode of ["signin-only", "disabled"] as const) {
     test(`${mode}: social buttons only`, () => {
       const html = render(<SignUpApiClient passwordMode={mode} />);
-      assert.ok(html.includes("Sign up for Cellar Assistant"));
+      assert.match(html, /<h1\b[^>]*>Create an account<\/h1>/);
       assertSocialButtons(html);
       assert.ok(!hasPasswordInput(html));
       assert.ok(!html.includes('type="email"'));
-      assert.ok(!html.includes("Display name"));
+      assert.ok(!html.includes("sign-up-name"));
       assert.ok(html.includes('href="/sign-in"'));
     });
   }
+});
+
+describe("returnTo crosses between sign-in and sign-up (D19)", () => {
+  const returnTo = "/cellars/abc/items";
+  const encoded = 'returnTo=%2Fcellars%2Fabc%2Fitems"';
+
+  test("sign-in's Sign up link carries it", () => {
+    const html = render(<SignInApiClient returnTo={returnTo} />);
+    assert.ok(html.includes(`href="/sign-up?${encoded}`), html);
+  });
+
+  for (const mode of ["enabled", "disabled"] as const) {
+    test(`sign-up (${mode}) links back to sign-in with it`, () => {
+      const html = render(
+        <SignUpApiClient returnTo={returnTo} passwordMode={mode} />,
+      );
+      assert.ok(html.includes(`href="/sign-in?${encoded}`), html);
+    });
+  }
+
+  test("without one, the links stay bare", () => {
+    assert.ok(render(<SignInApiClient />).includes('href="/sign-up"'));
+    assert.ok(render(<SignUpApiClient />).includes('href="/sign-in"'));
+  });
 });

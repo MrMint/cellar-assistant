@@ -210,6 +210,37 @@ export const seedCellarItem = async (
   return id;
 };
 
+/**
+ * One `check_ins` row (X02's shape): about `userId`, on `item`, poured from
+ * `cellarItemId` when given. Its own occasion unless `groupId` is passed.
+ */
+export const seedCheckIn = async (
+  db: DbOrTx,
+  options: {
+    readonly userId: string;
+    readonly item: ItemRef;
+    readonly cellarItemId?: string | null;
+    readonly createdById?: string;
+    readonly groupId?: string;
+    readonly id?: string;
+    readonly createdAt?: string;
+  },
+): Promise<string> => {
+  const id = options.id ?? randomUUID();
+  const createdAt = options.createdAt ?? new Date().toISOString();
+  await db.execute(sql`
+    insert into public.check_ins
+      (id, user_id, created_by_id, group_id, cellar_item_id,
+       ${ARCS.checkIns.unqualified(options.item.type)}, created_at, updated_at)
+    values (${id}::uuid, ${options.userId}::uuid,
+            ${options.createdById ?? options.userId}::uuid,
+            ${options.groupId ?? id}::uuid, ${options.cellarItemId ?? null}::uuid,
+            ${options.item.id}::uuid, ${createdAt}::timestamptz,
+            ${createdAt}::timestamptz)
+  `);
+  return id;
+};
+
 /* -------------------------------------------------------------------------- */
 /* Places, tier lists                                                          */
 /* -------------------------------------------------------------------------- */
@@ -225,6 +256,10 @@ export type SeedPlaceInput = {
   readonly locality?: string | null;
   readonly isActive?: boolean;
   readonly confidence?: number;
+  /** X27: `approved` (shared) unless a test says otherwise. */
+  readonly reviewStatus?: "pending" | "approved" | "rejected";
+  /** `places.created_by` — whose an unshared place is. */
+  readonly createdBy?: string | null;
 };
 
 /**
@@ -248,7 +283,8 @@ export const seedPlace = async (
   ];
   await db.execute(sql`
     insert into public.places
-      (id, name, location, categories, confidence, rating, locality, is_active, source)
+      (id, name, location, categories, confidence, rating, locality, is_active, source,
+       review_status, created_by)
     values (
       ${id}::uuid,
       ${input.name},
@@ -258,7 +294,9 @@ export const seedPlace = async (
       ${input.rating ?? null},
       ${input.locality ?? null},
       ${input.isActive ?? true},
-      'user'
+      'user',
+      ${input.reviewStatus ?? "approved"},
+      ${input.createdBy ?? null}::uuid
     )
   `);
   return id;
@@ -321,13 +359,25 @@ export const seedRecipe = async (
     readonly description?: string | null;
     readonly type?: "food" | "cocktail";
     readonly createdById?: string | null;
+    /**
+     * X15: defaults to `PUBLIC` — a fixture recipe stands for the catalog
+     * every pre-D22 search was written against. Pass `PRIVATE`/`FRIENDS` (or
+     * `isDraft`) to test the visibility rule itself.
+     */
+    readonly privacy?: "PUBLIC" | "FRIENDS" | "PRIVATE";
+    readonly isDraft?: boolean;
+    readonly recipeGroupId?: string | null;
   },
 ): Promise<string> => {
   const id = randomUUID();
   await db.execute(sql`
-    insert into public.recipes (id, name, description, type, created_by_id)
+    insert into public.recipes
+      (id, name, description, type, created_by_id, privacy, is_draft,
+       recipe_group_id)
     values (${id}::uuid, ${input.name}, ${input.description ?? null},
-            ${input.type ?? "cocktail"}, ${input.createdById ?? null}::uuid)
+            ${input.type ?? "cocktail"}, ${input.createdById ?? null}::uuid,
+            ${input.privacy ?? "PUBLIC"}::permission_type,
+            ${input.isDraft ?? false}, ${input.recipeGroupId ?? null}::uuid)
   `);
   return id;
 };

@@ -39,8 +39,9 @@
 import type {
   ActorCategory,
   Ctx,
-  Page,
   PageArgs,
+  PersonRelation,
+  SearchPage,
   UserSearchActorInterface,
   UserSearchHit,
   UserSearchInput,
@@ -53,13 +54,31 @@ import {
 } from "@cellar-assistant/contracts";
 import { friendRequests, friends } from "@cellar-assistant/db";
 import { eq, or } from "@cellar-assistant/db/orm";
+import { canSeeProfile } from "@cellar-assistant/policy";
 import type { ActorId, DaprClient } from "@dapr/dapr";
 import type { DbOrTx } from "../lib/db.ts";
 import { actorDb } from "../lib/db.ts";
 import { requireSignedIn } from "../lib/guards.ts";
 import type { ProfileStore } from "../lib/profile-store.ts";
 import { betterAuthProfileStore } from "../lib/profile-store.ts";
-import { SearchActorBase } from "../lib/search-actor-base.ts";
+import {
+  type CountedHits,
+  exactTotal,
+  SearchActorBase,
+} from "../lib/search-actor-base.ts";
+
+/**
+ * Leftovers 5 (L6): a person the viewer may not see is simply not a hit, the
+ * same as someone who does not exist, through the one profile rule
+ * (`canSeeProfile`). Nobody is hidden yet (L41), so this drops nothing today;
+ * when blocking lands, a page may hold fewer than `limit` hits rather than
+ * say who was left out.
+ */
+const visibleTo = (
+  ctx: Ctx,
+  hits: readonly UserSearchHit[],
+): readonly UserSearchHit[] =>
+  hits.filter((hit) => canSeeProfile(ctx, { userId: hit.userId }));
 
 export class UserSearchActor
   extends SearchActorBase<UserSearchInput, UserSearchHit>
@@ -87,7 +106,7 @@ export class UserSearchActor
     ctx: Ctx,
     input: UserSearchInput,
     page: PageArgs,
-  ): Promise<Page<UserSearchHit>> {
+  ): Promise<SearchPage<UserSearchHit>> {
     return this.pageOf(ctx, input, page);
   }
 
@@ -114,21 +133,179 @@ export class UserSearchActor
   protected async runSearch(
     ctx: Ctx,
     input: UserSearchInput,
-  ): Promise<readonly UserSearchHit[]> {
+  ): Promise<CountedHits<UserSearchHit>> {
     const viewer = ctx.viewerId;
     const term = input.term.trim();
     const limit = requireLimit(input.limit ?? USER_SEARCH_RESULT_CAP);
+
+    if (input.includeConnected === true) {
+      // Not held for the activation's idle window: every hit carries how it
+      // is connected *now*, and the page it answers is where that changes —
+      // an Add, then "See all", must not say "Add" again, nor a request
+      // accepted on Friends still read "Wants to be friends". Two small
+      // reads and one capped store search per turn.
+      this.doNotCache();
+      const everyone = await this.#everyone(viewer, term, limit);
+      return exactTotal(visibleTo(ctx, everyone.hits), everyone.total);
+    }
 
     // An admin ctx has no viewer of its own to exclude around; it searches the
     // whole directory. `bypassesPolicy` covers system and admin (§1.6).
     const excludeIds = viewer === null ? [] : await this.#excludedFor(viewer);
 
     const rows = await this.#profiles.search({ term, excludeIds, limit });
-    return rows.map((row) => ({
-      userId: row.id,
-      displayName: row.displayName,
-      avatarUrl: row.avatarUrl,
-    }));
+    // Lexical, so exact (L3): the store counts the same match without a limit.
+    const total = await this.#profiles.count({ term, excludeIds });
+    return exactTotal(
+      visibleTo(
+        ctx,
+        rows.map((row) => ({
+          userId: row.id,
+          displayName: row.displayName,
+          avatarUrl: row.avatarUrl,
+          avatarFileId: row.avatarFileId,
+        })),
+      ),
+      total,
+    );
+  }
+
+  /**
+   * X12 — anyone by name, connected people first.
+   *
+   * The connected half is small (one viewer's friends and open requests),
+   * so their profiles are loaded and matched here, with the store's own
+   * rule — `%term%`, case-insensitive — and its order (exact name, then
+   * shortest, then alphabetical). The rest is the ordinary store search with
+   * them excluded, so a viewer with many friends called "Al…" still sees
+   * the strangers after them, and nobody appears twice.
+   */
+  async #everyone(
+    viewer: string | null,
+    term: string,
+    limit: number,
+  ): Promise<{ hits: readonly UserSearchHit[]; total: number }> {
+    const { relations, pendingIds } =
+      viewer === null
+        ? {
+            relations: new Map<string, PersonRelation>(),
+            pendingIds: new Map<string, string>(),
+          }
+        : await this.#relationsOf(viewer);
+    const connected = await this.#profiles.load([...relations.keys()]);
+    const needle = term.toLowerCase();
+    const knownMatches = [...connected.values()].filter((row) =>
+      row.displayName.toLowerCase().includes(needle),
+    );
+    const known = knownMatches
+      .map((row) => ({
+        row,
+        relation: relations.get(row.id) ?? ("NONE" as const),
+      }))
+      .sort(
+        (a, b) =>
+          RELATION_ORDER[a.relation] - RELATION_ORDER[b.relation] ||
+          compareByName(a.row.displayName, b.row.displayName, needle) ||
+          compareText(a.row.id, b.row.id),
+      )
+      .slice(0, limit);
+    const excludeIds = viewer === null ? [] : [viewer, ...relations.keys()];
+    const rest =
+      known.length >= limit
+        ? []
+        : await this.#profiles.search({
+            term,
+            excludeIds,
+            limit: limit - known.length,
+          });
+    // Connected matches are counted here, strangers by the store: together
+    // every match, before the cap.
+    const total =
+      knownMatches.length + (await this.#profiles.count({ term, excludeIds }));
+    const hits: UserSearchHit[] = [
+      ...known.map(({ row, relation }) => {
+        const pendingRequestId =
+          relation === "REQUEST_SENT" || relation === "REQUEST_RECEIVED"
+            ? pendingIds.get(row.id)
+            : undefined;
+        return {
+          userId: row.id,
+          displayName: row.displayName,
+          avatarUrl: row.avatarUrl,
+          avatarFileId: row.avatarFileId,
+          relation,
+          ...(pendingRequestId === undefined ? {} : { pendingRequestId }),
+        };
+      }),
+      ...rest.map((row) => ({
+        userId: row.id,
+        displayName: row.displayName,
+        avatarUrl: row.avatarUrl,
+        avatarFileId: row.avatarFileId,
+        relation: "NONE" as const,
+      })),
+    ];
+    return { hits, total };
+  }
+
+  /**
+   * Everyone the viewer is connected to, and how. A friendship wins over a
+   * request (between the two calls of an acceptance both can exist); a
+   * request *to* the viewer over one *from* them, since that is the one
+   * waiting on the viewer.
+   */
+  async #relationsOf(viewer: string): Promise<{
+    relations: Map<string, PersonRelation>;
+    /** F-43: the other person → the id of the request that relation names. */
+    pendingIds: Map<string, string>;
+  }> {
+    const friendRows = await this.db
+      .select({ userId: friends.userId, friendId: friends.friendId })
+      .from(friends)
+      .where(or(eq(friends.userId, viewer), eq(friends.friendId, viewer)));
+    const requestRows = await this.db
+      .select({
+        id: friendRequests.id,
+        userId: friendRequests.userId,
+        friendId: friendRequests.friendId,
+        status: friendRequests.status,
+      })
+      .from(friendRequests)
+      .where(
+        or(
+          eq(friendRequests.userId, viewer),
+          eq(friendRequests.friendId, viewer),
+        ),
+      );
+    const out = new Map<string, PersonRelation>();
+    const offer = (id: string, relation: PersonRelation) => {
+      if (id === viewer) return;
+      const current = out.get(id);
+      if (
+        current === undefined ||
+        RELATION_ORDER[relation] < RELATION_ORDER[current]
+      ) {
+        out.set(id, relation);
+      }
+    };
+    for (const row of friendRows) {
+      offer(row.userId === viewer ? row.friendId : row.userId, "FRIEND");
+    }
+    // Received first, so a pair with requests both ways keeps the one the
+    // relation names (a request to the viewer wins, as above).
+    const pendingIds = new Map<string, string>();
+    const sorted = [...requestRows].sort(
+      (a, b) => Number(a.userId === viewer) - Number(b.userId === viewer),
+    );
+    for (const row of sorted) {
+      if (row.userId === viewer) offer(row.friendId, "REQUEST_SENT");
+      else offer(row.userId, "REQUEST_RECEIVED");
+      const other = row.userId === viewer ? row.friendId : row.userId;
+      if (row.status === "PENDING" && !pendingIds.has(other)) {
+        pendingIds.set(other, row.id);
+      }
+    }
+    return { relations: out, pendingIds };
   }
 
   /** The viewer, everyone they are friends with, everyone mid-request. */
@@ -159,6 +336,28 @@ export class UserSearchActor
     return [...excluded];
   }
 }
+
+/** Friends first, then requests waiting on the viewer, then the viewer's own. */
+const RELATION_ORDER: Record<PersonRelation, number> = {
+  FRIEND: 0,
+  REQUEST_RECEIVED: 1,
+  REQUEST_SENT: 2,
+  NONE: 3,
+};
+
+/** `ProfileStore.search`'s order: exact name, then shortest, then A–Z. */
+const compareByName = (a: string, b: string, needle: string): number => {
+  const exact =
+    Number(b.toLowerCase() === needle) - Number(a.toLowerCase() === needle);
+  return (
+    exact ||
+    a.length - b.length ||
+    compareText(a.toLowerCase(), b.toLowerCase())
+  );
+};
+
+const compareText = (a: string, b: string): number =>
+  a < b ? -1 : a > b ? 1 : 0;
 
 const requireLimit = (value: number): number => {
   if (!Number.isInteger(value) || value < 1 || value > USER_SEARCH_RESULT_CAP) {

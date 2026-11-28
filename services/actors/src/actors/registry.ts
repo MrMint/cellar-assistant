@@ -41,6 +41,8 @@ import type {
   AnyActorDescriptor,
 } from "@cellar-assistant/contracts";
 import {
+  AiJobsCollectionActorDescriptor,
+  BarActorDescriptor,
   BarcodeActorDescriptor,
   BrandActorDescriptor,
   BrandLinksCollectionActorDescriptor,
@@ -52,7 +54,9 @@ import {
   CellarActorDescriptor,
   CellarItemSearchActorDescriptor,
   CellarsCollectionActorDescriptor,
+  CheckInActorDescriptor,
   CheckInsCollectionActorDescriptor,
+  DraftsCollectionActorDescriptor,
   DuplicatePlaceSearchActorDescriptor,
   EmbeddingActorDescriptor,
   FavoritesCollectionActorDescriptor,
@@ -74,14 +78,17 @@ import {
   PlaceActorDescriptor,
   PlaceCreationActorDescriptor,
   PlaceRefreshJobActorDescriptor,
+  PlaceReviewActorDescriptor,
   PlaceSearchActorDescriptor,
   RankingsActorDescriptor,
+  RecapActorDescriptor,
   RecipeActorDescriptor,
   RecipeGroupActorDescriptor,
   RecipeGroupsCollectionActorDescriptor,
   RecipePhotoJobActorDescriptor,
   RecipeSearchActorDescriptor,
   ReferenceDataActorDescriptor,
+  TasteActorDescriptor,
   TierListActorDescriptor,
   TierListsCollectionActorDescriptor,
   UserActorDescriptor,
@@ -91,6 +98,8 @@ import {
 import type { AbstractActor, ActorId, DaprClient } from "@dapr/dapr";
 import { guardDeclaredMethods } from "../lib/actor-method-allowlist.ts";
 import type { KeepAlive } from "../lib/keep-alive.ts";
+import { AiJobsCollectionActor } from "./ai-jobs-collection-actor.ts";
+import { BarActor } from "./bar-actor.ts";
 import { BarcodeActor } from "./barcode-actor.ts";
 import { BrandActor } from "./brand-actor.ts";
 import { BrandLinksCollectionActor } from "./brand-links-collection-actor.ts";
@@ -102,7 +111,9 @@ import { CategoryVectorsActor } from "./category-vectors-actor.ts";
 import { CellarActor } from "./cellar-actor.ts";
 import { CellarItemSearchActor } from "./cellar-item-search-actor.ts";
 import { CellarsCollectionActor } from "./cellars-collection-actor.ts";
+import { CheckInActor } from "./check-in-actor.ts";
 import { CheckInsCollectionActor } from "./check-ins-collection-actor.ts";
+import { DraftsCollectionActor } from "./drafts-collection-actor.ts";
 import { DuplicatePlaceSearchActor } from "./duplicate-place-search-actor.ts";
 import { EmbeddingActor } from "./embedding-actor.ts";
 import { FavoritesCollectionActor } from "./favorites-collection-actor.ts";
@@ -134,15 +145,18 @@ import { PingActor } from "./ping-actor.ts";
 import { PlaceActor } from "./place-actor.ts";
 import { PlaceCreationActor } from "./place-creation-actor.ts";
 import { PlaceRefreshJobActor } from "./place-refresh-job-actor.ts";
+import { PlaceReviewActor } from "./place-review-actor.ts";
 import { PlaceSearchActor } from "./place-search-actor.ts";
 import { ProbeJobActor, ProbeJobActorDescriptor } from "./probe-job-actor.ts";
 import { RankingsActor } from "./rankings-actor.ts";
+import { RecapActor } from "./recap-actor.ts";
 import { RecipeActor } from "./recipe-actor.ts";
 import { RecipeGroupActor } from "./recipe-group-actor.ts";
 import { RecipeGroupsCollectionActor } from "./recipe-groups-collection-actor.ts";
 import { RecipePhotoJobActor } from "./recipe-photo-job-actor.ts";
 import { RecipeSearchActor } from "./recipe-search-actor.ts";
 import { ReferenceDataActor } from "./reference-data-actor.ts";
+import { TasteActor } from "./taste-actor.ts";
 import { TierListActor } from "./tier-list-actor.ts";
 import { TierListsCollectionActor } from "./tier-lists-collection-actor.ts";
 import { UserActor } from "./user-actor.ts";
@@ -240,6 +254,7 @@ export const ACTOR_REGISTRY: readonly RegistryEntry[] = [
   entry(CategoryVectorsActor, CategoryVectorsActorDescriptor),
   // B1 (§2.1).
   entry(CellarActor, CellarActorDescriptor),
+  entry(CheckInActor, CheckInActorDescriptor),
   // B4 (§2.1, §1.7).
   entry(UserActor, UserActorDescriptor),
   // B3 (§2.1).
@@ -258,6 +273,9 @@ export const ACTOR_REGISTRY: readonly RegistryEntry[] = [
   // external call reserves through.
   entry(PlaceActor, PlaceActorDescriptor),
   entry(PlaceCreationActor, PlaceCreationActorDescriptor),
+  // X27 / D28: the AI review of a pending place, delivered by the outbox and
+  // keyed by the place — so the model call holds no reader's turn lock.
+  entry(PlaceReviewActor, PlaceReviewActorDescriptor),
   entry(BudgetActor, BudgetActorDescriptor),
   // B6 (§2.1, §3). A group owns `recipe_votes` because what a vote decides is
   // the group's `canonical_recipe_id` — `vote` recomputes it in-turn,
@@ -291,6 +309,10 @@ export const ACTOR_REGISTRY: readonly RegistryEntry[] = [
   // See `packages/contracts/src/views.ts`.
   entry(MapActor, MapActorDescriptor),
   entry(RankingsActor, RankingsActorDescriptor),
+  // X14 (D9, D18/G29, D23). The viewer's bar — own cellars' bottles plus
+  // the Bar pantry — and every cocktail judged against it. A view actor for
+  // the same reasons as the two above. See `./bar-actor.ts`.
+  entry(BarActor, BarActorDescriptor),
   // B8 (§2.1, §1.4, §8.5). `MenuScanActor` owns `menu_scans` and
   // `item_match_suggestions` and replaces the `processing_status` event
   // trigger with three outbox rows. `MenuMatchJobActor` exists because §8.5
@@ -344,4 +366,18 @@ export const ACTOR_REGISTRY: readonly RegistryEntry[] = [
   entry(RecipeGroupsCollectionActor, RecipeGroupsCollectionActorDescriptor),
   entry(BrandsCollectionActor, BrandsCollectionActorDescriptor),
   entry(BrandLinksCollectionActor, BrandLinksCollectionActorDescriptor),
+  // X10. Home's job tray and inbox: the viewer's AI work across four tables
+  // (label reads, menu scans, recipe photos, tier-list insights), read the
+  // C3 way — keyed by the viewer, checked every turn, nothing held.
+  entry(AiJobsCollectionActor, AiJobsCollectionActorDescriptor),
+  // L03 (wave C "taste"): the taste profile and friend agreement, read-only,
+  // keyed by the viewer and checked every turn.
+  entry(TasteActor, TasteActorDescriptor),
+  // L04. The recap deck and breadth stamps: the viewer's own drink log, read
+  // through its own query and DTO (L32, L45). Keyed by the viewer, read-only.
+  entry(RecapActor, RecapActorDescriptor),
+  // SV-B (L6, L30). The viewer's saved "Needs details" drafts, listed and
+  // counted per cellar, and `Item.unconfirmedFields`. Keyed by the viewer,
+  // read-only, checked every turn.
+  entry(DraftsCollectionActor, DraftsCollectionActorDescriptor),
 ];

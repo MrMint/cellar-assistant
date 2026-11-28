@@ -1,10 +1,12 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
+import { print } from "graphql";
 import {
   type ItemCardSource,
   itemCardFromCellarItem,
   itemCardFromFragment,
   itemCardFromItem,
+  plateStyleFields,
   subtitleDescriptor,
 } from "./adapter";
 import { ItemCardFragment } from "./fragments";
@@ -47,7 +49,71 @@ describe("itemCardFromItem", () => {
       reviewed: undefined,
       favoriteCount: null,
       isFavorite: true,
+      myScore: null,
+      plate: { producer: "Vietti", name: "Barolo", vintage: "2016" },
+      styleFields: { style: null, variety: "NEBBIOLO" },
     });
+  });
+
+  test("H-2: each type's style fields reach the plate under the vessel's names", () => {
+    assert.deepEqual(
+      plateStyleFields("WINE", {
+        wineStyle: "SPARKLING",
+        variety: "CHARDONNAY",
+      }),
+      { style: "SPARKLING", variety: "CHARDONNAY" },
+    );
+    assert.deepEqual(plateStyleFields("BEER", { beerStyle: "STOUT" }), {
+      style: "STOUT",
+    });
+    // Spirit's vessel reads spiritType; its style only when that is absent.
+    assert.deepEqual(
+      plateStyleFields("SPIRIT", { spiritType: "TEQUILA", spiritStyle: "x" }),
+      { style: "TEQUILA" },
+    );
+    assert.deepEqual(plateStyleFields("SPIRIT", { spiritStyle: "GIN" }), {
+      style: "GIN",
+    });
+    assert.deepEqual(
+      plateStyleFields("TEA", { category: "GREEN", form: "matcha_powder" }),
+      { style: "GREEN", form: "matcha_powder" },
+    );
+    assert.equal(plateStyleFields("SAKE", { category: "JUNMAI" }), null);
+    assert.equal(plateStyleFields("COFFEE", {}), null);
+    assert.deepEqual(
+      itemCardFromItem({ id: "b", type: "BEER", name: "B", beerStyle: "IPA" })
+        .styleFields,
+      { style: "IPA" },
+    );
+  });
+
+  test("the LabelPlate gets region (else country) and ABV when selected", () => {
+    const card = itemCardFromItem({
+      ...wine,
+      region: "Piedmont",
+      country: "ITALY",
+      alcoholContentPercentage: 14.5,
+    });
+    assert.deepEqual(card.plate, {
+      producer: "Vietti",
+      name: "Barolo",
+      vintage: "2016",
+      origin: "Piedmont",
+      abv: "14.5%",
+    });
+    assert.equal(
+      itemCardFromItem({ id: "t", type: "TEA", name: "T", country: "JAPAN" })
+        .plate?.origin,
+      "Japan",
+    );
+  });
+
+  test("myScore is the viewer's own score, null when unreviewed", () => {
+    assert.equal(
+      itemCardFromItem({ ...wine, myReview: { score: 4.5 } }).myScore,
+      4.5,
+    );
+    assert.equal(itemCardFromItem({ ...wine, myReview: null }).myScore, null);
   });
 
   test("the primary brand wins over page order; else the first", () => {
@@ -182,5 +248,23 @@ describe("itemCardFromFragment", () => {
     assert.equal(card.subtitle, "Nebbiolo");
     assert.equal(card.displayImageUrl, undefined);
     assert.ok(ItemCardFragment);
+  });
+});
+
+describe("ItemCardFragment selects the plate's style fields (H-9)", () => {
+  // `plateStyleFields` reads these; unselected, a card's plate never got a
+  // style vessel.
+  const source = print(ItemCardFragment).replace(/\s+/g, " ");
+  const branch = (type: string) =>
+    source.match(new RegExp(`\\.\\.\\. on ${type} \\{([^}]*)\\}`))?.[1] ?? "";
+
+  test("Wine's style as wineStyle", () => {
+    assert.match(branch("Wine"), /\bwineStyle: style\b/);
+  });
+  test("Spirit's spiritType", () => {
+    assert.match(branch("Spirit"), /\bspiritType\b/);
+  });
+  test("Tea's form", () => {
+    assert.match(branch("Tea"), /\bform\b/);
   });
 });

@@ -19,20 +19,58 @@ import {
  *
  * The assertion that matters is the one at the end: the new band survives a
  * **reload**. A board that only reorders in React state looks identical.
+ *
+ * X23 / D4: the board is read-only until **Edit order**, so the add and the drag
+ * both start from the page (an empty list's own "Add from what you've tasted"
+ * opens the picker, the dock's "Add a wine" after it), and a picker row is one control — the
+ * whole row.
+ *
+ * X16: the picker opens on suggestion sections and picks several — a row is
+ * a checkbox, and "Add N entries" adds them as one edit — so this spec
+ * searches, ticks the one row it wants and adds it. It also creates its list
+ * empty: the form's "Start with your ratings" is turned off when offered, so
+ * the empty list's own button is there to press (that start is
+ * `mobile/m06-tier-list-without-typing.spec.ts`'s).
  */
 test.describe.configure({ mode: "serial" });
+
+const escapeRegExp = (text: string) =>
+  text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 let tierListId: string;
 let listName: string;
 
-test("creates a tier list", async ({ primary }) => {
+test("creates a tier list", async ({ api, primary }) => {
   listName = unique("E2 Tier List");
+  // Whether the form will offer "Start with your ratings" for wines, asked
+  // up front: the switch appears only once the form's own templates read
+  // lands, so a bare `isVisible()` raced it and, losing, created the list
+  // pre-filled (the switch is on by default).
+  const templates = await api.raw(
+    `query { me { tierListTemplates(first: 10) { edges { node { listType ratedCount } } } } }`,
+  );
+  const ratedWines =
+    (templates.data?.me?.tierListTemplates?.edges ?? []).find(
+      (e: any) => e.node.listType === "wine",
+    )?.node.ratedCount ?? 0;
 
   await primary.goto("/tier-lists/add");
   await primary.getByLabel("Name").fill(listName);
-  // The old form's default list type is Places; this list ranks wines.
-  await primary.getByRole("combobox", { name: "List Type" }).click();
-  await primary.getByRole("option", { name: "Wines" }).click();
+  // The form's default kind is Places; this list ranks wines.
+  await primary
+    .getByRole("group", { name: "Kind" })
+    .getByRole("button", { name: "Wines" })
+    .click();
+  // X16: offered only to an account that has rated a wine; this spec wants
+  // its list empty.
+  const fromRatings = primary.getByRole("switch", {
+    name: /From my ratings/,
+  });
+  if (ratedWines > 0) {
+    await expect(fromRatings).toBeChecked({ timeout: 15_000 });
+    await fromRatings.click();
+    await expect(fromRatings).not.toBeChecked();
+  }
   await primary.getByRole("button", { name: /^(Create|Save)/ }).click();
 
   await expect(primary, "did not navigate to the new tier list").toHaveURL(
@@ -73,30 +111,71 @@ test("adds entries to it", async ({ api, primary }) => {
   );
 
   await primary.goto(`/tier-lists/${tierListId}`);
-  for (const item of items.slice(0, 2)) {
-    await primary.getByRole("button", { name: "Add entry" }).click();
+  for (const [index, item] of items.slice(0, 2).entries()) {
+    // The empty list's own button first (N15's "Add from what you've
+    // tasted"), then the dock's "Add a wine": one at a time either way.
     await primary
+      .getByRole("button", {
+        name: index === 0 ? "Add from what you've tasted" : "Add a wine",
+        exact: true,
+      })
+      .click();
+    const dialog = primary.getByRole("dialog");
+    // Each open starts from an empty search — no rows left over from the
+    // last one, which used to satisfy the name wait below before this
+    // search had even been sent.
+    const results = dialog.getByRole("list", { name: "Search results" });
+    await expect(results.getByRole("listitem")).toHaveCount(0);
+    // H-83: the field searches as you type (debounced), no Search button;
+    // every query still embeds the phrase first. Wait for *this* search's answer, not for text that may already be on screen.
+    const searched = primary.waitForResponse(
+      (response) =>
+        response.url().includes("/api/graphql") &&
+        /query TierListItemPicker\b/.test(response.request().postData() ?? ""),
+      { timeout: 25_000 },
+    );
+    await dialog
       .getByPlaceholder("Search wines by name or description")
       .fill(item.name);
-    // Not search-as-you-type: every query embeds the phrase first.
-    await primary.getByRole("button", { name: "Search", exact: true }).click();
+    await searched;
+    // Lexical retrieval (N08) brings back every "E2 Wine …" for any one of
+    // their names, so pick the row that *is* this item, not the first row.
+    // (The `Add ` prefix is the X23 row's old screen-reader text; X16's
+    // rows are checkboxes named by the item, so the pattern allows both.)
+    const row = results.getByRole("listitem").filter({
+      has: primary.getByText(
+        new RegExp(`^(Add )?${escapeRegExp(item.name)}$`, "i"),
+      ),
+    });
     await expect(
-      primary.getByRole("dialog").getByText(item.name).first(),
+      row.first(),
       `"${item.name}" did not come back in the picker`,
     ).toBeVisible({ timeout: 25_000 });
+    // The whole row is the control (X23), a checkbox since X16; "On this
+    // list" rows are disabled. Ticking it arms the sheet's one action.
+    await row.first().getByRole("checkbox").click();
+    await dialog.getByRole("button", { name: "Add 1 entry" }).click();
+    // F-175: nothing lands in Unrated unasked — an unrated pick is asked its
+    // band (an empty band needs no further questions).
+    // An empty band has nothing to compare with ("Place it" lands it); a
+    // band with an entry asks which is liked more, and Skip puts it last.
+    await primary.getByRole("radio", { name: /^Outstanding/ }).click();
     await primary
-      .getByRole("dialog")
-      .getByRole("button", { name: "Add", exact: true })
-      .first()
+      .getByRole("button", { name: "Place it", exact: true })
+      .or(primary.getByRole("button", { name: /^Skip, put it at the end of / }))
       .click();
+    await primary.getByRole("button", { name: "Done", exact: true }).click();
     // A successful add closes the dialog and refreshes the board.
-    await expect(primary.getByRole("dialog")).toBeHidden({ timeout: 20_000 });
+    await expect(dialog).toBeHidden({ timeout: 20_000 });
   }
 
-  await expect(
-    primary.getByRole("button", { name: /^Remove / }).nth(1),
-    "two entries did not land on the board",
-  ).toBeVisible({ timeout: 20_000 });
+  // Read-only, each row is a link to its entry.
+  for (const item of items.slice(0, 2)) {
+    await expect(
+      primary.getByRole("link", { name: item.name, exact: true }),
+      `"${item.name}" did not land on the board`,
+    ).toBeVisible({ timeout: 20_000 });
+  }
 });
 
 test("a drag between bands survives a reload", async ({ api, primary }) => {
@@ -116,6 +195,13 @@ test("a drag between bands survives a reload", async ({ api, primary }) => {
   );
 
   await primary.goto(`/tier-lists/${tierListId}`);
+  // Read-only until Edit order (DECISIONS 41): no handles before it.
+  await expect(
+    primary.locator('[aria-roledescription="sortable"]'),
+  ).toHaveCount(0);
+  await primary
+    .getByRole("button", { name: "Edit order", exact: true })
+    .click();
   const handle = primary.locator('[aria-roledescription="sortable"]').first();
   await expect(handle, "no drag handle on the board").toBeVisible({
     timeout: 20_000,
@@ -231,13 +317,67 @@ test("a stranger cannot read a PRIVATE tier list", async ({ api2 }) => {
   ).toBe("NotFoundError");
 });
 
-test("the rankings board renders for every scope", async ({ primary }) => {
+test("Top rated: Me · Friends · Everyone, Me first, each scope renders (N15)", async ({
+  primary,
+}) => {
   const noise = watch(primary);
   await primary.goto("/rankings");
-  await settleNetwork(primary);
+  await expect(
+    primary.getByRole("heading", { name: "Top rated" }),
+  ).toBeVisible();
+  const scopes = primary.getByRole("radiogroup", { name: "Whose scores" });
+  await expect(scopes.getByRole("radio")).toHaveText([
+    "Me",
+    "Friends",
+    "Everyone",
+  ]);
+  // Me by default: a new account's first look is its own scores, never
+  // strangers' items under a label it did not choose (observation 3).
+  await expect(
+    scopes.getByRole("radio", { name: "Me", exact: true }),
+  ).toHaveAttribute("aria-checked", "true");
+  for (const [label, param] of [
+    ["Friends", "friends"],
+    ["Everyone", "everyone"],
+  ] as const) {
+    await scopes.getByRole("radio", { name: label }).click();
+    await expect(primary).toHaveURL(new RegExp(`[?&]scope=${param}`));
+    await settleNetwork(primary);
+  }
+  // Every board is ranked: a card carries its place as a numeral.
+  const numerals = primary.locator('[data-slot="rank-numeral"]');
+  if ((await numerals.count()) > 0) {
+    await expect(numerals.first()).toHaveText(/Rank\s*1$/);
+  }
   expect(noise.pageErrors, "the rankings page threw").toEqual([]);
-  // D7's behaviour change: "friends exist but none reviewed" and "no friends
-  // yet" must read differently, and neither may silently fall back.
   const text = await bodyText(primary);
   expect(text.length).toBeGreaterThan(0);
+});
+
+test("/tier-lists: your own lists are under Yours and never under Discover (X11)", async ({
+  api,
+  primary,
+}) => {
+  const data = await api.query(
+    `query { myTierLists(first: 100, section: MINE) {
+       __typename ... on TierListConnection { edges { node { id } } }
+     } }`,
+  );
+  const mine: string[] = (data.myTierLists.edges ?? []).map(
+    (edge: { node: { id: string } }) => edge.node.id,
+  );
+  await primary.goto("/tier-lists");
+  await expect(primary.getByRole("region", { name: "Yours" })).toBeVisible();
+  const discoverLinks = await primary
+    .getByRole("region", { name: "Discover" })
+    .locator('a[href^="/tier-lists/"]')
+    .evaluateAll((links) =>
+      links.map((link) => link.getAttribute("href") ?? ""),
+    );
+  for (const id of mine) {
+    expect(
+      discoverLinks,
+      "one of your own tier lists is listed under Discover",
+    ).not.toContain(`/tier-lists/${id}`);
+  }
 });

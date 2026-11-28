@@ -17,7 +17,7 @@
  *
  * ## The projection is exactly C2's, and it is not widened here
  *
- * `MapPlace` is nine fields and `MapCluster` is three, and
+ * `MapPlace` is thirteen fields (F-82 added three) and `MapCluster` is three, and
  * `packages/contracts/src/views.ts` justifies each one against a renderer:
  * `primaryCategory` picks the marker glyph, `categories` (plural — it is the
  * whole array, not the primary repeated) drives `calculateItemTypeMatches`,
@@ -55,20 +55,24 @@
  * returns an empty page rather than silently widening to the whole viewport.
  */
 import type {
+  FileDto,
   MapCluster,
   MapEntry,
   MapPlace,
 } from "@cellar-assistant/contracts";
 import {
+  FileActorDescriptor,
   ForbiddenError,
   isMapCluster,
   MAP_RESULT_CAP,
   MapActorDescriptor,
   mapActorId,
 } from "@cellar-assistant/contracts";
+import type { ApiContext } from "../context.ts";
 import { builder } from "./builder.ts";
+import { FileType } from "./file.ts";
 import { connectionFromPage, toPageArgs } from "./pagination.ts";
-import { LngLatType } from "./place.ts";
+import { LngLatType, PlaceReviewStatusEnum, reviewStatusOut } from "./place.ts";
 import { MapBoundsInput, VisitStatusEnum } from "./place-search.ts";
 
 /* -------------------------------------------------------------------------- */
@@ -77,7 +81,7 @@ import { MapBoundsInput, VisitStatusEnum } from "./place-search.ts";
 
 const MapPlaceType = builder.objectRef<MapPlace>("MapPlace").implement({
   description:
-    "One place marker. Nine fields, every one of them read by the marker " +
+    "One place marker. Thirteen fields, every one of them read by the marker " +
     "renderer (§2.4); the address and contact block lives on `Place` and is " +
     "fetched by id when the drawer opens.",
   fields: (t) => ({
@@ -109,6 +113,60 @@ const MapPlaceType = builder.objectRef<MapPlace>("MapPlace").implement({
     isVerified: t.boolean({
       nullable: true,
       resolve: (place) => place.isVerified,
+    }),
+    reviewStatus: t.field({
+      type: PlaceReviewStatusEnum,
+      description:
+        "X27: APPROVED for every shared marker. PENDING / REJECTED markers " +
+        "are the viewer's own places under review — drawn as their own " +
+        "markers, never clustered — and appear on nobody else's map.",
+      resolve: (place) => reviewStatusOut(place.reviewStatus),
+    }),
+    ratingCount: t.int({
+      resolve: (place) => place.ratingCount ?? 0,
+      description:
+        "F-82: how many ratings `rating` stands on (`places.review_count`); " +
+        "0 when none.",
+    }),
+    myBand: t.int({
+      nullable: true,
+      resolve: (place) => place.myBand ?? null,
+      description:
+        "F-82: the viewer's own best band (0–5) for this place across the " +
+        "tier lists they created — the owner's pin rank. Null when it is on " +
+        "none of theirs; never another person's band.",
+    }),
+    photo: t.loadable({
+      type: FileType,
+      nullable: true,
+      // H-141: kept in step with `packages/schema/schema.graphql`.
+      description:
+        "The place's first mirrored Google photo, for the viewer's own ranked " +
+        "pins only (a place on one of their tier lists, `myBand` set); null " +
+        "for every other place.",
+      // H-135: only a place on the viewer's own tier lists (`myBand` set)
+      // gets a photo — the owner's ranked pins, the only ones that draw one.
+      // A box holds hundreds of markers, so every other one is null with no
+      // FileActor read (nor the presign its `url` would cost), and the ranked
+      // ones are read in one loader batch per request, each file once.
+      resolve: (place) =>
+        place.myBand === null || place.myBand === undefined
+          ? null
+          : (place.photoFileId ?? null),
+      load: (
+        fileIds: string[],
+        context: ApiContext,
+      ): Promise<(FileDto | Error)[]> =>
+        Promise.all(
+          fileIds.map((fileId) =>
+            context
+              .actor(FileActorDescriptor, fileId)
+              .get()
+              .catch((cause: unknown) =>
+                cause instanceof Error ? cause : new Error(String(cause)),
+              ),
+          ),
+        ),
     }),
   }),
 });

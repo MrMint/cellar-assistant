@@ -11,7 +11,8 @@
  *  - **pagination never reaches the key** — `first`/`after` change the page and
  *    not the activation, which is the whole of §1.5's caching claim seen from
  *    the client's side;
- *  - **the viewer changes the key for exactly three surfaces** and no others.
+ *  - **the viewer changes the key for exactly the identity-sensitive
+ *    surfaces** and no others (X27 added both place searches to them).
  */
 import type { Ctx } from "@cellar-assistant/contracts";
 import {
@@ -120,6 +121,24 @@ const FIELDS: readonly {
     viewerScoped: false,
   },
   {
+    // X12: `narrow` joins the key, and only when it is set.
+    actorType: "ItemSearchActor",
+    document: `{ itemSearch(text: "pinot noir", narrow: true, first: 2) { ... on ItemSearchConnection { edges { cursor } } } }`,
+    key: (ctx) =>
+      itemSearchActorId(
+        {
+          text: "pinot noir",
+          vector: null,
+          itemTypes: null,
+          maxDistance: null,
+          limit: null,
+          narrow: true,
+        },
+        ctx.viewerId,
+      ),
+    viewerScoped: false,
+  },
+  {
     actorType: "CellarItemSearchActor",
     document: `{ cellarItemSearch(cellarId: "${CELLAR}", query: "oaky", first: 2) { ... on CellarItemSearchConnection { edges { cursor } } } }`,
     key: (ctx) =>
@@ -150,12 +169,43 @@ const FIELDS: readonly {
         },
         ctx.viewerId,
       ),
-    viewerScoped: false,
+    // X15: recipes are private first, so the answer is the viewer's.
+    viewerScoped: true,
+  },
+  {
+    // X12 / D9: universal search's Recipes — `hybrid` joins the key.
+    actorType: "RecipeSearchActor",
+    document: `{ recipeSearch(term: "negroni", hybrid: true, first: 2) { ... on RecipeSearchConnection { edges { cursor } } } }`,
+    key: (ctx) =>
+      recipeSearchActorId(
+        {
+          term: "negroni",
+          semanticQuery: null,
+          type: null,
+          maxDistance: null,
+          limit: null,
+          hybrid: true,
+        },
+        ctx.viewerId,
+      ),
+    // X15: and so is the hybrid one.
+    viewerScoped: true,
   },
   {
     actorType: "UserSearchActor",
     document: `{ userSearch(term: "jar", first: 2) { ... on UserSearchConnection { edges { cursor } } } }`,
     key: (ctx) => userSearchActorId({ term: "jar", limit: null }, ctx.viewerId),
+    viewerScoped: true,
+  },
+  {
+    // X12: universal search's People — `includeConnected` joins the key.
+    actorType: "UserSearchActor",
+    document: `{ userSearch(term: "jar", includeConnected: true, first: 2) { ... on UserSearchConnection { edges { cursor } } } }`,
+    key: (ctx) =>
+      userSearchActorId(
+        { term: "jar", limit: null, includeConnected: true },
+        ctx.viewerId,
+      ),
     viewerScoped: true,
   },
   {
@@ -174,7 +224,8 @@ const FIELDS: readonly {
         },
         ctx.viewerId,
       ),
-    viewerScoped: false,
+    // X27: every place search carries the viewer's own places under review.
+    viewerScoped: true,
   },
   {
     actorType: "PlaceSearchActor",
@@ -208,7 +259,8 @@ const FIELDS: readonly {
         },
         ctx.viewerId,
       ),
-    viewerScoped: false,
+    // X27: and so does every duplicate check.
+    viewerScoped: true,
   },
   {
     actorType: "GooglePlacesActor",
@@ -520,6 +572,64 @@ const unionDocument = (
   }
 }`;
 
+describe("search section totals (MC-search, L3)", () => {
+  const SECTIONS = [
+    ["itemSearch", 'text: "pinot"', "ItemSearchActor", "ItemSearchConnection"],
+    [
+      "brandSearch",
+      'term: "krug"',
+      "BrandSearchActor",
+      "BrandSearchConnection",
+    ],
+    [
+      "recipeSearch",
+      'term: "negroni"',
+      "RecipeSearchActor",
+      "RecipeSearchConnection",
+    ],
+    ["userSearch", 'term: "al"', "UserSearchActor", "UserSearchConnection"],
+    [
+      "placeSearch",
+      'query: "vino"',
+      "PlaceSearchActor",
+      "PlaceSearchConnection",
+    ],
+  ] as const;
+
+  for (const [field, args, actor, connection] of SECTIONS) {
+    it(`${field} relays the actor's pre-cap total and whether it is a lower bound`, async () => {
+      for (const totalIsLowerBound of [true, false]) {
+        const { invoke } = stubSidecar({
+          ...allSearchStubs(),
+          [`${actor}.results`]: () => ({
+            ...emptyPage(),
+            totalCount: 200,
+            totalIsLowerBound,
+          }),
+        });
+        const result = await run(
+          `{ ${field}(${args}, first: 1) { ... on ${connection} { totalCount totalIsLowerBound } } }`,
+          testContext(invoke, viewer),
+        );
+        expect(result.errors).toBeUndefined();
+        expect(result.data?.[field]).toEqual({
+          totalCount: 200,
+          totalIsLowerBound,
+        });
+      }
+    });
+  }
+
+  it("a page without the flag is a server error, never a silent `false`", async () => {
+    const { invoke } = stubSidecar(allSearchStubs());
+    const result = await run(
+      `{ brandSearch(term: "krug", first: 1) { ... on BrandSearchConnection { totalIsLowerBound } } }`,
+      testContext(invoke, viewer),
+    );
+    expect(result.errors?.[0]?.message).toMatch(/searchConnectionFromPage/);
+  });
+});
+
 describe("every paging root field degrades per field, not per document (A7e)", () => {
   for (const field of PAGING_ROOT_FIELDS) {
     describe(field.field, () => {
@@ -627,4 +737,64 @@ describe("a resolver-raised ForbiddenError is a union member too (A7e)", () => {
       expect(calls).toHaveLength(0);
     });
   }
+});
+
+describe("userSearch pendingRequestId (F-43)", () => {
+  it("passes the open request's id through, null for everyone else", async () => {
+    const REQUEST = "55555555-5555-4555-8555-555555555555";
+    const { invoke } = stubSidecar({
+      "UserSearchActor.results": () => ({
+        entries: [
+          {
+            cursor: "a",
+            node: {
+              userId: otherViewer.id,
+              displayName: "Alma",
+              avatarUrl: null,
+              avatarFileId: null,
+              relation: "REQUEST_SENT",
+              pendingRequestId: REQUEST,
+            },
+          },
+          {
+            cursor: "b",
+            node: {
+              userId: CELLAR,
+              displayName: "Alberta",
+              avatarUrl: null,
+              avatarFileId: null,
+              relation: "NONE",
+            },
+          },
+        ],
+        hasNextPage: false,
+        hasPreviousPage: false,
+        totalCount: 2,
+      }),
+    });
+    const result = await run(
+      `{ userSearch(term: "al", includeConnected: true) {
+           ... on UserSearchConnection { edges { node { displayName relation pendingRequestId } } } } }`,
+      testContext(invoke, viewer),
+    );
+    expect(result.errors).toBeUndefined();
+    expect(result.data?.userSearch).toEqual({
+      edges: [
+        {
+          node: {
+            displayName: "Alma",
+            relation: "REQUEST_SENT",
+            pendingRequestId: REQUEST,
+          },
+        },
+        {
+          node: {
+            displayName: "Alberta",
+            relation: "NONE",
+            pendingRequestId: null,
+          },
+        },
+      ],
+    });
+  });
 });

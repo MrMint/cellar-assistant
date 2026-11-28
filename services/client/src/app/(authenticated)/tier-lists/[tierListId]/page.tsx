@@ -1,5 +1,6 @@
-import { Typography } from "@mui/joy";
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { cache } from "react";
 import {
   type TierListItemNode,
   tierListDataFrom,
@@ -26,9 +27,33 @@ const MAX_ENTRY_PAGES = 50;
  *   holds every entry and a reorder must name a band's full membership.
  * - The viewer's own scores ride on each row: `Item.myReview` (G7) and
  *   `Place.myInteraction` (G16), replacing the old `GetUserItemReviews` round
- *   trip and `user_place_interactions`.
+ *   trip and `user_place_interactions`; the owner's beside them
+ *   (`TierListItem.ownerReview`, X23).
+ * - D4: `editHistory` (the owner's Undo / Redo) rides on the first page.
  */
 export const dynamic = "force-dynamic";
+
+/** The first page, once per request, for the page and its title (X21). */
+const loadFirstPage = cache((tierListId: string) =>
+  apiServerQuery(GetTierListQuery, {
+    id: tierListId,
+    first: TIER_LIST_ITEMS_PAGE_SIZE,
+    after: null,
+  }),
+);
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ tierListId: string }>;
+}): Promise<Metadata> {
+  const { tierListId } = await params;
+  const result = unwrapResult(
+    (await loadFirstPage(tierListId)).tierList,
+    "TierList",
+  );
+  return { title: result.ok ? result.data.name : "Tier list" };
+}
 
 export default async function TierListPage({
   params,
@@ -37,18 +62,18 @@ export default async function TierListPage({
 }) {
   const { tierListId } = await params;
   const [first, viewer] = await Promise.all([
-    apiServerQuery(GetTierListQuery, {
-      id: tierListId,
-      first: TIER_LIST_ITEMS_PAGE_SIZE,
-      after: null,
-    }),
+    loadFirstPage(tierListId),
     apiServerQuery(TierListViewerQuery, {}),
   ]);
 
   const result = unwrapResult(first.tierList, "TierList");
   if (!result.ok) {
     if (isNotFound(result.error)) notFound();
-    return <Typography color="danger">{result.error.message}</Typography>;
+    return (
+      <p role="alert" className="t-body text-danger">
+        {result.error.message}
+      </p>
+    );
   }
   const tierList = result.data;
 
@@ -72,6 +97,7 @@ export default async function TierListPage({
     tierList,
     nodes,
     viewer.me?.id ?? null,
+    tierList.editHistory ?? null,
   );
 
   return <TierListViewPage data={data} insightsData={insightsData} />;

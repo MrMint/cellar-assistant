@@ -38,6 +38,8 @@ const details = (
   version: 2,
   recipeGroupId: "g1",
   canonicalRecipeId: "r0",
+  privacy: "PUBLIC",
+  isDraft: false,
   createdAt: "2026-01-02T03:04:05.000Z",
   createdBy: { id: "u1", displayName: "Ada", avatarUrl: null },
   ingredients: {
@@ -129,6 +131,13 @@ describe("recipeDetailsFromNode → the old RecipeDetailsItem", () => {
       id: "i1",
       quantity: 1.5,
       unit: "oz",
+      // X14: absent from this older fixture, so null — the row falls back
+      // to the shared formatter, and shows no availability.
+      amount: null,
+      role: null,
+      kind_label: null,
+      brand_mentioned: null,
+      availability: null,
       is_optional: false,
       substitution_notes: null,
       item: { id: "w1", name: "Vermouth", type: "WINE", vintage: "2019" },
@@ -388,7 +397,11 @@ describe("small pieces", () => {
   });
 
   test("the old card's spirit label", () => {
-    assert.equal(formatSpirit("BRANDY_COGNAC"), "Brandy Cognac");
+    // A pre-X14 free-text value, humanised in sentence case.
+    assert.equal(formatSpirit("BRANDY_COGNAC"), "Brandy cognac");
+    // X14 writes a bar kind; the vocabulary has its words.
+    assert.equal(formatSpirit("irish_whiskey"), "Irish whiskey");
+    assert.equal(formatSpirit("rye"), "Rye whiskey");
     assert.equal(formatSpirit(null), null);
   });
 

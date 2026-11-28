@@ -1,18 +1,21 @@
 "use client";
 
-import { Button, Card, Slider, Stack, Typography } from "@mui/joy";
-import { useRouter } from "next/navigation";
-import { useEffect, useState, useTransition } from "react";
+import { Slider as SliderPrimitive } from "radix-ui";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useMutation } from "urql";
 import { useDebouncedCallback } from "@/hooks/useDebouncedCallback";
 import {
-  EmptyCellarItemMutation,
   OpenCellarItemMutation,
   SetCellarItemPercentageMutation,
 } from "@/lib/api/cellars";
 import { unwrapResult } from "@/lib/api/result";
 import { formatDistance } from "@/lib/items/distance";
 import { useInterval } from "@/utilities/hooks";
+import { FinishBottleDialogs } from "./FinishBottleDialogs";
+import { ItemSection } from "./ItemSection";
+import { LoadingButton } from "./LoadingButton";
+import { useRefreshAfterWrite } from "./parts/pane-refresh";
+import { useFinishBottle } from "./useFinishBottle";
 
 export type ItemRemainingSliderProps = {
   isCellarOwner: boolean;
@@ -23,38 +26,62 @@ export type ItemRemainingSliderProps = {
   opened?: string | null;
   emptied?: string | null;
   percentageRemaining: number;
+  /**
+   * F-150 (H-125): the level a finished bottle had before it was finished
+   * (`CellarItem.levelBeforeEmpty`), which Put back restores; null or
+   * absent puts it back full.
+   */
+  levelBeforeEmpty?: number | null;
+  /** For the "Finished it?" question. */
+  itemName?: string;
+  /** Put back's toast: "Back in <cellar>" (F-150). */
+  cellarName?: string;
 };
 
 /**
  * `82450ad1:src/components/item/ItemRemainingSlider.tsx`, restored.
  *
- * - `openCellarItemAction` → `openCellarItem`;
+ * - `openCellarItemAction` → `openCellarItem`, behind "Mark as opened" (it
+ *   was "Open it!", the page's main action until X03's Pour, whose first
+ *   pour opens the bottle);
  *   `updateCellarItemPercentageAction` → `setCellarItemPercentage`, still
  *   debounced 400 ms (a local hook instead of `@uidotdev/usehooks`). The old
- *   action stamped `empty_at` when the slider reached 0; that is
- *   `emptyCellarItem` now, which also sets the percentage to 0.
+ *   action stamped `empty_at` the moment the slider reached 0. Now 0% asks
+ *   "Finished it?" first and offers Undo after (N13a, `useFinishBottle`):
+ *   "Not yet" puts the slider back on the last saved level. A finished
+ *   bottle keeps a "Put back" button for its owner, so putting it
+ *   back is not limited to the Undo toast's five seconds.
  * - "Opened … ago" no longer seeds `now` with `new Date()` during render (the
  *   hydration rule): `now` is set in an effect, so the server and the first
  *   client render both show no distance, and the 10 s tick takes over.
  *   `formatDistance` is a local copy of date-fns' wording.
  * - A refused write is shown instead of being swallowed.
+ *
+ * The slider is Radix's primitive composed here rather than `ui/slider`: the
+ * old one was a tall "level" bar (a 3 rem track), and `ui/slider` neither
+ * draws that nor lets the thumb — the element with `role="slider"` — carry
+ * its accessible name ("Remaining").
  */
 export const ItemRemainingSlider = ({
   itemId,
   cellarId,
   percentageRemaining,
+  levelBeforeEmpty = null,
   opened,
   emptied,
   isCellarOwner,
+  itemName,
+  cellarName,
 }: ItemRemainingSliderProps) => {
-  const router = useRouter();
+  const refreshAfterWrite = useRefreshAfterWrite();
   const [isPending, startTransition] = useTransition();
   const [percent, setPercent] = useState(percentageRemaining);
   const [now, setNow] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [, openItem] = useMutation(OpenCellarItemMutation);
-  const [, emptyItem] = useMutation(EmptyCellarItemMutation);
   const [, setPercentage] = useMutation(SetCellarItemPercentageMutation);
+  const finish = useFinishBottle({ cellarId, cellarItemId: itemId });
+  const finishPhase = finish.state.phase;
 
   useEffect(() => {
     setNow(Date.now());
@@ -63,31 +90,54 @@ export const ItemRemainingSlider = ({
     setNow(Date.now());
   }, 10000);
 
+  // Where the person last moved the thumb, until the server's level agrees
+  // (F-160): a refresh answering an earlier save must not drag the thumb
+  // back from where the keys have since moved it.
+  const pending = useRef<number | null>(null);
+
+  // Back to the saved level whenever the server's changes, and whenever a
+  // finish ends without one ("Not yet", a refused write, Undo).
   useEffect(() => {
+    // A put back's toast (`restored`) is not a finish in flight: the level
+    // it came back at shows at once.
+    if (finishPhase !== "idle" && finishPhase !== "restored") return;
+    if (pending.current !== null && pending.current !== percentageRemaining)
+      return;
+    pending.current = null;
     setPercent(percentageRemaining);
-  }, [percentageRemaining]);
+  }, [percentageRemaining, finishPhase]);
 
   const save = useDebouncedCallback((value: number) => {
-    if (value === percentageRemaining) return;
+    // 0% is a question, not a write — even for a bottle already saved at 0.
+    if (value === 0) {
+      pending.current = null;
+      finish.request({ percentageRemaining, openAt: opened ?? null });
+      return;
+    }
+    if (value === percentageRemaining) {
+      pending.current = null;
+      return;
+    }
     startTransition(async () => {
       setError(null);
-      const response =
-        value === 0
-          ? (await emptyItem({ cellarId, cellarItemId: itemId })).data
-              ?.emptyCellarItem
-          : (
-              await setPercentage({
-                cellarId,
-                cellarItemId: itemId,
-                percentageRemaining: value,
-              })
-            ).data?.setCellarItemPercentage;
+      const response = (
+        await setPercentage({
+          cellarId,
+          cellarItemId: itemId,
+          percentageRemaining: value,
+        })
+      ).data?.setCellarItemPercentage;
       const result = unwrapResult(response, "CellarItem");
       if (!result.ok) {
+        // Refused: the saved level is the truth again.
+        if (pending.current === value) {
+          pending.current = null;
+          setPercent(percentageRemaining);
+        }
         setError(result.error.message);
         return;
       }
-      router.refresh();
+      refreshAfterWrite();
     });
   }, 400);
 
@@ -103,55 +153,95 @@ export const ItemRemainingSlider = ({
         setError(result.error.message);
         return;
       }
-      router.refresh();
+      refreshAfterWrite();
     });
   };
 
   const isOpened = opened !== null && opened !== undefined;
   const isEmptied = emptied !== null && emptied !== undefined;
+  const finishError = finish.state.phase === "idle" ? finish.state.error : null;
+  const shownError = error ?? finishError;
 
   return (
-    <Card>
+    <ItemSection>
+      {/* X03: the first Pour opens a bottle (the page's ActionBar); this
+          is for opening one without pouring — for cooking, say. */}
       {isCellarOwner && !isOpened && (
-        <Button loading={isPending} onClick={handleOpen}>
-          Open it!
-        </Button>
+        <LoadingButton
+          variant="outline"
+          loading={isPending}
+          onClick={handleOpen}
+        >
+          Mark as opened
+        </LoadingButton>
       )}
       {isOpened && !isEmptied && (
-        <Stack spacing={2}>
-          <Typography>Remaining: {percent}%</Typography>
-          <Slider
-            value={percent}
+        <div className="flex flex-col gap-4">
+          <p className="t-body tabular text-ink">Remaining: {percent}%</p>
+          <SliderPrimitive.Root
+            data-slot="slider"
+            value={[percent]}
             max={100}
             min={0}
             step={1}
             disabled={!isCellarOwner}
-            onChange={(_, value) => {
-              const next = Array.isArray(value) ? (value[0] ?? 0) : value;
+            onValueChange={(value) => {
+              const next = value[0] ?? 0;
+              pending.current = next;
               setPercent(next);
               save(next);
             }}
-            slotProps={{ input: { "aria-label": "Remaining" } }}
-            sx={{
-              "--Slider-trackSize": "3rem",
-              "--Slider-trackRadius": ".5rem",
-            }}
-          />
-          <Typography textAlign="center">
+            className="relative flex h-12 w-full touch-none select-none items-center data-[disabled]:opacity-50"
+          >
+            <SliderPrimitive.Track
+              data-slot="slider-track"
+              className="relative h-12 grow overflow-hidden rounded-md bg-sel"
+            >
+              <SliderPrimitive.Range
+                data-slot="slider-range"
+                className="absolute h-full bg-primary"
+              />
+            </SliderPrimitive.Track>
+            <SliderPrimitive.Thumb
+              data-slot="slider-thumb"
+              aria-label="Remaining"
+              className="block h-10 w-3 rounded-full bg-ink shadow-sm outline-none ring-ring/50 transition-shadow focus-visible:ring-4 disabled:pointer-events-none"
+            />
+          </SliderPrimitive.Root>
+          <p className="t-body text-center text-ink-2">
             Opened {now === null ? "" : formatDistance(opened, now)} ago
-          </Typography>
-        </Stack>
+          </p>
+        </div>
       )}
       {isEmptied && (
-        <Typography textAlign="center">
-          Empty {now === null ? "" : formatDistance(emptied, now)} ago
-        </Typography>
+        <div className="flex flex-col gap-2">
+          <p className="t-body text-center text-ink-2">
+            Empty {now === null ? "" : formatDistance(emptied, now)} ago
+          </p>
+          {/* Undo outlives its toast: put a finished bottle back (N13a). */}
+          {isCellarOwner && (
+            <LoadingButton
+              variant="outline"
+              loading={finishPhase === "restoring"}
+              onClick={() =>
+                finish.restore(percentageRemaining, levelBeforeEmpty)
+              }
+            >
+              Put back
+            </LoadingButton>
+          )}
+        </div>
       )}
-      {error !== null && (
-        <Typography level="body-sm" color="danger">
-          {error}
-        </Typography>
+      {shownError !== null && (
+        <p role="alert" className="t-cap text-danger">
+          {shownError}
+        </p>
       )}
-    </Card>
+      <FinishBottleDialogs
+        finish={finish}
+        itemName={itemName}
+        cellarName={cellarName}
+      />
+    </ItemSection>
   );
 };

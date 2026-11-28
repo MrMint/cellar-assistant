@@ -1,37 +1,28 @@
 "use client";
 
-import {
-  Alert,
-  Badge,
-  Box,
-  Button,
-  Card,
-  CardContent,
-  Chip,
-  CircularProgress,
-  Stack,
-  Tab,
-  TabList,
-  TabPanel,
-  Tabs,
-  Typography,
-} from "@mui/joy";
-import NextLink from "next/link";
 import { useState } from "react";
-import {
-  MdCheck,
-  MdClose,
-  MdCoffee,
-  MdFavorite,
-  MdLocalBar,
-  MdLocationOn,
-  MdRestaurant,
-  MdSportsBar,
-  MdVisibility,
-  MdWineBar,
-} from "react-icons/md";
 import { useMutation, useQuery } from "urql";
+import { EmptyState } from "@/components/app/EmptyState";
+import {
+  Check,
+  Close,
+  ICON_STROKE,
+  Info,
+  Love,
+  Place,
+  Restaurant,
+  Visible,
+  WantToTry,
+} from "@/components/app/icons";
+import { Link } from "@/components/app/Link";
+import { ITEM_TYPES_IN_ORDER, TypeGlyph } from "@/components/app/TypeChip";
+import type { ApiItemType } from "@/components/cellar-api/itemTypes";
 import { Timestamp } from "@/components/common/Timestamp";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Spinner } from "@/components/ui/spinner";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { failureFromTransport, unwrapResult } from "@/lib/api/result";
 import { pageOf } from "@/lib/paging/paged-connection";
 import { usePagedConnection } from "@/lib/paging/use-paged-connection";
@@ -55,8 +46,8 @@ import {
  *   scans (the old query reached other users' scans through any place the
  *   viewer had touched: a disclosure leak), with the line and place (G20);
  *   Accept / Reject → `actOnMenuScanSuggestion`.
- * - Saved Places: `myPlaceInteractions` filtered to favourite-or-visited, as
- *   the old `_or` did, with each place (G16) and its menu-line count. The
+ * - Saved Places: `myPlaceInteractions` filtered to loved, want-to-try
+ *   (X08 — the old `_or` predates it) or visited, with each place (G16) and its menu-line count. The
  *   API pages it at 100, so "Load more" walks the rest (the old read was
  *   unbounded); the tab's count is of the saved places loaded so far.
  * - Recent Additions is **not restored**: it read `cellar_items` by
@@ -83,6 +74,7 @@ interface SavedPlaceInteraction {
   id: string;
   is_favorite?: boolean;
   is_visited?: boolean;
+  want_to_visit?: boolean;
   last_visited_at?: string;
   visit_count?: number;
   place: {
@@ -103,7 +95,7 @@ interface DiscoveryDashboardProps {
 }
 
 export function DiscoveryDashboard(_props: DiscoveryDashboardProps) {
-  const [activeTab, setActiveTab] = useState(0);
+  const [activeTab, setActiveTab] = useState("pending");
 
   const [{ data, fetching, error }, reexecute] = useQuery({
     query: DiscoveryDataQuery,
@@ -120,11 +112,14 @@ export function DiscoveryDashboard(_props: DiscoveryDashboardProps) {
         unwrapResult(answer?.myPlaceInteractions, "PlaceInteractionConnection"),
         (edge): SavedPlaceInteraction | null => {
           const node = edge.node;
-          if (!node.isFavorite && !node.isVisited) return null;
+          if (!node.isFavorite && !node.isVisited && !node.wantToVisit) {
+            return null;
+          }
           return {
             id: node.id,
             is_favorite: node.isFavorite,
             is_visited: node.isVisited,
+            want_to_visit: node.wantToVisit,
             last_visited_at: node.lastVisitedAt ?? undefined,
             visit_count: node.visitCount,
             place: {
@@ -210,357 +205,292 @@ export function DiscoveryDashboard(_props: DiscoveryDashboardProps) {
     reexecute({ requestPolicy: "network-only" });
   };
 
-  const getItemIcon = (type?: string) => {
-    switch (type) {
-      case "wine":
-        return <MdWineBar style={{ color: "var(--joy-palette-danger-500)" }} />;
-      case "beer":
-        return (
-          <MdSportsBar style={{ color: "var(--joy-palette-warning-500)" }} />
-        );
-      case "spirit":
-        return (
-          <MdLocalBar style={{ color: "var(--joy-palette-neutral-500)" }} />
-        );
-      case "coffee":
-        return <MdCoffee style={{ color: "var(--joy-palette-success-500)" }} />;
-      default:
-        return <MdRestaurant />;
-    }
-  };
-
   if (fetching || (saved.status === "resetting" && saved.rows.length === 0)) {
     return (
-      <Box sx={{ display: "flex", justifyContent: "center", p: 4 }}>
-        <CircularProgress />
-      </Box>
+      <div className="flex justify-center p-8">
+        <Spinner className="size-10 text-ink-2" />
+      </div>
     );
   }
 
   if (error || (data !== undefined && !discoveries.ok) || saved.failure) {
     return (
-      <Box sx={{ p: 2 }}>
-        <Alert color="danger">Failed to load discovery data</Alert>
-      </Box>
+      <div className="p-4">
+        <Alert variant="destructive">
+          <AlertDescription>Failed to load discovery data</AlertDescription>
+        </Alert>
+      </div>
     );
   }
 
   return (
-    <Box sx={{ p: 0 }}>
-      <Tabs
-        value={activeTab}
-        onChange={(_, value) => setActiveTab(value as number)}
-      >
-        <TabList>
-          <Tab>
+    <div>
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <TabsList
+          variant="line"
+          className="w-full justify-start group-data-[orientation=horizontal]/tabs:h-11"
+        >
+          <TabsTrigger value="pending" className="flex-none px-3">
             Pending Matches
             {pendingMatches.length > 0 && (
-              <Badge
-                badgeContent={pendingMatches.length}
-                color="warning"
-                sx={{ ml: 1 }}
-              />
+              <CountPill>{pendingMatches.length}</CountPill>
             )}
-          </Tab>
-          <Tab>
+          </TabsTrigger>
+          <TabsTrigger value="saved" className="flex-none px-3">
             Saved Places
             {savedPlaces.length > 0 && (
-              <Chip size="sm" sx={{ ml: 1 }}>
-                {savedPlaces.length}
-              </Chip>
+              <CountPill>{savedPlaces.length}</CountPill>
             )}
-          </Tab>
-        </TabList>
+          </TabsTrigger>
+        </TabsList>
 
         {/* Pending Matches Tab */}
-        <TabPanel value={0}>
-          <Stack spacing={3}>
+        <TabsContent value="pending" className="pt-4">
+          <div className="flex flex-col gap-6">
             {pendingMatches.length === 0 ? (
-              <Card>
-                <CardContent sx={{ textAlign: "center", py: 4 }}>
-                  <MdCheck
-                    size={48}
-                    style={{
-                      color: "var(--joy-palette-success-500)",
-                      marginBottom: 16,
-                    }}
-                  />
-                  <Typography level="h4">All caught up!</Typography>
-                  <Typography level="body-md" sx={{ color: "text.secondary" }}>
-                    No pending matches to review right now.
-                  </Typography>
-                </CardContent>
-              </Card>
+              <div className="rounded-lg bg-surface-1">
+                <EmptyState
+                  illustration={<Check className="text-success" />}
+                  title="All caught up!"
+                  description="No pending matches to review right now."
+                />
+              </div>
             ) : (
               <>
-                <Alert color="primary">
-                  <Typography level="body-sm">
+                <Alert>
+                  <Info aria-hidden />
+                  <AlertDescription className="t-cap text-ink-2">
                     Review these AI-suggested matches for menu items. Accept
                     good matches to link items to your database, or reject to
                     keep them as standalone discoveries.
-                  </Typography>
+                  </AlertDescription>
                 </Alert>
 
                 {actionError && (
-                  <Alert color="danger" size="sm">
-                    {actionError}
+                  <Alert variant="destructive">
+                    <AlertDescription>{actionError}</AlertDescription>
                   </Alert>
                 )}
-                {pendingMatches.map((suggestion: DiscoverySuggestion) => {
-                  const menuItem = suggestion.place_menu_item;
-                  const suggestedItem = suggestion.suggested;
+                <ul className="flex flex-col gap-6">
+                  {pendingMatches.map((suggestion: DiscoverySuggestion) => {
+                    const menuItem = suggestion.place_menu_item;
+                    const suggestedItem = suggestion.suggested;
 
-                  // Skip rendering if required data is missing
-                  if (!menuItem || !suggestedItem) return null;
+                    // Skip rendering if required data is missing
+                    if (!menuItem || !suggestedItem) return null;
 
-                  return (
-                    <Card key={suggestion.id} variant="outlined">
-                      <CardContent>
-                        <Stack spacing={2}>
-                          <Stack
-                            direction="row"
-                            spacing={2}
-                            alignItems="flex-start"
-                          >
-                            {getItemIcon(menuItem.detected_item_type)}
-                            <Box sx={{ flex: 1 }}>
-                              <Typography level="title-md">
-                                {menuItem.menu_item_name}
-                              </Typography>
-                              <Stack
-                                direction="row"
-                                spacing={1}
-                                alignItems="center"
-                                sx={{ mt: 0.5 }}
-                              >
-                                <MdLocationOn
-                                  size={20}
-                                  style={{
-                                    color: "var(--joy-palette-text-secondary)",
-                                  }}
-                                />
-                                <Typography
-                                  level="body-sm"
-                                  sx={{ color: "text.secondary" }}
-                                >
-                                  {menuItem.place.name}
-                                </Typography>
-                              </Stack>
-                              {menuItem.menu_item_description && (
-                                <Typography
-                                  level="body-sm"
-                                  sx={{ mt: 1, color: "text.secondary" }}
-                                >
-                                  {menuItem.menu_item_description}
-                                </Typography>
-                              )}
-                            </Box>
+                    return (
+                      <li
+                        key={suggestion.id}
+                        className="flex flex-col gap-4 rounded-lg bg-surface-1 p-4"
+                      >
+                        <div className="flex flex-row items-start gap-4">
+                          <ItemGlyph type={menuItem.detected_item_type} />
+                          <div className="min-w-0 flex-1">
+                            <p className="t-head text-ink-1">
+                              {menuItem.menu_item_name}
+                            </p>
+                            <p className="t-cap mt-1 flex flex-row items-center gap-2 text-ink-2">
+                              <Place
+                                aria-hidden
+                                strokeWidth={ICON_STROKE}
+                                className="size-5 shrink-0"
+                              />
+                              {menuItem.place.name}
+                            </p>
+                            {menuItem.menu_item_description && (
+                              <p className="t-cap mt-2 text-ink-2">
+                                {menuItem.menu_item_description}
+                              </p>
+                            )}
+                          </div>
 
-                            <Chip color="warning" variant="soft" size="sm">
-                              {(suggestion.confidence_score * 100).toFixed(0)}%
-                              match
-                            </Chip>
-                          </Stack>
+                          <Badge variant="secondary" className="tabular">
+                            {(suggestion.confidence_score * 100).toFixed(0)}%
+                            match
+                          </Badge>
+                        </div>
 
-                          <Alert color="neutral" size="sm">
-                            <Typography level="body-sm">
-                              <strong>Suggested match:</strong>{" "}
-                              {suggestedItem.name}
-                              {suggestion.match_reasoning && (
-                                <>
-                                  <br />
-                                  <em>{suggestion.match_reasoning}</em>
-                                </>
-                              )}
-                            </Typography>
-                          </Alert>
+                        <p className="t-cap rounded-sm bg-surface-2 px-3 py-2 text-ink-1">
+                          <strong>Suggested match:</strong> {suggestedItem.name}
+                          {suggestion.match_reasoning && (
+                            <>
+                              <br />
+                              <em className="text-ink-2">
+                                {suggestion.match_reasoning}
+                              </em>
+                            </>
+                          )}
+                        </p>
 
-                          <Stack
-                            direction="row"
-                            spacing={1}
-                            justifyContent="flex-end"
-                          >
-                            <Button
-                              size="sm"
-                              variant="outlined"
-                              startDecorator={<MdVisibility />}
-                              component={NextLink}
+                        <div className="flex flex-row flex-wrap justify-end gap-2">
+                          <Button variant="outline" asChild>
+                            <Link
                               href={`/places/${menuItem.place.id}`}
+                              underline="none"
                             >
+                              <Visible aria-hidden />
                               View Place
-                            </Button>
-                            <Button
-                              size="sm"
-                              color="danger"
-                              variant="outlined"
-                              startDecorator={<MdClose />}
-                              onClick={() =>
-                                handleProcessMatch(suggestion, false)
-                              }
-                            >
-                              Reject
-                            </Button>
-                            <Button
-                              size="sm"
-                              color="success"
-                              startDecorator={<MdCheck />}
-                              onClick={() =>
-                                handleProcessMatch(suggestion, true)
-                              }
-                            >
-                              Accept Match
-                            </Button>
-                          </Stack>
-                        </Stack>
-                      </CardContent>
-                    </Card>
-                  );
-                })}
+                            </Link>
+                          </Button>
+                          <Button
+                            variant="destructive"
+                            onClick={() =>
+                              handleProcessMatch(suggestion, false)
+                            }
+                          >
+                            <Close aria-hidden />
+                            Reject
+                          </Button>
+                          <Button
+                            onClick={() => handleProcessMatch(suggestion, true)}
+                          >
+                            <Check aria-hidden />
+                            Accept Match
+                          </Button>
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
               </>
             )}
-          </Stack>
-        </TabPanel>
+          </div>
+        </TabsContent>
 
         {/* Saved Places Tab */}
-        <TabPanel value={1}>
-          <Stack spacing={2}>
+        <TabsContent value="saved" className="pt-4">
+          <div className="flex flex-col gap-4">
             {savedPlaces.length === 0 ? (
-              <Card>
-                <CardContent sx={{ textAlign: "center", py: 4 }}>
-                  <MdFavorite
-                    size={48}
-                    style={{
-                      color: "var(--joy-palette-text-secondary)",
-                      marginBottom: 16,
-                    }}
-                  />
-                  <Typography level="h4">No saved places</Typography>
-                  <Typography level="body-md" sx={{ color: "text.secondary" }}>
-                    Places you favorite or visit will appear here.
-                  </Typography>
-                </CardContent>
-              </Card>
+              <div className="rounded-lg bg-surface-1">
+                <EmptyState
+                  illustration={<Love />}
+                  title="No saved places"
+                  description="Places you love, want to try or visit will appear here."
+                />
+              </div>
             ) : (
-              savedPlaces.map((interaction: SavedPlaceInteraction) => {
-                const place = interaction.place;
-                const menuItemsCount = place.menu_items_count;
+              <ul className="flex flex-col gap-4">
+                {savedPlaces.map((interaction: SavedPlaceInteraction) => {
+                  const place = interaction.place;
+                  const menuItemsCount = place.menu_items_count;
 
-                return (
-                  <Card key={interaction.id} variant="outlined">
-                    <CardContent>
-                      <Stack
-                        direction="row"
-                        spacing={2}
-                        alignItems="flex-start"
-                      >
-                        <Box sx={{ flex: 1 }}>
-                          <Stack
-                            direction="row"
-                            alignItems="center"
-                            spacing={1}
-                          >
-                            <Typography level="title-md">
-                              {place.name}
-                            </Typography>
-                            {interaction.is_favorite && (
-                              <MdFavorite
-                                size={16}
-                                style={{
-                                  color: "var(--joy-palette-danger-500)",
-                                }}
-                              />
-                            )}
-                          </Stack>
-
-                          <Stack
-                            direction="row"
-                            spacing={1}
-                            alignItems="center"
-                            sx={{ mt: 0.5 }}
-                          >
-                            <MdLocationOn
-                              size={20}
-                              style={{
-                                color: "var(--joy-palette-text-secondary)",
-                              }}
+                  return (
+                    <li
+                      key={interaction.id}
+                      className="flex flex-row items-start gap-4 rounded-lg bg-surface-1 p-4"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-row items-center gap-2">
+                          <p className="t-head text-ink-1">{place.name}</p>
+                          {interaction.is_favorite && (
+                            <Love
+                              role="img"
+                              aria-label="Loved"
+                              strokeWidth={ICON_STROKE}
+                              className="size-4 shrink-0 fill-brand text-brand"
                             />
-                            <Typography
-                              level="body-sm"
-                              sx={{ color: "text.secondary" }}
-                            >
-                              {place.street_address}, {place.locality}
-                            </Typography>
-                          </Stack>
+                          )}
+                          {interaction.want_to_visit && (
+                            <WantToTry
+                              role="img"
+                              aria-label="Want to try"
+                              strokeWidth={ICON_STROKE}
+                              className="size-4 shrink-0 fill-current text-ink-1"
+                            />
+                          )}
+                        </div>
 
-                          <Stack
-                            direction="row"
-                            spacing={1}
-                            sx={{ mt: 1, flexWrap: "wrap" }}
-                          >
-                            {place.categories
-                              ?.slice(0, 3)
-                              .map((category: string) => (
-                                <Chip key={category} size="sm" variant="soft">
-                                  {category}
-                                </Chip>
-                              ))}
-                          </Stack>
+                        <p className="t-cap mt-1 flex flex-row items-center gap-2 text-ink-2">
+                          <Place
+                            aria-hidden
+                            strokeWidth={ICON_STROKE}
+                            className="size-5 shrink-0"
+                          />
+                          {place.street_address}, {place.locality}
+                        </p>
 
-                          <Stack direction="row" spacing={2} sx={{ mt: 1 }}>
-                            {menuItemsCount > 0 && (
-                              <Typography
-                                level="body-xs"
-                                sx={{ color: "success.600" }}
-                              >
-                                {menuItemsCount} menu items discovered
-                              </Typography>
-                            )}
-                            {interaction.last_visited_at && (
-                              <Typography
-                                level="body-xs"
-                                sx={{ color: "text.secondary" }}
-                              >
-                                Visited{" "}
-                                <Timestamp
-                                  iso={interaction.last_visited_at}
-                                  precision="date"
-                                />
-                                {(interaction.visit_count ?? 0) > 1 &&
-                                  ` (${interaction.visit_count}x)`}
-                              </Typography>
-                            )}
-                          </Stack>
-                        </Box>
+                        <div className="mt-2 flex flex-row flex-wrap gap-2">
+                          {place.categories
+                            ?.slice(0, 3)
+                            .map((category: string) => (
+                              <Badge key={category} variant="secondary">
+                                {category}
+                              </Badge>
+                            ))}
+                        </div>
 
-                        <Button
-                          size="sm"
-                          variant="outlined"
-                          startDecorator={<MdVisibility />}
-                          component={NextLink}
-                          href={`/places/${place.id}`}
-                        >
+                        <div className="mt-2 flex flex-row flex-wrap gap-4">
+                          {menuItemsCount > 0 && (
+                            <span className="t-cap text-ink-3 text-success">
+                              {menuItemsCount} menu items discovered
+                            </span>
+                          )}
+                          {interaction.last_visited_at && (
+                            <span className="t-cap text-ink-2">
+                              Visited{" "}
+                              <Timestamp
+                                iso={interaction.last_visited_at}
+                                precision="date"
+                              />
+                              {(interaction.visit_count ?? 0) > 1 &&
+                                ` (${interaction.visit_count}x)`}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      <Button variant="outline" asChild>
+                        <Link href={`/places/${place.id}`} underline="none">
+                          <Visible aria-hidden />
                           View Details
-                        </Button>
-                      </Stack>
-                    </CardContent>
-                  </Card>
-                );
-              })
+                        </Link>
+                      </Button>
+                    </li>
+                  );
+                })}
+              </ul>
             )}
             {saved.hasNextPage && (
               <Button
-                variant="outlined"
-                color="neutral"
-                loading={saved.status === "loadingMore"}
-                disabled={!saved.canLoadMore}
+                variant="outline"
+                disabled={!saved.canLoadMore || saved.status === "loadingMore"}
+                aria-busy={saved.status === "loadingMore" || undefined}
                 onClick={() => void saved.loadMore()}
               >
+                {saved.status === "loadingMore" && <Spinner />}
                 Load more
               </Button>
             )}
-          </Stack>
-        </TabPanel>
+          </div>
+        </TabsContent>
       </Tabs>
-    </Box>
+    </div>
+  );
+}
+
+/** A tab's count (the old Joy badge / chip). */
+function CountPill({ children }: { children: number }) {
+  return (
+    <span className="tabular inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-surface-3 px-1.5 font-semibold text-ink-1 text-xs">
+      {children}
+    </span>
+  );
+}
+
+/** A suggestion line's type in its own hue; anything else is a plate. */
+function ItemGlyph({ type }: { type?: string }) {
+  const key = type?.toUpperCase();
+  const known = ITEM_TYPES_IN_ORDER.find((t) => t === key) as
+    | ApiItemType
+    | undefined;
+  return known ? (
+    <TypeGlyph type={known} className="mt-0.5 size-5" />
+  ) : (
+    <Restaurant
+      aria-hidden
+      strokeWidth={ICON_STROKE}
+      className="mt-0.5 size-5 shrink-0 text-ink-2"
+    />
   );
 }

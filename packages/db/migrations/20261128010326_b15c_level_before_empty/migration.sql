@@ -1,0 +1,2 @@
+ALTER TABLE "cellar_items" ADD COLUMN "level_before_empty" numeric;--> statement-breakpoint
+ALTER TABLE "cellar_items" ADD CONSTRAINT "cellar_items_level_before_empty_range" CHECK (((level_before_empty IS NULL) OR ((level_before_empty > (0)::numeric) AND (level_before_empty <= (100)::numeric))));

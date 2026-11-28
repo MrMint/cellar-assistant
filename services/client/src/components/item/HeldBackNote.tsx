@@ -1,4 +1,3 @@
-import { Typography } from "@mui/joy";
 import { heldBackNote } from "./adapter";
 
 /**
@@ -19,9 +18,5 @@ export function HeldBackNote({
 }) {
   const note = heldBackNote(shown, total, noun, order);
   if (note === null) return null;
-  return (
-    <Typography level="body-xs" sx={{ color: "text.tertiary" }}>
-      {note}
-    </Typography>
-  );
+  return <p className="t-cap text-ink-3">{note}</p>;
 }

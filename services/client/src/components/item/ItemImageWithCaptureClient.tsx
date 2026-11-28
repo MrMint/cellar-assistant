@@ -1,8 +1,7 @@
 "use client";
 
-import type { StaticImageData } from "next/image";
 import { useRouter } from "next/navigation";
-import { useCallback } from "react";
+import { type ReactNode, useCallback } from "react";
 import { useClient, useMutation } from "urql";
 import type { ApiItemType } from "@/components/cellar-api/itemTypes";
 import { UploadRejectedError, uploadFile } from "@/lib/api/files";
@@ -15,11 +14,14 @@ import { ItemImage } from "./ItemImage";
 interface ItemImageWithCaptureClientProps {
   url?: string | null;
   placeholder?: string | null;
-  fallback: StaticImageData;
+  /** The bottle's LabelPlate, for a bottle with no photo. */
+  fallback: ReactNode;
   itemId: string;
   itemType: ApiItemType;
   cellarId: string;
   cellarItemId: string;
+  /** Passed to `ItemImage`: the tile's shape. */
+  className?: string;
 }
 
 /**
@@ -40,6 +42,7 @@ export function ItemImageWithCaptureClient({
   itemType,
   cellarId,
   cellarItemId,
+  className,
 }: ItemImageWithCaptureClientProps) {
   const client = useClient();
   const router = useRouter();
@@ -100,6 +103,7 @@ export function ItemImageWithCaptureClient({
       placeholder={placeholder}
       fallback={fallback}
       onCaptureImage={handleCaptureImage}
+      className={className}
     />
   );
 }

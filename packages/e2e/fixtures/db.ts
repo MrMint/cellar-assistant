@@ -4,11 +4,12 @@ import { execFileSync } from "node:child_process";
  * Direct Postgres access, for fixture teardown that has no API path.
  *
  * A place is created through `createPlace` — "the only place-creation path a
- * client has" (`place-creation-actor.ts`'s module doc) — and there is
- * deliberately no `deletePlace` mutation in `schema.graphql`. Unlike a cellar
- * (`deleteCellar`) or a tier list (`deleteTierList`), a place is a shared
- * reference entity with no per-viewer lifecycle a mutation could authorize, so
- * a spec that creates one has nothing to call to undo it.
+ * client has" (`place-creation-actor.ts`'s module doc). Since X27 there *is* a
+ * `deletePlace` mutation, but only for a place still under review (pending
+ * or rejected, its creator's alone): once the review shares it, a place is a
+ * shared reference entity with no per-viewer lifecycle a mutation could
+ * authorize, so a spec that cannot be sure where the review left its place
+ * still needs this.
  *
  * That matters for `PLACE_RATE_LIMIT_PER_DAY` (25/day,
  * `place-creation-actor.ts#enforceRateLimit`), because the limit counts rows
@@ -89,9 +90,10 @@ function psql(sql: string): string {
  *
  * ## `waitForRowMs`: when the row may not exist *yet*
  *
- * `createPlace` runs its AI review **before** it inserts
- * (`place-creation-actor.ts`), under a 120s invocation timeout. A spec that
- * gave up on a slow create can reach its teardown while that turn is still
+ * `createPlace` used to run its AI review **before** it inserts, under a
+ * 120s invocation timeout; since X27 it inserts at once (pending) and the
+ * review runs afterwards from the outbox, under a 30s bound. A spec that gave
+ * up on a slow create can still reach its teardown while that turn is
  * running and commits afterwards — so "no row" can mean "not yet". A caller
  * that does not know whether the create committed passes a window, and this
  * retries until the row appears and is deleted, or the window closes and it
@@ -171,6 +173,30 @@ export function deleteCellarWithContents(cellarId: string): void {
 }
 
 /**
+ * Pretend a bottle was opened `days` ago (X10's Drink soon reads `open_at`
+ * against a style table, and nothing in the API backdates it). The bottle
+ * must already be open; its cellar's own cleanup removes it.
+ */
+export function backdateOpened(cellarItemId: string, days: number): void {
+  if (!UUID_PATTERN.test(cellarItemId)) {
+    throw new Error(`backdateOpened: not a uuid: ${cellarItemId}`);
+  }
+  if (!Number.isInteger(days) || days < 0 || days > 3650) {
+    throw new Error(`backdateOpened: days must be 0..3650, got ${days}`);
+  }
+  const output = psql(
+    `with moved as (update cellar_items set open_at = now() - interval '${days} days' ` +
+      `where id = '${cellarItemId}' and open_at is not null returning 1) ` +
+      "select count(*) from moved",
+  );
+  if (output !== "1") {
+    throw new Error(
+      `backdateOpened: expected one open bottle ${cellarItemId}, psql said ${JSON.stringify(output)}`,
+    );
+  }
+}
+
+/**
  * Insert one active place at a point, for a spec that needs a place *near*
  * somewhere without `createPlace`'s synchronous AI review and its 25/day
  * quota (`/search`'s Nearby Places, G31). Remove it with {@link deletePlace}.
@@ -212,4 +238,263 @@ export function insertPlace(input: {
       `st_setsrid(st_makepoint(${lng}, ${lat}), 4326)::geography, ` +
       `array['${input.category}']::text[], 0.9, 4.2, true, 'user')`,
   );
+}
+
+/**
+ * X27 / D28: pin a place's review where a spec needs it, whatever the stack's
+ * AI is doing.
+ *
+ * A new place is saved `pending` and an outbox row queues its AI review. On a
+ * lane with a working model that review can land within seconds — approving
+ * the place (now everyone's) or rejecting it — and on one without, never. A
+ * spec about the *pending* or *rejected* experience therefore cannot just wait;
+ * it holds the state instead, in one transaction:
+ *
+ *  - the place's queued review rows that have not been delivered are deleted,
+ *    so none is drawn again;
+ *  - `review_requested_at` is re-stamped, so a review already in flight finds
+ *    its verdict stale (`PlaceActor.applyReview` compares the stamp) and
+ *    writes nothing;
+ *  - the status — and for `rejected` the reason — is set.
+ *
+ * The edit-and-resubmit flow queues a fresh review row of its own afterwards,
+ * which this does not touch; call it again after a resubmit to hold the new
+ * submission too.
+ */
+export function holdPlaceInReview(
+  placeId: string,
+  status: "pending" | "rejected",
+  rejectionReason: string | null = null,
+): void {
+  if (!UUID_PATTERN.test(placeId)) {
+    throw new Error(`holdPlaceInReview: not a uuid: ${placeId}`);
+  }
+  if (
+    rejectionReason !== null &&
+    !/^[A-Za-z0-9 .,'-]+$/.test(rejectionReason)
+  ) {
+    throw new Error(
+      `holdPlaceInReview: unsafe reason ${JSON.stringify(rejectionReason)}`,
+    );
+  }
+  const reason =
+    rejectionReason === null
+      ? "null"
+      : `'${rejectionReason.replace(/'/g, "''")}'`;
+  const output = psql(
+    "delete from outbox where target_actor = 'PlaceReviewActor' " +
+      `and target_id = '${placeId}' and status in ('pending', 'delivering'); ` +
+      "with held as (update places set " +
+      `review_status = '${status}', rejection_reason = ${reason}, ` +
+      "review_requested_at = clock_timestamp(), " +
+      `reviewed_at = ${status === "rejected" ? "now()" : "null"} ` +
+      `where id = '${placeId}' returning 1) select count(*) from held`,
+  );
+  if (output !== "1") {
+    throw new Error(
+      `holdPlaceInReview: expected to hold place ${placeId} in ` +
+        `${CONTAINER}/${DB_NAME}, psql said ${JSON.stringify(output)}`,
+    );
+  }
+}
+
+/** What `insertScannedMenu` accepts in a line's text: no quotes to escape. */
+const MENU_TEXT = /^[A-Za-z0-9 .,&—–'-]+$/;
+const MENU_TYPES = [
+  "wine",
+  "beer",
+  "spirit",
+  "coffee",
+  "sake",
+  "tea",
+  "cocktail",
+  "unknown",
+] as const;
+const MATCH_TYPES = [
+  "wine",
+  "beer",
+  "spirit",
+  "coffee",
+  "sake",
+  "tea",
+] as const;
+
+export type ScannedMenuLine = {
+  readonly id: string;
+  readonly name: string;
+  readonly description?: string;
+  readonly price?: number;
+  readonly type: (typeof MENU_TYPES)[number];
+  /** The catalog item the line is already matched to. */
+  readonly match?: {
+    readonly type: (typeof MATCH_TYPES)[number];
+    readonly id: string;
+  };
+};
+
+const quoted = (value: string): string => `'${value.replace(/'/g, "''")}'`;
+
+/**
+ * X07: a menu scanned at `placeId` by `userId`, without the vision pipeline —
+ * so a spec about what the lines *look like* and *do* does not depend on a
+ * model reading a photograph, or spend the shared account's menu budget.
+ *
+ * One `files` row (never uploaded: the foreign key is all a scan row needs),
+ * one `completed` `menu_scans` row, and its lines with `menu_category` left
+ * null — which is what a real read leaves on most menus, and the case X07's
+ * grouping exists for. A line's `match` sets its item column directly, as an
+ * accepted suggestion would have. Every id is the caller's (checked as a
+ * uuid) and every text value is checked against a plain-text pattern before
+ * it is interpolated. Remove it with {@link deleteScannedMenu} before the
+ * place.
+ *
+ * Insert it before the place page is first opened in the run: `PlaceActor`
+ * caches a place's lines when it activates.
+ */
+export function insertScannedMenu(input: {
+  scanId: string;
+  fileId: string;
+  placeId: string;
+  userId: string;
+  lines: readonly ScannedMenuLine[];
+}): void {
+  for (const id of [input.scanId, input.fileId, input.placeId, input.userId]) {
+    if (!UUID_PATTERN.test(id)) {
+      throw new Error(`insertScannedMenu: not a uuid: ${id}`);
+    }
+  }
+  const values = input.lines.map((line) => {
+    if (!UUID_PATTERN.test(line.id)) {
+      throw new Error(`insertScannedMenu: not a uuid: ${line.id}`);
+    }
+    for (const text of [line.name, line.description ?? "x"]) {
+      if (!MENU_TEXT.test(text)) {
+        throw new Error(
+          `insertScannedMenu: unsafe text ${JSON.stringify(text)}`,
+        );
+      }
+    }
+    if (!MENU_TYPES.includes(line.type)) {
+      throw new Error(`insertScannedMenu: not a menu type: ${line.type}`);
+    }
+    if (line.price !== undefined && !Number.isFinite(line.price)) {
+      throw new Error(`insertScannedMenu: not a price: ${line.price}`);
+    }
+    const match = line.match;
+    if (
+      match !== undefined &&
+      (!MATCH_TYPES.includes(match.type) || !UUID_PATTERN.test(match.id))
+    ) {
+      throw new Error(`insertScannedMenu: bad match ${JSON.stringify(match)}`);
+    }
+    const column = (type: string) =>
+      match !== undefined && match.type === type ? `'${match.id}'` : "null";
+    return (
+      `('${line.id}', '${input.placeId}', '${input.scanId}', ${quoted(line.name)}, ` +
+      `${line.description === undefined ? "null" : quoted(line.description)}, ` +
+      `${line.price ?? "null"}, '${line.type}', ` +
+      MATCH_TYPES.map(column).join(", ") +
+      ")"
+    );
+  });
+  psql(
+    "insert into files (id, key) values " +
+      `('${input.fileId}', 'e2e/menu-${input.fileId}.png'); ` +
+      "insert into menu_scans (id, user_id, place_id, original_image_id, " +
+      "processing_status, items_detected) values " +
+      `('${input.scanId}', '${input.userId}', '${input.placeId}', ` +
+      `'${input.fileId}', 'completed', ${input.lines.length}); ` +
+      "insert into place_menu_items (id, place_id, menu_scan_id, menu_item_name, " +
+      "menu_item_description, menu_item_price, detected_item_type, " +
+      `${MATCH_TYPES.map((type) => `${type}_id`).join(", ")}) values ` +
+      `${values.join(", ")}`,
+  );
+}
+
+/** Undo {@link insertScannedMenu}: the scan (its lines cascade) and its file. */
+export function deleteScannedMenu(scanId: string, fileId: string): void {
+  for (const id of [scanId, fileId]) {
+    if (!UUID_PATTERN.test(id)) {
+      throw new Error(`deleteScannedMenu: not a uuid: ${id}`);
+    }
+  }
+  psql(
+    `delete from menu_scans where id = '${scanId}'; ` +
+      `delete from files where id = '${fileId}'`,
+  );
+}
+
+/**
+ * The teas filed into a cellar, by id: read them *before*
+ * {@link deleteCellarWithContents} removes the bottles that name them, so a
+ * spec can delete a tea its UI created (a typed draft) along with the one it
+ * created through the API.
+ */
+export function teaIdsInCellar(cellarId: string): string[] {
+  if (!UUID_PATTERN.test(cellarId)) {
+    throw new Error(`teaIdsInCellar: not a uuid: ${cellarId}`);
+  }
+  const output = psql(
+    "select distinct tea_id from cellar_items " +
+      `where cellar_id = '${cellarId}' and tea_id is not null`,
+  );
+  return output === "" ? [] : output.split("\n").map((line) => line.trim());
+}
+
+/**
+ * Delete teas a spec created (leftovers 7: m06 left one per run). There is no
+ * item delete in the API, the same gap {@link deleteCellarWithContents} fills.
+ * The tea's own rows go first — every foreign key onto `teas` is RESTRICT or
+ * plain — in one transaction, so a run either removes a tea whole or not at
+ * all. A recipe ingredient naming the tea is *not* removed: no spec here puts
+ * one there, so one existing is someone else's data and the delete fails
+ * loudly instead. Throws unless every id named a tea.
+ */
+export function deleteTeas(teaIds: readonly string[]): void {
+  if (teaIds.length === 0) return;
+  for (const id of teaIds) {
+    if (!UUID_PATTERN.test(id)) {
+      throw new Error(`deleteTeas: not a uuid: ${id}`);
+    }
+  }
+  const ids = teaIds.map((id) => `'${id}'`).join(", ");
+  const output = psql(
+    "begin; " +
+      `delete from check_ins where tea_id in (${ids}) or cellar_item_id in ` +
+      `(select id from cellar_items where tea_id in (${ids})); ` +
+      `delete from cellar_items where tea_id in (${ids}); ` +
+      `delete from item_brew_prefs where tea_id in (${ids}); ` +
+      `delete from want_to_try where tea_id in (${ids}); ` +
+      `delete from tier_list_items where tea_id in (${ids}); ` +
+      `delete from item_reviews where tea_id in (${ids}); ` +
+      `delete from item_favorites where tea_id in (${ids}); ` +
+      `delete from item_image where tea_id in (${ids}); ` +
+      `delete from item_vectors where tea_id in (${ids}); ` +
+      `delete from item_brands where tea_id in (${ids}); ` +
+      `delete from item_match_suggestions where suggested_tea_id in (${ids}); ` +
+      `with deleted as (delete from teas where id in (${ids}) returning 1) ` +
+      "select count(*) from deleted; " +
+      "commit;",
+  );
+  if (output !== String(teaIds.length)) {
+    throw new Error(
+      `deleteTeas: expected to delete ${teaIds.length} tea(s) in ` +
+        `${CONTAINER}/${DB_NAME}, psql said ${JSON.stringify(output)}.`,
+    );
+  }
+}
+
+/**
+ * ux-c L08: the drink logs naming a recipe ("Made it"), by id. No API read
+ * lists your own logs of a recipe (`friendProfile` is never yourself), so
+ * m10 checks the write and its Undo here, and cleans up with the ids.
+ */
+export function recipeLogIds(recipeId: string): string[] {
+  if (!UUID_PATTERN.test(recipeId)) {
+    throw new Error(`recipeLogIds: not a uuid: ${recipeId}`);
+  }
+  const output = psql(
+    `select id from check_ins where recipe_id = '${recipeId}' order by id`,
+  );
+  return output === "" ? [] : output.split("\n").map((line) => line.trim());
 }

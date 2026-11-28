@@ -10,6 +10,7 @@ import { describe, test } from "node:test";
 import type { ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { Client, Provider } from "urql";
+import { stripStyleBlocks } from "@/test-support/markup";
 
 mock.module("next/image", () => ({
   default: (props: { alt: string }) => (
@@ -23,16 +24,14 @@ mock.module("next/navigation", () => ({
 
 const { CellarCard } = await import("./CellarCard");
 const { CellarForm } = await import("./CellarForm");
-const { AddItemClient } = await import("./AddItemClient");
 
 const client = new Client({
   url: "http://test.invalid/graphql",
   exchanges: [],
 });
 const render = (node: ReactNode) =>
-  renderToStaticMarkup(<Provider value={client}>{node}</Provider>).replace(
-    /<style[^>]*>[^<]*<\/style>/g,
-    "",
+  stripStyleBlocks(
+    renderToStaticMarkup(<Provider value={client}>{node}</Provider>),
   );
 
 const cellar = {
@@ -44,13 +43,19 @@ const cellar = {
 };
 
 describe("CellarCard (restored)", () => {
-  test("an InteractiveCard whose title links to the cellar's items", () => {
+  test("a card whose title links to the cellar's items", () => {
     const html = render(
       <CellarCard userId="u-zed" cellar={cellar} onEditClick={() => {}} />,
     );
-    assert.match(html, /^<div class="MuiCard-root/);
+    assert.ok(
+      html.indexOf("/cellars/c1/items") < html.indexOf('aria-label="Wines"'),
+      "the title leads, the counts follow",
+    );
     assert.match(html, /href="\/cellars\/c1\/items"/, "absolute, not relative");
-    assert.match(html, /MuiTypography-title-lg[^>]*>Basement</);
+    assert.match(
+      html,
+      /href="\/cellars\/c1\/items"[^>]*>(?:<[^>]+>)*Basement</,
+    );
   });
 
   test("edit button only for the creator or a co-owner", () => {
@@ -60,18 +65,20 @@ describe("CellarCard (restored)", () => {
     const coOwner = render(
       <CellarCard userId="u-bo" cellar={cellar} onEditClick={() => {}} />,
     );
-    assert.doesNotMatch(stranger, /MuiIconButton-root/);
-    assert.match(coOwner, /MuiIconButton-root/);
+    assert.doesNotMatch(stranger, /<button[^>]*aria-label="Edit Cellar"/);
+    assert.match(coOwner, /<button[^>]*aria-label="Edit Cellar"/);
   });
 
-  test("creator then co-owners in an AvatarGroup, by initial", () => {
+  test("creator then co-owners beside the title, by initial", () => {
     const html = render(
       <CellarCard userId="u-ana" cellar={cellar} onEditClick={() => {}} />,
     );
-    assert.match(html, /MuiAvatarGroup-root/);
-    const initials = [...html.matchAll(/MuiAvatar-root[^>]*>([A-Z])</g)].map(
-      (m) => m[1],
+    const owners = html.slice(
+      html.indexOf(">Basement<") + ">Basement<".length,
+      html.indexOf('aria-label="Wines"'),
     );
+    assert.ok(owners.length > 0, "the avatars sit between title and counts");
+    const initials = [...owners.matchAll(/>([A-Z])</g)].map((m) => m[1]);
     assert.deepEqual(initials, ["A", "B"]);
   });
 
@@ -79,30 +86,52 @@ describe("CellarCard (restored)", () => {
     const html = render(
       <CellarCard userId="u-ana" cellar={cellar} onEditClick={() => {}} />,
     );
-    const counts = [...html.matchAll(/MuiTypography-body-md[^>]*>(\d+)</g)].map(
-      (m) => m[1],
-    );
-    assert.deepEqual(counts, ["3", "0", "1", "0", "0", "2"]);
+    const counts = [
+      ...html.matchAll(
+        /aria-label="(Wines|Beers|Spirits|Coffees|Sakes|Teas)"[^>]*>[\s\S]*?>(\d+)</g,
+      ),
+    ].map((m) => `${m[1]} ${m[2]}`);
+    assert.deepEqual(counts, [
+      "Wines 3",
+      "Beers 0",
+      "Spirits 1",
+      "Coffees 0",
+      "Sakes 0",
+      "Teas 2",
+    ]);
     assert.equal([...html.matchAll(/<svg/g)].length >= 7, true);
+    const dimmed = [
+      ...html.matchAll(
+        /<span[^>]*class="([^"]*)"[^>]*><svg[^>]*aria-label="(\w+)"/g,
+      ),
+    ]
+      .filter((m) => /\bopacity-30\b/.test(m[1] ?? ""))
+      .map((m) => m[2]);
+    assert.deepEqual(dimmed, ["Beers", "Coffees", "Sakes"], "only the zeros");
   });
 });
 
-describe("CellarForm (restored)", () => {
+describe("CellarForm (lot-cellars-shelves-03)", () => {
   const labels = (html: string) =>
     [...html.matchAll(/<label[^>]*>([^<]+)/g)].map((m) => m[1]);
 
-  test("Name, Privacy, Co-Owners; helper text; 'Add' when creating", () => {
-    const html = render(<CellarForm friends={[]} onSubmitted={() => {}} />);
-    assert.deepEqual(labels(html), ["Name", "Privacy", "Co-Owners"]);
-    assert.match(html, /These users will be treated as owners of the cellar\./);
-    assert.match(html, /Choose friends\.\.\./);
-    assert.match(html, /<button[^>]*type="submit"[^>]*>Add<\/button>/);
-    // The privacy default (FRIENDS) is not asserted here: Joy's Select learns
-    // its options' labels in an effect, so a server render shows the
-    // placeholder. e2e 02 reads the stored value back instead.
+  test("Name, Who sees it (Friends by default), Co-owners; Cancel and Make cellar", () => {
+    const html = render(
+      <CellarForm friends={[]} onSubmitted={() => {}} onCancel={() => {}} />,
+    );
+    assert.deepEqual(labels(html), ["Name", "Co-owners"]);
+    assert.match(html, /role="radiogroup"[^>]*aria-label="Who sees it"/);
+    assert.match(
+      html,
+      /aria-checked="true"[^>]*>(?:<[^>]+>)*Friends|Friends(?:<[^>]+>)*[^<]*aria-checked="true"/,
+    );
+    assert.match(html, /Your friends can look/);
+    assert.match(html, />None</);
+    assert.match(html, /<button[^>]*type="button"[^>]*>Cancel<\/button>/);
+    assert.match(html, /<button[^>]*type="submit"[^>]*>Make cellar<\/button>/);
   });
 
-  test("'Save' when editing (the old 'Add' here was a bug)", () => {
+  test("'Save' when editing, with the stored privacy's line", () => {
     const html = render(
       <CellarForm
         id="c1"
@@ -113,46 +142,16 @@ describe("CellarForm (restored)", () => {
     );
     assert.match(html, /<button[^>]*type="submit"[^>]*>Save<\/button>/);
     assert.match(html, /value="Basement"/);
+    assert.match(html, /Only you and co-owners/);
+    assert.doesNotMatch(html, />Cancel</);
   });
 });
 
-describe("AddItemClient (restored)", () => {
-  const cards = (html: string) =>
-    [...html.matchAll(/MuiTypography-title-lg[^>]*>(\w+)</g)].map((m) => m[1]);
-
-  test("heading, six image cards in the old order, onboarding links", () => {
-    const html = render(
-      <AddItemClient cellarId="c1" cellarName="Basement" canAdd />,
-    );
-    assert.match(html, /<h2[^>]*>Add an item to Basement<\/h2>/);
-    assert.deepEqual(cards(html), [
-      "Wine",
-      "Beer",
-      "Spirit",
-      "Coffee",
-      "Sake",
-      "Tea",
-    ]);
-    assert.equal([...html.matchAll(/data-next-image="art"/g)].length, 6);
-    assert.match(html, /href="\/cellars\/c1\/wines\/add"/);
-    assert.match(html, /href="\/cellars\/c1\/teas\/add"/);
-    assert.doesNotMatch(html, /You do not have permission/);
-  });
-
-  test("without permission: the old note, and the cards do not link", () => {
-    const html = render(
-      <AddItemClient cellarId="c1" cellarName="Basement" canAdd={false} />,
-    );
-    assert.match(
-      html,
-      /You do not have permission to add items to this cellar\./,
-    );
-    assert.doesNotMatch(html, /href="\/cellars\/c1\//);
-  });
-
-  test("off a cellar it is /add's chooser", () => {
-    const html = render(<AddItemClient />);
-    assert.match(html, /<h2[^>]*>Add an item<\/h2>/);
-    assert.match(html, /href="\/add\/sakes"/);
+describe("Delete cellar: refused while it holds bottles", async () => {
+  const { deleteRefusal } = await import("../cellar-api/DeleteCellarButton");
+  test("the refusal's words; none for an empty cellar", () => {
+    assert.equal(deleteRefusal(240), "Holds 240 bottles. Empty it first.");
+    assert.equal(deleteRefusal(1), "Holds 1 bottle. Empty it first.");
+    assert.equal(deleteRefusal(0), null);
   });
 });

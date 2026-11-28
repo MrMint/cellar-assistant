@@ -4,19 +4,18 @@ import { useEffect } from "react";
 import { unwrapResult } from "@/lib/api/result";
 import { type Page, toPage } from "@/lib/paging/paged-connection";
 import { usePagedConnection } from "@/lib/paging/use-paged-connection";
-import { MyTierListOptionsPageQuery, TIER_LISTS_PAGE_SIZE } from "./queries";
+import { MyListOptionsPageQuery } from "./lists/queries";
 
 /**
- * Every tier list the viewer may see, walked to the last page — for the two
+ * Every tier list the viewer owns, walked to the last page — for the two
  * pickers that offer "your own lists of this type": the map's tier-list
  * filter and the "Add to Tier List" modal.
  *
- * The old queries filtered server-side (`list_type`, `created_by_id`).
- * `myTierLists` takes no filter (G33 is not built) and pages at 100, so a
- * viewer who could see more than 100 lists — friends' and public ones count —
- * used to lose their own lists off the end of the first page. Owner and type
- * are still narrowed by the caller; this only makes sure the narrowing sees
- * every list first.
+ * The old queries filtered server-side (`list_type`, `created_by_id`). The
+ * owner half is server-side again (`myTierLists(section: MINE)`, X11), so the
+ * walk no longer pages through friends' and strangers' lists to find the
+ * viewer's own; the type is still narrowed by the caller, which also keeps
+ * its owner check as a second line.
  *
  * `active` false holds the hook (a closed modal, no viewer). Each time it
  * turns true the walk restarts from the first page, network-only when
@@ -28,9 +27,15 @@ export type TierListOptionNode = {
   name: string;
   listType: string;
   createdById: string;
+  itemCount: number;
+  /** The first 100 entries' bands: enough to say where an add lands. */
+  bands: readonly number[];
 };
 
-/** A runaway guard, not a product limit: 50 pages is 5,000 visible lists. */
+/** `MyListOptionsPage`'s literal `first`. */
+const OPTIONS_PAGE_SIZE = 50;
+
+/** A runaway guard, not a product limit: 50 pages of 50 is 2,500 lists. */
 const MAX_PAGES = 50;
 
 const EMPTY: Page<TierListOptionNode, string | null> = {
@@ -53,8 +58,8 @@ export function useAllMyTierLists({
   error: string | null;
 } {
   const paged = usePagedConnection({
-    query: MyTierListOptionsPageQuery,
-    variables: (_args: null, after) => ({ first: TIER_LISTS_PAGE_SIZE, after }),
+    query: MyListOptionsPageQuery,
+    variables: (_args: null, after) => ({ after }),
     select: (data) => {
       const result = unwrapResult(data?.myTierLists, "TierListConnection");
       if (!result.ok) return result;
@@ -66,6 +71,8 @@ export function useAllMyTierLists({
             name: edge.node.name,
             listType: edge.node.listType,
             createdById: edge.node.createdById,
+            itemCount: edge.node.itemCount,
+            bands: edge.node.bands.edges.map((band) => band.node.band),
           })),
           meta: data?.me?.id ?? null,
         },
@@ -81,7 +88,7 @@ export function useAllMyTierLists({
     if (active) void reset(null, { fresh });
   }, [active, fresh, reset]);
 
-  const pages = Math.ceil(rows.length / TIER_LISTS_PAGE_SIZE);
+  const pages = Math.ceil(rows.length / OPTIONS_PAGE_SIZE);
   // A failed page stops the walk (no retry loop); the error is surfaced.
   const walking =
     active &&

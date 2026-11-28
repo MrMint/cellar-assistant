@@ -18,6 +18,8 @@ import {
   matchedItemHref,
   menuItemFrom,
   photosFrom,
+  pinAddressDraft,
+  pinAddressNotFound,
   placeResultFromNode,
   scanSummaryFrom,
   semanticResultsFrom,
@@ -87,6 +89,40 @@ describe("mapItemsFromBrowse", () => {
     assert.equal(cluster.is_cluster, true);
     assert.equal(cluster.cluster_count, 12);
     assert.deepEqual(cluster.cluster_center.coordinates, [3, 4]);
+  });
+
+  test("F-196: the owner's band, the rating count and the photo reach the pin", () => {
+    const [mine, theirs] = mapItemsFromBrowse(
+      [
+        {
+          __typename: "MapPlace",
+          id: "mine",
+          name: "Mine",
+          categories: ["cafe"],
+          rating: 4.6,
+          ratingCount: 210,
+          myBand: 4,
+          photo: { url: "https://files.example/p.jpg" },
+          location: { lng: 1, lat: 2 },
+        },
+        {
+          __typename: "MapPlace",
+          id: "theirs",
+          name: "Theirs",
+          categories: ["cafe"],
+          ratingCount: 0,
+          myBand: null,
+          photo: null,
+          location: { lng: 1, lat: 2 },
+        },
+      ],
+      { bounds },
+    ) as PlaceResult[];
+    assert.equal(mine?.my_band, 4);
+    assert.equal(mine?.rating_count, 210);
+    assert.equal(mine?.photo_url, "https://files.example/p.jpg");
+    assert.equal(theirs?.my_band, undefined);
+    assert.equal(theirs?.photo_url, undefined);
   });
 });
 
@@ -227,10 +263,49 @@ describe("one place", () => {
       id: "s1",
       name: "Kubota",
       type: "sake",
+      is_want_to_try: false,
     });
-    // The pipeline's own matching key is not a menu attribute.
+    // The pipeline's own matching key is not a menu attribute — but it is
+    // what X07's candidate search asks for.
     assert.deepEqual(line.extracted_attributes, { region: "Niigata" });
-    assert.equal(menuItemFrom({ id: "l2", name: "x" }).matched_item, null);
+    assert.equal(line.search_name, "junmai");
+    const bare = menuItemFrom({ id: "l2", name: "x" });
+    assert.equal(bare.matched_item, null);
+    assert.equal(bare.search_name, null);
+    assert.equal(bare.can_correct_match, false);
+    assert.equal(bare.for_you, null);
+  });
+
+  test("menuItemFrom carries X07's reasons, with the liked item's name cased", () => {
+    const line = menuItemFrom({
+      id: "l3",
+      name: "LAPHROAIG 10",
+      canCorrectMatch: true,
+      matchedItem: {
+        id: "w1",
+        type: "SPIRIT",
+        item: { id: "w1", name: "LAPHROAIG 10", isWantToTry: true },
+      },
+      forYou: {
+        yourScore: null,
+        friendsWhoLovedNames: ["Sam"],
+        friendsWhoLovedCount: 2,
+        cellar: { id: "c1", name: "Bar Cart" },
+        likeYouRated: {
+          score: 4.5,
+          item: { id: "w2", name: "LAGAVULIN 16" },
+        },
+      },
+    });
+    assert.equal(line.can_correct_match, true);
+    assert.equal(line.matched_item?.is_want_to_try, true);
+    assert.deepEqual(line.for_you, {
+      your_score: null,
+      cellar: { id: "c1", name: "Bar Cart" },
+      friends_who_loved: ["Sam"],
+      friends_who_loved_count: 2,
+      like_you_rated: { name: "Lagavulin 16", score: 4.5 },
+    });
   });
 
   test("matchedItemHref only for item types with a page", () => {
@@ -329,6 +404,7 @@ describe("scans and suggestions", () => {
       suggestedItem: { id: "w", type: "WINE", name: "Pinot Noir" },
     });
     assert.equal(view.pending, true);
+    assert.equal(view.accepted, false);
     assert.deepEqual(view.suggested, {
       id: "w",
       name: "Pinot Noir",
@@ -343,6 +419,7 @@ describe("scans and suggestions", () => {
       suggestedRecipe: { id: "r", name: "Negroni" },
     });
     assert.equal(recipe.pending, false);
+    assert.equal(recipe.accepted, true);
     assert.equal(recipe.suggested?.href, "/recipes/r");
   });
 });
@@ -508,6 +585,40 @@ describe("googlePrefillFields (G21 — the old prefillFromGoogle)", () => {
         valid,
       ),
       {},
+    );
+  });
+});
+
+describe("pinAddressDraft (N19: the pin's draft for AIDraftField)", () => {
+  test("only what the geocode returned, country upper-cased", () => {
+    assert.deepEqual(
+      pinAddressDraft({
+        street_address: "1 Main St",
+        locality: " Portland ",
+        region: "",
+        postcode: undefined,
+        country_code: "us",
+      }),
+      { street_address: "1 Main St", locality: "Portland", country_code: "US" },
+    );
+  });
+
+  test("no geocode drafts nothing — so nothing is marked From pin", () => {
+    assert.deepEqual(pinAddressDraft(null), {});
+    assert.deepEqual(pinAddressDraft({}), {});
+  });
+
+  test("an empty lookup says so only once it has finished", () => {
+    assert.equal(pinAddressNotFound(true, {}), false, "still loading");
+    assert.equal(pinAddressNotFound(false, pinAddressDraft(null)), true);
+    assert.equal(
+      pinAddressNotFound(false, pinAddressDraft({ locality: "  " })),
+      true,
+      "only blanks came back",
+    );
+    assert.equal(
+      pinAddressNotFound(false, pinAddressDraft({ locality: "Madison" })),
+      false,
     );
   });
 });

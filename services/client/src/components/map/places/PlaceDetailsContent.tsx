@@ -5,51 +5,60 @@
  * the map drawer's body. Save / Mark Visited arrive as `setInteraction`
  * (`recordPlaceInteraction` via `usePlaceDetails`) instead of two Hasura
  * upserts with a client-computed visit count; photos are presigned reads through `next/image`;
- * Google's attribution blocks print with "Powered by Google".
+ * Google's attribution blocks print with "Place details from Google" (FR-15).
+ *
+ * On shadcn (S8): the feedback Snackbar is `notify`, the tooltips are
+ * `ui/tooltip` (hover devices; on touch the `aria-label` names the button).
  */
 
-import {
-  Alert,
-  AspectRatio,
-  Box,
-  Button,
-  Chip,
-  CircularProgress,
-  IconButton,
-  Snackbar,
-  Stack,
-  Tooltip,
-  Typography,
-} from "@mui/joy";
 import Image from "next/image";
-import Link from "next/link";
 import type React from "react";
 import { useState } from "react";
+import { IconButton, type IconButtonProps } from "@/components/app/IconButton";
 import {
-  MdCheckCircle,
-  MdClose,
-  MdCoffee,
-  MdDirections,
-  MdFavorite,
-  MdFavoriteBorder,
-  MdFormatListNumbered,
-  MdLanguage,
-  MdLocalBar,
-  MdMenuBook,
-  MdPhone,
-  MdPlace,
-  MdRadioButtonUnchecked,
-  MdRestaurant,
-  MdShare,
-  MdSportsBar,
-  MdStar,
-  MdWineBar,
-} from "react-icons/md";
+  Close,
+  Directions,
+  ICON_STROKE,
+  Love,
+  Phone,
+  Public,
+  Ranked,
+  Recipe,
+  Share,
+  Star,
+  Success,
+  Unrated,
+  Warning,
+} from "@/components/app/icons";
+import { Link } from "@/components/app/Link";
+import { notify } from "@/components/app/notify";
+import { pressFeedback } from "@/components/app/overlays/press";
+import { TogglePop } from "@/components/app/TogglePop";
 import { AddToTierListModal } from "@/components/tier-list/AddToTierListModal";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Spinner } from "@/components/ui/spinner";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { WantToTryButton } from "@/components/want-to-try/WantToTryButton";
+import { cn } from "@/lib/utils";
 import type { MenuItemView } from "../adapter";
+import { usePlaceToggles } from "../hooks/usePlaceToggles";
 import type { PlaceEnrichment, PlaceGooglePhoto } from "../types/places";
 import { GoogleAttribution } from "./GoogleAttribution";
+import {
+  LoveToggleButton,
+  PlaceCategoryTile,
+  VisitedToggleButton,
+} from "./PlaceActionButtons";
 import { PlaceMenuItems } from "./PlaceMenuItems";
+import { PlaceReviewBadge } from "./PlaceReviewBadge";
+import { isUnshared, type ReviewStatus } from "./place-review";
 import {
   formatCategoryName,
   formatTimeString,
@@ -61,6 +70,8 @@ import {
 export interface Place {
   id: string;
   name: string;
+  /** X27: PENDING / REJECTED reach only the person who added the place. */
+  review_status?: ReviewStatus;
   primary_category?: string;
   categories: string[];
   street_address?: string;
@@ -84,6 +95,8 @@ export type DrawerState = "collapsed" | "half" | "full";
 interface UserInteraction {
   is_favorite?: boolean | null;
   is_visited?: boolean | null;
+  /** X08/D11: on the viewer's Want to try list. */
+  want_to_visit?: boolean | null;
   visit_count?: number | null;
 }
 
@@ -110,7 +123,10 @@ interface PlaceDetailsContentProps {
     isVisited?: boolean;
   }) => Promise<string | null>;
   enrichment?: PlaceEnrichment | null;
+  /** N22: Google details on their way — a skeleton, for at most 8 s. */
   isEnriching?: boolean;
+  /** N22/D16: details owed but not coming yet — "Details pending". */
+  detailsPending?: boolean;
   googlePhotos?: PlaceGooglePhoto[];
 }
 
@@ -169,24 +185,10 @@ function getOpenStatusWithHours(openingHours: Place["opening_hours"]): {
   return { text: isOpen ? "Open" : "Closed", isOpen };
 }
 
-export function getCategoryIcon(category: string) {
-  switch (category) {
-    case "restaurant":
-      return MdRestaurant;
-    case "bar":
-    case "pub":
-      return MdLocalBar;
-    case "cafe":
-    case "coffee_shop":
-      return MdCoffee;
-    case "brewery":
-      return MdSportsBar;
-    case "winery":
-      return MdWineBar;
-    default:
-      return MdPlace;
-  }
-}
+const CLOSED_COPY = {
+  CLOSED_PERMANENTLY: "This place is permanently closed",
+  CLOSED_TEMPORARILY: "This place is temporarily closed",
+} as const;
 
 // ── Component ──────────────────────────────────────────────────────────
 
@@ -205,9 +207,11 @@ export function PlaceDetailsContent({
   variant,
   drawerState,
   onClose,
+  refetch,
   setInteraction,
   enrichment,
   isEnriching,
+  detailsPending,
   googlePhotos,
 }: PlaceDetailsContentProps) {
   // Merge Google enrichment data with existing place data (Google takes precedence)
@@ -222,18 +226,23 @@ export function PlaceDetailsContent({
     phone: mergedPhone,
     website: mergedWebsite,
   };
-  const [isTogglingFavorite, setIsTogglingFavorite] = useState(false);
-  const [isMarkingVisited, setIsMarkingVisited] = useState(false);
-  const [feedback, setFeedback] = useState<{
-    message: string;
-    color: "success" | "danger" | "neutral";
-  } | null>(null);
+  const wantToTry = userInteraction?.want_to_visit === true;
+  // Love / Mark Visited flip on the tap (X24); a refusal puts them back.
+  const { love, visit } = usePlaceToggles({
+    placeId: place.id,
+    loved: !!userInteraction?.is_favorite,
+    visited: !!userInteraction?.is_visited,
+    wantToTry,
+    setInteraction,
+  });
 
   const [tierListModalOpen, setTierListModalOpen] = useState(false);
 
   const isDesktop = variant === "desktop";
   const isCompact = variant === "mobile" && drawerState === "collapsed";
   const isFullyExpanded = variant === "desktop" || drawerState === "full";
+  /** The old `px: isDesktop ? 0 : 2` on every section. */
+  const gutter = isDesktop ? undefined : "px-4";
 
   // ── Action Handlers ────────────────────────────────────────────────
 
@@ -283,248 +292,190 @@ export function PlaceDetailsContent({
         await navigator.clipboard.writeText(
           `${shareData.title}\n${shareData.text}\n${shareData.url}`,
         );
-        setFeedback({ message: "Link copied to clipboard", color: "success" });
+        notify("Link copied to clipboard", { tone: "success" });
       }
     } catch {
-      setFeedback({ message: "Failed to share", color: "danger" });
+      notify("Failed to share", { tone: "error" });
     }
   };
 
-  const handleToggleFavorite = async (e: React.MouseEvent) => {
+  // Inside the drawer a tap must not reach the drawer's own handlers.
+  const handleToggleFavorite = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (!place.id) return;
-    setIsTogglingFavorite(true);
-    try {
-      const error = await setInteraction({
-        isFavorite: !userInteraction?.is_favorite,
-      });
-      if (error) {
-        setFeedback({
-          message: "Failed to update favorite",
-          color: "danger",
-        });
-      } else {
-        setFeedback({
-          message: userInteraction?.is_favorite
-            ? "Removed from saved"
-            : "Saved",
-          color: "success",
-        });
-      }
-    } catch {
-      setFeedback({ message: "Failed to update favorite", color: "danger" });
-    } finally {
-      setIsTogglingFavorite(false);
-    }
+    love.toggle();
   };
 
-  const handleMarkVisited = async (e: React.MouseEvent) => {
+  const handleMarkVisited = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (!place.id) return;
-    setIsMarkingVisited(true);
-    const willBeVisited = !userInteraction?.is_visited;
-    try {
-      const error = await setInteraction({ isVisited: willBeVisited });
-      if (error) {
-        setFeedback({
-          message: "Failed to update visited status",
-          color: "danger",
-        });
-      } else {
-        setFeedback({
-          message: willBeVisited ? "Marked as visited" : "Unmarked",
-          color: "success",
-        });
-      }
-    } catch {
-      setFeedback({
-        message: "Failed to update visited status",
-        color: "danger",
-      });
-    } finally {
-      setIsMarkingVisited(false);
-    }
+    visit.toggle();
   };
 
   // ── Derived Values ─────────────────────────────────────────────────
 
-  const MainCategoryIcon = getCategoryIcon(
-    place.primary_category ?? place.categories[0],
-  );
   const openStatus = place.opening_hours
     ? getOpenStatusWithHours(place.opening_hours)
     : null;
   const maxCategories = isDesktop ? 4 : 3;
   const editorialSummary = enrichment?.editorialSummary;
   const ratingCount = enrichment?.userRatingsTotal;
+  const closedStatus =
+    enrichment?.businessStatus === "CLOSED_TEMPORARILY" ||
+    enrichment?.businessStatus === "CLOSED_PERMANENTLY"
+      ? enrichment.businessStatus
+      : null;
 
   // ── Render ─────────────────────────────────────────────────────────
 
   return (
     <>
       {/* Header */}
-      <Stack
-        direction="row"
-        alignItems="flex-start"
-        spacing={2}
-        sx={{ px: isDesktop ? 0 : 2, pb: 2 }}
-      >
-        <Box
-          sx={{
-            p: 1.5,
-            borderRadius: "md",
-            backgroundColor: "primary.100",
-            color: "primary.600",
-          }}
-        >
-          <MainCategoryIcon size={24} />
-        </Box>
+      <div className={cn("flex flex-row items-start gap-4 pb-4", gutter)}>
+        <PlaceCategoryTile
+          category={place.primary_category ?? place.categories[0]}
+        />
 
-        <Box sx={{ flex: 1, minWidth: 0 }}>
-          <Link href={`/places/${place.id}`} style={{ textDecoration: "none" }}>
-            <Typography
-              level={isDesktop ? "h3" : "h4"}
-              sx={{
-                mb: 0.5,
-                cursor: "pointer",
-                "&:hover": { color: "primary.500" },
-              }}
-            >
+        <div className="min-w-0 flex-1">
+          <h2 className={cn("mb-1 text-ink", isDesktop ? "t-title" : "t-head")}>
+            <Link href={`/places/${place.id}`} underline="hover">
               {place.name}
-            </Typography>
-          </Link>
+            </Link>
+          </h2>
+          <PlaceReviewBadge status={place.review_status} className="mb-2" />
 
-          <Stack
-            direction="row"
-            spacing={2}
-            alignItems="center"
-            sx={{ mb: 1, flexWrap: "wrap" }}
-          >
+          <div className="mb-2 flex flex-row flex-wrap items-center gap-x-4 gap-y-1">
             {mergedPlace.rating && (
-              <Stack direction="row" spacing={0.5} alignItems="center">
-                <MdStar
-                  size={16}
-                  style={{ color: "var(--joy-palette-warning-400)" }}
+              <span className="t-body tabular flex flex-row items-center gap-1 font-medium text-ink">
+                <Star
+                  aria-hidden
+                  strokeWidth={0}
+                  className="size-4 fill-current text-ink-2"
                 />
-                <Typography level="body-sm" sx={{ fontWeight: "md" }}>
-                  {mergedPlace.rating.toFixed(1)}
-                  {ratingCount ? ` (${ratingCount})` : ""}
-                </Typography>
-              </Stack>
+                {mergedPlace.rating.toFixed(1)}
+                {ratingCount ? ` (${ratingCount})` : ""}
+              </span>
             )}
             {mergedPlace.price_level && (
-              <Typography
-                level="body-sm"
-                sx={{ color: "success.600", fontWeight: "md" }}
-              >
+              <span className="t-body font-medium text-success">
                 {getPriceLevelText(mergedPlace.price_level)}
-              </Typography>
+              </span>
             )}
             {openStatus && (
-              <Typography
-                level="body-sm"
-                sx={{
-                  color: openStatus.isOpen ? "success.600" : "danger.600",
-                  fontWeight: "md",
-                }}
+              <span
+                className={cn(
+                  "t-body font-medium",
+                  openStatus.isOpen ? "text-success" : "text-danger",
+                )}
               >
                 {openStatus.text}
-              </Typography>
+              </span>
             )}
-          </Stack>
+          </div>
 
           {place.street_address && (
-            <Typography level="body-sm" sx={{ color: "text.secondary" }}>
+            <p className="t-body text-ink-2">
               {place.street_address}
               {place.locality && `, ${place.locality}`}
-            </Typography>
+            </p>
           )}
-        </Box>
+        </div>
 
         <IconButton
-          variant="soft"
-          color="neutral"
-          size={isDesktop ? "md" : "sm"}
+          variant="secondary"
+          size={isDesktop ? "default" : "sm"}
           onClick={(e) => {
             e.stopPropagation();
             onClose();
           }}
           aria-label="Close place details"
-          sx={{ alignSelf: "flex-start" }}
+          className="self-start"
         >
-          <MdClose />
+          <Close />
         </IconButton>
-      </Stack>
+      </div>
+
+      {/* X27: what "Under review" means, and where the controls are */}
+      {!isCompact && isUnshared(place.review_status) && (
+        <p
+          className={cn("t-cap pb-4 text-ink-2", gutter)}
+          data-testid="drawer-review-note"
+        >
+          {place.review_status === "PENDING"
+            ? "Only you can see this place until it's been checked. "
+            : "Only you can see this place. "}
+          <Link href={`/places/${place.id}`} underline="always">
+            {place.review_status === "PENDING" ? "Edit or delete" : "See why"}
+          </Link>
+        </p>
+      )}
 
       {/* Business Status Warning */}
-      {!isCompact &&
-        enrichment?.businessStatus &&
-        (enrichment.businessStatus === "CLOSED_TEMPORARILY" ||
-          enrichment.businessStatus === "CLOSED_PERMANENTLY") && (
-          <Box sx={{ px: isDesktop ? 0 : 2, pb: 2 }}>
-            <Alert
-              color={
-                enrichment.businessStatus === "CLOSED_PERMANENTLY"
-                  ? "danger"
-                  : "warning"
-              }
-              size="sm"
-            >
-              {enrichment.businessStatus === "CLOSED_PERMANENTLY"
-                ? "This place is permanently closed"
-                : "This place is temporarily closed"}
-            </Alert>
-          </Box>
-        )}
+      {!isCompact && closedStatus && (
+        <div className={cn("pb-4", gutter)}>
+          <Alert
+            variant={
+              closedStatus === "CLOSED_PERMANENTLY" ? "destructive" : "default"
+            }
+          >
+            <Warning aria-hidden />
+            <AlertDescription>{CLOSED_COPY[closedStatus]}</AlertDescription>
+          </Alert>
+        </div>
+      )}
 
       {/* Photo — hidden when collapsed */}
       {!isCompact && googlePhotos?.[0]?.url && (
-        <Box sx={{ px: isDesktop ? 0 : 2, pb: 2 }}>
-          <AspectRatio
-            ratio={isDesktop ? "16/9" : "21/9"}
-            sx={{ borderRadius: "md" }}
+        <div className={cn("pb-4", gutter)}>
+          <div
+            className={cn(
+              "relative overflow-hidden rounded-md bg-surface-2",
+              isDesktop ? "aspect-video" : "aspect-[21/9]",
+            )}
           >
             <Image
               src={googlePhotos[0].url}
               alt={place.name}
               fill
               sizes="(max-width: 600px) 100vw, 720px"
-              style={{ objectFit: "cover" }}
+              className="object-cover"
             />
-          </AspectRatio>
-        </Box>
+          </div>
+        </div>
       )}
 
       {/* Categories — hidden when collapsed */}
       {!isCompact && place.categories.length > 0 && (
-        <Box sx={{ px: isDesktop ? 0 : 2, pb: 2 }}>
-          <Stack
-            direction="row"
-            spacing={1}
-            sx={{ flexWrap: "wrap", gap: isDesktop ? 1 : 0.5 }}
-          >
-            {place.categories.slice(0, maxCategories).map((category) => (
-              <Chip key={category} variant="soft" color="neutral" size="sm">
-                {formatCategoryName(category)}
-              </Chip>
-            ))}
-            {place.categories.length > maxCategories && (
-              <Chip variant="soft" color="neutral" size="sm">
-                +{place.categories.length - maxCategories} more
-              </Chip>
-            )}
-          </Stack>
-        </Box>
+        <div
+          className={cn(
+            "flex flex-row flex-wrap pb-4",
+            isDesktop ? "gap-2" : "gap-1",
+            gutter,
+          )}
+        >
+          {place.categories.slice(0, maxCategories).map((category) => (
+            <Badge key={category} variant="secondary">
+              {formatCategoryName(category)}
+            </Badge>
+          ))}
+          {place.categories.length > maxCategories && (
+            <Badge variant="secondary">
+              +{place.categories.length - maxCategories} more
+            </Badge>
+          )}
+        </div>
       )}
 
       {/* Action Buttons — layout differs by variant */}
-      <Box sx={{ px: isDesktop ? 0 : 2, pb: 2 }}>
+      <div className={cn("pb-4", gutter)}>
         {isDesktop ? (
           <DesktopActions
             place={mergedPlace}
-            userInteraction={userInteraction}
-            isTogglingFavorite={isTogglingFavorite}
-            isMarkingVisited={isMarkingVisited}
+            loved={love.on}
+            visited={visit.on}
+            wantToTry={wantToTry}
+            isTogglingFavorite={love.pending}
+            isMarkingVisited={visit.pending}
             onDirections={handleDirections}
             onCall={handleCall}
             onWebsite={handleWebsite}
@@ -536,10 +487,12 @@ export function PlaceDetailsContent({
         ) : (
           <MobileActions
             place={mergedPlace}
-            userInteraction={userInteraction}
+            loved={love.on}
+            visited={visit.on}
+            wantToTry={wantToTry}
             isCompact={isCompact}
-            isTogglingFavorite={isTogglingFavorite}
-            isMarkingVisited={isMarkingVisited}
+            isTogglingFavorite={love.pending}
+            isMarkingVisited={visit.pending}
             onDirections={handleDirections}
             onCall={handleCall}
             onWebsite={handleWebsite}
@@ -549,211 +502,119 @@ export function PlaceDetailsContent({
             onAddToTierList={() => setTierListModalOpen(true)}
           />
         )}
-      </Box>
+      </div>
 
       {/* Editorial Summary — from Google enrichment */}
       {!isCompact && editorialSummary && (
-        <Box
-          sx={{
-            px: isDesktop ? 0 : 2,
-            pb: 2,
-            pt: 2,
-            borderTop: "1px solid",
-            borderColor: "divider",
-          }}
-        >
-          <Typography
-            level="body-sm"
-            sx={{ color: "text.secondary", fontStyle: "italic" }}
-          >
-            {editorialSummary}
-          </Typography>
-        </Box>
+        <div className={cn("border-rule border-t py-4", gutter)}>
+          <p className="t-body text-ink-2 italic">{editorialSummary}</p>
+        </div>
       )}
 
-      {/* Enriching indicator */}
+      {/* Google details: a skeleton for at most 8 s, then a calm line (N22) */}
       {isEnriching && (
-        <Box
-          sx={{
-            px: isDesktop ? 0 : 2,
-            pb: 1,
-            display: "flex",
-            alignItems: "center",
-            gap: 1,
-          }}
+        <div
+          role="status"
+          aria-busy="true"
+          aria-label="Loading details"
+          className={cn("flex flex-col gap-2 pb-2", gutter)}
         >
-          <CircularProgress
-            size="sm"
-            sx={{ "--CircularProgress-size": "14px" }}
-          />
-          <Typography level="body-xs" color="neutral">
-            Loading additional details...
-          </Typography>
-        </Box>
+          <Skeleton className="h-4 w-[70%]" />
+          <Skeleton className="h-4 w-[45%]" />
+        </div>
+      )}
+      {!isEnriching && detailsPending && (
+        <p className={cn("t-cap pb-2", gutter)}>Details pending</p>
       )}
 
       {/* Contact Info — hidden when collapsed */}
       {!isCompact && (mergedPlace.phone || mergedPlace.website) && (
-        <Box
-          sx={{
-            px: isDesktop ? 0 : 2,
-            pb: 2,
-            pt: 2,
-            borderTop: "1px solid",
-            borderColor: "divider",
-          }}
-        >
-          <Stack spacing={2}>
+        <div className={cn("border-rule border-t py-4", gutter)}>
+          <div className="flex flex-col gap-2">
             {mergedPlace.phone && (
-              <Stack
-                direction="row"
-                spacing={2}
-                alignItems="center"
-                sx={{ cursor: "pointer" }}
-                onClick={handleCall}
-              >
-                <MdPhone
-                  size={20}
-                  style={{ color: "var(--joy-palette-text-secondary)" }}
-                />
-                <Typography level="body-sm" sx={{ color: "primary.500" }}>
-                  {mergedPlace.phone}
-                </Typography>
-              </Stack>
+              <ContactRow icon={Phone} onClick={handleCall}>
+                {mergedPlace.phone}
+              </ContactRow>
             )}
             {mergedPlace.website && (
-              <Stack
-                direction="row"
-                spacing={2}
-                alignItems="center"
-                sx={{ cursor: "pointer" }}
-                onClick={handleWebsite}
-              >
-                <MdLanguage
-                  size={20}
-                  style={{ color: "var(--joy-palette-text-secondary)" }}
-                />
-                <Typography level="body-sm" sx={{ color: "primary.500" }}>
-                  Visit website
-                </Typography>
-              </Stack>
+              <ContactRow icon={Public} onClick={handleWebsite}>
+                Visit website
+              </ContactRow>
             )}
-          </Stack>
-        </Box>
+          </div>
+        </div>
       )}
 
       {/* Menu Items — only when fully expanded */}
       {isFullyExpanded && (
-        <Box
-          sx={{
-            px: isDesktop ? 0 : 2,
-            pb: isDesktop ? 2 : 1.5,
-            borderTop: "1px solid",
-            borderColor: "divider",
-            pt: isDesktop ? 3 : 2,
-            flex: "1 1 0",
-            display: "flex",
-            flexDirection: "column",
-            minHeight: hasMenuItems ? (isDesktop ? 250 : 200) : "auto",
-            overflow: "hidden",
-          }}
+        <div
+          className={cn(
+            "flex flex-[1_1_0] flex-col overflow-hidden border-rule border-t",
+            isDesktop ? "pt-6 pb-4" : "pt-4 pb-3",
+            hasMenuItems && (isDesktop ? "min-h-[250px]" : "min-h-[200px]"),
+            gutter,
+          )}
         >
-          <Stack
-            direction="row"
-            spacing={1}
-            alignItems="center"
-            sx={{ mb: 2, flexShrink: 0 }}
-          >
-            <MdMenuBook
-              size={20}
-              style={{ color: "var(--joy-palette-text-secondary)" }}
+          <div className="mb-4 flex shrink-0 flex-row items-center gap-2">
+            <Recipe
+              aria-hidden
+              strokeWidth={ICON_STROKE}
+              className="size-5 text-ink-2"
             />
-            <Typography level="title-md">Menu Items</Typography>
+            <h3 className="t-head text-ink">Menu Items</h3>
             {hasMenuItems && (
-              <Chip size="sm" variant="soft" color="primary">
+              <Badge variant="secondary" className="tabular">
                 {menuItemCount ?? menuItems.length}
-              </Chip>
+              </Badge>
             )}
-          </Stack>
+          </div>
 
           {loadingDetails ? (
-            <Box sx={{ display: "flex", justifyContent: "center", py: 2 }}>
-              <CircularProgress size="sm" />
-            </Box>
+            <div className="flex justify-center py-4">
+              <Spinner className="size-6 text-ink-2" />
+            </div>
           ) : hasMenuItems ? (
-            <Box
+            <div
               data-scrollable-content
-              sx={{
-                flex: "1 1 0",
-                overflowY: "auto",
-                minHeight: 0,
-                height: "100%",
-                pointerEvents: "auto",
-              }}
+              className="pointer-events-auto h-full min-h-0 flex-[1_1_0] overflow-y-auto"
             >
               <PlaceMenuItems
                 placeId={place.id}
+                placeName={mergedPlace.name}
                 userId={userId}
+                onChanged={refetch}
                 menuItems={menuItems}
                 hasMore={hasMoreMenuItems}
                 loadingMore={loadingMoreMenuItems}
                 loadMoreError={menuLoadMoreError}
                 onLoadMore={onLoadMoreMenuItems}
               />
-            </Box>
+            </div>
           ) : (
-            <Alert
-              color="neutral"
-              size="sm"
-              sx={{
-                "& .MuiAlert-message": {
-                  display: "flex",
-                  flexWrap: "wrap",
-                  gap: 0.5,
-                },
-              }}
-            >
-              <Typography level="body-sm" component="span">
-                No menu discovered yet.
-              </Typography>
+            <p className="t-body flex flex-row flex-wrap gap-1 rounded-md bg-surface-1 px-4 py-3 text-ink">
+              <span>No menu discovered yet.</span>
               <Link
                 href={`/places/${place.id}`}
-                style={{
-                  color: "var(--joy-palette-primary-500)",
-                  textDecoration: "underline",
-                }}
+                underline="always"
+                className="text-act-ink"
               >
-                <Typography level="body-sm" component="span">
-                  Scan a menu
-                </Typography>
+                Scan a menu
               </Link>
-            </Alert>
+            </p>
           )}
-        </Box>
+        </div>
       )}
 
       {/* Google Attribution */}
       {!isCompact && enrichment && (
-        <Box sx={{ px: isDesktop ? 0 : 2, pb: 1 }}>
+        <div className={cn("pb-2", gutter)}>
           <GoogleAttribution
             enrichment={enrichment}
             photos={googlePhotos?.slice(0, 1)}
-            sx={{ mb: 0 }}
+            className="mb-0"
           />
-        </Box>
+        </div>
       )}
-
-      {/* Feedback Snackbar */}
-      <Snackbar
-        open={feedback !== null}
-        autoHideDuration={3000}
-        onClose={() => setFeedback(null)}
-        color={feedback?.color ?? "neutral"}
-        variant="soft"
-        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
-      >
-        {feedback?.message}
-      </Snackbar>
 
       {/* Add to Tier List Modal */}
       <AddToTierListModal
@@ -768,11 +629,43 @@ export function PlaceDetailsContent({
   );
 }
 
+/** A tappable phone / website line (the old clickable `Stack`). */
+function ContactRow({
+  icon: Icon,
+  onClick,
+  children,
+}: {
+  icon: typeof Phone;
+  onClick: (e: React.MouseEvent) => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      {...pressFeedback()}
+      onClick={onClick}
+      className="t-body flex min-h-11 flex-row items-center gap-4 rounded-sm text-left text-act-ink outline-none hover:underline focus-visible:ring-[3px] focus-visible:ring-ring/50"
+    >
+      <Icon
+        aria-hidden
+        strokeWidth={ICON_STROKE}
+        className="size-5 shrink-0 text-ink-2"
+      />
+      {children}
+    </button>
+  );
+}
+
 // ── Desktop Action Buttons ─────────────────────────────────────────────
 
 interface ActionProps {
   place: Place;
-  userInteraction?: UserInteraction;
+  /** The drawn (optimistic) Love and Visited states (X24). */
+  loved: boolean;
+  visited: boolean;
+  /** On the viewer's Want to try list: the bookmark follows the server. */
+  wantToTry: boolean;
+  /** A write in flight: `aria-busy` only, never disabled, never a spinner. */
   isTogglingFavorite: boolean;
   isMarkingVisited: boolean;
   onDirections: (e: React.MouseEvent) => void;
@@ -786,7 +679,9 @@ interface ActionProps {
 
 function DesktopActions({
   place,
-  userInteraction,
+  loved,
+  visited,
+  wantToTry,
   isTogglingFavorite,
   isMarkingVisited,
   onDirections,
@@ -798,92 +693,65 @@ function DesktopActions({
   onAddToTierList,
 }: ActionProps) {
   return (
-    <Stack spacing={2}>
-      <Button
-        variant="solid"
-        color="primary"
-        startDecorator={<MdDirections />}
-        fullWidth
-        onClick={onDirections}
-      >
+    <div className="flex flex-col gap-4">
+      <Button className="w-full" onClick={onDirections}>
+        <Directions aria-hidden />
         Directions
       </Button>
 
-      <Stack direction="row" spacing={1}>
+      <div className="flex flex-row gap-2">
         <Button
-          variant="outlined"
-          color="neutral"
-          startDecorator={<MdPhone />}
+          variant="outline"
           disabled={!place.phone}
-          sx={{ flex: 1 }}
+          className="flex-1"
           onClick={onCall}
         >
+          <Phone aria-hidden />
           Call
         </Button>
         <Button
-          variant="outlined"
-          color="neutral"
-          startDecorator={<MdLanguage />}
+          variant="outline"
           disabled={!place.website}
-          sx={{ flex: 1 }}
+          className="flex-1"
           onClick={onWebsite}
         >
+          <Public aria-hidden />
           Website
         </Button>
-      </Stack>
+      </div>
 
-      <Stack direction="row" spacing={1}>
-        <Button
-          variant={userInteraction?.is_favorite ? "solid" : "outlined"}
-          color={userInteraction?.is_favorite ? "danger" : "neutral"}
-          startDecorator={
-            userInteraction?.is_favorite ? <MdFavorite /> : <MdFavoriteBorder />
-          }
-          onClick={onToggleFavorite}
-          loading={isTogglingFavorite}
-          disabled={isTogglingFavorite}
-          sx={{ flex: 1 }}
-        >
-          {userInteraction?.is_favorite ? "Saved" : "Save"}
-        </Button>
-        <Button
-          variant={userInteraction?.is_visited ? "solid" : "outlined"}
-          color={userInteraction?.is_visited ? "success" : "neutral"}
-          startDecorator={
-            userInteraction?.is_visited ? (
-              <MdCheckCircle />
-            ) : (
-              <MdRadioButtonUnchecked />
-            )
-          }
+      <div className="flex flex-row gap-2">
+        <WantToTryButton
+          variant="button"
+          target={{ kind: "PLACE", placeId: place.id }}
+          saved={wantToTry}
+          name={place.name}
+          className="flex-1"
+        />
+        <VisitedToggleButton
+          on={visited}
+          pending={isMarkingVisited}
           onClick={onMarkVisited}
-          loading={isMarkingVisited}
-          disabled={isMarkingVisited}
-          sx={{ flex: 1 }}
-        >
-          {userInteraction?.is_visited ? "Visited" : "Mark Visited"}
-        </Button>
-        <Button
-          variant="outlined"
-          color="neutral"
-          startDecorator={<MdShare />}
-          onClick={onShare}
-          sx={{ flex: 1 }}
-        >
-          Share
-        </Button>
-      </Stack>
+          className="flex-1"
+        />
+        <LoveToggleButton
+          on={loved}
+          pending={isTogglingFavorite}
+          onClick={onToggleFavorite}
+          className="flex-1"
+        />
+      </div>
 
-      <Button
-        variant="outlined"
-        color="neutral"
-        startDecorator={<MdFormatListNumbered />}
-        fullWidth
-        onClick={onAddToTierList}
-      >
+      <Button variant="outline" className="w-full" onClick={onShare}>
+        <Share aria-hidden />
+        Share
+      </Button>
+
+      <Button variant="outline" className="w-full" onClick={onAddToTierList}>
+        <Ranked aria-hidden />
         Add to Tier List
       </Button>
-    </Stack>
+    </div>
   );
 }
 
@@ -893,9 +761,29 @@ interface MobileActionProps extends ActionProps {
   isCompact: boolean;
 }
 
+/** An icon-only action with its name as a hover tooltip (the old Joy one). */
+function TipIconButton({
+  label,
+  children,
+  ...props
+}: Omit<IconButtonProps, "aria-label"> & { label: string }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <IconButton {...props} aria-label={label}>
+          {children}
+        </IconButton>
+      </TooltipTrigger>
+      <TooltipContent side="top">{label}</TooltipContent>
+    </Tooltip>
+  );
+}
+
 function MobileActions({
   place,
-  userInteraction,
+  loved,
+  visited,
+  wantToTry,
   isCompact,
   isTogglingFavorite,
   isMarkingVisited,
@@ -908,118 +796,71 @@ function MobileActions({
   onAddToTierList,
 }: MobileActionProps) {
   return (
-    <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap", gap: 1 }}>
-      <Button
-        variant="solid"
-        color="primary"
-        startDecorator={<MdDirections />}
-        size="sm"
-        sx={{ flex: "1 1 auto", minWidth: "fit-content" }}
-        onClick={onDirections}
-      >
+    <div className="flex flex-row flex-wrap gap-2">
+      <Button className="min-w-fit flex-auto" onClick={onDirections}>
+        <Directions aria-hidden />
         Directions
       </Button>
 
       {!isCompact && (
         <>
-          <Button
-            variant="outlined"
-            color="neutral"
-            startDecorator={<MdPhone />}
-            size="sm"
-            disabled={!place.phone}
-            onClick={onCall}
-          >
+          <Button variant="outline" disabled={!place.phone} onClick={onCall}>
+            <Phone aria-hidden />
             Call
           </Button>
           <Button
-            variant="outlined"
-            color="neutral"
-            startDecorator={<MdLanguage />}
-            size="sm"
+            variant="outline"
             disabled={!place.website}
             onClick={onWebsite}
           >
+            <Public aria-hidden />
             Web
           </Button>
 
-          <Tooltip
-            title={userInteraction?.is_favorite ? "Remove from saved" : "Save"}
-            placement="top"
+          {/* Save first (D27): the Want to try bookmark, then Love, then Log. */}
+          <WantToTryButton
+            framed
+            target={{ kind: "PLACE", placeId: place.id }}
+            saved={wantToTry}
+            name={place.name}
+          />
+
+          <TipIconButton
+            label="Love"
+            aria-pressed={loved}
+            variant={loved ? "secondary" : "outline"}
+            onClick={onToggleFavorite}
+            aria-busy={isTogglingFavorite || undefined}
           >
-            <IconButton
-              variant={userInteraction?.is_favorite ? "solid" : "outlined"}
-              color={userInteraction?.is_favorite ? "danger" : "neutral"}
-              size="sm"
-              onClick={onToggleFavorite}
-              loading={isTogglingFavorite}
-              disabled={isTogglingFavorite}
-              aria-label={
-                userInteraction?.is_favorite ? "Remove from saved" : "Save"
-              }
-            >
-              {userInteraction?.is_favorite ? (
-                <MdFavorite />
-              ) : (
-                <MdFavoriteBorder />
-              )}
-            </IconButton>
-          </Tooltip>
+            <TogglePop on={loved} pop={isTogglingFavorite}>
+              <Love className={loved ? "fill-brand text-brand" : undefined} />
+            </TogglePop>
+          </TipIconButton>
 
-          <Tooltip
-            title={
-              userInteraction?.is_visited
-                ? "Mark as not visited"
-                : "Mark as visited"
-            }
-            placement="top"
+          <TipIconButton
+            label={visited ? "Mark as not visited" : "Mark as visited"}
+            variant={visited ? "secondary" : "outline"}
+            onClick={onMarkVisited}
+            aria-busy={isMarkingVisited || undefined}
           >
-            <IconButton
-              variant={userInteraction?.is_visited ? "solid" : "outlined"}
-              color={userInteraction?.is_visited ? "success" : "neutral"}
-              size="sm"
-              onClick={onMarkVisited}
-              loading={isMarkingVisited}
-              disabled={isMarkingVisited}
-              aria-label={
-                userInteraction?.is_visited
-                  ? "Mark as not visited"
-                  : "Mark as visited"
-              }
-            >
-              {userInteraction?.is_visited ? (
-                <MdCheckCircle />
-              ) : (
-                <MdRadioButtonUnchecked />
-              )}
-            </IconButton>
-          </Tooltip>
+            <TogglePop on={visited} pop={isMarkingVisited}>
+              {visited ? <Success className="text-success" /> : <Unrated />}
+            </TogglePop>
+          </TipIconButton>
 
-          <Tooltip title="Share" placement="top">
-            <IconButton
-              variant="outlined"
-              color="neutral"
-              size="sm"
-              onClick={onShare}
-              aria-label="Share"
-            >
-              <MdShare />
-            </IconButton>
-          </Tooltip>
+          <TipIconButton label="Share" variant="outline" onClick={onShare}>
+            <Share />
+          </TipIconButton>
 
-          <Tooltip title="Add to Tier List" placement="top">
-            <IconButton
-              variant="outlined"
-              color="neutral"
-              size="sm"
-              onClick={onAddToTierList}
-              aria-label="Add to Tier List"
-            >
-              <MdFormatListNumbered />
-            </IconButton>
-          </Tooltip>
+          <TipIconButton
+            label="Add to Tier List"
+            variant="outline"
+            onClick={onAddToTierList}
+          >
+            <Ranked />
+          </TipIconButton>
         </>
       )}
-    </Stack>
+    </div>
   );
 }

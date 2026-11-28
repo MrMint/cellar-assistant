@@ -1,4 +1,6 @@
-import { Alert, Typography } from "@mui/joy";
+import { AppBar } from "@/components/app/AppBar";
+import { ErrorState } from "@/components/app/EmptyState";
+import { ICON_STROKE, Warning } from "@/components/app/icons";
 import { getApiToken } from "@/lib/api/auth-server";
 import { FriendsClient } from "./FriendsClient";
 
@@ -18,12 +20,14 @@ export async function Friends() {
 
   if (token === null) {
     return (
-      <Alert color="warning" variant="soft">
-        <Typography level="body-md">
-          Your session ended while this page was loading. Sign in again to see
-          your friends.
-        </Typography>
-      </Alert>
+      <div className="flex flex-col gap-4">
+        <AppBar title="Friends" parent="/me" />
+        <ErrorState
+          illustration={<Warning aria-hidden strokeWidth={ICON_STROKE} />}
+          title="Your session ended"
+          reason="Sign in again to see your friends."
+        />
+      </div>
     );
   }
 

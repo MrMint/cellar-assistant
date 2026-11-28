@@ -1,0 +1,1 @@
+ALTER TABLE "menu_scans" ADD COLUMN "header_name" text;

@@ -70,6 +70,7 @@ const recordingSearcher = (
       id: string;
       name: string;
       distance: number;
+      lexicalSimilarity?: number;
     }[];
     readonly recipes?: {
       recipeId: string;
@@ -88,6 +89,9 @@ const recordingSearcher = (
         id: hit.id,
         name: hit.name,
         distance: hit.distance,
+        ...(hit.lexicalSimilarity === undefined
+          ? {}
+          : { lexicalSimilarity: hit.lexicalSimilarity }),
       }));
     },
     searchRecipes: async (_ctx, input) => {
@@ -519,6 +523,136 @@ describe.skipIf(skip)("MenuMatchJobActor (B8)", () => {
     });
   });
 
+  /**
+   * N08: `ItemSearchActor` ranks by vector and name together, and the job
+   * must not undo that by re-sorting on the vector half — the named sibling
+   * is offered first even though the embedding put the other a hair nearer.
+   */
+  it("offers the verifier the search's own order, and records the name match", async () => {
+    await withTestDb(async (db) => {
+      const owner = await seedUser(db);
+      const placeId = await seedPlace(db, { name: "Bar", ...SAN_FRANCISCO });
+      const scanId = await seedScan(db, owner, placeId);
+      const named = await seedWine(db, owner, "Dassai 23");
+      const nearer = await seedWine(db, owner, "Dassai 45");
+      // Not the catalog's name exactly — that would be auto-suggested by
+      // name and never reach the verifier (next test).
+      await seedMenuItem(db, {
+        placeId,
+        menuScanId: scanId,
+        name: "Dassai 23 Junmai Daiginjo",
+        scanItemType: "wine",
+      });
+      const search = recordingSearcher({
+        items: [
+          {
+            type: "WINE",
+            id: named.id,
+            name: "Dassai 23",
+            distance: 0.4,
+            lexicalSimilarity: 1,
+          },
+          { type: "WINE", id: nearer.id, name: "Dassai 45", distance: 0.38 },
+        ],
+      });
+      const offered: string[][] = [];
+      const verify: MenuMatchVerifier = async (_ctx, request) => {
+        offered.push(request.candidates.map((c) => c.key));
+        return {
+          acceptedKey: request.candidates[0]?.key ?? null,
+          confidence: 0.8,
+          reasoning: "first offered",
+          model: "fake-verifier-1",
+        };
+      };
+      const job = await activate(
+        newJobActor(crypto.randomUUID(), db, search, verify),
+      );
+      await startJob(job, scanId);
+      await job.runBatch(testDelivery("b0"), { batch: 0 });
+
+      expect(offered).toEqual([[`WINE:${named.id}`, `WINE:${nearer.id}`]]);
+      const [suggestion] = await suggestionsOf(db, scanId);
+      expect(suggestion?.target).toEqual({
+        kind: "ITEM",
+        item: { type: "WINE", id: named.id },
+      });
+      expect(suggestion?.similarityMetrics).toMatchObject({
+        vectorSimilarity: 0.8,
+        lexicalSimilarity: 1,
+      });
+    });
+  });
+
+  /**
+   * The local-lane failure: exact catalog names under the vector auto band
+   * went to a verifier that accepted none of them, so a scanned menu matched
+   * nothing. A line that names one catalog item exactly, with the vector
+   * agreeing and no sibling level with it, is suggested without asking.
+   */
+  it("suggests an exactly named item below the auto band without the verifier", async () => {
+    await withTestDb(async (db) => {
+      const owner = await seedUser(db);
+      const placeId = await seedPlace(db, { name: "Pub", ...SAN_FRANCISCO });
+      const scanId = await seedScan(db, owner, placeId);
+      const draught = await seedWine(db, owner, "Guinness Draught");
+      const stout = await seedWine(db, owner, "Guinness Extra Stout");
+      await seedMenuItem(db, {
+        placeId,
+        menuScanId: scanId,
+        name: "Guinness Draught",
+        scanItemType: "wine",
+      });
+      const search = recordingSearcher({
+        items: [
+          {
+            type: "WINE",
+            id: draught.id,
+            name: "Guinness Draught",
+            distance: 0.224,
+            lexicalSimilarity: 1,
+          },
+          {
+            type: "WINE",
+            id: stout.id,
+            name: "Guinness Extra Stout",
+            distance: 0.386,
+            lexicalSimilarity: 0.47,
+          },
+        ],
+      });
+      let asked = 0;
+      const verify: MenuMatchVerifier = async () => {
+        asked += 1;
+        return {
+          acceptedKey: null,
+          confidence: 0.5,
+          reasoning: "",
+          model: "fake-verifier-1",
+        };
+      };
+      const job = await activate(
+        newJobActor(crypto.randomUUID(), db, search, verify),
+      );
+      await startJob(job, scanId);
+      await job.runBatch(testDelivery("b0"), { batch: 0 });
+
+      expect(asked).toBe(0);
+      const suggestions = await suggestionsOf(db, scanId);
+      expect(suggestions).toHaveLength(1);
+      expect(suggestions[0]?.target).toEqual({
+        kind: "ITEM",
+        item: { type: "WINE", id: draught.id },
+      });
+      expect(suggestions[0]?.confidenceScore).toBeCloseTo(0.89, 2);
+      expect(suggestions[0]?.matchReasoning).toMatch(/names it exactly/);
+      expect(suggestions[0]?.similarityMetrics).toMatchObject({
+        lexicalSimilarity: 1,
+        exactName: true,
+      });
+    });
+  });
+
   it("a verifier that says 'none of these' produces no suggestion", async () => {
     await withTestDb(async (db) => {
       const owner = await seedUser(db);
@@ -675,7 +809,7 @@ describe.skipIf(skip)("MenuMatchJobActor (B8)", () => {
     });
   });
 
-  it("a scan whose menu items have not arrived yet completes without suggestions and without failing", async () => {
+  it("a scan that read no lines completes without suggestions and without failing", async () => {
     await withTestDb(async (db) => {
       const owner = await seedUser(db);
       const placeId = await seedPlace(db, { name: "Bar", ...SAN_FRANCISCO });
@@ -687,6 +821,50 @@ describe.skipIf(skip)("MenuMatchJobActor (B8)", () => {
       expect(outcome).toEqual({ ran: true, processed: 0, done: true });
       expect(search.seen.items).toEqual([]);
       expect(search.seen.recipes).toEqual([]);
+    });
+  });
+
+  it("N06a: lines read but not filed yet are retryable, not a completed match run", async () => {
+    await withTestDb(async (db) => {
+      const owner = await seedUser(db);
+      const placeId = await seedPlace(db, { name: "Bar", ...SAN_FRANCISCO });
+      const scanId = await seedScan(db, owner, placeId);
+      // `process` recorded two lines; `addMenuFromScan` has not landed them.
+      await db.execute(
+        sql`update public.menu_scans set items_detected = 2 where id = ${scanId}::uuid`,
+      );
+      const wine = await seedWine(db, owner, "Chateau Test 2019");
+      const search = recordingSearcher({
+        items: [{ type: "WINE", id: wine.id, name: "Chateau", distance: 0.1 }],
+      });
+      const jobId = crypto.randomUUID();
+      const job = await activate(newJobActor(jobId, db, search));
+      await startJob(job, scanId);
+
+      const thrown = await job.runBatch(testDelivery("b0"), { batch: 0 }).then(
+        () => null,
+        (error: unknown) => error,
+      );
+      // CONFLICT, so the outbox retries it with backoff (VALIDATION would
+      // dead-letter on the first attempt).
+      expect(thrown).toBeInstanceOf(ConflictError);
+      const { rows } = await db.execute<{ status: string }>(
+        sql`select status from public.jobs where id = ${jobId}::uuid`,
+      );
+      expect(rows[0]?.status).not.toBe("completed");
+
+      // The filing lands; the retried batch now matches it.
+      await seedMenuItem(db, {
+        placeId,
+        menuScanId: scanId,
+        name: "Chateau Test",
+        scanItemType: "wine",
+      });
+      const retried = await job.runBatch(testDelivery("b0-retry"), {
+        batch: 0,
+      });
+      expect(retried).toEqual({ ran: true, processed: 1, done: true });
+      expect(await suggestionsOf(db, scanId)).toHaveLength(1);
     });
   });
 

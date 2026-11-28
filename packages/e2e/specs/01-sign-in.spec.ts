@@ -2,6 +2,9 @@ import { expect, test } from "@playwright/test";
 import { ACCOUNTS, BASE_URL, storageStatePath } from "../fixtures/accounts.ts";
 import { newContext } from "../fixtures/test.ts";
 
+/** `/` — Home (X10) — with no path after the origin. */
+const HOME_URL = /^https?:\/\/[^/]+\/(?:\?.*)?$/;
+
 /**
  * Sign in, stay signed in, sign out.
  *
@@ -10,18 +13,28 @@ import { newContext } from "../fixtures/test.ts";
  * broken in half a dozen ways the endpoint cannot show you.
  */
 
-test("signs in through the form and lands on /cellars", async ({ browser }) => {
+test("signs in through the form and lands on Home (X01)", async ({
+  browser,
+}) => {
   const ctx = await newContext(browser);
   const page = await ctx.newPage();
 
   await page.goto("/sign-in");
-  await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { level: 1, name: "Cellar Assistant" }),
+  ).toBeVisible();
 
   await page.getByLabel("Email").fill(ACCOUNTS.primary.email);
   await page.getByLabel("Password").fill(ACCOUNTS.primary.password);
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
 
-  await expect(page).toHaveURL(/\/cellars/, { timeout: 30_000 });
+  // (That the button stays busy until the next page commits is held by
+  // `components/auth/landing.test.tsx`: here the sign-in is too quick to
+  // observe without racing it.)
+
+  // Every landing goes to `/`, Home "Today" since X10 (D1).
+  await expect(page).toHaveURL(HOME_URL, { timeout: 30_000 });
+  await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
 
   // The cookie is what every later request depends on; assert it directly so a
   // failure says "no session cookie" rather than "some page did not render".
@@ -80,19 +93,12 @@ test("sign out ends the session", async ({ browser }) => {
   await page.getByLabel("Email").fill(ACCOUNTS.primary.email);
   await page.getByLabel("Password").fill(ACCOUNTS.primary.password);
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
-  await expect(page).toHaveURL(/\/cellars/, { timeout: 30_000 });
+  await expect(page).toHaveURL(HOME_URL, { timeout: 30_000 });
 
-  // Sign out lives in the side navigation, which is part of the
-  // `(authenticated)` layout — so it needs a page that actually renders. Do not
-  // use `/cellars` here: while its `$first` defect stands it answers 500 and
-  // the layout never mounts, which would make this test fail for the wrong
-  // reason.
-  await page.goto("/search");
-  // The nav bar is rendered twice — a horizontal bar for `xs` and a vertical
-  // one for `sm` and up — and only one is visible at any viewport, so filter on
-  // visibility rather than taking the first in document order.
-  await page.locator('[aria-haspopup="menu"]:visible').first().click();
-  await page.getByRole("menuitem", { name: "Sign out" }).click();
+  // Sign out lives in Settings, under Me (Shell-Me), a plain button rather
+  // than a menu item.
+  await page.goto("/me/settings");
+  await page.getByRole("button", { name: "Sign out" }).click();
 
   // Wait for the cookie to actually go, which is the first of this test's two
   // checks and is observable in ~100ms.
@@ -108,16 +114,20 @@ test("sign out ends the session", async ({ browser }) => {
   // context closed, which is where the intermittent `ENOENT` on
   // `.playwright-artifacts-N/traces/…` during `ctx.close()` came from.
   //
-  // Do **not** wait for a redirect to `/sign-in` here instead: measured, sign
-  // out clears the cookie but does not navigate — the page stays on `/search`
-  // — so that wait would hang for its full timeout and then fail. Polling the
-  // cookie both waits and asserts, so it replaces the separate expect too.
+  // Polling the cookie both waits and asserts.
   await expect
     .poll(async () => (await ctx.cookies()).map((c) => c.name), {
       message: "better-auth.session_token survived sign out",
       timeout: 15_000,
     })
     .not.toContain("better-auth.session_token");
+  // And the viewer is taken to /sign-in. This used to be documented as "does
+  // not navigate": `completeSignOut` (a server action) runs after the cookie
+  // is gone, the proxy answers its POST with a redirect, and the rejection
+  // skipped `router.replace`. It is best effort now (SignOutButton).
+  await expect(page, "sign out left the viewer on a signed-in page").toHaveURL(
+    /\/sign-in/,
+  );
 
   await page.goto("/cellars");
   await expect(
@@ -144,5 +154,31 @@ test("a garbage session cookie is not a session", async ({ browser }) => {
   const page = await ctx.newPage();
   await page.goto("/cellars");
   await expect(page).toHaveURL(/\/sign-in/);
+  await ctx.close();
+});
+
+test("a signed-out deep link signs in and returns there, not Home", async ({
+  browser,
+}) => {
+  const ctx = await newContext(browser);
+  const page = await ctx.newPage();
+  // `/cellars` is no longer the default landing (X01), so it is carried like
+  // any other page.
+  await page.goto("/cellars");
+  await expect(page).toHaveURL(/\/sign-in\?returnTo=%2Fcellars/);
+  await page.getByLabel("Email").fill(ACCOUNTS.primary.email);
+  await page.getByLabel("Password").fill(ACCOUNTS.primary.password);
+  await page.getByRole("button", { name: "Sign in", exact: true }).click();
+  await expect(page).toHaveURL(/\/cellars$/, { timeout: 30_000 });
+  await ctx.close();
+});
+
+test("a signed-in visit to /sign-in goes Home", async ({ browser }) => {
+  const ctx = await newContext(browser, {
+    storageState: storageStatePath("primary"),
+  });
+  const page = await ctx.newPage();
+  await page.goto("/sign-in");
+  await expect(page).toHaveURL(HOME_URL);
   await ctx.close();
 });

@@ -1,28 +1,16 @@
-"use client";
+import type { ReactNode } from "react";
+import { Business } from "@/components/app/icons";
+import { Link } from "@/components/app/Link";
+import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
+import { ItemSection } from "./ItemSection";
 
-import { Box, Card, CardContent, Chip, Stack, Typography } from "@mui/joy";
-import { MdBusiness } from "react-icons/md";
-import { Link } from "@/components/common/Link";
-
-const getBrandTypeColor = (brandType: string | null) => {
-  switch (brandType) {
-    case "brewery":
-      return "warning";
-    case "distillery":
-      return "neutral";
-    case "winery":
-      return "danger";
-    case "roastery":
-      return "primary";
-    case "restaurant_chain":
-      return "success";
-    default:
-      return "neutral";
-  }
-};
-
+/**
+ * The type word, or null: a brand whose type is neither stored nor inferable
+ * (`inferBrandType`, X23) says nothing rather than "Other".
+ */
 const formatBrandType = (brandType: string | null) => {
-  if (!brandType) return "Other";
+  if (!brandType) return null;
   return brandType.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase());
 };
 
@@ -40,147 +28,140 @@ export type ItemBrand = {
 export type ItemBrandsProps = {
   brands: ItemBrand[];
   title?: string;
+  /**
+   * D8: the creator's one-tap correction ("Wrong brand? Change it"), drawn
+   * under the list — and, when the item has no brand yet, as the section's
+   * only content, so a missing brand can be added from here too.
+   */
+  change?: ReactNode;
 };
+
+/** The brand the page leads with: the primary link, or the first. */
+export const shownItemBrand = (
+  brands: readonly ItemBrand[],
+): { brandId: string; name: string } | null => {
+  const link = brands.find((b) => b.is_primary) ?? brands[0];
+  return link === undefined
+    ? null
+    : { brandId: link.brand.id, name: link.brand.name };
+};
+
+/** The logo tile: the brand's own logo, or the business glyph on a surface. */
+function BrandLogo({
+  brand,
+  primary,
+}: {
+  brand: ItemBrand["brand"];
+  primary: boolean;
+}) {
+  const size = primary ? 48 : 40;
+  return (
+    <span
+      className={cn(
+        "flex shrink-0 items-center justify-center overflow-hidden rounded-sm bg-surface-2",
+        primary ? "size-12" : "size-10",
+      )}
+    >
+      {brand.logo_url !== null && brand.logo_url !== undefined ? (
+        // biome-ignore lint/performance/noImgElement: external logos have no `remotePatterns` entry (see below).
+        <img
+          src={brand.logo_url}
+          alt={`${brand.name} logo`}
+          width={size}
+          height={size}
+          className="size-full object-contain"
+        />
+      ) : (
+        <Business
+          aria-hidden
+          className={cn("text-ink-3", primary ? "size-6" : "size-5")}
+        />
+      )}
+    </span>
+  );
+}
 
 /**
  * `82450ad1:src/components/item/ItemBrands.tsx`, restored. Fed by
  * `Item.brands` (`isPrimary`, `brand.brandType`, `brand.logoUrl`) through the
  * adapter. Logos are external URLs with no `remotePatterns` entry, so they go
  * into a plain `<img>` rather than `next/image`.
+ *
+ * The other brands' type chip was tinted by type (brewery amber, winery red,
+ * …) with Joy's palette; the type word is the information, so the chips are
+ * one neutral outline now (design §3.1: no decorative hues).
  */
-export const ItemBrands = ({ brands, title = "Brands" }: ItemBrandsProps) => {
+export const ItemBrands = ({
+  brands,
+  title = "Brands",
+  change,
+}: ItemBrandsProps) => {
   if (brands.length === 0) {
-    return null;
+    return change === undefined ? null : (
+      <ItemSection title={title}>
+        <p className="t-cap text-ink-3">No brand recorded yet.</p>
+        {change}
+      </ItemSection>
+    );
   }
 
   const primaryBrand = brands.find((b) => b.is_primary);
   const otherBrands = brands.filter((b) => !b.is_primary);
 
   return (
-    <Card variant="outlined">
-      <CardContent>
-        <Typography level="title-sm" sx={{ mb: 2 }}>
-          {title} ({brands.length})
-        </Typography>
-
-        <Stack spacing={2}>
-          {/* Primary brand (if exists) */}
-          {primaryBrand && (
-            <Box>
-              <Stack direction="row" spacing={2} alignItems="center">
-                <Box
-                  sx={{
-                    width: 48,
-                    height: 48,
-                    borderRadius: "sm",
-                    overflow: "hidden",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    bgcolor: "background.level1",
-                  }}
+    <ItemSection
+      title={brands.length > 1 ? `${title} (${brands.length})` : title}
+    >
+      <ul className="flex flex-col gap-4">
+        {primaryBrand && (
+          <li className="flex items-center gap-4">
+            <BrandLogo brand={primaryBrand.brand} primary />
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <Link
+                  href={`/brands/${primaryBrand.brand.id}`}
+                  underline="always"
+                  className="t-body font-medium text-ink-1"
                 >
-                  {primaryBrand.brand.logo_url !== null &&
-                  primaryBrand.brand.logo_url !== undefined ? (
-                    <Box
-                      component="img"
-                      src={primaryBrand.brand.logo_url}
-                      alt={`${primaryBrand.brand.name} logo`}
-                      width={48}
-                      height={48}
-                      style={{ objectFit: "contain" }}
-                    />
-                  ) : (
-                    <MdBusiness
-                      size={24}
-                      style={{ color: "var(--joy-palette-neutral-500)" }}
-                    />
-                  )}
-                </Box>
+                  {primaryBrand.brand.name}
+                </Link>
+                <Badge variant="secondary">Primary</Badge>
+              </div>
+              {primaryBrand.brand.brand_type !== null && (
+                <p className="t-cap text-ink-2">
+                  {formatBrandType(primaryBrand.brand.brand_type)}
+                </p>
+              )}
+            </div>
+          </li>
+        )}
 
-                <Box sx={{ flex: 1 }}>
-                  <Stack direction="row" spacing={1} alignItems="center">
-                    <Link href={`/brands/${primaryBrand.brand.id}`}>
-                      <Typography
-                        level="body-md"
-                        fontWeight="md"
-                        sx={{ textDecoration: "underline" }}
-                      >
-                        {primaryBrand.brand.name}
-                      </Typography>
-                    </Link>
-                    <Chip variant="solid" color="primary" size="sm">
-                      Primary
-                    </Chip>
-                  </Stack>
-                  <Typography level="body-sm" sx={{ color: "text.secondary" }}>
-                    {formatBrandType(primaryBrand.brand.brand_type)}
-                  </Typography>
-                </Box>
-              </Stack>
-            </Box>
-          )}
-
-          {/* Other brands */}
-          {otherBrands.map((brandRelation) => (
-            <Box key={brandRelation.id}>
-              <Stack direction="row" spacing={2} alignItems="center">
-                <Box
-                  sx={{
-                    width: 40,
-                    height: 40,
-                    borderRadius: "sm",
-                    overflow: "hidden",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    bgcolor: "background.level1",
-                  }}
-                >
-                  {brandRelation.brand.logo_url !== null &&
-                  brandRelation.brand.logo_url !== undefined ? (
-                    <Box
-                      component="img"
-                      src={brandRelation.brand.logo_url}
-                      alt={`${brandRelation.brand.name} logo`}
-                      width={40}
-                      height={40}
-                      style={{ objectFit: "contain" }}
-                    />
-                  ) : (
-                    <MdBusiness
-                      size={20}
-                      style={{ color: "var(--joy-palette-neutral-500)" }}
-                    />
-                  )}
-                </Box>
-
-                <Box sx={{ flex: 1 }}>
-                  <Link href={`/brands/${brandRelation.brand.id}`}>
-                    <Typography
-                      level="body-sm"
-                      sx={{ textDecoration: "underline" }}
-                    >
-                      {brandRelation.brand.name}
-                    </Typography>
-                  </Link>
-                  <Typography level="body-xs" sx={{ color: "text.secondary" }}>
-                    {formatBrandType(brandRelation.brand.brand_type)}
-                  </Typography>
-                </Box>
-
-                <Chip
-                  variant="outlined"
-                  color={getBrandTypeColor(brandRelation.brand.brand_type)}
-                  size="sm"
-                >
+        {otherBrands.map((brandRelation) => (
+          <li key={brandRelation.id} className="flex items-center gap-4">
+            <BrandLogo brand={brandRelation.brand} primary={false} />
+            <div className="min-w-0 flex-1">
+              <Link
+                href={`/brands/${brandRelation.brand.id}`}
+                underline="always"
+                className="t-cap text-ink-1"
+              >
+                {brandRelation.brand.name}
+              </Link>
+              {brandRelation.brand.brand_type !== null && (
+                <p className="t-cap text-ink-3">
                   {formatBrandType(brandRelation.brand.brand_type)}
-                </Chip>
-              </Stack>
-            </Box>
-          ))}
-        </Stack>
-      </CardContent>
-    </Card>
+                </p>
+              )}
+            </div>
+            {brandRelation.brand.brand_type !== null && (
+              <Badge variant="outline">
+                {formatBrandType(brandRelation.brand.brand_type)}
+              </Badge>
+            )}
+          </li>
+        ))}
+      </ul>
+      {change}
+    </ItemSection>
   );
 };

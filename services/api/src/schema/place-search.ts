@@ -62,7 +62,17 @@ import {
 } from "@cellar-assistant/contracts";
 import { builder } from "./builder.ts";
 import { connectionFromPage, toPageArgs } from "./pagination.ts";
-import { LngLatInput, LngLatType } from "./place.ts";
+import {
+  LngLatInput,
+  LngLatType,
+  PlaceReviewStatusEnum,
+  reviewStatusOut,
+} from "./place.ts";
+import {
+  lowerBoundOf,
+  SEARCH_LOWER_BOUND_DESCRIPTION,
+  searchConnectionFromPage,
+} from "./search.ts";
 import { PlaceStubType } from "./tier-list.ts";
 
 /* -------------------------------------------------------------------------- */
@@ -128,6 +138,13 @@ const PlaceSearchResult = builder
       combinedScore: t.exposeFloat("combinedScore", {
         description: "What the results are ordered by, descending.",
       }),
+      reviewStatus: t.field({
+        type: PlaceReviewStatusEnum,
+        description:
+          "X27: APPROVED for every shared hit. A PENDING / REJECTED hit is " +
+          "the viewer's own place under review, matched on its name.",
+        resolve: (hit) => reviewStatusOut(hit.reviewStatus),
+      }),
       place: t.field({
         type: PlaceStubType,
         description: "The full place, if more than the projection is needed.",
@@ -137,7 +154,16 @@ const PlaceSearchResult = builder
   });
 
 const PlaceSearchConnection = builder.connectionObject(
-  { type: PlaceSearchResult, name: "PlaceSearchConnection" },
+  {
+    type: PlaceSearchResult,
+    name: "PlaceSearchConnection",
+    fields: (t) => ({
+      totalIsLowerBound: t.boolean({
+        description: SEARCH_LOWER_BOUND_DESCRIPTION,
+        resolve: lowerBoundOf,
+      }),
+    }),
+  },
   { name: "PlaceSearchEdge" },
 );
 
@@ -178,7 +204,7 @@ builder.queryField("placeSearch", (t) =>
         visitStatus: args.visitStatus ?? null,
         limit: args.limit ?? null,
       };
-      return connectionFromPage(
+      return searchConnectionFromPage(
         await context
           .actor(
             PlaceSearchActorDescriptor,

@@ -8,8 +8,8 @@ import {
   brandCardFromSource,
   brandDetailsFromSource,
   brandItemFromLink,
+  inferBrandType,
   itemLinkFromFragment,
-  sinceYear,
 } from "./adapter";
 
 describe("brandCardFromSource (old toBrandCardItems)", () => {
@@ -35,10 +35,19 @@ describe("brandCardFromSource (old toBrandCardItems)", () => {
       },
     );
   });
-  test("a null brand type is 'other', as before", () => {
+  test("X23: no stored type reads as its first item's producer, else none", () => {
+    assert.equal(
+      brandCardFromSource({
+        id: "b",
+        name: "Ridge",
+        brandType: null,
+        firstItemType: "WINE",
+      }).brand_type,
+      "winery",
+    );
     assert.equal(
       brandCardFromSource({ id: "b", name: "X", brandType: null }).brand_type,
-      "other",
+      null,
     );
   });
 });
@@ -65,18 +74,37 @@ describe("brandItemFromLink (ItemBrand → the old item_brands row)", () => {
     );
   });
   test("reads a BrandItemLink node", () => {
-    assert.deepEqual(
-      itemLinkFromFragment({
-        __typename: "ItemBrand",
-        id: "l3",
-        isPrimary: false,
-        item: { __typename: "Beer", id: "be1", type: "BEER", name: "Pils" },
-      } as never),
-      {
-        id: "l3",
-        isPrimary: false,
-        item: { id: "be1", type: "BEER", name: "Pils", vintage: null },
+    const { tile, ...row } = itemLinkFromFragment({
+      __typename: "ItemBrand",
+      id: "l3",
+      isPrimary: false,
+      item: {
+        __typename: "Beer",
+        id: "be1",
+        type: "BEER",
+        name: "Pils",
+        isFavorite: true,
+        myBottles: {
+          totalCount: 3,
+          edges: [
+            { node: { id: "x1", cellar: { id: "c1", name: "Home" } } },
+            { node: { id: "x2", cellar: { id: "c1", name: "Home" } } },
+            { node: { id: "x3", cellar: { id: "c2", name: "Lake" } } },
+          ],
+        },
       },
+    } as never);
+    assert.deepEqual(row, {
+      id: "l3",
+      isPrimary: false,
+      item: { id: "be1", type: "BEER", name: "Pils", vintage: null },
+    });
+    // C1's tile: the item page, the heart, your cellars once each.
+    assert.equal(tile?.href, "/beers/be1");
+    assert.equal(tile?.favorite, true);
+    assert.deepEqual(
+      tile?.cellars.map((c) => c.name),
+      ["Home", "Lake"],
     );
   });
 });
@@ -131,11 +159,16 @@ describe("brandDetailsFromSource", () => {
       },
     ]);
     assert.equal(details.item_brands.length, 1);
-    assert.equal(details.created_at, "2019-06-01T00:00:00Z");
   });
 });
 
-test("sinceYear slices, never parses", () => {
-  assert.equal(sinceYear("2019-12-31T23:30:00-05:00"), "2019");
-  assert.equal(sinceYear(""), null);
+test("inferBrandType: a stored type wins; `other` and unset defer to the first item", () => {
+  assert.equal(inferBrandType("distillery", "WINE"), "distillery");
+  assert.equal(inferBrandType("restaurant_chain", null), "restaurant_chain");
+  assert.equal(inferBrandType("other", "BEER"), "brewery");
+  assert.equal(inferBrandType(undefined, "SAKE"), "kura");
+  assert.equal(inferBrandType(null, "COFFEE"), "roastery");
+  assert.equal(inferBrandType(null, "TEA"), "tea_house");
+  assert.equal(inferBrandType(null, "SPIRIT"), "distillery");
+  assert.equal(inferBrandType("other", null), null);
 });

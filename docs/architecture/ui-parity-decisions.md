@@ -1,5 +1,30 @@
 # UI parity — decisions
 
+> **Superseded (2026-10-08).** The visual overhaul this document deferred has
+> happened: decision D20 (`docs/product/decisions.md`) moved the client from MUI
+> Joy to shadcn/ui + Tailwind CSS v4 + `motion`, and the removal step deleted
+> Joy, Emotion, react-icons and the restored Joy-era shared components. The
+> `82450ad1` UI is no longer the spec for look and markup; the UI rules are in
+> `AGENTS.md` ("UI and styling") and `docs/product/design-direction.md`. What
+> still holds from here is the *behavioural* parity (same data, same flows) and
+> the server-side decisions. Kept as history.
+
+> **Answered (2026-10-07).** The open questions below ("Awaiting the user")
+> were folded into the 29 product decisions of
+> [`docs/product/ux-roadmap.md`](../product/ux-roadmap.md) and answered by the
+> user; the answers are in [`docs/product/decisions.md`](../product/decisions.md),
+> which **wins** over anything here. Per item: 1 → D3 (the overview merges into
+> the cellar page, whose top becomes a dashboard); 2 and 14 → D4 (keep Add
+> entry and delete; the padlock becomes "Arrange", with an edit history);
+> 3 → D5; 4 and 5 → D6; 6 → D7 (type lists removed); 7 → D8; 8 → D9; 9 → D10
+> and X01 (the quick-link chips are deleted, not restored); 10 → D11 and D18;
+> 11 → D12; 12 and 13 → D13 (count bottles still in the cellar; order cellars
+> by recent activity); 15 → D14; 16 → D15; 17 → D16; 18 → D17; 19 → D18; 20 →
+> D19. Gating answer 2's "the Your/Shared split goes" is reversed by D2:
+> `/cellars` and `/tier-lists` are Yours · From friends · Discover again (X11),
+> as server-side sections. Calls taken while implementing the answers are in
+> `decisions.md` under "Implementation calls".
+
 **Status:** defaults chosen 2026-10-04 by the orchestrating agent under the user's
 standing instruction, so the restore can proceed without blocking. **Every row
 marked _default_ is open to the user's override**; a row marked _user_ is theirs.
@@ -49,10 +74,12 @@ wave merges.
   2026-10-05 — restore it; see item 19.
 - Anything that changes production data or URLs beyond row 1.
 
-## Awaiting the user (collected 2026-10-05)
+## Awaiting the user (collected 2026-10-05) — answered, see the note at the top
 
 Everything below shipped as described so the restore could finish; each is a
-one-line or small change to reverse. Answer per item.
+one-line or small change to reverse. **Answered 2026-10-07** through the
+roadmap's D1–D29 (`docs/product/decisions.md`); the per-item mapping is the
+"Answered" note at the top of this file.
 
 ### Kept new-only (the rewrite added it; the old UI had nothing there)
 1. `/cellars/[id]` overview page (old URL only printed the id), with a per-card
@@ -90,9 +117,14 @@ one-line or small change to reverse. Answer per item.
     order was arbitrary. — orchestrator
 14. Tier-list lock is enforced in the UI only, as in production. — TierListsWave
 15. The map asks for geolocation on load (old), not on click (rewrite). — MapPlacesWave
+    *Superseded by D14 (`docs/product/decisions.md`): still when the map opens,
+    but after the app's own one-line reason, and the OS prompt only on its
+    Continue (`components/map/hooks/geolocation-store.ts`).*
 16. AI place-review categories now equal the restored create form's 25 slugs
     (12 added, 6 dropped: wine_shop, vineyard, taproom, coffee_roaster,
     tea_shop, izakaya). — FinalGate 90d1e8e9
+    *Superseded by D15: the six are back, and the form and the reviewer now
+    read one list (`packages/contracts/src/place-categories.ts`).*
 20. **Email verification is superseded by social-first sign-in in production
     (user, 2026-10-05).** No email is sent at all, so verification and
     reset-by-email are not restored. Production runs

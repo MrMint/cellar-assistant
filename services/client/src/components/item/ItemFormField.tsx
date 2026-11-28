@@ -1,9 +1,20 @@
 "use client";
 
-import { Checkbox, FormControl, FormLabel, Input, Textarea } from "@mui/joy";
+import { type ReactNode, useId } from "react";
 import { type Control, Controller } from "react-hook-form";
+import { FilterChip } from "@/components/app/FilterChip";
 import { EnumSelect } from "@/components/forms/EnumSelect";
+import {
+  isNonVintageText,
+  NON_VINTAGE,
+} from "@/components/item-api/itemFormRules";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Field, FieldError, FieldLabel } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import type { EnumKey } from "@/hooks/enum-options";
+import { fieldErrorText, isRequired, requiredRule } from "./form-errors";
 import type { ItemFormValues } from "./ItemForm";
 import type { FormEntry } from "./itemFormLayout";
 
@@ -12,6 +23,16 @@ import type { FormEntry } from "./itemFormLayout";
  * out of `ItemForm` unchanged so the onboarding wizard's create form
  * (`common/OnboardingWizard/OnboardingItemForm.tsx`, the old forms' create
  * mode) renders the same fields in the same order with the same controls.
+ *
+ * N03: a required field says what is wrong — a line under it
+ * (`form-errors.ts`) — and its ref is the native input, so the validation
+ * that scrolls to it also focuses it. The control itself carries
+ * `aria-invalid`, so assistive tech hears the error state too.
+ *
+ * On `ui/field` now (Joy's `FormControl`/`FormLabel`/`Input`): the label is
+ * tied to its control by id, a required field keeps the native `required`
+ * and the starred label, and the pickers stay `EnumSelect` (S2's, converted
+ * in place there).
  */
 export const ItemFormField = ({
   entry,
@@ -22,33 +43,61 @@ export const ItemFormField = ({
   control: Control<ItemFormValues>;
   disabled: boolean;
 }) => {
+  const id = useId();
   if (entry.kind === "name") {
     return (
-      <FormControl key="name" required>
-        <FormLabel>{entry.label}</FormLabel>
-        <Controller
-          name="name"
-          control={control}
-          rules={{ required: true }}
-          render={({ field }) => (
-            <Input disabled={disabled} type="text" {...field} />
-          )}
-        />
-      </FormControl>
+      <Controller
+        key="name"
+        name="name"
+        control={control}
+        rules={requiredRule(entry)}
+        render={({ field: { ref, ...field }, fieldState }) => (
+          <FieldShell
+            id={id}
+            label={entry.label}
+            required
+            error={fieldState.error}
+          >
+            <Input
+              id={id}
+              ref={ref}
+              required
+              disabled={disabled}
+              type="text"
+              {...field}
+              {...errorAria(id, entry.label, fieldState)}
+            />
+          </FieldShell>
+        )}
+      />
     );
   }
   if (entry.kind === "description") {
     return (
-      <FormControl key="description">
-        <FormLabel>{entry.label}</FormLabel>
-        <Controller
-          name="description"
-          control={control}
-          render={({ field }) => (
-            <Textarea disabled={disabled} minRows={2} {...field} />
-          )}
-        />
-      </FormControl>
+      <Controller
+        key="description"
+        name="description"
+        control={control}
+        rules={requiredRule(entry)}
+        render={({ field: { ref, ...field }, fieldState }) => (
+          <FieldShell
+            id={id}
+            label={entry.label}
+            required={isRequired(entry)}
+            error={fieldState.error}
+          >
+            <Textarea
+              id={id}
+              ref={ref}
+              required={isRequired(entry)}
+              disabled={disabled}
+              rows={2}
+              {...field}
+              {...errorAria(id, entry.label, fieldState)}
+            />
+          </FieldShell>
+        )}
+      />
     );
   }
   if (entry.kind === "country") {
@@ -84,7 +133,7 @@ export const ItemFormField = ({
         label={entry.label}
         required={required}
         disabled={disabled}
-        rules={required ? { required: true } : undefined}
+        rules={requiredRule(entry)}
       />
     );
   }
@@ -96,59 +145,195 @@ export const ItemFormField = ({
         name={name}
         control={control}
         render={({ field: { value, onChange, ...rest } }) => (
-          <Checkbox
-            label={entry.label}
-            disabled={disabled}
-            checked={value === "true"}
-            onChange={(event) =>
-              onChange(event.target.checked ? "true" : "false")
-            }
-            {...rest}
-          />
+          <div className="flex min-h-11 items-center gap-3">
+            <Checkbox
+              id={id}
+              disabled={disabled}
+              checked={value === "true"}
+              onCheckedChange={(checked) =>
+                onChange(checked === true ? "true" : "false")
+              }
+              className="size-5"
+              {...rest}
+            />
+            <Label htmlFor={id} className="t-body font-normal">
+              {entry.label}
+            </Label>
+          </div>
         )}
+      />
+    );
+  }
+
+  if (field.nonVintage === true) {
+    return (
+      <Controller
+        key={field.key}
+        name={name}
+        control={control}
+        rules={requiredRule(entry)}
+        render={({ field: { ref, value, onChange, ...input }, fieldState }) => {
+          const nonVintage = isNonVintageText(value ?? "");
+          return (
+            <FieldShell
+              id={id}
+              label={entry.label}
+              required={required}
+              error={fieldState.error}
+            >
+              {/* X19: a year, or NV. The chip is the answer "this wine has no
+                  vintage" — stored as NULL — so it sits beside the year it
+                  replaces rather than behind a menu. */}
+              <div className="flex items-center gap-2">
+                <Input
+                  id={id}
+                  ref={ref}
+                  required={required && !nonVintage}
+                  type="number"
+                  inputMode="numeric"
+                  disabled={disabled || nonVintage}
+                  placeholder={nonVintage ? "Non-vintage" : "Year"}
+                  min="1900"
+                  max="2099"
+                  step="1"
+                  className="min-w-0 flex-1"
+                  {...input}
+                  value={nonVintage ? "" : (value ?? "")}
+                  onChange={(event) => onChange(event.target.value)}
+                  {...errorAria(id, entry.label, fieldState)}
+                />
+                {/* Named by its visible "NV" and described, not labelled:
+                    a label containing "vintage" would also answer to the
+                    year field's own name. */}
+                <FilterChip
+                  selected={nonVintage}
+                  disabled={disabled}
+                  aria-describedby={`${id}-nv`}
+                  onClick={() => onChange(nonVintage ? "" : NON_VINTAGE)}
+                >
+                  NV
+                </FilterChip>
+                <span id={`${id}-nv`} className="sr-only">
+                  Non-vintage: this wine has no vintage year
+                </span>
+              </div>
+            </FieldShell>
+          );
+        }}
       />
     );
   }
 
   const isYear = field.kind === "date" || field.kind === "year";
   return (
-    <FormControl key={field.key} required={required}>
-      <FormLabel>{entry.label}</FormLabel>
-      <Controller
-        name={name}
-        control={control}
-        rules={required ? { required: true } : undefined}
-        render={({ field: input }) =>
-          entry.multiline === true ? (
+    <Controller
+      key={field.key}
+      name={name}
+      control={control}
+      rules={requiredRule(entry)}
+      render={({ field: { ref, ...input }, fieldState }) => (
+        <FieldShell
+          id={id}
+          label={entry.label}
+          required={required}
+          error={fieldState.error}
+        >
+          {entry.multiline === true ? (
             <Textarea
+              id={id}
+              ref={ref}
+              required={required}
               disabled={disabled}
-              minRows={2}
+              rows={2}
               {...input}
               value={input.value ?? ""}
+              {...errorAria(id, entry.label, fieldState)}
             />
           ) : (
             <Input
+              id={id}
+              ref={ref}
+              required={required}
               type={isYear || field.kind === "number" ? "number" : "text"}
               disabled={disabled}
-              slotProps={
-                isYear
-                  ? {
-                      input: {
-                        min: "1900",
-                        max: "2099",
-                        step: "1",
-                      },
-                    }
-                  : field.kind === "number"
-                    ? { input: { step: "any" } }
-                    : undefined
-              }
               {...input}
               value={input.value ?? ""}
+              {...errorAria(id, entry.label, fieldState)}
+              {...(isYear
+                ? { min: "1900", max: "2099", step: "1" }
+                : field.kind === "number"
+                  ? { step: "any" }
+                  : {})}
             />
-          )
-        }
-      />
-    </FormControl>
+          )}
+        </FieldShell>
+      )}
+    />
   );
 };
+
+/**
+ * Label, control and the line under a field that failed validation (nothing
+ * otherwise). A required label is starred, as Joy's was; the star is
+ * decoration (the control's own `required` is what assistive tech hears).
+ */
+const FieldShell = ({
+  id,
+  label,
+  required = false,
+  error,
+  children,
+}: {
+  id: string;
+  label: string;
+  required?: boolean;
+  error: { type?: string; message?: string } | undefined;
+  children: ReactNode;
+}) => {
+  const text = fieldErrorText(label, error);
+  return (
+    // The same ink, size and gap as EnumSelect's label (the Style, Variety
+    // and Country pickers in this same form): ink-2 callout labels sat
+    // visibly dimmer than the pickers' between them.
+    <Field
+      data-invalid={error !== undefined || undefined}
+      className="gap-2 text-foreground"
+    >
+      <FieldLabel htmlFor={id} className="gap-1">
+        {label}
+        {required && (
+          <span aria-hidden="true" data-slot="asterisk" className="text-ink-3">
+            *
+          </span>
+        )}
+      </FieldLabel>
+      {children}
+      {text !== undefined && (
+        <FieldError id={errorId(id)} className="t-cap text-danger">
+          {text}
+        </FieldError>
+      )}
+    </Field>
+  );
+};
+
+/** The id of the line under a field that says what is wrong with it. */
+const errorId = (id: string) => `${id}-error`;
+
+/**
+ * A control's error state for assistive tech: `aria-invalid` while it holds
+ * an error, and `aria-describedby` naming the line that says why — what
+ * Joy's `FormControl` wired up for its helper text, so the message is read
+ * with the field, not only announced once.
+ */
+const errorAria = (
+  id: string,
+  label: string,
+  fieldState: { error?: { type?: string; message?: string } },
+): { "aria-invalid"?: true; "aria-describedby"?: string } => ({
+  "aria-invalid": fieldState.error !== undefined || undefined,
+  "aria-describedby":
+    fieldErrorText(label, fieldState.error) === undefined
+      ? undefined
+      : errorId(id),
+});

@@ -68,6 +68,14 @@ export type ItemDefaultsResult = {
   readonly confidence: number;
   /** A brand name for `BrandRegistryActor.resolve`, if the label showed one. */
   readonly brandName?: string | null;
+  /**
+   * F-77: the kind of drink the label is for, as the model read it, or
+   * `null` when it named none. When it differs from the request's
+   * `itemType`, `defaults` is empty: the label was read against the wrong
+   * kind's vocabulary, so nothing of it is kept, and the caller can read it
+   * again as this kind rather than refuse it.
+   */
+  readonly detectedItemType?: ItemType | null;
 };
 
 export type ItemDefaultsProvider = (
@@ -155,6 +163,7 @@ export const requireExtractableInput = (request: ItemDefaultsRequest): void => {
         ? ""
         : " The barcode is registered through `BarcodeActor` on confirm; it " +
           "is a lookup key, not something a vision model can read a label off."),
+    "NOTHING_READ",
   );
 };
 
@@ -255,6 +264,14 @@ export const requireLegibleLabel = (answer: {
   /** `null` when the field was absent — not the same as `false`. */
   readonly labelIsLegible: boolean | null;
   readonly imageDescription: string | null;
+  /**
+   * X05: what the model said the text is printed on. Read **only** when the
+   * verdict is already false — it refines a refusal into `LOOKS_LIKE_MENU`,
+   * and never overrules a `true` verdict (the measured E2g/E2h order decides
+   * that, not this). Optional and free text on the way in: anything but
+   * `menu` is the plain `NOTHING_READ`.
+   */
+  readonly surfaceKind?: string | null;
 }): void => {
   const noun = answer.itemType.toLowerCase();
   if (answer.labelIsLegible === null) {
@@ -268,6 +285,20 @@ export const requireLegibleLabel = (answer: {
     );
   }
   if (answer.labelIsLegible) return;
+  if (answer.surfaceKind === "menu") {
+    throw new ValidationError(
+      `no ${noun} label was found in this image: the model reads it as a ` +
+        "menu or drinks list" +
+        (answer.imageDescription === null
+          ? ""
+          : ` ("${sentence(answer.imageDescription)}")`) +
+        `. A menu names what somebody sells, not what is in a ${noun} ` +
+        "container, so nothing has been stored. Scan it as a menu instead, " +
+        `or photograph the ${noun}'s own label — the onboarding session is ` +
+        "open either way.",
+      "LOOKS_LIKE_MENU",
+    );
+  }
   throw new ValidationError(
     `no ${noun} label was found in this image — nothing here is a ${noun} ` +
       "container showing its own printed label" +
@@ -281,6 +312,7 @@ export const requireLegibleLabel = (answer: {
       "Nothing has been stored: a plausible bottle nobody photographed is " +
       `worse than an empty form. Photograph the ${noun}'s own label, or fill ` +
       "the form in by hand — the onboarding session is open either way.",
+    "NOTHING_READ",
   );
 };
 
@@ -303,6 +335,7 @@ export const unconfiguredItemDefaults: ItemDefaultsProvider = async () => {
       "label defaults until AI_PROVIDER is set — `installAI()` installed nothing " +
       "at boot. Set AI_PROVIDER=ollama for a local model that needs no " +
       `credentials. See services/actors/README.md · Local AI.`,
+    "AI_UNCONFIGURED",
   );
 };
 

@@ -1,27 +1,25 @@
 "use client";
 
+import { useEffect } from "react";
+import { RatingDisplay } from "@/components/app/RatingInput";
+import { UserAvatar } from "@/components/app/UserAvatar";
+import type { ApiItemType } from "@/components/cellar-api/itemTypes";
 import {
   Accordion,
-  AccordionDetails,
-  AccordionGroup,
-  AccordionSummary,
-  Button,
-  Card,
-  ListItemContent,
-  Typography,
-} from "@mui/joy";
-import { useEffect } from "react";
-import { Rating } from "react-simple-star-rating";
-import type { ApiItemType } from "@/components/cellar-api/itemTypes";
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
 import { readFragment } from "@/lib/api/graphql";
 import { unwrapResult } from "@/lib/api/result";
 import { pageOf } from "@/lib/paging/paged-connection";
 import { usePagedConnection } from "@/lib/paging/use-paged-connection";
 import { RichTextDisplay } from "../common/RichTextDisplay";
 import { Timestamp } from "../common/Timestamp";
-import { UserAvatar } from "../common/UserAvatar";
 import { reviewFromRow } from "./adapter";
 import { ItemPageReviewFragment, ItemReviewsPageQuery } from "./fragments";
+import { ItemSection } from "./ItemSection";
+import { LoadingButton } from "./LoadingButton";
 
 export type Review = {
   id: string;
@@ -93,66 +91,61 @@ export const ItemReviews = ({
   const canPage = itemId !== undefined && type !== undefined;
 
   return (
-    <Card sx={{ padding: "0" }}>
-      <Typography level="title-lg" padding="1rem 0 0 1rem">
-        Reviews:
-      </Typography>
+    <ItemSection id="reviews" title="Reviews">
       {!hasReviews && (
-        <Typography
-          level="body-lg"
-          padding="1rem"
-          justifyContent="center"
-          textAlign="center"
-        >
+        <p className="t-body p-4 text-center text-ink-2">
           No reviews yet! Want to add one?
-        </Typography>
+        </p>
       )}
       {hasReviews && (
-        <AccordionGroup>
+        <Accordion type="multiple" className="-mx-4 border-line border-y">
           {all.map((x) => (
-            <Accordion key={x.id}>
-              <AccordionSummary>
-                <UserAvatar
-                  avatarUrl={x.user.avatarUrl}
-                  displayName={x.user.displayName}
-                />
-                <ListItemContent>
-                  <Typography level="title-md">{x.user.displayName}</Typography>
-                  <Rating
-                    initialValue={x.score}
-                    allowFraction
-                    size={25}
-                    readonly
+            <AccordionItem key={x.id} value={x.id} className="border-line px-4">
+              <AccordionTrigger
+                // A review without text has nothing to open.
+                disabled={x.text === null || x.text === undefined}
+                className="items-center py-3 hover:no-underline disabled:opacity-100"
+              >
+                <span className="flex min-w-0 flex-1 items-center gap-3">
+                  <UserAvatar
+                    avatarUrl={x.user.avatarUrl}
+                    displayName={x.user.displayName}
                   />
-                </ListItemContent>
-                <Typography>
-                  <Timestamp iso={x.createdAt} precision="date" />
-                </Typography>
-              </AccordionSummary>
+                  <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                    <span className="t-head truncate text-ink-1">
+                      {x.user.displayName}
+                    </span>
+                    <RatingDisplay value={x.score} size="md" />
+                  </span>
+                  {/* One line beside the stars: "Oct 8, 2026" wrapped at 390px. */}
+                  <span className="t-cap shrink-0 whitespace-nowrap text-ink-2">
+                    <Timestamp iso={x.createdAt} precision="date" />
+                  </span>
+                </span>
+              </AccordionTrigger>
               {x.text !== null && x.text !== undefined && (
-                <AccordionDetails>
+                <AccordionContent>
                   <RichTextDisplay text={x.text} />
-                </AccordionDetails>
+                </AccordionContent>
               )}
-            </Accordion>
+            </AccordionItem>
           ))}
-        </AccordionGroup>
+        </Accordion>
       )}
       {list.canLoadMore && canPage && (
-        <Button
-          variant="plain"
-          color="neutral"
+        <LoadingButton
+          variant="ghost"
           loading={list.status === "loadingMore"}
           onClick={() => void list.loadMore()}
         >
           Show more reviews
-        </Button>
+        </LoadingButton>
       )}
       {list.failure !== null && (
-        <Typography level="body-sm" color="danger" padding="0 1rem 1rem">
+        <p role="alert" className="t-cap text-destructive">
           {list.failure.message}
-        </Typography>
+        </p>
       )}
-    </Card>
+    </ItemSection>
   );
 };

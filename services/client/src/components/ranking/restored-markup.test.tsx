@@ -1,6 +1,6 @@
 /**
- * Render tests for the restored rankings components, asserting the **old**
- * markup (`82450ad1:src/components/ranking/*`).
+ * Render tests for `/rankings` ("Top rated"): the scope control N15 put in
+ * place of the old two toggles, and the restored type chips.
  */
 import { mock } from "bun:test";
 import assert from "node:assert/strict";
@@ -8,6 +8,7 @@ import { describe, test } from "node:test";
 import type { ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { Client, Provider } from "urql";
+import { stripStyleBlocks } from "@/test-support/markup";
 
 mock.module("next/image", () => ({
   default: (props: { alt: string }) => (
@@ -17,60 +18,66 @@ mock.module("next/image", () => ({
 mock.module("next/navigation", () => ({
   useRouter: () => ({ replace: () => {}, push: () => {}, refresh: () => {} }),
   usePathname: () => "/rankings",
-  useSearchParams: () => new URLSearchParams('reviewers=["ME"]&types=["WINE"]'),
+  useSearchParams: () => new URLSearchParams('scope=friends&types=["WINE"]'),
 }));
 
-const { RankingsFilter, RankingsFilterValue } = await import(
-  "./RankingsFilter"
-);
-const { RankingsClient } = await import("./RankingsClient");
+const { RankingsClient, RankNumeral } = await import("./RankingsClient");
 
 const client = new Client({
   url: "http://test.invalid/graphql",
   exchanges: [],
 });
 const render = (node: ReactNode) =>
-  renderToStaticMarkup(<Provider value={client}>{node}</Provider>).replace(
-    /<style[^>]*>[^<]*<\/style>/g,
-    "",
+  stripStyleBlocks(
+    renderToStaticMarkup(<Provider value={client}>{node}</Provider>),
   );
 
-describe("RankingsFilter (restored)", () => {
-  test("two toggles, Your Scores then Friends Scores, the pressed one marked", () => {
-    const html = render(
-      <RankingsFilter
-        types={[RankingsFilterValue.ME]}
-        onTypesChange={() => {}}
-      />,
-    );
-    const labels = [...html.matchAll(/aria-label="([^"]+)"/g)].map((m) => m[1]);
-    assert.deepEqual(
-      labels.filter((l) => l.endsWith("Scores")),
-      ["Your Scores", "Friends Scores"],
-    );
+describe("RankingsClient", () => {
+  test("Top rated, the labelled scope control from the URL, the kind chips", () => {
+    const html = render(<RankingsClient />);
+    assert.match(html, />Top rated</);
+    assert.match(html, /href="\/tier-lists"/);
+    assert.match(html, /role="radiogroup"[^>]*aria-label="Whose scores"/);
+    const segments = [
+      ...html.matchAll(/role="radio"[^>]*>(?:<[^>]+>)*([^<]+)</g),
+    ].map((m) => m[1]);
+    assert.deepEqual(segments, ["Me", "Friends", "Everyone"]);
+    // `?scope=friends` reaches the control.
     assert.match(
       html,
-      /aria-pressed="true"[^>]*aria-label="Your Scores"|aria-label="Your Scores"[^>]*aria-pressed="true"/,
+      /aria-checked="true"[^>]*>(?:<[^>]+>)*Friends<|data-state="on"[^>]*>(?:<[^>]+>)*Friends</,
     );
+    const chips = [
+      ...html.matchAll(
+        /data-slot="filter-chip"[^>]*>(?:<[^>]+>)*<span class="t-head">([^<]+)</g,
+      ),
+    ].map((m) => m[1]);
+    assert.deepEqual(chips, [
+      "All",
+      "Beer",
+      "Wine",
+      "Spirit",
+      "Coffee",
+      "Tea",
+      "Sake",
+    ]);
+    // `?types=["WINE"]` lights Wine, and only Wine: one kind at a time.
+    const pressed = [
+      ...html.matchAll(
+        /aria-pressed="true"[^>]*>(?:<[^>]+>)*<span class="t-head">([^<]+)</g,
+      ),
+    ].map((m) => m[1]);
+    assert.deepEqual(pressed, ["Wine"]);
   });
 });
 
-describe("RankingsClient (restored)", () => {
-  test("title, both filters from the URL, and the grid", () => {
-    const html = render(<RankingsClient />);
-    assert.match(html, /MuiTypography-title-lg[^>]*>Rankings</);
-    assert.match(html, /aria-label="Friends Scores"/);
-    for (const type of ["Beer", "Wine", "Spirit", "Coffee", "Sake", "Tea"]) {
-      assert.match(html, new RegExp(`aria-label="${type}"`));
-    }
-    // The old URL state reaches the toggles.
-    assert.match(
-      html,
-      /aria-pressed="true"[^>]*aria-label="Your Scores"|aria-label="Your Scores"[^>]*aria-pressed="true"/,
-    );
-    assert.match(
-      html,
-      /aria-pressed="true"[^>]*aria-label="Wine"|aria-label="Wine"[^>]*aria-pressed="true"/,
-    );
+describe("RankNumeral", () => {
+  test("says Rank N to assistive tech, a plain numeral, crowned only when told", () => {
+    const first = renderToStaticMarkup(<RankNumeral rank={1} crown />);
+    assert.match(first, /<span class="sr-only">Rank <\/span>1/);
+    assert.match(first, /<svg/);
+    const plain = renderToStaticMarkup(<RankNumeral rank={1} />);
+    assert.doesNotMatch(plain, /<svg/);
+    assert.match(plain, /\bt-head\b/);
   });
 });

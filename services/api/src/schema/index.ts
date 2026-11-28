@@ -15,10 +15,16 @@ import "./item.ts";
 // declares the interface.
 import "./barcode.ts";
 import "./item-onboarding.ts";
+// X19: `Item.correction` and the three correction mutations reference `Item`,
+// `ItemBrand` and the onboarding actor's types.
+import "./item-correction.ts";
 import "./ping.ts";
 // B6: `RecipeIngredient` resolves through the `Item` interface and the
 // `GenericItem` type, both declared by `item.ts`.
 import "./recipe.ts";
+// X14: availability, makeability, Love, the Bar pantry and What can I make —
+// fields on `Recipe`, `RecipeIngredient` and `Item`, so after both modules.
+import "./bar.ts";
 import "./reference-data.ts";
 import "./tier-list.ts";
 // B5 grows `tier-list.ts`'s one-field `Place` stub rather than declaring a
@@ -40,6 +46,10 @@ import "./recipe-photo.ts";
 // B8: `MenuScan` links to `Item`, `Recipe` and the `Place` stub, so it follows
 // the three modules that declare them.
 import "./menu-scan.ts";
+// X02: the drink log. Adds `place`/`photo` to `item.ts`'s `ItemCheckIn` and
+// links `tier-list.ts`'s `Place` stub and `file.ts`'s `File`, so it follows all
+// three.
+import "./check-in.ts";
 import "./viewer.ts";
 // B4 adds a field to `Viewer`, so it is imported after the module that
 // declares it — `builder.objectField` needs the ref to exist.
@@ -59,5 +69,29 @@ import "./place-edges.ts";
 // link `UserProfile`, `Item`, `ItemReview`, `TierListItem` and `Cellar`,
 // nearby places link `Place`, so it comes after every module declaring them.
 import "./discovery.ts";
+// X10: Home's `Viewer.openBottles`, `Viewer.aiJobs` and `CellarItem.cellar` —
+// references `cellar.ts`, `item.ts` and `errors.ts`, so it follows them.
+import "./home.ts";
+// X08: `Viewer.wantToTry` and the `isWantToTry` edges on `Item` and `Recipe`
+// reference `Viewer`, `Item`, `Recipe` and the `Place` stub, so it comes last.
+import "./want-to-try.ts";
+// X17: the share reads and friend invites. Reuses enums from `item.ts`,
+// `recipe.ts` and `tier-list.ts`, and adds a field to `Viewer`.
+import "./share.ts";
+// X18: `Viewer.counts` and `friendProfile`, whose sections are `TierList`,
+// `Cellar` and `ItemCheckIn` connections and whose person is a `UserProfile`
+// — refs from four modules, so it comes after every one of them.
+import "./friend-profile.ts";
+// L03 (wave C "taste"): the taste profile and agreement. References
+// `ItemType` from `item.ts`; adds two Query fields.
+import "./taste.ts";
+// L04: the recap deck and breadth stamps (uses `ItemType` from item.ts).
+import "./recap.ts";
+// ux-c L08 (make): `Item.myBrewPrefs` and `setBrewPrefs` — reference `Item`.
+import "./brew-prefs.ts";
+// L10 (wave C seenat): `Item.seenAt`.
+import "./seen-at.ts";
+// SV-A (redesign-2026-11): `myAiQuota`. References only its own types.
+import "./budget.ts";
 
 export const schema = builder.toSchema();

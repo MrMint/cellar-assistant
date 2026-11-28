@@ -64,14 +64,27 @@ const { skip } = await resolveTestDatabase();
 
 const NO_FILTER = {} as const;
 
-const seedGroup = async (db: DbOrTx, name: string): Promise<string> => {
+/**
+ * A group with one PUBLIC version: since X15 a group is listed only for a
+ * viewer who can see a version in it (or created it), so an empty group
+ * would be nobody's to count.
+ */
+const seedGroup = async (
+  db: DbOrTx,
+  name: string,
+  category = "cocktail",
+): Promise<string> => {
   const { rows } = await db.execute<{ id: string }>(sql`
     insert into public.recipe_groups (name, category, tags)
-    values (${name}, 'cocktail'::recipe_category, '{classic}'::text[])
+    values (${name}, ${category}::recipe_category, '{classic}'::text[])
     returning id
   `);
   const id = rows[0]?.id;
   if (id === undefined) throw new Error("no group id");
+  await db.execute(sql`
+    insert into public.recipes (name, type, recipe_group_id, privacy)
+    values (${name}, 'cocktail', ${id}::uuid, 'PUBLIC')
+  `);
   return id;
 };
 
@@ -83,7 +96,10 @@ const seedGroup = async (db: DbOrTx, name: string): Promise<string> => {
  */
 const countGroups = async (db: DbOrTx): Promise<number> => {
   const { rows } = await db.execute<{ n: string }>(
-    sql`select count(*) as n from public.recipe_groups`,
+    sql`select count(*) as n from public.recipe_groups g
+        where exists (select 1 from public.recipes r
+                      where r.recipe_group_id = g.id
+                        and r.privacy = 'PUBLIC' and not r.is_draft)`,
   );
   return Number(rows[0]?.n ?? 0);
 };
@@ -135,11 +151,7 @@ describe.skipIf(skip)("collection totalCount (A7d item 1)", () => {
       const viewer = await seedUser(db);
       const prefix = `zzz-a7d-${crypto.randomUUID().slice(0, 8)}`;
       await seedGroup(db, `${prefix}-cocktail`);
-      await db.execute(sql`
-        insert into public.recipe_groups (name, category, base_spirit, tags)
-        values (${`${prefix}-shot`}, 'shot'::recipe_category, null,
-                '{classic}'::text[])
-      `);
+      await seedGroup(db, `${prefix}-shot`, "shot");
 
       const filter = { category: "shot" } as const;
       const actor = await activate(
@@ -156,8 +168,11 @@ describe.skipIf(skip)("collection totalCount (A7d item 1)", () => {
       );
 
       const { rows } = await db.execute<{ n: string }>(sql`
-        select count(*) as n from public.recipe_groups
+        select count(*) as n from public.recipe_groups g
         where category = 'shot'::recipe_category
+          and exists (select 1 from public.recipes r
+                      where r.recipe_group_id = g.id
+                        and r.privacy = 'PUBLIC' and not r.is_draft)
       `);
       const shots = Number(rows[0]?.n ?? 0);
       // The unfiltered total is strictly larger, so a count that dropped the

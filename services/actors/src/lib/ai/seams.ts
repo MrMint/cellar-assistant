@@ -11,7 +11,7 @@
  * | `ItemDefaultsProvider` | B2 | `../item-defaults.ts` |
  * | `MenuExtractionProvider` + `MenuMatchVerifier` | B8 | `../menu-ai.ts` |
  * | `RecipePhotoExtractor` | C4 | `../recipe-photo-ai.ts` |
- * | `PlaceReviewer` | B5 | `../../actors/place-creation-actor.ts` |
+ * | `PlaceReviewer` | B5, X27 | `../place-review.ts` |
  *
  * **Nothing here replaces a seam's `unconfigured*` default.** Those stay
  * exactly as their authors wrote them and remain what every one of these
@@ -44,15 +44,26 @@ import type {
   RecipeType,
 } from "@cellar-assistant/contracts";
 import {
+  BASE_SPIRIT_KINDS,
   ConflictError,
+  FIELD_CONFIDENCE_KEY,
+  INGREDIENT_ROLES,
+  ITEM_ATTRIBUTE_KEY,
+  ITEM_TYPES,
+  type ItemType,
   isRecipeType,
   RECIPE_TYPES,
+  sanitiseFieldConfidence,
   ValidationError,
 } from "@cellar-assistant/contracts";
-import type { PlaceReviewer } from "../../actors/place-creation-actor.ts";
-import { requirePlaceReviewSubject } from "../../actors/place-creation-actor.ts";
 import type { InsightsGenerator } from "../../actors/tier-list-actor.ts";
 import type { Embedder } from "../embeddings.ts";
+import type { FlavourTagSuggester } from "../flavour-tags.ts";
+import {
+  groundFlavourTags,
+  NO_FLAVOUR_TAGS,
+  noteIsWorthAsking,
+} from "../flavour-tags.ts";
 import { downscaleForEmbedding } from "../image-downscale.ts";
 import type { ImageEmbedder } from "../image-embeddings.ts";
 import type {
@@ -63,11 +74,20 @@ import {
   requireExtractableInput,
   requireLegibleLabel,
 } from "../item-defaults.ts";
+import type { ItemSuggestionsProvider } from "../item-suggestions.ts";
+import {
+  keepWanted,
+  requireRecognition,
+  requireSuggestibleInput,
+} from "../item-suggestions.ts";
 import type {
   ExtractedMenuLine,
   MenuExtractionProvider,
+  MenuMatchVerificationRequest,
   MenuMatchVerifier,
 } from "../menu-ai.ts";
+import type { PlaceReviewer } from "../place-review.ts";
+import { requirePlaceReviewSubject } from "../place-review.ts";
 import type { RecipePhotoExtractor } from "../recipe-photo-ai.ts";
 import { requireGroundedEntries } from "../tier-list-entries.ts";
 import { embeddingModel } from "../vectors.ts";
@@ -84,19 +104,24 @@ import {
   str,
 } from "./json.ts";
 import {
+  buildFlavourTagsPrompt,
   buildInsightsPrompt,
   buildItemDefaultsPrompt,
+  buildItemSuggestionsPrompt,
   buildMenuExtractionPrompt,
   buildMenuMatchPrompt,
   buildPlaceReviewPrompt,
   buildRecipePhotoPrompt,
+  buildRecipeTextPrompt,
+  FLAVOUR_TAGS_SCHEMA,
   INSIGHTS_FIELDS,
   INSIGHTS_REQUIRED_FIELDS,
   INSIGHTS_SCHEMA,
   isScannedType,
   itemDefaultsSchema,
+  itemSuggestionsSchema,
   MENU_EXTRACTION_SCHEMA,
-  MENU_MATCH_SCHEMA,
+  menuMatchSchema,
   PLACE_REVIEW_SCHEMA,
   RECIPE_PHOTO_SCHEMA,
 } from "./prompts.ts";
@@ -290,7 +315,43 @@ export const providerInsightsGenerator =
  * it. They are the model's working, not the item's attributes, so they never
  * reach `item_onboardings.defaults`.
  */
-const ANSWER_GROUNDING = new Set(["imageDescription", "labelIsLegible"]);
+const ANSWER_GROUNDING = new Set([
+  "imageDescription",
+  "labelIsLegible",
+  // X05: what the photo is of, not a value for the item. Read by
+  // `requireLegibleLabel` on an abstention; kept in `raw` like the other two.
+  "surfaceKind",
+  // F-77: the kind the label is for; returned as `detectedItemType`.
+  "labelItemType",
+]);
+
+/** F-77: the model's `labelItemType`, or `null` for `NONE` or anything else. */
+const detectedItemTypeOf = (value: unknown): ItemType | null =>
+  typeof value === "string" && (ITEM_TYPES as readonly string[]).includes(value)
+    ? (value as ItemType)
+    : null;
+
+/**
+ * Whether the answer proposes a value for `field` — at the top level (`name`,
+ * `brandName`, `country`, `region`) or in the per-type bag (`vintage`).
+ */
+const proposesValue = (
+  type: ItemType,
+  defaults: Record<string, unknown>,
+  field: string,
+): boolean => {
+  const bag = defaults[ITEM_ATTRIBUTE_KEY[type]];
+  const value =
+    defaults[field] ??
+    (typeof bag === "object" && bag !== null && !Array.isArray(bag)
+      ? (bag as Record<string, unknown>)[field]
+      : undefined);
+  return (
+    value !== undefined &&
+    value !== null &&
+    !(typeof value === "string" && value.trim() === "")
+  );
+};
 
 /**
  * Four things happen here that did not before E2c/E2g, in this order and for
@@ -351,6 +412,20 @@ export const providerItemDefaults =
       "high",
     );
     const answer = parseModelJson(content, "item defaults");
+    const detectedItemType = detectedItemTypeOf(answer.labelItemType);
+    if (detectedItemType !== null && detectedItemType !== request.itemType) {
+      // F-77: another kind's label. Its values were read against this kind's
+      // schema and vocabulary, so none is kept; the kind is the answer.
+      const result: ItemDefaultsResult = {
+        defaults: {},
+        raw: content,
+        model: metadata.model,
+        confidence: 0,
+        brandName: null,
+        detectedItemType,
+      };
+      return result;
+    }
     requireLegibleLabel({
       itemType: request.itemType,
       // The model is asked the *positive* question, because a negatively-named
@@ -360,6 +435,7 @@ export const providerItemDefaults =
       // keep in step, so the one polarity is the only one.
       labelIsLegible: bool(answer.labelIsLegible),
       imageDescription: str(answer.imageDescription),
+      surfaceKind: str(answer.surfaceKind),
     });
 
     /*
@@ -386,14 +462,97 @@ export const providerItemDefaults =
       vocabulary,
     );
     requireInVocabulary(request.itemType, defaults, vocabulary);
+    // X05: the per-field confidences are kept to their three words, and only
+    // for fields the answer actually filled — a judgement about a value that
+    // is not there is noise the form would have to explain.
+    if (FIELD_CONFIDENCE_KEY in defaults) {
+      const judged = sanitiseFieldConfidence(defaults[FIELD_CONFIDENCE_KEY]);
+      const kept = Object.fromEntries(
+        Object.entries(judged).filter(([field]) =>
+          proposesValue(request.itemType, defaults, field),
+        ),
+      );
+      if (Object.keys(kept).length === 0) delete defaults[FIELD_CONFIDENCE_KEY];
+      else defaults[FIELD_CONFIDENCE_KEY] = kept;
+    }
     const result: ItemDefaultsResult = {
       defaults,
       raw: content,
       model: metadata.model,
       confidence: confidence(defaults.confidence, 0.5),
       brandName: str(defaults.brandName),
+      detectedItemType,
     };
     return result;
+  };
+
+/* -------------------------------------------------------------------------- */
+/* X19 · ItemOnboardingActor.suggestDetails                                    */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The text-only pass behind "Suggest details" — the contract and its three
+ * code-enforced rules are in `../item-suggestions.ts`; this is the call.
+ *
+ * In order, as the label read does it: the input gate before anything is
+ * built (`requireSuggestibleInput`), the schema from the live vocabulary
+ * (only the empty suggestible fields, abstention first), the verdict read
+ * before the rest of the answer (`requireRecognition` — `false` discards
+ * every suggestion), then the vocabulary mapped back and checked
+ * (`normaliseUnconstrainedAttributes`, `requireInVocabulary`), and last
+ * `keepWanted`, which drops anything the caller did not ask for whatever the
+ * provider sent. "medium": a few short fields from a name, no image — the
+ * label read's "high" buys reading, which this does not do.
+ */
+export const providerItemSuggestions =
+  (provider: ProviderFor): ItemSuggestionsProvider =>
+  async (ctx, request) => {
+    requireSuggestibleInput(request);
+    const vocabulary = await itemVocabulary();
+    const known: string[] = [];
+    for (const [key, value] of Object.entries(request.known)) {
+      if (typeof value === "string" && value.trim() !== "") {
+        known.push(`${key}: ${value.trim()}`);
+      } else if (value !== null && typeof value === "object") {
+        for (const [field, inner] of Object.entries(value)) {
+          if (inner === null || inner === undefined || inner === "") continue;
+          known.push(`${field}: ${String(inner)}`);
+        }
+      }
+    }
+    const { content, metadata } = await provider(ctx).generateContent(
+      {
+        prompt: buildItemSuggestionsPrompt({
+          itemType: request.itemType,
+          name: request.name.trim(),
+          brandName: request.brandName,
+          known,
+        }),
+        schema: itemSuggestionsSchema(
+          request.itemType,
+          vocabulary,
+          request.wanted,
+        ),
+      },
+      "medium",
+    );
+    const answer = parseModelJson(content, "detail suggestions");
+    const note = str(answer.productNote);
+    if (!requireRecognition(bool(answer.recognised))) {
+      return { abstained: true, note, defaults: {}, model: metadata.model };
+    }
+    const normalised = normaliseUnconstrainedAttributes(
+      request.itemType,
+      answer,
+      vocabulary,
+    );
+    requireInVocabulary(request.itemType, normalised, vocabulary);
+    return {
+      abstained: false,
+      note,
+      defaults: keepWanted(request.itemType, normalised, request),
+      model: metadata.model,
+    };
   };
 
 /* -------------------------------------------------------------------------- */
@@ -445,6 +604,26 @@ export const providerItemDefaults =
  * same defect at resolutions no size check could ever separate from a real
  * menu.
  */
+/** `menu_scans.header_name` is shown in a sheet title; longer is not a name. */
+const MENU_HEADER_NAME_MAX = 120;
+
+/**
+ * L10: the menu header's venue name, or `null` for every way of abstaining.
+ * The verdict is read first (L4): no `venueNameIsPrinted: true`, no name,
+ * whatever `venueName` says. A name that is not in the page's own `rawText`
+ * was not read off the page, so it is dropped rather than proposed.
+ */
+export const menuHeaderName = (
+  parsed: Record<string, unknown>,
+  rawText: string,
+): string | null => {
+  if (bool(parsed.venueNameIsPrinted) !== true) return null;
+  const name = str(parsed.venueName)?.replace(/\s+/g, " ").trim() ?? "";
+  if (name.length < 2 || name.length > MENU_HEADER_NAME_MAX) return null;
+  const haystack = rawText.replace(/\s+/g, " ").toLowerCase();
+  return haystack.includes(name.toLowerCase()) ? name : null;
+};
+
 export const providerMenuExtraction =
   (provider: ProviderFor, loadImages: ImageLoader): MenuExtractionProvider =>
   async (ctx, request) => {
@@ -533,6 +712,7 @@ export const providerMenuExtraction =
       durationMs: Date.now() - started,
       noMenuDetected: false,
       imageDescription,
+      headerName: menuHeaderName(parsed, rawText),
     };
   };
 
@@ -543,15 +723,41 @@ export const providerMenuExtraction =
 /** The model says "none" for "no candidate matches"; the seam wants `null`. */
 const NONE = "none";
 
+/**
+ * The model's `acceptedKey`, with one forgiven slip: the *name* of exactly
+ * one offered candidate, which a small local model answers instead of its
+ * key (measured on gemma3:4b, where `menuMatchSchema`'s `enum` is what
+ * normally prevents it). A name shared by two candidates, or matching none,
+ * is passed through unchanged, and the check below refuses it.
+ */
+const keyFromAnswer = (
+  answer: string | null,
+  candidates: MenuMatchVerificationRequest["candidates"],
+): string | null => {
+  if (answer === null || candidates.some((c) => c.key === answer)) {
+    return answer;
+  }
+  const folded = answer.trim().toLowerCase();
+  const named = candidates.filter(
+    (candidate) => candidate.name.trim().toLowerCase() === folded,
+  );
+  return named.length === 1 ? (named[0]?.key ?? answer) : answer;
+};
+
 export const providerMenuMatchVerifier =
   (provider: ProviderFor): MenuMatchVerifier =>
   async (ctx, request) => {
     const { content, metadata } = await provider(ctx).generateContent(
-      { prompt: buildMenuMatchPrompt(request), schema: MENU_MATCH_SCHEMA },
+      {
+        prompt: buildMenuMatchPrompt(request),
+        schema: menuMatchSchema(
+          request.candidates.map((candidate) => candidate.key),
+        ),
+      },
       "medium",
     );
     const parsed = parseModelJson(content, "menu match verification");
-    const accepted = str(parsed.acceptedKey);
+    const accepted = keyFromAnswer(str(parsed.acceptedKey), request.candidates);
     const known = new Set(request.candidates.map((candidate) => candidate.key));
 
     // A key the model invented is not a match — but it is also not a silent
@@ -587,6 +793,20 @@ const describedAs = (description: string | null): string =>
   description === null
     ? ""
     : ` (the model describes it as "${description.trim().replace(/\.+$/, "")}")`;
+
+/**
+ * X14: a closed-vocabulary answer, or `null`. Unlike `type` (required, and a
+ * refusal when illegal), these fields are omittable, so an illegal answer is
+ * treated as the omission it should have been rather than failing a recipe
+ * that was otherwise read correctly.
+ */
+const inVocabulary = (
+  value: unknown,
+  allowed: readonly string[],
+): string | null => {
+  const answer = str(value);
+  return answer !== null && allowed.includes(answer) ? answer : null;
+};
 
 /**
  * The model's `type`, or a refusal — never `cocktail` by default (C4d).
@@ -691,13 +911,25 @@ const requireRecipeType = (value: unknown, jobId: string): RecipeType => {
 export const providerRecipePhotoExtractor =
   (provider: ProviderFor, loadImages: ImageLoader): RecipePhotoExtractor =>
   async (ctx, request) => {
-    const images = await loadImages(ctx, [
-      request.fileId,
-      ...request.additionalFileIds,
-    ]);
+    // X15's Paste: the same schema and the same abstention, read from text
+    // instead of pixels — `imageDescription` then says what the text is, and
+    // `recipeIsLegible` whether it is a recipe at all.
+    const pasted = request.fileId === null ? (request.text ?? "") : null;
+    if (pasted !== null && pasted.trim() === "") {
+      throw new ValidationError(
+        `job ${request.jobId} has neither a photo nor any text to read`,
+      );
+    }
+    const images =
+      pasted !== null || request.fileId === null
+        ? []
+        : await loadImages(ctx, [request.fileId, ...request.additionalFileIds]);
     const { content, metadata } = await provider(ctx).generateContent(
       {
-        prompt: buildRecipePhotoPrompt(request.notes),
+        prompt:
+          pasted === null
+            ? buildRecipePhotoPrompt(request.notes)
+            : buildRecipeTextPrompt(pasted, request.notes),
         images,
         schema: RECIPE_PHOTO_SCHEMA,
       },
@@ -719,11 +951,18 @@ export const providerRecipePhotoExtractor =
     }
     if (!recipeIsLegible) {
       throw new ValidationError(
-        `no recipe could be read from the photo for job ${request.jobId}` +
-          describedAs(imageDescription) +
-          ". Nothing has been created: a plausible recipe nobody " +
-          "photographed is worse than no recipe at all. Retake the photo so " +
-          "the written ingredients and method are legible, and start again.",
+        pasted !== null
+          ? `no recipe could be read from the pasted text for job ${request.jobId}` +
+              describedAs(imageDescription) +
+              ". Nothing has been created: a recipe the text does not " +
+              "contain is worse than no recipe at all. Paste the " +
+              "ingredients and the method, or type the recipe in."
+          : `no recipe could be read from the photo for job ${request.jobId}` +
+              describedAs(imageDescription) +
+              ". Nothing has been created: a plausible recipe nobody " +
+              "photographed is worse than no recipe at all. Retake the photo so " +
+              "the written ingredients and method are legible, and start again.",
+        "NOTHING_READ",
       );
     }
 
@@ -739,8 +978,18 @@ export const providerRecipePhotoExtractor =
         isOptional: bool(row.isOptional),
         substitutionNotes: str(row.substitutionNotes),
         itemType: str(row.itemType),
-        brandName: str(row.brandName),
+        // `brandName` is the pre-X14 spelling of the same field; a provider
+        // answering an older schema still lands here.
+        brandName: str(row.brandMentioned) ?? str(row.brandName),
         category: str(row.category),
+        // X14. Out-of-vocabulary answers are dropped here, not stored: the
+        // schema's `enum` makes them unsayable for a provider that honours
+        // it, and one that does not gets an absent field, which is the
+        // abstention — never an invented kind.
+        quantityText: str(row.quantityText),
+        brandMentioned: str(row.brandMentioned) ?? str(row.brandName),
+        baseSpirit: inVocabulary(row.baseSpirit, BASE_SPIRIT_KINDS),
+        role: inVocabulary(row.role, INGREDIENT_ROLES),
       });
     }
 
@@ -789,6 +1038,7 @@ export const providerRecipePhotoExtractor =
           "ingredients, so an answer with none did not read one off this " +
           "image. Failing rather than writing an empty recipe — see " +
           "services/actors/src/lib/recipe-photo-ai.ts.",
+        "NOTHING_READ",
       );
     }
 
@@ -809,7 +1059,7 @@ export const providerRecipePhotoExtractor =
   };
 
 /* -------------------------------------------------------------------------- */
-/* B5 · PlaceCreationActor.createPlace                                         */
+/* B5 · the place review (X27: PlaceReviewActor, via the outbox)              */
 /* -------------------------------------------------------------------------- */
 
 /** The string members of a model's array, in order. Non-strings are not values. */
@@ -830,9 +1080,10 @@ const strings = (value: unknown): readonly string[] => {
  * The prompt's job, its voice, its five review criteria, its approve/reject
  * bias ("approve anything that looks like a genuine venue, even when the
  * details are sparse") and the `-0.3 … +0.3` confidence band are the old
- * function's, and `"low"` is the quality tier it asked for — the user is
- * waiting on this call in-turn (§8.5), and a verdict over ten short fields is
- * not the place to spend the 120s budget.
+ * function's, and `"low"` is the quality tier it asked for — a verdict over
+ * ten short fields is not the place to spend a larger model. (The user no
+ * longer waits on it: since X27 the place is saved `pending` at once and this
+ * runs from the outbox in `PlaceReviewActor`.)
  *
  * ## What did not, and why
  *
@@ -844,18 +1095,21 @@ const strings = (value: unknown): readonly string[] => {
  *    rewrote a `null` `enriched_description` to `""` before validating,
  *    commenting that the model "sometimes returns null for required string
  *    fields". See `PLACE_REVIEW_SCHEMA` for the whole argument; the field that
- *    made it urgent is `enrichedDescription`, because `createPlace` writes it
- *    into `places.description` whenever the submitter left theirs blank. A
- *    required description is a compelled description of a venue the model has
- *    never heard of, persisted as the place's own words.
+ *    made it urgent is `enrichedDescription`, because `createPlace` used to
+ *    write it into `places.description` whenever the submitter left theirs
+ *    blank. A required description is a compelled description of a venue the
+ *    model has never heard of, persisted as the place's own words. (Since X27
+ *    it is only *offered* to the creator — `places.suggested_description` —
+ *    and reaches the shared row only if they take it.)
  * 2. **The fallback is gone.** `FALLBACK_RESULT` was
  *    `{approved: true, confidence_adjustment: 0, flags: []}`, returned with a
  *    200 on *any* failure — a bad completion, a schema violation, a dead
  *    provider. That is an approval nobody made, and it is indistinguishable at
  *    the call site from one a model reasoned its way to. Every failure here
- *    throws instead. `PlaceCreationActor.#reviewOrNull` catches it, logs it and
- *    records `review: null`, so the place is still created at the neutral
- *    confidence and the result says plainly that no review happened.
+ *    throws instead. Since X27 that fails the `PlaceReviewActor` delivery and
+ *    the place simply stays `pending` — creator-only — until a review does
+ *    succeed; before it, the failure meant `review: null` and a *shared*
+ *    place at the neutral confidence.
  * 3. **The categories are slugs, not labels.** `formatAllCategories()` printed
  *    Title Case ("Coffee Shop") while the column and the form both hold
  *    `coffee_shop`, so a model that obeyed the prompt suggested categories the
@@ -865,21 +1119,29 @@ const strings = (value: unknown): readonly string[] => {
  *
  * `requireInVocabulary` exists because an out-of-vocabulary item attribute is a
  * foreign-key violation raised inside the outbox where nobody sees it. Nothing
- * in a `PlaceReview` reaches a constrained column: `suggestedCategories` and
- * `flags` are advisory, returned to the caller and written nowhere, and
+ * in a `PlaceReview` reaches a constrained column: `flags` are advisory and
+ * written nowhere, `suggestedCategories` is stored only as an *offer* to the
+ * creator (X27) — filtered to the category list by `suggestedCategoriesFrom`
+ * in `../place-review.ts`, never applied unless they confirm it — and
  * `places.categories` is `text[]` with no key behind it. Throwing over an
- * advisory field would trade a real verdict for `review: null` — it would lose
- * the approval to protect a chip label.
+ * advisory field would trade a real verdict for a failed review — it would
+ * lose the approval to protect a chip label.
  */
 export const providerPlaceReviewer =
   (provider: ProviderFor): PlaceReviewer =>
-  async (ctx, subject) => {
+  async (ctx, subject, signal) => {
     // Before the model, not after: a review of nothing is not a hard question,
     // it is an empty one, and an empty question is answered with an invention.
     requirePlaceReviewSubject(subject);
 
+    // A caller's deadline, when it sets one, cancels the call itself, so a
+    // review nobody is waiting for stops running — and stops being metered.
     const { content } = await provider(ctx).generateContent(
-      { prompt: buildPlaceReviewPrompt(subject), schema: PLACE_REVIEW_SCHEMA },
+      {
+        prompt: buildPlaceReviewPrompt(subject),
+        schema: PLACE_REVIEW_SCHEMA,
+        ...(signal === undefined ? {} : { signal }),
+      },
       "low",
     );
     const parsed = parseModelJson(content, "place review");
@@ -891,8 +1153,8 @@ export const providerPlaceReviewer =
           "field this seam cannot fill in for it. Reading an absent verdict as " +
           "approval is the silent approval the whole seam exists to refuse; " +
           "reading it as a rejection turns a decoding glitch into a refused " +
-          "submission the person cannot appeal. PlaceCreationActor records " +
-          "`review: null` for this — the same outcome as no provider at all.",
+          "submission the person cannot appeal. The place stays pending — " +
+          "creator-only — exactly as with no provider at all.",
       );
     }
 
@@ -909,4 +1171,60 @@ export const providerPlaceReviewer =
       flags: strings(parsed.flags),
     };
     return review;
+  };
+
+/* -------------------------------------------------------------------------- */
+/* X02 · CheckInActor.suggestFlavourTags                                       */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * A typed note → flavour chips the drinker may tap. Abstention first, in the
+ * same order as the other abstaining seams:
+ *
+ * 1. **Before the call:** a note with fewer than three letters in it is an
+ *    abstention without a model call, and so without a charge.
+ * 2. **The discriminator:** `noteDescribesTaste` is the schema's one required
+ *    field and its first property. Absent means the provider ignored the
+ *    schema — refused, not defaulted, exactly as `providerMenuExtraction`
+ *    treats `menuIsLegible`. `false` is an abstention, and any tags that came
+ *    with it are dropped: the model has said the note names no flavour.
+ * 3. **Grounding:** `groundFlavourTags` keeps only tags whose evidence is in
+ *    the note and whose words come from that evidence. A model that answers
+ *    "tannic" for "great night!" gets nothing through.
+ *
+ * Nothing here writes. The answer is a list of suggestions the client shows as
+ * dashed `source="suggested"` chips; only a tap puts one on the log.
+ */
+export const providerFlavourTags =
+  (provider: ProviderFor): FlavourTagSuggester =>
+  async (ctx, request) => {
+    if (!noteIsWorthAsking(request.note)) return NO_FLAVOUR_TAGS;
+    const { content } = await provider(ctx).generateContent(
+      {
+        prompt: buildFlavourTagsPrompt(request),
+        schema: FLAVOUR_TAGS_SCHEMA,
+      },
+      "low",
+    );
+    const parsed = parseModelJson(content, "flavour tags");
+    const describesTaste = bool(parsed.noteDescribesTaste);
+    if (describesTaste === null) {
+      throw new ConflictError(
+        "the model's flavour-tag answer has no `noteDescribesTaste`, the one " +
+          "field `FLAVOUR_TAGS_SCHEMA` requires. Either the provider is not " +
+          "constraining its sampler to the output schema, or it was given a " +
+          "different schema. Reading the absence as `true` would let a note " +
+          "about the evening come back as a list of flavours, so it is " +
+          "refused instead.",
+      );
+    }
+    if (!describesTaste) return NO_FLAVOUR_TAGS;
+    const candidates = arr(parsed.tags).map((entry) => {
+      const fields = record(entry);
+      return {
+        tag: fields === null ? null : str(fields.tag),
+        evidence: fields === null ? null : str(fields.evidence),
+      };
+    });
+    return groundFlavourTags(request.note, candidates, request.existing);
   };

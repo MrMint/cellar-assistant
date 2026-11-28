@@ -26,24 +26,32 @@ import {
   anonymousCtx,
   ConflictError,
   ForbiddenError,
+  NO_AI_CAPABILITIES,
   NotFoundError,
+  PROFILE_NOT_SHARED,
   pageArgs,
+  parseInviteToken,
   systemCtx,
   userCtx,
   ValidationError,
 } from "@cellar-assistant/contracts";
 import {
+  files,
+  friendInvites,
   friendRequests,
   friends,
   itemFavorites,
   outbox,
   places,
+  recipes,
   teas,
   userPlaceInteractions,
+  wantToTry,
 } from "@cellar-assistant/db";
 import { and, eq, sql } from "@cellar-assistant/db/orm";
 import { ActorId, DaprClient } from "@dapr/dapr";
 import { afterAll, describe, expect, it } from "vitest";
+import { setAiCapabilities } from "../lib/ai/capabilities.ts";
 import type { DbOrTx } from "../lib/db.ts";
 import type { ProfileFields, ProfileStore } from "../lib/profile-store.ts";
 import {
@@ -94,6 +102,14 @@ const fakeProfiles = (): ProfileStore & {
         .sort((a, b) => a.displayName.localeCompare(b.displayName))
         .slice(0, limit);
     },
+    count: async ({ term, excludeIds }) => {
+      const excluded = new Set(excludeIds);
+      return [...rows.values()].filter(
+        (row) =>
+          !excluded.has(row.id) &&
+          row.displayName.toLowerCase().includes(term.toLowerCase()),
+      ).length;
+    },
     update: async (id, patch) => {
       const current = rows.get(id);
       if (current === undefined) return null;
@@ -106,6 +122,9 @@ const fakeProfiles = (): ProfileStore & {
           ? {}
           : { avatarUrl: patch.avatarUrl }),
         ...(patch.locale === undefined ? {} : { locale: patch.locale }),
+        ...(patch.avatarFileId === undefined
+          ? {}
+          : { avatarFileId: patch.avatarFileId }),
       };
       rows.set(id, next);
       return next;
@@ -172,6 +191,7 @@ const seedPerson = async (db: DbOrTx, name: string): Promise<string> => {
     id,
     displayName: name,
     avatarUrl: null,
+    avatarFileId: null,
     locale: "en",
     email: `${name.toLowerCase()}-${id.slice(0, 8)}@example.test`,
   });
@@ -184,6 +204,21 @@ const seedTea = async (db: DbOrTx, createdById: string): Promise<string> => {
     .values({ name: `Tea ${Date.now()}`, createdById })
     .returning({ id: teas.id });
   if (row === undefined) throw new Error("seedTea: no row");
+  return row.id;
+};
+
+const seedRecipe = async (db: DbOrTx, createdById: string): Promise<string> => {
+  const [row] = await db
+    .insert(recipes)
+    // X15: PUBLIC, the pre-D22 catalog these tests describe.
+    .values({
+      name: `Recipe ${Date.now()}`,
+      type: "cocktail",
+      createdById,
+      privacy: "PUBLIC",
+    })
+    .returning({ id: recipes.id });
+  if (row === undefined) throw new Error("seedRecipe: no row");
   return row.id;
 };
 
@@ -235,6 +270,9 @@ const withUserDb = <T>(fn: (db: DbOrTx) => Promise<T>): Promise<T> =>
     return fn(db);
   });
 
+/** A uuid no `user` row has — `crypto.randomUUID`, without the import. */
+const randomUUIDLike = (): string => globalThis.crypto.randomUUID();
+
 const nodes = <T>(page: Page<T>): T[] => page.entries.map((e) => e.node);
 const firstPage: PageArgs = pageArgs({ first: 20 });
 
@@ -273,6 +311,76 @@ describe.skipIf(skip)("UserActor (B4)", () => {
       await expect(junk.getProfile(adminCtx("a", "r"))).rejects.toThrow(
         NotFoundError,
       );
+    });
+  });
+
+  describe("no account-existence oracle (leftovers 5, L6, L41)", () => {
+    /** What a refused turn says: the class, the code and the exact bytes. */
+    const refusal = async (turn: () => Promise<unknown>) => {
+      try {
+        await turn();
+      } catch (error) {
+        return {
+          name: (error as Error).constructor.name,
+          code: (error as { code?: unknown }).code,
+          message: (error as Error).message,
+        };
+      }
+      throw new Error("the turn was not refused");
+    };
+    const expected = {
+      name: "NotFoundError",
+      code: "NOT_FOUND",
+      message: PROFILE_NOT_SHARED,
+    };
+
+    it("answers a missing id and a malformed id with the same error, naming neither", async () => {
+      await withUserDb(async (db) => {
+        const viewer = await seedPerson(db, "Viewer");
+        const ctx = userCtx(viewer, "r");
+        const missingId = "00000000-0000-4000-8000-00000000abcd";
+        const missing = await userActor(missingId, db);
+        const malformed = await userActor("not-a-uuid", db);
+
+        const viaMissing = await refusal(() => missing.getProfile(ctx));
+        const viaMalformed = await refusal(() => malformed.getProfile(ctx));
+        expect(viaMissing).toEqual(expected);
+        expect(viaMalformed).toEqual(viaMissing);
+        // Dapr runs the pre-turn guard first; a malformed key is refused
+        // there, and in the same bytes.
+        expect(await refusal(() => malformed.onActorMethodPre())).toEqual(
+          expected,
+        );
+        expect(viaMissing.message).not.toContain(missingId);
+      });
+    });
+
+    it("answers an existing user's profile to any signed-in viewer (nobody is hidden yet)", async () => {
+      await withUserDb(async (db) => {
+        const viewer = await seedPerson(db, "Viewer");
+        const other = await seedPerson(db, "Other");
+        const profile = await (await userActor(other, db)).getProfile(
+          userCtx(viewer, "r"),
+        );
+        expect(profile).toMatchObject({ id: other, displayName: "Other" });
+      });
+    });
+
+    it("refuses an anonymous viewer the same way whether or not the id names someone", async () => {
+      await withUserDb(async (db) => {
+        const other = await seedPerson(db, "Other");
+        const anon = anonymousCtx("r");
+        const existing = await refusal(async () =>
+          (await userActor(other, db)).getProfile(anon),
+        );
+        const missing = await refusal(async () =>
+          (
+            await userActor("00000000-0000-4000-8000-00000000abce", db)
+          ).getProfile(anon),
+        );
+        expect(existing.name).toBe("ForbiddenError");
+        expect(missing).toEqual(existing);
+      });
     });
   });
 
@@ -481,6 +589,223 @@ describe.skipIf(skip)("UserActor (B4)", () => {
   /* ---------------------------------------------------------------------- */
   /* sendFriendRequest — the three rejections                                */
   /* ---------------------------------------------------------------------- */
+
+  describe("friend invites (X17)", () => {
+    const secretOf = (token: string): string =>
+      parseInviteToken(token)?.secret ?? "";
+
+    it("mints one invite on first use, returns it again, and is self only", async () => {
+      await withUserDb(async (db) => {
+        const alice = await seedPerson(db, "Alice");
+        const bob = await seedPerson(db, "Bob");
+        const actor = await userActor(alice, db);
+
+        expect(await actor.friendInvite(userCtx(alice, "r"))).toBeNull();
+        const first = await actor.ensureFriendInvite(userCtx(alice, "r"));
+        const again = await actor.ensureFriendInvite(userCtx(alice, "r"));
+        expect(again.token).toBe(first.token);
+        expect(parseInviteToken(first.token)?.inviterId).toBe(alice);
+        expect((await actor.friendInvite(userCtx(alice, "r")))?.token).toBe(
+          first.token,
+        );
+
+        for (const ctx of [userCtx(bob, "r"), anonymousCtx("r")]) {
+          await expect(actor.friendInvite(ctx)).rejects.toThrow(ForbiddenError);
+          await expect(actor.ensureFriendInvite(ctx)).rejects.toThrow(
+            ForbiddenError,
+          );
+          await expect(actor.resetFriendInvite(ctx)).rejects.toThrow(
+            ForbiddenError,
+          );
+        }
+      });
+    });
+
+    it("previews to anyone holding the link, and says where they stand", async () => {
+      await withUserDb(async (db) => {
+        const alice = await seedPerson(db, "Alice");
+        const bob = await seedPerson(db, "Bob");
+        const carol = await seedPerson(db, "Carol");
+        await befriend(db, alice, carol);
+        const actor = await userActor(alice, db);
+        const { token } = await actor.ensureFriendInvite(userCtx(alice, "r"));
+        const secret = secretOf(token);
+
+        const statusFor = async (ctx: Ctx) =>
+          (await (await userActor(alice, db)).previewFriendInvite(ctx, secret))
+            .status;
+        expect(await statusFor(anonymousCtx("r"))).toBe("SIGNED_OUT");
+        expect(await statusFor(userCtx(alice, "r"))).toBe("OWN_INVITE");
+        expect(await statusFor(userCtx(bob, "r"))).toBe("CAN_ACCEPT");
+        expect(await statusFor(userCtx(carol, "r"))).toBe("ALREADY_FRIENDS");
+
+        const preview = await actor.previewFriendInvite(
+          anonymousCtx("r"),
+          secret,
+        );
+        expect(preview).toEqual({
+          inviterId: alice,
+          inviterDisplayName: "Alice",
+          inviterAvatarUrl: null,
+          status: "SIGNED_OUT",
+        });
+        expect(JSON.stringify(preview)).not.toContain("@example.test");
+      });
+    });
+
+    it("a wrong or rotated secret answers exactly as a user who does not exist", async () => {
+      await withUserDb(async (db) => {
+        const alice = await seedPerson(db, "Alice");
+        const actor = await userActor(alice, db);
+        const { token } = await actor.ensureFriendInvite(userCtx(alice, "r"));
+        const old = secretOf(token);
+        const fresh = await actor.resetFriendInvite(userCtx(alice, "r"));
+        expect(fresh.token).not.toBe(token);
+
+        const message = async (id: string, secret: string) => {
+          try {
+            await (await userActor(id, db)).previewFriendInvite(
+              anonymousCtx("r"),
+              secret,
+            );
+          } catch (error) {
+            expect(error).toBeInstanceOf(NotFoundError);
+            return (error as Error).message.replaceAll(id, "<id>");
+          }
+          throw new Error("expected NotFound");
+        };
+        const missingUser = await message(randomUUIDLike(), old);
+        expect(await message(alice, old)).toBe(missingUser);
+        expect(await message(alice, "not-a-secret")).toBe(missingUser);
+        await expect(
+          actor.previewFriendInvite(anonymousCtx("r"), secretOf(fresh.token)),
+        ).resolves.toMatchObject({ inviterId: alice });
+      });
+    });
+
+    it("accepting makes both friends rows — one now, one through the outbox", async () => {
+      await withUserDb(async (db) => {
+        const alice = await seedPerson(db, "Alice");
+        const bob = await seedPerson(db, "Bob");
+        const { token } = await (await userActor(alice, db)).ensureFriendInvite(
+          userCtx(alice, "r"),
+        );
+        // Bob had already asked; the invite settles that too.
+        await (await userActor(bob, db)).sendFriendRequest(
+          userCtx(bob, "r"),
+          alice,
+        );
+
+        const input = parseInviteToken(token);
+        if (input === null) throw new Error("bad token");
+        const accepted = await (await userActor(bob, db)).acceptFriendInvite(
+          userCtx(bob, "r"),
+          input,
+        );
+        expect(accepted).toEqual({ friendId: alice, becameFriends: true });
+        expect(await friendPairs(db, [alice, bob])).toEqual(["u2→u1"]);
+        expect(
+          await db
+            .select()
+            .from(friendRequests)
+            .where(eq(friendRequests.userId, bob)),
+        ).toEqual([]);
+
+        const result = await (await drainer(db)).drain(systemCtx("drain"));
+        expect(result).toMatchObject({ delivered: 1, dead: 0 });
+        expect(await friendPairs(db, [alice, bob])).toEqual(["u1→u2", "u2→u1"]);
+
+        // Idempotent: a second accept writes nothing.
+        const again = await (await userActor(bob, db)).acceptFriendInvite(
+          userCtx(bob, "r2"),
+          input,
+        );
+        expect(again).toEqual({ friendId: alice, becameFriends: false });
+        expect(
+          (
+            await (
+              await userActor(alice, db)
+            ).previewFriendInvite(userCtx(bob, "r"), input.secret)
+          ).status,
+        ).toBe("ALREADY_FRIENDS");
+      });
+    });
+
+    /**
+     * **FR-11 (m06-share "Add as a friend").** Alice removes Bob, which drops
+     * both rows in her own transaction, and the mirror that tells Bob's
+     * activation to reload sits in the outbox. Bob accepts her invite in that
+     * window. His activation still caches the `friends(bob, alice)` row Alice
+     * deleted, so the accept read "already friends", wrote nothing and said
+     * so, and the friendship never reached Alice.
+     */
+    it("an invite accepted before the removal's mirror lands still makes the friendship", async () => {
+      await withUserDb(async (db) => {
+        const alice = await seedPerson(db, "Alice");
+        const bob = await seedPerson(db, "Bob");
+        await befriend(db, alice, bob);
+        const { token } = await (await userActor(alice, db)).ensureFriendInvite(
+          userCtx(alice, "r"),
+        );
+        const input = parseInviteToken(token);
+        if (input === null) throw new Error("bad token");
+        // Bob's activation, loaded while they are friends.
+        const bobs = await userActor(bob, db);
+
+        await (await userActor(alice, db)).removeFriend(
+          userCtx(alice, "r"),
+          bob,
+        );
+        expect(await friendPairs(db, [alice, bob])).toEqual([]);
+
+        // No drain: the removal's mirror has not reached Bob's activation.
+        const accepted = await bobs.acceptFriendInvite(
+          userCtx(bob, "r2"),
+          input,
+        );
+        expect(accepted).toEqual({ friendId: alice, becameFriends: true });
+        expect(await friendPairs(db, [alice, bob])).toEqual(["u2→u1"]);
+      });
+    });
+
+    it("refuses anonymous, a rotated link, and your own link", async () => {
+      await withUserDb(async (db) => {
+        const alice = await seedPerson(db, "Alice");
+        const bob = await seedPerson(db, "Bob");
+        const aliceActor = await userActor(alice, db);
+        const { token } = await aliceActor.ensureFriendInvite(
+          userCtx(alice, "r"),
+        );
+        const input = parseInviteToken(token);
+        if (input === null) throw new Error("bad token");
+
+        await expect(
+          (await userActor(bob, db)).acceptFriendInvite(
+            anonymousCtx("r"),
+            input,
+          ),
+        ).rejects.toThrow(ForbiddenError);
+        await expect(
+          aliceActor.acceptFriendInvite(userCtx(alice, "r"), input),
+        ).rejects.toThrow(ValidationError);
+
+        await aliceActor.resetFriendInvite(userCtx(alice, "r"));
+        await expect(
+          (await userActor(bob, db)).acceptFriendInvite(
+            userCtx(bob, "r"),
+            input,
+          ),
+        ).rejects.toThrow(NotFoundError);
+        expect(await friendPairs(db, [alice, bob])).toEqual([]);
+        expect(
+          await db
+            .select()
+            .from(friendInvites)
+            .where(eq(friendInvites.userId, alice)),
+        ).toHaveLength(1);
+      });
+    });
+  });
 
   describe("sendFriendRequest rejections", () => {
     it("refuses yourself, an existing friend, and a pending recipient", async () => {
@@ -783,6 +1108,80 @@ describe.skipIf(skip)("UserActor (B4)", () => {
             alices.friends(userCtx(outsider, `r-${outsider}`), firstPage),
           ).rejects.toBeInstanceOf(ForbiddenError);
         }
+      });
+    });
+
+    /**
+     * **F-31 (FR-11): a late removal cannot undo a later friendship.** Alice
+     * removes Bob, and the mirror sits in the outbox. Before it is delivered
+     * they re-friend: Alice asks, Bob accepts, which writes `friends(bob,
+     * alice)` at once. The removal then lands on Bob and, unconditionally,
+     * deleted that new row, leaving the new friendship half-made.
+     *
+     * The test database runs every test in one transaction, so `now()` ties
+     * everywhere; the removal's row is backdated a minute to model it having
+     * been queued before the re-friending, as it is on a real clock.
+     */
+    it("a queued removal delivered after a re-friend leaves the new friendship", async () => {
+      await withUserDb(async (db) => {
+        const alice = await seedPerson(db, "Alice");
+        const bob = await seedPerson(db, "Bob");
+        await befriend(db, alice, bob);
+        await (await userActor(alice, db)).removeFriend(
+          userCtx(alice, "r"),
+          bob,
+        );
+        await db
+          .update(outbox)
+          .set({ createdAt: sql`now() - interval '1 minute'` })
+          .where(
+            and(
+              eq(outbox.method, "removeFriendOtherSide"),
+              eq(outbox.targetId, bob),
+            ),
+          );
+
+        const request = await (await userActor(alice, db)).sendFriendRequest(
+          userCtx(alice, "r2"),
+          bob,
+        );
+        await (await userActor(bob, db)).acceptFriendRequest(
+          userCtx(bob, "r2"),
+          request.id,
+        );
+        expect(await friendPairs(db, [alice, bob])).toEqual(["u2→u1"]);
+
+        // Delivers the late removal (seq first), then confirmFriendship.
+        const outboxActor = await drainer(db);
+        await outboxActor.drain(systemCtx("d"));
+        expect(outboxActor.delivered.map((row) => row.method)).toEqual([
+          "removeFriendOtherSide",
+          "confirmFriendship",
+        ]);
+        expect(await friendPairs(db, [alice, bob])).toEqual(["u1→u2", "u2→u1"]);
+      });
+    });
+
+    it("a removal still deletes a friend row that predates it (the backstop)", async () => {
+      await withUserDb(async (db) => {
+        const alice = await seedPerson(db, "Alice");
+        const bob = await seedPerson(db, "Bob");
+        await befriend(db, alice, bob);
+        await (await userActor(alice, db)).removeFriend(
+          userCtx(alice, "r"),
+          bob,
+        );
+        // A legacy half-state: Bob's row survived, from before the removal.
+        await db.insert(friends).values({
+          userId: bob,
+          friendId: alice,
+          createdAt: sql`now() - interval '1 hour'`,
+        });
+
+        const outboxActor = await drainer(db);
+        await outboxActor.drain(systemCtx("d"));
+        expect(outboxActor.results).toEqual([true]);
+        expect(await friendPairs(db, [alice, bob])).toEqual([]);
       });
     });
 
@@ -1163,6 +1562,30 @@ describe.skipIf(skip)("UserActor (B4)", () => {
       });
     });
 
+    it("answers the process's AI capabilities to its owner only (N07)", async () => {
+      await withUserDb(async (db) => {
+        const alice = await seedPerson(db, "Alice");
+        const bob = await seedPerson(db, "Bob");
+        const actor = await userActor(alice, db);
+        const installed = {
+          ...NO_AI_CAPABILITIES,
+          semanticSearch: true,
+          labelRead: true,
+        };
+        setAiCapabilities(installed);
+        try {
+          expect(await actor.aiCapabilities(userCtx(alice, "r"))).toEqual(
+            installed,
+          );
+          await expect(
+            actor.aiCapabilities(userCtx(bob, "r")),
+          ).rejects.toBeInstanceOf(ForbiddenError);
+        } finally {
+          setAiCapabilities(NO_AI_CAPABILITIES);
+        }
+      });
+    });
+
     it("lets only the owner update a profile", async () => {
       await withUserDb(async (db) => {
         const alice = await seedPerson(db, "Alice");
@@ -1206,6 +1629,95 @@ describe.skipIf(skip)("UserActor (B4)", () => {
         expect(updated).toMatchObject({
           displayName: "Alice B",
           avatarUrl: "https://example.test/a.png",
+        });
+      });
+    });
+  });
+
+  describe("profile picture (SV-D, MC-avatar)", () => {
+    const seedFile = async (
+      db: DbOrTx,
+      uploadedBy: string,
+      kind: string,
+      verified = true,
+    ): Promise<string> => {
+      const [row] = await db
+        .insert(files)
+        .values({
+          key: `${kind}/${crypto.randomUUID()}`,
+          uploadedBy,
+          mimeType: "image/png",
+          metadata: { kind },
+          verifiedAt: verified ? new Date() : null,
+        })
+        .returning({ id: files.id });
+      if (row === undefined) throw new Error("seeding a file returned no row");
+      return row.id;
+    };
+
+    it("sets only a verified avatar upload of the viewer's own", async () => {
+      await withUserDb(async (db) => {
+        const alice = await seedPerson(db, "Alice");
+        const bob = await seedPerson(db, "Bob");
+        await befriend(db, alice, bob);
+        const actor = await userActor(alice, db);
+        const ctx = userCtx(alice, "r");
+
+        const bobs = await seedFile(db, bob, "avatar");
+        const wrongKind = await seedFile(db, alice, "item-image");
+        const unverified = await seedFile(db, alice, "avatar", false);
+        const own = await seedFile(db, alice, "avatar");
+
+        // Another person's file is not Alice's to name — answered as missing,
+        // so the call cannot be used to learn that the file exists.
+        await expect(actor.setAvatar(ctx, { fileId: bobs })).rejects.toThrow(
+          NotFoundError,
+        );
+        await expect(
+          actor.setAvatar(ctx, { fileId: crypto.randomUUID() }),
+        ).rejects.toThrow(NotFoundError);
+        await expect(
+          actor.setAvatar(ctx, { fileId: wrongKind }),
+        ).rejects.toThrow(ValidationError);
+        await expect(
+          actor.setAvatar(ctx, { fileId: unverified }),
+        ).rejects.toThrow(ConflictError);
+        await expect(
+          actor.setAvatar(ctx, { fileId: "not-a-uuid" }),
+        ).rejects.toThrow(ValidationError);
+        // Someone else may not set Alice's picture, even with her own file.
+        await expect(
+          actor.setAvatar(userCtx(bob, "r"), { fileId: own }),
+        ).rejects.toThrow(ForbiddenError);
+        await expect(actor.removeAvatar(userCtx(bob, "r"))).rejects.toThrow(
+          ForbiddenError,
+        );
+        expect((await actor.getProfile(ctx)).avatarFileId).toBeNull();
+
+        expect(await actor.setAvatar(ctx, { fileId: own })).toMatchObject({
+          avatarFileId: own,
+        });
+        expect((await actor.getProfile(userCtx(bob, "r"))).avatarFileId).toBe(
+          own,
+        );
+      });
+    });
+
+    it("removes the picture and falls back to user.image", async () => {
+      await withUserDb(async (db) => {
+        const alice = await seedPerson(db, "Alice");
+        const actor = await userActor(alice, db);
+        const ctx = userCtx(alice, "r");
+        await actor.updateProfile(ctx, {
+          avatarUrl: "https://example.test/oauth.png",
+        });
+        const own = await seedFile(db, alice, "avatar");
+        await actor.setAvatar(ctx, { fileId: own });
+
+        const removed = await actor.removeAvatar(ctx);
+        expect(removed).toMatchObject({
+          avatarFileId: null,
+          avatarUrl: "https://example.test/oauth.png",
         });
       });
     });
@@ -1316,7 +1828,7 @@ describe.skipIf(skip)("UserActor (B4)", () => {
   /* ---------------------------------------------------------------------- */
 
   describe("favorites are owner-only", () => {
-    it("toggles on and off, and nobody else can read or mutate them", async () => {
+    it("sets on and off idempotently, and nobody else can read or mutate them", async () => {
       await withUserDb(async (db) => {
         const alice = await seedPerson(db, "Alice");
         const bob = await seedPerson(db, "Bob");
@@ -1326,27 +1838,37 @@ describe.skipIf(skip)("UserActor (B4)", () => {
         const ref = { type: "TEA", id: teaId } as const;
 
         const actor = await userActor(alice, db);
-        expect(await actor.toggleFavorite(userCtx(alice, "r"), ref)).toEqual({
-          ref,
-          favorited: true,
-        });
+        expect(await actor.setFavorite(userCtx(alice, "r"), ref, true)).toEqual(
+          { ref, favorited: true, changed: true },
+        );
+        // A retried request (its first answer lost) lands on the same state:
+        // it used to be a toggle, and a retry un-favourited.
+        expect(await actor.setFavorite(userCtx(alice, "r"), ref, true)).toEqual(
+          { ref, favorited: true, changed: false },
+        );
         expect(
           nodes(await actor.favorites(userCtx(alice, "r"), firstPage)),
         ).toEqual([ref]);
+        expect(
+          await db
+            .select({ n: sql<number>`count(*)::int` })
+            .from(itemFavorites)
+            .where(eq(itemFavorites.userId, alice)),
+        ).toEqual([{ n: 1 }]);
 
-        // A second toggle removes it — and `item_favorites` has no unique
-        // constraint for sake or tea, so this is the actor's own guard.
-        expect(await actor.toggleFavorite(userCtx(alice, "r"), ref)).toEqual({
-          ref,
-          favorited: false,
-        });
+        expect(
+          await actor.setFavorite(userCtx(alice, "r"), ref, false),
+        ).toEqual({ ref, favorited: false, changed: true });
+        expect(
+          await actor.setFavorite(userCtx(alice, "r"), ref, false),
+        ).toEqual({ ref, favorited: false, changed: false });
         expect(
           await db
             .select({ n: sql<number>`count(*)::int` })
             .from(itemFavorites)
             .where(eq(itemFavorites.userId, alice)),
         ).toEqual([{ n: 0 }]);
-        await actor.toggleFavorite(userCtx(alice, "r"), ref);
+        await actor.setFavorite(userCtx(alice, "r"), ref, true);
 
         // friend, stranger, anonymous — read and write alike.
         for (const viewer of [
@@ -1357,9 +1879,11 @@ describe.skipIf(skip)("UserActor (B4)", () => {
           await expect(actor.favorites(viewer, firstPage)).rejects.toThrow(
             ForbiddenError,
           );
-          await expect(actor.toggleFavorite(viewer, ref)).rejects.toThrow(
-            ForbiddenError,
-          );
+          for (const favorited of [true, false]) {
+            await expect(
+              actor.setFavorite(viewer, ref, favorited),
+            ).rejects.toThrow(ForbiddenError);
+          }
         }
         // Nothing the refused calls did leaked through.
         expect(
@@ -1383,10 +1907,11 @@ describe.skipIf(skip)("UserActor (B4)", () => {
         const favorited = await seedTea(db, alice);
         const notFavorited = await seedTea(db, alice);
         const actor = await userActor(alice, db);
-        await actor.toggleFavorite(userCtx(alice, "r"), {
-          type: "TEA",
-          id: favorited,
-        });
+        await actor.setFavorite(
+          userCtx(alice, "r"),
+          { type: "TEA", id: favorited },
+          true,
+        );
 
         expect(
           await actor.favoriteStates(userCtx(alice, "r"), [
@@ -1439,10 +1964,11 @@ describe.skipIf(skip)("UserActor (B4)", () => {
         ] as const) {
           const theirs = await userActor(person, db);
           for (const id of ids) {
-            await theirs.toggleFavorite(userCtx(person, "r"), {
-              type: "TEA",
-              id,
-            });
+            await theirs.setFavorite(
+              userCtx(person, "r"),
+              { type: "TEA", id },
+              true,
+            );
           }
         }
 
@@ -1458,10 +1984,11 @@ describe.skipIf(skip)("UserActor (B4)", () => {
 
         // Fresh, not cached: Bob's un-favourite shows up on Alice's very
         // next call, though her activation never reloaded.
-        await (await userActor(bob, db)).toggleFavorite(userCtx(bob, "r"), {
-          type: "TEA",
-          id: popular,
-        });
+        await (await userActor(bob, db)).setFavorite(
+          userCtx(bob, "r"),
+          { type: "TEA", id: popular },
+          false,
+        );
         expect(
           await actor.favoriteCounts(userCtx(alice, "r"), [
             { type: "TEA", id: popular },
@@ -1487,23 +2014,44 @@ describe.skipIf(skip)("UserActor (B4)", () => {
         const alice = await seedPerson(db, "Alice");
         const actor = await userActor(alice, db);
         await expect(
-          actor.toggleFavorite(userCtx(alice, "r"), {
-            type: "TEA",
-            id: "00000000-0000-4000-8000-00000000dead",
-          }),
+          actor.setFavorite(
+            userCtx(alice, "r"),
+            { type: "TEA", id: "00000000-0000-4000-8000-00000000dead" },
+            true,
+          ),
         ).rejects.toThrow(NotFoundError);
+        // Un-favouriting something never favourited is already done: no
+        // existence check, nothing to refuse.
         await expect(
-          actor.toggleFavorite(userCtx(alice, "r"), {
-            type: "COCKTAIL" as never,
-            id: "00000000-0000-4000-8000-00000000dead",
-          }),
+          actor.setFavorite(
+            userCtx(alice, "r"),
+            { type: "TEA", id: "00000000-0000-4000-8000-00000000dead" },
+            false,
+          ),
+        ).resolves.toMatchObject({ favorited: false, changed: false });
+        await expect(
+          actor.setFavorite(
+            userCtx(alice, "r"),
+            {
+              type: "COCKTAIL" as never,
+              id: "00000000-0000-4000-8000-00000000dead",
+            },
+            true,
+          ),
+        ).rejects.toThrow(ValidationError);
+        await expect(
+          actor.setFavorite(
+            userCtx(alice, "r"),
+            { type: "TEA", id: "00000000-0000-4000-8000-00000000dead" },
+            "yes" as never,
+          ),
         ).rejects.toThrow(ValidationError);
       });
     });
 
     /**
      * Review W4 #3. The uuid check is case-insensitive and Postgres reads both
-     * spellings as one row, but the toggle's lookup is `===` against the
+     * spellings as one row, but the set's lookup is `===` against the
      * cached (lowercase) rows: an uppercase id used to miss the existing
      * favourite, fall through to the insert, and fail as a raw 23505 on
      * `item_favorites_user_id_tea_id_key` instead of un-favouriting.
@@ -1516,18 +2064,22 @@ describe.skipIf(skip)("UserActor (B4)", () => {
         const actor = await userActor(alice, db);
 
         expect(
-          await actor.toggleFavorite(userCtx(alice, "r"), {
-            type: "TEA",
-            id: teaId,
-          }),
+          await actor.setFavorite(
+            userCtx(alice, "r"),
+            { type: "TEA", id: teaId },
+            true,
+          ),
         ).toMatchObject({ favorited: true });
         expect(
           await actor.favoriteStates(userCtx(alice, "r"), [upper]),
         ).toEqual([`tea:${teaId}`]);
         // The answer names the canonical id, not the spelling it was given.
-        expect(await actor.toggleFavorite(userCtx(alice, "r"), upper)).toEqual({
+        expect(
+          await actor.setFavorite(userCtx(alice, "r"), upper, false),
+        ).toEqual({
           ref: { type: "TEA", id: teaId },
           favorited: false,
+          changed: true,
         });
         expect(
           await db
@@ -1611,7 +2163,367 @@ describe.skipIf(skip)("UserActor (B4)", () => {
   /* Place interactions                                                      */
   /* ---------------------------------------------------------------------- */
 
+  /* ---------------------------------------------------------------------- */
+  /* X08 — Want to try                                                       */
+  /* ---------------------------------------------------------------------- */
+
+  describe("want to try (X08) — items, recipes and places on one list", () => {
+    it("sets and clears each kind idempotently, newest first", async () => {
+      await withUserDb(async (db) => {
+        const alice = await seedPerson(db, "Alice");
+        const teaId = await seedTea(db, alice);
+        const recipeId = await seedRecipe(db, alice);
+        const placeId = await seedPlace(db);
+        const actor = await userActor(alice, db);
+        const ctx = userCtx(alice, "r");
+        const tea = { kind: "ITEM", item: { type: "TEA", id: teaId } } as const;
+        const recipe = { kind: "RECIPE", recipeId } as const;
+        const place = { kind: "PLACE", placeId } as const;
+
+        expect(await actor.setWantToTry(ctx, tea, true)).toEqual({
+          target: tea,
+          wantToTry: true,
+          changed: true,
+        });
+        // A repeat is a no-op that says so, not a toggle and not a 23505.
+        expect(await actor.setWantToTry(ctx, tea, true)).toEqual({
+          target: tea,
+          wantToTry: true,
+          changed: false,
+        });
+        await actor.setWantToTry(ctx, recipe, true);
+        expect(await actor.setWantToTry(ctx, place, true)).toMatchObject({
+          wantToTry: true,
+          changed: true,
+        });
+
+        const all = nodes(await actor.wantToTry(ctx, firstPage));
+        expect(all.map((entry) => entry.target.kind).sort()).toEqual([
+          "ITEM",
+          "PLACE",
+          "RECIPE",
+        ]);
+        for (let i = 1; i < all.length; i += 1) {
+          expect(
+            Date.parse(all[i - 1]?.savedAt ?? "") >=
+              Date.parse(all[i]?.savedAt ?? ""),
+          ).toBe(true);
+        }
+        expect(
+          nodes(await actor.wantToTry(ctx, firstPage, ["RECIPE"])),
+        ).toEqual([{ target: recipe, savedAt: expect.any(String) }]);
+        expect(
+          nodes(await actor.wantToTry(ctx, firstPage, ["PLACE", "ITEM"])),
+        ).toHaveLength(2);
+
+        // The place half lives on the interaction row (D11), not a new table.
+        const [interaction] = await db
+          .select()
+          .from(userPlaceInteractions)
+          .where(eq(userPlaceInteractions.userId, alice));
+        expect(interaction?.wantToVisit).toBe(true);
+        expect(
+          await db
+            .select({ n: sql<number>`count(*)::int` })
+            .from(wantToTry)
+            .where(eq(wantToTry.userId, alice)),
+        ).toEqual([{ n: 2 }]);
+
+        for (const target of [tea, recipe, place]) {
+          expect(await actor.setWantToTry(ctx, target, false)).toMatchObject({
+            wantToTry: false,
+            changed: true,
+          });
+          expect(await actor.setWantToTry(ctx, target, false)).toMatchObject({
+            wantToTry: false,
+            changed: false,
+          });
+        }
+        expect(nodes(await actor.wantToTry(ctx, firstPage))).toEqual([]);
+      });
+    });
+
+    it("the list drops a recipe its author deleted under a live activation", async () => {
+      await withUserDb(async (db) => {
+        const alice = await seedPerson(db, "Alice");
+        const bob = await seedPerson(db, "Bob");
+        const kept = await seedRecipe(db, bob);
+        const doomed = await seedRecipe(db, bob);
+        const actor = await userActor(alice, db);
+        const ctx = userCtx(alice, "r");
+        await actor.setWantToTry(ctx, { kind: "RECIPE", recipeId: kept }, true);
+        await actor.setWantToTry(
+          ctx,
+          { kind: "RECIPE", recipeId: doomed },
+          true,
+        );
+
+        // `RecipeActor.delete`'s statement: the wish goes by cascade, behind
+        // this activation's back — nothing reloads Alice's actor.
+        await db.delete(recipes).where(eq(recipes.id, doomed));
+
+        expect(nodes(await actor.wantToTry(ctx, firstPage))).toEqual([
+          {
+            target: { kind: "RECIPE", recipeId: kept },
+            savedAt: expect.any(String),
+          },
+        ]);
+        expect((await actor.wantToTry(ctx, firstPage)).totalCount).toBe(1);
+      });
+    });
+
+    it("deletes: a saved item RESTRICTs like item_favorites; a recipe still cascades, through its own index", async () => {
+      await withUserDb(async (db) => {
+        const alice = await seedPerson(db, "Alice");
+        const teaId = await seedTea(db, alice);
+        const actor = await userActor(alice, db);
+        const ctx = userCtx(alice, "r");
+        await actor.setWantToTry(
+          ctx,
+          { kind: "ITEM", item: { type: "TEA", id: teaId } },
+          true,
+        );
+
+        // In a savepoint: the refused statement must not poison the harness's
+        // transaction for the assertions after it.
+        const refused = await db
+          .transaction(async (sp) => {
+            await sp.execute(sql`delete from public.teas where id = ${teaId}`);
+          })
+          .then(
+            () => null,
+            (error: unknown) =>
+              (error as { cause?: { code?: string; constraint?: string } })
+                .cause ?? (error as { code?: string; constraint?: string }),
+          );
+        // 23001 restrict_violation — RESTRICT, not NO ACTION's 23503.
+        expect(refused).toMatchObject({
+          code: "23001",
+          constraint: "want_to_try_tea_id_teas_id_fkey",
+        });
+        expect(
+          nodes(await actor.wantToTry(ctx, firstPage)).map(
+            (entry) => entry.target.kind,
+          ),
+        ).toEqual(["ITEM"]);
+
+        // The catalog, for what the statement above cannot show: every rule,
+        // and the index the recipe cascade reads.
+        const rules = await db.execute<{ column: string; rule: string }>(sql`
+          select a.attname as column, c.confdeltype::text as rule
+          from pg_constraint c
+          join pg_attribute a
+            on a.attrelid = c.conrelid and a.attnum = c.conkey[1]
+          where c.conrelid = 'public.want_to_try'::regclass and c.contype = 'f'
+          order by a.attname
+        `);
+        expect(
+          Object.fromEntries(rules.rows.map((row) => [row.column, row.rule])),
+        ).toEqual({
+          beer_id: "r",
+          coffee_id: "r",
+          recipe_id: "c",
+          sake_id: "r",
+          spirit_id: "r",
+          tea_id: "r",
+          user_id: "r",
+          wine_id: "r",
+        });
+        const index = await db.execute<{ indexdef: string }>(sql`
+          select indexdef from pg_indexes
+          where schemaname = 'public' and indexname = 'idx_want_to_try_recipe_id'
+        `);
+        expect(index.rows[0]?.indexdef).toMatch(
+          /\(recipe_id\) WHERE \(recipe_id IS NOT NULL\)/,
+        );
+      });
+    });
+
+    it("X27: the list drops a saved place that went under review — for everyone but its creator", async () => {
+      await withUserDb(async (db) => {
+        const alice = await seedPerson(db, "Alice");
+        const bob = await seedPerson(db, "Bob");
+        const placeId = await seedPlace(db);
+        const place = { kind: "PLACE", placeId } as const;
+        const alices = await userActor(alice, db);
+        const bobs = await userActor(bob, db);
+        await alices.setWantToTry(userCtx(alice, "r"), place, true);
+        await bobs.setWantToTry(userCtx(bob, "r"), place, true);
+
+        // Out of reach for Bob from here on; the interaction row stays.
+        await db
+          .update(places)
+          .set({ reviewStatus: "pending", createdBy: alice })
+          .where(eq(places.id, placeId));
+
+        const bobsList = await bobs.wantToTry(userCtx(bob, "r"), firstPage);
+        expect(nodes(bobsList)).toEqual([]);
+        expect(bobsList.totalCount).toBe(0);
+        expect(
+          nodes(await alices.wantToTry(userCtx(alice, "r"), firstPage)),
+        ).toEqual([{ target: place, savedAt: expect.any(String) }]);
+      });
+    });
+
+    it("wantToTryStates answers a page in one call, in canonical spelling", async () => {
+      await withUserDb(async (db) => {
+        const alice = await seedPerson(db, "Alice");
+        const saved = await seedTea(db, alice);
+        const notSaved = await seedTea(db, alice);
+        const recipeId = await seedRecipe(db, alice);
+        const placeId = await seedPlace(db);
+        const actor = await userActor(alice, db);
+        const ctx = userCtx(alice, "r");
+        // Saved with an upper-case id: the row must still be found below.
+        await actor.setWantToTry(
+          ctx,
+          { kind: "ITEM", item: { type: "TEA", id: saved.toUpperCase() } },
+          true,
+        );
+        await actor.setWantToTry(ctx, { kind: "PLACE", placeId }, true);
+
+        expect(
+          await actor.wantToTryStates(ctx, [
+            { kind: "ITEM", item: { type: "TEA", id: notSaved } },
+            { kind: "ITEM", item: { type: "TEA", id: saved } },
+            { kind: "RECIPE", recipeId },
+            { kind: "PLACE", placeId: placeId.toUpperCase() },
+            { kind: "ITEM", item: { type: "TEA", id: saved } },
+          ]),
+        ).toEqual([`tea:${saved}`, `place:${placeId}`]);
+        expect(await actor.wantToTryStates(ctx, [])).toEqual([]);
+        await expect(
+          actor.wantToTryStates(ctx, [
+            { kind: "ITEM", item: { type: "TEA", id: "nope" } },
+          ]),
+        ).rejects.toThrow(ValidationError);
+      });
+    });
+
+    it("is owner-only, validates its input and refuses what does not exist", async () => {
+      await withUserDb(async (db) => {
+        const alice = await seedPerson(db, "Alice");
+        const bob = await seedPerson(db, "Bob");
+        await befriend(db, alice, bob);
+        const teaId = await seedTea(db, alice);
+        const actor = await userActor(alice, db);
+        const ctx = userCtx(alice, "r");
+        const tea = { kind: "ITEM", item: { type: "TEA", id: teaId } } as const;
+        await actor.setWantToTry(ctx, tea, true);
+
+        // A wish list is not friends-visible, and nobody else may edit it.
+        for (const viewer of [userCtx(bob, "r"), anonymousCtx("r")]) {
+          await expect(actor.wantToTry(viewer, firstPage)).rejects.toThrow(
+            ForbiddenError,
+          );
+          await expect(actor.wantToTryStates(viewer, [tea])).rejects.toThrow(
+            ForbiddenError,
+          );
+          await expect(actor.setWantToTry(viewer, tea, false)).rejects.toThrow(
+            ForbiddenError,
+          );
+        }
+        expect(nodes(await actor.wantToTry(ctx, firstPage))).toHaveLength(1);
+
+        const missing = "00000000-0000-4000-8000-00000000dead";
+        await expect(
+          actor.setWantToTry(
+            ctx,
+            { kind: "ITEM", item: { type: "WINE", id: missing } },
+            true,
+          ),
+        ).rejects.toThrow(NotFoundError);
+        await expect(
+          actor.setWantToTry(ctx, { kind: "RECIPE", recipeId: missing }, true),
+        ).rejects.toThrow(NotFoundError);
+        await expect(
+          actor.setWantToTry(ctx, { kind: "PLACE", placeId: missing }, true),
+        ).rejects.toThrow(NotFoundError);
+        await expect(
+          actor.setWantToTry(
+            ctx,
+            { kind: "BOTTLE" } as unknown as typeof tea,
+            true,
+          ),
+        ).rejects.toThrow(ValidationError);
+        await expect(
+          actor.setWantToTry(ctx, tea, "yes" as unknown as boolean),
+        ).rejects.toThrow(ValidationError);
+        await expect(
+          actor.wantToTry(ctx, firstPage, ["BOTTLE"] as never),
+        ).rejects.toThrow(ValidationError);
+      });
+    });
+
+    it("the first visit takes a place off the list; a later save sticks", async () => {
+      await withUserDb(async (db) => {
+        const alice = await seedPerson(db, "Alice");
+        const placeId = await seedPlace(db);
+        const actor = await userActor(alice, db);
+        const ctx = userCtx(alice, "r");
+        const place = { kind: "PLACE", placeId } as const;
+
+        await actor.setWantToTry(ctx, place, true);
+        await actor.recordPlaceInteraction(ctx, { placeId, isVisited: true });
+        expect(await actor.wantToTryStates(ctx, [place])).toEqual([]);
+
+        // Saving it again after you have been is a deliberate "go back".
+        await actor.setWantToTry(ctx, place, true);
+        await actor.recordPlaceInteraction(ctx, { placeId, isVisited: true });
+        expect(await actor.wantToTryStates(ctx, [place])).toEqual([
+          `place:${placeId}`,
+        ]);
+
+        // And a visit that says what it wants about the list is obeyed.
+        await actor.recordPlaceInteraction(ctx, { placeId, isVisited: false });
+        const visited = await actor.recordPlaceInteraction(ctx, {
+          placeId,
+          isVisited: true,
+          wantToVisit: true,
+        });
+        expect(visited.wantToVisit).toBe(true);
+      });
+    });
+  });
+
   describe("place interactions are owner-only and count visits server-side", () => {
+    it("X27: a place under review can be saved by its creator; to anyone else it is the NotFound an unknown id gets", async () => {
+      await withUserDb(async (db) => {
+        const alice = await seedPerson(db, "Alice");
+        const bob = await seedPerson(db, "Bob");
+        const placeId = await seedPlace(db);
+        await db
+          .update(places)
+          .set({ reviewStatus: "pending", createdBy: alice })
+          .where(eq(places.id, placeId));
+
+        const saved = await (await userActor(alice, db)).recordPlaceInteraction(
+          userCtx(alice, "r"),
+          { placeId, wantToVisit: true },
+        );
+        expect(saved.wantToVisit).toBe(true);
+
+        const bobs = await userActor(bob, db);
+        const hidden = await bobs
+          .recordPlaceInteraction(userCtx(bob, "r"), {
+            placeId,
+            wantToVisit: true,
+          })
+          .catch((error: unknown) => error);
+        const absentId = crypto.randomUUID();
+        const absent = await bobs
+          .recordPlaceInteraction(userCtx(bob, "r"), {
+            placeId: absentId,
+            wantToVisit: true,
+          })
+          .catch((error: unknown) => error);
+        expect(hidden).toBeInstanceOf(NotFoundError);
+        expect(String((hidden as Error).message).replace(placeId, "<id>")).toBe(
+          String((absent as Error).message).replace(absentId, "<id>"),
+        );
+      });
+    });
+
     it("computes visit_count from the visited transition, never from input", async () => {
       await withUserDb(async (db) => {
         const alice = await seedPerson(db, "Alice");
@@ -1637,8 +2549,10 @@ describe.skipIf(skip)("UserActor (B4)", () => {
         });
         expect(visited.visitCount).toBe(1);
         expect(visited.lastVisitedAt).not.toBeNull();
-        // Fields not named in the input are preserved, not reset.
-        expect(visited.wantToVisit).toBe(true);
+        // X08/D11: the first visit takes the place off "Want to try" — the
+        // one flag the visited transition changes; the rest are preserved.
+        expect(visited.wantToVisit).toBe(false);
+        expect(visited.isFavorite).toBe(false);
 
         // Idempotent: saying "visited" again is not a second visit.
         expect(
@@ -1812,6 +2726,218 @@ describe.skipIf(skip)("UserActor (B4)", () => {
 });
 
 /* -------------------------------------------------------------------------- */
+/* Brew prefs — ux-c L08                                                       */
+/* -------------------------------------------------------------------------- */
+
+describe("brew prefs (ux-c L08) — the viewer's own, nobody else's", () => {
+  it("sets, reads back, updates and clears a tea's overrides", async () => {
+    await withUserDb(async (db) => {
+      const alice = await seedPerson(db, "Alice");
+      const teaId = await seedTea(db, alice);
+      const actor = await userActor(alice, db);
+      const ctx = userCtx(alice, "r");
+      const item = { type: "TEA", id: teaId } as const;
+
+      expect(await actor.brewPrefs(ctx, item)).toBeNull();
+      expect(
+        await actor.setBrewPrefs(ctx, {
+          item,
+          waterTempC: 90,
+          steepSeconds: null,
+          doseGrams: null,
+          waterMl: null,
+        }),
+      ).toMatchObject({ item, waterTempC: 90, steepSeconds: null });
+      await actor.setBrewPrefs(ctx, {
+        item,
+        waterTempC: 85,
+        steepSeconds: 50,
+        doseGrams: 5,
+        waterMl: null,
+      });
+      expect(await actor.brewPrefs(ctx, item)).toMatchObject({
+        waterTempC: 85,
+        steepSeconds: 50,
+        doseGrams: 5,
+        waterMl: null,
+      });
+      // All four cleared is back to typical: no row.
+      expect(
+        await actor.setBrewPrefs(ctx, {
+          item,
+          waterTempC: null,
+          steepSeconds: null,
+          doseGrams: null,
+          waterMl: null,
+        }),
+      ).toBeNull();
+      expect(await actor.brewPrefs(ctx, item)).toBeNull();
+    });
+  });
+
+  it("answers another user's prefs exactly like a missing item", async () => {
+    await withUserDb(async (db) => {
+      const alice = await seedPerson(db, "Alice");
+      const bob = await seedPerson(db, "Bob");
+      const teaId = await seedTea(db, alice);
+      const missingId = "00000000-0000-4000-8000-00000000beef";
+      const aliceActor = await userActor(alice, db);
+      const aliceCtx = userCtx(alice, "r");
+      const bobCtx = userCtx(bob, "r");
+      const tea = { type: "TEA", id: teaId } as const;
+      await aliceActor.setBrewPrefs(aliceCtx, {
+        item: tea,
+        waterTempC: 90,
+        steepSeconds: null,
+        doseGrams: null,
+        waterMl: null,
+      });
+
+      const refusal = async (run: () => Promise<unknown>) => {
+        const caught = await run().then(
+          () => null,
+          (error: unknown) => error,
+        );
+        expect(caught).toBeInstanceOf(NotFoundError);
+        return (caught as Error).message.replace(/[0-9a-f-]{36}/g, "<id>");
+      };
+      // Bob, on Alice's actor: reading and writing her prefs.
+      const othersRead = await refusal(() => aliceActor.brewPrefs(bobCtx, tea));
+      const othersWrite = await refusal(() =>
+        aliceActor.setBrewPrefs(bobCtx, {
+          item: tea,
+          waterTempC: 20,
+          steepSeconds: null,
+          doseGrams: null,
+          waterMl: null,
+        }),
+      );
+      // Alice, on her own actor, naming a tea that does not exist.
+      const missing = await refusal(() =>
+        aliceActor.brewPrefs(aliceCtx, { type: "TEA", id: missingId }),
+      );
+      expect(othersRead).toBe(missing);
+      expect(othersWrite).toBe(missing);
+      // And Alice's row is untouched by Bob's attempt.
+      expect(await aliceActor.brewPrefs(aliceCtx, tea)).toMatchObject({
+        waterTempC: 90,
+      });
+    });
+  });
+
+  it("takes any dose and water above zero, as the contract and DB do (CB-2)", async () => {
+    await withUserDb(async (db) => {
+      const alice = await seedPerson(db, "Alice");
+      const teaId = await seedTea(db, alice);
+      const actor = await userActor(alice, db);
+      const ctx = userCtx(alice, "r");
+      const saved = await actor.setBrewPrefs(ctx, {
+        item: { type: "TEA", id: teaId },
+        waterTempC: null,
+        steepSeconds: null,
+        doseGrams: 0.05,
+        waterMl: 0.5,
+      });
+      expect(saved?.doseGrams).toBeCloseTo(0.05);
+      expect(saved?.waterMl).toBeCloseTo(0.5);
+    });
+  });
+
+  it("refuses out-of-range numbers and non-brew item types", async () => {
+    await withUserDb(async (db) => {
+      const alice = await seedPerson(db, "Alice");
+      const teaId = await seedTea(db, alice);
+      const actor = await userActor(alice, db);
+      const ctx = userCtx(alice, "r");
+      const base = {
+        item: { type: "TEA", id: teaId },
+        waterTempC: null,
+        steepSeconds: null,
+        doseGrams: null,
+        waterMl: null,
+      } as const;
+      await expect(
+        actor.setBrewPrefs(ctx, { ...base, waterTempC: 101 }),
+      ).rejects.toBeInstanceOf(ValidationError);
+      await expect(
+        actor.setBrewPrefs(ctx, { ...base, steepSeconds: 0 }),
+      ).rejects.toBeInstanceOf(ValidationError);
+      await expect(
+        actor.setBrewPrefs(ctx, { ...base, doseGrams: 0 }),
+      ).rejects.toBeInstanceOf(ValidationError);
+      await expect(
+        actor.setBrewPrefs(ctx, { ...base, waterMl: -1 }),
+      ).rejects.toBeInstanceOf(ValidationError);
+      await expect(
+        actor.brewPrefs(ctx, { type: "WINE", id: teaId }),
+      ).rejects.toBeInstanceOf(ValidationError);
+    });
+  });
+});
+
+describe.skipIf(skip)(
+  "account settings (H-119 / FR-21): the owner's only",
+  () => {
+    afterAll(closeTestDb);
+
+    it("reads PRIVATE with no row, and the owner can set it", async () => {
+      await withTestDb(async (db) => {
+        const alice = await seedUser(db);
+        const actor = await userActor(alice, db);
+        const ctx = userCtx(alice, "r");
+        expect(await actor.settings(ctx)).toEqual({
+          defaultCellarPrivacy: "PRIVATE",
+        });
+        expect(
+          await actor.setDefaultCellarPrivacy(ctx, { privacy: "FRIENDS" }),
+        ).toEqual({ defaultCellarPrivacy: "FRIENDS" });
+        expect(
+          await actor.setDefaultCellarPrivacy(ctx, { privacy: "PUBLIC" }),
+        ).toEqual({ defaultCellarPrivacy: "PUBLIC" });
+        expect((await actor.settings(ctx)).defaultCellarPrivacy).toBe("PUBLIC");
+      });
+    });
+
+    it("a stranger or a friend can neither read nor write it", async () => {
+      await withTestDb(async (db) => {
+        const alice = await seedUser(db);
+        const bob = await seedUser(db);
+        const actor = await userActor(alice, db);
+        await actor.setDefaultCellarPrivacy(userCtx(alice, "r"), {
+          privacy: "FRIENDS",
+        });
+        await expect(actor.settings(userCtx(bob, "r"))).rejects.toThrow(
+          ForbiddenError,
+        );
+        await expect(
+          actor.setDefaultCellarPrivacy(userCtx(bob, "r"), {
+            privacy: "PUBLIC",
+          }),
+        ).rejects.toThrow(ForbiddenError);
+        await expect(actor.settings(anonymousCtx("r"))).rejects.toThrow(
+          ForbiddenError,
+        );
+        expect(
+          (await actor.settings(userCtx(alice, "r"))).defaultCellarPrivacy,
+        ).toBe("FRIENDS");
+      });
+    });
+
+    it("refuses a value that is not a privacy", async () => {
+      await withTestDb(async (db) => {
+        const alice = await seedUser(db);
+        const actor = await userActor(alice, db);
+        await expect(
+          actor.setDefaultCellarPrivacy(userCtx(alice, "r"), {
+            privacy: "EVERYONE" as never,
+          }),
+        ).rejects.toThrow(ValidationError);
+      });
+    });
+  },
+);
+
+/* -------------------------------------------------------------------------- */
 /* Static guard — §2.1's "no AI or external call inside a UserActor turn"      */
 /* -------------------------------------------------------------------------- */
 
@@ -1856,6 +2982,12 @@ describe("UserActor makes no external call (§2.1, B4 acceptance)", () => {
       "@cellar-assistant/policy",
       "@dapr/dapr",
       "../lib/actor-base.ts",
+      // Pure: a module-local registry `installAI` fills at boot (N07); its
+      // only import is the contracts package.
+      "../lib/ai/capabilities.ts",
+      // X18: `cellarOwnedBySql`, a SQL fragment for the Me hub's counts —
+      // guarded import by import in `no-external-calls.test.ts`.
+      "../lib/cellar-ownership.ts",
       "../lib/db.ts",
       "../lib/delivery.ts",
       "../lib/guards.ts",
@@ -1866,11 +2998,20 @@ describe("UserActor makes no external call (§2.1, B4 acceptance)", () => {
       "../lib/outbox.ts",
       "../lib/outbox-targets.ts",
       "../lib/profile-store.ts",
+      // X15: `visibleRecipeIds`, one SQL read of `recipes` — guarded import
+      // by import in `no-external-calls.test.ts`.
+      "../lib/recipe-visibility.ts",
+      // X27: `placeIsVisible`, a Drizzle read of `places` — guarded import by
+      // import in `no-external-calls.test.ts`.
+      "../lib/unshared-places.ts",
       // Pure: validates a uuid and returns its canonical (lowercase) spelling.
       "../lib/uuid.ts",
       // Pure: the display-name rule (a regex, `node:crypto` for a handle).
       // Guarded import by import in `no-external-calls.test.ts`.
       "../auth/display-name.ts",
+      // X17: `randomBytes` for an invite secret, `timingSafeEqual` to check
+      // one. Local CPU only — no socket.
+      "node:crypto",
     ]);
     expect(
       specifiers.filter((s) => s !== undefined && !allowed.has(s)),

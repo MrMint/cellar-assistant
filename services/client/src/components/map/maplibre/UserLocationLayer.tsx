@@ -6,35 +6,48 @@ import { useMemo } from "react";
 import type { CircleLayerSpecification } from "react-map-gl/maplibre";
 import { Layer, Source } from "react-map-gl/maplibre";
 import { LAYER_IDS, SOURCE_IDS } from "./constants";
+import type { MapPalette } from "./palette";
 
 interface UserLocationLayerProps {
   location: { latitude: number; longitude: number };
+  palette: MapPalette;
 }
 
-const pulseLayer: CircleLayerSpecification = {
-  id: LAYER_IDS.USER_LOCATION_PULSE,
-  type: "circle",
-  source: SOURCE_IDS.USER_LOCATION,
-  paint: {
-    "circle-radius": 18,
-    "circle-color": "#4285f4",
-    "circle-opacity": 0.2,
-  },
-};
+/** "You are here" (kit `here`): the dot, its ring, and a soft halo. */
+function youLayers(palette: MapPalette): {
+  pulse: CircleLayerSpecification;
+  dot: CircleLayerSpecification;
+} {
+  return {
+    pulse: {
+      id: LAYER_IDS.USER_LOCATION_PULSE,
+      type: "circle",
+      source: SOURCE_IDS.USER_LOCATION,
+      paint: {
+        "circle-radius": 18,
+        "circle-color": palette.here,
+        "circle-opacity": 0.2,
+      },
+    },
+    dot: {
+      id: LAYER_IDS.USER_LOCATION_DOT,
+      type: "circle",
+      source: SOURCE_IDS.USER_LOCATION,
+      paint: {
+        "circle-radius": 7,
+        "circle-color": palette.here,
+        "circle-stroke-width": 2.5,
+        "circle-stroke-color": palette.hereRing,
+      },
+    },
+  };
+}
 
-const dotLayer: CircleLayerSpecification = {
-  id: LAYER_IDS.USER_LOCATION_DOT,
-  type: "circle",
-  source: SOURCE_IDS.USER_LOCATION,
-  paint: {
-    "circle-radius": 7,
-    "circle-color": "#4285f4",
-    "circle-stroke-width": 2.5,
-    "circle-stroke-color": "#ffffff",
-  },
-};
-
-export function UserLocationLayer({ location }: UserLocationLayerProps) {
+export function UserLocationLayer({
+  location,
+  palette,
+}: UserLocationLayerProps) {
+  const layers = useMemo(() => youLayers(palette), [palette]);
   const geoJson = useMemo(
     (): GeoJSON.FeatureCollection => ({
       type: "FeatureCollection",
@@ -54,8 +67,8 @@ export function UserLocationLayer({ location }: UserLocationLayerProps) {
 
   return (
     <Source id={SOURCE_IDS.USER_LOCATION} type="geojson" data={geoJson}>
-      <Layer {...pulseLayer} />
-      <Layer {...dotLayer} />
+      <Layer {...layers.pulse} />
+      <Layer {...layers.dot} />
     </Source>
   );
 }

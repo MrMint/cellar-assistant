@@ -28,7 +28,7 @@ import {
   userCtx,
   ValidationError,
 } from "@cellar-assistant/contracts";
-import { files, menuScans, outbox } from "@cellar-assistant/db";
+import { files, menuScans, outbox, places } from "@cellar-assistant/db";
 import { eq, sql } from "@cellar-assistant/db/orm";
 import { ActorId, DaprClient } from "@dapr/dapr";
 import { afterAll, describe, expect, it } from "vitest";
@@ -333,6 +333,97 @@ describe.skipIf(skip)("MenuScanActor (B8)", () => {
     });
   });
 
+  it("get: matchStatus (N06a) follows extraction, the outbox hops and the job", async () => {
+    await withTestDb(async (db) => {
+      const owner = await seedUser(db);
+      const ctx = userCtx(owner, "r-match-status");
+      const placeId = await seedPlace(db, { name: "Bar", ...SAN_FRANCISCO });
+      const statusOf = async (scanId: string) =>
+        (await (await activate(newScanActor(scanId, db))).get(ctx)).matchStatus;
+
+      // Still extracting: nothing to say about matching yet.
+      const extracting = await seedScan(db, {
+        userId: owner,
+        placeId,
+        status: "processing",
+      });
+      expect(await statusOf(extracting)).toBe("waiting");
+
+      // Completed with nowhere to file, or with nothing read: no run is coming.
+      const placeless = await seedScan(db, {
+        userId: owner,
+        status: "completed",
+      });
+      await db.execute(
+        sql`update public.menu_scans set items_detected = 3 where id = ${placeless}::uuid`,
+      );
+      expect(await statusOf(placeless)).toBe("skipped");
+      const empty = await seedScan(db, {
+        userId: owner,
+        placeId,
+        status: "completed",
+      });
+      expect(await statusOf(empty)).toBe("skipped");
+
+      // Eligible: the match hop is live in the outbox.
+      const scanId = await seedScan(db, {
+        userId: owner,
+        placeId,
+        status: "completed",
+      });
+      await db.execute(
+        sql`update public.menu_scans set items_detected = 8 where id = ${scanId}::uuid`,
+      );
+      const matchRow = await enqueueOutbox(
+        db,
+        OUTBOX_TARGETS["MenuScanActor.match"],
+        {
+          targetId: scanId,
+          payload: { menuScanId: scanId },
+        },
+      );
+      expect(await statusOf(scanId)).toBe("queued");
+
+      // The hop died: say so, rather than "queued" forever.
+      await db.execute(
+        sql`update public.outbox set status = 'dead' where id = ${matchRow}::uuid`,
+      );
+      expect(await statusOf(scanId)).toBe("failed");
+
+      // The job exists: it wins over every outbox fact.
+      const jobId = menuMatchJobId(scanId);
+      await db.execute(sql`
+        insert into public.jobs (id, kind, status, payload)
+        values (${jobId}::uuid, 'menu-match', 'running',
+                ${JSON.stringify({ menuScanId: scanId })}::jsonb)
+      `);
+      expect(await statusOf(scanId)).toBe("running");
+      await db.execute(
+        sql`update public.jobs set status = 'completed' where id = ${jobId}::uuid`,
+      );
+      expect(await statusOf(scanId)).toBe("completed");
+      await db.execute(
+        sql`update public.jobs set status = 'failed' where id = ${jobId}::uuid`,
+      );
+      expect(await statusOf(scanId)).toBe("failed");
+
+      // The second hop: `match` delivered, `MenuMatchJobActor.start` pending.
+      const other = await seedScan(db, {
+        userId: owner,
+        placeId,
+        status: "completed",
+      });
+      await db.execute(
+        sql`update public.menu_scans set items_detected = 2 where id = ${other}::uuid`,
+      );
+      await enqueueOutbox(db, OUTBOX_TARGETS["MenuMatchJobActor.start"], {
+        targetId: menuMatchJobId(other),
+        payload: { menuScanId: other },
+      });
+      expect(await statusOf(other)).toBe("queued");
+    });
+  });
+
   it("suggestions: paged for the owner, refused for a stranger", async () => {
     await withTestDb(async (db) => {
       const owner = await seedUser(db);
@@ -436,6 +527,76 @@ describe.skipIf(skip)("MenuScanActor (B8)", () => {
       ).rejects.toBeInstanceOf(NotFoundError);
       await expect(
         actor.menuItems(anonymousCtx("r4"), pageArgs({ first: 3 })),
+      ).rejects.toBeInstanceOf(NotFoundError);
+    });
+  });
+
+  it("matchCounts (N06a follow-up): only a confirmed line is matched; a pending suggestion is to confirm; owner only", async () => {
+    await withTestDb(async (db) => {
+      const owner = await seedUser(db);
+      const stranger = await seedUser(db);
+      const placeId = await seedPlace(db, { name: "Bar", ...SAN_FRANCISCO });
+      const scanId = await seedScan(db, { userId: owner, placeId });
+      const otherScan = await seedScan(db, { userId: owner, placeId });
+      const line = (menuScanId: string, name: string) =>
+        seedMenuItem(db, { placeId, menuScanId, name });
+      const wine = await seedWine(db, owner, "Chateau Count 2019");
+      const other = await seedWine(db, owner, "Chateau Other 2020");
+      const recipe = await seedRecipe(db, {
+        name: "House Negroni",
+        type: "cocktail",
+      });
+
+      const verified = await line(scanId, "Verified wine");
+      await db.execute(sql`
+        update public.place_menu_items set wine_id = ${wine.id}::uuid
+        where id = ${verified}::uuid
+      `);
+      const linked = await line(scanId, "Linked cocktail");
+      await db.execute(sql`
+        insert into public.menu_item_recipes (menu_item_id, recipe_id)
+        values (${linked}::uuid, ${recipe}::uuid)
+      `);
+      const accepted = await line(scanId, "Accepted wine");
+      const pending = await line(scanId, "Pending wine");
+      const rejected = await line(scanId, "Rejected wine");
+      await line(scanId, "Nothing at all");
+      // A line on another scan never counts here.
+      const foreign = await line(otherScan, "Other scan's line");
+
+      const suggest = async (
+        menuItemId: string,
+        state: "accepted" | "rejected" | "pending",
+        itemId = wine.id,
+      ) => {
+        await db.execute(sql`
+          insert into public.item_match_suggestions
+            (place_menu_item_id, suggested_wine_id, confidence_score,
+             accepted, rejected)
+          values (${menuItemId}::uuid, ${itemId}::uuid, 0.80,
+                  ${state === "accepted" ? true : null},
+                  ${state === "rejected" ? true : null})
+        `);
+      };
+      await suggest(accepted, "accepted");
+      // A confirmed line with a second candidate still open is matched, once.
+      await suggest(accepted, "pending", other.id);
+      await suggest(pending, "pending");
+      await suggest(rejected, "rejected");
+      await suggest(foreign, "pending");
+
+      const actor = await activate(newScanActor(scanId, db));
+      expect(await actor.matchCounts(userCtx(owner, "r1"))).toEqual({
+        lines: 6,
+        matched: 3,
+        toConfirm: 1,
+      });
+
+      await expect(
+        actor.matchCounts(userCtx(stranger, "r2")),
+      ).rejects.toBeInstanceOf(NotFoundError);
+      await expect(
+        actor.matchCounts(anonymousCtx("r3")),
       ).rejects.toBeInstanceOf(NotFoundError);
     });
   });
@@ -562,6 +723,64 @@ describe.skipIf(skip)("MenuScanActor (B8)", () => {
         await db.select().from(menuScans).where(eq(menuScans.id, scanId)),
       ).toEqual([]);
       expect(await outboxRows(db, scanId)).toEqual([]);
+    });
+  });
+
+  /**
+   * X27: somebody else's place under review is, to this caller, a place that
+   * does not exist — the same refusal, before anything is written, so a scan
+   * can neither be filed into it nor used to learn that it is there. The
+   * creator's own pending place is a fine hint.
+   */
+  it("create: a hint naming somebody else's pending place is refused exactly as an unknown one; the creator's own is accepted", async () => {
+    await withTestDb(async (db) => {
+      const owner = await seedUser(db);
+      const creator = await seedUser(db);
+      const fileId = await seedFile(db);
+      const pending = await seedPlace(db, {
+        name: "Pending",
+        ...SAN_FRANCISCO,
+      });
+      await db.execute(sql`
+        update public.places
+        set review_status = 'pending', created_by = ${creator}::uuid
+        where id = ${pending}::uuid
+      `);
+
+      for (const placeHint of [
+        { placeId: pending },
+        { estimatedPlaceId: pending },
+      ]) {
+        const scanId = crypto.randomUUID();
+        const actor = await activate(newScanActor(scanId, db));
+        const hidden = await actor
+          .create(userCtx(owner, "r1"), { originalImageId: fileId, placeHint })
+          .catch((error: unknown) => error);
+        const ghost = await (
+          await activate(newScanActor(crypto.randomUUID(), db))
+        )
+          .create(userCtx(owner, "r2"), {
+            originalImageId: fileId,
+            placeHint: Object.fromEntries(
+              Object.keys(placeHint).map((key) => [key, crypto.randomUUID()]),
+            ),
+          })
+          .catch((error: unknown) => error);
+        expect(hidden).toBeInstanceOf(NotFoundError);
+        expect((hidden as Error).message).toBe((ghost as Error).message);
+        expect(
+          await db.select().from(menuScans).where(eq(menuScans.id, scanId)),
+        ).toEqual([]);
+      }
+
+      const creatorsFile = await seedFile(db);
+      const own = await (
+        await activate(newScanActor(crypto.randomUUID(), db))
+      ).create(userCtx(creator, "r3"), {
+        originalImageId: creatorsFile,
+        placeHint: { placeId: pending },
+      });
+      expect(own.placeId).toBe(pending);
     });
   });
 
@@ -754,6 +973,59 @@ describe.skipIf(skip)("MenuScanActor (B8)", () => {
       ]);
       expect(rows[0]?.targetId).toBe(placeId);
       expect(rows[1]?.targetId).toBe(scanId);
+    });
+  });
+
+  it("process (L10): the menu header is stored as a proposal and never renames the place unconfirmed", async () => {
+    await withTestDb(async (db) => {
+      const owner = await seedUser(db);
+      const placeId = await seedPlace(db, { name: "Bar", ...SAN_FRANCISCO });
+      const scanId = await seedScan(db, { userId: owner, placeId });
+      const actor = await activate(
+        newScanActor(scanId, db, async () =>
+          extraction({ headerName: "Bar Lumen" }),
+        ),
+      );
+      await actor.process(testDelivery("row-h"), { menuScanId: scanId });
+
+      const scan = await actor.get(userCtx(owner, "r1"));
+      expect(scan.headerName).toBe("Bar Lumen");
+      // L24: the rename is the creator's to confirm. Processing writes the
+      // proposal on the scan and nothing on the place, and queues nothing
+      // that would (only the menu filing and the match).
+      const [place] = await db
+        .select({ name: places.name, displayName: places.displayName })
+        .from(places)
+        .where(eq(places.id, placeId));
+      expect(place?.name).toBe("Bar");
+      expect(place?.displayName ?? "Bar").toBe("Bar");
+    });
+  });
+
+  it("process (L10): an abstaining or no-menu read stores no header", async () => {
+    await withTestDb(async (db) => {
+      const owner = await seedUser(db);
+      const placeId = await seedPlace(db, { name: "Bar", ...SAN_FRANCISCO });
+      const quiet = await seedScan(db, { userId: owner, placeId });
+      const wall = await seedScan(db, { userId: owner, placeId });
+      const a = await activate(
+        newScanActor(quiet, db, async () => extraction()),
+      );
+      await a.process(testDelivery("row-q"), { menuScanId: quiet });
+      expect((await a.get(userCtx(owner, "r1"))).headerName).toBeNull();
+
+      const b = await activate(
+        newScanActor(wall, db, async () =>
+          extraction({
+            lines: [],
+            rawText: "",
+            noMenuDetected: true,
+            headerName: "Bar Lumen",
+          }),
+        ),
+      );
+      await b.process(testDelivery("row-w"), { menuScanId: wall });
+      expect((await b.get(userCtx(owner, "r2"))).headerName).toBeNull();
     });
   });
 

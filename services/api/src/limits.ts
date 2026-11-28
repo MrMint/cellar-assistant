@@ -189,7 +189,8 @@ export type ModelBackedField = {
  *  - **Vision and LLM calls inside the request** — `startItemOnboarding`
  *    (`item_defaults`), `createPlace` (`place_review`).
  *  - **Vision and LLM calls it enqueues** — `createMenuScan` (menu extraction,
- *    then match verification), `startRecipePhotoJob` (`recipe_photo`), and the
+ *    then match verification), `startRecipePhotoJob` and `startRecipeTextJob`
+ *    (`recipe_photo`), and the
  *    three tier-list edits that enqueue `generateInsights`.
  *  - **Embeddings it enqueues** — every write that enqueues an item's or a
  *    recipe's `regenerateVector`, directly or by recomputing a recipe group's
@@ -222,15 +223,46 @@ export const MODEL_BACKED_FIELDS: ReadonlyMap<string, ModelBackedField> =
       "Cellar.items",
       { via: ["CellarActor.items"], onlyWithArgument: "semanticQuery" },
     ],
+    [
+      "Cellar.itemGroups",
+      { via: ["CellarActor.itemGroups"], onlyWithArgument: "search" },
+    ],
     // A vision or LLM call inside the request.
+    // L03/H-10: the profile's line, phrased through `taste_phrase`.
+    ["Query.tasteProfile", { via: ["TasteActor.profile"] }],
     ["Mutation.startItemOnboarding", { via: ["ItemOnboardingActor.start"] }],
+    // X02: a typed note's flavour words (`flavour_tags`).
+    [
+      "Mutation.suggestFlavourTags",
+      { via: ["CheckInActor.suggestFlavourTags"] },
+    ],
     ["Mutation.createPlace", { via: ["PlaceCreationActor.createPlace"] }],
+    // X27: a resubmission queues a fresh review, which is a model call.
+    ["Mutation.resubmitPlace", { via: ["PlaceActor.editUnshared"] }],
     // A vision or LLM call it enqueues.
     ["Mutation.createMenuScan", { via: ["MenuScanActor.create"] }],
     ["Mutation.startRecipePhotoJob", { via: ["RecipePhotoJobActor.start"] }],
+    // X15's Paste: the same job, reading text.
+    ["Mutation.startRecipeTextJob", { via: ["RecipePhotoJobActor.start"] }],
     ["Mutation.addTierListItem", { via: ["TierListActor.addItem"] }],
+    // X16: a multi-add, and a list started from your ratings, are edits.
+    ["Mutation.addTierListItems", { via: ["TierListActor.addItems"] }],
+    ["Mutation.createTierList", { via: ["TierListActor.create"] }],
+    ["Mutation.cloneTierList", { via: ["TierListActor.clone"] }],
     ["Mutation.removeTierListItem", { via: ["TierListActor.removeItem"] }],
     ["Mutation.reorderTierListBand", { via: ["TierListActor.reorderBand"] }],
+    ["Mutation.undoTierListEdit", { via: ["TierListActor.undo"] }],
+    ["Mutation.redoTierListEdit", { via: ["TierListActor.redo"] }],
+    // SV-A (L12): enqueues `generateInsights` from IDLE.
+    [
+      "Mutation.requestTierListInsights",
+      { via: ["TierListActor.requestInsights"] },
+    ],
+    // F-86: enqueues `generateInsights` past the throttle, from READY.
+    [
+      "Mutation.rewriteTierListInsights",
+      { via: ["TierListActor.rewriteInsights"] },
+    ],
     // An embedding it enqueues (`regenerateVector`).
     ["Mutation.createItem", { via: ["ItemActor.create"] }],
     ["Mutation.updateItem", { via: ["ItemActor.update"] }],
@@ -238,6 +270,19 @@ export const MODEL_BACKED_FIELDS: ReadonlyMap<string, ModelBackedField> =
     // newest image is one of its vector's inputs.
     ["Mutation.attachItemImage", { via: ["ItemActor.attachImage"] }],
     ["Mutation.detachItemImage", { via: ["ItemActor.detachImage"] }],
+    // N08: an item's brands are in its embedded text, so a link re-embeds it.
+    ["Mutation.linkItemBrand", { via: ["ItemActor.linkBrand"] }],
+    ["Mutation.unlinkItemBrand", { via: ["ItemActor.unlinkBrand"] }],
+    ["Mutation.replaceItemBrand", { via: ["ItemActor.replacePrimaryBrand"] }],
+    ["Mutation.rereadItemLabel", { via: ["ItemOnboardingActor.rereadLabel"] }],
+    [
+      "Mutation.suggestItemDetails",
+      { via: ["ItemOnboardingActor.suggestDetails"] },
+    ],
+    [
+      "Mutation.suggestNewItemDetails",
+      { via: ["ItemOnboardingActor.suggestNewItem"] },
+    ],
     [
       "Mutation.confirmItemOnboarding",
       { via: ["ItemOnboardingActor.confirm"] },

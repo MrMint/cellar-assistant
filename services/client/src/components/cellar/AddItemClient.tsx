@@ -1,26 +1,23 @@
 "use client";
 
-import {
-  AspectRatio,
-  Box,
-  CardContent,
-  CardOverflow,
-  Grid,
-  Link,
-  Stack,
-  Typography,
-} from "@mui/joy";
-import Image from "next/image";
-import NextLink from "next/link";
-import { InteractiveCard } from "@/components/common/InteractiveCard";
-import beer1 from "@/images/beer1.png";
-import coffee1 from "@/images/coffee1.png";
-import sake1 from "@/images/sake1.png";
-import spirit1 from "@/images/spirit1.png";
-import tea1 from "@/images/tea1.png";
-import wine1 from "@/images/wine1.png";
+import { VesselSilhouette } from "@/components/app/LabelPlate";
+import { Link } from "@/components/app/Link";
+import { itemTypeTokens } from "@/components/app/TypeChip";
+import type { ApiItemType } from "@/components/cellar-api/itemTypes";
+import { feedback } from "@/lib/feedback";
+import { cn } from "@/lib/utils";
 
 type ItemType = "Beer" | "Wine" | "Spirit" | "Coffee" | "Sake" | "Tea";
+
+/** Each card's plate type (H-3, L22: its vessel on its tint, no raster). */
+const PLATE_TYPE: Readonly<Record<ItemType, ApiItemType>> = {
+  Beer: "BEER",
+  Wine: "WINE",
+  Spirit: "SPIRIT",
+  Coffee: "COFFEE",
+  Sake: "SAKE",
+  Tea: "TEA",
+};
 
 type AddItemTypeCardProps = {
   type: ItemType;
@@ -29,63 +26,42 @@ type AddItemTypeCardProps = {
 };
 
 const AddItemTypeCard = ({ type, href }: AddItemTypeCardProps) => (
-  <InteractiveCard>
-    <CardOverflow>
-      <AspectRatio ratio="1">
-        {type === "Beer" && (
-          <Image
-            src={beer1}
-            alt="An image of a beer glass"
-            fill
-            placeholder="blur"
-          />
-        )}
-        {type === "Wine" && (
-          <Image
-            src={wine1}
-            alt="An image of a wine bottle"
-            fill
-            placeholder="blur"
-          />
-        )}
-        {type === "Spirit" && (
-          <Image
-            src={spirit1}
-            alt="An image of a liquor bottle"
-            fill
-            placeholder="blur"
-          />
-        )}
-        {type === "Coffee" && (
-          <Image
-            src={coffee1}
-            alt="A bag of coffee beans"
-            fill
-            placeholder="blur"
-          />
-        )}
-        {type === "Sake" && (
-          <Image src={sake1} alt="A sake bottle" fill placeholder="blur" />
-        )}
-        {type === "Tea" && (
-          <Image src={tea1} alt="A tea container" fill placeholder="blur" />
-        )}
-      </AspectRatio>
-    </CardOverflow>
-    <CardContent>
+  <div
+    data-slot="add-item-type-card"
+    className={cn(
+      "relative flex min-w-0 flex-col overflow-hidden rounded-lg bg-card",
+      href !== undefined &&
+        "transition-[background-color,transform] duration-(--ca-dur-micro) ease-standard hover:bg-raised has-[a:active]:scale-97 motion-reduce:has-[a:active]:scale-100",
+    )}
+  >
+    {/* Decorative: the card's name says the type. */}
+    <div
+      data-slot="type-plate"
+      data-type={PLATE_TYPE[type]}
+      className={cn(
+        "relative flex aspect-square items-center justify-center",
+        itemTypeTokens[PLATE_TYPE[type]].tintClass,
+        itemTypeTokens[PLATE_TYPE[type]].textClass,
+      )}
+    >
+      <VesselSilhouette type={PLATE_TYPE[type]} className="h-3/5 w-auto" />
+    </div>
+    <div className="flex p-4">
       {href === undefined ? (
-        <Typography level="title-lg" flexGrow={1} textAlign="center">
-          {type}
-        </Typography>
+        <span className="t-head grow text-center text-ink">{type}</span>
       ) : (
-        <Link component={NextLink} overlay href={href}>
-          <Typography level="title-lg" flexGrow={1} textAlign="center">
-            {type}
-          </Typography>
+        <Link
+          overlay
+          underline="none"
+          href={href}
+          className="grow"
+          onClick={() => feedback("press")}
+        >
+          <span className="t-head block text-center text-ink">{type}</span>
         </Link>
       )}
-    </CardContent>
-  </InteractiveCard>
+    </div>
+  </div>
 );
 
 interface AddItemClientProps {
@@ -98,7 +74,7 @@ interface AddItemClientProps {
 
 /**
  * `82450ad1:src/components/cellar/AddItemClient.tsx`, restored: the heading,
- * the permission note, and six image cards in the old order linking to the
+ * the permission note, and six type cards in the old order linking to the
  * onboarding routes (`/cellars/<id>/<type>s/add`, or `/add/<type>s`).
  *
  * The old component read the cellar's name and owners with a client query;
@@ -113,42 +89,44 @@ export function AddItemClient({
   const canAdd = !cellarId || canAddProp;
 
   return (
-    <Box>
-      <Stack spacing={4}>
-        <Typography level="h2">
-          {cellarId ? `Add an item to ${cellarName}` : "Add an item"}
-        </Typography>
-        {cellarId && !canAdd && (
-          <Typography level="body-md">
-            You do not have permission to add items to this cellar.
-          </Typography>
-        )}
-        <Grid container spacing={2}>
-          {(
-            [
-              "Wine",
-              "Beer",
-              "Spirit",
-              "Coffee",
-              "Sake",
-              "Tea",
-            ] satisfies ItemType[]
-          ).map((x) => (
-            <Grid key={x} xs={6} sm={6} md={4} lg={2}>
-              <AddItemTypeCard
-                type={x}
-                href={
-                  !canAdd
-                    ? undefined
-                    : cellarId
-                      ? `/cellars/${cellarId}/${x.toLowerCase()}s/add`
-                      : `/add/${x.toLowerCase()}s`
-                }
-              />
-            </Grid>
-          ))}
-        </Grid>
-      </Stack>
-    </Box>
+    <div className="flex flex-col gap-8">
+      <h2 className="t-title text-ink">
+        {cellarId ? `Add an item to ${cellarName}` : "Add an item"}
+      </h2>
+      {cellarId && !canAdd && (
+        <p className="t-body">
+          You do not have permission to add items to this cellar.{" "}
+          {/* The cards are inert here, so this is the page's one control —
+              and axe's scrollable-region-focusable needs one in <main>. */}
+          <Link href={`/cellars/${cellarId}/items`} underline="always">
+            Back to {cellarName ?? "the cellar"}
+          </Link>
+        </p>
+      )}
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-6">
+        {(
+          [
+            "Wine",
+            "Beer",
+            "Spirit",
+            "Coffee",
+            "Sake",
+            "Tea",
+          ] satisfies ItemType[]
+        ).map((x) => (
+          <AddItemTypeCard
+            key={x}
+            type={x}
+            href={
+              !canAdd
+                ? undefined
+                : cellarId
+                  ? `/cellars/${cellarId}/${x.toLowerCase()}s/add`
+                  : `/add/${x.toLowerCase()}s`
+            }
+          />
+        ))}
+      </div>
+    </div>
   );
 }

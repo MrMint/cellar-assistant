@@ -1,0 +1,22 @@
+-- D13 (cellars ordered by recent activity): an index on check_ins by bottle.
+--
+-- `CellarsCollectionActor.list` sorts the cellars a viewer may see by their
+-- latest activity, which includes the newest check-in on any of the cellar's
+-- bottles. `check_ins.cellar_item_id` had no index at all (the foreign key to
+-- `cellar_items` is ON DELETE RESTRICT, so every bottle delete probed the
+-- table too), so the first version of that sort aggregated every bottle and
+-- every check-in in the database on each /cellars read. The actor now asks
+-- per visible cellar (a LATERAL probe), and this index makes each probe an
+-- index-only scan: (cellar_item_id, created_at) answers `max(created_at)`
+-- per bottle without touching the heap.
+--
+-- Measured 2026-10-08 on synthetic data (30,000 cellars, 900,000 bottles,
+-- 1,081,186 check-ins; 80 cellars visible to the viewer), EXPLAIN (ANALYZE,
+-- BUFFERS): the global aggregate read ~46,900 pages and spilled ~12,000 temp
+-- pages; the per-cellar probe with this index read ~10,200 and spilled none.
+-- The same probe *without* the index sequentially scans check_ins once per
+-- visible cellar (7.5 s), which is why the two ship together.
+--
+-- Plain CREATE INDEX, not CONCURRENTLY: `db:migrate` runs each migration in a
+-- transaction, and check_ins is small (one row per drink logged).
+CREATE INDEX "idx_check_ins_cellar_item_id_created_at" ON "check_ins" ("cellar_item_id","created_at");

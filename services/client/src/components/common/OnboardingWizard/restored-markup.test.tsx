@@ -1,8 +1,7 @@
 /**
- * Render tests for the restored onboarding wizard, asserting the **old**
- * markup and copy (`82450ad1:src/components/common/OnboardingWizard/*`,
- * `common/QuickAddCard.tsx`, `{type}/{T}Onboarding.tsx`, `{T}Form.tsx` in
- * create mode).
+ * Render tests for the onboarding flow: the snap-once capture (X05, N21) and
+ * the restored pieces it kept — `common/QuickAddCard.tsx` and the old
+ * `{T}Form.tsx` in create mode (`82450ad1`).
  */
 import { mock } from "bun:test";
 import assert from "node:assert/strict";
@@ -10,6 +9,7 @@ import { describe, test } from "node:test";
 import type { ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { Client, Provider } from "urql";
+import { stripStyleBlocks, stripTags } from "@/test-support/markup";
 
 mock.module("next/image", () => ({
   default: (props: { alt: string }) => (
@@ -23,12 +23,8 @@ mock.module("next/navigation", () => ({
 }));
 
 const { ItemOnboarding } = await import("./ItemOnboarding");
-const { BarcodeStep } = await import("./BarcodeStep");
-const { PictureStep } = await import("./PictureStep");
-const { DisplayPictureStep } = await import("./DisplayPictureStep");
-const { FinalPrompt } = await import("./FinalPrompt");
-const { ExistingItems } = await import("./ExistingItems");
 const { OnboardingItemForm } = await import("./OnboardingItemForm");
+const { emptyDefaults } = await import("./adapter");
 const { QuickAddCard } = await import("../QuickAddCard");
 const { formDefaultsFromOnboarding, quickAddDefaultsFrom } = await import(
   "./adapter"
@@ -39,94 +35,66 @@ const client = new Client({
   exchanges: [],
 });
 const render = (node: ReactNode) =>
-  renderToStaticMarkup(<Provider value={client}>{node}</Provider>).replace(
-    /<style[^>]*>[^<]*<\/style>/g,
-    "",
+  stripStyleBlocks(
+    renderToStaticMarkup(<Provider value={client}>{node}</Provider>),
   );
-const text = (html: string) => html.replace(/<[^>]+>/g, " ");
+const text = (html: string) => stripTags(html, " ");
 const noop = () => {};
 
-describe("ItemOnboarding (restored {T}Onboarding)", () => {
-  test("opens on 'Add Wine' and the barcode step, as the old wizard did", () => {
-    const html = text(render(<ItemOnboarding type="WINE" />));
-    assert.match(html, /Add Wine/);
-    assert.match(html, /Lets start by scanning the barcode/);
-    assert.match(html, /Skip/);
+describe("ItemOnboarding (snap-once, X05/N21)", () => {
+  test("opens on 'Add wine' and the one camera, with no step to skip", () => {
+    const html = render(<ItemOnboarding type="WINE" />);
+    const words = text(html);
+    assert.match(words, /Add wine/);
+    assert.match(html, /data-slot="capture-camera"/);
+    assert.match(words, /Type it/);
+    // Capture-Camera: the camera is one dark place in both themes.
+    assert.match(html, /class="keep-dark/);
+    // N21: the old step copy and the scanner's debug line are gone.
+    assert.doesNotMatch(words, /Lets |Scanning \(|used for display/);
   });
 
   test("the heading names the type", () => {
-    assert.match(text(render(<ItemOnboarding type="TEA" />)), /Add Tea/);
+    assert.match(text(render(<ItemOnboarding type="TEA" />)), /Add tea/);
   });
-});
 
-describe("the picture steps", () => {
-  test("BarcodeStep: title, Skip and the three tips", () => {
-    const html = text(
-      render(
-        <BarcodeStep
-          barcode={undefined}
-          onBarcodeChange={noop}
-          onSkip={noop}
-        />,
-      ),
+  test("a generic entry asks the type; the surface's mode row sits under the camera", () => {
+    const html = render(
+      <ItemOnboarding
+        type="WINE"
+        chooseType
+        leading={<button type="button">Close</button>}
+        modeRow={<div data-slot="mode-row" />}
+      />,
     );
-    assert.match(html, /Lets start by scanning the barcode/);
-    assert.match(html, /Tips/);
-    assert.match(html, /Make sure the barcode is horizontal/);
-    assert.match(html, /Adjust the distance so your camera is able to focus/);
-  });
-
-  test("PictureStep: header, Back/Skip, label tips", () => {
-    const html = text(
-      render(
-        <PictureStep
-          header="Lets take a picture of the front label"
-          picture={undefined}
-          onCapture={noop}
-          onSkip={noop}
-          onBack={noop}
-        />,
-      ),
+    const words = text(html);
+    assert.match(words, /Close[\s\S]*Add a bottle/);
+    assert.match(html, /aria-label="What are you adding\?"/);
+    for (const type of ["Wine", "Beer", "Spirit", "Sake", "Coffee", "Tea"]) {
+      assert.match(words, new RegExp(`\\b${type}\\b`));
+    }
+    // X06: right under the picture, above the shutter row and "Type it".
+    assert.match(
+      html,
+      /data-slot="capture-camera"[\s\S]*data-slot="mode-row"[\s\S]*Type it/,
     );
-    assert.match(html, /Lets take a picture of the front label/);
-    assert.match(html, /Back/);
-    assert.match(html, /This picture will be used to generate the product/);
   });
 
-  test("DisplayPictureStep", () => {
-    const html = text(
-      render(
-        <DisplayPictureStep onCapture={noop} onSkip={noop} onBack={noop} />,
-      ),
+  test("a carried photo stands in for the camera until 'Read this label' (X06)", () => {
+    const html = render(
+      <ItemOnboarding
+        type="BEER"
+        chooseType
+        initialPhoto="data:image/jpeg;base64,AA=="
+      />,
     );
-    assert.match(html, /Lets take a photo that will be used for display/);
-  });
-
-  test("ExistingItems: 'Create New' and one card per match", () => {
-    const html = text(
-      render(
-        <ExistingItems
-          items={[
-            {
-              type: "BEER",
-              item: { id: "b1", itemId: "b1", name: "Pliny the Elder" },
-            },
-          ]}
-          onClickItem={noop}
-          onSkip={noop}
-        />,
-      ),
-    );
-    assert.match(html, /Don&#x27;t see what you are looking for\?/);
-    assert.match(html, /Create New/);
-    assert.match(html, /Pliny the Elder/);
-  });
-
-  test("FinalPrompt", () => {
-    const html = text(render(<FinalPrompt onYes={noop} onNo={noop} />));
-    assert.match(html, /Would you like to add another item\?/);
-    assert.match(html, /No/);
-    assert.match(html, /Yes/);
+    assert.doesNotMatch(html, /data-slot="capture-camera"/);
+    assert.match(html, /data-slot="capture-preview"/);
+    assert.match(html, /src="data:image\/jpeg;base64,AA=="/);
+    assert.match(text(html), /Read this label/);
+    assert.match(text(html), /Retake/);
+    // The type row is still there, so the read's type is the person's.
+    assert.match(html, /aria-label="What are you adding\?"/);
   });
 });
 
@@ -138,7 +106,7 @@ const wine = formDefaultsFromOnboarding("WINE", {
 });
 
 describe("QuickAddCard", () => {
-  test("name, match chip, summary, countdown and the two buttons", () => {
+  test("name, summary and the two buttons; no countdown (B-223)", () => {
     const html = text(
       render(
         <QuickAddCard
@@ -151,11 +119,29 @@ describe("QuickAddCard", () => {
       ),
     );
     assert.match(html, /Château Margaux/);
-    assert.match(html, /93% match/);
     assert.match(html, /2015 · RED · Margaux · France/);
-    assert.match(html, /Adding in 15s\.\.\./);
-    assert.match(html, /Edit Details/);
-    assert.match(html, /Add \(15s\)/);
+    assert.doesNotMatch(html, /Adding in|% match/);
+    assert.match(html, /Not this/);
+    assert.match(html, /\+1 bottle/);
+  });
+});
+
+describe("QuickAddCard with a known item's summary", () => {
+  test("the summary given replaces the one built from the read", () => {
+    const html = text(
+      render(
+        <QuickAddCard
+          defaults={quickAddDefaultsFrom("WINE", wine)}
+          itemType="WINE"
+          confidence={0.93}
+          summary="2015 · Cabernet Sauvignon"
+          onConfirm={async () => undefined}
+          onEdit={noop}
+        />,
+      ),
+    );
+    assert.match(html, /2015 · Cabernet Sauvignon/);
+    assert.doesNotMatch(html, /RED/);
   });
 });
 
@@ -189,6 +175,22 @@ describe("OnboardingItemForm (the old {T}Form in create mode)", () => {
     assert.match(html, /value="Château Margaux"/);
     assert.match(html, /value="2015"/);
     assert.match(text(html), /\bAdd\b/);
+  });
+
+  test("F-60: typed, the open floor fields say Check this and Add counts them", () => {
+    const html = render(
+      <OnboardingItemForm
+        type="WINE"
+        itemOnboardingId="o"
+        defaultValues={emptyDefaults()}
+        onCreated={noop}
+        cellarId="c1"
+      />,
+    );
+    const marks = html.match(/data-slot="floor-mark"/g) ?? [];
+    assert.ok(marks.length >= 2, `open floor fields marked (${marks.length})`);
+    assert.match(text(html), new RegExp(`${marks.length} left to check`));
+    assert.doesNotMatch(text(html), /Read from label/);
   });
 
   test("a scanned code pre-fills the Barcode field as printed", () => {
@@ -234,5 +236,18 @@ describe("OnboardingItemForm: the old create forms' required stars (gap #14b)", 
       />,
     );
     assert.deepEqual(starred(html), ["Name", "Category"]);
+  });
+
+  test("the form opts out of native validation, so N03's own messages show", () => {
+    const html = render(
+      <OnboardingItemForm
+        type="WINE"
+        itemOnboardingId="o"
+        defaultValues={formDefaultsFromOnboarding("WINE", {})}
+        onCreated={noop}
+      />,
+    );
+    assert.match(html, /<input[^>]*required/);
+    assert.match(html, /<form[^>]*novalidate/i);
   });
 });

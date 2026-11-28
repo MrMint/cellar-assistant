@@ -141,7 +141,6 @@ const tierList = {
   createdById: viewer.id,
   privacy: "PUBLIC" as const,
   listType: "place",
-  isEditingLocked: false,
   itemCount: 4,
   aiInsights: null,
   insightsGeneratedAt: null,
@@ -161,6 +160,7 @@ const scanDto = {
   processedImageId: null,
   extractedText: null,
   processingStatus: "completed" as const,
+  matchStatus: "completed" as const,
   processingError: null,
   confidenceScore: null,
   processingModel: null,
@@ -530,5 +530,280 @@ describe("MatchSuggestion.place / placeMenuItem (G20)", () => {
     expect(result.errors).toBeUndefined();
     expect(callsTo(calls, "menuItemsOf")).toEqual([]);
     expect(JSON.stringify(result.data)).not.toContain(L1);
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/* X07                                                                         */
+/* -------------------------------------------------------------------------- */
+
+describe("PlaceMenuItem.canCorrectMatch / forYou (X07)", () => {
+  const CELLAR = "f0000002-0000-4000-8000-000000000002";
+  const lines = [
+    line(L1, "Barolo", { type: "wine", id: WINE }),
+    line(L2, "House white"),
+    line(L3, "Pilsner", { type: "beer", id: BEER }),
+  ];
+  const context = (lineId: string) =>
+    lineId === L1
+      ? {
+          lineId,
+          canCorrectMatch: true,
+          forYou: {
+            cellarId: CELLAR,
+            yourScore: 4.5,
+            lovedByFriendNames: ["Sam"],
+            lovedByFriendCount: 3,
+            likeYouRated: null,
+          },
+        }
+      : lineId === L3
+        ? {
+            lineId,
+            canCorrectMatch: true,
+            forYou: {
+              cellarId: null,
+              yourScore: null,
+              lovedByFriendNames: [],
+              lovedByFriendCount: 0,
+              likeYouRated: { item: { type: "WINE", id: WINE }, score: 4 },
+            },
+          }
+        : { lineId, canCorrectMatch: false, forYou: null };
+
+  const sidecar = () =>
+    stubSidecar({
+      "MenuScanActor.get": () => scanDto,
+      "MenuScanActor.menuItems": (_id, _ctx, args) => page(lines, args),
+      "MenuScansCollectionActor.lineContext": (_id, _ctx, ids) =>
+        (ids as string[]).map(context),
+      "CellarActor.get": (id) => ({
+        id,
+        name: "Bar Cart",
+        privacy: "PRIVATE",
+        createdById: viewer.id,
+        coOwnerIds: [],
+        itemCount: 1,
+        itemCounts: {
+          total: 1,
+          byType: { WINE: 1, BEER: 0, SPIRIT: 0, COFFEE: 0, SAKE: 0, TEA: 0 },
+        },
+        createdAt: stamp,
+        updatedAt: stamp,
+      }),
+      "ItemActor.get": (id) => wine(String(id).split(":")[1] ?? ""),
+    });
+
+  const DOC = `{ menuScan(id: "${SCAN}") { ... on MenuScan {
+    menuItems(first: 10) { edges { node {
+      id canCorrectMatch
+      forYou {
+        yourScore friendsWhoLovedCount
+        cellar { name }
+        friendsWhoLovedNames
+        likeYouRated { score item { name } }
+      }
+    } } }
+  } } }`;
+
+  it("answers a page of lines with one lineContext call, keyed by the viewer", async () => {
+    const { invoke, calls } = sidecar();
+    const result = await run(DOC, testContext(invoke, viewer));
+    expect(result.errors).toBeUndefined();
+
+    const batched = callsTo(calls, "lineContext");
+    expect(batched).toHaveLength(1);
+    expect(batched[0]?.actorType).toBe("MenuScansCollectionActor");
+    expect(batched[0]?.actorId).toBe(viewerCollectionActorId(viewer.id));
+    expect(batched[0]?.args[1]).toEqual([L1, L2, L3]);
+
+    const nodes = (
+      result.data as {
+        menuScan: { menuItems: { edges: { node: unknown }[] } };
+      }
+    ).menuScan.menuItems.edges.map((edge) => edge.node);
+    expect(nodes).toEqual([
+      {
+        id: L1,
+        canCorrectMatch: true,
+        forYou: {
+          yourScore: 4.5,
+          friendsWhoLovedCount: 3,
+          cellar: { name: "Bar Cart" },
+          friendsWhoLovedNames: ["Sam"],
+          likeYouRated: null,
+        },
+      },
+      { id: L2, canCorrectMatch: false, forYou: null },
+      {
+        id: L3,
+        canCorrectMatch: true,
+        forYou: {
+          yourScore: null,
+          friendsWhoLovedCount: 0,
+          cellar: null,
+          friendsWhoLovedNames: [],
+          likeYouRated: { score: 4, item: { name: wine(WINE).name } },
+        },
+      },
+    ]);
+  });
+
+  it("a failed lineContext nulls each line's forYou, not the menu", async () => {
+    const { invoke } = stubSidecar({
+      "MenuScanActor.get": () => scanDto,
+      "MenuScanActor.menuItems": (_id, _ctx, args) => page(lines, args),
+      "MenuScansCollectionActor.lineContext": () => {
+        throw new Error("actor timed out");
+      },
+    });
+    const result = await run(
+      `{ menuScan(id: "${SCAN}") { ... on MenuScan {
+         menuItems(first: 10) { edges { node { id canCorrectMatch forYou { yourScore } } } }
+       } } }`,
+      testContext(invoke, viewer),
+    );
+    const nodes = (
+      result.data as {
+        menuScan: { menuItems: { edges: { node: unknown }[] } };
+      }
+    ).menuScan.menuItems.edges.map((edge) => edge.node);
+    expect(nodes).toEqual([
+      { id: L1, canCorrectMatch: false, forYou: null },
+      { id: L2, canCorrectMatch: false, forYou: null },
+      { id: L3, canCorrectMatch: false, forYou: null },
+    ]);
+    // Not swallowed: the failure is still reported, on the nullable field.
+    expect(result.errors?.length ?? 0).toBeGreaterThan(0);
+  });
+
+  it("an anonymous viewer gets nothing, and costs no call", async () => {
+    const { invoke, calls } = stubSidecar({
+      "PlaceActor.get": (id) => placeDto(id),
+      "PlaceActor.menuItems": (_id, _ctx, args) => page(lines, args),
+      "MenuScansCollectionActor.lineContext": () => {
+        throw new Error("must not be called");
+      },
+    });
+    const result = await run(
+      `{ place(id: "${P1}") { ... on Place {
+         menuItems(first: 10) { edges { node { canCorrectMatch forYou { yourScore } } } }
+       } } }`,
+      testContext(invoke, null),
+    );
+    expect(callsTo(calls, "lineContext")).toEqual([]);
+    expect(JSON.stringify(result.data ?? {})).not.toContain('"yourScore"');
+    expect(JSON.stringify(result.data ?? {})).not.toContain(
+      '"canCorrectMatch":true',
+    );
+  });
+});
+
+describe("MapPlace.photo (H-135)", () => {
+  const PHOTO_A = "f0000001-0000-4000-8000-000000000001";
+  const PHOTO_B = "f0000002-0000-4000-8000-000000000002";
+  const PHOTO_C = "f0000003-0000-4000-8000-000000000003";
+  const marker = (
+    placeId: string,
+    myBand: number | null,
+    photoFileId: string | null,
+  ) => ({
+    kind: "place" as const,
+    placeId,
+    name: `Place ${placeId.slice(0, 2)}`,
+    location: { lng: -122.4, lat: 37.7 },
+    primaryCategory: "bar",
+    categories: ["bar"],
+    rating: 4,
+    confidence: null,
+    isVerified: false,
+    reviewStatus: "approved",
+    myBand,
+    photoFileId,
+  });
+  const photoRow = (id: string) => ({
+    id,
+    bucket: "cellar-files",
+    key: `place-photo/${id}`,
+    size: 4096,
+    mimeType: "image/jpeg",
+    etag: "abc",
+    uploadedBy: null,
+    verifiedAt: stamp,
+    metadata: {},
+    createdAt: stamp,
+    updatedAt: stamp,
+  });
+  // P1 and P3 are on the viewer's tier lists; P2, L1 and L2 are not, and
+  // each has a photo of its own.
+  const sidecar = () =>
+    stubSidecar({
+      "MapActor.browse": (_id, _ctx, _input, args) =>
+        page(
+          [
+            marker(P1, 4, PHOTO_A),
+            marker(P2, null, PHOTO_B),
+            marker(P3, 0, PHOTO_C),
+            marker(L1, null, PHOTO_A),
+            marker(L2, 3, null),
+          ],
+          args,
+        ),
+      "FileActor.get": (id) => photoRow(String(id)),
+      "FileActor.presignRead": (id) => ({
+        url: `https://files.test/${String(id)}`,
+        expiresAt: stamp,
+      }),
+    });
+
+  const DOC = `{ mapBrowse(first: 10, bounds: { west: -123, south: 37, east: -122, north: 38 }) {
+    ... on MapEntryConnection { edges { node {
+      ... on MapPlace { placeId: id myBand photo { id url } }
+    } } }
+  } }`;
+
+  type Node = { placeId: string; photo: { id: string; url: string } | null };
+  const nodesOf = (result: Awaited<ReturnType<typeof run>>): Node[] =>
+    (
+      result.data as {
+        mapBrowse: { edges: { node: Node }[] };
+      }
+    ).mapBrowse.edges.map((edge) => edge.node);
+
+  it("a place on none of the viewer's lists gets null, with no file read", async () => {
+    const { invoke, calls } = sidecar();
+    const result = await run(DOC, testContext(invoke, viewer));
+    expect(result.errors).toBeUndefined();
+    const photos = Object.fromEntries(
+      nodesOf(result).map((node) => [node.placeId, node.photo?.id ?? null]),
+    );
+    expect(photos).toEqual({
+      [P1]: PHOTO_A,
+      [P2]: null,
+      [P3]: PHOTO_C,
+      [L1]: null,
+      [L2]: null,
+    });
+    const read = callsTo(calls, "get")
+      .filter((call) => call.actorType === "FileActor")
+      .map((call) => call.actorId);
+    expect(read).not.toContain(PHOTO_B);
+    expect(callsTo(calls, "presignRead").map((c) => c.actorId)).not.toContain(
+      PHOTO_B,
+    );
+  });
+
+  it("the ranked places' photos are read once each, in one batch per request", async () => {
+    const { invoke, calls } = sidecar();
+    const result = await run(DOC, testContext(invoke, viewer));
+    expect(result.errors).toBeUndefined();
+    const read = callsTo(calls, "get")
+      .filter((call) => call.actorType === "FileActor")
+      .map((call) => call.actorId)
+      .sort();
+    expect(read).toEqual([PHOTO_A, PHOTO_C].sort());
+    expect(
+      nodesOf(result).find((node) => node.placeId === P1)?.photo?.url,
+    ).toBe(`https://files.test/${PHOTO_A}`);
   });
 });

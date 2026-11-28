@@ -12,6 +12,8 @@ export const ITEM_TYPE_CATEGORY_MAPPINGS: Record<ItemType, CategoryIdentity[]> =
       { category: "winery", identityScore: 0.95 },
       { category: "wine_bar", identityScore: 0.95 },
       { category: "wine_tasting_room", identityScore: 0.95 },
+      { category: "vineyard", identityScore: 0.95 },
+      { category: "wine_shop", identityScore: 0.9 },
       { category: "beer_wine_and_spirits", identityScore: 0.7 },
       { category: "wine_wholesaler", identityScore: 0.6 },
       { category: "steakhouse", identityScore: 0.6 },
@@ -39,6 +41,7 @@ export const ITEM_TYPE_CATEGORY_MAPPINGS: Record<ItemType, CategoryIdentity[]> =
       { category: "brewery", identityScore: 0.95 },
       { category: "beer_bar", identityScore: 0.95 },
       { category: "beer_garden", identityScore: 0.9 },
+      { category: "taproom", identityScore: 0.95 },
       { category: "pub", identityScore: 0.85 },
       { category: "sports_bar", identityScore: 0.7 },
       { category: "beer_wine_and_spirits", identityScore: 0.7 },
@@ -46,6 +49,7 @@ export const ITEM_TYPE_CATEGORY_MAPPINGS: Record<ItemType, CategoryIdentity[]> =
       { category: "bar", identityScore: 0.6 },
       { category: "beverage_store", identityScore: 0.55 },
       { category: "music_venue", identityScore: 0.5 },
+      { category: "izakaya", identityScore: 0.5 },
       { category: "liquor_store", identityScore: 0.5 },
       { category: "tapas_bar", identityScore: 0.35 },
       { category: "mexican_restaurant", identityScore: 0.35 },
@@ -75,6 +79,7 @@ export const ITEM_TYPE_CATEGORY_MAPPINGS: Record<ItemType, CategoryIdentity[]> =
       { category: "pub", identityScore: 0.55 },
       { category: "beverage_store", identityScore: 0.55 },
       { category: "sake_bar", identityScore: 0.5 },
+      { category: "izakaya", identityScore: 0.45 },
       { category: "steakhouse", identityScore: 0.45 },
       { category: "gastropub", identityScore: 0.45 },
       { category: "japanese_restaurant", identityScore: 0.4 },
@@ -97,6 +102,7 @@ export const ITEM_TYPE_CATEGORY_MAPPINGS: Record<ItemType, CategoryIdentity[]> =
     coffee: [
       { category: "coffee_shop", identityScore: 0.95 },
       { category: "coffee_roastery", identityScore: 0.95 },
+      { category: "coffee_roaster", identityScore: 0.95 },
       { category: "cafe", identityScore: 0.9 },
       { category: "italian_restaurant", identityScore: 0.25 },
       { category: "french_restaurant", identityScore: 0.2 },
@@ -116,6 +122,7 @@ export const ITEM_TYPE_CATEGORY_MAPPINGS: Record<ItemType, CategoryIdentity[]> =
 
     sake: [
       { category: "sake_bar", identityScore: 0.95 },
+      { category: "izakaya", identityScore: 0.9 },
       { category: "japanese_restaurant", identityScore: 0.8 },
       { category: "sushi_restaurant", identityScore: 0.75 },
       { category: "liquor_store", identityScore: 0.5 },

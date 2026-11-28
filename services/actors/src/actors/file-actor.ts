@@ -143,6 +143,9 @@
  */
 import {
   type ActorCategory,
+  AVATAR_BATCH_MAX_IDS,
+  type AvatarBatchFilter,
+  avatarBatchActorId,
   ConflictError,
   type CreateUploadTargetInput,
   type Ctx,
@@ -157,12 +160,18 @@ import {
   type UploadTarget,
   ValidationError,
 } from "@cellar-assistant/contracts";
-import { files, itemImage, placeGooglePhotos } from "@cellar-assistant/db";
-import { and, eq } from "@cellar-assistant/db/orm";
-import { isOwner } from "@cellar-assistant/policy";
+import {
+  files,
+  itemImage,
+  placeGooglePhotos,
+  user,
+} from "@cellar-assistant/db";
+import { and, eq, inArray, isNotNull, sql } from "@cellar-assistant/db/orm";
+import { canSeeProfile, isOwner } from "@cellar-assistant/policy";
 import type { ActorId, DaprClient } from "@dapr/dapr";
 import { EntityActorBase } from "../lib/actor-base.ts";
 import { detectImageMime, type ImageMime } from "../lib/ai/image-mime.ts";
+import { canSeeCheckInDetailsSql } from "../lib/check-in-visibility.ts";
 import type { DbOrTx } from "../lib/db.ts";
 import { actorDb } from "../lib/db.ts";
 import {
@@ -178,6 +187,8 @@ import {
   readUrlWindowSettings,
   stableReadWindow,
 } from "../lib/s3-presign.ts";
+import { isUuid } from "../lib/uuid.ts";
+import { visibilityScope } from "../lib/visibility-sql.ts";
 
 export type FileRow = typeof files.$inferSelect;
 type FileAggregate = { readonly file: FileRow };
@@ -231,6 +242,7 @@ export const uploadKeyOf = (key: string): string => `uploads/${key}`;
  * `select` first would only race the delete.
  */
 const ATTACHMENTS: Readonly<Record<string, string>> = {
+  check_ins_photo_file_id_files_id_fkey: "a drink log",
   item_image_file_id_files_id_fkey: "an item image",
   item_onboardings_front_label_image_id_files_id_fkey:
     "an item onboarding's front label",
@@ -526,6 +538,57 @@ export class FileActor
     );
   }
 
+  /**
+   * F-89: one turn signs a page of profile pictures (contract doc). One
+   * statement finds which ids are verified pictures and whose; each is
+   * signed in process (`presignGetPublic` dials nothing), under one window,
+   * so the URLs are the ones `presignRead` would have handed out.
+   *
+   * The only rule a picture has is `canSeeProfile` of its owner (the
+   * `canSee` doc, SV-D): this never signs a file through any other referent,
+   * so it can admit nothing `presignRead` would refuse. Addressed at the
+   * viewer's own id ({@link avatarBatchActorId}), and refused for anyone
+   * else, so no activation is shared between viewers.
+   */
+  async presignAvatars(
+    ctx: Ctx,
+    filter: AvatarBatchFilter,
+  ): Promise<readonly (ReadTarget | null)[]> {
+    const viewer = requireSignedIn(ctx, "see profile pictures");
+    if (viewer === null || avatarBatchActorId(viewer) !== this.key) {
+      throw new ForbiddenError(
+        `FileActor(${this.key}) signs pictures only for the viewer it is keyed by`,
+      );
+    }
+    const ids = filter.fileIds.map((id) => String(id).toLowerCase());
+    if (ids.length > AVATAR_BATCH_MAX_IDS) {
+      throw new ValidationError(
+        `presignAvatars takes at most ${AVATAR_BATCH_MAX_IDS} ids, got ${ids.length}`,
+      );
+    }
+    for (const id of ids) {
+      if (!isUuid(id)) throw new ValidationError(`not a file id: ${id}`);
+    }
+    if (ids.length === 0) return [];
+    const rows = await this.db
+      .select({ id: files.id, key: files.key, owner: user.id })
+      .from(files)
+      .innerJoin(user, eq(user.avatarFileId, files.id))
+      .where(and(inArray(files.id, ids), isNotNull(files.verifiedAt)));
+    const window = stableReadWindow(new Date(), readUrlWindowSettings());
+    const signed = new Map<string, ReadTarget>();
+    for (const row of rows) {
+      if (signed.has(row.id) || !canSeeProfile(ctx, { userId: row.owner })) {
+        continue;
+      }
+      signed.set(row.id, {
+        url: await this.#binding.presignGetPublic(row.key, window),
+        expiresAt: window.expiresAt.toISOString(),
+      });
+    }
+    return ids.map((id) => signed.get(id) ?? null);
+  }
+
   /** The half both read methods share, so neither can drift from the other. */
   async #readTarget(
     ctx: Ctx,
@@ -725,13 +788,49 @@ export class FileActor
    * The other three referents (`item_onboardings`' two label images and
    * `menu_scans`' two) are deliberately absent: both aggregates are owner-only,
    * and their owner is the uploader, so the first branch already covers them.
+   *
+   * **A drink log's photo (X02)** is the one viewer-dependent referent: it is
+   * readable by whoever may see what the drinker said in the log it is
+   * attached to — `canSeeCheckInDetails`, as SQL
+   * (`../lib/check-in-visibility.ts`): the drinker, a companion, or a friend
+   * of the drinker. Seeing the bottle's cellar is not enough: a cellar viewer
+   * sees that a bottle was drunk, not the photo. A file attached to no log
+   * they may see that of stays as private as before.
+   *
+   * **A profile picture (SV-D)** is readable by whoever may see the profile
+   * that names it (`user.avatar_file_id`, `canSeeProfile`): every surface
+   * that shows a person shows their picture. `UserActor.setAvatar` only ever
+   * names the user's own upload, so this widens nothing they did not choose.
    */
   protected override async canSee(
     ctx: Ctx,
     aggregate: FileAggregate,
   ): Promise<boolean> {
     if (isOwner(ctx, aggregate.file.uploadedBy)) return true;
-    return await this.#hasPublicReferent();
+    if (await this.#hasPublicReferent()) return true;
+    if (await this.#isVisibleAvatar(ctx)) return true;
+    return await this.#hasVisibleCheckInReferent(ctx);
+  }
+
+  async #isVisibleAvatar(ctx: Ctx): Promise<boolean> {
+    const [owner] = await this.db
+      .select({ id: user.id })
+      .from(user)
+      .where(eq(user.avatarFileId, this.key))
+      .limit(1);
+    return owner !== undefined && canSeeProfile(ctx, { userId: owner.id });
+  }
+
+  async #hasVisibleCheckInReferent(ctx: Ctx): Promise<boolean> {
+    const scope = await visibilityScope(this.db, ctx);
+    if (scope.kind === "nothing") return false;
+    const { rows } = await this.db.execute<{ id: string }>(sql`
+      select ci.id from public.check_ins ci
+      where ci.photo_file_id = ${this.key}::uuid
+        and ${canSeeCheckInDetailsSql(scope, "ci")}
+      limit 1
+    `);
+    return rows.length > 0;
   }
 
   /**

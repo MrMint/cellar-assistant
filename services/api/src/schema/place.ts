@@ -63,6 +63,7 @@ import type {
   PlaceMenuItemDto,
   PlacePhotoDto,
   PlaceReview,
+  PlaceReviewStatus,
   RecordedAccess,
 } from "@cellar-assistant/contracts";
 import {
@@ -84,6 +85,7 @@ import {
   PlaceActorDescriptor,
   PlaceCreationActorDescriptor,
   placeCreationActorId,
+  ValidationError,
 } from "@cellar-assistant/contracts";
 import type { ApiContext } from "../context.ts";
 import { Brand } from "./brand.ts";
@@ -155,6 +157,31 @@ const PlaceBrandRelationshipEnum = builder.enumType("PlaceBrandRelationship", {
   description: "`place_brands_relationship_type_check`, verbatim.",
   values: PLACE_BRAND_RELATIONSHIPS,
 });
+
+/**
+ * X27 / D28 — `places.review_status`, upper-cased like every other enum
+ * here. The mapping is the identity on the letters, so it stays a function
+ * rather than a table to keep in step.
+ */
+export const PlaceReviewStatusEnum = builder.enumType("PlaceReviewStatus", {
+  description:
+    "Where a place is in its review. PENDING: saved, visible to the person " +
+    "who added it and nobody else, waiting for the AI review (or for a " +
+    "review that could not run). APPROVED: shared on everyone's map. " +
+    "REJECTED: still only visible to the person who added it, with " +
+    "`rejectionReason`; they can edit it (which sends it for review again) " +
+    "or delete it.",
+  values: ["PENDING", "APPROVED", "REJECTED"] as const,
+});
+
+export const reviewStatusOut = (
+  status: PlaceReviewStatus,
+): "PENDING" | "APPROVED" | "REJECTED" =>
+  status === "approved"
+    ? "APPROVED"
+    : status === "rejected"
+      ? "REJECTED"
+      : "PENDING";
 
 const EnrichmentStatusEnum = builder.enumType("PlaceEnrichmentStatus", {
   description:
@@ -571,6 +598,42 @@ builder.objectFields(PlaceStubType, (t) => ({
     resolve: via("lastSyncAt"),
   }),
 
+  reviewStatus: t.field({
+    type: PlaceReviewStatusEnum,
+    description:
+      "X27. Only the person who added a place ever sees it PENDING or " +
+      "REJECTED — to anyone else such a place does not exist.",
+    resolve: async (place, _args, context) =>
+      reviewStatusOut((await loadPlace(place, context)).reviewStatus),
+  }),
+  rejectionReason: t.string({
+    nullable: true,
+    description:
+      "Why the review said no, addressed to the person who added the place. " +
+      "Null unless REJECTED.",
+    resolve: via("rejectionReason"),
+  }),
+  suggestedCategories: t.stringList({
+    description:
+      "Categories the review suggested ('also tagged as…'), for the person " +
+      "who added the place to confirm (`acceptPlaceSuggestion`) or dismiss. " +
+      "Never applied on their own. Empty for everyone else.",
+    resolve: via("suggestedCategories"),
+  }),
+  suggestedDescription: t.string({
+    nullable: true,
+    description:
+      "A description the review offered for a place that has none — the " +
+      "creator's to take or dismiss. Null for everyone else.",
+    resolve: via("suggestedDescription"),
+  }),
+  reviewedAt: t.field({
+    type: "DateTime",
+    nullable: true,
+    description: "When the latest verdict landed; null while PENDING.",
+    resolve: via("reviewedAt"),
+  }),
+
   enrichment: t.field({
     type: PlaceEnrichmentType,
     nullable: true,
@@ -657,9 +720,9 @@ const PlaceReviewType = builder
   .objectRef<PlaceReview>("PlaceReview")
   .implement({
     description:
-      "What the AI review said. Null on `CreatePlacePayload` when no review " +
-      "ran — an unconfigured or failing model degrades to no review rather " +
-      "than to a fabricated approval.",
+      "What the AI review said. Always null on `CreatePlacePayload` since " +
+      "X27: the review runs after the place is saved, and its verdict is " +
+      "`Place.reviewStatus`. Kept so existing documents still validate.",
     fields: (t) => ({
       approved: t.exposeBoolean("approved"),
       confidenceAdjustment: t.exposeFloat("confidenceAdjustment", {
@@ -691,9 +754,10 @@ const CreatePlacePayloadType = builder
   .objectRef<CreatePlacePayload>("CreatePlacePayload")
   .implement({
     description:
-      "The created place, plus what the checks found. A *blocking* duplicate " +
-      "is a ConflictError instead; these are the near-misses that were " +
-      "allowed through and are worth showing the user.",
+      "The created place — PENDING, visible only to its creator until the " +
+      "review approves it — plus what the checks found. A *blocking* " +
+      "duplicate is a ConflictError instead; these are the near-misses that " +
+      "were allowed through and are worth showing the user.",
     fields: (t) => ({
       place: t.field({ type: PlaceStubType, resolve: (p) => p.place }),
       nearbyDuplicates: t.field({
@@ -827,6 +891,47 @@ const CreatePlaceInput = builder.inputType("CreatePlaceInput", {
     }),
   }),
 });
+
+const ResubmitPlaceInput = builder.inputType("ResubmitPlaceInput", {
+  description:
+    "The whole place, as the creator wants it now — the same fields and " +
+    "rules as `CreatePlaceInput`, without the id (the place has one). Not a " +
+    "patch: every field is the full new answer, so an omitted or null field " +
+    "is 'none', exactly as on `createPlace`.",
+  fields: (t) => ({
+    name: t.string({ required: true, description: "2–200 characters." }),
+    categories: t.stringList({ required: true, description: "At least one." }),
+    location: t.field({ type: LngLatInput, required: true }),
+    streetAddress: t.string({ required: false }),
+    locality: t.string({ required: false }),
+    region: t.string({ required: false }),
+    postcode: t.string({ required: false }),
+    countryCode: t.string({ required: false, description: "Two letters." }),
+    phone: t.string({ required: false }),
+    website: t.string({ required: false }),
+    email: t.string({ required: false }),
+    description: t.string({ required: false, description: "Under 1000." }),
+  }),
+});
+
+const AcceptPlaceSuggestionInput = builder.inputType(
+  "AcceptPlaceSuggestionInput",
+  {
+    description:
+      "Exactly one: a `category` from `Place.suggestedCategories`, or " +
+      "`description: true` to take `Place.suggestedDescription`.",
+    fields: (t) => ({
+      category: t.string({ required: false }),
+      description: t.boolean({ required: false }),
+    }),
+  },
+);
+
+const DeletedPlaceType = builder
+  .objectRef<{ readonly placeId: string }>("DeletedPlace")
+  .implement({
+    fields: (t) => ({ placeId: t.exposeID("placeId") }),
+  });
 
 const EnrichPlaceInput = builder.inputType("EnrichPlaceInput", {
   description:
@@ -1003,10 +1108,12 @@ builder.mutationField("createPlace", (t) =>
   t.field({
     type: CreatePlacePayloadType,
     description:
-      "Rate limit, duplicate check, AI review, then PlaceActor.create — one " +
-      "submission at a time per user (PlaceCreationActor, keyed by the " +
-      "viewer), with the cross-user duplicate check re-run under database " +
-      "locks inside PlaceActor.create. The only place-creation path a client " +
+      "Rate limit, duplicate check, then PlaceActor.create — one submission " +
+      "at a time per user (PlaceCreationActor, keyed by the viewer), with the " +
+      "duplicate check re-run under database locks inside PlaceActor.create. " +
+      "The place is saved at once as PENDING — on its creator's map with " +
+      "'Under review', on nobody else's — and the AI review runs afterwards, " +
+      "from the outbox (X27 / D28). The only place-creation path a client " +
       "has; there is deliberately no mutation that reaches PlaceActor.create " +
       "directly.",
     errors: {},
@@ -1026,6 +1133,95 @@ builder.mutationField("createPlace", (t) =>
         .actor(PlaceCreationActorDescriptor, placeCreationActorId(viewerId))
         .createPlace(toCreateInput(args.input));
     },
+  }),
+);
+
+/* X27 / D28 — the creator's controls over a place under review. */
+
+builder.mutationField("resubmitPlace", (t) =>
+  t.field({
+    type: PlaceStubType,
+    description:
+      "Edit a PENDING or REJECTED place you added and send it for review " +
+      "again — the whole place, not a patch: it goes back to PENDING, its old " +
+      "verdict and suggestions are " +
+      "cleared, and a fresh review is queued. An APPROVED place is shared and " +
+      "is not editable here. To anyone but its creator the place does not " +
+      "exist (NotFound).",
+    errors: {},
+    args: {
+      placeId: t.arg.id({ required: true }),
+      input: t.arg({ type: ResubmitPlaceInput, required: true }),
+    },
+    resolve: (_root, args, context) => {
+      const { placeId: _ignored, ...input } = toCreateInput(args.input);
+      return context
+        .actor(PlaceActorDescriptor, String(args.placeId))
+        .editUnshared(input);
+    },
+  }),
+);
+
+builder.mutationField("deletePlace", (t) =>
+  t.field({
+    type: DeletedPlaceType,
+    description:
+      "Delete a PENDING or REJECTED place you added. A shared place cannot " +
+      "be deleted, nor one a tier list or menu scan still points at " +
+      "(Conflict, naming which).",
+    errors: {},
+    args: { placeId: t.arg.id({ required: true }) },
+    resolve: (_root, args, context) =>
+      context
+        .actor(PlaceActorDescriptor, String(args.placeId))
+        .deleteUnshared(),
+  }),
+);
+
+builder.mutationField("acceptPlaceSuggestion", (t) =>
+  t.field({
+    type: PlaceStubType,
+    description:
+      "Confirm one of the review's suggestions on a place you added: a " +
+      "suggested category is added to `categories`; the suggested " +
+      "description becomes `description` (only when there is none). The " +
+      "suggestion is used up either way.",
+    errors: {},
+    args: {
+      placeId: t.arg.id({ required: true }),
+      input: t.arg({ type: AcceptPlaceSuggestionInput, required: true }),
+    },
+    resolve: (_root, args, context) => {
+      const category = present(args.input.category)
+        ? String(args.input.category)
+        : null;
+      const description = args.input.description === true;
+      if ((category === null) === !description) {
+        throw new ValidationError(
+          "name exactly one suggestion: a `category`, or `description: true`",
+        );
+      }
+      return context
+        .actor(PlaceActorDescriptor, String(args.placeId))
+        .acceptSuggestion(
+          category === null ? { description: true } : { category },
+        );
+    },
+  }),
+);
+
+builder.mutationField("dismissPlaceSuggestions", (t) =>
+  t.field({
+    type: PlaceStubType,
+    description:
+      "Dismiss every remaining review suggestion on a place you added. " +
+      "Idempotent.",
+    errors: {},
+    args: { placeId: t.arg.id({ required: true }) },
+    resolve: (_root, args, context) =>
+      context
+        .actor(PlaceActorDescriptor, String(args.placeId))
+        .dismissSuggestions(),
   }),
 );
 

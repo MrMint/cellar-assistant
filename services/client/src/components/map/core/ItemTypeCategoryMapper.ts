@@ -1,4 +1,3 @@
-import { ITEM_TYPE_JOY_COLORS } from "../constants/colors";
 import type { ItemType, PlaceCategory } from "../types";
 
 // Item type configuration for UI
@@ -6,7 +5,6 @@ export interface ItemTypeConfig {
   id: ItemType;
   label: string;
   icon: string; // Icon key for ITEM_TYPE_ICONS mapping
-  color: "danger" | "warning" | "neutral" | "success"; // Joy UI color scheme
 }
 
 export const ITEM_TYPES: ItemTypeConfig[] = [
@@ -14,37 +12,31 @@ export const ITEM_TYPES: ItemTypeConfig[] = [
     id: "wine",
     label: "Wine",
     icon: "WineBar",
-    color: ITEM_TYPE_JOY_COLORS.wine,
   },
   {
     id: "beer",
     label: "Beer",
     icon: "SportsBar",
-    color: ITEM_TYPE_JOY_COLORS.beer,
   },
   {
     id: "spirit",
     label: "Spirits",
     icon: "LocalBar",
-    color: ITEM_TYPE_JOY_COLORS.spirit,
   },
   {
     id: "coffee",
     label: "Coffee",
     icon: "Coffee",
-    color: ITEM_TYPE_JOY_COLORS.coffee,
   },
   {
     id: "sake",
     label: "Sake",
     icon: "Sake",
-    color: ITEM_TYPE_JOY_COLORS.sake,
   },
   {
     id: "tea",
     label: "Tea",
     icon: "Tea",
-    color: ITEM_TYPE_JOY_COLORS.tea,
   },
 ];
 

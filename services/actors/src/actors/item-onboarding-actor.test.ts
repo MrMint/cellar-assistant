@@ -17,6 +17,8 @@ import type { Ctx } from "@cellar-assistant/contracts";
 import {
   adminCtx,
   ConflictError,
+  DRAFT_IMAGE_BATCH_MAX_IDS,
+  draftImageBatchActorId,
   ForbiddenError,
   NotFoundError,
   systemCtx,
@@ -40,6 +42,7 @@ import { unconfiguredItemDefaults } from "../lib/item-defaults.ts";
 import {
   activate,
   closeTestDb,
+  createActor,
   deliveryCtx,
   refusalOf,
   resolveTestDatabase,
@@ -47,8 +50,13 @@ import {
   withTestDb,
 } from "../lib/testing.ts";
 import { CellarActor } from "./cellar-actor.ts";
+import { DraftsCollectionActor } from "./drafts-collection-actor.ts";
 import { ItemActor } from "./item-actor.ts";
-import type { BarcodeEnsurer, BrandResolver } from "./item-onboarding-actor.ts";
+import type {
+  BarcodeEnsurer,
+  BrandResolver,
+  ImageSigner,
+} from "./item-onboarding-actor.ts";
 import { ItemOnboardingActor } from "./item-onboarding-actor.ts";
 
 const daprClient = (): DaprClient =>
@@ -347,6 +355,41 @@ describe.skipIf(skip)("ItemOnboardingActor (B2)", () => {
       });
     });
 
+    it("F-77: keeps the kind the label read found, so the kind can follow the shot", async () => {
+      await withOnboardingDb(async (db) => {
+        const user = await seedUser(db);
+        // Another kind's label: the seam keeps no values and names the kind,
+        // and its raw completion (stored as `raw_defaults`) says so too.
+        const ai = provider({
+          defaults: {},
+          raw: '```json\n{"imageDescription":"a beer can","labelIsLegible":true,"labelItemType":"BEER"}\n```',
+          model: "test-vision-1",
+          confidence: 0,
+          brandName: null,
+          detectedItemType: "BEER",
+        });
+        const id = randomUUID();
+        const actor = await activate(newOnboardingActor(id, db, ai));
+        const dto = await actor.start(userCtx(user, "r"), { itemType: "WINE" });
+        expect(dto.itemType).toBe("WINE");
+        expect(dto.detectedItemType).toBe("BEER");
+        // Stored, not only returned: a fresh activation reads it back.
+        const again = await activate(newOnboardingActor(id, db, ai));
+        expect((await again.get(userCtx(user, "r2"))).detectedItemType).toBe(
+          "BEER",
+        );
+
+        // A read that named no kind (or an older row) reads null.
+        const plain = await activate(
+          newOnboardingActor(randomUUID(), db, provider()),
+        );
+        expect(
+          (await plain.start(userCtx(user, "r3"), { itemType: "WINE" }))
+            .detectedItemType,
+        ).toBeNull();
+      });
+    });
+
     it("is idempotent: a retry after a completed extraction does not call the model again", async () => {
       await withOnboardingDb(async (db) => {
         const user = await seedUser(db);
@@ -358,6 +401,42 @@ describe.skipIf(skip)("ItemOnboardingActor (B2)", () => {
         expect(ai.calls).toBe(1);
         await actor.start(userCtx(user, "r"), { itemType: "WINE" });
         expect(ai.calls).toBe(1);
+      });
+    });
+
+    it("answers a closed session as it stands: no model call, no reopening", async () => {
+      await withOnboardingDb(async (db) => {
+        const user = await seedUser(db);
+        const ai = provider() as ItemDefaultsProvider & { calls: number };
+        const confirmed = randomUUID();
+        await (await activate(newOnboardingActor(confirmed, db, ai))).start(
+          userCtx(user, "r"),
+          { itemType: "WINE" },
+        );
+        await db.execute(
+          sql`update public.item_onboardings set status = 'CONFIRMED' where id = ${confirmed}::uuid`,
+        );
+        const matched = randomUUID();
+        const matchedActor = await activate(
+          newOnboardingActor(matched, db, ai),
+        );
+        await matchedActor.start(userCtx(user, "r"), { itemType: "WINE" });
+        await matchedActor.closeAsMatched(userCtx(user, "r"));
+        expect(ai.calls).toBe(2);
+
+        // X05's `?draft=` resume asks again, with no label ids at all.
+        const again = await (
+          await activate(newOnboardingActor(confirmed, db, ai))
+        ).start(userCtx(user, "r2"), { itemType: "WINE" });
+        expect(again.status).toBe("CONFIRMED");
+        expect(
+          (
+            await (
+              await activate(newOnboardingActor(matched, db, ai))
+            ).start(userCtx(user, "r2"), { itemType: "WINE" })
+          ).status,
+        ).toBe("MATCHED");
+        expect(ai.calls).toBe(2);
       });
     });
 
@@ -775,6 +854,67 @@ describe.skipIf(skip)("ItemOnboardingActor (B2)", () => {
   });
 
   /* ------------------------------------------------------------------ */
+  /* closeAsMatched — an existing item was filed instead                 */
+  /* ------------------------------------------------------------------ */
+
+  describe("closeAsMatched (quick-add / +1 bottle of an existing item)", () => {
+    it("closes a read session as MATCHED, idempotently, creating nothing", async () => {
+      await withOnboardingDb(async (db) => {
+        const owner = await seedUser(db);
+        const id = randomUUID();
+        const actor = await activate(newOnboardingActor(id, db, provider()));
+        await actor.start(userCtx(owner, "r"), { itemType: "WINE" });
+
+        const closed = await actor.closeAsMatched(userCtx(owner, "r"));
+        expect(closed.status).toBe("MATCHED");
+        expect((await actor.closeAsMatched(userCtx(owner, "r2"))).status).toBe(
+          "MATCHED",
+        );
+        expect((await actor.get(userCtx(owner, "r"))).status).toBe("MATCHED");
+        expect(
+          await db
+            .select({ method: outbox.method })
+            .from(outbox)
+            .where(eq(outbox.status, "pending")),
+        ).toEqual([]);
+      });
+    });
+
+    it("never downgrades a session that confirmed an item of its own", async () => {
+      await withOnboardingDb(async (db) => {
+        const owner = await seedUser(db);
+        const id = randomUUID();
+        await (await activate(newOnboardingActor(id, db, provider()))).start(
+          userCtx(owner, "r"),
+          { itemType: "WINE" },
+        );
+        await db.execute(
+          sql`update public.item_onboardings set status = 'CONFIRMED' where id = ${id}::uuid`,
+        );
+        const actor = await activate(newOnboardingActor(id, db));
+        expect((await actor.closeAsMatched(userCtx(owner, "r"))).status).toBe(
+          "CONFIRMED",
+        );
+      });
+    });
+
+    it("a reprocess refreshes the proposal without reopening the session", async () => {
+      await withOnboardingDb(async (db) => {
+        const owner = await seedUser(db);
+        const id = randomUUID();
+        const actor = await activate(newOnboardingActor(id, db, provider()));
+        await actor.start(userCtx(owner, "r"), { itemType: "WINE" });
+        await actor.closeAsMatched(userCtx(owner, "r"));
+
+        await expect(
+          actor.reprocess(systemCtx("job-turn"), {}),
+        ).resolves.toMatchObject({ reprocessed: true });
+        expect((await actor.get(userCtx(owner, "r"))).status).toBe("MATCHED");
+      });
+    });
+  });
+
+  /* ------------------------------------------------------------------ */
   /* confirm — B2's headline acceptance                                  */
   /* ------------------------------------------------------------------ */
 
@@ -1062,19 +1202,26 @@ describe.skipIf(skip)("ItemOnboardingActor (B2)", () => {
       });
     });
 
-    it("names each of the four NOT NULL columns the outbox used to swallow", async () => {
+    // Four until X19 made `wines.vintage` (NULL = non-vintage) and
+    // `coffees.description` nullable; the two left are still refused here,
+    // and so is a wine whose vintage was never answered — `null` is the
+    // answer "NV", an absent key is not an answer at all.
+    it("names each NOT NULL column the outbox used to swallow", async () => {
       await withOnboardingDb(async (db) => {
         const owner = await seedUser(db);
         await seedReferenceValues(db);
         const cases = [
-          { itemType: "WINE", attributes: { style: "RED" }, field: /vintage/ },
+          {
+            itemType: "WINE",
+            attributes: { style: "RED" },
+            field: /wine\.vintage: a year, or null/,
+          },
           {
             itemType: "WINE",
             attributes: { vintage: "2019-01-01" },
             field: /style/,
           },
           { itemType: "SPIRIT", attributes: {}, field: /spiritType/ },
-          { itemType: "COFFEE", attributes: {}, field: /description/ },
         ] as const;
 
         for (const testCase of cases) {
@@ -1440,6 +1587,7 @@ describe.skipIf(skip)("ItemOnboardingActor concealment", () => {
     ["get", "NOT_FOUND", (actor, ctx) => actor.get(ctx)],
     ["defaults", "NOT_FOUND", (actor, ctx) => actor.defaults(ctx)],
     ["confirm", "NOT_FOUND", (actor, ctx) => actor.confirm(ctx, {} as never)],
+    ["closeAsMatched", "NOT_FOUND", (actor, ctx) => actor.closeAsMatched(ctx)],
     ["reprocess", "FORBIDDEN", (actor, ctx) => actor.reprocess(ctx)],
   ];
 
@@ -1469,3 +1617,602 @@ describe.skipIf(skip)("ItemOnboardingActor concealment", () => {
     });
   });
 });
+
+/* -------------------------------------------------------------------------- */
+/* SV-B · MC-drafts — saved "Needs details" drafts (L6)                         */
+/* -------------------------------------------------------------------------- */
+
+describe.skipIf(skip)("ItemOnboardingActor.saveDraft (SV-B, MC-drafts)", () => {
+  afterAll(closeTestDb);
+
+  const draftRow = async (db: DbOrTx, id: string) =>
+    (
+      await db.execute<Record<string, unknown>>(sql`
+        select status, cellar_id::text as "cellarId", confirmed_fields as "confirmedFields",
+               vintage_answer as "vintageAnswer", display_name as "displayName",
+               draft_fields as "draftFields"
+        from public.item_onboardings where id = ${id}::uuid
+      `)
+    ).rows[0];
+
+  /** An owner, a cellar of theirs, and an open wine draft. */
+  const openWineDraft = async (db: DbOrTx) => {
+    const owner = await seedUser(db);
+    await seedReferenceValues(db);
+    const cellarId = await seedCellar(db, owner);
+    const onboardingId = randomUUID();
+    const actor = await activate(
+      newOnboardingActor(
+        onboardingId,
+        db,
+        provider(),
+        undefined,
+        brandRegistry(db),
+      ),
+    );
+    await actor.openDraft(userCtx(owner, "r"), { itemType: "WINE" });
+    return { owner, cellarId, onboardingId, actor };
+  };
+
+  it("keeps a draft missing a floor field as NEEDS_DETAILS, with everything it was told", async () => {
+    await withOnboardingDb(async (db) => {
+      const { owner, cellarId, actor } = await openWineDraft(db);
+      const saved = await actor.saveDraft(userCtx(owner, "r"), {
+        cellarId,
+        fields: { name: " Demo Rioja ", brandName: "Demo Bodega" },
+        confirmedFields: ["name", "name", " brandName "],
+        vintageAnswer: "UNANSWERED",
+      });
+      expect(saved).toMatchObject({
+        status: "NEEDS_DETAILS",
+        cellarId,
+        confirmedFields: ["name", "brandName"],
+        vintageAnswer: "UNANSWERED",
+        displayName: "Demo Rioja",
+        displayMaker: "Demo Bodega",
+        imageId: null,
+      });
+      expect(JSON.parse(saved.draftFields ?? "null")).toMatchObject({
+        name: "Demo Rioja",
+        brandName: "Demo Bodega",
+      });
+    });
+  });
+
+  it("stores No vintage as an answer, distinct from unanswered", async () => {
+    await withOnboardingDb(async (db) => {
+      const { owner, actor } = await openWineDraft(db);
+      const ctx = userCtx(owner, "r");
+      const fields = { name: "Demo Cava", attributes: { style: "RED" } };
+      const unanswered = await actor.saveDraft(ctx, {
+        fields,
+        confirmedFields: [],
+        vintageAnswer: "UNANSWERED",
+      });
+      // The floor wants the vintage answered: unanswered still needs details.
+      expect(unanswered.status).toBe("NEEDS_DETAILS");
+      const nv = await actor.saveDraft(ctx, {
+        fields,
+        confirmedFields: [],
+        vintageAnswer: "NON_VINTAGE",
+      });
+      expect(nv.vintageAnswer).toBe("NON_VINTAGE");
+      // Floor met: it stays listed (still NEEDS_DETAILS) until confirm.
+      expect(nv.status).toBe("NEEDS_DETAILS");
+    });
+  });
+
+  it("a draft set aside with its floor met is still NEEDS_DETAILS (FR-1)", async () => {
+    await withOnboardingDb(async (db) => {
+      const { owner, actor } = await openWineDraft(db);
+      const saved = await actor.saveDraft(userCtx(owner, "r"), {
+        fields: { name: "Demo Red", attributes: { style: "RED" } },
+        confirmedFields: [],
+        vintageAnswer: "NON_VINTAGE",
+      });
+      expect(saved.status).toBe("NEEDS_DETAILS");
+    });
+  });
+
+  it("a named beer set aside with Finish later is NEEDS_DETAILS, though its floor is just a name (F-41)", async () => {
+    await withOnboardingDb(async (db) => {
+      const owner = await seedUser(db);
+      await seedReferenceValues(db);
+      const actor = await activate(
+        newOnboardingActor(
+          randomUUID(),
+          db,
+          provider(),
+          undefined,
+          brandRegistry(db),
+        ),
+      );
+      await actor.openDraft(userCtx(owner, "r"), { itemType: "BEER" });
+      const saved = await actor.saveDraft(userCtx(owner, "r"), {
+        fields: { name: "Demo Pale Ale" },
+        confirmedFields: [],
+        vintageAnswer: "UNANSWERED",
+      });
+      expect(saved.status).toBe("NEEDS_DETAILS");
+    });
+  });
+
+  it("refuses another person's draft, as absent, and writes nothing", async () => {
+    await withOnboardingDb(async (db) => {
+      const { onboardingId, actor } = await openWineDraft(db);
+      const stranger = await seedUser(db);
+      await expect(
+        actor.saveDraft(userCtx(stranger, "r"), {
+          fields: { name: "Mine now" },
+          confirmedFields: [],
+          vintageAnswer: "UNANSWERED",
+        }),
+      ).rejects.toBeInstanceOf(NotFoundError);
+      expect(await draftRow(db, onboardingId)).toMatchObject({
+        status: "START",
+        displayName: null,
+        draftFields: null,
+      });
+    });
+  });
+
+  it("refuses a cellar the owner cannot write, as absent, and writes nothing", async () => {
+    await withOnboardingDb(async (db) => {
+      const { owner, onboardingId, actor } = await openWineDraft(db);
+      const other = await seedUser(db);
+      const theirs = await seedCellar(db, other);
+      await expect(
+        actor.saveDraft(userCtx(owner, "r"), {
+          cellarId: theirs,
+          fields: { name: "Demo" },
+          confirmedFields: [],
+          vintageAnswer: "UNANSWERED",
+        }),
+      ).rejects.toBeInstanceOf(NotFoundError);
+      expect(await draftRow(db, onboardingId)).toMatchObject({
+        status: "START",
+        cellarId: null,
+      });
+    });
+  });
+
+  it("refuses bad shapes before writing", async () => {
+    await withOnboardingDb(async (db) => {
+      const { owner, actor } = await openWineDraft(db);
+      const ctx = userCtx(owner, "r");
+      const bad = [
+        { fields: [], confirmedFields: [], vintageAnswer: "UNANSWERED" },
+        {
+          fields: { name: 3 },
+          confirmedFields: [],
+          vintageAnswer: "UNANSWERED",
+        },
+        { fields: {}, confirmedFields: "name", vintageAnswer: "UNANSWERED" },
+        { fields: {}, confirmedFields: [], vintageAnswer: "MAYBE" },
+        {
+          fields: { attributes: [] },
+          confirmedFields: [],
+          vintageAnswer: "VINTAGE",
+        },
+        {
+          cellarId: "nope",
+          fields: {},
+          confirmedFields: [],
+          vintageAnswer: "VINTAGE",
+        },
+      ];
+      for (const input of bad) {
+        await expect(
+          actor.saveDraft(ctx, input as never),
+        ).rejects.toBeInstanceOf(ValidationError);
+      }
+    });
+  });
+
+  it("refuses a closed session: its bottle is filed already", async () => {
+    await withOnboardingDb(async (db) => {
+      const { owner, actor } = await openWineDraft(db);
+      const ctx = userCtx(owner, "r");
+      await actor.closeAsMatched(ctx);
+      await expect(
+        actor.saveDraft(ctx, {
+          fields: { name: "Demo" },
+          confirmedFields: [],
+          vintageAnswer: "UNANSWERED",
+        }),
+      ).rejects.toBeInstanceOf(ConflictError);
+    });
+  });
+
+  it("start on a saved draft answers it as it stands, without a model call", async () => {
+    await withOnboardingDb(async (db) => {
+      const owner = await seedUser(db);
+      const onboardingId = randomUUID();
+      const model = provider();
+      const actor = await activate(newOnboardingActor(onboardingId, db, model));
+      const ctx = userCtx(owner, "r");
+      await actor.openDraft(ctx, { itemType: "WINE" });
+      await actor.saveDraft(ctx, {
+        fields: { name: "Demo" },
+        confirmedFields: [],
+        vintageAnswer: "UNANSWERED",
+      });
+      const again = await actor.start(ctx, { itemType: "WINE" });
+      expect(again.status).toBe("NEEDS_DETAILS");
+      expect((model as unknown as { calls: number }).calls).toBe(0);
+    });
+  });
+
+  it("confirm from NEEDS_DETAILS follows the normal path into the draft's cellar, and keeps its link", async () => {
+    await withOnboardingDb(async (db) => {
+      const { owner, cellarId, onboardingId, actor } = await openWineDraft(db);
+      const ctx = userCtx(owner, "r");
+      await actor.saveDraft(ctx, {
+        cellarId,
+        fields: { name: "Demo Rioja" },
+        confirmedFields: ["name"],
+        vintageAnswer: "UNANSWERED",
+      });
+      const result = await actor.confirm(ctx, {
+        name: "Demo Rioja",
+        attributes: { vintage: null, style: "RED" },
+        confirmedFields: ["name", "style"],
+      });
+      expect(result.cellarItemId).not.toBeNull();
+      await drain(db);
+      expect(await draftRow(db, onboardingId)).toMatchObject({
+        status: "CONFIRMED",
+        confirmedFields: ["name", "style"],
+      });
+      expect(
+        await countOf(
+          db,
+          sql`select count(*) as count from public.wines where item_onboarding_id = ${onboardingId}::uuid`,
+        ),
+      ).toBe(1);
+      expect(
+        await countOf(
+          db,
+          sql`select count(*) as count from public.cellar_items where cellar_id = ${cellarId}::uuid`,
+        ),
+      ).toBe(1);
+      // A closed draft cannot be saved over.
+      await expect(
+        actor.saveDraft(ctx, {
+          fields: {},
+          confirmedFields: [],
+          vintageAnswer: "UNANSWERED",
+        }),
+      ).rejects.toBeInstanceOf(ConflictError);
+    });
+  });
+
+  it("confirm re-checks the draft's cellar: one the owner lost access to is refused", async () => {
+    await withOnboardingDb(async (db) => {
+      const owner = await seedUser(db);
+      const other = await seedUser(db);
+      await seedReferenceValues(db);
+      // Shared with the owner as a co-owner, then unshared.
+      const shared = await seedCellar(db, other);
+      await db.execute(sql`
+        insert into public.cellar_owners (cellar_id, user_id) values (${shared}::uuid, ${owner}::uuid)
+      `);
+      const onboardingId = randomUUID();
+      const actor = await activate(newOnboardingActor(onboardingId, db));
+      const ctx = userCtx(owner, "r");
+      await actor.openDraft(ctx, { itemType: "WINE" });
+      await actor.saveDraft(ctx, {
+        cellarId: shared,
+        fields: { name: "Demo" },
+        confirmedFields: [],
+        vintageAnswer: "UNANSWERED",
+      });
+      await db.execute(
+        sql`delete from public.cellar_owners where cellar_id = ${shared}::uuid`,
+      );
+      await expect(
+        actor.confirm(ctx, {
+          name: "Demo",
+          attributes: { vintage: null, style: "RED" },
+        }),
+      ).rejects.toBeInstanceOf(NotFoundError);
+    });
+  });
+});
+
+describe.skipIf(skip)("ItemOnboardingActor.confirmItemFields (F-75)", () => {
+  /** A confirmed wine session whose read guessed name and country. */
+  const seedGuessedWine = async (db: DbOrTx, owner: string) => {
+    await db.execute(
+      sql`insert into public.wine_style (value) values ('RED') on conflict do nothing`,
+    );
+    const onboardingId = randomUUID();
+    await db.execute(sql`
+      insert into public.item_onboardings
+        (id, user_id, item_type, status, defaults, confirmed_fields)
+      values (${onboardingId}::uuid, ${owner}::uuid, 'WINE', 'CONFIRMED',
+              ${JSON.stringify({ name: "Demo Red", fieldConfidence: { name: "sure", country: "check" } })}::jsonb,
+              '{name}'::text[])
+    `);
+    const wineId = randomUUID();
+    await db.execute(sql`
+      insert into public.wines (id, name, created_by_id, style, item_onboarding_id)
+      values (${wineId}::uuid, 'Demo Red', ${owner}::uuid, 'RED', ${onboardingId}::uuid)
+    `);
+    return { onboardingId, wineId };
+  };
+  const confirmedOf = async (db: DbOrTx, id: string) =>
+    (
+      await db.execute<{ confirmedFields: string[] }>(sql`
+        select confirmed_fields as "confirmedFields"
+        from public.item_onboardings where id = ${id}::uuid
+      `)
+    ).rows[0]?.confirmedFields;
+
+  it("adds the fields the creator confirmed on the item's edit page, keeping the earlier ones", async () => {
+    await withOnboardingDb(async (db) => {
+      const owner = await seedUser(db);
+      const { onboardingId, wineId } = await seedGuessedWine(db, owner);
+      const actor = await activate(newOnboardingActor(onboardingId, db));
+      const dto = await actor.confirmItemFields(userCtx(owner, "r"), {
+        item: { type: "WINE", id: wineId },
+        fields: [" country ", "name"],
+      });
+      expect(dto.confirmedFields).toEqual(["name", "country"]);
+      expect(await confirmedOf(db, onboardingId)).toEqual(["name", "country"]);
+    });
+  });
+
+  it("refuses anyone but the creator, and an item another session made, writing nothing", async () => {
+    await withOnboardingDb(async (db) => {
+      const owner = await seedUser(db);
+      const stranger = await seedUser(db);
+      const { onboardingId, wineId } = await seedGuessedWine(db, owner);
+      const other = await seedGuessedWine(db, owner);
+      const actor = await activate(newOnboardingActor(onboardingId, db));
+      await expect(
+        actor.confirmItemFields(userCtx(stranger, "r"), {
+          item: { type: "WINE", id: wineId },
+          fields: ["country"],
+        }),
+      ).rejects.toBeInstanceOf(NotFoundError);
+      await expect(
+        actor.confirmItemFields(userCtx(owner, "r"), {
+          item: { type: "WINE", id: other.wineId },
+          fields: ["country"],
+        }),
+      ).rejects.toBeInstanceOf(ValidationError);
+      expect(await confirmedOf(db, onboardingId)).toEqual(["name"]);
+    });
+  });
+});
+
+describe.skipIf(skip)("ItemOnboardingActor.discardDraft (H-133, F-65)", () => {
+  afterAll(closeTestDb);
+
+  /** An owner with a saved wine draft aimed at a cellar of theirs. */
+  const savedDraft = async (db: DbOrTx) => {
+    const owner = await seedUser(db);
+    await seedReferenceValues(db);
+    const cellarId = await seedCellar(db, owner);
+    const onboardingId = randomUUID();
+    const actor = await activate(newOnboardingActor(onboardingId, db));
+    const ctx = userCtx(owner, "r");
+    await actor.openDraft(ctx, { itemType: "WINE" });
+    await actor.saveDraft(ctx, {
+      cellarId,
+      fields: { name: "Demo Rioja" },
+      confirmedFields: [],
+      vintageAnswer: "UNANSWERED",
+    });
+    return { owner, cellarId, onboardingId, actor, ctx };
+  };
+  const statusOf = async (db: DbOrTx, id: string) =>
+    (
+      await db.execute<{ status: string }>(
+        sql`select status from public.item_onboardings where id = ${id}::uuid`,
+      )
+    ).rows[0]?.status;
+  const drafts = async (db: DbOrTx, owner: string) =>
+    activate(createActor(DraftsCollectionActor, owner, db));
+
+  it("discards the owner's draft: it leaves Needs details and every count, and nothing is created", async () => {
+    await withOnboardingDb(async (db) => {
+      const { owner, cellarId, onboardingId, actor, ctx } =
+        await savedDraft(db);
+      const collection = await drafts(db, owner);
+      expect(await collection.needsDetailsCount(ctx, {})).toBe(1);
+
+      const discarded = await actor.discardDraft(ctx);
+      expect(discarded.status).toBe("DISCARDED");
+      expect(await statusOf(db, onboardingId)).toBe("DISCARDED");
+      expect(await collection.needsDetails(ctx, {})).toEqual([]);
+      expect(await collection.needsDetailsCount(ctx, {})).toBe(0);
+      expect(await collection.needsDetailsCount(ctx, { cellarId })).toBe(0);
+      expect(await collection.unconfirmedBottleCount(ctx)).toBe(0);
+      expect(
+        await countOf(
+          db,
+          sql`select count(*)::int as n from public.wines where item_onboarding_id = ${onboardingId}::uuid`,
+        ),
+      ).toBe(0);
+      expect(
+        await countOf(
+          db,
+          sql`select count(*)::int as n from public.outbox where payload::text like ${`%${onboardingId}%`}`,
+        ),
+      ).toBe(0);
+      // Idempotent.
+      expect((await actor.discardDraft(ctx)).status).toBe("DISCARDED");
+    });
+  });
+
+  it("refuses a stranger as absent and leaves the draft listed", async () => {
+    await withOnboardingDb(async (db) => {
+      const { owner, onboardingId, actor, ctx } = await savedDraft(db);
+      const stranger = await seedUser(db);
+      await expect(
+        actor.discardDraft(userCtx(stranger, "r")),
+      ).rejects.toBeInstanceOf(NotFoundError);
+      expect(await statusOf(db, onboardingId)).toBe("NEEDS_DETAILS");
+      expect(await (await drafts(db, owner)).needsDetailsCount(ctx, {})).toBe(
+        1,
+      );
+    });
+  });
+
+  it("a discarded draft cannot be saved, confirmed or restarted back into the lists", async () => {
+    await withOnboardingDb(async (db) => {
+      const { owner, onboardingId, actor, ctx } = await savedDraft(db);
+      await actor.discardDraft(ctx);
+      await expect(
+        actor.saveDraft(ctx, {
+          fields: { name: "Again" },
+          confirmedFields: [],
+          vintageAnswer: "UNANSWERED",
+        }),
+      ).rejects.toBeInstanceOf(ConflictError);
+      await expect(
+        actor.confirm(ctx, {
+          name: "Demo Rioja",
+          attributes: { vintage: null, style: "RED" },
+        }),
+      ).rejects.toBeInstanceOf(ConflictError);
+      expect((await actor.start(ctx, { itemType: "WINE" })).status).toBe(
+        "DISCARDED",
+      );
+      expect(await statusOf(db, onboardingId)).toBe("DISCARDED");
+      expect(await (await drafts(db, owner)).needsDetailsCount(ctx, {})).toBe(
+        0,
+      );
+    });
+  });
+
+  it("refuses a filed session: its bottle exists already", async () => {
+    await withOnboardingDb(async (db) => {
+      const owner = await seedUser(db);
+      const onboardingId = randomUUID();
+      const actor = await activate(newOnboardingActor(onboardingId, db));
+      const ctx = userCtx(owner, "r");
+      await actor.openDraft(ctx, { itemType: "WINE" });
+      await actor.closeAsMatched(ctx);
+      await expect(actor.discardDraft(ctx)).rejects.toBeInstanceOf(
+        ConflictError,
+      );
+      expect(await statusOf(db, onboardingId)).toBe("MATCHED");
+    });
+  });
+});
+
+describe.skipIf(skip)(
+  "ItemOnboardingActor.draftImageUrls (H-133, F-71)",
+  () => {
+    afterAll(closeTestDb);
+
+    /** The batch actor, keyed at `viewer`, with a signer that counts calls. */
+    const batchActor = async (db: DbOrTx, viewer: string) => {
+      const signed: string[] = [];
+      const signImage: ImageSigner = async (key) => {
+        signed.push(key);
+        return `https://files.example/${key}`;
+      };
+      const actor = await activate(
+        new ItemOnboardingActor(
+          daprClient(),
+          new ActorId(draftImageBatchActorId(viewer)),
+          db,
+          unconfiguredItemDefaults,
+          async (_ctx, code) => ({ code }),
+          async () => {
+            throw new Error("no BrandRegistryActor in this test");
+          },
+          dbVerifyFile(db),
+          undefined,
+          signImage,
+        ),
+      );
+      return { actor, signed };
+    };
+    const seedDraftWithImage = async (
+      db: DbOrTx,
+      userId: string,
+      imageId: string | null,
+    ) => {
+      const id = randomUUID();
+      await db.execute(sql`
+      insert into public.item_onboardings (id, user_id, item_type, status, image_id, front_label_image_id)
+      values (${id}::uuid, ${userId}::uuid, 'WINE', 'NEEDS_DETAILS', ${imageId}::uuid, ${imageId}::uuid)
+    `);
+      return id;
+    };
+    const keyOf = async (db: DbOrTx, fileId: string) =>
+      (
+        await db.execute<{ key: string }>(
+          sql`select key from public.files where id = ${fileId}::uuid`,
+        )
+      ).rows[0]?.key;
+
+    it("signs a page of the viewer's draft pictures in one call, aligned, null where there is none", async () => {
+      await withOnboardingDb(async (db) => {
+        const owner = await seedUser(db);
+        const stranger = await seedUser(db);
+        const fileA = await seedVerifiedFile(db, owner);
+        const fileB = await seedVerifiedFile(db, owner);
+        const theirFile = await seedVerifiedFile(db, stranger);
+        const unverified = await seedUnverifiedFile(db, owner);
+        const a = await seedDraftWithImage(db, owner, fileA);
+        const b = await seedDraftWithImage(db, owner, fileB);
+        const noImage = await seedDraftWithImage(db, owner, null);
+        const theirs = await seedDraftWithImage(db, stranger, theirFile);
+        const notVerified = await seedDraftWithImage(db, owner, unverified);
+        const { actor, signed } = await batchActor(db, owner);
+
+        const urls = await actor.draftImageUrls(userCtx(owner, "r"), {
+          onboardingIds: [a, noImage, theirs, b.toUpperCase(), notVerified, a],
+        });
+        const keyA = await keyOf(db, fileA);
+        const keyB = await keyOf(db, fileB);
+        expect(urls.map((u) => u?.url ?? null)).toEqual([
+          `https://files.example/${keyA}`,
+          null,
+          null,
+          `https://files.example/${keyB}`,
+          null,
+          `https://files.example/${keyA}`,
+        ]);
+        expect(urls[0]?.expiresAt).toMatch(/^\d{4}-/);
+        // One signature per picture, none for anything the viewer cannot see.
+        expect(signed.sort()).toEqual([keyA, keyB].sort());
+      });
+    });
+
+    it("signs only for the viewer it is keyed by, and bounds the batch", async () => {
+      await withOnboardingDb(async (db) => {
+        const owner = await seedUser(db);
+        const stranger = await seedUser(db);
+        const { actor } = await batchActor(db, owner);
+        await expect(
+          actor.draftImageUrls(userCtx(stranger, "r"), { onboardingIds: [] }),
+        ).rejects.toBeInstanceOf(ForbiddenError);
+        await expect(
+          actor.draftImageUrls(userCtx(owner, "r"), {
+            onboardingIds: Array.from(
+              { length: DRAFT_IMAGE_BATCH_MAX_IDS + 1 },
+              () => randomUUID(),
+            ),
+          }),
+        ).rejects.toBeInstanceOf(ValidationError);
+        await expect(
+          actor.draftImageUrls(userCtx(owner, "r"), {
+            onboardingIds: ["not-a-uuid"],
+          }),
+        ).rejects.toBeInstanceOf(ValidationError);
+        expect(
+          await actor.draftImageUrls(userCtx(owner, "r"), {
+            onboardingIds: [],
+          }),
+        ).toEqual([]);
+      });
+    });
+  },
+);

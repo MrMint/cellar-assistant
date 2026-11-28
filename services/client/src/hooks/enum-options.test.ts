@@ -4,7 +4,9 @@ import { STATIC_OPTIONS } from "@/components/item-api/itemFormRules";
 import {
   enumOptionsFor,
   formatEnumValue,
+  optionsHolding,
   PERMISSION_VALUES,
+  withCurrentValue,
 } from "./enum-options";
 
 describe("enumOptionsFor — old EnumSelect options from new sources", () => {
@@ -56,5 +58,65 @@ describe("enumOptionsFor — old EnumSelect options from new sources", () => {
       "Brandy & Cognac",
     );
     assert.equal(formatEnumValue("teaCategory", "pu_erh"), "Pu-erh");
+  });
+});
+
+describe("optionsHolding — a held value survives options still loading", () => {
+  const first = enumOptionsFor("country", ["FRANCE", "ITALY"]);
+
+  test("while loading, a value missing from the options is kept as one", () => {
+    assert.deepEqual(optionsHolding("country", first, "SPAIN", true), [
+      ...first,
+      { value: "SPAIN", label: formatEnumValue("country", "SPAIN") },
+    ]);
+  });
+
+  test("a value already among the options is not duplicated", () => {
+    assert.deepEqual(optionsHolding("country", first, "FRANCE", true), first);
+  });
+
+  test("once loaded, a value that is not an option is not invented", () => {
+    assert.deepEqual(optionsHolding("country", first, "ESPANA", false), first);
+  });
+
+  test("empty and absent values add nothing", () => {
+    assert.deepEqual(optionsHolding("country", first, "", true), first);
+    assert.deepEqual(optionsHolding("country", first, null, true), first);
+    assert.deepEqual(optionsHolding("country", first, undefined, true), first);
+  });
+});
+
+describe("withCurrentValue — a stored value the list does not have yet", () => {
+  const firstPage = enumOptionsFor("country", ["FRANCE", "ITALY"]);
+
+  test("keeps a stored value the options lack, labelled by the formatter", () => {
+    assert.deepEqual(withCurrentValue("country", firstPage, "UNITED_STATES"), [
+      ...firstPage,
+      {
+        value: "UNITED_STATES",
+        label: formatEnumValue("country", "UNITED_STATES"),
+      },
+    ]);
+  });
+
+  test("adds nothing once the options contain it", () => {
+    const both = enumOptionsFor("country", ["FRANCE", "UNITED_STATES"]);
+    assert.deepEqual(withCurrentValue("country", both, "UNITED_STATES"), both);
+  });
+
+  test("keeps the value while the list is still loading (no options yet)", () => {
+    assert.deepEqual(
+      withCurrentValue("country", [], "UNITED_STATES").map((o) => o.value),
+      ["UNITED_STATES"],
+    );
+  });
+
+  test("blank values add nothing", () => {
+    for (const blank of ["", null, undefined]) {
+      assert.deepEqual(
+        withCurrentValue("country", firstPage, blank),
+        firstPage,
+      );
+    }
   });
 });

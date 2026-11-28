@@ -144,6 +144,7 @@ import type { KeepAlive } from "../lib/keep-alive.ts";
 import { enqueueOutbox, enqueueOutboxOnce } from "../lib/outbox.ts";
 import { OUTBOX_TARGETS } from "../lib/outbox-targets.ts";
 import { type Event, emit } from "../lib/telemetry.ts";
+import { isUuid } from "../lib/uuid.ts";
 import { MaintenanceActorDescriptor } from "./maintenance-actor-descriptor.ts";
 
 export {
@@ -516,7 +517,45 @@ export const deadLetterEvents = (
  * reminder, or by an admin — never by another process — so the contract lives
  * beside the class and its result types stay this module's.
  */
+/** X14: what one `backfillRecipeMeta` call scheduled. */
+export type RecipeMetaBackfillSchedule = {
+  /** `RecipeActor.backfillIngredientMeta` rows enqueued. */
+  readonly recipes: number;
+  /** `RecipeGroupActor.backfillBaseSpirit` rows enqueued. */
+  readonly groups: number;
+  readonly limit: number;
+  /**
+   * Where the next call picks up (`afterRecipe` / `afterGroup`), or `null`
+   * once that scan has reached the end. A keyset, not "whatever is still
+   * null": an ingredient nothing can place stays null for ever, and
+   * re-selecting from the start would hand the same first `limit` recipes
+   * back on every run, never reaching the rest.
+   */
+  readonly nextAfterRecipe: string | null;
+  readonly nextAfterGroup: string | null;
+};
+
+/** The default and the ceiling for one backfill call's batch. */
+export const RECIPE_BACKFILL_DEFAULT_LIMIT = 500;
+export const RECIPE_BACKFILL_MAX_LIMIT = 5_000;
+
 export type MaintenanceActorInterface = {
+  /**
+   * X14's backfill, `system`/admin only (`bun scripts/operator.ts
+   * backfill-recipes`). Enqueues `RecipeActor.backfillIngredientMeta` for up
+   * to `limit` **cocktail** recipes with an ingredient whose `kind` or `role`
+   * is null, and `RecipeGroupActor.backfillBaseSpirit` for up to `limit`
+   * groups with a cocktail member and no `base_spirit` — each after the
+   * payload's `afterRecipe` / `afterGroup` id, in id order. The answer's
+   * `nextAfterRecipe` / `nextAfterGroup` are the next call's cursors (`null`:
+   * that scan is done). Each delivery writes only null cells, so a repeat is
+   * harmless. Food is left alone: the bar vocabulary is drinks, and nothing
+   * reads a dish's kinds.
+   */
+  backfillRecipeMeta(
+    ctx: Ctx,
+    payload?: Record<string, unknown>,
+  ): Promise<RecipeMetaBackfillSchedule>;
   reapOrphanFiles(
     ctx: Ctx,
     payload?: Record<string, unknown>,
@@ -782,6 +821,108 @@ export class MaintenanceActor
     }
 
     return { scheduled: orphans.map((o) => o.id) };
+  }
+
+  /* ---------------------------------------------------------------------- */
+  /* X14: the recipe-meta backfill                                           */
+  /* ---------------------------------------------------------------------- */
+
+  async backfillRecipeMeta(
+    ctx: Ctx,
+    payload: Record<string, unknown> = {},
+  ): Promise<RecipeMetaBackfillSchedule> {
+    requirePrivileged(
+      ctx,
+      "MaintenanceActor.backfillRecipeMeta is system/admin only",
+    );
+    const requested = payload.limit ?? RECIPE_BACKFILL_DEFAULT_LIMIT;
+    if (
+      typeof requested !== "number" ||
+      !Number.isInteger(requested) ||
+      requested < 1 ||
+      requested > RECIPE_BACKFILL_MAX_LIMIT
+    ) {
+      throw new ValidationError(
+        `limit must be an integer from 1 to ${RECIPE_BACKFILL_MAX_LIMIT}`,
+      );
+    }
+    const limit = requested;
+    const cursor = (key: "afterRecipe" | "afterGroup"): string | null => {
+      const value = payload[key];
+      if (value === undefined || value === null) return null;
+      if (typeof value !== "string" || !isUuid(value)) {
+        throw new ValidationError(`${key} must be a recipe or group id`);
+      }
+      return value.toLowerCase();
+    };
+    const afterRecipe = cursor("afterRecipe");
+    const afterGroup = cursor("afterGroup");
+
+    const [recipeRows, groupRows] = await Promise.all([
+      this.db.execute<{ recipe_id: string }>(sql`
+        select r.id as recipe_id from public.recipes r
+        where r.type = 'cocktail'
+          and (${afterRecipe}::uuid is null or r.id > ${afterRecipe}::uuid)
+          and exists (
+            select 1 from public.recipe_ingredients ri
+            where ri.recipe_id = r.id and (ri.kind is null or ri.role is null)
+          )
+        order by r.id
+        limit ${limit}
+      `),
+      this.db.execute<{ id: string }>(sql`
+        select g.id from public.recipe_groups g
+        where g.base_spirit is null
+          and (${afterGroup}::uuid is null or g.id > ${afterGroup}::uuid)
+          and exists (
+            select 1 from public.recipes r
+            where r.recipe_group_id = g.id and r.type = 'cocktail'
+          )
+        order by g.id
+        limit ${limit}
+      `),
+    ]);
+    // A full page may have more behind it; a short one is the end.
+    const nextAfter = (ids: readonly string[]): string | null =>
+      ids.length === limit ? (ids[ids.length - 1] ?? null) : null;
+
+    await this.tx(async (tx) => {
+      for (const row of recipeRows.rows) {
+        await enqueueOutbox(
+          tx,
+          OUTBOX_TARGETS["RecipeActor.backfillIngredientMeta"],
+          { targetId: row.recipe_id, payload: {} },
+          { attributeTo: ctx },
+        );
+      }
+      for (const row of groupRows.rows) {
+        await enqueueOutbox(
+          tx,
+          OUTBOX_TARGETS["RecipeGroupActor.backfillBaseSpirit"],
+          { targetId: row.id, payload: {} },
+          { attributeTo: ctx },
+        );
+      }
+    });
+
+    emit({
+      name: "maintenance.recipe_backfill_scheduled",
+      severity: "INFO",
+      message:
+        `MaintenanceActor scheduled ${recipeRows.rows.length} recipe and ` +
+        `${groupRows.rows.length} group backfill(s)`,
+      attributes: {
+        recipes: recipeRows.rows.length,
+        groups: groupRows.rows.length,
+      },
+    });
+    return {
+      recipes: recipeRows.rows.length,
+      groups: groupRows.rows.length,
+      limit,
+      nextAfterRecipe: nextAfter(recipeRows.rows.map((row) => row.recipe_id)),
+      nextAfterGroup: nextAfter(groupRows.rows.map((row) => row.id)),
+    };
   }
 
   /* ---------------------------------------------------------------------- */

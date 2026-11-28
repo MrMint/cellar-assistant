@@ -1,0 +1,23 @@
+{
+  "recorded": "2026-10-09, X12 added `narrow` (the search numbers are N08's, unchanged: 2026-10-07, hybrid vector + trigram name ranking, embedding text v2 with labels and brand, auto band needs a separated winner)",
+  "model": "ollama:nomic-embed-text@768/RETRIEVAL_DOCUMENT",
+  "verifier": "stand-in",
+  "search": {
+    "hitAt1": 0.9796,
+    "hitAt3": 1,
+    "hitAt10": 1,
+    "recallAt3": 0.9694,
+    "recallAt10": 1,
+    "mrr": 0.9864
+  },
+  "narrowed": {
+    "hitAt1": 0.9796,
+    "recallAt10": 1,
+    "irrelevantAfter": 172
+  },
+  "menus": {
+    "matchRate": 0.96,
+    "candidateRecall": 1,
+    "falseAutoMatches": 0
+  }
+}

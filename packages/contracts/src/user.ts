@@ -2,9 +2,9 @@
  * The `User` aggregate as `services/api` sees it (migration plan §2.1 `UserActor`,
  * §1.7, B4).
  *
- * `UserActor(userId)` owns four tables — `friends` and `friend_requests` (rows
- * where `user_id` is *this* user), `item_favorites` and
- * `user_place_interactions`. Profile fields are **not** among them: there is no
+ * `UserActor(userId)` owns five tables — `friends` and `friend_requests` (rows
+ * where `user_id` is *this* user), `item_favorites`, `user_place_interactions`
+ * and `want_to_try` (X08). Profile fields are **not** among them: there is no
  * `public.users` table, and A6 moved identity to better-auth's `user` table
  * (`services/actors/src/auth/README.md`). `getProfile`/`updateProfile` therefore
  * proxy to better-auth rather than reading a table this actor owns.
@@ -39,10 +39,18 @@
  * the Dapr wire as an ISO-8601 string, because `services/api` has no Drizzle.
  */
 import type { ActorDescriptor } from "./actors.ts";
+import type { AiCapabilities } from "./ai.ts";
+import type { BarKind } from "./bar.ts";
 import type { Ctx } from "./ctx.ts";
-import type { FriendRequestStatus } from "./enums.ts";
-import type { ItemRef } from "./items.ts";
+import type { FriendRequestStatus, PermissionType } from "./enums.ts";
+import { type ItemRef, isItemType, itemActorId } from "./items.ts";
 import type { Page, PageArgs } from "./page.ts";
+import type {
+  AcceptFriendInviteInput,
+  AcceptFriendInviteResult,
+  FriendInviteDto,
+  FriendInvitePreviewDto,
+} from "./share.ts";
 
 /* -------------------------------------------------------------------------- */
 /* Profile                                                                     */
@@ -60,10 +68,54 @@ import type { Page, PageArgs } from "./page.ts";
 export type UserProfileDto = {
   readonly id: string;
   readonly displayName: string;
+  /**
+   * `user.image` — the fallback picture (an OAuth avatar, or one set by URL).
+   * Never shown as is when {@link avatarFileId} is set: every resolver goes
+   * through the API's one avatar helper (MC-avatar, L17).
+   */
   readonly avatarUrl: string | null;
+  /** SV-D: the uploaded profile picture, presigned at read; wins over `avatarUrl`. */
+  readonly avatarFileId: string | null;
   readonly locale: string | null;
   /** Owner or admin only; `null` for every other viewer. */
   readonly email: string | null;
+};
+
+/**
+ * The Me hub's counts (X18). Each is the viewer's own, decided from their own
+ * rows only:
+ *
+ * - `bottles` — bottles still in a cellar they created or co-own (D13, the
+ *   number `CellarsCollectionActor.stats` and every cellar card count);
+ * - `logs` — drink-log entries about them (`check_ins.user_id`), with or
+ *   without a bottle (X02) — the item page's "Your log", summed;
+ * - `places` — distinct places they have been: marked visited, or named on
+ *   one of their logs; a place under review someone else created is left out
+ *   (X27);
+ * - `tierLists` — tier lists they created, whatever their privacy.
+ */
+export type UserCountsDto = {
+  readonly bottles: number;
+  readonly logs: number;
+  readonly places: number;
+  readonly tierLists: number;
+};
+
+export type SetAvatarInput = {
+  readonly fileId: string;
+};
+
+/**
+ * H-119 / FR-21: account-level settings. `defaultCellarPrivacy` is the
+ * privacy `CellarActor.create` gives a new cellar when none is asked for;
+ * changing it never rewrites an existing cellar.
+ */
+export type UserSettingsDto = {
+  readonly defaultCellarPrivacy: PermissionType;
+};
+
+export type SetDefaultCellarPrivacyInput = {
+  readonly privacy: PermissionType;
 };
 
 /** The mutable half. Every field is optional; omitted means unchanged. */
@@ -115,7 +167,11 @@ export type FriendRequestDto = {
 export type ConfirmFriendshipPayload = {
   /** The user who accepted — the *other* side of the friendship. */
   readonly friendId: string;
-  /** The `friend_requests` row to close. Absent only for a hand-driven repair. */
+  /**
+   * The `friend_requests` row to close. Absent for a hand-driven repair, and
+   * for an accepted friend invite (X17), where there was no request — the
+   * receiving actor closes any pending request between the two either way.
+   */
   readonly requestId?: string;
 };
 
@@ -152,10 +208,17 @@ export type AcceptFriendRequestResult = {
 /* Favorites and place interactions                                            */
 /* -------------------------------------------------------------------------- */
 
-export type ToggleFavoriteResult = {
+/**
+ * `setFavorite`'s answer. A `set`, not a toggle (wave B hardening): the
+ * caller names the state it wants, so a retried request — or one whose
+ * answer was lost — lands on the same state instead of flipping it back.
+ */
+export type SetFavoriteResult = {
   readonly ref: ItemRef;
-  /** State *after* the toggle. */
+  /** State *after* the call. */
   readonly favorited: boolean;
+  /** False when the state already was what was asked — a repeat or a retry. */
+  readonly changed: boolean;
 };
 
 /**
@@ -194,6 +257,132 @@ export type RecordPlaceInteractionInput = {
 };
 
 /* -------------------------------------------------------------------------- */
+/* Want to try (X08 — the "Save" verb of D27)                                  */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * What a "Want to try" can name. Items and recipes are rows in `want_to_try`;
+ * a place is `user_place_interactions.want_to_visit` (D11 revives that column
+ * rather than keeping the same fact twice), so all three answer through one
+ * `UserActor` call and one GraphQL mutation.
+ */
+export const WANT_TO_TRY_KINDS = ["ITEM", "RECIPE", "PLACE"] as const;
+export type WantToTryKind = (typeof WANT_TO_TRY_KINDS)[number];
+
+export const isWantToTryKind = (value: unknown): value is WantToTryKind =>
+  typeof value === "string" &&
+  (WANT_TO_TRY_KINDS as readonly string[]).includes(value);
+
+export type WantToTryTarget =
+  | { readonly kind: "ITEM"; readonly item: ItemRef }
+  | { readonly kind: "RECIPE"; readonly recipeId: string }
+  | { readonly kind: "PLACE"; readonly placeId: string };
+
+/**
+ * One stable string per target — `wine:<uuid>` (the `ItemActor` id),
+ * `recipe:<uuid>`, `place:<uuid>` — so a batch answer can be a set of keys,
+ * the shape `favoriteStates` already uses.
+ */
+export const wantToTryKey = (target: WantToTryTarget): string => {
+  switch (target.kind) {
+    case "ITEM":
+      return itemActorId(target.item);
+    case "RECIPE":
+      return `recipe:${target.recipeId}`;
+    case "PLACE":
+      return `place:${target.placeId}`;
+  }
+};
+
+/** The inverse of {@link wantToTryKey}; `null` for anything else. */
+export const parseWantToTryKey = (key: string): WantToTryTarget | null => {
+  const separator = key.indexOf(":");
+  if (separator < 1) return null;
+  const head = key.slice(0, separator);
+  const id = key.slice(separator + 1);
+  if (id.length === 0) return null;
+  if (head === "recipe") return { kind: "RECIPE", recipeId: id };
+  if (head === "place") return { kind: "PLACE", placeId: id };
+  const type = head.toUpperCase();
+  return isItemType(type) ? { kind: "ITEM", item: { type, id } } : null;
+};
+
+/** One row of the viewer's list, newest first. */
+export type WantToTryEntryDto = {
+  readonly target: WantToTryTarget;
+  /**
+   * ISO-8601. For a place this is the interaction row's `updatedAt`: the
+   * column carries no time of its own, so a later visit or rating moves it.
+   */
+  readonly savedAt: string;
+};
+
+/**
+ * ux-c L08: the viewer's own steep (tea) or brew (coffee) numbers for one item
+ * (`item_brew_prefs`). Each is the user's override of the "typical" table
+ * row the client draws (L3); `null` keeps the table's number. Owner-only:
+ * nobody else's prefs are readable or writable, and asking for them answers
+ * exactly like an item that does not exist.
+ */
+export type BrewPrefsDto = {
+  readonly item: ItemRef;
+  /** Water temperature, °C, 1–100. */
+  readonly waterTempC: number | null;
+  /** First steep / total brew time, seconds, > 0. */
+  readonly steepSeconds: number | null;
+  /** Leaf or ground coffee, grams, > 0. */
+  readonly doseGrams: number | null;
+  /** Water, millilitres, > 0. */
+  readonly waterMl: number | null;
+  readonly updatedAt: string;
+};
+
+/** Brew-pref item types: a steep guide on a tea, a brew guide on a coffee. */
+export const BREW_PREF_ITEM_TYPES = ["TEA", "COFFEE"] as const;
+
+/** The four overrides; each `null` clears that one (all `null` removes the row). */
+export type SetBrewPrefsInput = {
+  readonly item: ItemRef;
+  readonly waterTempC: number | null;
+  readonly steepSeconds: number | null;
+  readonly doseGrams: number | null;
+  readonly waterMl: number | null;
+};
+
+export type SetWantToTryResult = {
+  readonly target: WantToTryTarget;
+  /** State *after* the call. */
+  readonly wantToTry: boolean;
+  /** False when the state already was what was asked — a repeat or a retry. */
+  readonly changed: boolean;
+};
+
+/* -------------------------------------------------------------------------- */
+/* Bar pantry (D23) and recipe Love (D9)                                       */
+/* -------------------------------------------------------------------------- */
+
+export type SetBarPantryItemInput = {
+  /** One of `PANTRY_KINDS`. */
+  readonly kind: BarKind;
+  /** `true` turns the toggle on (a row), `false` off (no row). */
+  readonly have: boolean;
+};
+
+export type BarPantryItemDto = {
+  readonly kind: BarKind;
+  readonly have: boolean;
+};
+
+/** `setRecipeLove`'s answer — a `set`, for `SetFavoriteResult`'s reason. */
+export type SetRecipeLoveResult = {
+  readonly recipeId: string;
+  /** State *after* the call. */
+  readonly loved: boolean;
+  /** False when the state already was what was asked — a repeat or a retry. */
+  readonly changed: boolean;
+};
+
+/* -------------------------------------------------------------------------- */
 /* The actor                                                                   */
 /* -------------------------------------------------------------------------- */
 
@@ -209,7 +398,33 @@ export type RecordPlaceInteractionInput = {
  */
 export type UserActorInterface = {
   getProfile(ctx: Ctx): Promise<UserProfileDto>;
+  /**
+   * N07/D25: what this deployment's AI can do, behind `viewer.aiCapabilities`,
+   * so a client hides a feature the configured provider genuinely cannot serve
+   * instead of offering it and refusing. Process-wide — the viewer's own actor
+   * answers only because `viewer` is where a client asks. Self only.
+   */
+  aiCapabilities(ctx: Ctx): Promise<AiCapabilities>;
   updateProfile(ctx: Ctx, input: UpdateProfileInput): Promise<UserProfileDto>;
+  /**
+   * SV-D (MC-avatar). Self only. `fileId` must be a verified
+   * {@link AVATAR_FILE_KIND} upload of the viewer's own: anyone else's file is
+   * `NotFoundError` (it is not theirs to name), the wrong kind
+   * `ValidationError`, an unverified one `ConflictError` (finish the upload).
+   */
+  setAvatar(ctx: Ctx, input: SetAvatarInput): Promise<UserProfileDto>;
+  /** Self only. Clears the picture; the profile falls back to `user.image`. */
+  removeAvatar(ctx: Ctx): Promise<UserProfileDto>;
+  /**
+   * H-119 / FR-21. Self only, read and write: a stranger (or friend) is
+   * `ForbiddenError`. No settings row reads as PRIVATE, the column default.
+   */
+  settings(ctx: Ctx): Promise<UserSettingsDto>;
+  /** Self only. New cellars only; existing cellars keep their privacy. */
+  setDefaultCellarPrivacy(
+    ctx: Ctx,
+    input: SetDefaultCellarPrivacyInput,
+  ): Promise<UserSettingsDto>;
 
   friends(ctx: Ctx, page: PageArgs): Promise<Page<FriendDto>>;
   friendRequests(
@@ -231,6 +446,36 @@ export type UserActorInterface = {
   withdrawFriendRequest(ctx: Ctx, payload: OtherSidePayload): Promise<boolean>;
   removeFriend(ctx: Ctx, friendId: string): Promise<boolean>;
   removeFriendOtherSide(ctx: Ctx, payload: OtherSidePayload): Promise<boolean>;
+
+  /**
+   * X17 friend invites (`share.ts`). The viewer's own live invite, or `null`
+   * if they never made one. Self only.
+   */
+  friendInvite(ctx: Ctx): Promise<FriendInviteDto | null>;
+  /** The live invite, minted on first use — idempotent. Self only. */
+  ensureFriendInvite(ctx: Ctx): Promise<FriendInviteDto>;
+  /** A new secret; every earlier link stops working. Self only. */
+  resetFriendInvite(ctx: Ctx): Promise<FriendInviteDto>;
+  /**
+   * On the **inviter's** actor: who sent this invite and where the viewer
+   * stands with them. Anonymous allowed — the link's holder was given it.
+   * `NotFoundError` for a wrong or rotated secret, the same as for a user
+   * who does not exist.
+   */
+  previewFriendInvite(
+    ctx: Ctx,
+    secret: string,
+  ): Promise<FriendInvitePreviewDto>;
+  /**
+   * On the **invitee's** (the viewer's own) actor: become friends with the
+   * inviter. Inserts the viewer's `friends` row and, through the outbox, the
+   * inviter's (`confirmFriendship`, §1.7) — the same two-sided write as
+   * accepting a request. Idempotent: already friends writes nothing.
+   */
+  acceptFriendInvite(
+    ctx: Ctx,
+    input: AcceptFriendInviteInput,
+  ): Promise<AcceptFriendInviteResult>;
 
   favorites(ctx: Ctx, page: PageArgs): Promise<Page<ItemRef>>;
   /**
@@ -262,7 +507,15 @@ export type UserActorInterface = {
     ctx: Ctx,
     refs: readonly ItemRef[],
   ): Promise<readonly number[]>;
-  toggleFavorite(ctx: Ctx, ref: ItemRef): Promise<ToggleFavoriteResult>;
+  /**
+   * Favourite an item, or stop. Idempotent — `set`, not `toggle`, as
+   * `setWantToTry` is, so a retried request cannot flip it the wrong way.
+   */
+  setFavorite(
+    ctx: Ctx,
+    ref: ItemRef,
+    favorited: boolean,
+  ): Promise<SetFavoriteResult>;
 
   placeInteractions(
     ctx: Ctx,
@@ -290,6 +543,87 @@ export type UserActorInterface = {
     ctx: Ctx,
     input: RecordPlaceInteractionInput,
   ): Promise<PlaceInteractionDto>;
+
+  /**
+   * X08: the viewer's "Want to try" list — items, recipes and places together,
+   * newest first, optionally narrowed to `kinds` (omitted, `null` or empty:
+   * all three). Owner (or admin) only: a wish list is not friends-visible.
+   */
+  wantToTry(
+    ctx: Ctx,
+    page: PageArgs,
+    kinds?: readonly WantToTryKind[] | null,
+  ): Promise<Page<WantToTryEntryDto>>;
+  /**
+   * Which of `targets` are on the list, as {@link wantToTryKey}s — the
+   * matching subset, for the reason `favoriteStates` gives. One call per
+   * request behind `Item.isWantToTry` / `Recipe.isWantToTry`, answered from
+   * rows this actor already holds.
+   */
+  wantToTryStates(
+    ctx: Ctx,
+    targets: readonly WantToTryTarget[],
+  ): Promise<readonly string[]>;
+  /**
+   * Put a target on the list or take it off. Idempotent — `set`, not
+   * `toggle`, so an Undo or a retried request cannot flip it the wrong way.
+   */
+  setWantToTry(
+    ctx: Ctx,
+    target: WantToTryTarget,
+    wantToTry: boolean,
+  ): Promise<SetWantToTryResult>;
+  /** D23: the pantry toggles that are on. Self (or admin) only. */
+  barPantry(ctx: Ctx): Promise<readonly BarKind[]>;
+  /** D23: one toggle. Idempotent — setting what is already set is a no-op. */
+  setBarPantryItem(
+    ctx: Ctx,
+    input: SetBarPantryItemInput,
+  ): Promise<BarPantryItemDto>;
+
+  /**
+   * D9: which of `recipeIds` the viewer loves — the matching subset, as
+   * `favoriteStates` answers, for the same reason. Self only.
+   */
+  recipeLoveStates(
+    ctx: Ctx,
+    recipeIds: readonly string[],
+  ): Promise<readonly string[]>;
+  /**
+   * D9: Love replaces the recipe heart. Self only. Idempotent — `set`, not
+   * `toggle`, so a retried request cannot flip it the wrong way.
+   */
+  setRecipeLove(
+    ctx: Ctx,
+    recipeId: string,
+    loved: boolean,
+  ): Promise<SetRecipeLoveResult>;
+  /** Loved recipe ids, newest first. Self only. */
+  lovedRecipes(ctx: Ctx, page: PageArgs): Promise<Page<string>>;
+  /**
+   * X15: the recipes this user wrote, newest change first — `drafts: true`
+   * for the AI drafts waiting on review, `false` for the published ones,
+   * omitted for both. Self only: a draft is nobody else's business, and
+   * someone else's recipes are reached through search and their groups.
+   */
+  myRecipes(
+    ctx: Ctx,
+    page: PageArgs,
+    drafts?: boolean | null,
+  ): Promise<Page<string>>;
+  /** X18: the Me hub's counts. Self (or admin, for their own) only. */
+  counts(ctx: Ctx): Promise<UserCountsDto>;
+  /**
+   * ux-c L08: this user's brew prefs for one tea or coffee, or `null` when
+   * they have none. Self only — anybody else, and an item that does not
+   * exist, get the same `NotFound`.
+   */
+  brewPrefs(ctx: Ctx, item: ItemRef): Promise<BrewPrefsDto | null>;
+  /** ux-c L08: replace this user's brew prefs for one item. Self only, as above. */
+  setBrewPrefs(
+    ctx: Ctx,
+    input: SetBrewPrefsInput,
+  ): Promise<BrewPrefsDto | null>;
 };
 
 export const UserActorDescriptor: ActorDescriptor<UserActorInterface> = {
@@ -297,7 +631,12 @@ export const UserActorDescriptor: ActorDescriptor<UserActorInterface> = {
   category: "entity",
   methods: {
     getProfile: {},
+    aiCapabilities: {},
     updateProfile: {},
+    setAvatar: {},
+    removeAvatar: {},
+    settings: {},
+    setDefaultCellarPrivacy: {},
     friends: {},
     friendRequests: {},
     sendFriendRequest: {},
@@ -307,13 +646,30 @@ export const UserActorDescriptor: ActorDescriptor<UserActorInterface> = {
     withdrawFriendRequest: {},
     removeFriend: {},
     removeFriendOtherSide: {},
+    friendInvite: {},
+    ensureFriendInvite: {},
+    resetFriendInvite: {},
+    previewFriendInvite: {},
+    acceptFriendInvite: {},
     favorites: {},
     favoriteStates: {},
     favoriteCounts: {},
-    toggleFavorite: {},
+    setFavorite: {},
     placeInteractions: {},
     placeInteraction: {},
     placeInteractionsFor: {},
     recordPlaceInteraction: {},
+    wantToTry: {},
+    wantToTryStates: {},
+    setWantToTry: {},
+    barPantry: {},
+    setBarPantryItem: {},
+    recipeLoveStates: {},
+    setRecipeLove: {},
+    lovedRecipes: {},
+    myRecipes: {},
+    counts: {},
+    brewPrefs: {},
+    setBrewPrefs: {},
   },
 };

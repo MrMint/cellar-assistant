@@ -71,6 +71,7 @@ import type {
   ActorCategory,
   Ctx,
   ExtractedRecipe,
+  InferredIngredientMeta,
   InternalJobActorInterface,
   RecipeCategory,
   RecipeIngredientInput,
@@ -88,6 +89,7 @@ import {
   RECIPE_CATEGORIES,
   RECIPE_PHOTO_JOB_KIND,
   RECIPE_PHOTO_STAGES,
+  RECIPE_TEXT_MAX,
   RECIPE_TYPES,
   RecipePhotoJobActorDescriptor,
   userCtx,
@@ -112,6 +114,8 @@ import type {
 import {
   daprIngredientSearcher,
   daprRecipeWriter,
+  extractionBaseSpirit,
+  extractionMeta,
   genericFallback,
   ingredientQuantities,
   ingredientRefFromHit,
@@ -323,6 +327,26 @@ export class RecipePhotoJobActor
       "a recipe-photo job's payload",
     );
     requireUuid(this.key, "jobId");
+    // X15's Paste: a job reads either a photo or pasted text, never both and
+    // never neither. Text needs no file check — there is no file.
+    const text = payload.text ?? null;
+    const hasFile = payload.fileId !== undefined && payload.fileId !== null;
+    if (text !== null) {
+      if (hasFile || (payload.additionalFileIds ?? []).length > 0) {
+        throw new ValidationError(
+          "a recipe job reads a photo or pasted text, not both",
+        );
+      }
+      if (text.trim() === "") {
+        throw new ValidationError("there is no recipe text to read");
+      }
+      if (text.length > RECIPE_TEXT_MAX) {
+        throw new ValidationError(
+          `pasted recipe text is at most ${RECIPE_TEXT_MAX} characters, got ${text.length}`,
+        );
+      }
+      return;
+    }
     const fileId = requireUuid(payload.fileId ?? "", "fileId");
 
     const sent = payload.additionalFileIds ?? [];
@@ -418,7 +442,8 @@ export class RecipePhotoJobActor
       case "extract": {
         const { recipe, model } = await this.#extract(owner, {
           jobId: this.key,
-          fileId: payload.fileId,
+          fileId: payload.fileId ?? null,
+          text: payload.text ?? null,
           additionalFileIds: payload.additionalFileIds ?? [],
           notes: payload.notes ?? null,
         });
@@ -446,15 +471,25 @@ export class RecipePhotoJobActor
           difficultyLevel: extraction.difficultyLevel ?? null,
           prepTimeMinutes: extraction.prepTimeMinutes ?? null,
           servingSize: extraction.servingSize ?? null,
+          // X15 / D22: what the model read is a draft, private, until the
+          // person reviews it in the editor and saves it.
+          privacy: "PRIVATE",
+          isDraft: true,
         });
         return state;
       }
       case "ingredients": {
         const extraction = this.#requireExtraction(state);
+        const kept = extraction.ingredients.filter(
+          (ingredient) => ingredientSearchText(ingredient) !== "",
+        );
+        // Decided over the whole list at once: "base" is relative (X14).
+        const meta = extractionMeta(kept);
         const ingredients: RecipeIngredientInput[] = [];
-        for (const ingredient of extraction.ingredients) {
-          if (ingredientSearchText(ingredient) === "") continue;
-          ingredients.push(await this.#resolveIngredient(owner, ingredient));
+        for (const [index, ingredient] of kept.entries()) {
+          ingredients.push(
+            await this.#resolveIngredient(owner, ingredient, meta[index]),
+          );
         }
         await this.#write.setIngredients(owner, state.recipeId, {
           ingredients,
@@ -504,7 +539,12 @@ export class RecipePhotoJobActor
     const created = await this.#write.createGroup(
       owner,
       derivedUuid(RECIPE_GROUP_ID_NAMESPACE, key),
-      { name, category: groupCategoryOf(extraction) },
+      {
+        name,
+        category: groupCategoryOf(extraction),
+        // X14: T7's "baseSpirit is never written", for every new group.
+        baseSpirit: extractionBaseSpirit(extraction),
+      },
     );
     return created.id;
   }
@@ -520,18 +560,19 @@ export class RecipePhotoJobActor
   async #resolveIngredient(
     owner: Ctx,
     ingredient: Parameters<typeof genericFallback>[0],
+    meta?: InferredIngredientMeta,
   ): Promise<RecipeIngredientInput> {
     const hits = await this.#search(owner, ingredientSearchInput(ingredient));
     const match = pickIngredientMatch(hits);
     if (match !== null) {
       return {
         ref: ingredientRefFromHit(match),
-        ...ingredientQuantities(ingredient),
+        ...ingredientQuantities(ingredient, meta),
       };
     }
     return {
       newGenericItem: genericFallback(ingredient),
-      ...ingredientQuantities(ingredient),
+      ...ingredientQuantities(ingredient, meta),
     };
   }
 

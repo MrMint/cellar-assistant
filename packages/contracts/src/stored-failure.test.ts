@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { ACTOR_ERROR_CODES, ConflictError, ValidationError } from "./errors.ts";
+import {
+  ACTOR_ERROR_CODES,
+  BudgetExceededError,
+  ConflictError,
+  ValidationError,
+} from "./errors.ts";
 import { formatStoredFailure, parseStoredFailure } from "./stored-failure.ts";
 
 describe("formatStoredFailure", () => {
@@ -10,6 +15,7 @@ describe("formatStoredFailure", () => {
     expect(stored).toBe("VALIDATION: a 400 from ollama");
     expect(parseStoredFailure(stored)).toEqual({
       code: "VALIDATION",
+      reason: null,
       detail: "a 400 from ollama",
     });
   });
@@ -29,9 +35,22 @@ describe("formatStoredFailure", () => {
     for (const code of ACTOR_ERROR_CODES) {
       expect(parseStoredFailure(`${code}: why`)).toEqual({
         code,
+        reason: null,
         detail: "why",
       });
     }
+  });
+
+  it("keeps a reason in brackets after the code, and reads it back", () => {
+    const stored = formatStoredFailure(
+      new BudgetExceededError("over the hourly cap", "USER_CAP"),
+    );
+    expect(stored).toBe("BUDGET_EXCEEDED[USER_CAP]: over the hourly cap");
+    expect(parseStoredFailure(stored)).toEqual({
+      code: "BUDGET_EXCEEDED",
+      reason: "USER_CAP",
+      detail: "over the hourly cap",
+    });
   });
 
   it("stores an untyped throw with no class at all", () => {
@@ -55,7 +74,11 @@ describe("parseStoredFailure", () => {
     // Backwards compatibility is the reason nothing had to be migrated.
     const legacy =
       "ollama generateContent(gemma3:4b) failed (400) at http://x:1/y";
-    expect(parseStoredFailure(legacy)).toEqual({ code: null, detail: legacy });
+    expect(parseStoredFailure(legacy)).toEqual({
+      code: null,
+      reason: null,
+      detail: legacy,
+    });
   });
 
   it("only recognises an exact member of ACTOR_ERROR_CODES", () => {
@@ -66,6 +89,9 @@ describe("parseStoredFailure", () => {
       " VALIDATION: leading space",
       ": empty",
       "VALIDATION",
+      "CONFLICT[NOT_A_REASON]: unknown reason",
+      "CONFLICT[]: empty reason",
+      "CONFLICT[AI_UNCONFIGURED: unclosed",
     ]) {
       expect(parseStoredFailure(impostor).code).toBeNull();
       expect(parseStoredFailure(impostor).detail).toBe(impostor);

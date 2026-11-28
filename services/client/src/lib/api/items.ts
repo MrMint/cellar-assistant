@@ -259,6 +259,7 @@ export const ItemBrandFragment = graphql(`
       id
       name
       brandType
+      firstItemType
       logoUrl
     }
   }
@@ -532,6 +533,26 @@ export const StartItemOnboardingMutation = graphql(
 );
 
 /**
+ * Close a session whose bottle was an item the catalogue already held (the
+ * quick-add, or "+1 bottle"): `MATCHED`, nothing created. Idempotent.
+ */
+export const CloseItemOnboardingMutation = graphql(
+  `
+  mutation CloseItemOnboarding($onboardingId: ID!) {
+    closeItemOnboarding(onboardingId: $onboardingId) {
+      __typename
+      ... on ItemOnboarding {
+        id
+        status
+      }
+      ...ActorErrorFields
+    }
+  }
+`,
+  [ActorErrorFieldsFragment],
+);
+
+/**
  * Turn an accepted proposal into an item, a brand link and a cellar item.
  *
  * **`item` is deliberately not selected.** The schema says it is "null until
@@ -574,11 +595,25 @@ export const ConfirmItemOnboardingMutation = graphql(
 // Mutations — the item itself
 // ---------------------------------------------------------------------------
 
-/** Creator only. Enrichment updates arrive as `system` and never through here. */
+/**
+ * Creator only. Enrichment updates arrive as `system` and never through here.
+ * `$confirmedFields` (F-75, F-162): the label-read guesses the person settled
+ * in the form, so `Item.unconfirmedFields` stops naming them.
+ */
 export const UpdateItemMutation = graphql(
   `
-  mutation UpdateItem($itemId: ID!, $type: ItemType!, $input: UpdateItemInput!) {
-    updateItem(itemId: $itemId, type: $type, input: $input) {
+  mutation UpdateItem(
+    $itemId: ID!
+    $type: ItemType!
+    $input: UpdateItemInput!
+    $confirmedFields: [String!]
+  ) {
+    updateItem(
+      itemId: $itemId
+      type: $type
+      input: $input
+      confirmedFields: $confirmedFields
+    ) {
       __typename
       ... on MutationUpdateItemSuccess {
         data {
@@ -660,21 +695,49 @@ export const DeleteItemReviewMutation = graphql(
 );
 
 /**
- * Add or remove one item from the viewer's favourites.
+ * Put one item in the viewer's favourites, or take it out — the state asked
+ * for, so a retried request cannot flip it back (it replaced the flipping
+ * `toggleFavorite`).
  *
- * `favorited` in the payload is the state *after* the toggle, so the star does
+ * `favorited` in the payload is the state *after* the call, so the heart does
  * not have to guess. `item` is not selected: the payload resolves it through
- * the item DataLoader, and the star already has everything it needs.
+ * the item DataLoader, and the heart already has everything it needs.
  */
-export const ToggleFavoriteMutation = graphql(
+export const SetFavoriteMutation = graphql(
   `
-  mutation ToggleItemFavorite($itemId: ID!, $type: ItemType!) {
-    toggleFavorite(itemId: $itemId, type: $type) {
+  mutation SetItemFavorite($itemId: ID!, $type: ItemType!, $favorited: Boolean!) {
+    setFavorite(itemId: $itemId, type: $type, favorited: $favorited) {
       __typename
-      ... on ToggleFavoritePayload {
+      ... on SetFavoritePayload {
         favorited
         itemId
         itemType
+      }
+      ...ActorErrorFields
+    }
+  }
+`,
+  [ActorErrorFieldsFragment],
+);
+
+/**
+ * L02's re-buy check: how many bottles of this item you have had, in any
+ * state, and its name for the offer's line.
+ */
+export const ItemBottleHistoryQuery = graphql(
+  `
+  query ItemBottleHistory($itemId: ID!, $type: ItemType!) {
+    item(id: $itemId, type: $type) {
+      __typename
+      ... on QueryItemSuccess {
+        data {
+          __typename
+          id
+          name
+          myBottles(first: 1, status: ALL) {
+            totalCount
+          }
+        }
       }
       ...ActorErrorFields
     }

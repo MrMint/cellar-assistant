@@ -1,8 +1,12 @@
 "use client";
 
-import { Box, Chip, Divider, Stack, Typography } from "@mui/joy";
-import { isNil, isNotNil } from "ramda";
-import { Link } from "@/components/common/Link";
+import { formatQuantity } from "@cellar-assistant/contracts/quantity";
+import { isNotNil } from "ramda";
+import { ChevronRight } from "@/components/app/icons";
+import { Link } from "@/components/app/Link";
+import { availabilityText } from "@/components/bar/copy";
+import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 import { ingredientItemHref, type RecipeIngredient } from "./adapter";
 
 export type { RecipeIngredient };
@@ -10,9 +14,15 @@ export type { RecipeIngredient };
 export type RecipeIngredientListProps = {
   ingredients: RecipeIngredient[];
   showSubstitutions?: boolean;
+  /**
+   * Availability tags (D9). On by default; the versions tab turns them off,
+   * where every version repeating the same tags would be noise.
+   */
+  showAvailability?: boolean;
 };
 
-const getIngredientDisplay = (ingredient: RecipeIngredient) => {
+/** An ingredient's name and link: the specific bottle, else the generic. */
+export const getIngredientDisplay = (ingredient: RecipeIngredient) => {
   if (isNotNil(ingredient.item)) {
     const vintage = ingredient.item.vintage
       ? `${ingredient.item.vintage} `
@@ -21,7 +31,6 @@ const getIngredientDisplay = (ingredient: RecipeIngredient) => {
       name: `${vintage}${ingredient.item.name}`,
       href: ingredientItemHref(ingredient.item),
       isSpecific: true,
-      category: null,
     };
   }
 
@@ -30,136 +39,110 @@ const getIngredientDisplay = (ingredient: RecipeIngredient) => {
       name: ingredient.generic_item.name,
       href: null,
       isSpecific: false,
-      category: ingredient.generic_item.category,
     };
   }
 
-  return {
-    name: "Unknown ingredient",
-    href: null,
-    isSpecific: false,
-    category: null,
-  };
-};
-
-const formatQuantity = (quantity?: number | null, unit?: string | null) => {
-  if (isNil(quantity)) return "";
-
-  let formatted = quantity.toString();
-
-  // Convert decimals to fractions for common cooking measurements
-  if (quantity % 1 !== 0) {
-    const decimal = quantity % 1;
-    const whole = Math.floor(quantity);
-
-    if (decimal === 0.25) formatted = `${whole > 0 ? whole : ""} 1/4`.trim();
-    else if (decimal === 0.5)
-      formatted = `${whole > 0 ? whole : ""} 1/2`.trim();
-    else if (decimal === 0.75)
-      formatted = `${whole > 0 ? whole : ""} 3/4`.trim();
-    else if (decimal === 0.33)
-      formatted = `${whole > 0 ? whole : ""} 1/3`.trim();
-    else if (decimal === 0.67)
-      formatted = `${whole > 0 ? whole : ""} 2/3`.trim();
-  }
-
-  return isNotNil(unit) ? `${formatted} ${unit}` : formatted;
+  return { name: "Unknown ingredient", href: null, isSpecific: false };
 };
 
 /**
- * `82450ad1:src/components/recipe/RecipeIngredientList.tsx`, restored.
+ * `82450ad1:src/components/recipe/RecipeIngredientList.tsx`, restored, and
+ * X14's ingredient row.
  *
- * Dropped: the availability icons and messages ("In your cellar", "Similar
- * items available", "View substitutions"). They came from `Math.random()` —
- * a different answer on every render, and a hydration mismatch — and the API
- * has no real compatibility field to replace them (G29, dropped). Rendering
- * them from nothing would be a claim about the viewer's cellar that is not
- * true, so the row renders as it did with `showAvailability={false}`, which
- * is how the versions tab already showed it.
+ * - **The amount** is the one quantity formatter's (`RecipeIngredient.amount`
+ *   from the API — the printed "¾ oz" when the recipe had one, else the
+ *   numbers with Unicode fractions); `formatQuantity` from contracts covers a
+ *   row from an older document without it. The two hand-rolled fraction
+ *   tables this file and `ItemRecipes` each carried are gone.
+ * - **Availability** is real (D9): Have, Swap, Missing or Not tracked, from
+ *   the viewer's own bottles and Bar pantry. The old icons came from
+ *   `Math.random()` and were dropped in the restore; these replace them.
+ * - The generic item's category chip ("spirit", "citrus") is gone: the kind
+ *   label it approximated is what availability is decided on, and the tag
+ *   already says what matters about it.
  *
- * The item link covers all six item types (`/{type}s/{id}`); the old row had
- * no sake or tea column, so those could not link.
+ * The item link covers all six item types (`/{type}s/{id}`).
  */
 export const RecipeIngredientList = ({
   ingredients,
   showSubstitutions = true,
+  showAvailability = true,
 }: RecipeIngredientListProps) => {
   return (
-    <Stack spacing={2}>
-      {ingredients.map((ingredient, index) => {
+    <ul className="m-0 flex list-none flex-col p-0">
+      {ingredients.map((ingredient) => {
         const display = getIngredientDisplay(ingredient);
-        const quantityText = formatQuantity(
-          ingredient.quantity,
-          ingredient.unit,
-        );
+        const amount =
+          ingredient.amount ??
+          formatQuantity(ingredient.quantity, ingredient.unit);
+        const isGarnish = ingredient.role === "garnish";
+        const linked = display.isSpecific && display.href !== null;
+        const note =
+          showAvailability && isNotNil(ingredient.availability)
+            ? ingredient.availability
+            : null;
 
         return (
-          <Box key={ingredient.id}>
-            <Stack direction="row" spacing={2} alignItems="flex-start">
-              {/* Ingredient details */}
-              <Stack spacing={1} sx={{ flex: 1 }}>
-                <Stack
-                  direction="row"
-                  spacing={1}
-                  alignItems="center"
-                  flexWrap="wrap"
-                >
-                  {/* Quantity */}
-                  {quantityText && (
-                    <Typography level="body-md" fontWeight="md">
-                      {quantityText}
-                    </Typography>
-                  )}
-
-                  {/* Ingredient name */}
-                  {display.isSpecific && display.href ? (
-                    <Link href={display.href}>
-                      <Typography
-                        level="body-md"
-                        sx={{ textDecoration: "underline" }}
-                      >
-                        {display.name}
-                      </Typography>
+          <li
+            key={ingredient.id}
+            data-ingredient-role={ingredient.role ?? undefined}
+            className="relative flex flex-col gap-1 border-hair border-b py-3 last:border-b-0"
+          >
+            <div className="flex min-h-8 items-center gap-3">
+              <span className="t-body tabular w-20 shrink-0 text-ink-2">
+                {amount}
+              </span>
+              <div className="flex min-w-0 flex-1 flex-col">
+                <div className="flex min-w-0 flex-wrap items-center gap-2">
+                  {linked && display.href !== null ? (
+                    <Link
+                      href={display.href}
+                      overlay
+                      underline="none"
+                      className="t-body text-ink"
+                    >
+                      {display.name}
                     </Link>
                   ) : (
-                    <Typography level="body-md">{display.name}</Typography>
+                    <span className="t-body text-ink">{display.name}</span>
                   )}
-
-                  {/* Optional indicator */}
                   {ingredient.is_optional && (
-                    <Chip variant="outlined" size="sm" color="neutral">
-                      Optional
-                    </Chip>
+                    <Badge variant="outline">Optional</Badge>
                   )}
-
-                  {/* Ingredient type for generic items */}
-                  {!display.isSpecific && display.category && (
-                    <Chip variant="soft" size="sm">
-                      {display.category}
-                    </Chip>
+                  {isGarnish && !ingredient.is_optional && (
+                    <Badge variant="outline">Garnish</Badge>
                   )}
-                </Stack>
+                </div>
+                {note !== null && (
+                  <span
+                    data-availability={note.status.toLowerCase()}
+                    className={cn(
+                      "t-cap truncate",
+                      note.status === "MISSING" || note.status === "UNKNOWN"
+                        ? "text-ink-3"
+                        : "text-ink-2",
+                    )}
+                  >
+                    {availabilityText(note)}
+                  </span>
+                )}
+              </div>
+              {linked && (
+                <ChevronRight
+                  aria-hidden
+                  className="size-5 shrink-0 text-glyph"
+                />
+              )}
+            </div>
 
-                {/* Substitution notes */}
-                {showSubstitutions &&
-                  isNotNil(ingredient.substitution_notes) && (
-                    <Typography
-                      level="body-sm"
-                      sx={{
-                        color: "text.secondary",
-                        fontStyle: "italic",
-                      }}
-                    >
-                      Note: {ingredient.substitution_notes}
-                    </Typography>
-                  )}
-              </Stack>
-            </Stack>
-
-            {index < ingredients.length - 1 && <Divider sx={{ my: 2 }} />}
-          </Box>
+            {showSubstitutions && isNotNil(ingredient.substitution_notes) && (
+              <p className="t-cap m-0 pl-23 text-ink-2">
+                {ingredient.substitution_notes}
+              </p>
+            )}
+          </li>
         );
       })}
-    </Stack>
+    </ul>
   );
 };

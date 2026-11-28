@@ -1,9 +1,9 @@
 "use client";
 
-import { Box, CircularProgress } from "@mui/joy";
 import dynamic from "next/dynamic";
 import type { CachedLocation } from "@/lib/geo-cookie/parse";
 import { MapMachineProvider } from "../state/MapMachineProvider";
+import { MapShell } from "./MapShell";
 
 interface MapViewProps {
   userId: string;
@@ -15,20 +15,9 @@ const MapLibreRenderer = dynamic(
     import("../maplibre/MapLibreRenderer").then((mod) => mod.MapLibreRenderer),
   {
     ssr: false,
-    loading: () => (
-      <Box
-        sx={{
-          height: "100%",
-          width: "100%",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          backgroundColor: "background.surface",
-        }}
-      >
-        <CircularProgress />
-      </Box>
-    ),
+    // The route's shell again (X24), not a spinner: the chunk arrives into
+    // the frame the tap already showed.
+    loading: () => <MapShell />,
   },
 );
 

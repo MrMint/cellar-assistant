@@ -1,18 +1,12 @@
 "use client";
 
-import { Box, Card, CardContent, Chip, Stack, Typography } from "@mui/joy";
-import Image from "next/image";
-import { MdRestaurant } from "react-icons/md";
-import { Link } from "@/components/common/Link";
-import beer1 from "@/images/beer1.png";
-import wine1 from "@/images/wine1.png";
+import { formatQuantity } from "@cellar-assistant/contracts/quantity";
+import { Restaurant } from "@/components/app/icons";
+import { Link } from "@/components/app/Link";
+import { RecipeThumb } from "@/components/recipe/RecipePlate";
+import { Badge } from "@/components/ui/badge";
 import { HeldBackNote } from "./HeldBackNote";
-
-const getDifficultyColor = (level: number) => {
-  if (level <= 2) return "success";
-  if (level <= 3) return "warning";
-  return "danger";
-};
+import { ItemSection } from "./ItemSection";
 
 const getDifficultyText = (level: number) => {
   if (level === 1) return "Very Easy";
@@ -20,38 +14,6 @@ const getDifficultyText = (level: number) => {
   if (level === 3) return "Medium";
   if (level === 4) return "Hard";
   return "Very Hard";
-};
-
-const getFallback = (type: string) => {
-  return type === "food"
-    ? { image: beer1, alt: "A food dish" }
-    : { image: wine1, alt: "A cocktail" };
-};
-
-const formatQuantity = (quantity?: number | null, unit?: string | null) => {
-  if (quantity === null || quantity === undefined) return "";
-
-  let formatted = quantity.toString();
-
-  // Convert decimals to fractions for common cooking measurements
-  if (quantity % 1 !== 0) {
-    const decimal = quantity % 1;
-    const whole = Math.floor(quantity);
-
-    if (decimal === 0.25) formatted = `${whole > 0 ? whole : ""} 1/4`.trim();
-    else if (decimal === 0.5)
-      formatted = `${whole > 0 ? whole : ""} 1/2`.trim();
-    else if (decimal === 0.75)
-      formatted = `${whole > 0 ? whole : ""} 3/4`.trim();
-    else if (decimal === 0.33)
-      formatted = `${whole > 0 ? whole : ""} 1/3`.trim();
-    else if (decimal === 0.67)
-      formatted = `${whole > 0 ? whole : ""} 2/3`.trim();
-  }
-
-  return unit !== null && unit !== undefined
-    ? `${formatted} ${unit}`
-    : formatted;
 };
 
 export type ItemRecipeIngredient = {
@@ -80,7 +42,15 @@ export type ItemRecipesProps = {
  * `82450ad1:src/components/item/ItemRecipes.tsx`, restored. Fed by
  * `Item.recipeIngredients` + `RecipeIngredient.recipe` (G11) through the
  * adapter; a recipe's own `imageUrl` goes into a plain `<img>` (no
- * `remotePatterns` entry), the fallback stays a static `next/image`.
+ * `remotePatterns` entry). With none, B03's drawn `RecipeThumb` — the old
+ * fallback was a wine-bottle photo for every cocktail.
+ *
+ * Amounts go through the one quantity formatter (X14, contracts
+ * `formatQuantity`): "1½ oz", where this file used to carry its own table.
+ *
+ * The difficulty chip was green/amber/red by level with Joy's palette; the
+ * word ("Easy", "Hard") is the information, so it is one neutral outline now
+ * (design §3.1: no decorative hues), like the type and "Optional" chips.
  */
 export const ItemRecipes = ({
   recipeIngredients,
@@ -93,123 +63,71 @@ export const ItemRecipes = ({
   }
 
   return (
-    <Card variant="outlined">
-      <CardContent>
-        <Typography level="title-sm" sx={{ mb: 2 }}>
-          {title} ({recipeIngredients.length})
-        </Typography>
+    <ItemSection title={`${title} (${recipeIngredients.length})`}>
+      <ul className="flex flex-col gap-4">
+        {recipeIngredients.map((ingredient) => {
+          const recipe = ingredient.recipe;
+          const quantityText = formatQuantity(
+            ingredient.quantity,
+            ingredient.unit,
+          );
 
-        <Stack spacing={2}>
-          {recipeIngredients.map((ingredient) => {
-            const recipe = ingredient.recipe;
-            const fallback = getFallback(recipe.type);
-            const quantityText = formatQuantity(
-              ingredient.quantity,
-              ingredient.unit,
-            );
+          return (
+            <li key={ingredient.id} className="flex items-center gap-4">
+              <span className="flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-sm bg-surface-2">
+                {recipe.image_url !== null && recipe.image_url !== undefined ? (
+                  // biome-ignore lint/performance/noImgElement: a recipe's own image URL has no `remotePatterns` entry.
+                  <img
+                    src={recipe.image_url}
+                    alt={recipe.name}
+                    width={48}
+                    height={48}
+                    className="size-full rounded-xs object-cover"
+                  />
+                ) : (
+                  // B03: a drawn coupe or cloche, not a beer or wine photo.
+                  <RecipeThumb type={recipe.type} className="rounded-xs" />
+                )}
+              </span>
 
-            return (
-              <Box key={ingredient.id}>
-                <Stack direction="row" spacing={2} alignItems="center">
-                  <Box
-                    sx={{
-                      width: 48,
-                      height: 48,
-                      borderRadius: "sm",
-                      overflow: "hidden",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      bgcolor: "background.level1",
-                    }}
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Link
+                    href={`/recipes/${recipe.id}`}
+                    underline="always"
+                    className="t-body font-medium text-ink-1"
                   >
-                    {recipe.image_url !== null &&
-                    recipe.image_url !== undefined ? (
-                      <Box
-                        component="img"
-                        src={recipe.image_url}
-                        alt={recipe.name}
-                        width={48}
-                        height={48}
-                        style={{ objectFit: "cover", borderRadius: "4px" }}
-                      />
-                    ) : (
-                      <Image
-                        src={fallback.image}
-                        alt={fallback.alt}
-                        width={48}
-                        height={48}
-                        style={{ objectFit: "cover", borderRadius: "4px" }}
-                      />
+                    {recipe.name}
+                  </Link>
+                  <Badge variant="secondary" className="capitalize">
+                    {recipe.type === "food" && <Restaurant aria-hidden />}
+                    {recipe.type}
+                  </Badge>
+                  {recipe.difficulty_level !== null &&
+                    recipe.difficulty_level !== undefined && (
+                      <Badge variant="outline">
+                        {getDifficultyText(recipe.difficulty_level)}
+                      </Badge>
                     )}
-                  </Box>
-
-                  <Box sx={{ flex: 1 }}>
-                    <Stack
-                      direction="row"
-                      spacing={1}
-                      alignItems="center"
-                      flexWrap="wrap"
-                    >
-                      <Link href={`/recipes/${recipe.id}`}>
-                        <Typography
-                          level="body-md"
-                          fontWeight="md"
-                          sx={{ textDecoration: "underline" }}
-                        >
-                          {recipe.name}
-                        </Typography>
-                      </Link>
-
-                      <Chip
-                        variant="soft"
-                        size="sm"
-                        startDecorator={
-                          recipe.type === "food" ? <MdRestaurant /> : undefined
-                        }
-                        sx={{ textTransform: "capitalize" }}
-                      >
-                        {recipe.type}
-                      </Chip>
-
-                      {recipe.difficulty_level !== null &&
-                        recipe.difficulty_level !== undefined && (
-                          <Chip
-                            color={getDifficultyColor(recipe.difficulty_level)}
-                            variant="outlined"
-                            size="sm"
-                          >
-                            {getDifficultyText(recipe.difficulty_level)}
-                          </Chip>
-                        )}
-
-                      {ingredient.is_optional && (
-                        <Chip variant="outlined" size="sm" color="neutral">
-                          Optional
-                        </Chip>
-                      )}
-                    </Stack>
-
-                    <Typography
-                      level="body-sm"
-                      sx={{ color: "text.secondary" }}
-                    >
-                      {quantityText
-                        ? `${quantityText} of ${itemName}`
-                        : `Uses ${itemName}`}
-                    </Typography>
-                  </Box>
-                </Stack>
-              </Box>
-            );
-          })}
-        </Stack>
-        <HeldBackNote
-          shown={recipeIngredients.length}
-          total={total}
-          noun="recipes"
-        />
-      </CardContent>
-    </Card>
+                  {ingredient.is_optional && (
+                    <Badge variant="outline">Optional</Badge>
+                  )}
+                </div>
+                <p className="t-cap text-ink-2">
+                  {quantityText
+                    ? `${quantityText} of ${itemName}`
+                    : `Uses ${itemName}`}
+                </p>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+      <HeldBackNote
+        shown={recipeIngredients.length}
+        total={total}
+        noun="recipes"
+      />
+    </ItemSection>
   );
 };

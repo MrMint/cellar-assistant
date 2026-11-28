@@ -31,6 +31,7 @@ import { ActorId, DaprClient } from "@dapr/dapr";
 import { afterAll, afterEach, describe, expect, it } from "vitest";
 import type { DbOrTx } from "../lib/db.ts";
 import type { EmbedDocument, EmbedImage } from "../lib/embedding-client.ts";
+import { EMBEDDING_TEXT_PREFIX } from "../lib/item-bindings.ts";
 import {
   seedItemImage,
   seedItemImageVector,
@@ -148,6 +149,11 @@ const seedVectors = async (db: DbOrTx) => {
     MODEL,
     sql`wine_id = ${current.id}::uuid`,
   );
+  // Made from the current text format too (N08), so it is not stale at all.
+  await db.execute(sql`
+    update public.item_vectors set embedding_text = ${`${EMBEDDING_TEXT_PREFIX}0000`}
+    where wine_id = ${current.id}::uuid
+  `);
   const recipeId = await seedRecipe(db, { name: "Legacy Negroni" });
   await seedRecipeVector(db, recipeId, unit(4));
   return { owner, legacy, older, current, recipeId };
@@ -222,6 +228,42 @@ describe.skipIf(skip)("VectorReembedJobActor", () => {
           failed: 0,
         },
       });
+    });
+  });
+
+  /**
+   * N08's backfill: the configured model made it, but from the text format
+   * before labels and brands — `embedding_text` NULL, or another version.
+   * Recipes have no text key and are not walked for it.
+   */
+  it("also visits item vectors made from an older embedding-text format, whatever model made them", async () => {
+    await withTestDb(async (db) => {
+      const { owner, current } = await seedVectors(db);
+      setEmbeddingModel({ key: MODEL, acceptsImages: false });
+      const formatOne = await seedWine(db, owner, "Format One Wine");
+      await seedItemVector(db, formatOne, unit(5));
+      await setModelOf(
+        db,
+        "item_vectors",
+        MODEL,
+        sql`wine_id = ${formatOne.id}::uuid`,
+      );
+      const formatZero = await seedWine(db, owner, "Format Zero Wine");
+      await seedItemVector(db, formatZero, unit(6));
+      await db.execute(sql`
+        update public.item_vectors
+        set embedding_model = ${MODEL}, embedding_text = 'v1:0000'
+        where wine_id = ${formatZero.id}::uuid
+      `);
+      const { regenerate, calls } = recording();
+      const jobId = randomUUID();
+      const actor = await jobActor(db, jobId, regenerate);
+      await actor.start(adminCtx(owner, "r"), { tables: ["item_vectors"] });
+      await runToEnd(actor, jobId, db);
+
+      expect(calls).toContain(itemActorId(formatOne));
+      expect(calls).toContain(itemActorId(formatZero));
+      expect(calls).not.toContain(itemActorId(current));
     });
   });
 

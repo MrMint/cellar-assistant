@@ -87,6 +87,11 @@ export const ItemPageItemFragment = graphql(
     ...ItemCore
     ...ItemAttributes
     isFavorite
+    isWantToTry
+    friendsScore {
+      average
+      count
+    }
     images(first: 1) {
       edges {
         node {
@@ -117,6 +122,8 @@ export const ItemPageItemFragment = graphql(
       id
       score
       text
+      # F-151: the date under Your rating.
+      updatedAt
     }
     reviews(first: 20) {
       totalCount
@@ -228,9 +235,43 @@ export const ItemPageRecipesFragment = graphql(`
 `);
 
 /**
+ * X09 "Your bottles": the viewer's own bottles of the item still in their
+ * cellars, open first, with each one's cellar named. 50 is a literal (see the
+ * module doc on pricing); a person with more than fifty bottles of one item
+ * sees "showing 50 of N" (`totalCount` is exact).
+ */
+export const ItemPageBottlesFragment = graphql(`
+  fragment ItemPageBottles on Item {
+    __typename
+    myBottles(first: 50) {
+      totalCount
+      edges {
+        node {
+          __typename
+          id
+          cellarId
+          openAt
+          emptyAt
+          percentageRemaining
+          levelBeforeEmpty
+          createdAt
+          cellar {
+            __typename
+            id
+            name
+          }
+        }
+      }
+    }
+  }
+`);
+
+/**
  * `/{type}s/[itemId]` — the item, its relations, the viewer, and the cellars
  * the viewer can drop a bottle into (the old page's `cellars` prop: own and,
- * now, co-owned — `myCellars` is `canSeeCellar`, so the adapter filters).
+ * now, co-owned). `section: MINE` asks the server for exactly those (X11), so
+ * the walk no longer pages through every stranger's PUBLIC cellar to find
+ * them; the adapter's own filter stays as the second check.
  */
 export const ItemPageQuery = graphql(
   `
@@ -238,7 +279,7 @@ export const ItemPageQuery = graphql(
     me {
       id
     }
-    myCellars(first: 100) {
+    myCellars(first: 100, section: MINE) {
       __typename
       ... on CellarConnection {
         pageInfo {
@@ -264,6 +305,7 @@ export const ItemPageQuery = graphql(
           ...ItemPageItem
           ...ItemPageRelations
           ...ItemPageRecipes
+          ...ItemPageBottles
         }
       }
       ...ActorErrorFields
@@ -274,6 +316,7 @@ export const ItemPageQuery = graphql(
     ItemPageItemFragment,
     ItemPageRelationsFragment,
     ItemPageRecipesFragment,
+    ItemPageBottlesFragment,
     ActorErrorFieldsFragment,
   ],
 );
@@ -309,40 +352,15 @@ export const ItemReviewsPageQuery = graphql(
 );
 
 /**
- * `/cellars/[cellarId]/{type}s/[bottleId]` — one bottle (G10) with its
- * check-ins (G14) and display photo (G15), the item it holds, the viewer and
- * their friends (the bulk check-in picker).
+ * `/cellars/[cellarId]/{type}s/[bottleId]` — one bottle (G10) and the cellar
+ * it is in: enough to pick the item page to render and to select this bottle
+ * on it (X09). Everything about the item is the item page's own query.
  */
 export const CellarItemPageQuery = graphql(
   `
   query CellarItemPage($cellarId: ID!, $bottleId: ID!) {
     me {
       id
-      profile {
-        id
-        displayName
-        avatarUrl
-      }
-    }
-    myFriends(first: 100) {
-      __typename
-      ... on FriendConnection {
-        pageInfo {
-          hasNextPage
-          endCursor
-        }
-        edges {
-          node {
-            user {
-              __typename
-              id
-              displayName
-              avatarUrl
-            }
-          }
-        }
-      }
-      ...ActorErrorFields
     }
     cellar(id: $cellarId) {
       __typename
@@ -358,6 +376,7 @@ export const CellarItemPageQuery = graphql(
           openAt
           emptyAt
           percentageRemaining
+          createdAt
           displayImageId
           displayImage {
             __typename
@@ -369,26 +388,10 @@ export const CellarItemPageQuery = graphql(
               url
             }
           }
-          checkIns(first: 100) {
-            totalCount
-            edges {
-              node {
-                __typename
-                id
-                createdAt
-                userId
-                user {
-                  __typename
-                  id
-                  displayName
-                  avatarUrl
-                }
-              }
-            }
-          }
           item {
-            ...ItemPageItem
-            ...ItemPageRecipes
+            __typename
+            id
+            type
           }
         }
       }
@@ -396,7 +399,7 @@ export const CellarItemPageQuery = graphql(
     }
   }
 `,
-  [ItemPageItemFragment, ItemPageRecipesFragment, ActorErrorFieldsFragment],
+  [ActorErrorFieldsFragment],
 );
 
 /**
@@ -541,7 +544,7 @@ export const CellarCoOwnersPageQuery = graphql(
 export const AddableCellarsPageQuery = graphql(
   `
   query AddableCellarsPage($after: String!) {
-    myCellars(first: 100, after: $after) {
+    myCellars(first: 100, after: $after, section: MINE) {
       __typename
       ... on CellarConnection {
         pageInfo {
@@ -586,6 +589,78 @@ export const BottleFriendsPageQuery = graphql(
             }
           }
         }
+      }
+      ...ActorErrorFields
+    }
+  }
+`,
+  [ActorErrorFieldsFragment],
+);
+
+/**
+ * F-145: the whole bottle, read just before Delete bottle removes it, so its
+ * Undo (`restoreCellarItem`, F-79) can put back the same row — its own id,
+ * `createdAt` and every field — rather than a bottle rebuilt from what the
+ * page happened to hold.
+ */
+export const BottleForRestoreQuery = graphql(
+  `
+  query BottleForRestore($cellarId: ID!, $bottleId: ID!) {
+    cellar(id: $cellarId) {
+      __typename
+      ... on Cellar {
+        id
+        item(id: $bottleId) {
+          __typename
+          id
+          cellarId
+          createdAt
+          acquiredOn
+          displayImageId
+          drinkFrom
+          drinkUntil
+          emptyAt
+          location
+          openAt
+          packagedOn
+          percentageRemaining
+          priceAmount
+          priceCurrency
+          sourceMenuItemId
+          sourcePlaceId
+          sourceType
+          item {
+            __typename
+            id
+            type
+          }
+        }
+      }
+      ...ActorErrorFields
+    }
+  }
+`,
+  [ActorErrorFieldsFragment],
+);
+
+/** F-145: Delete bottle's Undo (F-79). */
+export const RestoreCellarItemMutation = graphql(
+  `
+  mutation RestoreCellarItem(
+    $cellarId: ID!
+    $cellarItemId: ID!
+    $createdAt: DateTime!
+    $input: AddCellarItemInput!
+  ) {
+    restoreCellarItem(
+      cellarId: $cellarId
+      cellarItemId: $cellarItemId
+      createdAt: $createdAt
+      input: $input
+    ) {
+      __typename
+      ... on CellarItem {
+        id
       }
       ...ActorErrorFields
     }

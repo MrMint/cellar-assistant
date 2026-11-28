@@ -52,6 +52,14 @@ const fakeProfiles = (): ProfileStore & { put(f: ProfileFields): void } => {
           .filter((row): row is ProfileFields => row !== undefined)
           .map((row) => [row.id, row]),
       ),
+    count: async ({ term, excludeIds }) => {
+      const excluded = new Set(excludeIds);
+      return [...rows.values()].filter(
+        (row) =>
+          !excluded.has(row.id) &&
+          row.displayName.toLowerCase().includes(term.toLowerCase()),
+      ).length;
+    },
     update: async () => null,
     search: async ({ term, excludeIds, limit }) => {
       const excluded = new Set(excludeIds);
@@ -107,6 +115,7 @@ const scenario = async (db: DbOrTx) => {
       id,
       displayName,
       avatarUrl: null,
+      avatarFileId: null,
       locale: "en",
       email: `${displayName.toLowerCase()}@example.test`,
     });
@@ -132,6 +141,118 @@ describe.skipIf(skip)("UserSearchActor (§2.3, §1.5)", () => {
       );
       expect(hits.map((hit) => hit.displayName)).toEqual(["Alberta"]);
       expect(hits[0]?.userId).toBe(s.stranger);
+    });
+  });
+
+  describe("everyone, for universal search's People (X12)", () => {
+    it("finds friends and requests too, connected first, each with its relation", async () => {
+      await withTestDb(async (db) => {
+        const s = await scenario(db);
+        const input: UserSearchInput = { term: "al", includeConnected: true };
+        const hits = await newActor(input, db, s.viewer, s.profiles).all(
+          userCtx(s.viewer),
+          input,
+        );
+        expect(hits.map((hit) => [hit.displayName, hit.relation])).toEqual([
+          ["Alfred", "FRIEND"],
+          ["Alonzo", "REQUEST_RECEIVED"],
+          ["Alma", "REQUEST_SENT"],
+          ["Alberta", "NONE"],
+        ]);
+      });
+    });
+
+    it("F-43: a pending row carries its request's id, so Cancel and Accept need no lookup", async () => {
+      await withTestDb(async (db) => {
+        const s = await scenario(db);
+        const ids = await db.execute<{
+          id: string;
+          user_id: string;
+          friend_id: string;
+        }>(sql`select id, user_id, friend_id from public.friend_requests`);
+        const idBetween = (from: string, to: string) =>
+          ids.rows.find((r) => r.user_id === from && r.friend_id === to)?.id;
+        const input: UserSearchInput = { term: "al", includeConnected: true };
+        const hits = await newActor(input, db, s.viewer, s.profiles).all(
+          userCtx(s.viewer),
+          input,
+        );
+        expect(
+          hits.map((hit) => [hit.displayName, hit.pendingRequestId ?? null]),
+        ).toEqual([
+          ["Alfred", null],
+          ["Alonzo", idBetween(s.requester, s.viewer)],
+          ["Alma", idBetween(s.viewer, s.requested)],
+          ["Alberta", null],
+        ]);
+        expect(idBetween(s.requester, s.viewer)).toEqual(expect.any(String));
+      });
+    });
+
+    it("never returns the viewer, and fills the limit with strangers after", async () => {
+      await withTestDb(async (db) => {
+        const s = await scenario(db);
+        const input: UserSearchInput = {
+          term: "al",
+          includeConnected: true,
+          limit: 2,
+        };
+        const hits = await newActor(input, db, s.viewer, s.profiles).all(
+          userCtx(s.viewer),
+          input,
+        );
+        expect(hits.map((hit) => hit.displayName)).toEqual([
+          "Alfred",
+          "Alonzo",
+        ]);
+        const wide: UserSearchInput = { term: "ali", includeConnected: true };
+        const self = await newActor(wide, db, s.viewer, s.profiles).all(
+          userCtx(s.viewer),
+          wide,
+        );
+        expect(self).toEqual([]);
+      });
+    });
+
+    it("matches connected people by the same rule as the store", async () => {
+      await withTestDb(async (db) => {
+        const s = await scenario(db);
+        const input: UserSearchInput = { term: "FRED", includeConnected: true };
+        const hits = await newActor(input, db, s.viewer, s.profiles).all(
+          userCtx(s.viewer),
+          input,
+        );
+        expect(hits.map((hit) => hit.userId)).toEqual([s.friend]);
+      });
+    });
+
+    it("re-reads relations every turn rather than holding a stale answer", async () => {
+      await withTestDb(async (db) => {
+        const s = await scenario(db);
+        const input: UserSearchInput = {
+          term: "alberta",
+          includeConnected: true,
+        };
+        const actor = newActor(input, db, s.viewer, s.profiles);
+        const ctx = userCtx(s.viewer);
+        const before = await actor.all(ctx, input);
+        expect(before.map((hit) => hit.relation)).toEqual(["NONE"]);
+
+        await seedRequest(db, s.viewer, s.stranger);
+        const after = await actor.all(ctx, input);
+        expect(after.map((hit) => hit.relation)).toEqual(["REQUEST_SENT"]);
+        expect(actor.searchRuns).toBe(2);
+      });
+    });
+
+    it("joins the key only when set", () => {
+      const viewer = crypto.randomUUID();
+      expect(
+        userSearchActorId({ term: "al", includeConnected: false }, viewer),
+      ).toBe(userSearchActorId({ term: "al" }, viewer));
+      expect(
+        userSearchActorId({ term: "al", includeConnected: true }, viewer),
+      ).not.toBe(userSearchActorId({ term: "al" }, viewer));
     });
   });
 
@@ -178,6 +299,39 @@ describe.skipIf(skip)("UserSearchActor (§2.3, §1.5)", () => {
     });
   });
 
+  it("MC-search: a people section's total is exact past the cap, in both modes", async () => {
+    await withTestDb(async (db) => {
+      const s = await scenario(db);
+      const ctx = userCtx(s.stranger);
+      const plain: UserSearchInput = { term: "al" };
+      const full = await newActor(plain, db, s.stranger, s.profiles).results(
+        ctx,
+        plain,
+        { first: 100, after: null },
+      );
+      const matches = full.entries.length;
+      expect(full.totalCount).toBe(matches);
+      expect(full.totalIsLowerBound).toBe(false);
+
+      for (const includeConnected of [false, true]) {
+        const capped: UserSearchInput = {
+          term: "al",
+          limit: 1,
+          ...(includeConnected ? { includeConnected } : {}),
+        };
+        const page = await newActor(capped, db, s.stranger, s.profiles).results(
+          ctx,
+          capped,
+          { first: 10, after: null },
+        );
+        expect(page.entries).toHaveLength(1);
+        // Lexical: counted before the cap, so the whole count, not 1.
+        expect(page.totalCount).toBe(matches);
+        expect(page.totalIsLowerBound).toBe(false);
+      }
+    });
+  });
+
   it("pages one result set without re-querying (§1.5)", async () => {
     await withTestDb(async (db) => {
       const s = await scenario(db);
@@ -200,6 +354,33 @@ describe.skipIf(skip)("UserSearchActor (§2.3, §1.5)", () => {
         "Alonzo",
       ]);
       expect(actor.searchRuns).toBe(1);
+    });
+  });
+
+  it("answers nobody by that name with the same empty set in both modes, and an existing person with a hit (leftovers 5)", async () => {
+    await withTestDb(async (db) => {
+      const s = await scenario(db);
+      for (const includeConnected of [false, true]) {
+        const nobody: UserSearchInput = {
+          term: "Zebedee",
+          ...(includeConnected ? { includeConnected } : {}),
+        };
+        expect(
+          await newActor(nobody, db, s.viewer, s.profiles).all(
+            userCtx(s.viewer),
+            nobody,
+          ),
+        ).toEqual([]);
+        const someone: UserSearchInput = {
+          term: "Alberta",
+          ...(includeConnected ? { includeConnected } : {}),
+        };
+        const hits = await newActor(someone, db, s.viewer, s.profiles).all(
+          userCtx(s.viewer),
+          someone,
+        );
+        expect(hits.map((hit) => hit.userId)).toEqual([s.stranger]);
+      }
     });
   });
 

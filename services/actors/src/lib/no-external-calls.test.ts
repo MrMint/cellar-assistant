@@ -129,6 +129,12 @@ const GUARDED: readonly Guarded[] = [
       ...SHARED_IMPORTS,
       "../lib/embedding-client.ts",
       "../lib/file-verification.ts",
+      // X09: `friendshipsOf` / `friendIdsOf` for `friendsScore` — Drizzle
+      // reads of `friends`, guarded below.
+      "../lib/visibility.ts",
+      // L10: `seenAt` — Drizzle reads composed with the policy's canSee*
+      // rules, guarded below.
+      "../lib/seen-at.ts",
     ],
     // §8.5's "entity → FileActor, BudgetActor, EmbeddingActor,
     // BrandRegistryActor, BarcodeActor". `ItemActor` uses two of the five,
@@ -168,6 +174,9 @@ const GUARDED: readonly Guarded[] = [
     // helper that every item-shaped actor imports cannot grow an edge.
     file: "../lib/item-bindings.ts",
     imports: [
+      // `createHash` for `embeddingTextKey` (N08): a SHA-256 of a string in
+      // memory, no I/O.
+      "node:crypto",
       "@cellar-assistant/contracts",
       "@cellar-assistant/db",
       // `requireUuid` for `itemOnboardingId` — pure, and guarded itself.
@@ -210,9 +219,60 @@ const GUARDED: readonly Guarded[] = [
     sidecarTargets: [],
   },
   {
+    // The visibility inputs read from Postgres (`friendshipsOf`, the pure
+    // `friendIdsOf`): Drizzle reads and `packages/policy`, no client, no
+    // actor — guarded so `ItemActor.friendsScore` cannot grow an edge
+    // through it.
+    file: "../lib/visibility.ts",
+    imports: [
+      "@cellar-assistant/contracts",
+      "@cellar-assistant/db",
+      "@cellar-assistant/db/orm",
+      "@cellar-assistant/policy",
+      "./db.ts",
+    ],
+    sidecarTargets: [],
+  },
+  {
     // The shared uuid check: contracts' `ValidationError`, nothing else.
     file: "../lib/uuid.ts",
     imports: ["@cellar-assistant/contracts"],
+    sidecarTargets: [],
+  },
+  {
+    // X27: the creator-only place reads — Drizzle over `places`, no I/O
+    // beyond the database. `UserActor` imports it for `placeVisibleTo`.
+    file: "../lib/unshared-places.ts",
+    imports: [
+      "@cellar-assistant/contracts",
+      "@cellar-assistant/db",
+      "@cellar-assistant/db/orm",
+      "@cellar-assistant/policy",
+      "./db.ts",
+    ],
+    sidecarTargets: [],
+  },
+  {
+    // X18: "cellars this user created or co-owns" as a SQL fragment — builds
+    // SQL, issues no query. `UserActor.counts` imports it for the bottles.
+    file: "../lib/cellar-ownership.ts",
+    imports: ["@cellar-assistant/db/orm"],
+    sidecarTargets: [],
+  },
+  {
+    // X15: who may see a recipe — SQL fragments and one friendship read, no
+    // I/O beyond the database. `UserActor` imports it for Love and Want to
+    // try on a recipe, which must not confirm a private one exists.
+    file: "../lib/recipe-visibility.ts",
+    imports: [
+      "@cellar-assistant/contracts",
+      "@cellar-assistant/db/orm",
+      "@cellar-assistant/policy",
+      "./collection-sql.ts",
+      "./db.ts",
+      "./visibility-sql.ts",
+      "./visibility.ts",
+    ],
     sidecarTargets: [],
   },
   {
@@ -224,14 +284,45 @@ const GUARDED: readonly Guarded[] = [
     sidecarTargets: [],
   },
   {
+    // N07: the boot-time answer to "what can this deployment's AI do", read
+    // by `UserActor.aiCapabilities`. A registry, not a seam — it holds a
+    // record of booleans, never a provider — guarded so it stays that way.
+    file: "../lib/ai/capabilities.ts",
+    imports: ["@cellar-assistant/contracts"],
+    sidecarTargets: [],
+  },
+  {
     file: "user-actor.ts",
     // No `sidecar.ts` or actor client at all: §2.1 is absolute for this one,
     // and B4's own test says the same thing from the other direction.
     imports: [
       ...SHARED_IMPORTS,
       "../lib/profile-store.ts",
+      // `aiCapabilities()` — a registry of booleans, guarded above.
+      "../lib/ai/capabilities.ts",
       // `isEmailShaped` — pure, and guarded above.
       "../auth/display-name.ts",
+      // X27: `placeVisibleTo`, a Drizzle predicate — guarded above.
+      "../lib/unshared-places.ts",
+      // X15: `visibleRecipeIds` — guarded above.
+      "../lib/recipe-visibility.ts",
+      // X18: `cellarOwnedBySql` for the Me hub's counts — guarded above.
+      "../lib/cellar-ownership.ts",
+    ],
+    sidecarTargets: [],
+  },
+  {
+    // L10: Seen at — the item's menu lines and logs, kept through
+    // `canSeePlace` / `canSeeCheckInDetails`. Reads only; no actor, no model.
+    file: "../lib/seen-at.ts",
+    imports: [
+      "@cellar-assistant/contracts",
+      "@cellar-assistant/db",
+      "@cellar-assistant/db/orm",
+      "@cellar-assistant/policy",
+      "./db.ts",
+      "./item-arcs.ts",
+      "./visibility.ts",
     ],
     sidecarTargets: [],
   },

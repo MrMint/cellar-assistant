@@ -72,8 +72,7 @@ export const CellarItemRowFragment = graphql(`
  * One drink.
  *
  * `CheckIn` carries ids and nothing else — no drinker profile, no item. That is
- * C3's deliberate shape, so the drinker's name is a separate `user(id:)` read
- * (`UserNameQuery`) rather than an inlined profile per row.
+ * C3's deliberate shape: the check-in mutations echo it back.
  */
 export const CheckInRowFragment = graphql(`
   fragment CheckInRow on CheckIn {
@@ -88,67 +87,6 @@ export const CheckInRowFragment = graphql(`
 // ---------------------------------------------------------------------------
 // Queries
 // ---------------------------------------------------------------------------
-
-/**
- * A cellar with its first bottles and its check-in history. The overview page
- * now reads `GetCellarOverviewQuery` (`components/cellar/fragments.ts`); this
- * one survives as the document `CellarCheckIns`' "Show more" re-reads.
- *
- * The check-ins here are gated on **`canSeeCellar`** (B1): every check-in in a
- * cellar you can see, including a co-owner's, friend or not. The item page uses
- * the looser author-or-friend rule on `Item.checkIns` instead. The two are not
- * the same list and must not be unified.
- */
-export const CellarDetailQuery = graphql(
-  `
-  query CellarDetail(
-    $cellarId: ID!
-    $items: Int!
-    $checkIns: Int!
-    $sort: CellarItemSort
-  ) {
-    cellar(id: $cellarId) {
-      __typename
-      ... on Cellar {
-        ...CellarCard
-        items(first: $items, sort: $sort) {
-          totalCount
-          pageInfo {
-            hasNextPage
-            endCursor
-          }
-          edges {
-            cursor
-            node {
-              ...CellarItemRow
-            }
-          }
-        }
-        checkIns(first: $checkIns) {
-          totalCount
-          pageInfo {
-            hasNextPage
-            endCursor
-          }
-          edges {
-            cursor
-            node {
-              ...CheckInRow
-            }
-          }
-        }
-      }
-      ...ActorErrorFields
-    }
-  }
-`,
-  [
-    CellarCardFragment,
-    CellarItemRowFragment,
-    CheckInRowFragment,
-    ActorErrorFieldsFragment,
-  ],
-);
 
 /** One cellar's header fields (`/cellars/[cellarId]/items/add`). */
 export const CellarHeaderQuery = graphql(
@@ -181,30 +119,6 @@ export const ViewerQuery = graphql(`
     }
   }
 `);
-
-/**
- * One display name, for a check-in row.
- *
- * A separate document on purpose: URQL deduplicates identical in-flight
- * operations and the graphcache keys `UserProfile` by id, so a cellar with
- * forty check-ins by three people performs three reads, not forty.
- */
-export const UserNameQuery = graphql(
-  `
-  query UserName($userId: ID!) {
-    user(id: $userId) {
-      __typename
-      ... on UserProfile {
-        id
-        displayName
-        avatarUrl
-      }
-      ...ActorErrorFields
-    }
-  }
-`,
-  [ActorErrorFieldsFragment],
-);
 
 // ---------------------------------------------------------------------------
 // Mutations
@@ -305,6 +219,96 @@ export const EmptyCellarItemMutation = graphql(
   }
 `,
   [CellarItemRowFragment, ActorErrorFieldsFragment],
+);
+
+/**
+ * L02: a bottle's own dates, price and place, and the item fields the
+ * shelf-life table keys on. Owner-only on the server: anyone else reads null.
+ */
+export const BottleFreshnessFragment = graphql(`
+  fragment BottleFreshness on CellarItem {
+    __typename
+    id
+    openAt
+    emptyAt
+    packagedOn
+    acquiredOn
+    drinkFrom
+    drinkUntil
+    priceAmount
+    priceCurrency
+    location
+  }
+`);
+
+/** The bottle page's freshness card: the bottle, and its item's style keys. */
+export const BottleFreshnessQuery = graphql(
+  `
+  query BottleFreshness($cellarId: ID!, $cellarItemId: ID!) {
+    cellar(id: $cellarId) {
+      __typename
+      ... on Cellar {
+        id
+        item(id: $cellarItemId) {
+          ...BottleFreshness
+          item {
+            __typename
+            id
+            type
+            ... on Wine {
+              wineStyle: style
+              vintage
+            }
+            ... on Beer {
+              beerStyle: style
+            }
+            ... on Spirit {
+              spiritType
+            }
+            ... on Sake {
+              category
+              vintageYear
+            }
+            ... on Tea {
+              teaCategory: category
+              form
+            }
+          }
+        }
+      }
+      ...ActorErrorFields
+    }
+  }
+`,
+  [BottleFreshnessFragment, ActorErrorFieldsFragment],
+);
+
+/**
+ * A partial patch of one bottle. The client's one use is Undo after
+ * finishing (N13a): `emptyAt: null` puts the bottle back in the cellar.
+ */
+export const UpdateCellarItemMutation = graphql(
+  `
+  mutation UpdateCellarItem(
+    $cellarId: ID!
+    $cellarItemId: ID!
+    $input: UpdateCellarItemInput!
+  ) {
+    updateCellarItem(
+      cellarId: $cellarId
+      cellarItemId: $cellarItemId
+      input: $input
+    ) {
+      __typename
+      ... on CellarItem {
+        ...CellarItemRow
+        ...BottleFreshness
+      }
+      ...ActorErrorFields
+    }
+  }
+`,
+  [CellarItemRowFragment, BottleFreshnessFragment, ActorErrorFieldsFragment],
 );
 
 export const SetCellarItemPercentageMutation = graphql(

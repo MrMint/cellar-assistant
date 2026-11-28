@@ -39,6 +39,8 @@ import {
 
 /** Static routes only. Dynamic ones are covered by the flows that create rows. */
 const ROUTES = [
+  // X10: Home "Today".
+  "/",
   "/cellars",
   "/cellars/add",
   "/add",
@@ -46,19 +48,31 @@ const ROUTES = [
   // segment. Asserting the singular 404s guards the route contract itself.
   "/add/wines",
   "/search",
-  "/brands",
   "/favorites",
+  "/want-to-try",
   "/map",
   "/map/create-place",
-  "/map/scans",
-  "/discoveries",
   "/recipes",
   "/recipes/ai-generator",
+  // X15: New recipe — the choices, and the editor for Type.
+  "/recipes/new",
+  "/recipes/new?from=type",
+  // X14: What can I make (G29) and the Bar pantry (D23).
+  "/recipes/bar",
+  "/recipes/bar/pantry",
   "/tier-lists",
   "/tier-lists/add",
   "/rankings",
   "/friends",
   "/users/edit",
+];
+
+/**
+ * D7 removed the `/{type}s` index pages; `/{type}s/[id]` and its `edit` stay.
+ * An old bookmark to one is an unmatched URL, which must render the in-shell
+ * not-found (D24) — 404 status, the shared copy, and the tab bar still there.
+ */
+const REMOVED_TYPE_INDEXES = [
   "/wines",
   "/beers",
   "/spirits",
@@ -122,6 +136,15 @@ async function devOverlayIssues(page: Page): Promise<number> {
   });
 }
 
+/**
+ * L37 (40f): there is no brand index. `/brands` opens search with the Brands
+ * section, keeping an old link's `?q=`.
+ */
+test("/brands redirects to search with Brands", async ({ primary }) => {
+  await primary.goto("/brands?q=ale", { waitUntil: "domcontentloaded" });
+  await expect(primary).toHaveURL(/\/search\?in=brands&q=ale$/);
+});
+
 for (const route of ROUTES) {
   test(`renders ${route}`, async ({ primary }) => {
     const noise = watch(primary);
@@ -184,6 +207,50 @@ for (const route of ROUTES) {
       await devOverlayIssues(primary),
       `${route}: Next dev overlay issues (dev server only)`,
     ).toBe(0);
+  });
+}
+
+for (const route of REMOVED_TYPE_INDEXES) {
+  test(`${route} is gone, and says so inside the shell`, async ({
+    primary,
+  }) => {
+    const res = await primary.goto(route);
+    expect(res?.status()).toBe(404);
+    await expect(
+      primary.getByRole("heading", {
+        name: "Can't open this page",
+      }),
+    ).toBeVisible();
+    await expect(primary.getByRole("link", { name: "Go home" })).toBeVisible();
+    // The shell, not a bare framework page: the tab bar's Cellars link is
+    // still there. (The bar renders twice, one per breakpoint; only one is
+    // visible.)
+    await expect(
+      primary.locator('a[href="/cellars"]:visible').first(),
+    ).toBeVisible();
+  });
+}
+
+/**
+ * Pages that look a row up and find nothing (missing, or not the viewer's to
+ * see — one answer, D24). Both used to answer 200: the items page threw
+ * `notFound()` inside its streaming loading boundary, and the place page
+ * rendered its own message on the client.
+ */
+const MISSING_ROWS = [
+  "/cellars/00000000-0000-4000-8000-000000000000/items",
+  "/places/00000000-0000-4000-8000-000000000000",
+];
+
+for (const route of MISSING_ROWS) {
+  test(`${route} is a 404 with the shared message`, async ({ primary }) => {
+    const res = await primary.goto(route);
+    expect(res?.status()).toBe(404);
+    await expect(
+      primary.getByRole("heading", {
+        name: "Can't open this page",
+      }),
+    ).toBeVisible();
   });
 }
 

@@ -18,6 +18,7 @@ import type {
   TierListEntryRef,
 } from "@cellar-assistant/contracts";
 import {
+  brandFirstItemTypesActorId,
   brandItemCountsActorId,
   NotFoundError,
   offsetPage,
@@ -80,7 +81,6 @@ const tierList = (id: string) => ({
   createdById: viewer.id,
   privacy: "PUBLIC" as const,
   listType: "wine",
-  isEditingLocked: false,
   itemCount: 1,
   aiInsights: null,
   insightsGeneratedAt: null,
@@ -640,6 +640,39 @@ describe("Brand.itemCount / Brand.itemLinks (G23, G24)", () => {
     );
   });
 
+  it("firstItemType (X23): one batched call for the page, under its own key", async () => {
+    const { invoke, calls } = sidecar({
+      "BrandsCollectionActor.list": (_id, _ctx, _filter, args) =>
+        page([brand(BRAND_A), brand(BRAND_B)], args),
+      "BrandLinksCollectionActor.firstItemTypes": ((
+        _id: string,
+        _ctx: unknown,
+        filter: { brandIds: string[] },
+      ) =>
+        filter.brandIds.map((id) => (id === BRAND_A ? "BEER" : null))) as never,
+    });
+    const result = await run(
+      `{ brands(first: 10) { ... on BrandConnection { edges { node { id firstItemType } } } } }`,
+      testContext(invoke, viewer),
+    );
+    expect(result.errors).toBeUndefined();
+    const batched = callsTo(calls, "firstItemTypes");
+    expect(batched).toHaveLength(1);
+    expect(batched[0]?.actorId).toBe(
+      brandFirstItemTypesActorId({ brandIds: [BRAND_A, BRAND_B] }),
+    );
+    expect(JSON.stringify(result.data)).toBe(
+      JSON.stringify({
+        brands: {
+          edges: [
+            { node: { id: BRAND_A, firstItemType: "BEER" } },
+            { node: { id: BRAND_B, firstItemType: null } },
+          ],
+        },
+      }),
+    );
+  });
+
   it("itemLinks carries isPrimary and resolves each item through the loader", async () => {
     const { invoke, calls } = sidecar({
       "BrandActor.get": (id) => brand(String(id)),
@@ -682,5 +715,194 @@ describe("Viewer.favorites(types) (G25)", () => {
       (call) => call.actorType === "FavoritesCollectionActor",
     );
     expect(lists.map((call) => call.args[2])).toEqual([["BEER", "TEA"], null]);
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/* X09 — Your bottles, and each bottle's cellar                                */
+/* -------------------------------------------------------------------------- */
+
+describe("Item.myBottles / CellarItem.cellar (X09)", () => {
+  const at = (iso: string) => iso;
+  const mine = (
+    id: string,
+    item: string,
+    cellarId: string,
+    state: { openAt?: string; emptyAt?: string; createdAt?: string } = {},
+  ) => ({
+    ...bottle(id, item, null),
+    cellarId,
+    openAt: state.openAt ?? null,
+    emptyAt: state.emptyAt ?? null,
+    createdAt: state.createdAt ?? stamp,
+  });
+  const B_OPEN = "0b000001-0000-4000-8000-000000000001";
+  const B_SEALED = "0b000002-0000-4000-8000-000000000002";
+  const B_OTHER = "0b000003-0000-4000-8000-000000000003";
+
+  const ownContaining = (_id: string, _ctx: unknown, refs: ItemRef[]) =>
+    refs.map((ref) =>
+      ref.id === W1
+        ? capped([CELLAR, CELLAR_2])
+        : ref.id === W2
+          ? capped([CELLAR])
+          : capped([]),
+    );
+  const bottlesOf = (cellarId: string, _ctx: unknown, refs: ItemRef[]) =>
+    refs.map((ref) =>
+      cellarId === CELLAR && ref.id === W1
+        ? [
+            mine(B_SEALED, W1, CELLAR, {
+              createdAt: at("2026-10-02T00:00:00.000Z"),
+            }),
+          ]
+        : cellarId === CELLAR_2 && ref.id === W1
+          ? [
+              mine(B_OPEN, W1, CELLAR_2, {
+                openAt: at("2026-10-01T00:00:00.000Z"),
+              }),
+            ]
+          : cellarId === CELLAR && ref.id === W2
+            ? [mine(B_OTHER, W2, CELLAR)]
+            : [],
+    );
+
+  const DOC = `{ me { favorites(first: 3) { edges { node {
+    id
+    myBottles(first: 20) { totalCount edges { node { id openAt cellar { id name } } } }
+  } } } } }`;
+
+  it("is one ownContaining for the page and one bottlesOf per cellar, merged open-first", async () => {
+    const { invoke, calls } = sidecar({
+      "CellarsCollectionActor.ownContaining": ownContaining as never,
+      "CellarActor.bottlesOf": bottlesOf as never,
+    });
+    const result = await run(DOC, testContext(invoke, viewer));
+    expect(result.errors).toBeUndefined();
+
+    const owned = callsTo(calls, "ownContaining");
+    expect(owned).toHaveLength(1);
+    expect(owned[0]?.actorId).toBe(viewer.id);
+    expect(owned[0]?.args[1]).toEqual(FAVORITES);
+    expect(owned[0]?.args[2]).toBe(false);
+    const perCellar = callsTo(calls, "bottlesOf");
+    expect(perCellar.map((call) => call.actorId).sort()).toEqual(
+      [CELLAR, CELLAR_2].sort(),
+    );
+    // CELLAR is asked once, for both items it holds.
+    expect(perCellar.find((call) => call.actorId === CELLAR)?.args[1]).toEqual([
+      { type: "WINE", id: W1 },
+      { type: "WINE", id: W2 },
+    ]);
+
+    const nodes = (
+      result.data as {
+        me: {
+          favorites: {
+            edges: {
+              node: {
+                myBottles: {
+                  totalCount: number;
+                  edges: {
+                    node: { id: string; cellar: { id: string } | null };
+                  }[];
+                };
+              };
+            }[];
+          };
+        };
+      }
+    ).me.favorites.edges.map((edge) =>
+      edge.node.myBottles.edges.map((e) => e.node),
+    );
+    // The open bottle in the second cellar leads the sealed one in the first.
+    expect(nodes[0]?.map((b) => b.id)).toEqual([B_OPEN, B_SEALED]);
+    expect(nodes[0]?.map((b) => b.cellar?.id)).toEqual([CELLAR_2, CELLAR]);
+    expect(nodes[1]?.map((b) => b.id)).toEqual([B_OTHER]);
+    expect(nodes[2]).toEqual([]);
+  });
+
+  it("asks for finished bottles' cellars too when the status is not ACTIVE", async () => {
+    const { invoke, calls } = sidecar({
+      "CellarsCollectionActor.ownContaining": ownContaining as never,
+      "CellarActor.bottlesOf": bottlesOf as never,
+    });
+    const result = await run(
+      `{ item(type: WINE, id: "${W1}") { ... on QueryItemSuccess { data {
+           myBottles(status: ALL) { edges { node { id } } }
+         } } } }`,
+      testContext(invoke, viewer),
+    );
+    expect(result.errors).toBeUndefined();
+    expect(callsTo(calls, "ownContaining")[0]?.args[2]).toBe(true);
+    expect(
+      callsTo(calls, "bottlesOf").every((call) => call.args[2] === "ALL"),
+    ).toBe(true);
+  });
+
+  it("an anonymous viewer gets no bottles and costs no call", async () => {
+    const { invoke, calls } = sidecar();
+    const result = await run(
+      `{ item(type: WINE, id: "${W1}") { ... on QueryItemSuccess { data {
+           myBottles { totalCount edges { node { id } } }
+         } } } }`,
+      testContext(invoke, null),
+    );
+    expect(callsTo(calls, "ownContaining")).toEqual([]);
+    expect(callsTo(calls, "bottlesOf")).toEqual([]);
+    expect(JSON.stringify(result.data ?? {})).not.toContain(B_OPEN);
+  });
+
+  it("a cellar that refuses fails the items that needed it, and is never asked for others", async () => {
+    const { invoke, calls } = sidecar({
+      "CellarsCollectionActor.ownContaining": ownContaining as never,
+      "CellarActor.bottlesOf": ((
+        cellarId: string,
+        ctx: unknown,
+        refs: ItemRef[],
+      ) => {
+        if (cellarId === CELLAR_2) throw new NotFoundError("gone");
+        return bottlesOf(cellarId, ctx, refs);
+      }) as never,
+    });
+    const one = (id: string) =>
+      run(
+        `{ item(type: WINE, id: "${id}") { ... on QueryItemSuccess { data {
+             myBottles { edges { node { id } } }
+           } } } }`,
+        testContext(invoke, viewer),
+      );
+    // W1 needs CELLAR_2, which refuses: the field errors rather than
+    // silently dropping that cellar's bottles.
+    expect((await one(W1)).errors?.[0]?.message).toMatch(/gone/);
+    // W2 lives only in CELLAR: CELLAR_2 is not asked, and nothing fails.
+    const before = callsTo(calls, "bottlesOf").length;
+    const ok = await one(W2);
+    expect(ok.errors).toBeUndefined();
+    expect(JSON.stringify(ok.data)).toContain(B_OTHER);
+    expect(
+      callsTo(calls, "bottlesOf")
+        .slice(before)
+        .map((call) => call.actorId),
+    ).toEqual([CELLAR]);
+  });
+});
+
+describe("Item.friendsScore (X09)", () => {
+  it("is the actor's friends average, and empty for an anonymous viewer with no call", async () => {
+    const { invoke, calls } = sidecar({
+      "ItemActor.friendsScore": () => ({ average: 4.25, count: 2 }),
+    });
+    const result = await run(
+      `{ item(type: WINE, id: "${W1}") { ... on QueryItemSuccess { data {
+           friendsScore { average count }
+         } } } }`,
+      testContext(invoke, viewer),
+    );
+    expect(result.errors).toBeUndefined();
+    expect(JSON.stringify(result.data)).toContain(
+      '"friendsScore":{"average":4.25,"count":2}',
+    );
+    expect(callsTo(calls, "friendsScore")).toHaveLength(1);
   });
 });

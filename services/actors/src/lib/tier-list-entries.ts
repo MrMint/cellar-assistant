@@ -60,7 +60,13 @@ import type {
 import { ConflictError } from "@cellar-assistant/contracts";
 import { placeGoogleEnrichments, places } from "@cellar-assistant/db";
 import type { Column, SQL } from "@cellar-assistant/db/orm";
-import { eq, getTableColumns, inArray, sql } from "@cellar-assistant/db/orm";
+import {
+  and,
+  eq,
+  getTableColumns,
+  inArray,
+  sql,
+} from "@cellar-assistant/db/orm";
 import { CONSTRAINED_ITEM_ATTRIBUTES } from "./ai/vocabulary.ts";
 import type { DbOrTx } from "./db.ts";
 import { boundProperty, ITEM_TABLES } from "./item-bindings.ts";
@@ -249,7 +255,14 @@ const resolvePlaces = async (
       placeGoogleEnrichments,
       eq(placeGoogleEnrichments.placeId, places.id),
     )
-    .where(inArray(places.id, [...ids]));
+    // X27: shared places only. Insights are written once per list and read
+    // by everyone the list is shared with, so a place still under review —
+    // its creator's alone — must not be described to the model; it stays an
+    // undescribed entry (`name: null`), which the grounding gate already
+    // knows how to count.
+    .where(
+      and(inArray(places.id, [...ids]), eq(places.reviewStatus, "approved")),
+    );
 
   return rows.map((row) => ({
     ref: { type: "PLACE" as TierListEntryType, id: row.id },
@@ -392,5 +405,6 @@ export const requireGroundedEntries = (
       "stripped out, a model invents a list rather than abstaining (see " +
       "requireExtractableInput in lib/item-defaults.ts for the measurement " +
       "that established this). Nothing was written and nothing was consumed.",
+    "NOTHING_READ",
   );
 };

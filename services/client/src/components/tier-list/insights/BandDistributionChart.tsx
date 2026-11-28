@@ -1,89 +1,96 @@
 "use client";
 
-import { Stack, Typography, useTheme } from "@mui/joy";
-import {
-  Bar,
-  BarChart,
-  Cell,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
+/**
+ * The list's band spread (Social-Placing 21 "Bands"): F2b's `Histogram`, one
+ * bar per band in the kit's act hue (CROSS-LOT "Chart bars"), best band
+ * first, a tap reading the band out. Unrated shows only when something sits
+ * in it.
+ */
+
+import { useState } from "react";
+import { BAND_FILL, type Band } from "@/components/app/parts/Rank";
+import { feedback } from "@/lib/feedback";
+import { cn } from "@/lib/utils";
 import type { BandDistribution } from "./computeInsightsStats";
 
-interface BandDistributionChartProps {
-  distribution: BandDistribution[];
-}
+const SHORT: Record<number, string> = {
+  5: "Outst.",
+  4: "V. good",
+  3: "Good",
+  2: "Medi.",
+  1: "Bad",
+  0: "Unrated",
+};
 
-function CustomTooltip({
-  active,
-  payload,
-}: {
-  active?: boolean;
-  payload?: Array<{ payload: BandDistribution }>;
-}) {
-  if (!active || !payload?.[0]) return null;
-  const d = payload[0].payload;
-  return (
-    <div
-      style={{
-        backgroundColor: "var(--joy-palette-background-surface)",
-        border: "1px solid var(--joy-palette-divider)",
-        borderRadius: 8,
-        padding: "6px 10px",
-        fontSize: 13,
-      }}
-    >
-      <strong>{d.label}</strong>: {d.count} item{d.count !== 1 ? "s" : ""} (
-      {d.percentage}%)
-    </div>
-  );
-}
-
+/**
+ * F-16: bars wear their band's colour (the board's "Bands" chart), where
+ * `Histogram` is one hue; the same frame, readout and tap otherwise.
+ */
 export function BandDistributionChart({
   distribution,
-}: BandDistributionChartProps) {
-  const theme = useTheme();
-  const textColor =
-    theme.palette.mode === "dark"
-      ? "rgba(255,255,255,0.6)"
-      : "rgba(0,0,0,0.55)";
-
-  // Filter to only bands with items for a cleaner chart, but keep all if <=3 bands have items
-  const filledBands = distribution.filter((d) => d.count > 0);
-  const chartData = filledBands.length <= 2 ? distribution : filledBands;
-
+  noun = "entries",
+}: {
+  distribution: BandDistribution[];
+  /** "places", "wines": what the readout counts. */
+  noun?: string;
+}) {
+  const [on, setOn] = useState<number | null>(null);
+  const total = distribution.reduce((n, d) => n + d.count, 0);
+  const shown = distribution.filter((d) => d.band !== 0 || d.count > 0);
+  const max = Math.max(0, ...shown.map((d) => d.count));
+  const readout = (d: BandDistribution) => `${d.count} in ${d.label}`;
+  const picked = on === null ? undefined : shown[on];
   return (
-    <Stack spacing={1.5}>
-      <Typography level="title-md">Band Distribution</Typography>
-      <ResponsiveContainer width="100%" height={chartData.length * 40 + 16}>
-        <BarChart
-          data={chartData}
-          layout="vertical"
-          margin={{ top: 0, right: 48, bottom: 0, left: 0 }}
-          barCategoryGap="20%"
-        >
-          <XAxis type="number" hide />
-          <YAxis
-            type="category"
-            dataKey="label"
-            axisLine={false}
-            tickLine={false}
-            width={90}
-            tick={{ fill: textColor, fontSize: 12 }}
-          />
-          <Tooltip
-            content={<CustomTooltip />}
-            cursor={{ fill: "var(--joy-palette-background-level1)" }}
-          />
-          <Bar dataKey="count" radius={[0, 6, 6, 0]} animationDuration={600}>
-            {chartData.map((d) => (
-              <Cell key={d.band} fill={d.color} />
-            ))}
-          </Bar>
-        </BarChart>
-      </ResponsiveContainer>
-    </Stack>
+    <figure data-slot="chart" className="m-0 flex flex-col gap-2">
+      <figcaption className="flex items-baseline gap-2">
+        <span className="t-head min-w-0 flex-1 truncate text-ink">
+          {`Bands · ${total} ${noun}`}
+        </span>
+        <span aria-live="polite" className="t-cap tabular text-ink-2">
+          {picked ? readout(picked) : ""}
+        </span>
+      </figcaption>
+      <div className="flex h-[132px] items-end gap-0.5 border-edge border-b">
+        {shown.map((d, i) => (
+          <button
+            key={d.band}
+            type="button"
+            aria-pressed={on === i}
+            aria-label={readout(d)}
+            onClick={() => {
+              feedback("tick");
+              setOn(on === i ? null : i);
+            }}
+            className="flex h-full min-w-0 flex-1 flex-col items-center justify-end gap-1 outline-none focus-visible:outline-2 focus-visible:outline-act-ink"
+          >
+            {d.count > 0 && (
+              <span aria-hidden className="t-micro tabular text-ink-2">
+                {d.count}
+              </span>
+            )}
+            <span
+              aria-hidden
+              data-band={d.band}
+              className={cn(
+                "block w-full rounded-t-xs",
+                d.band === 0 ? "bg-edge-2" : BAND_FILL[d.band as Band],
+                on !== null && on !== i && "opacity-60",
+              )}
+              style={{ height: `${max > 0 ? (d.count / max) * 100 : 0}px` }}
+            />
+          </button>
+        ))}
+      </div>
+      <div aria-hidden className="flex gap-0.5">
+        {shown.map((d) => (
+          <span
+            key={d.band}
+            className="t-micro tabular min-w-0 flex-1 text-center text-ink-3"
+          >
+            {SHORT[d.band] ?? d.label}
+          </span>
+        ))}
+      </div>
+    </figure>
   );
 }

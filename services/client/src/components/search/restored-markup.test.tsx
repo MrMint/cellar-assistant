@@ -15,6 +15,7 @@ import { createRequest, ssrExchange } from "@urql/core";
 import type { ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { Client, Provider } from "urql";
+import { stripStyleBlocks, stripTags } from "@/test-support/markup";
 
 mock.module("next/image", () => ({
   default: (props: { alt: string }) => (
@@ -38,25 +39,22 @@ mock.module("@/components/map/hooks/useGeolocation", () => ({
 }));
 
 const { ClientSearchInterface } = await import("./ClientSearchInterface");
-const { RecentActivity } = await import("./RecentActivity");
 const { NearbyPlaces } = await import("./NearbyPlaces");
 const { SearchNearbyPlacesQuery, NEARBY_PLACES_LIMIT } = await import(
   "./queries"
 );
-const { Greeting } = await import("./Greeting");
+const { Greeting, greetingText } = await import("./Greeting");
 const { SearchResultGrid } = await import("./SearchResultGrid");
-const { FadeIn, StaggerIn, StaggerItem } = await import("./AnimateIn");
 
 const client = new Client({
   url: "http://test.invalid/graphql",
   exchanges: [],
 });
 const render = (node: ReactNode) =>
-  renderToStaticMarkup(<Provider value={client}>{node}</Provider>).replace(
-    /<style[^>]*>[^<]*<\/style>/g,
-    "",
+  stripStyleBlocks(
+    renderToStaticMarkup(<Provider value={client}>{node}</Provider>),
   );
-const text = (html: string) => html.replace(/<[^>]+>/g, " ");
+const text = (html: string) => stripTags(html, " ");
 
 describe("ClientSearchInterface (restored)", () => {
   test("an empty box offers the old Scan and Photo buttons, in that order", () => {
@@ -67,40 +65,41 @@ describe("ClientSearchInterface (restored)", () => {
     assert.doesNotMatch(text(html), /\bSearch\b/);
   });
 
-  test("a query swaps both buttons for the round scan and camera icons and adds clear", () => {
-    const html = render(<ClientSearchInterface initialQuery="barolo" />);
+  test("W-12: an empty sheet opens with the box focused, a query's does not", () => {
+    assert.match(render(<ClientSearchInterface />), /<input[^>]*autofocus/i);
+    assert.doesNotMatch(
+      render(<ClientSearchInterface urlQuery="barolo" />),
+      /<input[^>]*autofocus/i,
+    );
+  });
+
+  test("a query keeps the Scan and Photo segments and adds clear", () => {
+    const html = render(<ClientSearchInterface urlQuery="barolo" />);
     assert.match(html, /value="barolo"/);
-    assert.match(html, /aria-label="Scan barcode"/);
-    assert.match(html, /aria-label="Search by photo"/);
-    assert.doesNotMatch(text(html), /Scan\b(?! barcode)/);
-    assert.doesNotMatch(text(html), /\bPhoto\b/);
+    assert.match(html, /aria-label="Clear search"/);
+    assert.match(html, /aria-label="Scan a barcode"/);
+    assert.match(text(html), /Scan\s+Photo/);
   });
 });
 
-describe("Greeting (verbatim)", () => {
-  test("time-of-day greeting with the first name", () => {
+describe("Greeting (X01: the viewer's clock, never the server's)", () => {
+  test("the server render carries no greeting — the browser supplies it", () => {
     const html = text(render(<Greeting displayName="Jared Prather" />));
-    assert.match(html, /Good (morning|afternoon|evening), Jared/);
-    assert.doesNotMatch(html, /Prather/);
+    assert.doesNotMatch(html, /Good (morning|afternoon|evening)/);
   });
-  test("no name, no comma", () => {
-    assert.match(
-      text(render(<Greeting />)),
-      /Good (morning|afternoon|evening)\s*$/,
-    );
+  test("time of day from the hour, with the first name only", () => {
+    const at = (hour: number) => new Date(2026, 9, 5, hour, 30);
+    assert.equal(greetingText(at(0), "Jared Prather"), "Good morning, Jared");
+    assert.equal(greetingText(at(11), "Jared"), "Good morning, Jared");
+    assert.equal(greetingText(at(12), "Jared"), "Good afternoon, Jared");
+    assert.equal(greetingText(at(16), "Jared"), "Good afternoon, Jared");
+    assert.equal(greetingText(at(17), "Jared"), "Good evening, Jared");
+    assert.equal(greetingText(at(23), "Jared"), "Good evening, Jared");
   });
-});
-
-describe("AnimateIn (verbatim)", () => {
-  test("renders its children", () => {
-    const html = render(
-      <FadeIn>
-        <StaggerIn>
-          <StaggerItem>chip</StaggerItem>
-        </StaggerIn>
-      </FadeIn>,
-    );
-    assert.match(html, /chip/);
+  test("no name, no comma; a blank name is no name", () => {
+    const noon = new Date(2026, 9, 5, 12);
+    assert.equal(greetingText(noon), "Good afternoon");
+    assert.equal(greetingText(noon, "   "), "Good afternoon");
   });
 });
 
@@ -110,103 +109,11 @@ describe("SearchResultGrid (restored)", () => {
   });
 });
 
-/** No server-rendered entrance may leave content invisible (see AnimateIn). */
+/** No server-rendered entrance may leave content invisible. */
 const assertVisibleAtRest = (html: string) => {
   assert.doesNotMatch(html, /opacity:\s*0[;"]/);
   assert.doesNotMatch(html, /translateY\(10px\)|translateX\(-12px\)/);
 };
-
-describe("AnimateIn — visible without JavaScript", () => {
-  test("no hidden inline state; the entrance is a CSS animation", () => {
-    const html = render(
-      <FadeIn>
-        <StaggerIn>
-          <StaggerItem>chip</StaggerItem>
-          <StaggerItem>chip 2</StaggerItem>
-        </StaggerIn>
-      </FadeIn>,
-    );
-    assertVisibleAtRest(html);
-    assert.equal(html.match(/data-stagger-item/g)?.length, 2);
-  });
-});
-
-const NOW = "2026-10-05T12:00:00.000Z";
-const person = {
-  userId: "u2",
-  userName: "Fran Friend",
-  userAvatar: null,
-};
-
-const FEED = [
-  {
-    kind: "added" as const,
-    id: "added-b1",
-    timestamp: NOW,
-    itemName: "2016 Barolo",
-    itemType: "WINE",
-    itemImageUrl: "https://files.test/w1?sig",
-    itemPlaceholder: null,
-    itemHref: "/wines/w1",
-    ...person,
-    cellarName: "Home",
-  },
-  {
-    kind: "reviewed" as const,
-    id: "review-r1",
-    timestamp: NOW,
-    itemName: "Hazy IPA",
-    itemType: "BEER",
-    itemHref: "/beers/b1",
-    ...person,
-    score: 4.5,
-    reviewText: null,
-  },
-  {
-    kind: "tier-listed" as const,
-    id: "tier-t1",
-    timestamp: NOW,
-    itemName: "Corner Bar",
-    itemType: "PLACE",
-    itemHref: "/tier-lists/l1?item=t1",
-    ...person,
-    tierListName: "Best bars",
-    rank: 2,
-  },
-];
-
-describe("RecentActivity (restored, G31)", () => {
-  test("the old heading, filters and one card per entry, linked as before", () => {
-    const html = render(<RecentActivity feed={FEED} selectedKinds={[]} />);
-    const words = text(html);
-    assert.match(words, /Recent Activity/);
-    for (const label of ["Added", "Reviews", "Tier Lists"]) {
-      assert.match(html, new RegExp(`aria-label="${label}"`));
-    }
-    assert.match(html, /aria-label="Activity type filters"/);
-    assert.match(words, /2016 Barolo/);
-    assert.match(words, /Added to Home/);
-    assert.match(words, /Rated 4\.5/);
-    assert.match(words, /#2 in Best bars/);
-    assert.match(html, /href="\/wines\/w1"/);
-    assert.match(html, /href="\/tier-lists\/l1\?item=t1"/);
-    // The presigned thumbnail through next/image; the others fall back.
-    assert.match(html, /data-next-image="art" data-alt="2016 Barolo"/);
-    assertVisibleAtRest(html);
-  });
-
-  test("no activity and no filter renders nothing, as before", () => {
-    assert.equal(render(<RecentActivity feed={[]} selectedKinds={[]} />), "");
-  });
-
-  test("a filter with nothing in it says so", () => {
-    const words = text(
-      render(<RecentActivity feed={[]} selectedKinds={["reviewed"]} />),
-    );
-    assert.match(words, /Recent Activity/);
-    assert.match(words, /No recent activity for the selected filters/);
-  });
-});
 
 const PLACE = {
   id: "p1",
@@ -230,12 +137,13 @@ describe("NearbyPlaces (restored, G31)", () => {
       />,
     );
     const words = text(html);
-    assert.match(words, /Nearby Places/);
+    assert.match(words, /Nearby/);
     assert.match(words, /Corner Bar/);
     assert.match(words, /Wine Bar/);
     assert.match(words, /4\.6/);
     assert.match(words, /\$\$/);
-    assert.match(words, /\d+m/);
+    // Short form, narrow no-break space, the origin named (CROSS-LOT).
+    assert.match(words, /\d+(?:\.\d)?\u202f(?:m|km) from you/);
     assert.match(words, /Open/);
     assert.match(words, /View all on map/);
     assert.match(html, /href="\/map\?placeId=p1"/);
@@ -292,7 +200,7 @@ describe("NearbyPlaces (restored, G31)", () => {
         </Provider>,
       ),
     );
-    assert.match(words, /Nearby Places/);
+    assert.match(words, /Nearby/);
     assert.match(words, /No nearby places found/);
     assert.doesNotMatch(words, /for the selected types/);
   });

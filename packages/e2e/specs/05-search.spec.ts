@@ -1,5 +1,6 @@
-import { BASE_URL, storageStatePath } from "../fixtures/accounts.ts";
+import { BASE_URL } from "../fixtures/accounts.ts";
 import {
+  aiCapabilities,
   createCellar,
   deleteCellars,
   ensureFriends,
@@ -11,9 +12,10 @@ import { deletePlace, insertPlace } from "../fixtures/db.ts";
 import {
   bodyText,
   expect,
-  newContext,
+  searchBox,
   settleNetwork,
   test,
+  visibleOnly,
   watch,
 } from "../fixtures/test.ts";
 
@@ -92,36 +94,55 @@ test("semantic item search returns ranked results", async ({ api }) => {
   ).toEqual(distances);
 });
 
-/** The restored box: no label, no submit button, an animated placeholder. */
-const searchBox = (page: import("@playwright/test").Page) =>
-  page.getByRole("textbox").first();
+/**
+ * The restored box: no visible label (an `aria-label` since N01), no submit
+ * button, an animated placeholder.
+ */
 
-test("the restored landing view: greeting, collection line, Scan, Photo, five quick links", async ({
+test("the search page on a desktop: Look in, Photo, no Scan — and no quick-link chips (X01, X10)", async ({
+  api,
   primary,
 }) => {
   // `82450ad1:src/app/(authenticated)/search/page.tsx`. Scan and Photo (G32,
   // restored — 14-image-search drives it); no tabs, no Brands/Recipes chips:
   // the old page had none of them.
+  //
+  // Photo is offered only where the stack can search by image or read a
+  // label (N07/D25: hide, don't refuse; L13), so ask rather than assume. With
+  // both off the button must be *absent*, not merely refused when tapped.
+  const { imageSearch, labelRead } = await aiCapabilities(api);
   const noise = watch(primary);
   await primary.goto("/search");
+  // Recipes-Search-desktop: the page keeps its "Search" heading for a
+  // screen reader; Close is the phone sheet's (m01), and the desktop has the
+  // sidebar instead. The greeting is Home's.
+  await expect(
+    primary.getByRole("heading", { name: "Search", level: 1 }),
+  ).toHaveCount(1);
+  await expect(
+    primary.getByRole("button", { name: "Close search" }),
+  ).toBeHidden();
+  // No query: the Look in tiles, one per section.
+  await expect(primary.getByRole("heading", { name: "Look in" })).toBeVisible();
   await expect(
     primary.getByRole("heading", { name: /^Good (morning|afternoon|evening)/ }),
-  ).toBeVisible();
-  await expect(primary.getByRole("button", { name: "Scan" })).toBeVisible();
-  await expect(primary.getByRole("button", { name: "Photo" })).toBeVisible();
+  ).toHaveCount(0);
+  // A desktop has no camera to scan with: Scan is the phone's segment.
+  await expect(primary.getByRole("button", { name: "Scan" })).toBeHidden();
+  const photo = primary.getByRole("button", { name: "Photo" });
+  // L13: Photo also reads a label when the stack cannot search by image
+  // (X06's fallback), so it shows when either is on.
+  if (imageSearch || labelRead) await expect(photo).toBeVisible();
+  else await expect(photo).toHaveCount(0);
   await expect(primary.getByRole("tab")).toHaveCount(0);
-  const main = primary.locator("a[href] .MuiChip-root");
-  await expect(main).toHaveText([
-    "Cellars",
-    "Map",
-    "Tier Lists",
-    "Favorites",
-    "Rankings",
-  ]);
+  // X01: the five chips duplicated the tabs and the Me hub, and are gone.
+  await expect(
+    primary.getByRole("navigation", { name: "Quick links" }),
+  ).toHaveCount(0);
   expect(noise.pageErrors, "the search page threw").toEqual([]);
 });
 
-test("the collection line counts only cellars you own or co-own (G36)", async ({
+test("Home's collection line counts only cellars you own or co-own (G36)", async ({
   api,
   api2,
   primary,
@@ -151,24 +172,29 @@ test("the collection line counts only cellars you own or co-own (G36)", async ({
       "the stranger's PUBLIC cellar should be visible — or this test proves nothing",
     ).toBe("Cellar");
 
-    await primary.goto("/search");
+    // X10: the line moved with the greeting, to Home.
+    await primary.goto("/");
     const total = Object.values(
       after.itemCounts as Record<string, number>,
     ).reduce((a, b) => a + b, 0);
-    const cellars = `${after.cellarCount} ${after.cellarCount === 1 ? "cellar" : "cellars"}`;
-    const line =
-      total === 0
-        ? "Your collection awaits. Start by adding your first item."
-        : `${total} ${total === 1 ? "item" : "items"} across ${cellars}`;
-    await expect(primary.getByText(line, { exact: true })).toBeVisible();
+    // Home's line is the bottle count alone now (`home/landing.ts`); the
+    // cellar count it once carried is asserted through the API above, and a
+    // new person's Home draws no count at all.
+    if (total === 0) {
+      await expect(primary.getByText(/^[\d,]+ bottles?$/)).toHaveCount(0);
+    } else {
+      const line = `${total.toLocaleString("en-US")} ${total === 1 ? "bottle" : "bottles"}`;
+      await expect(
+        primary.getByText(line, { exact: true }).first(),
+      ).toBeVisible();
+    }
   } finally {
     await deleteCellars("primary", [mine]);
     await deleteCellars("secondary", [theirs]);
   }
 });
 
-test("typing searches on the debounce and renders results or an honest notice", async ({
-  api,
+test("typing searches on the debounce and renders sections or one empty state (X12)", async ({
   primary,
 }) => {
   const noise = watch(primary);
@@ -176,28 +202,70 @@ test("typing searches on the debounce and renders results or an honest notice", 
   // The old box has no submit button: a 300 ms debounce navigates to ?q=.
   await searchBox(primary).fill("a bold red wine");
   await primary.waitForURL(/[?&]q=a(\+|%20)bold(\+|%20)red(\+|%20)wine/);
-  // The old section titles are Typography title-lg, a <p>, not a heading.
-  await expect(
-    primary.getByText("Search results for \u201ca bold red wine\u201d", {
-      exact: true,
-    }),
-  ).toBeVisible();
+  // X12: one page of sections, or — when nothing anywhere matched — one
+  // empty state. Never a blank results area: with no embedding provider
+  // every section still matches by name (D25), so "nothing" is honest.
+  const sections = primary.locator("[data-search-sections]");
+  const empty = primary.getByText("Nothing matches “a bold red wine”");
+  await expect(sections.or(empty)).toBeVisible({ timeout: 30_000 });
   await settleNetwork(primary);
-
-  const text = await bodyText(primary);
-  const probe = await embeddingsAvailable(api);
-  if (!probe.ok) {
-    // The page must degrade visibly, not render a silent empty list.
-    expect(
-      text,
-      "search failed server-side and the page said nothing about it",
-    ).toMatch(/unavailable|could not|not available/i);
-  } else {
-    expect(text).toMatch(
-      /No items found for|Can.t find what you.re looking for\? Add an item/,
+  if ((await sections.count()) > 0) {
+    // D10's order, whichever sections this stack's data fills.
+    const order = await primary.evaluate(() =>
+      [...document.querySelectorAll("[data-search-section]")].map((el) =>
+        el.getAttribute("data-search-section"),
+      ),
     );
+    const d10 = ["bottles", "items", "places", "recipes", "people", "brands"];
+    expect(order).toEqual(d10.filter((name) => order.includes(name)));
+    // Six rows a section at most from md (three on a phone), before See all.
+    for (const name of order) {
+      const rows = await primary
+        .locator(`[data-search-section="${name}"] [data-search-row]`)
+        .count();
+      expect(
+        rows,
+        `section ${name} shows more than six rows`,
+      ).toBeLessThanOrEqual(6);
+    }
   }
   expect(noise.pageErrors, "the search page threw").toEqual([]);
+});
+
+test("a named item is not padded with unrelated ones (X12)", async ({
+  api,
+}) => {
+  // Through the API, so this holds on any stack: a phrase that names an item
+  // exactly returns the items whose names match, plus near neighbours — not
+  // twenty of whatever is nearest. Take a real item name off the catalog.
+  const probe = await api.query(
+    `query { itemSearch(text: "wine", limit: 1, first: 1) {
+       __typename ... on ItemSearchConnection { edges { node { name } } }
+     } }`,
+  );
+  const name = probe.itemSearch.edges?.[0]?.node.name as string | undefined;
+  test.skip(name === undefined, "no items on this stack to search for");
+  if (name === undefined) return;
+  const search = async (narrow: boolean): Promise<string[]> =>
+    (
+      await api.query(
+        `query S($text: String!, $narrow: Boolean) {
+           itemSearch(text: $text, narrow: $narrow, limit: 20, first: 20) {
+             __typename
+             ... on ItemSearchConnection { edges { node { name } } }
+           }
+         }`,
+        { text: name, narrow },
+      )
+    ).itemSearch.edges.map(
+      (edge: { node: { name: string } }) => edge.node.name,
+    );
+  const plain = await search(false);
+  const narrowed = await search(true);
+  expect(narrowed, "the named item is missing").toContain(name);
+  expect(narrowed.length).toBeLessThanOrEqual(plain.length);
+  // Narrowing only removes: what stays is in the plain answer's order.
+  expect(plain.filter((n) => narrowed.includes(n))).toEqual(narrowed);
 });
 
 test("a scanned code is looked up server-side from ?barcode=", async ({
@@ -208,11 +276,9 @@ test("a scanned code is looked up server-side from ?barcode=", async ({
   const noise = watch(primary);
   await primary.goto("/search?barcode=0000000000000");
   await expect(
-    primary.getByText("Barcode search results", { exact: true }),
+    primary.getByText("No drink matches this barcode"),
   ).toBeVisible();
-  await expect(
-    primary.getByText("No items found matching the barcode"),
-  ).toBeVisible();
+  await expect(primary.getByRole("link", { name: "Add it" })).toBeVisible();
   expect(noise.pageErrors).toEqual([]);
 });
 
@@ -221,7 +287,7 @@ test("an old image-results link, with no photo behind it, asks for a new one (G3
 }) => {
   await primary.goto("/search?image_no_results=true");
   await expect(
-    primary.getByText(/This image search link has expired/),
+    primary.getByText("This photo search has expired"),
   ).toBeVisible();
 });
 
@@ -316,7 +382,7 @@ async function rank(api: Api, tierListId: string, teaId: string) {
   );
 }
 
-test("Recent Activity shows a friend's review and their FRIENDS list — never their PRIVATE one", async ({
+test("Home's Friends feed shows a friend's review and their FRIENDS list — never their PRIVATE one (X10)", async ({
   api,
   api2,
   primary,
@@ -351,14 +417,30 @@ test("Recent Activity shows a friend's review and their FRIENDS list — never t
     await rank(api2, secret, teaId);
     await rank(api2, shared, teaId);
 
-    // Through the API: the PRIVATE list contributes no entry at all.
-    const feed = await api.query(
+    // Through the API: the PRIVATE list contributes no entry at all — in
+    // the old feed's field, and in Home's paged friends-only one.
+    const recent = await api.query(
       `query { me { recentActivity(kinds: [TIER_LISTED, REVIEWED], limit: 20, first: 40) {
+         edges { node { tierListItem { tierListId } } }
+       } } }`,
+    );
+    expect(
+      recent.me.recentActivity.edges.map(
+        (e: any) => e.node.tierListItem?.tierListId,
+      ),
+      "a friend's PRIVATE list leaked into recentActivity",
+    ).not.toContain(secret);
+    const feed = await api.query(
+      `query { me { friendsFeed(kinds: [TIER_LISTED, REVIEWED], first: 50) {
          edges { node { kind user { id } item { id }
            tierListItem { tierListId tierList { name } } } }
        } } }`,
     );
-    const nodes = feed.me.recentActivity.edges.map((e: any) => e.node);
+    const nodes = feed.me.friendsFeed.edges.map((e: any) => e.node);
+    expect(
+      nodes.every((n: any) => n.user?.id !== me),
+      "the friends feed listed the viewer's own activity",
+    ).toBe(true);
     const listIds = nodes.map((n: any) => n.tierListItem?.tierListId);
     expect(listIds, "the friend's FRIENDS list is missing").toContain(shared);
     expect(listIds, "a friend's PRIVATE list leaked").not.toContain(secret);
@@ -373,23 +455,36 @@ test("Recent Activity shows a friend's review and their FRIENDS list — never t
       "the friend's review is missing from the feed",
     ).toBe(true);
 
-    // Through the page, filtered as the old toggles filter (?activity=).
+    // Through the page: Home's Friends section, in sentences (X10).
     const noise = watch(primary);
-    await primary.goto("/search?activity=reviewed");
+    await primary.goto("/");
+    const friends = primary.getByRole("region", {
+      name: "Friends",
+      exact: true,
+    });
+    await expect(friends).toBeVisible({ timeout: 20_000 });
+    const rated = friends
+      .getByRole("article")
+      .filter({ hasText: teaName })
+      .filter({ hasText: "★4.5" });
+    await expect(rated.first()).toContainText(/ rated /);
+    // Ratings by one friend within three hours fold into "rated N things"
+    // (X10), and the shared account rates in other specs too (m07 runs
+    // beside this one), so the review may be one name in a fold rather than
+    // its own sentence. Only the sentence links the item.
+    const folded = /rated \d+ things/.test(
+      (await rated.first().textContent()) ?? "",
+    );
+    if (!folded) {
+      await expect(
+        rated.first().getByRole("link", { name: teaName }),
+      ).toHaveAttribute("href", `/teas/${teaId}`);
+    }
     await expect(
-      primary.getByText("Recent Activity", { exact: true }),
-    ).toBeVisible();
-    const reviewCard = primary.locator("a.MuiCard-root", { hasText: teaName });
-    await expect(reviewCard.first()).toBeVisible();
-    await expect(reviewCard.first()).toContainText("Rated 4.5");
-    await expect(reviewCard.first()).toHaveAttribute("href", `/teas/${teaId}`);
-
-    await primary.goto("/search?activity=tier-listed");
-    await expect(
-      primary.getByText(`#1 in ${sharedName}`).first(),
+      friends.getByText(new RegExp(`#1 in ${sharedName}`)).first(),
     ).toBeVisible();
     expect(await bodyText(primary)).not.toContain(secretName);
-    expect(noise.pageErrors, "the search page threw").toEqual([]);
+    expect(noise.pageErrors, "Home threw").toEqual([]);
   } finally {
     for (const id of [secret, shared]) {
       await api2.query(
@@ -401,7 +496,7 @@ test("Recent Activity shows a friend's review and their FRIENDS list — never t
   }
 });
 
-test("Nearby Places renders from the geolocation cookie, nearest first", async ({
+test("Home's Nearby Places renders from the geolocation cookie, nearest first (X10)", async ({
   primary,
 }) => {
   // Somewhere with nothing else nearby (open Atlantic), so the strip's six
@@ -419,61 +514,121 @@ test("Nearby Places renders from the geolocation cookie, nearest first", async (
         { name: "user_location", value: `${lat},${lng}`, url: BASE_URL },
       ]);
     const noise = watch(primary);
-    await primary.goto("/search");
-    await expect(
-      primary.getByText("Nearby Places", { exact: true }),
-    ).toBeVisible();
-    const cards = primary.locator('a.MuiCard-root[href^="/map?placeId="]');
+    await primary.goto("/");
+    // The board's head: "Nearby", or "Near <place>" when you're at one.
+    const nearby = primary.getByRole("region", { name: /^Near(?:by)?\b/ });
+    await expect(nearby).toBeVisible();
+    const cards = nearby.locator('[data-slot="place-row"]');
     await expect(cards).toHaveCount(2);
     await expect(cards.nth(0)).toContainText(near.name);
     await expect(cards.nth(0)).toContainText("Wine Bar");
-    await expect(cards.nth(0)).toContainText(/\d+m/);
-    await expect(cards.nth(0)).toHaveAttribute(
+    // Short form, narrow no-break space, the origin named (CROSS-LOT).
+    await expect(cards.nth(0)).toContainText(/\d+\u202fm from you/);
+    await expect(cards.nth(0).getByRole("link")).toHaveAttribute(
       "href",
       `/map?placeId=${near.id}`,
     );
     await expect(cards.nth(1)).toContainText(far.name);
-    await expect(primary.getByText("View all on map")).toBeVisible();
-    expect(noise.pageErrors, "the search page threw").toEqual([]);
+    await expect(
+      visibleOnly(primary.getByText("View all on map")).first(),
+    ).toBeVisible();
+    expect(noise.pageErrors, "Home threw").toEqual([]);
   } finally {
     await deletePlace(near.id);
     await deletePlace(far.id);
   }
 });
 
-test("the landing view is visible before any script runs", async ({
-  browser,
+test("the search sheet and Home draw their box and field once the app runs (L1)", async ({
+  primary,
 }) => {
-  // AnimateIn used to server-render `opacity:0` and wait for framer-motion to
-  // hydrate; with JavaScript off nothing but the search box ever appeared.
-  const ctx = await newContext(browser, {
-    storageState: storageStatePath("primary"),
-    javaScriptEnabled: false,
+  // The app needs JavaScript (L1, decisions.md "Search"): `/search`'s
+  // `loading.tsx` shell is what streams first, and without scripts nothing
+  // replaces it, so this no longer asserts a no-JS page. What still holds is
+  // the rule the no-JS spec guarded: AnimateIn's `opacity:0` once kept the box
+  // hidden until hydration, so the live box must rest fully visible, and it
+  // takes typing. The greeting is the viewer's clock (X01, observation 6).
+  const noise = watch(primary);
+  await primary.goto("/search");
+  const box = searchBox(primary);
+  await expect(box).toBeVisible();
+  const restingOpacity = () =>
+    box.evaluate((el) => {
+      let node: Element | null = el;
+      let min = 1;
+      while (node) {
+        min = Math.min(min, Number(getComputedStyle(node).opacity));
+        node = node.parentElement;
+      }
+      return min;
+    });
+  await expect
+    .poll(restingOpacity, {
+      message: "the search box stays hidden after hydration",
+      timeout: 5_000,
+    })
+    .toBe(1);
+  await box.fill("gin");
+  await expect(primary).toHaveURL(/\/search\?q=gin/);
+  await primary.goto("/");
+  await expect(
+    primary.getByRole("link", { name: "Search bottles, places and recipes" }),
+  ).toBeVisible();
+  expect(noise.pageErrors, "the search page or Home threw").toEqual([]);
+});
+
+test("Back from the search sheet returns to the page you came from (leftovers 9, FR-2)", async ({
+  primary,
+}) => {
+  // FR-2: the Close control is gone (the tab bar shows on /search), so what
+  // is left of leftovers 9 is that Back leaves the sheet for the page that
+  // opened it, and stays out of /search.
+  await primary.setViewportSize({ width: 390, height: 844 });
+  await primary.goto("/");
+  await primary
+    .getByRole("link", { name: "Search bottles, places and recipes" })
+    .click();
+  await expect(primary).toHaveURL(/\/search/);
+  await expect(
+    primary.getByRole("button", { name: "Close search" }),
+  ).toHaveCount(0);
+  await expect(searchBox(primary)).toBeVisible();
+  await primary.goBack();
+  await primary.waitForLoadState("domcontentloaded");
+  await expect(primary).not.toHaveURL(/\/search/);
+  await expect(primary).toHaveURL(/\/$/);
+});
+
+test("a text search has a Brands section, its See all into /brands (D1, D10)", async ({
+  api,
+  primary,
+}) => {
+  // Brands left the nav (D1): search is one way in. Take a real brand off the
+  // index rather than assuming one exists by name on this stack.
+  const data = await api.query(
+    `query { brands(first: 1) {
+       __typename ... on BrandConnection { edges { node { id name } } }
+     } }`,
+  );
+  const brand = data.brands.edges?.[0]?.node as
+    | { id: string; name: string }
+    | undefined;
+  test.skip(brand === undefined, "no brands on this stack to search for");
+  if (brand === undefined) return;
+
+  const noise = watch(primary);
+  await primary.goto(`/search?q=${encodeURIComponent(brand.name)}`);
+  const brands = primary.locator('[data-search-section="brands"]');
+  await expect(brands.getByRole("heading", { name: /^Brands\b/ })).toBeVisible({
+    timeout: 30_000,
   });
-  try {
-    const page = await ctx.newPage();
-    await page.goto("/search");
-    const chip = page.locator("a[href] .MuiChip-root", { hasText: "Cellars" });
-    await expect(chip).toBeVisible();
-    // The CSS entrance takes ~0.5s; what matters is where it comes to rest
-    // with no script at all — the old markup rested at opacity 0.
-    const restingOpacity = () =>
-      chip.evaluate((el) => {
-        let node: Element | null = el;
-        let min = 1;
-        while (node) {
-          min = Math.min(min, Number(getComputedStyle(node).opacity));
-          node = node.parentElement;
-        }
-        return min;
-      });
-    await expect
-      .poll(restingOpacity, {
-        message: "a quick-link chip stays hidden without JavaScript",
-        timeout: 5_000,
-      })
-      .toBe(1);
-  } finally {
-    await ctx.close();
-  }
+  await expect(
+    visibleOnly(brands.locator(`a[href="/brands/${brand.id}"]`)).first(),
+  ).toBeVisible();
+  expect(noise.pageErrors, "the search page threw").toEqual([]);
+
+  // `/brands?q=` is a redirect into search with the term already typed
+  // (`app/(authenticated)/brands/page.tsx`).
+  await primary.goto(`/brands?q=${encodeURIComponent(brand.name)}`);
+  await expect(searchBox(primary)).toHaveValue(brand.name);
 });

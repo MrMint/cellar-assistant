@@ -11,6 +11,8 @@ interface UseMapInitialFlightOptions {
   userLocation: { latitude: number; longitude: number } | null;
   locationLoading: boolean;
   cachedLocation?: { latitude: number; longitude: number } | null;
+  /** F-191: a list's link opens on the list; the location must not pull it away. */
+  suppressFlight?: boolean;
 }
 
 /**
@@ -27,6 +29,7 @@ export function useMapInitialFlight({
   userLocation,
   locationLoading,
   cachedLocation,
+  suppressFlight = false,
 }: UseMapInitialFlightOptions) {
   const hasFlownRef = useRef(false);
 
@@ -34,6 +37,7 @@ export function useMapInitialFlight({
   // Without mapReady, the effect fires on the same render the Map mounts
   // but before onLoad — flyTo silently fails on an unloaded map.
   useEffect(() => {
+    if (suppressFlight) return;
     if (userLocation && !hasFlownRef.current && mapRef.current && mapReady) {
       hasFlownRef.current = true;
       mapRef.current.flyTo({
@@ -42,7 +46,7 @@ export function useMapInitialFlight({
         duration: 600,
       });
     }
-  }, [userLocation, mapReady, mapRef]);
+  }, [userLocation, mapReady, mapRef, suppressFlight]);
 
   // Capture initial view state once geolocation resolves.
   // A ref (not useMemo) is used because useMemo([], []) would compute
@@ -64,6 +68,13 @@ export function useMapInitialFlight({
     };
   }
 
+  // Sticky (D14): once the map has drawn, a location request started later —
+  // the pre-prompt's Continue, or the location button — must not put the
+  // "Getting your location..." screen back over it and unmount the map.
+  const readyRef = useRef(false);
+  readyRef.current ||=
+    !locationLoading || userLocation !== null || cachedLocation != null;
+
   return {
     initialViewState: initialViewStateRef.current ?? {
       longitude: FALLBACK_CENTER.longitude,
@@ -71,7 +82,6 @@ export function useMapInitialFlight({
       zoom: 8,
     },
     /** True once geolocation has resolved, cached location exists, or location arrived. Controls the loading screen. */
-    isLocationReady:
-      !locationLoading || userLocation !== null || cachedLocation != null,
+    isLocationReady: readyRef.current,
   };
 }

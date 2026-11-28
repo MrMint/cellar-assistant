@@ -38,6 +38,7 @@
  */
 import type { ActorDescriptor } from "./actors.ts";
 import type { Ctx } from "./ctx.ts";
+import type { Page, PageArgs } from "./page.ts";
 
 /**
  * The single activation id. §1.5's "true singleton" — Dapr serializes every
@@ -122,7 +123,33 @@ export type ReserveResult = {
   readonly reason: string;
   /** The `api_usage_log` row id, or `null` when nothing was written. */
   readonly usageId: string | null;
+  /**
+   * N07: *whose* limit a denial hit, for a caller that turns it into
+   * something a person reads. `null` (or absent, from an older host) on an
+   * allow. See {@link BudgetRefusal}.
+   */
+  readonly refusal?: BudgetRefusal | null;
+  /**
+   * N07: when the refused call would first be allowed, ISO-8601 — the moment
+   * the per-user window frees a slot, or the start of next month for a
+   * monthly cap. `null` when no time clears it (a disabled or unconfigured
+   * kind) and on every allow.
+   */
+  readonly retryAt?: string | null;
 };
+
+/**
+ * Which kind of limit refused a reservation. Spelled as the
+ * `ActorErrorReason` each one becomes, so a model seam can hand it straight
+ * to `BudgetExceededError`:
+ *
+ * - `USER_CAP` — this account's rolling hourly or daily window, or its
+ *   calendar-period allowance (SV-A; `retryAt` is then the period's reset).
+ * - `SERVICE_BUDGET` — anything service-wide: the month's request cap, the
+ *   free tier with no paid budget, the month's money, or a disabled /
+ *   unconfigured kind.
+ */
+export type BudgetRefusal = "USER_CAP" | "SERVICE_BUDGET";
 
 /** `usage`'s window. Both ends ISO-8601; `to` is exclusive. */
 export type UsageRange = {
@@ -146,6 +173,26 @@ export type UsageReport = {
   readonly buckets: readonly UsageBucket[];
   readonly totalRequestCount: number;
   readonly totalSpendCents: number;
+};
+
+/**
+ * MC-quota: one kind of AI call, as the viewer's own allowance for the current
+ * period (`BUDGET_USER_CAPS`, default a UTC calendar month).
+ *
+ * - `kind` — the budget kind, `ai_model/<seam>` (e.g. `ai_model/tier_list_insights`),
+ *   or (F-230) `google_places`: Google Places' own allowance, one count across
+ *   every Places endpoint, always a UTC calendar month.
+ * - `used` — the viewer's own calls counted this period (a released
+ *   reservation does not count).
+ * - `limit` — the period cap.
+ * - `resetsAt` — ISO-8601, the next period start: the same instant a
+ *   `USER_CAP` refusal for the period carries as `retryAt`.
+ */
+export type AiQuotaDto = {
+  readonly kind: string;
+  readonly used: number;
+  readonly limit: number;
+  readonly resetsAt: string;
 };
 
 /** `setBudget`'s input — the admin repair path for a config row. */
@@ -174,6 +221,13 @@ export type BudgetConfigDto = {
  * calls it directly rather than through the outbox.
  */
 export type BudgetActorInterface = {
+  /**
+   * MC-quota: the **viewer's own** period usage per AI kind, then (F-230)
+   * one `google_places` row for their Places allowance. Signed-in only,
+   * and keyed by `ctx.viewerId` — there is no argument naming a user, so it
+   * can never read anybody else's.
+   */
+  myQuota(ctx: Ctx, page: PageArgs): Promise<Page<AiQuotaDto>>;
   /** Admin (or system). Reading spend is not a user-facing capability. */
   usage(ctx: Ctx, range: UsageRange): Promise<UsageReport>;
   /** Admin only. Upserts one `(service, endpoint)` config row. */
@@ -241,6 +295,30 @@ export type ModelSettleInput = {
 };
 
 /**
+ * Give back a model reservation whose call never got an answer (D17).
+ *
+ * "Only calls that got a model response count against the allowance": a
+ * provider that could not be reached, timed out, or refused the request with
+ * an HTTP error before generating anything has not spent a request, so the
+ * row `reserveForModel` wrote stops counting — against the month's request
+ * cap, the free tier, and the caller's per-user window. A retry is then free.
+ * Any response at all, even one that fails to parse, is settled instead.
+ */
+export type ModelReleaseInput = {
+  readonly usageId: string;
+  readonly seam: string;
+  /**
+   * The request left this process and no answer came back (a timeout, a reset
+   * connection): the provider may still have run and billed it. The row stops
+   * counting against the allowance — request cap, free tier, per-user window —
+   * but keeps its cost, so the month's money never under-counts. Absent or
+   * `false` gives back both, for a call refused before anything was generated
+   * (an HTTP error status, an image refused before sending).
+   */
+  readonly keepCost?: boolean;
+};
+
+/**
  * The doors only other actors walk through, never a resolver: the model seams
  * (`services/actors/src/lib/ai/budget.ts`) for `reserveForModel` and
  * `settleForModel`, the spending entity and job actors for `reserve`, and
@@ -278,6 +356,8 @@ export type InternalBudgetActorInterface = {
   reserveForModel(ctx: Ctx, input: ModelReserveInput): Promise<ReserveResult>;
   /** Replace a reservation's estimate with the provider's measurement. */
   settleForModel(ctx: Ctx, input: ModelSettleInput): Promise<void>;
+  /** Stop counting a reservation whose call got no response (D17). */
+  releaseForModel(ctx: Ctx, input: ModelReleaseInput): Promise<void>;
   /**
    * §8.4: idempotent on `input.reservationId`, which every caller supplies
    * (see `ReserveInput.reservationId` — there is no default). A repeat
@@ -316,6 +396,7 @@ export const BudgetActorDescriptor: ActorDescriptor<
   actorType: "BudgetActor",
   category: "entity",
   methods: {
+    myQuota: {},
     usage: {},
     setBudget: {},
     config: {},
@@ -326,5 +407,6 @@ export const BudgetActorDescriptor: ActorDescriptor<
     reserve: {},
     reserveForModel: {},
     settleForModel: {},
+    releaseForModel: {},
   },
 };
