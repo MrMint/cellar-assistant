@@ -465,6 +465,9 @@ export const OnboardingMachine = createMachine(
             actions: [
               assign({
                 itemOnboardingId: ({ event }) => event.output.itemOnboardingId,
+                // F-227: the label's own kind, when the read moved to it.
+                itemType: ({ event, context }) =>
+                  event.output.itemType ?? context.itemType,
                 defaults: ({ event }) => event.output.defaults,
                 confidence: ({ event }) => event.output.confidence,
                 extractionError: ({ event }) => event.output.extractionError,

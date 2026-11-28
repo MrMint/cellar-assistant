@@ -35,6 +35,7 @@ export function PlaceFilters({
   mineAvailable,
   onKindsChange,
   onMineChange,
+  listName = null,
   variant = "phone",
   className,
 }: {
@@ -47,6 +48,11 @@ export function PlaceFilters({
   mineAvailable: boolean;
   onKindsChange: (kinds: FilterKind[]) => void;
   onMineChange: (on: boolean) => void;
+  /**
+   * F-191: a list's `/map?list=` link names its list here, lit, in place of
+   * Mine (which a friend's list must not light, CC-6); a tap clears it.
+   */
+  listName?: string | null;
   variant?: "phone" | "desktop";
   className?: string;
 }) {
@@ -79,17 +85,30 @@ export function PlaceFilters({
           All
         </FilterChip>
       )}
-      {mineAvailable && (
+      {listName !== null ? (
         <FilterChip
-          selected={mine}
+          selected
           icon={<Lists aria-hidden />}
           onClick={() => {
             feedback("tick");
-            onMineChange(!mine);
+            onMineChange(false);
           }}
         >
-          Mine
+          {listName}
         </FilterChip>
+      ) : (
+        mineAvailable && (
+          <FilterChip
+            selected={mine}
+            icon={<Lists aria-hidden />}
+            onClick={() => {
+              feedback("tick");
+              onMineChange(!mine);
+            }}
+          >
+            Mine
+          </FilterChip>
+        )
       )}
       {FILTER_KINDS.map((kind) => {
         const Glyph = KIND_GLYPH[kind];

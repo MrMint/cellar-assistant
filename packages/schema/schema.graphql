@@ -2297,6 +2297,8 @@ type DetachedItemImage {
   id: ID!
 }
 
+union DiscardDraftResult = BudgetExceededError | ConflictError | ForbiddenError | ItemOnboarding | NotFoundError | ValidationError
+
 union DismissPlaceSuggestionsResult = BudgetExceededError | ConflictError | ForbiddenError | NotFoundError | Place | ValidationError
 
 """
@@ -3591,6 +3593,11 @@ type ItemOnboarding {
 
   """SV-B: a saved draft's picture, a `files.id`."""
   imageId: ID
+
+  """
+  H-133 (F-71): a browser URL for `imageId`, signed with every other draft picture in this response in one batch. Null when the draft has no picture, or its file is not a verified upload of yours.
+  """
+  imageUrl: String
   itemType: ItemType!
   status: OnboardingStatus!
   updatedAt: DateTime!
@@ -4433,6 +4440,11 @@ type Mutation {
   detachItemImage(imageId: ID!, itemId: ID!, type: ItemType!): DetachItemImageResult!
 
   """
+  H-133 (F-65): delete a saved draft. Its status becomes `DISCARDED`: nothing is created, and it leaves `needsDetails`, `needsDetailsCount` and every other draft count. Yours alone: someone else's is a `NotFoundError`. A filed session (`CONFIRMED`, `MATCHED`) is a `ConflictError`. Idempotent; `saveDraft` and `confirmItemOnboarding` refuse a discarded draft.
+  """
+  discardDraft(onboardingId: ID!): DiscardDraftResult!
+
+  """
   Dismiss every remaining review suggestion on a place you added. Idempotent.
   """
   dismissPlaceSuggestions(placeId: ID!): DismissPlaceSuggestionsResult!
@@ -4868,11 +4880,12 @@ type NotFoundError implements ActorError & Error {
 }
 
 """
-`item_onboardings.status`. Plain `text` in the database with no check constraint, so this enum is the convention rather than an enforced domain. `START` is the column default; `COMPLETED` is what the old `getItemDefaults` wrote; `CONFIRMED` and `FAILED` are B2 additions for two states the old flow had nowhere to record. `MATCHED` closes a session whose bottle was an item the catalogue already held (`closeItemOnboarding`): nothing was created from it.
+`item_onboardings.status`. Plain `text` in the database with no check constraint, so this enum is the convention rather than an enforced domain. `START` is the column default; `COMPLETED` is what the old `getItemDefaults` wrote; `CONFIRMED` and `FAILED` are B2 additions for two states the old flow had nowhere to record. `MATCHED` closes a session whose bottle was an item the catalogue already held (`closeItemOnboarding`): nothing was created from it. `NEEDS_DETAILS` is a draft set aside with Finish later (`saveDraft`); `DISCARDED` is a draft its owner deleted (`discardDraft`), listed and counted nowhere.
 """
 enum OnboardingStatus {
   COMPLETED
   CONFIRMED
+  DISCARDED
   FAILED
   MATCHED
   NEEDS_DETAILS

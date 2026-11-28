@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import type { MapList } from "../hooks/useMapList";
 import type { MapTheme } from "../maplibre/palette";
 import type { UserLocation } from "../types";
+import { BeyondChip } from "./BeyondChip";
 import type { DockDetent } from "./dock";
 import { MapDock } from "./MapDock";
 import { MapSearchRow } from "./MapSearchRow";
@@ -17,6 +18,8 @@ type MapPlacesProps = {
   onThemeChange: (theme: MapTheme) => void;
   onOpen: (index: number) => void;
   onAddPlace: () => void;
+  /** F-33: take the map to your places beyond the view. */
+  onShowBeyond: () => void;
   selectedId?: string | null;
 };
 
@@ -34,6 +37,7 @@ function Filters({
       mineAvailable={list.mineAvailable}
       onKindsChange={list.setKinds}
       onMineChange={list.setMine}
+      listName={list.listName}
       className={variant === "phone" ? "-mx-4 px-4 pb-3" : "-mx-6 px-6 pb-4"}
     />
   );
@@ -44,21 +48,32 @@ function Rows({
   origin,
   onOpen,
   onAddPlace,
+  onShowBeyond,
   selectedId,
 }: MapPlacesProps) {
   return (
-    <PlaceList
-      places={list.places}
-      origin={list.query === "" ? origin : null}
-      title={list.title}
-      loading={list.loading}
-      query={list.query}
-      globalSearch={list.globalSearch}
-      selectedId={selectedId}
-      onOpen={onOpen}
-      onAddPlace={onAddPlace}
-      onSearchEverywhere={() => list.setGlobalSearch(true)}
-    />
+    <>
+      {list.query === "" && (
+        <BeyondChip
+          total={list.beyond.total}
+          edges={list.beyond.edges}
+          onShow={onShowBeyond}
+          className="mb-3"
+        />
+      )}
+      <PlaceList
+        places={list.places}
+        origin={list.query === "" ? origin : null}
+        title={list.title}
+        loading={list.loading}
+        query={list.query}
+        globalSearch={list.globalSearch}
+        selectedId={selectedId}
+        onOpen={onOpen}
+        onAddPlace={onAddPlace}
+        onSearchEverywhere={() => list.setGlobalSearch(true)}
+      />
+    </>
   );
 }
 

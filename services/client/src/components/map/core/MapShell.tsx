@@ -11,7 +11,7 @@ function SearchPill() {
         strokeWidth={ICON_STROKE}
         className="size-5 text-ink-3"
       />
-      <span className="t-body truncate text-ink-3">Search places...</span>
+      <span className="t-body truncate text-ink-3">Search places</span>
     </div>
   );
 }

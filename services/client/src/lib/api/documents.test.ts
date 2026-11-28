@@ -76,6 +76,7 @@ import * as itemFriendsRatings from "@/components/item/friends/friends-ratings";
 import * as itemCardFragments from "@/components/item/ItemCard/fragments";
 import * as itemSeenAt from "@/components/item/seen-at";
 import * as makeBrewQueries from "@/components/make/brew-queries";
+import * as mapOwnPlaces from "@/components/map/hooks/useOwnPlaces";
 import * as placeListOwners from "@/components/map/places/own-list-entries";
 import * as mapQueries from "@/components/map/queries";
 import * as scanHeaderRename from "@/components/map/scanning/header-rename";
@@ -133,6 +134,7 @@ const MODULES: Readonly<Record<string, Record<string, unknown>>> = {
   "components/item/seen-at.ts": itemSeenAt,
   "components/make/brew-queries.ts": makeBrewQueries,
   "components/map/queries.ts": mapQueries,
+  "components/map/hooks/useOwnPlaces.ts": mapOwnPlaces,
   "components/map/places/own-list-entries.ts": placeListOwners,
   "components/map/scanning/header-rename.ts": scanHeaderRename,
   "components/menu-lines/queries.ts": menuLinesQueries,

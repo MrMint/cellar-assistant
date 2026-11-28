@@ -535,6 +535,10 @@ export const mapMachine = createMachine(
           SET_DESKTOP: {
             actions: "setDesktop",
           },
+          // F-189: the renderer sends the app's theme on mount, before the
+          // map's onLoad sends INITIALIZE; dropping it kept light mode dark.
+          SET_DARK_MODE: { actions: "setDarkMode" },
+          TOGGLE_DARK_MODE: { actions: "toggleDarkMode" },
           SET_BOUNDS: {
             actions: "setBounds",
           },
