@@ -219,6 +219,8 @@ export function ItemPageView({
         {/* The rating line (C3's taste header: yours, friends, everyone),
             then your stars and note under the photo. */}
         <TasteHeader
+          itemId={item.itemId}
+          itemType={item.type}
           cells={tasteCells({
             mine: item.myReview?.score ?? null,
             friends: item.friends,
