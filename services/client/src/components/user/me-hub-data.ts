@@ -163,19 +163,20 @@ export const countTiles = (counts: MeCounts | null | undefined): CountTile[] =>
 export const REQUEST_ROWS = 3;
 
 /**
- * A pinned list's band strip is drawn from its entries; past this many the
- * strip would be a sample of the top bands, so it is not drawn at all.
+ * How many entries a pinned list may hold and still draw its band strip.
+ * H-131: the strip reads `bandCounts` (F-85), which counts every entry, so
+ * there is no sample to hide any more and no cap.
  */
-export const BAND_STRIP_MAX = 100;
+export const BAND_STRIP_MAX = Number.POSITIVE_INFINITY;
 
 /**
  * The hub's own extras (Shell-Me), a document of its own because the shell
  * reads `MeHubQuery` on every page for the Me badge: the Loved, Want to try
  * and Friends counts, each pinned list's bands, and the requests drawn as
  * rows. The pages are literals, not variables: a variable `first` is costed
- * at the cap, and 100 lists × 100 entries is past the API's row limit
- * (`avatar.test.ts` runs its rule). 3 = PINNED_TIER_LISTS, 100 =
- * BAND_STRIP_MAX, 3 = REQUEST_ROWS.
+ * at the cap (`avatar.test.ts` runs its rule). 3 = PINNED_TIER_LISTS,
+ * 3 = REQUEST_ROWS. Each list's bands come from `bandCounts` (F-85, H-131),
+ * not a page of its entries.
  */
 export const MeExtrasQuery = graphql(
   `
@@ -202,13 +203,7 @@ export const MeExtrasQuery = graphql(
         edges {
           node {
             id
-            items(first: 100) {
-              edges {
-                node {
-                  band
-                }
-              }
-            }
+            bandCounts
           }
         }
       }
@@ -264,13 +259,12 @@ export const EMPTY_ME_EXTRAS: MeExtras = {
   requests: [],
 };
 
-const bandCounts = (bands: readonly number[]): BandCount[] => {
-  const counts = new Map<number, number>();
-  for (const band of bands) counts.set(band, (counts.get(band) ?? 0) + 1);
-  return Array.from(counts.entries())
-    .sort(([a], [b]) => b - a)
-    .map(([band, count]) => ({ band, count }));
-};
+/** `bandCounts` (indexed by band, bottom first) → the bands held, best first. */
+const bandsOf = (counts: readonly number[]): BandCount[] =>
+  counts
+    .map((count, band) => ({ band, count }))
+    .filter(({ count }) => count > 0)
+    .reverse();
 
 /** The extras' result → the hub's props; any failed part reads as absent. */
 export const meExtrasFromResult = (
@@ -292,10 +286,7 @@ export const meExtrasFromResult = (
     wantToTry: data.me?.wantToTry.totalCount ?? null,
     friends: friends?.totalCount ?? null,
     bands: Object.fromEntries(
-      lists.map(({ node }) => [
-        node.id,
-        bandCounts(node.items.edges.map((edge) => edge.node.band)),
-      ]),
+      lists.map(({ node }) => [node.id, bandsOf(node.bandCounts)]),
     ),
     requests: requests
       .filter(

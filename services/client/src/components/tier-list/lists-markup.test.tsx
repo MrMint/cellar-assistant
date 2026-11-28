@@ -76,9 +76,8 @@ const card = (overrides: Record<string, unknown> = {}) =>
         { node: entry("d", 2, 0) },
       ],
     },
-    bands: {
-      edges: [5, 5, 4, 2].map((band, i) => ({ node: { id: `b${i}`, band } })),
-    },
+    // F-85 / H-131: entries per band, bottom band first (5, 5, 4, 2).
+    bandCounts: [0, 0, 1, 0, 1, 2],
     ...overrides,
   }) as never;
 
@@ -111,11 +110,16 @@ describe("ListCard: yours (Social-Lists 01)", () => {
     assert.doesNotMatch(html, /data-slot="band-strip-rest"/);
   });
 
-  test("a list longer than the read keeps the rest neutral", () => {
+  test("a list past 100 entries is counted whole: no neutral rest", () => {
     const long = render(
-      <ListCard list={card({ itemCount: 113 })} mine now={now} />,
+      <ListCard
+        list={card({ itemCount: 113, bandCounts: [0, 10, 20, 30, 40, 13] })}
+        mine
+        now={now}
+      />,
     );
-    assert.match(long, /data-slot="band-strip-rest"/);
+    assert.doesNotMatch(long, /data-slot="band-strip-rest"/);
+    assert.match(long, /style="flex-grow:40"/);
     assert.match(textOf(long), /113 beers/);
   });
 });

@@ -123,7 +123,7 @@ describe("MeHub", () => {
     assert.match(pinned, /data-slot="row-count"[^>]*>4</);
   });
 
-  test("past BAND_STRIP_MAX entries a list draws no strip (it would be a sample)", () => {
+  test("H-131: a list past 100 entries still draws its strip (bandCounts counts every entry)", () => {
     const big = render(
       <MeHub
         user={user}
@@ -134,11 +134,16 @@ describe("MeHub", () => {
         }}
         extras={{
           ...EMPTY_ME_EXTRAS,
-          bands: { t1: [{ band: 5, count: 100 }] },
+          bands: {
+            t1: [
+              { band: 5, count: 100 },
+              { band: 2, count: 40 },
+            ],
+          },
         }}
       />,
     );
-    assert.ok(!big.includes('data-slot="band-strip"'));
+    assert.ok(big.includes('data-slot="band-strip"'));
   });
 
   test("X18: number tiles name each noun and leave out zeros; Logs has no list to open", () => {
