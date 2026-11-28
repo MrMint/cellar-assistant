@@ -12,6 +12,7 @@ import { buildSchema, type DocumentNode, Kind, validate } from "graphql";
 import { queryCostRule } from "../../../../api/src/limits.ts";
 import {
   bottlesLine,
+  chipWord,
   confirmInput,
   type Draft,
   finishPlan,
@@ -231,4 +232,13 @@ describe("drafts documents stay under the API's row limit", () => {
       );
     });
   }
+});
+
+describe("chipWord: the kind's own word for the Maker chip", () => {
+  test("rows of one kind use that kind's word; mixed kinds keep Maker", () => {
+    assert.equal(chipWord("maker", [rowOf(GARNACHA), rowOf(ROSE)]), "Winery");
+    assert.equal(chipWord("maker", [rowOf(COFFEE)]), "Roaster");
+    assert.equal(chipWord("maker", [rowOf(GARNACHA), rowOf(COFFEE)]), "Maker");
+    assert.equal(chipWord("style", [rowOf(GARNACHA)]), "Style");
+  });
 });

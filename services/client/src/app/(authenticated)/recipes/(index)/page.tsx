@@ -16,6 +16,10 @@ import {
   RECIPE_GROUPS_PAGE_SIZE,
   RecipeGroupsQuery,
 } from "@/components/recipe/queries";
+import {
+  RecipesIndexLayout,
+  RecipesMine,
+} from "@/components/recipe/RecipesIndexLayout";
 import { RecipeGroupSearch } from "@/components/search/RecipeGroupSearch";
 import { unwrapResult } from "@/lib/api/result";
 import { apiServerQuery } from "@/lib/api/urql-server";
@@ -93,24 +97,26 @@ export default async function RecipesPage({
         <NewRecipeButton className="shrink-0" />
       </div>
 
-      {result.ok ? (
-        <RecipeGroupSearch
-          initialQuery={initialQuery}
-          initialEdges={[...result.data.edges]}
-          initialEndCursor={result.data.pageInfo.endCursor ?? null}
-          initialHasNextPage={result.data.pageInfo.hasNextPage}
-          initialTotalCount={result.data.totalCount ?? null}
-          between={mine}
-        />
-      ) : (
-        <>
-          {mine}
-          <ErrorState
-            title="Couldn't load recipes"
-            reason={result.error.message}
+      <RecipesIndexLayout>
+        {result.ok ? (
+          <RecipeGroupSearch
+            initialQuery={initialQuery}
+            initialEdges={[...result.data.edges]}
+            initialEndCursor={result.data.pageInfo.endCursor ?? null}
+            initialHasNextPage={result.data.pageInfo.hasNextPage}
+            initialTotalCount={result.data.totalCount ?? null}
+            between={mine}
           />
-        </>
-      )}
+        ) : (
+          <>
+            {mine}
+            <ErrorState
+              title="Couldn't load recipes"
+              reason={result.error.message}
+            />
+          </>
+        )}
+      </RecipesIndexLayout>
     </Page>
   );
 }
@@ -118,11 +124,11 @@ export default async function RecipesPage({
 /** Your bar (X14 / G29), then your drafts and recipes (X15). */
 function YourBarAndRecipes(props: ComponentProps<typeof MyRecipes>) {
   return (
-    <>
+    <RecipesMine>
       <Suspense fallback={<BarEntryCardFallback />}>
         <BarEntryCard />
       </Suspense>
       <MyRecipes {...props} />
-    </>
+    </RecipesMine>
   );
 }

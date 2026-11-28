@@ -23,7 +23,10 @@ export default async function SettingsPage() {
         };
   return (
     <Page>
-      <AppBar title="Settings" parent="/me" />
+      <AppBar
+        title={<h1 className="t-head truncate text-ink">Settings</h1>}
+        parent="/me"
+      />
       <SettingsView profile={profile} />
     </Page>
   );

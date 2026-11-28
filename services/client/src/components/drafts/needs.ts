@@ -201,6 +201,26 @@ export const NEED_CHIP: Readonly<Record<Need, string>> = {
   vintage: "Vintage",
 };
 
+/**
+ * A chip's word for the rows on screen: when every row is one kind, the
+ * kind's own maker word ("Winery"), as the rows' need lines say it; across
+ * kinds, the shared "Maker".
+ */
+export const chipWord = (
+  need: Need,
+  rows: readonly { readonly draft: { readonly itemType: ItemType } }[],
+): string => {
+  const first = rows[0]?.draft.itemType;
+  if (
+    need === "maker" &&
+    first !== undefined &&
+    rows.every((row) => row.draft.itemType === first)
+  ) {
+    return KINDS[first].maker;
+  }
+  return NEED_CHIP[need];
+};
+
 export type DraftRow = {
   readonly draft: Draft;
   readonly fields: DraftFields;
