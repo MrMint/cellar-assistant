@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { createContext, useCallback, useContext } from "react";
+import type { PageQuery } from "../page-lists";
 
 /**
  * F-156: the desktop pane (`ItemPane`) reads the item through urql's
@@ -22,4 +23,31 @@ export function useRefreshAfterWrite(): () => void {
     router.refresh();
     pane?.();
   }, [router, pane]);
+}
+
+type QueryClient = {
+  query: (
+    document: never,
+    variables: never,
+    context: { requestPolicy: "network-only" },
+  ) => {
+    toPromise: () => Promise<{ data?: unknown; error?: Error | undefined }>;
+  };
+};
+
+/**
+ * The pane's `PageQuery` (F-156): the item page's lists walk past their first
+ * 100 through the browser's urql client, as the server page walks them
+ * through `apiServerQuery`. A failed read throws, as there.
+ */
+export function paneQuery(client: QueryClient): PageQuery {
+  return (async (document: never, variables?: never) => {
+    const result = await client
+      .query(document, (variables ?? {}) as never, {
+        requestPolicy: "network-only",
+      })
+      .toPromise();
+    if (result.error !== undefined) throw result.error;
+    return result.data;
+  }) as PageQuery;
 }

@@ -1,14 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useQuery } from "urql";
+import { useClient, useQuery } from "urql";
 import { Link } from "@/components/app/Link";
 import type { ApiItemType } from "@/components/cellar-api/itemTypes";
 import { itemPageHref } from "./adapter";
 import { ItemPageQuery } from "./fragments";
 import { ItemPageView } from "./ItemPageView";
 import { type ItemPageData, loadItemPageData } from "./parts/load-item-page";
-import { PaneRefreshProvider } from "./parts/pane-refresh";
+import { PaneRefreshProvider, paneQuery } from "./parts/pane-refresh";
 
 export type ItemPaneProps = {
   itemId: string;
@@ -31,10 +31,11 @@ type State =
  */
 export function ItemPane({ itemId, itemType, cellarId }: ItemPaneProps) {
   // urql's own hook, so only the answer for the current item lands (the
-  // no-to-promise rule); the lists then stop at their first page of 100
-  // (reading past them is F-156's hand-off). F-156: a write in the pane's
-  // sections re-runs this query (`PaneRefreshProvider`), since
-  // `router.refresh()` never reaches it.
+  // no-to-promise rule). F-156: the lists then read past their first 100
+  // through the same client (`paneQuery`; a stale answer is dropped by
+  // `live` below), and a write in the pane's sections re-runs this query
+  // (`PaneRefreshProvider`), since `router.refresh()` never reaches it.
+  const client = useClient();
   const [result, reexecute] = useQuery({
     query: ItemPageQuery,
     variables: { itemId, type: itemType },
@@ -57,7 +58,7 @@ export function ItemPane({ itemId, itemType, cellarId }: ItemPaneProps) {
       return;
     }
     let live = true;
-    loadItemPageData(null, itemType, itemId, data).then(
+    loadItemPageData(paneQuery(client), itemType, itemId, data).then(
       (loaded) => {
         if (!live) return;
         setState(
@@ -73,7 +74,7 @@ export function ItemPane({ itemId, itemType, cellarId }: ItemPaneProps) {
     return () => {
       live = false;
     };
-  }, [data, error, itemId, itemType]);
+  }, [client, data, error, itemId, itemType]);
 
   if (state.phase === "ready") {
     return (

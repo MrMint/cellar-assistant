@@ -35,6 +35,15 @@ type Exemption = { readonly calls: number; readonly reason: string };
  * or an effect's `cancelled` flag — and the reason says which.
  */
 const EXEMPT: Readonly<Record<string, Exemption>> = {
+  "item/parts/pane-refresh.tsx": {
+    calls: 1,
+    reason:
+      "F-156: `paneQuery`, the desktop pane's `PageQuery`, walks the item " +
+      "page's lists past their first 100 through the browser client, as the " +
+      "server page walks them through apiServerQuery. Its one caller is " +
+      "ItemPane's effect, whose `live` flag drops the answer for an item " +
+      "the pane has since moved past.",
+  },
   "map/actions.ts": {
     // 13 since X27's `resubmitPlace` — another submit-driven write.
     calls: 13,
