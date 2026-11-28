@@ -281,12 +281,11 @@ describe("ContinueSection", () => {
       <ContinueSection
         bottles={[bottle("a", "RED", 6)]}
         sealed={["s1", "s2", "s3", "s4", "s5"].map(sealedRow)}
-        sealedTotal={9}
         serverNow={NOW}
       />,
     );
     const words = text(html);
-    assert.match(words, /Drink soon 9/);
+    assert.match(words, /Drink soon 5/, "the rows Show more reaches");
     assert.match(words, /Sealed · ended Jan 2026/);
     assert.match(words, /Typical for IPA/);
     assert.equal(html.match(/data-kind="drink-soon-sealed"/g)?.length, 4);

@@ -56,7 +56,6 @@ export function ContinueSection({
   bottles,
   total = bottles.length,
   sealed = [],
-  sealedTotal = sealed.length,
   serverNow,
 }: {
   /** Every open bottle Home read, newest opened first. */
@@ -65,8 +64,6 @@ export function ContinueSection({
   total?: number;
   /** L02: sealed bottles whose window closes soon. */
   sealed?: readonly SealedSoon[];
-  /** All of them, beyond the page read (`drinkSoon.totalCount`). */
-  sealedTotal?: number;
   serverNow: number;
 }) {
   const now = useNow(serverNow);
@@ -130,9 +127,7 @@ export function ContinueSection({
           )}
         </section>
       )}
-      {sealed.length > 0 && (
-        <DrinkSoon rows={sealed} total={Math.max(sealedTotal, sealed.length)} />
-      )}
+      {sealed.length > 0 && <DrinkSoon rows={sealed} />}
     </>
   );
 }
@@ -141,14 +136,12 @@ export function ContinueSection({
  * The sealed bottles whose window is ending: four rows, "Show more · n" for
  * the rest Home read. Open opens the bottle (`openCellarItem`) and takes the
  * row away, with Undo, which puts the bottle back to sealed.
+ *
+ * The head counts the rows still here (F-125, F-128): `drinkSoon.totalCount`
+ * also counts the opened bottles past their span, which are the Open rail's,
+ * so it never matched the rows "Show more" reaches, nor dropped on an Open.
  */
-function DrinkSoon({
-  rows,
-  total,
-}: {
-  rows: readonly SealedSoon[];
-  total: number;
-}) {
+function DrinkSoon({ rows }: { rows: readonly SealedSoon[] }) {
   const router = useRouter();
   const [opened, setOpened] = useState<ReadonlySet<string>>(new Set());
   const [more, setMore] = useState(false);
@@ -180,19 +173,30 @@ function DrinkSoon({
       return;
     }
     notify(`${row.name} opened`, {
+      // notify plays the undo cue for an "Undo" itself (F-126).
       undo: async () => {
-        feedback("undo");
         restore(row.id);
-        await updateItem({ ...variables, input: { openAt: null } });
+        const undone = await updateItem({
+          ...variables,
+          input: { openAt: null },
+        });
+        const back = unwrapResult(undone.data?.updateCellarItem, "CellarItem");
+        if (undone.error !== undefined || !back.ok) {
+          setOpened((current) => new Set(current).add(row.id));
+          feedback("refuse");
+          notify(`${row.name} is still open`, { tone: "error" });
+        }
         router.refresh();
       },
+      // Swiped away or timed out, Home reads again: the bottle joins Open.
       onAutoClose: () => router.refresh(),
+      onClose: () => router.refresh(),
     });
   };
 
   return (
     <section aria-labelledby="soon-heading" className="flex flex-col gap-2">
-      <SectionHead id="soon-heading" title="Drink soon" count={total} />
+      <SectionHead id="soon-heading" title="Drink soon" count={left.length} />
       <ul className="m-0 flex list-none flex-col divide-y divide-rule overflow-hidden rounded-md border border-edge bg-card p-0">
         {shown.map((row) => (
           <li

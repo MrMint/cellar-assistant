@@ -182,7 +182,6 @@ export async function ContinueSectionServer() {
       bottles={bottles}
       total={data?.me?.openBottles.totalCount ?? bottles.length}
       sealed={sealed}
-      sealedTotal={soonData?.me?.drinkSoon.totalCount ?? sealed.length}
       serverNow={Date.now()}
     />
   );

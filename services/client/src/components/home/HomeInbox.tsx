@@ -6,6 +6,7 @@ import {
   type ReactNode,
   useEffect,
   useMemo,
+  useRef,
   useState,
   useSyncExternalStore,
 } from "react";
@@ -168,7 +169,12 @@ export function HomeInbox({
   const tray = trayJobs(jobs, seenSet);
 
   const [, acceptRequest] = useMutation(AcceptFriendRequestMutation);
+  // F-124: the row stays tappable through its 160 ms exit, so a second tap
+  // must not send a second accept (whose NotFound would read as a failure).
+  const accepting = useRef<Set<string>>(new Set());
   const accept = async (requestId: string, name: string) => {
+    if (accepting.current.has(requestId)) return;
+    accepting.current.add(requestId);
     setAnswered((current) => new Set(current).add(requestId));
     const response = await acceptRequest({ requestId });
     const failure = response.error
@@ -181,6 +187,8 @@ export function HomeInbox({
           return result.ok ? null : result.error;
         })();
     if (failure !== null) {
+      // Answered stays held on success: the row is leaving for good.
+      accepting.current.delete(requestId);
       setAnswered((current) => {
         const next = new Set(current);
         next.delete(requestId);
