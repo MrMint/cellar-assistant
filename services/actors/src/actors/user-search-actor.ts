@@ -185,9 +185,12 @@ export class UserSearchActor
     term: string,
     limit: number,
   ): Promise<{ hits: readonly UserSearchHit[]; total: number }> {
-    const relations =
+    const { relations, pendingIds } =
       viewer === null
-        ? new Map<string, PersonRelation>()
+        ? {
+            relations: new Map<string, PersonRelation>(),
+            pendingIds: new Map<string, string>(),
+          }
         : await this.#relationsOf(viewer);
     const connected = await this.#profiles.load([...relations.keys()]);
     const needle = term.toLowerCase();
@@ -219,14 +222,21 @@ export class UserSearchActor
     // every match, before the cap.
     const total =
       knownMatches.length + (await this.#profiles.count({ term, excludeIds }));
-    const hits = [
-      ...known.map(({ row, relation }) => ({
-        userId: row.id,
-        displayName: row.displayName,
-        avatarUrl: row.avatarUrl,
-        avatarFileId: row.avatarFileId,
-        relation,
-      })),
+    const hits: UserSearchHit[] = [
+      ...known.map(({ row, relation }) => {
+        const pendingRequestId =
+          relation === "REQUEST_SENT" || relation === "REQUEST_RECEIVED"
+            ? pendingIds.get(row.id)
+            : undefined;
+        return {
+          userId: row.id,
+          displayName: row.displayName,
+          avatarUrl: row.avatarUrl,
+          avatarFileId: row.avatarFileId,
+          relation,
+          ...(pendingRequestId === undefined ? {} : { pendingRequestId }),
+        };
+      }),
       ...rest.map((row) => ({
         userId: row.id,
         displayName: row.displayName,
@@ -244,15 +254,21 @@ export class UserSearchActor
    * request *to* the viewer over one *from* them, since that is the one
    * waiting on the viewer.
    */
-  async #relationsOf(viewer: string): Promise<Map<string, PersonRelation>> {
+  async #relationsOf(viewer: string): Promise<{
+    relations: Map<string, PersonRelation>;
+    /** F-43: the other person → the id of the request that relation names. */
+    pendingIds: Map<string, string>;
+  }> {
     const friendRows = await this.db
       .select({ userId: friends.userId, friendId: friends.friendId })
       .from(friends)
       .where(or(eq(friends.userId, viewer), eq(friends.friendId, viewer)));
     const requestRows = await this.db
       .select({
+        id: friendRequests.id,
         userId: friendRequests.userId,
         friendId: friendRequests.friendId,
+        status: friendRequests.status,
       })
       .from(friendRequests)
       .where(
@@ -275,11 +291,21 @@ export class UserSearchActor
     for (const row of friendRows) {
       offer(row.userId === viewer ? row.friendId : row.userId, "FRIEND");
     }
-    for (const row of requestRows) {
+    // Received first, so a pair with requests both ways keeps the one the
+    // relation names (a request to the viewer wins, as above).
+    const pendingIds = new Map<string, string>();
+    const sorted = [...requestRows].sort(
+      (a, b) => Number(a.userId === viewer) - Number(b.userId === viewer),
+    );
+    for (const row of sorted) {
       if (row.userId === viewer) offer(row.friendId, "REQUEST_SENT");
       else offer(row.userId, "REQUEST_RECEIVED");
+      const other = row.userId === viewer ? row.friendId : row.userId;
+      if (row.status === "PENDING" && !pendingIds.has(other)) {
+        pendingIds.set(other, row.id);
+      }
     }
-    return out;
+    return { relations: out, pendingIds };
   }
 
   /** The viewer, everyone they are friends with, everyone mid-request. */

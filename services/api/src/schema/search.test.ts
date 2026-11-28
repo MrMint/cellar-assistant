@@ -738,3 +738,63 @@ describe("a resolver-raised ForbiddenError is a union member too (A7e)", () => {
     });
   }
 });
+
+describe("userSearch pendingRequestId (F-43)", () => {
+  it("passes the open request's id through, null for everyone else", async () => {
+    const REQUEST = "55555555-5555-4555-8555-555555555555";
+    const { invoke } = stubSidecar({
+      "UserSearchActor.results": () => ({
+        entries: [
+          {
+            cursor: "a",
+            node: {
+              userId: otherViewer.id,
+              displayName: "Alma",
+              avatarUrl: null,
+              avatarFileId: null,
+              relation: "REQUEST_SENT",
+              pendingRequestId: REQUEST,
+            },
+          },
+          {
+            cursor: "b",
+            node: {
+              userId: CELLAR,
+              displayName: "Alberta",
+              avatarUrl: null,
+              avatarFileId: null,
+              relation: "NONE",
+            },
+          },
+        ],
+        hasNextPage: false,
+        hasPreviousPage: false,
+        totalCount: 2,
+      }),
+    });
+    const result = await run(
+      `{ userSearch(term: "al", includeConnected: true) {
+           ... on UserSearchConnection { edges { node { displayName relation pendingRequestId } } } } }`,
+      testContext(invoke, viewer),
+    );
+    expect(result.errors).toBeUndefined();
+    expect(result.data?.userSearch).toEqual({
+      edges: [
+        {
+          node: {
+            displayName: "Alma",
+            relation: "REQUEST_SENT",
+            pendingRequestId: REQUEST,
+          },
+        },
+        {
+          node: {
+            displayName: "Alberta",
+            relation: "NONE",
+            pendingRequestId: null,
+          },
+        },
+      ],
+    });
+  });
+});

@@ -162,6 +162,33 @@ describe.skipIf(skip)("UserSearchActor (§2.3, §1.5)", () => {
       });
     });
 
+    it("F-43: a pending row carries its request's id, so Cancel and Accept need no lookup", async () => {
+      await withTestDb(async (db) => {
+        const s = await scenario(db);
+        const ids = await db.execute<{
+          id: string;
+          user_id: string;
+          friend_id: string;
+        }>(sql`select id, user_id, friend_id from public.friend_requests`);
+        const idBetween = (from: string, to: string) =>
+          ids.rows.find((r) => r.user_id === from && r.friend_id === to)?.id;
+        const input: UserSearchInput = { term: "al", includeConnected: true };
+        const hits = await newActor(input, db, s.viewer, s.profiles).all(
+          userCtx(s.viewer),
+          input,
+        );
+        expect(
+          hits.map((hit) => [hit.displayName, hit.pendingRequestId ?? null]),
+        ).toEqual([
+          ["Alfred", null],
+          ["Alonzo", idBetween(s.requester, s.viewer)],
+          ["Alma", idBetween(s.viewer, s.requested)],
+          ["Alberta", null],
+        ]);
+        expect(idBetween(s.requester, s.viewer)).toEqual(expect.any(String));
+      });
+    });
+
     it("never returns the viewer, and fills the limit with strangers after", async () => {
       await withTestDb(async (db) => {
         const s = await scenario(db);
