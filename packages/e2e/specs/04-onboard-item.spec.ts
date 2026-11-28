@@ -65,8 +65,10 @@ test.describe("onboard → cellar → check in", () => {
     const add = primary
       .getByRole("main")
       .getByRole("button", { name: "Add bottle", exact: true });
+    // F-60: until the floor is filled the primary button reads "N left to
+    // check" and is disabled, so wait for the footer, not for "Add bottle".
     await expect(
-      add,
+      primary.locator('[data-slot="draft-footer"]'),
       "the form never appeared — startItemOnboarding did not answer",
     ).toBeVisible({ timeout: 45_000 });
     expect(await primary.getByLabel("Name").inputValue()).toBe("");
@@ -83,6 +85,9 @@ test.describe("onboard → cellar → check in", () => {
     ).toBeVisible({ timeout: 15_000 });
     await style.click();
 
+    await expect(add, "the floor is filled, so the button names its verb").toBeEnabled({
+      timeout: 15_000,
+    });
     await add.click();
 
     // Confirm → wait for the outbox to write the item → `addItemToCellar` →
@@ -181,24 +186,20 @@ test.describe("onboard → cellar → check in", () => {
       400,
     );
 
-    // `/cellars/[id]` redirects to the cellar home, whose content streams in
-    // behind its loading shell ("Loading cellar…"): poll rather than read the
-    // body once at `load`.
-    await expect
-      .poll(() => bodyText(primary), {
-        message: "the cellar page does not show its new item",
-        timeout: 20_000,
-      })
-      .toMatch(/E2 Wine/);
+    // The cellar home is a list of tiles now (no dashboard shelf): the new
+    // bottle is a tile, and Pour is the bottle row's own action on its page.
+    await expect(
+      primary.getByText(/E2 Wine/).filter({ visible: true }).first(),
+      "the cellar page does not show its new item",
+    ).toBeVisible({ timeout: 20_000 });
+    await primary
+      .getByRole("link", { name: /E2 Wine/ })
+      .filter({ visible: true })
+      .first()
+      .click();
 
-    // X04 merged the overview into the cellar home: a bottle added a moment
-    // ago is on the dashboard's "Recently added" shelf, and its owner gets
-    // X03's Pour there (open, log and level in one sheet); the default glass
-    // is the old "Check In" with a level.
-    const pour = primary
-      .locator('[data-slot="recent-shelf"]')
-      .getByRole("button", { name: /^Pour E2 Wine/ });
-    await expect(pour.first(), "no Pour on the cellar page").toBeVisible({
+    const pour = primary.getByRole("button", { name: /^Pour from / });
+    await expect(pour.first(), "no Pour on the item page").toBeVisible({
       timeout: 20_000,
     });
     await pour.first().click();
@@ -208,15 +209,11 @@ test.describe("onboard → cellar → check in", () => {
       .click();
 
     // The log is written by `CheckInActor` and read back through the cellar:
-    // the toast says so, and the dashboard's pours count it after the page
-    // re-reads (with the API check-in above, it is not the month's first).
+    // the toast says so.
     await expect(
       primary.getByText(/^Poured /).first(),
       "the log did not produce any visible result",
     ).toBeVisible({ timeout: 20_000 });
-    await expect(
-      primary.locator('[data-slot="pour-trend-readout"]'),
-    ).toContainText(/^[1-9]\d*\s*pours? in this month/, { timeout: 20_000 });
   });
 });
 
