@@ -133,7 +133,7 @@ test("creates a place through the form", async ({ primary }) => {
   );
   await primary.goto(`/map/create-place?lat=${lat}&lng=${lng}`);
   await expect(
-    primary.getByRole("heading", { name: "Add a new place" }),
+    primary.getByRole("heading", { name: "Add a place" }),
   ).toBeVisible();
   await geocoded;
   await expect(primary.getByText("Loading address...")).toBeHidden({
