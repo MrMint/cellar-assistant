@@ -16,7 +16,7 @@ import {
   Public,
 } from "@/components/app/icons";
 import { Link } from "@/components/app/Link";
-import { BAND_FILL, type Band, RankChip } from "@/components/app/parts/Rank";
+import { BAND_FILL, type Band, bandName } from "@/components/app/parts/Rank";
 import { MorphTitle } from "@/components/app/RouteTransition";
 import { TypeGlyph } from "@/components/app/TypeChip";
 import { UserAvatar } from "@/components/app/UserAvatar";
@@ -113,11 +113,16 @@ function StripCell({ entry, rank }: { entry: TopEntry; rank: number }) {
         </span>
       )}
       {entry.band > 0 && (
-        <RankChip
-          rank={rank}
-          band={band}
-          className="absolute bottom-2 left-2"
-        />
+        // F-21: the board's small dark chip; the band stays in the strip
+        // beneath the card, and in the words for a screen reader.
+        <span
+          data-slot="rank-chip"
+          data-band={band}
+          className="t-micro tabular absolute bottom-2 left-2 inline-flex h-5 min-w-8 items-center justify-center rounded-sm bg-glass px-1.5 text-on-glass"
+        >
+          #{rank}
+          <span className="sr-only">, {bandName(band)}</span>
+        </span>
       )}
     </div>
   );
@@ -209,7 +214,7 @@ export function ListCard({
               id={list.id}
               name={list.name}
               onNavigate={onNavigate}
-              className="t-title"
+              className="t-head"
             />
             <ChevronRight
               aria-hidden
