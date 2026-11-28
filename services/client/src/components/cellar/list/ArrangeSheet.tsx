@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Arrange, Check } from "@/components/app/icons";
 import { AnchoredSheet } from "@/components/app/overlays/AnchoredSheet";
+import { afterHistorySettles } from "@/components/app/overlays/layers";
 import { SegmentedControl } from "@/components/app/SegmentedControl";
 import { Button } from "@/components/ui/button";
 import { feedback } from "@/lib/feedback";
@@ -42,8 +43,10 @@ export function ArrangeSheet({
   const current = arrangementOf(arrangement);
   const choose = (next: Arrangement) => {
     if (next !== arrangement) feedback("detent");
-    onArrangementChange(next);
+    // Close first, then write `?sort=` once the sheet's history entry is
+    // gone: written now, it lands on that entry and Back pops it (F-136).
     setOpen(false);
+    afterHistorySettles(() => onArrangementChange(next));
   };
   const row = (entry: (typeof ARRANGEMENTS)[number]) => {
     const on = entry.value === arrangement;
@@ -103,8 +106,8 @@ export function ArrangeSheet({
           aria-label="Show"
           value={status}
           onValueChange={(next) => {
-            onStatusChange(next);
             setOpen(false);
+            afterHistorySettles(() => onStatusChange(next));
           }}
           options={CELLAR_STATUSES.map((entry) => ({
             value: entry.value,

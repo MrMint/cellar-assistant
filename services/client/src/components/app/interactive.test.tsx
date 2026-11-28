@@ -791,7 +791,7 @@ describe("TabBar", () => {
     assert.match(bar?.className ?? "", /pb-\[env\(safe-area-inset-bottom\)\]/);
   });
 
-  test("the search sheet has no tab bar, so the shell leaves the indicator's padding", async () => {
+  test("/search keeps the tab bar and its safe-area padding (FR-2, H-65)", async () => {
     pathname = "/search";
     await render(
       <AppShell>
@@ -799,8 +799,8 @@ describe("TabBar", () => {
       </AppShell>,
     );
     const shell = container.querySelector('[data-slot="app-shell"]');
-    assert.equal(container.querySelector('[data-slot="tab-bar"]'), null);
-    assert.doesNotMatch(shell?.className ?? "", /safe-area-inset-bottom/);
+    assert.ok(container.querySelector('[data-slot="tab-bar"]'));
+    assert.match(shell?.className ?? "", /safe-area-inset-bottom/);
   });
 
   test("＋ goes straight to the capture surface — no chooser (X06)", async () => {

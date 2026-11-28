@@ -49,6 +49,7 @@ import {
   shelvesOf,
   stripCounts,
 } from "./model";
+import { useBottleKeyWrites } from "./rate";
 import { Shelves } from "./Shelves";
 
 export type CellarListProps = {
@@ -210,6 +211,7 @@ export function CellarList({
   const [paneOpen, setPaneOpen] = useState(false);
   const paneBottle =
     selected === null ? undefined : byKey.get(selected)?.bottle;
+  const keyWrites = useBottleKeyWrites(paneBottle);
 
   const onPeek = useCallback(
     (key: string) => {
@@ -536,6 +538,12 @@ export function CellarList({
             feedback("tick");
             setView(view === "tiles" ? "rows" : "tiles");
           }}
+          onFavourite={() => {
+            if (paneBottle !== undefined) keyWrites.favourite(paneBottle);
+          }}
+          onRate={(score) => {
+            if (paneBottle !== undefined) keyWrites.rate(paneBottle, score);
+          }}
         />
       )}
 
@@ -568,12 +576,18 @@ function ListKeys({
   onClear,
   onOpenPage,
   onToggleView,
+  onFavourite,
+  onRate,
 }: {
   onMove: (key: string) => void;
   onEnter: (event: KeyEvent) => void;
   onClear: () => void;
   onOpenPage: () => void;
   onToggleView: () => void;
+  /** F on the selected bottle (F-144). */
+  onFavourite: () => void;
+  /** 1 to 5 on the selected bottle (F-144). */
+  onRate: (score: number) => void;
 }) {
   const move = (event: KeyEvent) =>
     onMove(event.key.length === 1 ? event.key.toLowerCase() : event.key);
@@ -587,5 +601,11 @@ function ListKeys({
   useAppKey("Backspace", onClear);
   useAppKey("o", onOpenPage);
   useAppKey("t", onToggleView);
+  useAppKey("f", onFavourite);
+  useAppKey("1", () => onRate(1));
+  useAppKey("2", () => onRate(2));
+  useAppKey("3", () => onRate(3));
+  useAppKey("4", () => onRate(4));
+  useAppKey("5", () => onRate(5));
   return null;
 }

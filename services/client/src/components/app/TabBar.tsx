@@ -6,10 +6,10 @@ import { feedback, HapticOverlay } from "@/lib/feedback";
 import { cn } from "@/lib/utils";
 import { Link, type LinkProps } from "./Link";
 import {
-  activeTab,
   CAPTURE_HREF,
   CaptureIcon,
   LEADING_TABS,
+  litTab,
   ME_TAB,
   type Tab,
   type TabKey,
@@ -72,7 +72,7 @@ export function useOptimisticTab(): [
   const [pending, setPending] = useState<TabKey | undefined>();
   // biome-ignore lint/correctness/useExhaustiveDependencies: reset on every route change, which is what pathname signals.
   useEffect(() => setPending(undefined), [pathname]);
-  return [pending ?? activeTab(pathname), setPending];
+  return [pending ?? litTab(pathname), setPending];
 }
 
 function TabLink({

@@ -33,8 +33,7 @@ export const isFullScreenRoute = (pathname: string): boolean =>
  * itself (`/map`) clips instead of scrolling, so MapLibre fills exactly the
  * space above the tab bar and its attribution stays visible (N22). The
  * phone's tab bar steps aside on the capture surface (X06, design §2 — the
- * camera has the screen, and Close is the way out) and on the search sheet
- * (X10).
+ * camera has the screen, and Close is the way out); it shows on /search.
  */
 export function contentLayout(pathname: string): {
   padded: boolean;
@@ -47,10 +46,10 @@ export function contentLayout(pathname: string): {
     padded: !isMap && !fullScreen,
     scrolls: pathname !== "/map",
     // The kit's tab bar never hides on scroll (KIT § 2). It steps aside for
-    // the search sheet (X10: full screen on a phone, with its own Cancel),
     // the capture surface (X06: the camera has the screen, and Close is the
-    // way out) and the full-screen routes. The rail stays from `md` up.
-    tabBar: pathname !== "/search" && !isCaptureRoute(pathname) && !fullScreen,
+    // way out) and the full-screen routes, and shows on /search, as the
+    // Search boards draw it (FR-2, H-65). The rail stays from `md` up.
+    tabBar: !isCaptureRoute(pathname) && !fullScreen,
   };
 }
 
