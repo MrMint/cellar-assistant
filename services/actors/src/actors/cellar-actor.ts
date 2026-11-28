@@ -931,7 +931,11 @@ export class CellarActor
    * and writes nothing.
    */
   async addItem(ctx: Ctx, input: AddCellarItemInput): Promise<CellarItemDto> {
-    return await this.#insertItem(ctx, input, null);
+    const cellarItemId =
+      input.cellarItemId ??
+      idempotencyKey(ctx, "CellarActor.addItem:cellar-item") ??
+      randomUUID();
+    return await this.#insertItem(ctx, { ...input, cellarItemId }, null);
   }
 
   /**
@@ -974,9 +978,7 @@ export class CellarActor
     }
     const itemId = requireUuid(input.item.id, "item.id");
     const cellarItemId = requireUuid(
-      input.cellarItemId ??
-        idempotencyKey(ctx, "CellarActor.addItem:cellar-item") ??
-        randomUUID(),
+      input.cellarItemId ?? randomUUID(),
       "cellarItemId",
     );
 
@@ -1662,13 +1664,13 @@ const KEYED_SORTS: Record<KeyedSort, SortKeySpec> = {
 };
 
 /** The item table and its card-descriptor column, per type (`STYLE_ASC`). */
-const STYLE_SOURCE: Record<ItemType, { table: string; column: string }> = {
-  WINE: { table: "wines", column: "variety" },
-  BEER: { table: "beers", column: "style" },
-  SPIRIT: { table: "spirits", column: "style" },
-  COFFEE: { table: "coffees", column: "roast_level" },
-  SAKE: { table: "sakes", column: "category" },
-  TEA: { table: "teas", column: "category" },
+const STYLE_COLUMN: Record<ItemType, string> = {
+  WINE: "variety",
+  BEER: "style",
+  SPIRIT: "style",
+  COFFEE: "roast_level",
+  SAKE: "category",
+  TEA: "category",
 };
 
 /**
@@ -1694,25 +1696,26 @@ const itemSortKeys = async (
         [...idSet].map((id) => sql`${id}::uuid`),
         sql`, `,
       );
-      const link = sql.identifier(`${type.toLowerCase()}_id`);
-      const source = STYLE_SOURCE[type];
+      const brandOf = ARCS.itemBrands.column(type, "ib");
+      const reviewOf = ARCS.itemReviews.column(type, "r");
+      const style = sql.identifier(STYLE_COLUMN[type]);
       const query =
         spec.key === "maker"
           ? sql`
-              select distinct on (ib.${link}) ib.${link}::text as id, b.name as key
+              select distinct on (${brandOf}) ${brandOf}::text as id, b.name as key
               from public.item_brands ib join public.brands b on b.id = ib.brand_id
-              where ib.${link} in (${ids})
-              order by ib.${link}, ib.is_primary desc nulls last, ib.created_at, b.name`
+              where ${brandOf} in (${ids})
+              order by ${brandOf}, ib.is_primary desc nulls last, ib.created_at, b.name`
           : spec.key === "style"
             ? sql`
-              select t.id::text as id, t.${sql.identifier(source.column)}::text as key
-              from public.${sql.identifier(source.table)} t
-              where t.id in (${ids}) and t.${sql.identifier(source.column)} is not null`
+              select t.id::text as id, t.${style}::text as key
+              from ${ITEM_TABLES[type]} t
+              where t.id in (${ids}) and t.${style} is not null`
             : sql`
-              select distinct on (r.${link}) r.${link}::text as id, r.score as key
+              select distinct on (${reviewOf}) ${reviewOf}::text as id, r.score as key
               from public.item_reviews r
-              where r.user_id = ${viewerId}::uuid and r.${link} in (${ids})
-              order by r.${link}, r.updated_at desc`;
+              where r.user_id = ${viewerId}::uuid and ${reviewOf} in (${ids})
+              order by ${reviewOf}, r.updated_at desc`;
       const { rows } = await db.execute<{ id: string; key: string | number }>(
         query,
       );

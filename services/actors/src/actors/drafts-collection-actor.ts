@@ -21,6 +21,7 @@ import {
   DraftsCollectionActorDescriptor,
   FIELD_CONFIDENCE_KEY,
   FIELD_CONFIDENCES,
+  ITEM_TYPES,
   isItemType,
   requireReverseEdgeBatch,
   sanitiseFieldConfidence,
@@ -38,6 +39,7 @@ import {
 import { cellarOwnedBySql } from "../lib/cellar-ownership.ts";
 import { ViewerCollectionActorBase } from "../lib/collection-actor-base.ts";
 import { requireUuidValue } from "../lib/collection-sql.ts";
+import { ARCS } from "../lib/item-arcs.ts";
 import { ITEM_TABLES } from "../lib/item-bindings.ts";
 import { onboardingRowToDto } from "./item-onboarding-actor.ts";
 
@@ -166,28 +168,37 @@ export class DraftsCollectionActor
   async unconfirmedBottleCount(ctx: Ctx): Promise<number> {
     return await this.batch(ctx, null, 0, async () => {
       const viewer = this.key;
-      // One join per item table: a bottle names exactly one item. The guessed
-      // fields test is `guessedFieldsOf` in SQL — a key of
+      // One join per item table (`ARCS`): a bottle names exactly one item.
+      // The guessed-fields test is `guessedFieldsOf` in SQL — a key of
       // `defaults.fieldConfidence` with a known level — less `confirmed_fields`.
+      const alias = (type: ItemType) => `it_${type.toLowerCase()}`;
+      const joins = sql.join(
+        ITEM_TYPES.map(
+          (type) =>
+            sql`left join ${ITEM_TABLES[type]} ${sql.identifier(alias(type))}
+                on ${sql.identifier(alias(type))}.id = ${ARCS.cellarItems.column(type, "ci")}`,
+        ),
+        sql` `,
+      );
+      const coalesced = (column: string) =>
+        sql`coalesce(${sql.join(
+          ITEM_TYPES.map(
+            (type) =>
+              sql`${sql.identifier(alias(type))}.${sql.identifier(column)}`,
+          ),
+          sql`, `,
+        )})`;
       const { rows } = await this.db.execute<{ n: number }>(sql`
         select count(*)::int as n
         from public.cellar_items ci
         join public.cellars c on c.id = ci.cellar_id
-        left join public.wines w on w.id = ci.wine_id
-        left join public.beers b on b.id = ci.beer_id
-        left join public.spirits s on s.id = ci.spirit_id
-        left join public.coffees f on f.id = ci.coffee_id
-        left join public.sakes k on k.id = ci.sake_id
-        left join public.teas t on t.id = ci.tea_id
-        join public.item_onboardings o on o.id = coalesce(
-          w.item_onboarding_id, b.item_onboarding_id, s.item_onboarding_id,
-          f.item_onboarding_id, k.item_onboarding_id, t.item_onboarding_id)
+        ${joins}
+        join public.item_onboardings o
+          on o.id = ${coalesced("item_onboarding_id")}
         where ${cellarOwnedBySql(viewer, "c")}
           and ci.empty_at is null
           and o.user_id = ${viewer}::uuid
-          and coalesce(w.created_by_id, b.created_by_id, s.created_by_id,
-                       f.created_by_id, k.created_by_id, t.created_by_id)
-              = ${viewer}::uuid
+          and ${coalesced("created_by_id")} = ${viewer}::uuid
           and jsonb_typeof(o.defaults -> ${FIELD_CONFIDENCE_KEY}) = 'object'
           and exists (
             select 1
