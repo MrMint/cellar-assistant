@@ -247,14 +247,10 @@ test("People finds a friend or someone to add, never yourself", async ({
   const pending = people.getByRole("button", {
     name: new RegExp(`^(Cancel the request to|Accept) ${name}`),
   });
-  const friendsLink = people
-    .getByRole("link")
-    .filter({ hasText: name })
-    .filter({ hasText: "Friend" });
-  expect(
-    (await addButton.count()) +
-      (await pending.count()) +
-      (await friendsLink.count()),
-  ).toBe(1);
+  const friendsLink = people.getByRole("link", { name, exact: true });
+  // A friend is the row's link with no action; anyone else has exactly one.
+  const actions = (await addButton.count()) + (await pending.count());
+  if (actions === 0) await expect(friendsLink).toHaveCount(1);
+  else expect(actions).toBe(1);
   expect(noise.pageErrors).toEqual([]);
 });
