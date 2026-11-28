@@ -1,13 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useQuery } from "urql";
+import { useCallback, useEffect, useState } from "react";
+import { useClient, useQuery } from "urql";
 import { Link } from "@/components/app/Link";
 import type { ApiItemType } from "@/components/cellar-api/itemTypes";
 import { itemPageHref } from "./adapter";
 import { ItemPageQuery } from "./fragments";
 import { ItemPageView } from "./ItemPageView";
 import { type ItemPageData, loadItemPageData } from "./parts/load-item-page";
+import { PaneRefreshProvider, paneQuery } from "./parts/pane-refresh";
 
 export type ItemPaneProps = {
   itemId: string;
@@ -30,13 +31,21 @@ type State =
  */
 export function ItemPane({ itemId, itemType, cellarId }: ItemPaneProps) {
   // urql's own hook, so only the answer for the current item lands (the
-  // no-to-promise rule); the lists then stop at their first page of 100.
-  const [result] = useQuery({
+  // no-to-promise rule). F-156: the lists then read past their first 100
+  // through the same client (`paneQuery`; a stale answer is dropped by
+  // `live` below), and a write in the pane's sections re-runs this query
+  // (`PaneRefreshProvider`), since `router.refresh()` never reaches it.
+  const client = useClient();
+  const [result, reexecute] = useQuery({
     query: ItemPageQuery,
     variables: { itemId, type: itemType },
     requestPolicy: "cache-and-network",
   });
   const [state, setState] = useState<State>({ phase: "loading" });
+  const refresh = useCallback(
+    () => reexecute({ requestPolicy: "network-only" }),
+    [reexecute],
+  );
   const { data, error } = result;
 
   useEffect(() => {
@@ -49,7 +58,7 @@ export function ItemPane({ itemId, itemType, cellarId }: ItemPaneProps) {
       return;
     }
     let live = true;
-    loadItemPageData(null, itemType, itemId, data).then(
+    loadItemPageData(paneQuery(client), itemType, itemId, data).then(
       (loaded) => {
         if (!live) return;
         setState(
@@ -65,18 +74,20 @@ export function ItemPane({ itemId, itemType, cellarId }: ItemPaneProps) {
     return () => {
       live = false;
     };
-  }, [data, error, itemId, itemType]);
+  }, [client, data, error, itemId, itemType]);
 
   if (state.phase === "ready") {
     return (
-      <div data-testid="item-pane">
-        <ItemPageView
-          {...state.data}
-          selected={null}
-          parent={cellarId === undefined ? "/" : `/cellars/${cellarId}/items`}
-          pane
-        />
-      </div>
+      <PaneRefreshProvider value={refresh}>
+        <div data-testid="item-pane">
+          <ItemPageView
+            {...state.data}
+            selected={null}
+            parent={cellarId === undefined ? "/" : `/cellars/${cellarId}/items`}
+            pane
+          />
+        </div>
+      </PaneRefreshProvider>
     );
   }
   return (

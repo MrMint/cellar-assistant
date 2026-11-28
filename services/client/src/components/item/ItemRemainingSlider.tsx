@@ -1,6 +1,5 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { Slider as SliderPrimitive } from "radix-ui";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useMutation } from "urql";
@@ -15,6 +14,7 @@ import { useInterval } from "@/utilities/hooks";
 import { FinishBottleDialogs } from "./FinishBottleDialogs";
 import { ItemSection } from "./ItemSection";
 import { LoadingButton } from "./LoadingButton";
+import { useRefreshAfterWrite } from "./parts/pane-refresh";
 import { useFinishBottle } from "./useFinishBottle";
 
 export type ItemRemainingSliderProps = {
@@ -66,7 +66,7 @@ export const ItemRemainingSlider = ({
   itemName,
   cellarName,
 }: ItemRemainingSliderProps) => {
-  const router = useRouter();
+  const refreshAfterWrite = useRefreshAfterWrite();
   const [isPending, startTransition] = useTransition();
   const [percent, setPercent] = useState(percentageRemaining);
   const [now, setNow] = useState<number | null>(null);
@@ -130,7 +130,7 @@ export const ItemRemainingSlider = ({
         setError(result.error.message);
         return;
       }
-      router.refresh();
+      refreshAfterWrite();
     });
   }, 400);
 
@@ -146,7 +146,7 @@ export const ItemRemainingSlider = ({
         setError(result.error.message);
         return;
       }
-      router.refresh();
+      refreshAfterWrite();
     });
   };
 

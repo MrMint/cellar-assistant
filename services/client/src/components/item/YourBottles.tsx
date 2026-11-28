@@ -26,6 +26,7 @@ import { useItemActions } from "./ItemActions";
 import { ItemRemainingSlider } from "./ItemRemainingSlider";
 import { bottleStateLine, type YourBottle } from "./item-page-model";
 import { checkInBottle } from "./parts/item-writes";
+import { useRefreshAfterWrite } from "./parts/pane-refresh";
 
 export type YourBottlesProps = {
   itemId: string;
@@ -128,6 +129,13 @@ export function YourBottles({
   addableCellars = [],
 }: YourBottlesProps) {
   const actions = useItemActions();
+  // F-156: `changed()` refreshes the page; in the desktop pane this re-reads
+  // the pane's own query too.
+  const refreshAfterWrite = useRefreshAfterWrite();
+  const changed = () => {
+    actions?.changed();
+    refreshAfterWrite();
+  };
   const [adding, setAdding] = useState(false);
   const [checking, startCheckIn] = useTransition();
   const [, checkIn] = useMutation(CheckInMutation);
@@ -151,7 +159,7 @@ export function YourBottles({
         });
         return;
       }
-      actions?.changed();
+      changed();
       notify("Checked in", {
         undo: () => {
           void result.undo().then((undone) => {
@@ -161,7 +169,7 @@ export function YourBottles({
                 description: undone.message,
               });
             }
-            actions?.changed();
+            changed();
           });
         },
       });

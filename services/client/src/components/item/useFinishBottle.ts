@@ -1,6 +1,5 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useCallback, useReducer } from "react";
 import { useMutation } from "urql";
 import {
@@ -20,6 +19,7 @@ import {
   performUndo,
   type WriteOutcome,
 } from "./finish-bottle";
+import { useRefreshAfterWrite } from "./parts/pane-refresh";
 
 export type FinishBottle = {
   state: FinishState;
@@ -47,7 +47,7 @@ export function useFinishBottle({
   cellarId: string;
   cellarItemId: string;
 }): FinishBottle {
-  const router = useRouter();
+  const refreshAfterWrite = useRefreshAfterWrite();
   const [state, dispatch] = useReducer(finishReducer, initialFinishState);
   const [, emptyItem] = useMutation(EmptyCellarItemMutation);
   const [, updateItem] = useMutation(UpdateCellarItemMutation);
@@ -73,7 +73,7 @@ export function useFinishBottle({
         ? { ok: true }
         : { ok: false, message: result.error.message };
     },
-    refresh: () => router.refresh(),
+    refresh: () => refreshAfterWrite(),
   };
 
   const request = useCallback(

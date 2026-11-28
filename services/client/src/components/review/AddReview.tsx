@@ -1,11 +1,11 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { useMutation } from "urql";
 import { formatKitScore, Stars } from "@/components/app/parts/Stars";
 import { RatingInput } from "@/components/app/RatingInput";
 import type { ApiItemType } from "@/components/cellar-api/itemTypes";
+import { useRefreshAfterWrite } from "@/components/item/parts/pane-refresh";
 import { Button } from "@/components/ui/button";
 import {
   AddItemReviewMutation,
@@ -55,7 +55,7 @@ export const AddReview = ({
   type,
   myReview = null,
 }: AddReviewProps) => {
-  const router = useRouter();
+  const refreshAfterWrite = useRefreshAfterWrite();
   const [isPending, startTransition] = useTransition();
   const [open, setOpen] = useState(false);
   // F-146 / F-147: the editor's draft. It is seeded from the saved review
@@ -79,7 +79,7 @@ export const AddReview = ({
 
   const finish = () => {
     setOpen(false);
-    router.refresh();
+    refreshAfterWrite();
   };
 
   const handleClick = () => {
