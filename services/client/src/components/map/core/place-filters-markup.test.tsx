@@ -23,7 +23,10 @@ const render = (listName: string | null) =>
 describe("the map's filter row on a list's link (F-191, CC-6)", () => {
   test("names the list, lit, and no Mine chip claims a friend's list", () => {
     const out = render("Their bars");
-    assert.match(out, /aria-pressed="true"[^>]*>(?:(?!<\/button>).)*Their bars/);
+    assert.match(
+      out,
+      /aria-pressed="true"[^>]*>(?:(?!<\/button>).)*Their bars/,
+    );
     assert.doesNotMatch(out, />Mine</);
   });
 
