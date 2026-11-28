@@ -2,11 +2,11 @@
  * `RecipeLoveButton` (D9) writes the state the tap asked for — `setRecipeLove`
  * with `loved` — never a flip, so a retried request (its first answer lost)
  * lands on the same state instead of taking the Love back. happy-dom, with
- * `useMutation` answering by hand.
+ * each write answered by hand.
  */
-import { mock } from "bun:test";
+import { spyOn } from "bun:test";
 import assert from "node:assert/strict";
-import { afterEach, beforeEach, describe, test } from "node:test";
+import { after, afterEach, beforeEach, describe, test } from "node:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 
 GlobalRegistrator.register({ url: "http://localhost/recipes/r1" });
@@ -14,36 +14,49 @@ GlobalRegistrator.register({ url: "http://localhost/recipes/r1" });
   globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
 ).IS_REACT_ACT_ENVIRONMENT = true;
 
+/*
+ * No `mock.module` here: a module mock outlives this file in one bun process
+ * and broke make-mode's urql (F-118, H-71). The client's own `fetch` answers
+ * each write by hand, and `notify` is spied on and restored.
+ */
 type Answer = { data?: { setRecipeLove: Record<string, unknown> } };
 let writes: {
   variables: Record<string, unknown>;
   resolve: (answer: Answer) => void;
 }[];
-const realUrql = await import("urql");
-mock.module("urql", () => ({
-  ...realUrql,
-  useMutation: () => [
-    { fetching: false, stale: false },
-    (variables: Record<string, unknown>) =>
-      new Promise<Answer>((resolve) => {
-        writes.push({ variables, resolve });
-      }),
-  ],
-}));
+const answerByHand: typeof fetch = async (_url, init) => {
+  const body = JSON.parse(String(init?.body ?? "{}")) as {
+    variables?: Record<string, unknown>;
+  };
+  const answer = await new Promise<Answer>((resolve) => {
+    writes.push({ variables: body.variables ?? {}, resolve });
+  });
+  return new Response(JSON.stringify(answer), {
+    headers: { "content-type": "application/json" },
+  });
+};
 
 let notes: string[];
-mock.module("@/components/app/notify", () => ({
-  notify: (message: string) => {
+const notifyModule = await import("@/components/app/notify");
+const notifySpy = spyOn(notifyModule, "notify").mockImplementation(
+  (message: string) => {
     notes.push(message);
     return message;
   },
-  dismissNotification: () => {},
-}));
+);
+after(() => notifySpy.mockRestore());
 
 const React = await import("react");
 const { act } = React;
 const { createRoot } = await import("react-dom/client");
+const { Client, Provider, fetchExchange } = await import("urql");
 const { RecipeLoveButton } = await import("./RecipeLoveButton");
+
+const client = new Client({
+  url: "http://test.invalid/graphql",
+  exchanges: [fetchExchange],
+  fetch: answerByHand,
+});
 
 let container: HTMLElement;
 let root: ReturnType<typeof createRoot>;
@@ -68,7 +81,11 @@ const button = () => {
 };
 const mount = async (loved: boolean) => {
   await act(async () =>
-    root.render(<RecipeLoveButton recipeId="r1" loved={loved} />),
+    root.render(
+      <Provider value={client}>
+        <RecipeLoveButton recipeId="r1" loved={loved} />
+      </Provider>,
+    ),
   );
 };
 const answer = async (index: number, payload: Record<string, unknown>) => {

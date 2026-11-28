@@ -6,6 +6,7 @@ import {
   type ReactNode,
   useEffect,
   useMemo,
+  useRef,
   useState,
   useSyncExternalStore,
 } from "react";
@@ -40,7 +41,7 @@ import {
   aiJobHref,
   aiJobOutcome,
   anyRunning,
-  failedLine,
+  failedGroupLine,
   readyDetail,
   readyLine,
   runningLine,
@@ -168,7 +169,12 @@ export function HomeInbox({
   const tray = trayJobs(jobs, seenSet);
 
   const [, acceptRequest] = useMutation(AcceptFriendRequestMutation);
+  // F-124: the row stays tappable through its 160 ms exit, so a second tap
+  // must not send a second accept (whose NotFound would read as a failure).
+  const accepting = useRef<Set<string>>(new Set());
   const accept = async (requestId: string, name: string) => {
+    if (accepting.current.has(requestId)) return;
+    accepting.current.add(requestId);
     setAnswered((current) => new Set(current).add(requestId));
     const response = await acceptRequest({ requestId });
     const failure = response.error
@@ -181,6 +187,8 @@ export function HomeInbox({
           return result.ok ? null : result.error;
         })();
     if (failure !== null) {
+      // Answered stays held on success: the row is leaving for good.
+      accepting.current.delete(requestId);
       setAnswered((current) => {
         const next = new Set(current);
         next.delete(requestId);
@@ -206,7 +214,9 @@ export function HomeInbox({
       <AiJobTray
         jobs={tray}
         quotas={quotas}
-        onDismiss={(job) => markSeen(seenKeyOf(job))}
+        onDismiss={(dismissed) => {
+          for (const job of dismissed) markSeen(seenKeyOf(job));
+        }}
       />
       {/* Where `/discoveries` and `/map/scans` now land (D1). */}
       <div id="waiting" className="-mb-8 scroll-mt-4" />
@@ -269,16 +279,40 @@ export function HomeInbox({
   );
 }
 
-/** The tray's jobs: failures nobody dismissed first, then what is reading. */
+/** One tray row: a job, or (F-32) every failed list insight as one. */
+export type TrayEntry = {
+  readonly key: string;
+  /** One job; more than one only for folded list insights. */
+  readonly jobs: readonly [AiJob, ...AiJob[]];
+};
+
+/**
+ * The tray's rows: failures nobody dismissed first, then what is reading.
+ * Failed list insights fold into one row where the first stood (F-32): they
+ * are background work, and one row per list pushed "You're at" and Open
+ * below the fold.
+ */
 export const trayJobs = (
   jobs: readonly AiJob[],
   seen: ReadonlySet<string>,
-): AiJob[] => [
-  ...jobs.filter(
+): TrayEntry[] => {
+  const failed = jobs.filter(
     (job) => job.status === "FAILED" && !seen.has(seenHash(seenKeyOf(job))),
-  ),
-  ...jobs.filter((job) => job.status === "RUNNING"),
-];
+  );
+  const insights = failed.filter((job) => job.kind === "TIER_LIST_INSIGHTS");
+  const entries: TrayEntry[] = [];
+  for (const job of failed) {
+    if (job.kind !== "TIER_LIST_INSIGHTS") {
+      entries.push({ key: job.id, jobs: [job] });
+    } else if (job === insights[0]) {
+      entries.push({ key: "insights", jobs: [job, ...insights.slice(1)] });
+    }
+  }
+  for (const job of jobs) {
+    if (job.status === "RUNNING") entries.push({ key: job.id, jobs: [job] });
+  }
+  return entries;
+};
 
 /** A row leaving the list collapses (design §4.7: removals, 160 ms). */
 function Collapse({ children }: { children: ReactNode }) {
@@ -414,7 +448,11 @@ function InboxRow({
               {item.check.count} to check
             </PressLink>
           }
-          detail={`${item.check.name} · ${item.check.fields}`}
+          detail={
+            item.check.name === null
+              ? item.check.fields
+              : `${item.check.name} · ${item.check.fields}`
+          }
           trailing={<Chevron />}
         />
       );
@@ -485,9 +523,9 @@ function AiJobTray({
   quotas,
   onDismiss,
 }: {
-  jobs: readonly AiJob[];
+  jobs: readonly TrayEntry[];
   quotas: readonly AiQuotaRow[];
-  onDismiss: (job: AiJob) => void;
+  onDismiss: (jobs: readonly AiJob[]) => void;
 }) {
   const [all, setAll] = useState(false);
   const online = useOnline();
@@ -502,28 +540,31 @@ function AiJobTray({
     >
       <ul className="m-0 flex list-none flex-col divide-y divide-rule p-0">
         <AnimatePresence initial={false}>
-          {shown.map((job) => (
-            <Collapse key={job.id}>
-              {job.status === "RUNNING" ? (
-                <Row
-                  leading={<Tile icon={AI} breathe={online} />}
-                  title={
-                    <>
-                      {runningLine(job)}
-                      <span className="sr-only"> — in progress</span>
-                    </>
-                  }
-                  detail={online ? "Working on it" : "Waits for a connection"}
-                />
-              ) : (
-                <FailedJob
-                  job={job}
-                  quotas={quotas}
-                  onDismiss={() => onDismiss(job)}
-                />
-              )}
-            </Collapse>
-          ))}
+          {shown.map(({ key, jobs: group }) => {
+            const [job] = group;
+            return (
+              <Collapse key={key}>
+                {job.status === "RUNNING" ? (
+                  <Row
+                    leading={<Tile icon={AI} breathe={online} />}
+                    title={
+                      <>
+                        {runningLine(job)}
+                        <span className="sr-only"> — in progress</span>
+                      </>
+                    }
+                    detail={online ? "Working on it" : "Waits for a connection"}
+                  />
+                ) : (
+                  <FailedJob
+                    jobs={group}
+                    quotas={quotas}
+                    onDismiss={() => onDismiss(group)}
+                  />
+                )}
+              </Collapse>
+            );
+          })}
         </AnimatePresence>
       </ul>
       {more > 0 && (
@@ -543,14 +584,16 @@ function AiJobTray({
 }
 
 function FailedJob({
-  job,
+  jobs,
   quotas,
   onDismiss,
 }: {
-  job: AiJob;
+  jobs: TrayEntry["jobs"];
   quotas: readonly AiQuotaRow[];
   onDismiss: () => void;
 }) {
+  const [job] = jobs;
+  const line = failedGroupLine(jobs);
   // `retryAt` is phrased in the viewer's own zone, so only after mount.
   const [now, setNow] = useState<Date | null>(null);
   useEffect(() => setNow(new Date()), []);
@@ -558,7 +601,8 @@ function FailedJob({
     now === null ? { ...job, retryAt: null } : job,
     now === null ? {} : { now },
   );
-  const href = aiJobHref(job);
+  // Folded insights have no one list to try again on.
+  const href = jobs.length === 1 ? aiJobHref(job) : null;
   const limit =
     outcome.kind === "user-cap" || outcome.kind === "service-budget";
   const detail =
@@ -574,7 +618,7 @@ function FailedJob({
             tone={outcome.tone === "danger" ? "danger" : "warn"}
           />
         }
-        title={failedLine(job)}
+        title={line}
         detail={detail}
         trailing={
           <>
@@ -586,7 +630,7 @@ function FailedJob({
               </Button>
             )}
             <IconButton
-              aria-label={`Dismiss: ${failedLine(job)}`}
+              aria-label={`Dismiss: ${line}`}
               onClick={() => {
                 feedback("tick");
                 onDismiss();

@@ -1201,6 +1201,30 @@ builder.mutationField("removeItemFromCellar", (t) =>
   }),
 );
 
+builder.mutationField("restoreCellarItem", (t) =>
+  t.field({
+    type: CellarItemType,
+    description:
+      "F-79: Undo for `removeItemFromCellar` — the bottle back under its own " +
+      "id and `createdAt`, so it returns to its place in the list. Creator " +
+      "or co-owner; again is a no-op. The check-ins the removal detached " +
+      "stay detached.",
+    errors: {},
+    args: {
+      cellarId: t.arg.id({ required: true }),
+      cellarItemId: t.arg.id({ required: true }),
+      createdAt: t.arg({ type: "DateTime", required: true }),
+      input: t.arg({ type: AddCellarItemInput, required: true }),
+    },
+    resolve: (_root, args, context) =>
+      context.actor(CellarActorDescriptor, String(args.cellarId)).restoreItem({
+        ...toAddItemInput(args.input),
+        cellarItemId: String(args.cellarItemId),
+        createdAt: String(args.createdAt),
+      }),
+  }),
+);
+
 builder.mutationField("setCellarItemPercentage", (t) =>
   t.field({
     type: CellarItemType,

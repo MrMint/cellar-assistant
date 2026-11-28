@@ -13,9 +13,11 @@ import { closeTopOnEscape } from "./layers";
  * `?` (the keys), N (Add), M (Map) and the `G` chords (G C Cellars, G L
  * Lists, G O More, G M Me). A screen adds its own (J/K, Enter, 1–5, ⌫, T, F,
  * O on the cellar grid) with `useAppKey`, live while it is mounted; a
- * screen's key wins over the shell's.
+ * screen's key wins over the shell's. A handler that returns `false` declines
+ * the key (a desktop key on a phone, say), and it goes on to the shell's keys
+ * and then the browser, whose default is kept.
  */
-export type AppKeyHandler = (event: KeyboardEvent | AppKeyEvent) => void;
+export type AppKeyHandler = (event: KeyboardEvent | AppKeyEvent) => unknown;
 
 /** The parts of a keyboard event the handlers read (React's or the DOM's). */
 export type AppKeyEvent = {
@@ -58,6 +60,17 @@ export const isTyping = (target: EventTarget | null): boolean => {
   return false;
 };
 
+/**
+ * Enter and Space on a focused control are the control's: they press the
+ * button or follow the link (F-90), never a screen's key.
+ */
+const pressesControl = (key: string, target: EventTarget | null): boolean =>
+  (key === "Enter" || key === " ") &&
+  typeof Element !== "undefined" &&
+  target instanceof Element &&
+  target.closest("button, a[href], summary, [role='button'], [role='link']") !==
+    null;
+
 /** Whether the key landed inside an open dialog (a sheet, a popover). */
 const inDialog = (target: EventTarget | null): boolean =>
   typeof Element !== "undefined" &&
@@ -98,6 +111,7 @@ export function handleAppKey(
     return closeTopOnEscape();
   }
   if (isTyping(event.target) || inDialog(event.target)) return false;
+  if (pressesControl(event.key, event.target)) return false;
 
   const key = event.key.length === 1 ? event.key.toLowerCase() : event.key;
   if (chord.armed) {
@@ -115,8 +129,7 @@ export function handleAppKey(
   }
 
   const own = screenKeys.get(key);
-  if (own !== undefined && own.length > 0) {
-    own.at(-1)?.(event);
+  if (own !== undefined && own.length > 0 && own.at(-1)?.(event) !== false) {
     return true;
   }
 

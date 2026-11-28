@@ -1,5 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import { canVote, undoWrite, voteToast, voteWrite } from "./vote-plan";
+import {
+  canVote,
+  undoWrite,
+  voteToast,
+  voteToastId,
+  voteWrite,
+} from "./vote-plan";
 
 /**
  * The versions page's two writes (Recipes-Browse 16–20): a tap on Up or Down,
@@ -53,12 +59,19 @@ describe("canVote — the author never votes on their own version", () => {
   });
 });
 
-describe("voteToast", () => {
-  test("names what happened", () => {
-    expect(voteToast({ kind: "vote", voteType: "upvote" })).toBe("Voted up");
-    expect(voteToast({ kind: "vote", voteType: "downvote" })).toBe(
-      "Voted down",
+describe("voteToast (F-116, Recipes-Browse 17, 18, 20)", () => {
+  test("names what happened, and to which version", () => {
+    expect(voteToast({ kind: "vote", voteType: "upvote" }, "Negroni")).toBe(
+      "You voted up Negroni",
     );
-    expect(voteToast({ kind: "remove" })).toBe("Vote taken back");
+    expect(voteToast({ kind: "vote", voteType: "downvote" }, "Negroni")).toBe(
+      "You voted down Negroni",
+    );
+    expect(voteToast({ kind: "remove" }, "Negroni")).toBe("Vote taken back");
+  });
+
+  test("one toast per version: the next replaces the last, never stacks", () => {
+    expect(voteToastId("r1")).toBe(voteToastId("r1"));
+    expect(voteToastId("r1")).not.toBe(voteToastId("r2"));
   });
 });

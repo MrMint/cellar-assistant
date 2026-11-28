@@ -76,7 +76,14 @@ export default async function RecipesPage({
     ? (published.data.totalCount ?? undefined)
     : undefined;
   const mine = (
-    <YourBarAndRecipes rows={rows} publishedTotal={publishedTotal} />
+    <YourBarAndRecipes
+      rows={rows}
+      publishedTotal={publishedTotal}
+      draftsTotal={
+        drafts.ok ? (drafts.data.totalCount ?? undefined) : undefined
+      }
+      draftsFailure={drafts.ok ? undefined : drafts.error.message}
+    />
   );
 
   return (
@@ -109,19 +116,13 @@ export default async function RecipesPage({
 }
 
 /** Your bar (X14 / G29), then your drafts and recipes (X15). */
-function YourBarAndRecipes({
-  rows,
-  publishedTotal,
-}: {
-  rows: ComponentProps<typeof MyRecipes>["rows"];
-  publishedTotal?: number;
-}) {
+function YourBarAndRecipes(props: ComponentProps<typeof MyRecipes>) {
   return (
     <>
       <Suspense fallback={<BarEntryCardFallback />}>
         <BarEntryCard />
       </Suspense>
-      <MyRecipes rows={rows} publishedTotal={publishedTotal} />
+      <MyRecipes {...props} />
     </>
   );
 }

@@ -39,6 +39,7 @@ import type { ApiContext } from "../context.ts";
 import { builder } from "./builder.ts";
 import { ItemInterface, ItemTypeEnum } from "./item.ts";
 import { connectionFromPage, toPageArgs } from "./pagination.ts";
+import { Viewer } from "./viewer.ts";
 
 const OnboardingStatusEnum = builder.enumType("OnboardingStatus", {
   description:
@@ -233,9 +234,8 @@ const ConfirmItemOnboardingInput = builder.inputType(
 
 const SaveDraftInput = builder.inputType("SaveDraftInput", {
   description:
-    "SV-B: an unfinished bottle, kept on the account. A draft missing a " +
-    "floor field (its name, or an attribute the item type requires) is saved " +
-    "as `NEEDS_DETAILS`; one whose floor is met keeps its status, for " +
+    "SV-B: an unfinished bottle, kept on the account. Every saved draft is " +
+    "`NEEDS_DETAILS`, floor met or not, and listed in `needsDetails` until " +
     "`confirmItemOnboarding`.",
   fields: (t) => ({
     onboardingId: t.id({
@@ -455,7 +455,7 @@ builder.queryField("needsDetails", (t) =>
     description:
       "SV-B: your saved “Needs details” drafts, newest first — one cellar's, " +
       "or all of yours without `cellarId`. Empty when signed out. Pages over " +
-      "the newest 200.",
+      "every draft `needsDetailsCount` counts.",
     errors: {},
     args: {
       ...t.arg.connectionArgs(),
@@ -477,16 +477,33 @@ builder.queryField("needsDetails", (t) =>
   }),
 );
 
+/**
+ * F-74: `needsDetailsCount` is a non-null root `Int`, so a `ValidationError`
+ * from the actor would null the whole response and hide `needsDetails`' own
+ * error value. A `cellarId` that is no UUID names no cellar: none of the
+ * viewer's drafts is aimed at it, so its count is 0, without a call.
+ */
+const UUID_SHAPE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 builder.queryField("needsDetailsCount", (t) =>
   t.int({
     description:
       "SV-B: how many of your drafts need details — on one cellar, or in all " +
       "of yours without `cellarId`. A draft is not a cellar item, so this is " +
-      "not in the cellar's item counts. 0 when signed out.",
+      "not in the cellar's item counts. 0 when signed out, and for a " +
+      "`cellarId` that is not a UUID (`needsDetails` reports that one).",
     args: { cellarId: t.arg.id({ required: false }) },
     resolve: async (_root, args, context) => {
       const viewerId = context.ctx.viewerId;
       if (viewerId === null) return 0;
+      if (
+        args.cellarId !== undefined &&
+        args.cellarId !== null &&
+        !UUID_SHAPE.test(String(args.cellarId))
+      ) {
+        return 0;
+      }
       return await context
         .actor(
           DraftsCollectionActorDescriptor,
@@ -494,6 +511,22 @@ builder.queryField("needsDetailsCount", (t) =>
         )
         .needsDetailsCount(needsDetailsArgs(args.cellarId));
     },
+  }),
+);
+
+builder.objectField(Viewer, "unconfirmedBottleCount", (t) =>
+  t.int({
+    description:
+      "F-76: Home's “n to check” — how many of your bottles (open or " +
+      "sealed, not finished, in cellars you created or co-own) are of an " +
+      "item you created whose `unconfirmedFields` is not empty.",
+    resolve: async (viewer, _args, context) =>
+      await context
+        .actor(
+          DraftsCollectionActorDescriptor,
+          viewerCollectionActorId(viewer.id),
+        )
+        .unconfirmedBottleCount(),
   }),
 );
 

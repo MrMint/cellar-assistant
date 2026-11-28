@@ -20,20 +20,28 @@ import type {
 import {
   DraftsCollectionActorDescriptor,
   FIELD_CONFIDENCE_KEY,
+  FIELD_CONFIDENCES,
+  ITEM_TYPES,
   isItemType,
   requireReverseEdgeBatch,
   sanitiseFieldConfidence,
   ValidationError,
 } from "@cellar-assistant/contracts";
 import { itemOnboardings } from "@cellar-assistant/db";
-import { and, desc, eq, inArray, type SQL } from "@cellar-assistant/db/orm";
+import {
+  and,
+  desc,
+  eq,
+  inArray,
+  type SQL,
+  sql,
+} from "@cellar-assistant/db/orm";
+import { cellarOwnedBySql } from "../lib/cellar-ownership.ts";
 import { ViewerCollectionActorBase } from "../lib/collection-actor-base.ts";
 import { requireUuidValue } from "../lib/collection-sql.ts";
+import { ARCS } from "../lib/item-arcs.ts";
 import { ITEM_TABLES } from "../lib/item-bindings.ts";
 import { onboardingRowToDto } from "./item-onboarding-actor.ts";
-
-/** A "Needs details" list is a handful of bottles; this only bounds it. */
-const NEEDS_DETAILS_LIMIT = 200;
 
 /**
  * The fields a label read guessed: those it gave a confidence for
@@ -65,8 +73,10 @@ export class DraftsCollectionActor
         .select()
         .from(itemOnboardings)
         .where(this.#needsDetailsWhere(ctx, args))
-        .orderBy(desc(itemOnboardings.updatedAt), desc(itemOnboardings.id))
-        .limit(NEEDS_DETAILS_LIMIT);
+        // No limit (F-73): the API pages over this list and the count counts
+        // every row, so a bound here left the oldest drafts unreachable. A
+        // draft is written one Finish later at a time, by its owner alone.
+        .orderBy(desc(itemOnboardings.updatedAt), desc(itemOnboardings.id));
       return rows.map(onboardingRowToDto);
     });
   }
@@ -153,6 +163,56 @@ export class DraftsCollectionActor
         });
       },
     );
+  }
+
+  async unconfirmedBottleCount(ctx: Ctx): Promise<number> {
+    return await this.batch(ctx, null, 0, async () => {
+      const viewer = this.key;
+      // One join per item table (`ARCS`): a bottle names exactly one item.
+      // The guessed-fields test is `guessedFieldsOf` in SQL — a key of
+      // `defaults.fieldConfidence` with a known level — less `confirmed_fields`.
+      const alias = (type: ItemType) => `it_${type.toLowerCase()}`;
+      const joins = sql.join(
+        ITEM_TYPES.map(
+          (type) =>
+            sql`left join ${ITEM_TABLES[type]} ${sql.identifier(alias(type))}
+                on ${sql.identifier(alias(type))}.id = ${ARCS.cellarItems.column(type, "ci")}`,
+        ),
+        sql` `,
+      );
+      const coalesced = (column: string) =>
+        sql`coalesce(${sql.join(
+          ITEM_TYPES.map(
+            (type) =>
+              sql`${sql.identifier(alias(type))}.${sql.identifier(column)}`,
+          ),
+          sql`, `,
+        )})`;
+      const { rows } = await this.db.execute<{ n: number }>(sql`
+        select count(*)::int as n
+        from public.cellar_items ci
+        join public.cellars c on c.id = ci.cellar_id
+        ${joins}
+        join public.item_onboardings o
+          on o.id = ${coalesced("item_onboarding_id")}
+        where ${cellarOwnedBySql(viewer, "c")}
+          and ci.empty_at is null
+          and o.user_id = ${viewer}::uuid
+          and ${coalesced("created_by_id")} = ${viewer}::uuid
+          and jsonb_typeof(o.defaults -> ${FIELD_CONFIDENCE_KEY}) = 'object'
+          and exists (
+            select 1
+            from jsonb_each(o.defaults -> ${FIELD_CONFIDENCE_KEY}) as g(field, level)
+            where jsonb_typeof(g.level) = 'string'
+              and (g.level #>> '{}') in (${sql.join(
+                FIELD_CONFIDENCES.map((level) => sql`${level}`),
+                sql`, `,
+              )})
+              and not (g.field = any(o.confirmed_fields))
+          )
+      `);
+      return rows[0]?.n ?? 0;
+    });
   }
 
   #needsDetailsWhere(ctx: Ctx, args: NeedsDetailsArgs): SQL | undefined {
