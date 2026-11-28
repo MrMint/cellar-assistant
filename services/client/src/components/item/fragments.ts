@@ -595,3 +595,75 @@ export const BottleFriendsPageQuery = graphql(
 `,
   [ActorErrorFieldsFragment],
 );
+
+/**
+ * F-145: the whole bottle, read just before Delete bottle removes it, so its
+ * Undo (`restoreCellarItem`, F-79) can put back the same row — its own id,
+ * `createdAt` and every field — rather than a bottle rebuilt from what the
+ * page happened to hold.
+ */
+export const BottleForRestoreQuery = graphql(
+  `
+  query BottleForRestore($cellarId: ID!, $bottleId: ID!) {
+    cellar(id: $cellarId) {
+      __typename
+      ... on Cellar {
+        id
+        item(id: $bottleId) {
+          __typename
+          id
+          cellarId
+          createdAt
+          acquiredOn
+          displayImageId
+          drinkFrom
+          drinkUntil
+          emptyAt
+          location
+          openAt
+          packagedOn
+          percentageRemaining
+          priceAmount
+          priceCurrency
+          sourceMenuItemId
+          sourcePlaceId
+          sourceType
+          item {
+            __typename
+            id
+            type
+          }
+        }
+      }
+      ...ActorErrorFields
+    }
+  }
+`,
+  [ActorErrorFieldsFragment],
+);
+
+/** F-145: Delete bottle's Undo (F-79). */
+export const RestoreCellarItemMutation = graphql(
+  `
+  mutation RestoreCellarItem(
+    $cellarId: ID!
+    $cellarItemId: ID!
+    $createdAt: DateTime!
+    $input: AddCellarItemInput!
+  ) {
+    restoreCellarItem(
+      cellarId: $cellarId
+      cellarItemId: $cellarItemId
+      createdAt: $createdAt
+      input: $input
+    ) {
+      __typename
+      ... on CellarItem {
+        id
+      }
+      ...ActorErrorFields
+    }
+  }
+`,
+  [ActorErrorFieldsFragment],
+);

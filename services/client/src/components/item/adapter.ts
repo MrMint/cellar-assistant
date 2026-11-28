@@ -731,3 +731,64 @@ export const heldBackNote = (
   total === null || total === undefined || total <= shown
     ? null
     : `Showing the ${order} ${shown} of ${total} ${noun}.`;
+
+/** F-145: the bottle as `BottleForRestoreQuery` read it. */
+export type BottleRestoreRow = {
+  id: string;
+  cellarId: string;
+  createdAt: unknown;
+  acquiredOn?: unknown;
+  displayImageId?: string | null;
+  drinkFrom?: unknown;
+  drinkUntil?: unknown;
+  emptyAt?: unknown;
+  location?: string | null;
+  openAt?: unknown;
+  packagedOn?: unknown;
+  percentageRemaining: number;
+  priceAmount?: number | null;
+  priceCurrency?: string | null;
+  sourceMenuItemId?: string | null;
+  sourcePlaceId?: string | null;
+  sourceType?: "import" | "manual" | "menu_discovery" | "menu_scan" | null;
+  item: { id: string; type: string };
+};
+
+const asDate = (value: unknown): string | null =>
+  typeof value === "string" ? value : null;
+
+/**
+ * F-145: `restoreCellarItem`'s variables from the bottle read before it was
+ * deleted — the same id and `createdAt`, so it returns to its place, and
+ * every field it had. No read is no restore (null): the Undo is then not
+ * offered rather than one that would put back a different bottle.
+ */
+export const restoreBottleVariables = (
+  row: BottleRestoreRow | null | undefined,
+) => {
+  if (row === null || row === undefined) return null;
+  const createdAt = asDate(row.createdAt);
+  if (createdAt === null) return null;
+  return {
+    cellarId: row.cellarId,
+    cellarItemId: row.id,
+    createdAt,
+    input: {
+      item: { id: row.item.id, type: row.item.type as ApiItemType },
+      acquiredOn: asDate(row.acquiredOn),
+      displayImageId: row.displayImageId ?? null,
+      drinkFrom: asDate(row.drinkFrom),
+      drinkUntil: asDate(row.drinkUntil),
+      emptyAt: asDate(row.emptyAt),
+      location: row.location ?? null,
+      openAt: asDate(row.openAt),
+      packagedOn: asDate(row.packagedOn),
+      percentageRemaining: row.percentageRemaining,
+      priceAmount: row.priceAmount ?? null,
+      priceCurrency: row.priceCurrency ?? null,
+      sourceMenuItemId: row.sourceMenuItemId ?? null,
+      sourcePlaceId: row.sourcePlaceId ?? null,
+      sourceType: row.sourceType ?? null,
+    },
+  };
+};

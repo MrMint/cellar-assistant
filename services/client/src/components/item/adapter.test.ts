@@ -16,6 +16,7 @@ import {
   itemSubtitlePhrases,
   myReviewFromRow,
   recipeIngredientFromNode,
+  restoreBottleVariables,
   reviewFromRow,
   teaTextCards,
   tierListEntryFromNode,
@@ -534,5 +535,58 @@ describe("itemPlateStyle (H-2)", () => {
       style: null,
       variety: null,
     });
+  });
+});
+
+describe("F-145: Undo of Delete bottle puts the same bottle back (restoreCellarItem)", () => {
+  const row = {
+    __typename: "CellarItem",
+    id: "b-1",
+    cellarId: "c-1",
+    createdAt: "2026-10-01T09:00:00.000Z",
+    updatedAt: "2026-11-01T09:00:00.000Z",
+    acquiredOn: "2026-09-30",
+    displayImageId: "img-1",
+    drinkFrom: null,
+    drinkUntil: "2030-01-01",
+    emptyAt: null,
+    location: "Rack B",
+    openAt: "2026-10-05T20:00:00.000Z",
+    packagedOn: null,
+    percentageRemaining: 70,
+    priceAmount: 24.5,
+    priceCurrency: "USD",
+    sourceMenuItemId: null,
+    sourcePlaceId: "p-1",
+    sourceType: "manual" as const,
+    item: { __typename: "Tea", id: "t-1", type: "TEA" as const },
+  };
+  test("under its own id and createdAt, with every field it had", () => {
+    assert.deepEqual(restoreBottleVariables(row), {
+      cellarId: "c-1",
+      cellarItemId: "b-1",
+      createdAt: "2026-10-01T09:00:00.000Z",
+      input: {
+        item: { id: "t-1", type: "TEA" },
+        acquiredOn: "2026-09-30",
+        displayImageId: "img-1",
+        drinkFrom: null,
+        drinkUntil: "2030-01-01",
+        emptyAt: null,
+        location: "Rack B",
+        openAt: "2026-10-05T20:00:00.000Z",
+        packagedOn: null,
+        percentageRemaining: 70,
+        priceAmount: 24.5,
+        priceCurrency: "USD",
+        sourceMenuItemId: null,
+        sourcePlaceId: "p-1",
+        sourceType: "manual",
+      },
+    });
+  });
+  test("no read of the bottle is no restore: never a bottle rebuilt from guesses", () => {
+    assert.equal(restoreBottleVariables(null), null);
+    assert.equal(restoreBottleVariables(undefined), null);
   });
 });
