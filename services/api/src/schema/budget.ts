@@ -7,6 +7,10 @@
  * alone, and nothing here passes a user id, so a viewer can only ever read
  * their own usage.
  *
+ * F-230 (FR-16): Google Places has its own monthly allowance, separate from
+ * AI, and it is one more row here — kind `google_places`, `service`
+ * GOOGLE_PLACES — so a Places refusal always has a visible reason.
+ *
  * A connection rather than MC-quota's `[AiQuota!]!`: §1.5/L48 allow no
  * composite list outside a connection's `edges`. One page holds every kind.
  */
@@ -19,13 +23,33 @@ import {
 import { builder } from "./builder.ts";
 import { connectionFromPage, toPageArgs } from "./pagination.ts";
 
+const AiQuotaServiceEnum = builder.enumType("AiQuotaService", {
+  description:
+    "F-230: which allowance a quota row is — an AI kind, or Google Places' " +
+    "one monthly allowance.",
+  values: {
+    AI_MODEL: { value: "ai_model" },
+    GOOGLE_PLACES: { value: "google_places" },
+  } as const,
+});
+
 const AiQuotaType = builder.objectRef<AiQuotaDto>("AiQuota").implement({
   description:
-    "Your own allowance for one kind of AI call this period (SV-A, L5).",
+    "Your own allowance for one kind of AI call this period (SV-A, L5), or " +
+    "(F-230) for Google Places this month.",
   fields: (t) => ({
     kind: t.exposeString("kind", {
       description:
-        "The budget kind, `ai_model/<seam>` — e.g. `ai_model/tier_list_insights`.",
+        "The budget kind, `ai_model/<seam>` — e.g. `ai_model/tier_list_insights` " +
+        "— or `google_places`, every Places endpoint together (F-230).",
+    }),
+    service: t.field({
+      type: AiQuotaServiceEnum,
+      description:
+        "F-230: AI_MODEL for an AI kind, GOOGLE_PLACES for Places' allowance, " +
+        "which always resets monthly.",
+      resolve: (quota) =>
+        quota.kind.startsWith("google_places") ? "google_places" : "ai_model",
     }),
     used: t.exposeInt("used", {
       description: "Your calls counted this period.",

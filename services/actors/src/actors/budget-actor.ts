@@ -940,13 +940,35 @@ export const parseUserCapConfig = (
 ): {
   readonly caps: Readonly<Record<string, UserCap>>;
   readonly period: UserCapPeriod | null;
+  readonly placesMonthly: number | null;
 } => {
-  if (raw === undefined || raw.trim() === "") return { caps: {}, period: null };
+  if (raw === undefined || raw.trim() === "") {
+    return { caps: {}, period: null, placesMonthly: null };
+  }
   const caps: Record<string, UserCap> = {};
   let period: UserCapPeriod | null = null;
+  let placesMonthly: number | null = null;
   for (const entry of raw.split(",")) {
     const text = entry.trim();
     if (text === "") continue;
+    // F-230: `google_places=<monthly>`, Places' one allowance per person.
+    const placesMatch = /^google_places=(.*)$/.exec(text);
+    if (placesMatch !== null) {
+      const calls = Number(placesMatch[1]);
+      if (placesMonthly !== null) {
+        throw new ValidationError(
+          "BUDGET_USER_CAPS names `google_places=` more than once",
+        );
+      }
+      if (!/^\d+$/.test(placesMatch[1] ?? "") || !Number.isSafeInteger(calls) || calls < 1) {
+        throw new ValidationError(
+          `BUDGET_USER_CAPS entry ${JSON.stringify(text)} is not ` +
+            "`google_places=<monthly calls>` with monthly calls >= 1",
+        );
+      }
+      placesMonthly = calls;
+      continue;
+    }
     const periodMatch = /^period=(month|week)$/.exec(text);
     if (periodMatch !== null) {
       if (period !== null) {
@@ -979,13 +1001,42 @@ export const parseUserCapConfig = (
           "`ai_model/embedding=600/4000` or `period=week`",
       );
     }
+    if (
+      periodCap !== undefined &&
+      (match[1] ?? "").startsWith(`${GOOGLE_PLACES_BUDGET_SERVICE}/`)
+    ) {
+      // F-230: a Places kind has no period of its own; `google_places=` is
+      // the month for all of them. Silently ignoring it would be worse.
+      throw new ValidationError(
+        `BUDGET_USER_CAPS entry ${JSON.stringify(text)} gives a Google Places ` +
+          "kind a period cap; Places has one monthly allowance for every " +
+          "endpoint, set with `google_places=<monthly calls>`",
+      );
+    }
     caps[match[1] ?? ""] =
       periodCap === undefined
         ? { hourly, daily }
         : { hourly, daily, period: periodCap };
   }
-  return { caps, period };
+  return { caps, period, placesMonthly };
 };
+
+/**
+ * F-230 (FR-16): **Google Places' own monthly allowance, per person** — one
+ * count across every `google_places/*` endpoint, separate from every AI kind,
+ * on a UTC calendar month whatever `period=` says for AI. It replaces the
+ * per-kind period cap for Places kinds (whose rolling hourly and daily caps
+ * still bind), which used to be ten days of each endpoint — invisible, since
+ * `myQuota` listed AI kinds only, and so a refusal with no visible reason.
+ * `myQuota` now lists it as kind `google_places`.
+ *
+ * A bound, not a forecast: autocomplete is a call per distinct prefix typed,
+ * so a person searching places every day for a month stays well inside it.
+ * Override with `BUDGET_USER_CAPS`'s `google_places=<monthly calls>`. The
+ * service-wide paid pool ({@link DEFAULT_GOOGLE_PLACES_MONTHLY_PAID_CENTS})
+ * still bounds the bill on top.
+ */
+export const DEFAULT_GOOGLE_PLACES_USER_MONTHLY_CALLS = 5_000;
 
 /** {@link parseUserCapConfig}'s per-kind caps alone. */
 export const parseUserCaps = (
@@ -1101,6 +1152,11 @@ export type ModelBudgetPolicy = {
    * across every endpoint ({@link DEFAULT_GOOGLE_PLACES_MONTHLY_PAID_CENTS}).
    */
   readonly googlePlacesMonthlyPaidCents: number;
+  /**
+   * F-230: the calls one person may make to Google Places in one UTC month,
+   * across every endpoint ({@link DEFAULT_GOOGLE_PLACES_USER_MONTHLY_CALLS}).
+   */
+  readonly googlePlacesUserMonthlyCalls: number;
 };
 
 export const readModelBudgetPolicy = (
@@ -1116,6 +1172,8 @@ export const readModelBudgetPolicy = (
     googlePlacesMonthlyPaidCents: parseGooglePlacesPaidCents(
       env.GOOGLE_PLACES_MONTHLY_PAID_CENTS,
     ),
+    googlePlacesUserMonthlyCalls:
+      userCapConfig.placesMonthly ?? DEFAULT_GOOGLE_PLACES_USER_MONTHLY_CALLS,
   };
 };
 
@@ -1551,6 +1609,7 @@ export class BudgetActor
           triggeredBy,
           aggregate.userCaps[budgetKind(kind)] ?? DEFAULT_USER_CAP,
           aggregate.userCapPeriod,
+          aggregate.googlePlacesUserMonthlyCalls,
         );
         if (refusal !== null) {
           return {
@@ -2012,7 +2071,8 @@ export class BudgetActor
     kind: BudgetKind,
     userId: string,
     cap: UserCap,
-    period: UserCapPeriod,
+    aiPeriod: UserCapPeriod,
+    placesMonthly: number,
   ): Promise<{ reason: string; retryAt: string | null } | null> {
     const mine = and(
       eq(apiUsageLog.service, kind.service),
@@ -2043,15 +2103,28 @@ export class BudgetActor
     // SV-A (L5): the calendar period, counted from its first instant. Unlike
     // the windows it does not roll — the whole allowance comes back at once,
     // at `next`, which is what lets a person be told the day it resets.
+    // F-230: a Places kind counts Places' one monthly allowance instead —
+    // every `google_places/*` endpoint together, always a month.
+    const places = kind.service === GOOGLE_PLACES_BUDGET_SERVICE;
+    const period: UserCapPeriod = places ? "month" : aiPeriod;
     const bounds = periodBounds(period);
-    const limit = periodLimit(cap);
+    const limit = places ? placesMonthly : periodLimit(cap);
+    const periodScope = places
+      ? and(
+          eq(apiUsageLog.service, GOOGLE_PLACES_BUDGET_SERVICE),
+          eq(apiUsageLog.triggeredBy, userId),
+          countsAgainstCaps,
+        )
+      : mine;
     const [periodRow] = await tx
       .select({
         used: sql<string>`count(*)`,
         resetsAt: isoSql(bounds.next),
       })
       .from(apiUsageLog)
-      .where(and(mine, sql`${apiUsageLog.createdAt} >= ${bounds.start}`));
+      .where(
+        and(periodScope, sql`${apiUsageLog.createdAt} >= ${bounds.start}`),
+      );
     const used = int(periodRow?.used);
     const periodFull =
       used >= limit
@@ -2102,9 +2175,14 @@ export class BudgetActor
     if (periodFull !== null) {
       return {
         reason:
-          `${USER_CAP_REASON}: this account has made ${periodFull.count} of ` +
-          `its ${periodFull.cap} calls this ${period} to ${budgetKind(kind)}. ` +
-          "It resets at the start of the next one; the caps are BUDGET_USER_CAPS.",
+          places
+            ? `${USER_CAP_REASON}: this account has made ${periodFull.count} of ` +
+              `its ${periodFull.cap} Google Places calls this month ` +
+              `(${budgetKind(kind)} asked for one more). It resets at the ` +
+              "start of the next one; the allowance is BUDGET_USER_CAPS's google_places=."
+            : `${USER_CAP_REASON}: this account has made ${periodFull.count} of ` +
+              `its ${periodFull.cap} calls this ${period} to ${budgetKind(kind)}. ` +
+              "It resets at the start of the next one; the caps are BUDGET_USER_CAPS.",
         retryAt,
       };
     }
@@ -2214,6 +2292,29 @@ export class BudgetActor
         limit: periodLimit(aggregate.userCaps[kind] ?? DEFAULT_USER_CAP),
         resetsAt,
       };
+    });
+    // F-230: Places' one allowance, counted as `#userCapRefusal` counts it —
+    // every Places endpoint together, this UTC month.
+    const month = periodBounds("month");
+    const [placesRow] = await this.db
+      .select({
+        used: sql<string>`count(*)`,
+        resetsAt: isoSql(month.next),
+      })
+      .from(apiUsageLog)
+      .where(
+        and(
+          eq(apiUsageLog.service, GOOGLE_PLACES_BUDGET_SERVICE),
+          eq(apiUsageLog.triggeredBy, viewerId),
+          countsAgainstCaps,
+          sql`${apiUsageLog.createdAt} >= ${month.start}`,
+        ),
+      );
+    quotas.push({
+      kind: GOOGLE_PLACES_BUDGET_SERVICE,
+      used: int(placesRow?.used),
+      limit: aggregate.googlePlacesUserMonthlyCalls,
+      resetsAt: placesRow?.resetsAt ?? nextMonthStart().toISOString(),
     });
     return offsetPage(quotas, page);
   }
