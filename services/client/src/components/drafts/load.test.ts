@@ -45,6 +45,7 @@ mock.module("@/lib/api/urql-server", () => ({
             confirmedFields: [],
             vintageAnswer: "UNANSWERED",
             imageId: `f-${i}`,
+            imageUrl: `u/f-${i}`,
             updatedAt: "2026-11-27T00:00:00Z",
           },
         })),
@@ -53,17 +54,15 @@ mock.module("@/lib/api/urql-server", () => ({
   },
 }));
 
-const { loadNeedsDetails, PRESIGNED_FIRST } = await import("./load");
+const { loadNeedsDetails } = await import("./load");
 
 describe("loadNeedsDetails", () => {
-  test("presigns only the first screenful; later rows read their own in view", async () => {
+  test("takes every photo URL from the one page read, with no per-draft read", async () => {
     imageReads.length = 0;
     const load = await loadNeedsDetails(null);
     assert.equal(load.drafts.length, 30);
-    assert.equal(imageReads.length, PRESIGNED_FIRST);
-    assert.ok(PRESIGNED_FIRST <= 12, "a phone screen's worth");
+    assert.equal(imageReads.length, 0);
     assert.equal(load.drafts[0]?.imageUrl, "u/f-0");
-    // Undefined (not null): DraftThumb reads it when the row is seen.
-    assert.equal(load.drafts[PRESIGNED_FIRST]?.imageUrl, undefined);
+    assert.equal(load.drafts[29]?.imageUrl, "u/f-29");
   });
 });

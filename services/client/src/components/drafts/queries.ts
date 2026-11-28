@@ -23,6 +23,7 @@ export const NeedsDetailsDraftFragment = graphql(`
     confirmedFields
     vintageAnswer
     imageId
+    imageUrl
     updatedAt
   }
 `);
@@ -73,23 +74,6 @@ export const NeedsDetailsCellarQuery = graphql(
   [ActorErrorFieldsFragment],
 );
 
-/** A draft's picture (`imageId` is a `files.id`; the URL is presigned). */
-export const DraftImageQuery = graphql(
-  `
-  query DraftImage($id: ID!) {
-    file(id: $id) {
-      __typename
-      ... on File {
-        id
-        url
-      }
-      ...ActorErrorFields
-    }
-  }
-`,
-  [ActorErrorFieldsFragment],
-);
-
 /** Keep what the person filled in; the draft stays listed until confirmed. */
 export const SaveNeedsDetailsDraftMutation = graphql(
   `
@@ -132,14 +116,14 @@ export const ConfirmNeedsDetailsDraftMutation = graphql(
 );
 
 /**
- * Delete a draft (F-65): the session closes as `MATCHED`, which creates
- * nothing and leaves Needs details (it lists only `NEEDS_DETAILS`). A closed
- * session refuses `saveDraft`, so Undo is the wait before this is sent.
+ * Delete a draft (F-65, H-133): the session becomes `DISCARDED`, which is
+ * listed and counted nowhere. A discarded session refuses `saveDraft`, so
+ * Undo is the wait before this is sent.
  */
-export const CloseNeedsDetailsDraftMutation = graphql(
+export const DiscardNeedsDetailsDraftMutation = graphql(
   `
-  mutation CloseNeedsDetailsDraft($onboardingId: ID!) {
-    closeItemOnboarding(onboardingId: $onboardingId) {
+  mutation DiscardNeedsDetailsDraft($onboardingId: ID!) {
+    discardDraft(onboardingId: $onboardingId) {
       __typename
       ... on ItemOnboarding {
         id
